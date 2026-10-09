@@ -1872,6 +1872,7 @@ module.exports = {
   'menu.window.front': 'Alle nach vorne',
   'menu.window.close': 'Schließen',
   'menu.help': 'Hilfe',
+  'menu.help.manual': 'Snotra-Handbuch',
   'menu.help.checkUpdates': 'Nach Updates suchen…',
   'menu.help.github': 'Projekt auf GitHub',
 

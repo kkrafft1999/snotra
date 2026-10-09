@@ -60,6 +60,11 @@ export default defineConfig({
           items: [{ autogenerate: { directory: 'updating' } }],
         },
         {
+          label: 'Troubleshooting',
+          translations: { de: 'Hilfe bei Problemen' },
+          items: [{ autogenerate: { directory: 'troubleshooting' } }],
+        },
+        {
           label: 'Reference',
           translations: { de: 'Referenz' },
           items: [{ autogenerate: { directory: 'reference' } }],

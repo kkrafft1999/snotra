@@ -5,6 +5,7 @@ Blick, und nichts passiert darin, ohne dass er fragt. Cloud- oder lokale
 Modelle, kein Konto, keine Telemetrie.**
 
 [**Download**](https://github.com/kkrafft1999/snotra/releases/latest) ·
+[**Handbuch**](https://docs.snotra-ai.dev/de/) ·
 [Website](https://snotra-ai.de) ·
 [Warum Snotra?](#warum-snotra) ·
 [Aus dem Quellcode bauen](#aus-dem-quellcode-bauen) ·
@@ -12,7 +13,7 @@ Modelle, kein Konto, keine Telemetrie.**
 
 Snotra Agent ist die Desktop-App der Plattform Snotra AI. Bis Oktober 2026 hieß
 die App selbst Snotra AI — siehe
-[Umbenannt von Snotra AI](#umbenannt-von-snotra-ai).
+[Alte Versionen](https://docs.snotra-ai.dev/de/updating/by-hand/#alte-versionen) im Handbuch.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/readme/demo-dark.gif">
@@ -30,6 +31,11 @@ eingebauten Workspace-Werkzeugen · jedem CLI auf deinem Rechner
 
 > Status: ein privates Open-Source-Projekt — keine Firma dahinter, kein
 > Bezahlmodell. Schnittstellen und Konfiguration können sich noch ändern.
+
+> **Du willst Snotra benutzen?** Das [Handbuch](https://docs.snotra-ai.dev/de/)
+> erklärt Schritt für Schritt mit Screenshots, wie du es installierst, ein
+> Modell verbindest, chattest, die Kontrolle darüber behältst, was es darf, und
+> es anpasst. Diese Seite ist die Übersicht und der Entwicklerteil.
 
 ## Wie Snotra arbeitet
 
@@ -59,7 +65,7 @@ Die neueste Version liegt auf der
 | --- | --- |
 | macOS (Apple Silicon) | `Snotra-Agent-<version>-mac-arm64.dmg` |
 | Windows (x64) | `Snotra-Agent-<version>-win-x64.zip` |
-| Linux (x64) | `.deb` (empfohlen), `.AppImage` oder `.tar.gz` — siehe [Linux installieren](#linux-installieren) |
+| Linux (x64) | `.deb` (empfohlen), `.AppImage` oder `.tar.gz` — siehe [Snotra Agent installieren](https://docs.snotra-ai.dev/de/getting-started/install/#auf-linux-installieren) |
 
 - **macOS:** Die App ist mit einer Developer ID signiert und von Apple
   notarisiert ([#662](https://github.com/kkrafft1999/snotra/issues/662)). DMG
@@ -108,50 +114,36 @@ das Feld bewegt sich schnell, Korrekturen willkommen.
 
 Was Snotra noch fehlt: signierte Builds
 ([#19](https://github.com/kkrafft1999/snotra/issues/19)), eine Sandbox unter
-Windows (unter macOS und Linux laufen Befehle und Python isoliert — siehe [Die
-Sandbox je Betriebssystem](#die-sandbox-je-betriebssystem)), MCP über HTTP
+Windows (unter macOS und Linux laufen Befehle und Python isoliert — siehe [Befehle in der
+Sandbox ausführen](https://docs.snotra-ai.dev/de/safety/sandbox/)), MCP über HTTP
 ([#341](https://github.com/kkrafft1999/snotra/issues/341)).
 
 ## Motivation
 
-*Ein Wort des Autors.*
+*Ein Wort des Autors.* Angefangen hat es mit dem Wunsch, **agentisches Arbeiten
+zu verstehen** — was zwischen einem Sprachmodell und einem Agent Harness
+tatsächlich hin- und hergeht. Das Experiment ist gewachsen, weil es Freude
+macht, Snotra eine weitere Fähigkeit mitzugeben. Cursor, Claude Code und ChatGPT
+sind die naheliegenden Vorbilder, aber jedes konzentriert sich auf die eigenen
+Modelle. Ein Agent Desktop, an den sich **beliebige Modelle** anbinden lassen —
+vor allem lokale —, ist der Grund, warum ich drangeblieben bin.
 
-Angefangen hat es mit dem Wunsch, **agentisches Arbeiten zu verstehen** — Agentic
-Coding und KI-Agenten allgemein. Deshalb stand am Anfang ein einfaches
-Experiment: Chats führen, um den Informationsaustausch zwischen einem
-Sprachmodell und einem lokalen Client nachzubauen, so wie ChatGPT oder Claude
-Code das tun — schlicht, um selbst zu sehen, was zwischen LLM und Agent Harness
-tatsächlich hin- und hergeht.
-
-Irgendwann wurde aus dem Experiment der eigentliche Spaß. Mit den Varianten
-herumzuspielen und Snotra eine weitere Fähigkeit mitzugeben, macht mir Freude —
-und genau daran ist das Projekt gewachsen.
-
-Die Vorbilder liegen auf der Hand: **Cursor, Claude Code, ChatGPT** fahren
-denselben Ansatz. Gemeinsam ist ihnen, dass sie sich auf ihre eigenen Modelle
-konzentrieren — mit Cursor als Ausnahme, und selbst Cursor dürfte künftig
-stärker in der Hand von xAI liegen, sodass auch dort die Modelle von dieser Seite
-bevorzugt werden. Ein Agent Harness, ein Agent Desktop, an den sich **beliebige
-Modelle** anbinden lassen — und vor allem lokale Modelle zum Ausprobieren —, ist
-der Grund, warum ich drangeblieben bin.
-
-Und nicht zuletzt: Snotra soll ein Werkzeug sein, mit dem Entwickler agentisches
-Arbeiten selbst ausprobieren können — und mit dem sich auf dieser
-Open-Source-Grundlage Agenten für **konkrete Use Cases** bauen lassen: für
-Fachabteilungen im Unternehmenskontext genauso wie für private Zwecke im
-Consumer-Bereich, aufgesetzt auf dem Agent Harness von Snotra. Die Architektur
-ist so geschnitten, dass sich das Backend vom Frontend trennen lässt. Was sich
-daraus sonst noch machen lässt, überlasse ich gern der Entwickler-Community und
-ihrer Fantasie.
+Es soll auch eine Grundlage sein: ein Werkzeug, mit dem Entwickler agentisches
+Arbeiten selbst ausprobieren und Agenten für **konkrete Use Cases** bauen
+können — für eine Fachabteilung genauso wie für zu Hause —, aufgesetzt auf dem
+Agent Harness von Snotra. Die Architektur ist so geschnitten, dass sich das
+Backend vom Frontend trennen lässt.
 
 Der Name stammt aus der nordischen Mythologie: Snotra ist die Göttin der
-Klugheit und Besonnenheit. Er steht für einen Assistenten, der den Kontext
-seines Workspace kennt und überlegt handelt.
+Klugheit und Besonnenheit — ein Assistent, der den Kontext seines Workspace
+kennt und überlegt handelt.
 
 ## Aktueller Stand & Planung
 
-Alles, was ansteht — Bugs, einzelne Features und größere Themen —, läuft über [GitHub Issues](https://github.com/kkrafft1999/snotra/issues). Den Fortschritt zeigt das zugehörige [GitHub Project](https://github.com/kkrafft1999/snotra/projects) (Kanban-Board: *Backlog* → *Ready* → *In progress* → *In review* → *Done*).
-
+Was offen ist, steht auf dem
+[GitHub-Project-Board](https://github.com/users/kkrafft1999/projects/2) und in
+den [GitHub Issues](https://github.com/kkrafft1999/snotra/issues). Was die App
+heute kann, beschreibt das [Handbuch](https://docs.snotra-ai.dev/de/).
 Du willst mitmachen? Siehe [`CONTRIBUTING.md`](./CONTRIBUTING.md) (Englisch).
 
 ## Tech-Stack
@@ -166,7 +158,7 @@ Du willst mitmachen? Siehe [`CONTRIBUTING.md`](./CONTRIBUTING.md) (Englisch).
 - **Node.js** ≥ 24 (Active LTS, siehe `.nvmrc`; mit nvm: `nvm use`)
 - **npm** (kommt mit Node)
 - macOS, Windows oder Linux
-- Optional: API-Key für OpenAI / Anthropic / Google, ein lokales [Ollama](https://ollama.com/) oder irgendein anderer Server mit OpenAI-kompatibler Schnittstelle (LM Studio, llama.cpp, vLLM, OpenRouter, ein Firmen-Gateway — siehe [Anbieter](#anbieter))
+- Optional: API-Key für OpenAI / Anthropic / Google, ein lokales [Ollama](https://ollama.com/) oder irgendein anderer Server mit OpenAI-kompatibler Schnittstelle (LM Studio, llama.cpp, vLLM, OpenRouter, ein Firmen-Gateway — siehe [Ein Modell anbinden](https://docs.snotra-ai.dev/de/getting-started/connect-a-model/))
 
 ## Aus dem Quellcode bauen
 
@@ -201,192 +193,9 @@ npm run package:linux   # Linux x64
 
 Die fertigen Artefakte landen im Ordner `out/` (per `.gitignore` ausgeschlossen).
 
-### Linux installieren
-
-Die [Releases](https://github.com/kkrafft1999/snotra/releases) enthalten für
-Linux drei Dateien:
-
-```bash
-# Empfohlen (Debian, Ubuntu, Mint, Pop!_OS …): legt Menüeintrag und Icon an
-sudo apt install ./Snotra-Agent-<version>-linux-x64.deb
-
-# Distributionsunabhängig: eine Datei, kein root nötig
-chmod +x Snotra-Agent-<version>-linux-x64.AppImage
-./Snotra-Agent-<version>-linux-x64.AppImage
-
-# Fallback, wenn beides nicht passt
-tar -xzf Snotra-Agent-<version>-linux-x64.tar.gz
-cd snotra-agent-<version>-linux-x64
-./"Snotra Agent"
-```
-
-Das `.deb` ist der empfohlene Weg: Es ist die einzige Variante, in der die
-Chromium-Sandbox fertig eingerichtet ist (Setuid-Bit auf `chrome-sandbox`), und
-es trägt die App ins Anwendungsmenü ein. Das **AppImage** braucht dafür weder
-Installation noch root-Rechte — nach dem Download einmal ausführbar machen, das
-Ausführungsrecht überlebt den Umweg über den Browser nicht.
-
-**AppImage und Tarball** verlassen sich stattdessen auf unprivilegierte
-User-Namespaces. Auf Distributionen, die diese einschränken — u. a. Ubuntu ab
-24.04 —, kann der Start fehlschlagen. Beim **Tarball** meldet sich das als
-*„The SUID sandbox helper binary was found, but is not configured correctly"*;
-dort hilft es, im entpackten Ordner einmal nachzuziehen:
-
-```bash
-cd snotra-agent-<version>-linux-x64
-sudo chown root:root chrome-sandbox && sudo chmod 4755 chrome-sandbox
-```
-
-Beim **AppImage** führt dieser Weg nicht zum Ziel: Das Image wird
-schreibgeschützt und `nosuid` eingehängt, ein Setuid-Bit hätte darin keine
-Wirkung. Dort ist das `.deb` die Lösung.
-
-Das `.deb` bringt außerdem `bubblewrap`, `socat` und `ripgrep` mit, die die
-Sandbox für Shell-Befehle und Python braucht (siehe [Die Sandbox je
-Betriebssystem](#die-sandbox-je-betriebssystem)). Beim AppImage und beim
-Tarball installierst du sie selbst: `sudo apt install bubblewrap socat ripgrep`.
-
-## Aktualisierung
-
-Snotra Agent sucht beim Start still nach einer neueren Version und meldet sich nur,
-wenn es eine gibt; *Hilfe › Nach Updates suchen…* — oder *Nach Updates suchen*
-neben der Versionsnummer unten in den Einstellungen — fragt jederzeit von Hand
-nach. Ab dann führt ein Dialog durch den ganzen Weg — **jeder Schritt einzeln
-bestätigt, jeder bis zuletzt abbrechbar**:
-
-1. **Gefunden.** Version, Größe des Pakets und „Was sich geändert hat".
-   „Herunterladen" lädt, „Diese Version überspringen" bietet genau diese
-   Version nie wieder an, „Später erinnern" fragt beim nächsten Start erneut.
-2. **Wird geladen.** Fortschritt in Prozent und Megabyte. „Abbrechen" bricht
-   den Download wirklich ab und räumt die halbe Datei weg.
-3. **Bereit.** Erst jetzt wird gefragt, ob installiert werden soll. Beim
-   Installieren beendet sich die App, wird ersetzt und startet neu — ungesendete
-   Eingaben gehen dabei verloren. „Abbrechen" verwirft die geladene Datei.
-4. **Wird installiert.** Der einzige Schritt ohne Rückweg; das steht auch so im
-   Dialog.
-
-Geladen wird ausschließlich das Release-Asset, das GitHub selbst für die
-laufende Installation ausweist — die Adresse kommt nie aus dem Fenster. Vor dem
-Austausch prüft die App unter macOS zusätzlich die Bundle-Kennung und die
-Versionsnummer im geladenen Paket. Schlägt irgendetwas fehl, bleibt die laufende
-Version unangetastet und der Dialog nennt den Grund.
-
-**Wann die App sich nicht selbst aktualisiert.** Dann erklärt der Dialog, warum,
-und verweist auf die Release-Seite:
-
-| Fall | Grund |
-| --- | --- |
-| Als `.deb` nach `/opt` installiert | Der Austausch bräuchte Administratorrechte. |
-| Kein Schreibrecht am Installationsort | z. B. `C:\Program Files` oder ein Mehrbenutzer-Mac. |
-| Entwicklungs-Build (`npm start`) | Da gibt es nichts zu ersetzen. |
-| Kein passendes Paket im Release | Lieber nichts anbieten als das Falsche einspielen. |
-
-Selbst aktualisieren können sich das macOS-App-Bundle, das Windows-Verzeichnis,
-ein laufendes AppImage und ein entpacktes Linux-Verzeichnis.
-
-**Windows bis Version 1.13.2:** Das Selbst-Update dieser Versionen schließt die
-App, lässt aber die alte Version stehen; neben dem App-Ordner bleibt ein Ordner
-`.snotra-new-…` zurück ([#442](https://github.com/kkrafft1999/snotra/issues/442),
-[#654](https://github.com/kkrafft1999/snotra/issues/654)). Installiere eine
-neuere Version einmal von Hand: Snotra beenden, den App-Ordner umbenennen (etwa
-in `Snotra-AI.alt`), das neue ZIP unter dem alten Ordnernamen entpacken und
-starten. Einstellungen und Chats bleiben erhalten — sie liegen in
-`%APPDATA%\Snotra AI`. Die übrig gebliebenen `.snotra-new-…`-Ordner und den
-umbenannten alten Ordner kannst du danach löschen. Ab dieser Version
-funktioniert das Selbst-Update.
-
-Bewusst kommt kein `electron-updater` bzw. Squirrel zum Einsatz: Beide setzen
-eine Code-Signatur voraus, und der Windows-Build hat keine. Ein eigener Updater
-bedient alle drei Plattformen auf dieselbe Weise.
-
-
-## Dateibaum
-
-- **Projektordner öffnen:** Der Name des Ordners oben in der Seitenleiste öffnet die Liste der zuletzt genutzten Ordner, darunter *Ordner öffnen …*. Alles Weitere bezieht sich immer auf diesen einen Ordner.
-- **Welcher Ordner offen ist:** Sein Name steht in der Titelzeile vorn, in jedem Layout — auch mit ausgeblendeter Seitenleiste —, und im Fenstertitel, damit Dock, Fenstermenü und App-Umschalter ihn zeigen. Oben in der Seitenleiste steht der Name mit seinem Pfad darunter (`~/Projects/snotra`). Ein Name, der nicht in die Seitenleiste passt, wird in der Mitte gekürzt statt am Ende, damit `snotra…motion` und `snotra…ebsite` unterscheidbar bleiben. In einer schmalen Seitenleiste hat der Name die erste Zeile für sich, der Pfad teilt sich die zweite mit den Knöpfen. Alles Weitere aus der Kopfzeile des Baums steckt in ihrem `⋯`-Menü: *Dateien filtern*, *Neue Datei*, *Neuer Ordner* und *Versteckte Dateien anzeigen*; nur der Radierer für die Markierungen des Agenten bleibt daneben stehen, solange es welche gibt.
-- **Vier Spalten, vier Schalter:** Das Fenster besteht aus Seitenleiste, Anzeige, Chat und Verlauf, und jede Spalte hat ihren eigenen Schalter in der Titelzeile — links die beiden des Arbeitsbereichs, rechts spiegelverkehrt die beiden der Chat-Seite, jeweils in der Reihenfolge ihrer Spalten. Alle vier tragen dasselbe Bild: ein Fenster mit einer schmalen und einer breiten Fläche, gefüllt ist die, die der Knopf schaltet. Jeder Zustand bleibt bis zum nächsten Start erhalten.
-- **Seitenleiste wegschalten:** Der erste Knopf blendet die Seitenleiste samt Trenner aus, der Arbeitsbereich rückt nach. Dasselbe per Tastatur mit `Cmd/Strg+B` oder über *Ansicht › Seitenleiste ein-/ausblenden* (alle Kürzel unter [Tastenkürzel](#tastenkürzel)).
-- **Mittlere Anzeige ein- und ausblenden:** Der zweite Knopf schaltet die mittlere Spalte — die, in der die Dateivorschau und der Startschirm stehen. Solange du nichts eingestellt hast, entscheidet der Ordner: Mit geöffnetem Ordner bleibt die Spalte **zu**, der Chat bekommt die Breite. Ist kein Ordner offen, steht dort der Startschirm, und zwar genau so breit, wie er ihn braucht — der Rest des Fensters gehört dem Chat. Klickst du eine Datei im Baum an, kommt die Spalte von selbst zurück, sonst ginge der Klick ins Leere. Schaltest du sie über den Knopf ein oder aus, gilt deine Entscheidung ab dann auch beim Start.
-- **Chat wegschalten:** Der vorletzte Knopf nimmt die Chat-Spalte weg; übrig bleibt rechts der Verlauf, falls er offen ist. Klickst du dort einen Chat an, kommt die Spalte von selbst zurück — spiegelbildlich zum Klick auf eine Datei im Baum. Die **Einstellungen** erreichst du unabhängig davon über die Menüleiste bzw. `Cmd/Strg+,` — auf dem Mac unter *Snotra Agent › Einstellungen…*, unter Windows und Linux unter *Ansicht › Einstellungen…*.
-- **Chat-Verlauf einblenden:** Der letzte Knopf stellt den Verlauf als Spalte neben den Chat. Ein Klick auf eine Zeile lädt diese Konversation samt ihrem Modell und ihrem Freigabemodus, das Papierkorb-Symbol entfernt sie. Der Knopf für einen **neuen Chat** steht in der Kopfzeile dieser Spalte — so wie der Ordner-Umschalter in der Kopfzeile des Baums. Wird das Fenster zu schmal für alle Spalten, weicht der Verlauf von selbst und kommt im breiteren Fenster zurück.
-- **So, wie du die App verlassen hast:** Beim Start holt Snotra die zuletzt geführte Konversation des Ordners zurück und du landest direkt im Gespräch. Der Startschirm („Womit fangen wir an?“) gehört zum kalten Start: Er steht in der mittleren Spalte und erscheint, wenn kein Ordner offen ist und es nichts fortzusetzen gibt — beim allerersten Start also von selbst. Auch das Fenster kommt zurück, wie du es zuletzt eingestellt hast: Größe, Position und ob es maximiert oder im Vollbild lief. Beim allerersten Start geht es mit 1536 × 960 Punkten auf, auf kleineren Bildschirmen so groß, wie die Arbeitsfläche hergibt. Hast du den Zweitbildschirm abgezogen, auf dem es zuletzt stand, kommt es in derselben Größe zentriert auf dem Hauptbildschirm zurück statt im Nichts.
-- **Versteckte Dateien:** Dateien und Ordner, deren Name mit einem Punkt beginnt — `.github`, `.gitignore`, `.env` —, zeigt der Baum zunächst nicht. *Versteckte Dateien anzeigen* im `⋯`-Menü der Kopfzeile des Baums holt sie herein, ebenso `Cmd+Shift+.` auf dem Mac, `Strg+Shift+.` unter Windows und Linux und *Ansicht › Versteckte Dateien anzeigen*. Sie stehen dann gedimmt an ihrem gewohnten Platz, samt allem, was in einem versteckten Ordner liegt, und öffnen in der Vorschau wie jede andere Textdatei. Die `@`-Liste im Chat folgt dem Baum. `.git`, `.DS_Store`, `Thumbs.db` und `desktop.ini` bleiben in jedem Fall draußen. Der Schalter gilt für alle Ordner und bleibt auch nach einem Neustart gesetzt.
-- **Was der Agent gelesen oder geändert hat:** Während der Agent arbeitet, markiert der Baum die Dateien, die er angefasst hat, am rechten Rand der Zeile. Ein gefülltes **M** ist eine Datei, die er geändert hat und die du noch nicht angesehen hast; sobald du sie in der Vorschau öffnest, behält das M nur noch seinen Rahmen, bis der Agent die Datei erneut ändert. Ein leises graues **R** ist eine Datei, die er nur gelesen hat. Ein zugeklappter Ordner trägt die Markierung dessen, was in ihm liegt, damit eine Änderung tief unten nicht verborgen bleibt. Fährst du über eine Markierung, sagt sie es in Worten, ebenso einem Screenreader. Suchen und Befehle in der Shell markieren nichts — nur, was sicher vom Agenten kommt. Die Markierungen gehören zur Konversation: Wechselst du den Chat, siehst du dessen Markierungen, ein neuer Chat beginnt ohne, und ein anderer Ordner oder ein Neustart der App räumt sie ab. Der Radierer in der Kopfzeile des Baums entfernt alle, *Markierung entfernen* im Kontextmenü eine Datei oder einen Ordner.
-- **Was genau sich geändert hat:** Unter der Antwort des Agenten steht eine Zeile mit jeder Datei, die er geändert hat, jeweils mit der Zahl der hinzugefügten und entfernten Zeilen — `format.js +3 −2`. Ein Klick zeigt die Änderung in der Vorschau: eine Spalte mit `−`- und `+`-Zeilen, drei unveränderte Zeilen um jede Änderung, der Rest zugeklappt, bis du ihn öffnest. Mehrere Änderungen an einer Datei erscheinen zusammen; die Auswahl in der Kopfzeile zeigt eine einzelne. **Inhalt | Änderungen** wechselt zwischen der Datei und ihrer Änderung, und *Änderungen anzeigen* im Kontextmenü des Baums zeigt alles, was die Konversation an einer Datei geändert hat. Hat sich eine Datei seitdem erneut geändert — durch dich oder ein anderes Programm —, sagt die Ansicht das; eine neue Datei, eine, in der sich jede Zeile geändert hat, eine, bei der nur die Zeilenenden wechselten, eine binäre oder zu große Datei bekommen jeweils einen Satz statt einer leeren Ansicht. Die Änderungen liegen nur im Speicher: Nach einem Neustart bleibt die Zeile stehen, sagt aber, dass sie nicht mehr verfügbar sind.
-- **Filtern:** *Dateien filtern* im `⋯`-Menü der Kopfzeile des Baums öffnet ein Feld über dem Baum, ebenso `Cmd+P` auf dem Mac, `Strg+P` unter Windows und Linux und *Ansicht › Dateien filtern…* — von überall aus, auch aus der Chat-Eingabe; eine zugeklappte Seitenleiste geht dabei mit auf. Tippst du in den Baum, während er den Fokus hat, beginnt das Feld mit diesem Buchstaben. Sobald etwas darin steht, nimmt eine flache Liste der passenden Dateien und Ordner den Platz des Baums ein, jeweils mit ihrem Ordner darunter und den getroffenen Buchstaben unterstrichen. Gesucht wird wie mit `@` im Chat — dieselben Einträge, dieselbe unscharfe Suche, dieselbe Reihenfolge —, `rlse` findet also `docs/release.md`. `↑`/`↓` wählt, `Enter` oder ein Klick öffnet eine Datei in der Vorschau und lässt die Liste für die nächste stehen; ein Ordner schließt den Filter und erscheint aufgeklappt im Baum. `Esc` bringt den Baum zurück, wie er war, aufgeklappt bis zu dem, was du geöffnet hast. Dateien, die entstehen oder verschwinden, während der Filter offen ist, erscheinen in der Liste. Durchsucht werden Namen und Pfade, nicht der Inhalt der Dateien.
-- **Verschieben:** Eine Datei oder einen Ordner im Baum auf eine Ordnerzeile ziehen verschiebt den Eintrag dorthin; auf der freien Fläche unter dem Baum landet er im Projektordner. Gibt es den Namen schon, wird `name (2).ext` daraus.
-- **Im Chat referenzieren:** Eine Datei oder einen Ordner in die Chat-Eingabe ziehen fügt dort `@<pfad relativ zur Projektwurzel>` ein; derselbe Weg ohne Ziehen ist der `@`-Knopf rechts in der Zeile (Hover oder Tabulator). Details unter [Chat](#chat).
-- **Kontextmenü:** Rechtsklick (oder ⌘-/Strg-Klick, siehe [Tastenkürzel](#tastenkürzel)) auf eine Zeile öffnet „Öffnen“, „Im Finder anzeigen“ (unter Windows „Im Explorer anzeigen“, unter Linux „Im Dateimanager anzeigen“), „Informationen“ und „Löschen…“. Gelöscht wird in den Papierkorb, nach Rückfrage. „Öffnen“ zeigt ein Dokument in seiner App. Ein Programm oder Skript — `setup.bat`, `run.command`, eine `.app`, eine als ausführbar markierte Datei — würde stattdessen ausgeführt, mit deinen Rechten und außerhalb der Sandbox von Snotra; deshalb fragt Snotra vorher nach, „Abbrechen“ vorbelegt. Kann keine App eine Datei öffnen, sagt dir das eine Meldung.
-- **Neue Datei, neuer Ordner, umbenennen:** „Neue Datei…“ und „Neuer Ordner…“ im Kontextmenü legen in einem Ordner bzw. neben einer Datei an; auf der freien Fläche unter den Zeilen im geöffneten Ordner selbst. Dieselben beiden Einträge im `⋯`-Menü der Kopfzeile des Baums tun das im ausgewählten Ordner (oder neben der ausgewählten Datei). „Umbenennen…“ – oder `F2` auf einer Zeile mit Fokus – macht aus dem Namen ein Eingabefeld, der Name bis zur Endung ist markiert. Den Namen tippst du direkt im Baum: `Enter` übernimmt, `Esc` oder ein Klick daneben lässt alles, wie es war. Ein Name, der nicht gehen kann, sagt schon beim Tippen unter dem Feld, warum – einer, den es schon gibt, `/` oder `\`, Zeichen und Namen, die Windows nicht zulässt (`:`, `?`, `con`, ein Punkt am Ende …) –, damit ein Projekt auf jedem System benutzbar bleibt. Überschrieben wird nie etwas. Eine neue Datei ist danach ausgewählt und in der Vorschau zu sehen; eine umbenannte Datei bleibt unter ihrem neuen Namen offen, ebenso die aufgeklappten Ordner und die offene Datei in einem umbenannten Ordner. Nur die Groß- und Kleinschreibung zu ändern (`readme.md` → `README.md`) klappt auch unter macOS und Windows.
-- **Informationen:** Der Eintrag „Informationen“ zeigt zu einer Datei Name, vollständigen Pfad, Typ, Größe (lesbar und auf das Byte genau), Änderungs- und Erstellungsdatum sowie das Programm, mit dem „Öffnen“ sie starten würde. Bei einem Ordner steht statt der Größe die Anzahl seiner direkten Einträge — rekursiv gezählt wird bewusst nicht, das kann bei `node_modules` beliebig lange dauern. Der Knopf **„Pfad kopieren“** legt den vollen Pfad in die Zwischenablage. Werte, die das Betriebssystem nicht hergibt — unter Linux oft das Erstellungsdatum —, stehen als „unbekannt“ da.
-- **Von außen übernehmen:** Dateien und Ordner aus Finder oder Explorer lassen sich direkt in den Baum ziehen — auf eine Ordnerzeile oder auf die freie Fläche für den Projektordner. Sie werden **kopiert**, das Original bleibt liegen; Mehrfachauswahl geht, Namenskollisionen enden wie oben als `name (2).ext`.
-
-  Weil damit zum ersten Mal etwas von außerhalb des Projektordners hereinkommt, fragt Snotra vorher nach: bei Ordnern immer, bei Dateien ab 20 Stück oder 10 MB — mit Anzahl, Größe und Zielordner im Klartext, „Abbrechen“ vorbelegt. Nicht übernommen werden Dateien, die nach Zugangsdaten aussehen (`.env`, `*.pem`, `id_*`, alles unter `.ssh/` …), auch nicht über einen verknüpften Ordner: Was das Modell später lesen könnte, soll nicht beiläufig per Drop hereinrutschen — der Weg über den Dateimanager bleibt offen. Verknüpfungen (Symlinks), Pipes und Sockets werden übersprungen, und ein Drop wird ganz abgelehnt statt halb kopiert, wenn er über 2000 Einträge oder 200 MB liegt; scheitert das Kopieren mittendrin, wird das bereits Kopierte wieder entfernt.
-
-## Chat
-
-- **Senden:** `Enter` schickt die Nachricht ab, `Shift+Enter` fügt einen Zeilenumbruch ein. Während das Modell antwortet, wird der Senden-Button zum Abbrechen-Button. Die übrigen Kürzel stehen gesammelt unter [Tastenkürzel](#tastenkürzel).
-- **Dateien per `@` referenzieren:** Tippst du `@` in die Eingabe, öffnet sich über dem Textfeld eine Liste der Dateien und Ordner des geöffneten Projektordners. Weiteres Tippen filtert – auch unscharf, `@rlse` findet z. B. `docs/release.md` –, `↑`/`↓` wählt, `Enter` oder `Tab` übernimmt, `Esc` schließt. Eingefügt wird der Pfad relativ zur Projektwurzel (`@docs/release.md`); bei Ordnern bleibt die Liste offen (`@src/`), so dass du direkt in den Ordner weitertippen kannst. Die Liste blendet aus, was auch das Tool `find_files` überspringt: versteckte Einträge, `.git` und Muster aus der `.gitignore` des Projektroots. Ohne geöffneten Ordner bleibt `@` normaler Text.
-- **Dateien aus dem Baum übernehmen (Maus):** Was du im Dateibaum schon vor Augen hast, musst du nicht abtippen. Zieh die Datei oder den Ordner aus dem Baum in die Chat-Eingabe — eingefügt wird an der Cursorposition der Pfad **relativ zur Projektwurzel** (`@docs/release.md`, Ordner mit `/` am Ende), nicht der absolute Pfad. Ohne Ziehen geht es über den `@`-Knopf, der rechts in der Zeile erscheint, sobald du mit der Maus über die Zeile fährst oder den Knopf per Tabulator ansteuerst. Der einfache Klick auf eine Zeile bleibt, was er war: auswählen und Vorschau zeigen; das Verschieben im Baum per Drag & Drop ebenfalls.
-- **Quelltext lesen:** Code- und Konfigurationsdateien öffnen in der Vorschau mit Syntax-Hervorhebung — JavaScript und TypeScript, JSON, YAML, Python, Shell-Skripte, HTML und CSS, Markdown-Quelltext und viele mehr, erkannt am Dateinamen. Die Farben folgen dem hellen und dunklen Design. Markieren und Kopieren liefert die Datei genau so, wie sie ist. Reiner Text und Logs bleiben ungefärbt, und eine Datei über 512 KB erscheint ohne Farben, damit sie sofort aufgeht.
-- **Markdown lesen:** Eine `.md`-Datei öffnet in der Vorschau formatiert — Überschriften, Listen, Tabellen, Code und der Front Matter einer `SKILL.md` als kompakter Block über dem Text. **Preview | Quelltext** in der Kopfzeile oder `Cmd/Ctrl+Shift+M` schaltet auf den Rohtext und zurück. Bilder aus dem geöffneten Ordner werden angezeigt, Bilder aus dem Netz nie geladen — ein Platzhalter sagt, wohin sie zeigen. Ein Link auf eine andere Datei im Ordner öffnet sie und markiert sie im Baum.
-- **Bilder ansehen:** PNG, JPEG, GIF, WebP und SVG öffnen in der Vorschau als Bild, in die Spalte eingepasst. Gezoomt wird in der Kopfzeile (`−`, `+`, **Einpassen** oder `Cmd/Strg` mit `+`, `−`, `0`); ein Bild, das größer als die Spalte ist, verschiebst du mit dem Hand-Cursor per Ziehen oder mit den Pfeiltasten. Die Kopfzeile nennt die Pixelmaße neben der Größe, und ein Schachbrett hinter dem Bild zeigt, wo es transparent ist. Ein SVG hat **Preview | Quelltext** wie eine Markdown-Datei. Angezeigt werden Bilder bis 10 MB aus dem geöffneten Ordner; bei allem anderen sagt die Spalte, warum nicht.
-- **PDFs lesen:** Eine PDF öffnet in der Vorschau, Seite für Seite, auf Spaltenbreite eingepasst. Die Kopfzeile zeigt die aktuelle Seite — eine Zahl eintippen springt dorthin — und zoomt mit − / + oder zurück auf **Breite**. Eine passwortgeschützte PDF fragt direkt dort nach dem Passwort; es wird nicht gespeichert. JavaScript in einer PDF läuft nie, ihre Links tun nichts. Angezeigt werden PDFs bis 50 MB aus dem geöffneten Ordner; bei allem anderen sagt die Spalte, warum nicht.
-- **HTML-Seiten ansehen:** Eine `.html`-Datei öffnet in der Vorschau als die Seite, die sie ist — Skripte laufen, ein interaktives Mockup oder ein Bericht funktioniert also wie im Browser. **Preview | Quelltext** schaltet auf den Text um. Die Seite bleibt offline und lädt nur Dateien aus dem geöffneten Ordner: Ein Stylesheet oder Skript daneben funktioniert, alles aus dem Netz oder von außerhalb des Ordners wird blockiert, und ein Hinweis über der Seite listet, was blockiert wurde. Ein Link auf eine andere HTML-Datei des Ordners öffnet sie in der Vorschau, ein Weblink öffnet deinen Browser — beides nur, wenn du klickst. Die Seite lädt neu, sobald sie oder eine ihrer Dateien sich ändert; **Neu laden** und **Im Browser öffnen** stehen in der Kopfzeile, und **F6** holt die Tastatur wieder aus der Seite. Auch ein Link auf eine HTML-Datei in einer Chat-Antwort öffnet sie in der Vorschau. Angezeigt werden HTML-Dateien bis 1 MB.
-- **Screenshots einfügen:** Ein Bild in der Zwischenablage (macOS `Cmd+Ctrl+Shift+4`, Windows Snipping Tool) landet mit `Cmd/Ctrl+V` als Anhang über der Eingabezeile — mit Vorschau, Dateigröße und einem Knopf zum Entfernen. Der getippte Text bleibt dabei unberührt; ein Screenshot ohne Begleitfrage lässt sich ebenfalls abschicken. Erlaubt sind PNG, JPEG, GIF und WebP, bis zu 4 Bilder je Nachricht und 5 MB pro Bild; größere Bilder werden vor dem Senden auf 1568 px längste Kante verkleinert. Weil ein Screenshot oft mehr zeigt, als man bewusst teilen will, siehst du vor dem Senden immer die Vorschau — bei einem Cloud-Anbieter verlässt das Bild deinen Rechner. Bilder weiterreichen kann **OpenAI** und, wenn du den Schalter „Bild-Anhänge erlauben“ setzt, der Anbieter **OpenAI-kompatibel**: Ist ein anderer Anbieter aktiv, wird das Einfügen mit einem Hinweis in der Statuszeile abgelehnt, statt still zu verschwinden — und hängst du ein Bild an und wechselst danach auf ein Modell ohne Bild-Unterstützung, sagt Snotra das beim Senden, bevor die Anfrage rausgeht. Angehängte Bilder gehören zum gespeicherten Verlauf: Sie liegen als Dateien unter `chat-attachments/<Chat-ID>/` im `userData`-Ordner — unverschlüsselt, wie die Screenshots auf deiner Platte auch —, während die Verlaufsdatei nur den Dateinamen trägt und schlank bleibt. Beim Öffnen einer älteren Konversation sind die Bilder wieder da; ein Klick auf das Vorschaubild zeigt es groß. Löschst du einen Chat, verschwinden seine Bilder mit; dasselbe gilt, wenn er aus dem Verlauf herausfällt. Ist eine Datei von Hand entfernt worden, steht an ihrer Stelle ein Hinweis statt eines kaputten Bildes.
-- **Bilder aus dem Arbeitsordner in der Antwort:** Schreibt das Modell ein Bild in den Projektordner — ein gerechnetes Diagramm, einen Plot — und bettet es danach in seine Antwort ein (`![Diagramm](diagramm.png)`), zeigt Snotra es im Chat an, auf Chat-Breite verkleinert und mit erhaltenem Seitenverhältnis. Es gilt der **gerade geöffnete** Ordner: relative und absolute Pfade werden gegen ihn aufgelöst, alles außerhalb wird nicht geladen — auch keine Verknüpfung, die aus dem Ordner herauszeigt, und keine Adresse aus dem Netz. Angezeigt werden PNG, JPEG, GIF, WebP und SVG bis 10 MB, erkannt am Dateiinhalt statt an der Endung; ein SVG nur als Bild, Skripte darin laufen nicht. Geht es nicht, steht dort kein kaputtes Bild, sondern ein Platzhalter mit dem Grund („Bild nicht gefunden“, „Außerhalb des Arbeitsordners“, „Bild zu groß zum Anzeigen“) und dem Alt-Text des Modells. Während die Antwort noch läuft, steht ein ruhiger Platzhalter — das Bild erscheint, wenn die Nachricht fertig ist, statt bei jedem Textstück neu zu laden. Öffnest du eine ältere Konversation in einem anderen Ordner, siehst du Platzhalter statt fremder Bilder; auf den früheren Ordner greift Snotra nie zu.
-- **Was das Modell davon sieht:** nur die Referenz im Text. Der System-Prompt erklärt die `@pfad`-Konvention; die Datei liest das Modell bei Bedarf selbst über die Lese-Tools, Inhalte werden nicht automatisch eingebettet (Token-Ziel).
-- **Dokumente lesen:** PDF-, Word- (DOCX), Excel- (XLSX) und PowerPoint-Dateien (PPTX) liest das Modell mit dem Tool `extract_document_text`. Es läuft lokal, zu installieren oder einzurichten gibt es nichts. Nie das ganze Dokument auf einmal, sondern immer ein Textfenster: Ein Handbuch mit 300 Seiten kostet die Seiten, nach denen gefragt ist, nicht alle. PDF-Seiten und Folien kommen mit ihrer Nummer markiert und lassen sich gezielt wählen („Seiten 12 bis 15“). Eine Arbeitsmappe kommt als Zeilen mit Zeilennummern und Spaltenbuchstaben, je ein Blatt und ein Zellbereich, Datumswerte als Datum. Überschriften in Word bleiben erkennbar, die Notizen einer Präsentation kommen mit. Lesbar sind Dateien bis 50 MB aus dem geöffneten Ordner. Gescannte PDFs ohne Textebene, passwortgeschützte Dateien und die alten Formate (.doc, .xls, .ppt) lassen sich nicht lesen; das Modell erfährt, warum.
-
-- **Python ausführen (standardmäßig aus):** Nach dem Einschalten unter Einstellungen › Tools & Sicherheit › *Ausführen* › „Python-Ausführung erlauben“ bekommt das Modell das Tool `run_python`: es schreibt ein Python-3-Programm, Snotra führt es im geöffneten Projektordner aus und gibt Ausgabe, Fehlerausgabe und Exit-Code zurück. Damit werden Auswertungen gerechnet statt geschätzt — Summen über eine CSV, Umrechnungen, Datenumformung, Regex an echten Beispielen prüfen. Jeder Aufruf ist ein frisches Skript, es gibt keinen Zustand zwischen Aufrufen und kein `pip install`; welche Pakete verfügbar sind, bestimmst du über einen eigenen Interpreter-Pfad (z. B. ein venv). Gesucht wird der Interpreter in **deinem** PATH — Snotra liest ihn beim Start einmal aus deinem Shell-Profil, damit auch eine aus dem Finder gestartete App den Homebrew-, pyenv- oder asdf-Python findet statt des System-Python; Unterprozesse im Skript (`subprocess`) sehen denselben PATH. Welcher Interpreter gefunden wurde, steht neben dem Schalter; einen eigenen Interpreter legst du unter Einstellungen › Tools fest.
-
-  **Das ist die riskanteste Einstellung der App — wie riskant, hängt von deinem System ab.** Unter **macOS und Linux** läuft der Code in einer Sandbox: Er darf nur im Projektordner und in einem temporären Ordner schreiben, kann keine Schlüssel, Cloud-Zugangsdaten, Shell-Verläufe oder Browserdaten lesen und erreicht das Netzwerk nur für die Domains, die er angibt und die die Freigabekarte auflistet — in *Auto* ohne Rückfrage. Deine übrigen Dateien kann er weiterhin *lesen*. Unter **Windows** gibt es noch keine Sandbox: Der Code läuft mit deinen Rechten und kann überall lesen und schreiben, ins Netz gehen und Programme starten. So oder so steht außerhalb von *Auto* die Freigabe vorn: Snotra zeigt dir vor jedem Lauf den vollständigen Quelltext, und eine Pille auf der Karte sagt, ob der Lauf isoliert ist — „Nicht isoliert“ in Bernstein. In *Auto* läuft der Code ohne Rückfrage. Ein „Für diese Sitzung erlauben“ gibt es für Ausführung bewusst nicht. Läuft ein Skript zu lange, wird es nach dem Zeitlimit (Standard 10 s) beendet; „Stop“ im Chat beendet es ebenfalls.
-
-- **Shell-Befehle ausführen (standardmäßig aus):** Nach dem Einschalten unter Einstellungen › Tools & Sicherheit › *Ausführen* › „Shell-Befehle erlauben“ bekommt das Modell das Tool `shell_execute`: es führt einen Befehl in der Shell deines Betriebssystems aus — macOS und Linux in deiner Login-Shell (zsh, bash, …), Windows in PowerShell bzw. `cmd.exe` — und liefert Ausgabe, Fehlerausgabe und Exit-Code zurück. Damit wird nutzbar, was ohnehin auf deinem Rechner liegt: `git status`, `npm run build`, `docker ps`, ein installiertes CLI-Werkzeug, das ein Skill beschreibt. Weil POSIX-Shells als **Login-Shell** starten und Snotra deinen PATH beim Start einmal aus dem Profil liest — interaktiv, also einschließlich `.zshrc` —, ist dein gewohnter PATH da (Homebrew, nvm, pyenv), auch wenn du die App aus dem Finder gestartet hast. Ausgeführt werden Befehle trotzdem nicht interaktiv, damit kein Prompt-Vorlauf in der Ausgabe landet. Arbeitsverzeichnis ist der Projektordner oder ein Unterordner davon; ein Befehl pro Aufruf, kein Zustand zwischen zwei Aufrufen (ein `cd` wirkt nur innerhalb desselben Befehls). Nicht interaktiv: es gibt kein Terminal, eine wartende Eingabeaufforderung läuft ins Zeitlimit (Standard 30 s, höchstens 300 s). Welche Shell benutzt wurde, steht im Ergebnis und auf der Freigabekarte.
-
-  **Das ist die weitreichendste Einstellung der App.** Unter **macOS und Linux** läuft jeder Befehl in einer Sandbox: Er schreibt nur im Projektordner und in einem temporären Ordner (Caches wie die von pip und npm landen ebenfalls dort), kann keine Schlüssel, Cloud-Zugangsdaten, Shell-Verläufe oder Browserdaten lesen und erreicht das Netzwerk nur für die Domains, die der Aufruf nennt und die die Freigabekarte auflistet — in *Auto* ohne Rückfrage; `pip install` und `npm install` bekommen ihre Registry automatisch, alles andere muss das Modell benennen. Unter **Windows** gibt es noch keine Sandbox: Ein Befehl kann alles, was du selbst im Terminal kannst — überall lesen und schreiben, ins Netz gehen, Programme installieren. Außerhalb von *Auto* zeigt dir Snotra vor jedem Lauf den vollständigen Befehl, die Shell, das Arbeitsverzeichnis und ob der Lauf isoliert ist, und ein „Für diese Sitzung erlauben“ gibt es für Ausführung bewusst nicht. Stattdessen kannst du dir eine **exakte, einfache Befehlszeile** für den geöffneten Ordner merken lassen — „Diesen Befehl immer erlauben“ auf der Karte, bestätigt im Systemdialog: `git status` läuft dann im Modus „Intelligent“ ohne Rückfrage, während `git status --short`, derselbe Befehl in einem anderen Ordner, mit anderen Netzwerk-Domains, mit Verkettung, Pipes, Umleitung, Variablen oder Anführungszeichen weiterhin jedes Mal fragt. Gesperrt sind rekursives Zwangslöschen (`rm -rf` und Entsprechungen), Datenträgeroperationen und das Umschreiben der Git-Historie — das ist eine zusätzliche Sicherung, **kein** vollständiger Schutz, denn ein Skript oder ein Interpreter dazwischen umgeht jede Musterliste. Im Modus „Auto“ läuft ein Befehl ohne Rückfrage — isoliert, wo die Sandbox greift. „Stop“ im Chat und das Zeitlimit beenden den ganzen Prozessbaum, nicht nur die Shell, und unter macOS und Linux überlebt nichts, was ein Befehl im Hintergrund weiterlaufen lässt, den Befehl selbst.
-
-- **Websuche:** Mit einem hinterlegten Tavily-Schlüssel (Einstellungen › Tool-Einrichtung › Websuche) bekommt das Modell das Tool `web_search` — es liefert Titel, URL und einen kurzen Auszug je Treffer, keine ganzen Seiten. Ohne Schlüssel wird das Tool gar nicht erst angeboten. Die Suchanfrage verlässt deinen Rechner, deshalb ist das Tool als **externer Dienst** eingestuft: im Modus „Intelligent“ fragt Snotra vor jeder Suche nach. Einen kostenlosen Schlüssel gibt es unter [app.tavily.com](https://app.tavily.com); er wird wie die Modell-Schlüssel verschlüsselt abgelegt. Einen geöffneten Projektordner braucht die Suche nicht — anders als die Datei-Tools steht sie auch im leeren Chat zur Verfügung.
-- **Seiten lesen:** Was `web_search` an Adressen findet, liest das Tool `fetch_url` am Stück: es ruft genau eine http(s)-Adresse ab und liefert den lesbaren Text der Seite statt des HTML — gekürzt, ohne Skripte und Navigation. Gedacht für das, was über den kurzen Auszug hinausgeht: ein Changelog, eine Norm, eine lange Fehlermeldung. Auch dieses Tool ist ein **externer Dienst** und braucht keinen Projektordner; einzurichten gibt es nichts. Abgelehnt werden lokale und private Adressen (`localhost`, Heimnetz, Cloud-Metadaten) — auch dann, wenn eine Weiterleitung erst dorthin führt — sowie alles, was kein Text ist: PDF, Bilder und Downloads holt Snotra nicht. **Der gelesene Text kommt von einem Fremden**: er ist für das Modell Material, kein Auftrag, und jeder Tool-Aufruf danach läuft erneut durch die Freigabe.
-- **Bilder erzeugen:** Mit einem OpenAI-Schlüssel unter Einstellungen › Modelle bekommt das Modell das Tool `generate_image` — es zeichnet ein Bild nach einer Beschreibung und legt es als PNG-, JPEG- oder WebP-Datei im geöffneten Projektordner ab; die Dateiendung bestimmt das Format. Das Bild erscheint im Chat unter der Zeile der geänderten Dateien, mit Pfad und Größe; ein Klick öffnet es in der Vorschau. Welches OpenAI-Bildmodell zeichnet, wählst du unter Einstellungen › Tool-Einrichtung › Bilderzeugung. Die Beschreibung verlässt deinen Rechner, und OpenAI rechnet jedes Bild einzeln ab — deshalb gilt das Tool als Änderung **und** externer Dienst: im Modus „Intelligent“ fragt Snotra vor jedem Bild nach, und ein Zug erzeugt höchstens vier. Ein ersetztes Bild bleibt als Kopie im Papierkorb. Das Modell bekommt Pfad und Größe zurück, nie das Bild selbst.
-
-**Netzwerk-Zeitlimits:** Modelllisten brechen nach 15 Sekunden (Cloud) bzw. 30 Sekunden (lokal) mit einer verständlichen Fehlermeldung ab, Sprachtranskriptionen nach 120 Sekunden, Bilderzeugungen nach 180 Sekunden. Ollama gilt immer als lokal; beim Anbieter „OpenAI-kompatibel“ entscheidet der Host der Server-URL — `localhost`, `127.0.0.x`, `::1` und `*.local` zählen als lokal. Die Zeitlimits umfassen auch das Lesen der Antwort. Schließen des Modell- oder Einstellungsdialogs sowie ein Anbieterwechsel brechen eine laufende Modellabfrage ab. Eine Transkription lässt sich über den Mikrofonknopf abbrechen; auch ein Kontextwechsel oder das Ausblenden der App verwirft die Spracheingabe. Verspätete Ergebnisse werden nicht mehr eingefügt.
-
-**Größengrenzen:** Eine Sprachaufnahme stoppt nach 5 Minuten oder 20 MB von selbst, je nachdem, was zuerst eintritt; eine halbe Minute vorher sagt es die Statuszeile unter der Eingabe an. Der Dateibaum listet höchstens 2.000 Einträge pro Ordner und schließt eine längere Liste mit einer Zeile ab, die sagt, wie viele noch fehlen.
-
-### Die Sandbox je Betriebssystem
-
-Ob ein Lauf isoliert ist, entscheidet ein kurzer Selbsttest einmal je App-Start — angenommen wird nichts. Einstellungen › Tools & Sicherheit zeigt das Ergebnis in der Zeile *Ausführen*, die Freigabekarte bei jedem Lauf.
-
-- **macOS:** eingebaut, nichts zu installieren.
-- **Linux:** braucht `bubblewrap`, `socat` und `ripgrep`; das `.deb` installiert sie, für AppImage und Tarball `sudo apt install bubblewrap socat ripgrep`. **Ubuntu ab 24.04** schränkt unprivilegierte User-Namespaces ein, dort startet die Sandbox im Auslieferungszustand nicht — die Einstellungen sagen das. Die Einschränkung aufzuheben ist eine systemweite Entscheidung, und sie liegt bei dir:
-
-  ```bash
-  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-  ```
-
-  Das gilt bis zum nächsten Neustart; damit es bleibt, dieselbe Zeile (ohne `sudo sysctl -w`) in eine Datei unter `/etc/sysctl.d/` schreiben. Ein AppArmor-Profil, das `bwrap` den `userns`-Zugriff erlaubt, geht ebenso. Starte Snotra danach neu.
-- **Windows:** noch keine Sandbox. Jeder Lauf hat deine vollen Rechte, und die Karte zeigt „Nicht isoliert“ in Bernstein.
-
-**Sehen, was blockiert wurde.** Verweigert die Sandbox während eines Laufs etwas — Schreiben außerhalb des Projektordners, Lesen an einem geschützten Ort wie `~/.ssh`, eine Verbindung zu einem Host, den der Aufruf nicht genannt hat —, steht direkt unter den Tool-Schritten der Antwort ein Kasten: welche Art, welcher Pfad oder Host und warum. Ein Programm, das einen Cache füllt, erscheint dabei einmal, mit dem Ordner und der Zahl der Pfade, die es versucht hat. Darunter liegt eingeklappt die Rohmeldung der Sandbox. Das Modell bekommt dieselbe Liste und die Ansage, es dir zu sagen, statt die Sperre zu umgehen, und der Kasten bleibt beim Chat, auch wenn du ihn später wieder öffnest.
-
-**Genau das Blockierte erlauben.** Bei Schreiben außerhalb des Projektordners oder Lesen an einem geschützten Ort fragt direkt nach dem Lauf eine Karte — in jedem Modus, auch in *Auto* —, ob genau dieser Pfad oder der Ordner eine Ebene höher geöffnet werden soll, für diesen Lauf oder für die Sitzung, und der Befehl noch einmal läuft. Für alles andere bleibt die Sandbox an; Snotras eigener Speicher, dein Home-Ordner als Ganzes und die Dateien, die die Sandbox immer schützt (`.bashrc`, `.git/hooks` …), werden nie angeboten. Eine Sitzungsfreigabe steht unter Einstellungen › Tools & Sicherheit und lässt sich dort widerrufen. Abgelehnt läuft der Befehl nicht noch einmal, und das Modell hat die Ansage, nicht auszuweichen. Eine Verbindung, die ein Programm direkt statt über den Proxy der Sandbox aufbaut, lässt sich nur anzeigen, nicht freigeben.
-
-**Eine Verbindung erlauben, während der Befehl wartet.** Eine Verbindung zu einem Host, den der Aufruf nicht genannt hat, hält die Sandbox fest, während der Befehl läuft, und eine Karte fragt — in jedem Modus, auch in *Auto* —, ob genau dieser Host durchdarf oder alle Hosts seiner Domain, für diesen Lauf oder für die Sitzung. Die Karte sagt, wie lange die Verbindung schon wartet, welche Hosts schon frei sind und was der Befehl bisher gemeldet hat. Erlaubt läuft der Befehl einfach weiter; nichts läuft zweimal. Abgelehnt bleibt die Verbindung zu, und das Modell hat die Ansage, nicht auszuweichen. Gibt der Befehl auf, bevor du entscheidest, bietet eine Karte nach dem Lauf den Host mit Wiederholung an.
-
-**Datei-Tools außerhalb des Projektordners.** Nennt das Modell eine Datei oder einen Ordner außerhalb des geöffneten Ordners — absolut oder mit `~/` am Anfang —, fragt vor dem Aufruf eine Karte, in jedem Modus, auch in *Auto*: genau diese Datei oder diesen Ordner öffnen oder den Ordner darum, für diesen Aufruf oder für die Sitzung. Die Karte ist zugleich die Freigabe des Aufrufs, bei einer Änderung mit Vorschau; eine zweite Karte folgt nicht. Dein Home-Ordner als Ganzes, das Wurzelverzeichnis eines Laufwerks, Snotras eigener Speicher und die globalen Skill-Ordner werden nie angeboten, zum Schreiben auch keine Orte mit Zugangsdaten (etwa `~/.ssh`) und keine Startdateien der Shell. Abgelehnt läuft der Aufruf nicht, und das Modell hat die Ansage, nicht auszuweichen.
-
-**Bescheid, wenn eine Karte wartet.** Ein Lauf steht still, bis du seine Karte beantwortest. Ist Snotra im Hintergrund oder wartet die Karte in einem Chat, den du gerade nicht ansiehst, nennt eine Systembenachrichtigung den Chat und was wartet; ein Klick holt Snotra mit diesem Chat nach vorn. Die Zeile des Chats im Verlauf zeigt *Wartet auf deine Freigabe* ohnehin. Abschalten lassen sich die Benachrichtigungen unter Einstellungen › Allgemein.
-
-**Für einen Workspace abschalten.** Verhindert die Sandbox in einem Projekt etwas Legitimes — Schreiben in ein Nachbar-Repository oder nach `~/.config`, `gh` oder `terraform`, die ins Netz müssen, ein älteres `pip` in einem venv —, schaltest du sie unter Einstellungen › Tools & Sicherheit › *Ausführen* › *Sandbox für diesen Workspace* für diesen Ordner ab. Das gilt nur für diesen einen Ordner, nie global und nie als Voreinstellung. Du bestätigst es in einem Systemdialog, und die Einstellung liegt bei deinen Berechtigungen statt im Ordner — ein ausgechecktes Repository kann sie also nicht selbst abschalten. Das braucht verschlüsselten Speicher (`safeStorage`); wo das System keinen bietet, bleibt der Schalter an, und die Kachel sagt, warum. Ab dann zeigt die Freigabekarte „Nicht isoliert“ mit dem Grund und einem Link zurück zur Einstellung, und das Modell erfährt, dass der Lauf nicht isoliert war. Im Modus „Auto“ laufen solche Befehle ohne Rückfrage; die Modus-Pille in der Chatleiste zeigt dann „Auto · nicht isoliert“ in Bernstein, sobald „Auto“ `shell_execute` oder `run_python` ohne Sandbox ausführen würde — hier abgeschaltet oder auf dem System nicht verfügbar —, und ihr Menü sagt, warum, mit einem Link zur Einstellung. „Workspace-Regeln zurücksetzen“ und „Alle Berechtigungen zurücksetzen“ schalten die Sandbox wieder ein.
-
-**Freigaben pro Programm.** Braucht nur ein einzelnes Programm mehr – ein Werkzeug, dessen Anmeldung erneuert werden muss, `gh` oder `terraform` unter macOS –, musst du die Sandbox nicht abschalten. Unter Einstellungen › Tools & Sicherheit › *Ausführen* › *Freigaben pro Programm* gibst du diesem Programm die Domains, die es erreichen darf, Ordner, in die es zusätzlich schreiben darf (etwa seinen Token-Cache), und unter macOS die Zertifikatsprüfung über das System, die Programme in Go brauchen, um überhaupt ins Netz zu kommen. Die Freigabe gilt in jedem Workspace, aber nur, wenn ein Befehl das Programm allein startet – ohne Verkettung, Pipe oder Umleitung – und nur für genau die Datei, die du gewählt hast, nicht für eine gleichnamige Datei in einem Projekt. Jede neue oder erweiterte Freigabe bestätigst du in einem Systemdialog. Die Freigabekarte nennt die Freigabe oder sagt, warum sie nicht gilt, und das Modell erfährt dasselbe.
-
-**Das Schild neben dem Ordnernamen** zeigt dasselbe in jedem Modus, solange `shell_execute` oder `run_python` an ist: ein schlichtes Schild, solange Läufe in diesem Ordner isoliert sind, ein durchgestrichenes in Bernstein, sobald sie es nicht sind. Ein Klick darauf öffnet die Sandbox-Einstellung.
-
-Was die Sandbox nicht leistet: Sie hindert einen Lauf nicht daran, Dateien außerhalb der geschützten Orte zu *lesen*, und was er gelesen hat, kann eine Domain erreichen, die die Karte erlaubt hat. Unter macOS kommen Werkzeuge, die Zertifikate über den Schlüsselbund prüfen — `gh`, `terraform` und andere Go-Programme —, darin nicht ins Netz.
-
 ## Tastenkürzel
+
+*Das Handbuch hat noch kein Nachschlage-Kapitel ([#787](https://github.com/kkrafft1999/snotra/issues/787)); bis dahin stehen die Kürzel hier.*
 
 Was Snotra zu den üblichen Systemkürzeln hinzufügt. Kopieren, Einfügen, Rückgängig, Zoom und Vollbild verhalten sich wie in jeder anderen App deiner Plattform und stehen in den Menüs *Bearbeiten*, *Ansicht* und *Fenster*.
 
@@ -428,468 +237,9 @@ Was Snotra zu den üblichen Systemkürzeln hinzufügt. Kopieren, Einfügen, Rüc
 | Einstellungen: zum vorigen oder nächsten Bereich · zum ersten oder letzten | `↑`/`↓` oder `←`/`→` · `Pos1`/`Ende` | `↑`/`↓` oder `←`/`→` · `Pos1`/`Ende` |
 | Dialog, Menü oder vergrößertes Bild schließen | `Esc` | `Esc` |
 
-## Anbieter
+## Umstieg von „Weyouze Anything“
 
-Ein **Eintrag in der Präferenzliste** (Einstellungen › Modelle › *Modell hinzufügen*) verbindet einen Anbieter mit einem Modell; im Chat wechselst du zwischen den Einträgen über die Pille neben der Eingabe. Die Pille nennt nur das Modell — `gpt-5-mini`, nicht `OpenAI · gpt-5-mini`; nur bei zwei Einträgen mit demselben Modell steht der Name des Eintrags dahinter. Das gewählte Modell bleibt bei der Konversation — ein Chat aus dem Verlauf kommt mit seinem eigenen zurück, ein neuer Chat startet mit dem zuletzt gewählten.
-
-**Das Reasoning-Level gehört zum Chat, nicht zum Eintrag.** Bei einem Modell, das eines kennt (OpenAI ab GPT-5), zeigt dasselbe Menü unter den Modellen die Level von `none` bis `max`; die Pille heißt dann `gpt-5-mini · high`. Ein Level gilt für diesen Chat und bleibt bei ihm, auch im Verlauf und nach einem Neustart. Ein neuer Chat startet immer mit `medium`. Welche Level ein Modell wirklich nimmt, entscheidet OpenAI: Ein abgelehntes Level wird im Chat erklärt, zusammen mit den Leveln, die das Modell nimmt, sofern OpenAI sie nennt.
-
-Fünf Anbieter stehen zur Wahl:
-
-| Anbieter | Zugang | Bemerkung |
-| -------- | ------ | --------- |
-| **OpenAI** | API-Key | Spricht die Responses-API; bietet GPT-5 und neuer an, mit Bildern und Reasoning-Level. Ein Eintrag mit einem älteren Modell läuft weiter, aber ohne Reasoning-Level |
-| **Anthropic** | API-Key | |
-| **Google** | API-Key | |
-| **Ollama** | Server-URL | Native Ollama-API (`/api/tags`, `/api/chat`), nicht der `/v1`-Layer |
-| **OpenAI-kompatibel** | Server-URL, Key optional | Alles andere mit OpenAI-förmiger Schnittstelle; **Verbindung je Eintrag**, mehrere Ziele nebeneinander |
-
-### OpenAI-kompatibel
-
-Für alles, was eine OpenAI-förmige HTTP-Schnittstelle anbietet: **LM Studio**, **MLX-LM** (`mlx_lm.server` auf Apple Silicon), **llama.cpp** (`llama-server`), **vLLM**, ein firmeninternes Gateway, Router-Dienste wie **OpenRouter**, Together, Groq oder Fireworks.
-
-**MLX-LM war früher ein eigener Anbieter** und ist jetzt eine Vorlage dieses Anbieters. Bestehende MLX-LM-Einträge werden beim ersten Start nach dem Update übernommen, ohne dass du etwas tun musst: gleiches Modell, gleiche Server-URL, Anzeigename „MLX-LM“, kein Schlüssel.
-
-**Die Verbindung gehört zum Eintrag.** Jede Zeile der Präferenzliste trägt ihre eigene Adresse, ihren eigenen Schlüssel und ihren eigenen Namen — ein lokaler LM-Studio-Server und ein Firmen-Gateway stehen also nebeneinander, ohne sich zu überschreiben. Bei den übrigen vier Anbietern bleibt es bei einer Konfiguration je Anbieter: Der OpenAI-Schlüssel soll sich gerade *nicht* über mehrere Zeilen verteilen. Der Preis dieser Wahl ist bekannt — wer sechs OpenRouter-Modelle führt, trägt den Schlüssel sechsmal ein und ändert ihn an sechs Stellen.
-
-Eine bestehende Zeile änderst du über das **Stift-Symbol** in der Liste (per Tabulator erreichbar, Enter öffnet). Der Dialog heißt dann *Modell bearbeiten*, der Anbieter steht fest, und **Änderungen übernehmen** ersetzt die Zeile, statt eine neue anzulegen. Gespeicherte Schlüssel und Header bleiben erhalten, solange du sie nicht überschreibst oder mit dem Papierkorb daneben löschst.
-
-Ganz oben im Dialog steht eine **Vorlage**. Sie belegt Server-URL und API-Stil vor (LM Studio, MLX-LM, llama.cpp, vLLM, Ollama `/v1`, OpenRouter, „Eigener Endpunkt“); danach ist jedes Feld frei änderbar, und die Vorlage selbst wird nicht gespeichert. Die Felder:
-
-| Feld | Bedeutung |
-| ---- | --------- |
-| **Server-URL** | Wurzel der API, z. B. `http://localhost:1234/v1`. Pflichtangabe; ein Schrägstrich am Ende wird abgeschnitten |
-| **API-Schlüssel** | **Optional.** Leer lassen heißt: es geht *kein* `Authorization`-Header hinaus — der Normalfall bei lokalen Servern. Mit Schlüssel: `Authorization: Bearer …` |
-| **Anzeigename** | Steht im Chat vor dem Modellnamen („LM Studio · qwen2.5“) und unterscheidet die Zeilen voneinander. Leer lassen für „OpenAI-kompatibel“ |
-| **Zusätzliche Header** | Eine Zeile je `Name: Wert`, für Gateway-Token oder Mandanten-Header. Wird wie ein Schlüssel behandelt: verschlüsselt gespeichert, nach dem Speichern nicht mehr angezeigt, nie in Logs oder Fehlermeldungen. Eine Zeile `Authorization: …` ersetzt den `Bearer`-Header, egal wie der Name geschrieben ist |
-| **API-Stil** | „Nur Chat Completions“ (Standard, passt fast immer) oder „Responses, sonst Chat Completions“. Geraten wird nichts; bei `404`/`405` auf `/responses` fällt Snotra genau einmal zurück und bleibt für die Sitzung dabei |
-| **TLS-Zertifikat ignorieren** | Wie bei Ollama, nur für selbst- oder intern signierte Zertifikate, denen du vertraust |
-| **Tools mitschicken** | Standardmäßig an. Aus lassen bei Servern, die an Tool-Schemata scheitern — dann bleibt es beim reinen Chat |
-| **Bild-Anhänge erlauben** | Standardmäßig aus. An nur, wenn das Modell dahinter Bilder versteht; sonst werden Anhänge im Chat gar nicht erst angeboten |
-
-**Modellliste:** „Modelle laden“ fragt `GET {Server-URL}/models` ab. Klappt das nicht oder liefert der Server eine leere Liste, ist das **kein Fehler** — der Modellname lässt sich von Hand eintragen, und der Eintrag bleibt nutzbar; die Statuszeile sagt, warum die Liste leer blieb. Ein von Hand eingetragener Name bleibt stehen, auch wenn die Liste später doch lädt. Ein gespeicherter Schlüssel und gespeicherte Zusatz-Header gehen nur an die Server-URL, mit der sie gespeichert wurden: Nach einem Wechsel der URL gibst du den Schlüssel neu ein, um die Liste vom neuen Server zu laden.
-
-**Lokal oder entfernt** entscheidet der Host der Server-URL: `localhost`, `127.0.0.x`, `::1` und `*.local` gelten als lokal und bekommen das großzügigere Zeitlimit beim Modellabruf, dafür das engere Verlaufs-Budget (siehe `historyCharLimit` unten) — genau wie Ollama.
-
-## Konfiguration
-
-Die meisten Einstellungen (Provider, Modelle, System-Prompt, Sprache) pflegst du direkt in der App unter **Einstellungen** — zu öffnen über die Menüleiste (*Snotra Agent › Einstellungen…* auf dem Mac, *Ansicht › Einstellungen…* unter Windows und Linux) oder `Cmd/Strg+,` (siehe [Tastenkürzel](#tastenkürzel)). Einen Knopf dafür gibt es bewusst nicht: Er saß in der Kopfzeile des Chats und war damit weg, sobald man die Chat-Spalte wegschaltete. Darüber hinaus liegen im Benutzerprofil (`userData`-Ordner von Electron: macOS `~/Library/Application Support/Snotra AI`, Windows `%APPDATA%\Snotra AI`, Linux `~/.config/Snotra AI` — nach der Plattform benannt, siehe unten) ein paar JSON-Dateien, u. a. `ui-preferences.json` mit folgenden Optionen:
-
-| Schlüssel          | Bedeutung                                                                  | Default   | Bereich          |
-| ------------------ | -------------------------------------------------------------------------- | --------- | ---------------- |
-| `maxToolRounds`    | Maximale Tool-Runden pro Chat-Anfrage (auch in der App einstellbar)         | 14        | 1 – 500          |
-| `historyCharLimit` | Zeichen-Budget für den an den Provider gesendeten Chat-Verlauf (siehe unten)| 200 000   | 4 000 – 2 000 000 |
-
-<a id="umbenannt-von-snotra-ai"></a>
-**Umbenannt von Snotra AI:** Snotra AI ist jetzt der Name der Plattform, die App heißt Snotra Agent. Was die App ablegt, trägt weiter den Namen der Plattform: der `userData`-Ordner oben und der Schlüssel, mit dem API-Keys und Chat-Verlauf verschlüsselt sind (unter macOS der Schlüsselbund-Eintrag „Snotra AI Safe Storage“). Nichts wird verschoben, und jeder gespeicherte Key bleibt lesbar. Was sich beim Umstieg ändert:
-
-- **macOS:** Das Selbst-Update ersetzt `Snotra AI.app` durch `Snotra Agent.app`. Einen Dock-Eintrag der alten App musst du neu anlegen. Installierst du die neue Version von Hand, lösch danach die alte `Snotra AI.app`.
-- **Windows und das Linux-tar.gz:** Snotra AI 1.16.0 und älter kann das umbenannte Paket nicht selbst einspielen. Installier die neue Version einmal von Hand, wie oben für Windows beschrieben; Einstellungen und Chats bleiben erhalten. Verknüpfungen auf `Snotra AI.exe` musst du neu anlegen.
-- **AppImage und `.deb`-Paket** laufen weiter wie bisher.
-
-**Umstieg von „Weyouze Anything“ (bis v1.0.4):** Beim ersten Start kopiert die App Einstellungen, Presets, Ordner-Historie und Chat-Verlauf aus dem alten `userData`-Ordner; der alte Ordner bleibt unverändert als Backup liegen. Unter macOS müssen die API-Keys einmal neu eingegeben werden, weil der Keychain-Eintrag von Electrons `safeStorage` am App-Namen hängt; die Einstellungen zeigen dann „Key neu eingeben“. Ein dadurch nicht mehr entschlüsselbarer Chat-Verlauf wird als `chat-history.json.undecryptable-<Zeitstempel>` gesichert statt überschrieben. Ein Start mit `--user-data-dir` nimmt den angegebenen Ordner, wie er ist, und kopiert nichts hinein.
-
-**Verlaufs-Trimming (`historyCharLimit`):** Damit lange Sessions nicht ins Token-Limit des Providers laufen, wird der Verlauf pro Anfrage budgetiert (Heuristik: 1 Token ≈ 4 Zeichen). Ältere Nachrichten jenseits des Budgets werden weggelassen, und große Tool-Ausgaben früherer Tool-Runden (z. B. gelesene Dateien) werden auf einen Platzhalter gekürzt. Die aktuelle Frage, alle User-Nachrichten im Fenster und die Tool-Ausgaben der jüngsten Runde bleiben immer vollständig erhalten.
-
-**Was der Prompt kostet:** Unter dem Eingabefeld steht die Größe des Kontextfensters der letzten Anfrage. Ein Klick darauf (oder Enter/Leertaste, wenn der Fokus darauf steht) klappt auf, **woraus** sie besteht: jeder eingeschaltete Skill einzeln, die Tool-Definitionen getrennt nach eingebauten Tools und je MCP-Server, der übrige System-Prompt und der Verlauf. Die Gesamtzahl ist die echte Zahl des Anbieters, die Aufteilung darauf ist aus der Zeichenzahl geschätzt (Fließtext, Markdown und JSON-Schemas mit unterschiedlicher Dichte, und je nach Anbieter mit anderem Teiler — ein Tokenizer packt JSON dichter als der nächste) — beides steht so auch in der Fläche. Hat der Anbieter einen Teil des Prompts aus seinem Cache gelesen, steht die Zahl direkt unter der Gesamtsumme; sie kommt wie diese vom Anbieter und ist keine Schätzung. Aus einer Skill-Zeile springst du direkt zu seinem Schalter unter **Einstellungen › Skills**, um ihn abzuschalten.
-
-**Tool-Berechtigungen:** Ob ein Tool-Aufruf läuft, entscheidet Snotra pro Aufruf nach Risikoklasse (`read`, `read-sensitive`, `write`, `delete`, `execute`, `external`) und Modus. Den Modus eines Chats wählst du in der **Chat-Leiste** (Pille neben der Modell-Auswahl). „Auto“ verlangt eine Bestätigung in einem Systemdialog, der Weg zurück zu „Intelligent“ geht jederzeit ohne Rückfrage. Der Modus gehört zur Konversation: Ein Chat aus dem Verlauf bringt seinen eigenen wieder mit, ein **neuer** Chat beginnt bei „Intelligent“. „Auto“ überlebt außerdem keinen Neustart der App — nach dem Start läuft auch ein Auto-Chat zunächst auf „Intelligent“, bis du ihn im Verlauf ausdrücklich öffnest.
-
-Ein Ordner kann einen eigenen **Standardmodus** haben. Setzt du im Menü der Pille unter den Modi den Haken „„Auto“ auch für neue Chats in ‹Ordner›“ — oder wählst den Standard oben auf der Seite **Einstellungen › Tools & Sicherheit** —, startet jeder neue Chat in diesem Ordner in diesem Modus. Ein Ordner, dem du vertraust, bleibt so auf „Auto“, auch nach einem Neustart; ein sensibler startet jeden Chat mit „Immer fragen“. „Auto“ als Standard bestätigst du einmal in einem Systemdialog, der den Ordner nennt; die Marke „Standard in ‹Ordner›“ im Menü zeigt, welcher Modus es ist. Einen einzelnen Chat kannst du weiterhin umstellen, das bleibt eine Entscheidung für diesen Chat. Der Standard liegt bei deinen Berechtigungen und nicht im Ordner, ein ausgechecktes Repository kann sich also nicht selbst auf „Auto“ setzen; „Workspace-Regeln zurücksetzen“ stellt ihn wieder auf „Intelligent“.
-
-Modus, Sperr-/Erlaubnisregeln und eigene sensible Pfadmuster liegen in einer eigenen, HMAC-signierten Datei `tool-policy.json` im `userData`-Ordner (Schlüssel über `safeStorage` geschützt); wird die Datei manipuliert, fällt Snotra auf den Modus „Intelligent“ zurück — oder bleibt bei „Immer fragen“ — und verwirft Erlaubnisse, Sperren bleiben wirksam. Ohne verschlüsselten Speicher (etwa ein Linux-Desktop ohne Schlüsselbund) stehen „Auto“ und dauerhafte Erlaubnisse nicht zur Verfügung; „Intelligent“ und „Immer fragen“ funktionieren wie gewohnt. Der bis v1.3.1 genutzte Schalter `allowWorkspaceWrite` entfällt; beide Altwerte laufen auf den Standardmodus hinaus, die Einstellungen weisen einmalig darauf hin.
-
-| Modus | Lesen | Sensible Daten lesen, Ändern, Überschreiben ohne Rückweg, Ausführen, externe Dienste |
-| ----- | ----- | ----- |
-| **Intelligent** (`smart`, Standard) | läuft | fragt im Chat nach Freigabe |
-| **Immer fragen** (`ask-all`) | fragt | fragt |
-| **Auto** (`auto`) | läuft | läuft ohne Rückfrage |
-
-Harte Grenzen gelten in jedem Modus: kein Ausbruch aus dem Projektordner, Skill-Verzeichnisse bleiben schreibgeschützt, der `userData`-Ordner von Snotra ist für Tools gesperrt, und Ausgaben, die einen der eigenen Provider-Schlüssel enthalten, werden zurückgehalten. Sensible Pfade (`.env*`, `*.pem`, `*.key`, `id_*`, `credentials*`, `secrets*`, `*.p12`, `*.pfx`, `.netrc`, `.npmrc`, `.pypirc`, Ordner `.ssh`, `.aws`, `.gnupg`, `.kube`) und Inhalte (Private-Key-Header, bekannte Token-Präfixe, Credential-Zuweisungen, Bearer-Token) werden lokal erkannt: gezielte Zugriffe brauchen eine Freigabe, breite Suchen und Listen lassen solche Einträge weg und melden nur die Anzahl (`omitted_sensitive`). Das Konzept dazu steht in [`docs/security-concept.md`](docs/security-concept.md).
-
-Die drei Schreib-Tools (max. 2 MB pro Datei):
-
-| Tool | Wofür |
-| ---- | ----- |
-| `write_file_text` | Textdatei anlegen oder komplett überschreiben; fehlende Zwischenordner werden automatisch erzeugt. Beim Überschreiben landet vorher eine Kopie der alten Fassung im Papierkorb (Dateiname mit Zeitstempel); gelingt das nicht, gilt der Aufruf als `delete` und braucht eine eigene Freigabe |
-| `edit_file` | Eine gezielte Ersetzung in einer bestehenden Datei (`old_string` → `new_string`), ohne die ganze Datei neu zu schreiben |
-| `apply_patch` | Mehrere zusammenhängende Änderungen in einem Aufruf — als Liste von Ersetzungen in einer Datei oder als unified diff über mehrere Dateien. Alles oder nichts: schlägt ein Schritt bzw. ein Hunk fehl, bleibt jede betroffene Datei unverändert. Dateien anlegen, löschen oder umbenennen kann das Tool nicht |
-
-Der Zugriff bleibt wie bei den Lese-Tools strikt auf den Projektordner beschränkt. Im Chat erscheint die Tool-Zeile (z. B. „Datei docs/neu.md wird geschrieben …“) bereits, während das Modell den Inhalt noch erzeugt — nicht erst nach dem eigentlichen Schreibvorgang.
-
-**Freigabe-Karte:** Braucht ein Aufruf eine Freigabe, erscheint im Chat eine Karte („Änderung bestätigen“, „Ausführung bestätigen“ bzw. „Dateizugriff bestätigen“) mit Tool, Wirkung, allen Zielpfaden, Grund und – bei Schreib- und Ausführungs-Tools – einer maskierten Vorschau des neuen Inhalts, der Ersetzung bzw. des vollständigen Befehls; bei `shell_execute` nennt die Karte zusätzlich die erkannte Shell und das Arbeitsverzeichnis; beim Überschreiben steht dabei, ob eine Kopie in den Papierkorb wandert. Bei sensiblen Dateien nennt die Karte den Provider, an den der Inhalt ginge. Drei Aktionen: **Einmal erlauben**, **Für diese Sitzung erlauben** (nur für Lesen, sensibles Lesen und gewöhnliches Ändern; genau dieses Tool auf genau diese Ziele, nicht im Modus „Immer fragen“) und **Ablehnen**; auf einer `shell_execute`-Karte steht in der Mitte stattdessen **Diesen Befehl immer erlauben**, und der Hinweis darunter sagt, was genau gemerkt wird — oder warum sich der Befehl nicht merken lässt. Unsichtbare Zeichen in dem, was das Modell geschrieben hat — Richtungszeichen, Zeichen ohne Breite —, stehen als `⟨U+202E⟩` an ihrer Stelle, mit einem Hinweis, damit sich ein Befehl nicht anders liest, als er ausgeführt wird. Esc lehnt die Karte ab, die du siehst, außer ein Menü oder ein anderes Feld wartet auf die Taste; kein Button ist vorbelegt, es gibt kein Zeitlimit. Wechseln Chat, Workspace, Modus oder Regeln, während eine Karte offen ist, verfällt die Anfrage und der Lauf endet sichtbar („Anfrage verfallen“). Lehnst du ab, erhält das Modell ein `permission_denied`-Ergebnis; die Tool-Zeile zeigt die Entscheidung („· abgelehnt“, „· blockiert“) mit Grund, Klasse und Status als Tooltip – auch in gespeicherten Verläufen.
-
-**Einstellungen › Tools & Sicherheit** zeigt alles, was im offenen Workspace über einen Tool-Aufruf entscheidet, auf einer Seite, sortiert nach den sechs Risikoklassen. Jede Zeile sagt, ob ihre Aufrufe laufen, fragen oder aus sind – ermittelt von Snotra aus denselben Regeln, die über jeden Aufruf entscheiden –, und beantwortet aufgeklappt drei Fragen: Darf Snotra das (die Tools, jedes mit seinem Schalter), fragt Snotra vorher (der Modus, deine Freigaben, gemerkte Befehle und Sitzungsfreigaben) und wo bzw. was genau (die Ordner, die sensiblen Muster, Sandbox und Freigaben pro Programm, Sperren, was deinen Computer verlässt). Jedes Bedienelement dort wirkt sofort; Lockerungen bestätigst du im Systemdialog. Einstellungen › Tool-Einrichtung behält, was selbst keine Sicherheitswirkung hat: den Python-Interpreter, den Suchschlüssel, das Bildmodell und die Verbindungen zu den MCP-Servern.
-
-**Regeln:** Sperren und Erlaubnisse je Tool oder Risikoklasse mit Pfadmuster (`*` innerhalb eines Ordners, `**` über Unterordner), für alle Workspaces oder nur den geöffneten, jeweils in der Zeile ihrer Klasse gelistet und dort angelegt – das Formular öffnet sich an Ort und Stelle, die Klasse ist schon gewählt. Sperren gewinnen immer, dauerhafte Erlaubnisse gibt es nur für Lesen und gewöhnliches Ändern – dazu die Shell-Befehle, die du dir auf der Karte gemerkt hast, gelistet in der Zeile *Ausführen* und einzeln löschbar – und sie werden, wie das Löschen einer Sperre, im Systemdialog bestätigt. Dazu eigene sensible Pfadmuster in der Zeile *Sensible Daten lesen*, die **Sitzungsfreigaben** – jedes „Für diese Sitzung erlauben“, das noch gilt, in der Zeile seiner Klasse und am Ende der Seite noch einmal nach Chat gruppiert, mit dem, was es abdeckt, und der Uhrzeit, einzeln oder alle auf einmal widerrufbar – und zwei Reset-Aktionen mit ausgewiesenem Umfang: „Workspace-Regeln zurücksetzen“ und „Alle Berechtigungen zurücksetzen“ (entfernt auch die Programm-Freigaben und setzt den Modus auf „Intelligent“). „Alle Berechtigungen zurücksetzen“ fragt immer in einem Systemdialog, „Workspace-Regeln zurücksetzen“ immer dann, wenn dabei eine Sperre oder „Immer fragen“ als Standard des Ordners wegfiele, und das Entfernen eines deiner sensiblen Pfadmuster fragt ebenfalls; der Dialog listet den Schutz auf, der wegfällt. Diese Einstellungen wirken sofort.
-
-## Skills
-
-Ein **Skill** ist ein Verzeichnis mit einer `SKILL.md` im
-[Agent-Skills-Format](https://agentskills.io/specification): YAML-Frontmatter
-mit `name` (muss dem Verzeichnisnamen entsprechen) und `description`, darunter
-die Anweisungen als Markdown. Eingeschaltete Skills gehen als Teil des
-System-Prompts ans Modell.
-
-**System-Skills** liegen unter `system-skills/` im App-Bundle, gehören zum
-Produkt und sind voreingestellt aktiv. Mitgeliefert werden
-`snotra-capabilities` — damit kann die App Auskunft über sich selbst geben
-(was geht, was nicht, wo etwas eingestellt wird), statt zu raten — sowie
-`snotra-memory` und `snotra-skill-authoring` fürs Merken und fürs Schreiben von
-Skills.
-
-**Ordner-Skills** liest Snotra beim Öffnen eines Ordners aus drei Quellen, in
-dieser Reihenfolge:
-
-| # | Ebene | Pfad |
-|---|-------|------|
-| 1 | Workspace | `<ordner>/.agents/skills/*/SKILL.md` |
-| 2 | Benutzer | `~/.snotra/skills/*/SKILL.md` |
-| 3 | Benutzer (Alt-Ort) | `~/.agents/skills/*/SKILL.md` |
-
-`~/.snotra/` ist **Snotras eigenes Benutzerverzeichnis** — die Wurzel für
-Nutzerdaten, die Snotra gehören und für die es keinen herstellerneutralen
-Standard gibt; `skills/` ist ihr erster Bewohner. Das ist der empfohlene Ort
-für globale Skills. `~/.agents/skills` wird weiterhin gelesen, damit
-bestehende Installationen nicht brechen. Angelegt wird `~/.snotra/` nicht von
-selbst, und vorhandene Skills verschiebt Snotra nirgendwohin: ein fehlendes
-Verzeichnis ist kein Fehler.
-
-Nicht zu verwechseln mit dem von Electron verwalteten `userData`-Ordner — der
-bleibt App-Zustand und ist für Tools gesperrt. `~/.snotra/` ist das Gegenteil:
-ein Ort, den du selbst öffnest, befüllst und versionierst.
-
-Verzeichnisse anderer Werkzeuge — insbesondere `.claude/` — liest Snotra
-nicht, weder im geöffneten Ordner noch im Home-Verzeichnis. Gibt es denselben
-Namen mehrfach, gewinnt der erste Treffer — die übrigen erscheinen in den
-Einstellungen als „überdeckt“ mit Pfad. System-Skills stehen ganz vorn und lassen sich nicht
-durch ein untergeschobenes Verzeichnis ersetzen. Ungültige Einträge (kein
-Verzeichnis, fehlende `SKILL.md`, Name ≠ Verzeichnis) werden übersprungen und
-mit Grund angezeigt, statt den Scan abzubrechen.
-
-Verwaltet wird alles unter **Einstellungen › Skills**: Häkchen je Skill
-(beliebig viele gleichzeitig), gruppiert nach Quelle, plus „Skills neu laden“.
-Die Skill-Verzeichnisse werden **beobachtet**: Legst du einen Skill an, änderst
-seine `SKILL.md` oder installierst einen per `skill-manager`, merkt Snotra das
-von selbst — die Liste in den Einstellungen und die `/`-Vervollständigung im
-Chat ziehen sofort nach, ohne dass du etwas anklicken musst.
-„Skills neu laden“ bleibt als Ausweg für die Fälle, in denen das Betriebssystem
-keine Änderung meldet — etwa auf Netzlaufwerken.
-
-**Ordner-Skills sind nie automatisch aktiv:** Sie sind fremder Inhalt und damit
-ein Prompt-Injection-Risiko, deshalb braucht jeder eine ausdrückliche Auswahl.
-Ein Skill im geöffneten Ordner ist **nur für diesen Ordner** eingeschaltet: Ein
-Häkchen bei `review` in einem Repository schaltet keinen `review`-Skill im
-nächsten ein, und bringt ein Ordner einen Skill mit, der so heißt wie einer
-deiner globalen, ist deiner dort überdeckt und sein Häkchen geht nicht auf den
-fremden über — der Skill des Ordners bleibt aus, bis du ihn in diesem Ordner
-anhakst. `allowed-tools` aus dem Frontmatter wird ignoriert —
-maßgeblich bleiben die Tool-Schalter unter Einstellungen › Tools & Sicherheit.
-
-### Einen Skill im Chat aufrufen: `/name`
-
-Für den einmaligen Einsatz musst du nicht in die Einstellungen. Tippst du im
-Eingabefeld ein **`/`**, öffnet sich — wie bei der `@`-Dateireferenz — eine
-Liste **aller verfügbaren** Skills, nicht nur der eingeschalteten; gesucht wird
-dabei über Name *und* Beschreibung. `↑`/`↓` wählt aus, `Enter` oder `Tab`
-übernimmt, `Esc` schließt. Ein offener Ordner ist nicht nötig, die
-System-Skills sind immer da.
-
-Übernommen wird der Text `/name`, der in deiner Nachricht stehen bleibt. Er
-wirkt für den **weiteren Verlauf dieses Chats** — auch für die Folgeantworten
-und nach dem Neuladen des Chats, weil der Aufruf Teil der Nachricht ist. Deine
-Auswahl unter Einstellungen › Skills ändert sich dadurch nicht — der Aufruf
-gilt nur für diesen Chat und ist deine bewusste Einzelentscheidung.
-
-Nur was *du* schreibst, zählt als Aufruf — ein `/name` in einer Antwort des
-Modells oder in einem Tool-Ergebnis bleibt wirkungslos. Damit kann sich weder
-das Modell selbst noch fremder Dateiinhalt einen Skill einschalten. Ein
-Schrägstrich mitten im Wort oder in einem Pfad (`/usr/bin`, `und/oder`) bleibt
-normaler Text.
-
-### Passende Skills vorgeschlagen bekommen
-
-`/name` hilft nur, wenn du den Namen kennst. Deshalb schlägt Snotra dir einen
-passenden Skill vor: Schreib dein Anliegen und tipp dann ein **`/`** — unter
-dem Eingabefeld erscheint „Passt dazu: `/meeting-protocol`". Ein Klick
-übernimmt ihn, das `×` blendet ihn aus. Ohne `/` passiert nichts; der
-Vorschlag drängt sich also nie in ein normales Gespräch.
-
-Woher der Vorschlag kommt, stellst du unter **Einstellungen › Skills ›
-Vorschläge im Chat** ein:
-
-- **Aus den Beschreibungen (Voreinstellung).** Snotra vergleicht deine Zeile
-  mit den Skill-Beschreibungen — auf deinem Rechner, ohne Netz und ohne
-  Kosten. Wörter, die in vielen Beschreibungen stehen, zählen dabei weniger
-  als seltene. Gemessen an 16 Skills lag der richtige Vorschlag in 10 von 13
-  Fällen vorn, und bei fünf Anfragen ohne passenden Skill kam kein einziger
-  Fehlvorschlag. Was dieses Verfahren nicht kann: Fachkürzel erkennen, die in
-  keiner Beschreibung stehen (`TTAI-421`), und zwei sehr ähnliche Skills
-  auseinanderhalten.
-- **Das Modell fragen.** Genau dafür. Kostet dann aber einen kurzen Aufruf
-  beim Anbieter, dauert einen Moment, und deine Zeile geht zusammen mit den
-  Skill-Namen dorthin.
-- **Keine Vorschläge.**
-
-In jedem Fall gilt: Vorgeschlagen wird, eingeschaltet nie. Ein Ordner-Skill
-ist fremder Inhalt, und ihn zu übernehmen bleibt dein Klick.
-
-### Dateien neben der `SKILL.md`
-
-Viele Skills legen ihr eigentliches Wissen daneben ab (`references/`,
-`assets/`, `scripts/`) und verweisen aus der `SKILL.md` darauf. Das
-Verzeichnis jedes **eingeschalteten** Skills ist deshalb eine zweite
-**Lesewurzel**: Die Lese-Tools erreichen es über das Präfix
-`skill:<name>/<pfad>`, zum Beispiel `skill:meeting-protocol/references/vorlage.md`.
-Der Systemprompt nennt die Adressierung und die eingeschalteten Namen, sobald
-ein Ordner offen ist.
-
-`load_skill` nennt außerdem den Ordner des Skills, und ein absoluter Pfad darin
-funktioniert genauso wie die `skill:`-Schreibweise. Skills, die für andere
-Agenten geschrieben sind — die erst ihren eigenen Ordner suchen und dann
-`<ordner>/assets/…` lesen —, laufen deshalb unverändert, auch über ein
-verlinktes Skill-Verzeichnis wie `~/.agents/skills`, das auf `~/.claude/skills`
-zeigt. Lässt sich eine Datei, auf die ein Skill angewiesen ist, trotzdem nicht
-lesen, soll das Modell das sagen und die Datei nennen, statt mit dem
-weiterzumachen, was es darin vermutet.
-
-Die Grenzen bleiben eng gezogen:
-
-- **Nur lesend.** `write_file_text`, `edit_file` und `apply_patch` weisen
-  `skill:`-Pfade und absolute Pfade in einen Skill-Ordner ab, in jedem Modus,
-  und die Sandbox von `shell_execute` und `run_python` öffnet nie einen
-  Skill-Ordner zum Schreiben. Ein Skill-Ordner gehört jedem Projekt, in dem der
-  Skill eingeschaltet ist, und wird beim nächsten Update des Skills ersetzt —
-  für die Daten eines Projekts ist er der falsche Ort.
-- **Nur eingeschaltete Skills.** Ein nicht ausgewählter Skill ist kein Pfad;
-  die Fehlermeldung nennt die tatsächlich eingeschalteten Namen.
-- **Kein Ausbruch.** `..` und Symlinks werden gegen den echten Pfad geprüft,
-  genau wie beim Arbeitsordner.
-- **Erkennbar im Chat.** Lesezugriffe auf Skill-Dateien bekommen im Tool-Log
-  ein eigenes Symbol samt „(Skill ‹name›)“ im Text, damit sie nicht wie ein
-  Zugriff auf das Projekt aussehen; in der zugeklappten Zusammenfassung
-  stehen Skill-Zugriffe an erster Stelle.
-
-### Wo ein Skill seine Daten ablegt
-
-Was ein Skill erzeugt und aufbewahren will — die Regeln, die er dazugelernt hat,
-eine Kontaktliste, den Stand für den nächsten Lauf —, landet in
-**`.agents/data/`** im geöffneten Ordner, zum Beispiel `.agents/data/kontakte.md`.
-Das Modell erfährt das, sobald ein Skill eingeschaltet ist, und auch die
-Ablehnung eines Schreibzugriffs in einen Skill-Ordner nennt den Ort. Skills, die
-für andere Agenten geschrieben sind, schreiben ihn oft als
-`<workspace>/.agents/data/…`; das ist derselbe Ordner. Geschrieben wird dort wie
-überall im Projekt, mit der üblichen Freigabe.
-
-Ohne geöffneten Ordner bleiben die Lese-Tools verfügbar, solange ein Skill
-eingeschaltet ist, und erreichen dann nur die Skill-Ordner; Schreib- und
-Ausführungs-Tools brauchen einen Ordner, und damit gibt es auch keinen Ort für
-die Daten eines Skills.
-
-### Snotra einen Skill schreiben lassen
-
-Bitte darum — „bau mir dafür einen Skill“, „ergänz den Review-Skill um X“ —,
-und Snotra schreibt den Skill nach **`.agents/skills/<name>/`** im geöffneten
-Ordner, mit den gewöhnlichen Datei-Tools und der üblichen Freigabe. Der
-System-Skill `snotra-skill-authoring` sagt dem Modell, wohin ein Skill gehört,
-wie Frontmatter und Beschreibung aussehen müssen und was nach `references/`
-gehört; wer das nicht will, schaltet ihn unter Einstellungen › Skills ab.
-
-Jede `SKILL.md`, die dabei entsteht, wird sofort so geprüft, wie der Katalog sie
-prüft — Frontmatter, `name` und `description`, Name gleich Ordnername. Eine
-kaputte geht zum Reparieren ans Modell zurück, statt als ausgegraute Zeile in
-den Einstellungen zu landen. Im Tool-Log liest sich der Schreibzugriff als Teil
-des Skills — „1 Skill-Datei geschrieben“, aufgeklappt „Datei SKILL.md (Skill
-review) geschrieben“. Der neue Skill
-erscheint von selbst unter Einstellungen › Skills und bleibt, wie jeder
-Ordner-Skill, aus, bis du ihn anhakst.
-
-Snotra schreibt **nur in den geöffneten Ordner**. Deine globalen Skills in
-`~/.snotra/skills` und `~/.agents/skills` und die System-Skills sind für jedes
-Tool schreibgeschützt. Soll ein Skill überall gelten, verschiebst du seinen
-Ordner selbst nach `~/.snotra/skills/` — dieser Schritt bleibt bei dir, damit
-kein Prompt in irgendeinem Projekt einen Skill unterbringen kann, der dann in
-allen anderen mitläuft. Ohne geöffneten Ordner bietet Snotra die `SKILL.md`
-stattdessen im Chat an.
-
-## Projektanweisungen: `AGENTS.md`
-
-Ein Skill beschreibt eine Arbeitsweise und wird eingeschaltet. Eine
-`AGENTS.md` beschreibt, wie in *diesem* Projekt gearbeitet wird — welcher
-Paketmanager, welche Testbefehle, welche Konventionen, welche Ordner tabu sind
-— und gilt ohne Auswahl. Snotra liest sie beim Aufbau jedes System-Prompts aus
-drei Stellen:
-
-| # | Pfad | Geltung |
-|---|------|---------|
-| 1 | `<ordner>/AGENTS.md` | dieses Projekt |
-| 2 | `~/.snotra/AGENTS.md` | überall |
-| 3 | `~/.agents/AGENTS.md` | überall, älterer Ort, wird weiter gelesen |
-
-Die Reihenfolge ist dieselbe wie bei den Skills: das Projekt zuerst, dann die
-globalen Orte. **Alle vorhandenen Dateien ergänzen einander** und gelten
-gemeinsam — keine ersetzt eine andere, es gibt also nichts zu entscheiden und
-keine Rangfolge. Fehlende Dateien sind der Normalfall
-und kein Fehler.
-
-**Im Projekt liegt die Datei direkt in der Ordnerwurzel**, dort, wo die meisten
-Repositorys sie ablegen — eine vorhandene `AGENTS.md` wirkt also so, wie sie ist.
-Eine `AGENTS.md` unter `.agents/` liest Snotra **nicht**; der Ordner hält nur
-`memory.md` und die Skills. Wer dort noch eine liegen hat, verschiebt sie eine
-Ebene höher in die Ordnerwurzel.
-
-`AGENTS.md` ist der einzige Dateiname, den Snotra dafür kennt — kein
-`CLAUDE.md`, kein `.cursorrules`. Je Datei gehen höchstens 20.000 Zeichen mit;
-Längeres wird sichtbar gekürzt statt verworfen. Wie viel jede Datei am
-Kontextfenster ausmacht, steht einzeln in der Aufschlüsselung unter dem
-Eingabefeld.
-
-**Änderungen wirken sofort**, ohne Neustart und ohne Knopf: Die Dateien werden
-bei jeder Nachricht frisch gelesen.
-
-**Der Inhalt ist Anweisung, keine Daten.** Anders als ein Tool-Ergebnis soll
-eine `AGENTS.md` das Verhalten des Modells ändern — sonst wäre sie sinnlos. Wer
-einen fremden Ordner öffnet, übernimmt damit auch dessen Anweisungen. Die
-Notbremse dafür ist der Schalter **Einstellungen › Allgemein ›
-„`AGENTS.md` mitschicken"** (voreingestellt an), der alle drei Stellen
-abschaltet.
-
-**Schlüssel bleiben draußen.** Bevor eine `AGENTS.md`, eine Gedächtnisdatei
-oder ein Skill an den Anbieter geht, prüft Snotra sie wie eine Datei, die ein
-Tool liest: Eine Datei mit einem der eigenen Schlüssel der App (ein
-Anbieter-Schlüssel, ein MCP-Geheimnis, der Schlüssel der Websuche) bleibt ganz
-weg, Zugangsdaten wie Tokens oder `password = …` werden maskiert. Die
-Aufschlüsselung unter dem Eingabefeld sagt, welche Datei es war.
-
-## Gedächtnis: `memory.md`
-
-Snotra fängt nicht jeden Chat bei null an. Sag im Chat **„bitte merke dir …"**,
-und der Satz steht ab der nächsten Nachricht wieder im Systemprompt — auch in
-einem neuen Chat, auch nach einem Neustart.
-
-Es gibt zwei Ebenen, beide als gewöhnliche Markdown-Datei:
-
-| Ebene | Datei | Gilt für |
-| --- | --- | --- |
-| Projekt | `<ordner>/.agents/memory.md` | nur den geöffneten Ordner |
-| Global | `~/.snotra/memory.md` | jeden Ordner |
-
-**Snotra fragt nach, welche der beiden**, bevor es sich etwas merkt — außer du
-hast es schon gesagt („merk dir global …"), oder es ist kein Ordner geöffnet und
-nur das globale Gedächtnis bleibt übrig.
-
-Dieselben zwei Orte wie bei `AGENTS.md` und den Skills. Weil es Dateien sind,
-kannst du sie im Editor lesen und bearbeiten, und das Projekt-Gedächtnis zieht
-beim Verschieben des Ordners mit um. Es liegt damit aber auch **in deinem
-Projekt** und kann in ein Repository geraten — was nur dich angeht, gehört ins
-globale Gedächtnis oder gar nicht hinein. **Passwörter, Schlüssel und
-Zugangsdaten niemals:** Das Gedächtnis geht mit jeder Anfrage an den Anbieter.
-Rutscht doch etwas hinein, wird es maskiert wie in einer `AGENTS.md` (siehe
-oben). Und weil ein Repository ein Projekt-Gedächtnis mitbringen kann, liest das
-Modell es als Notizen aus dem Ordner, neben dessen `AGENTS.md` — nicht als
-etwas, das du gesagt hast.
-
-Snotra merkt sich auch **von selbst**, was dauerhaft wichtig aussieht. Jeder
-Merkvorgang ist freigabepflichtig und steht mit Ziel und Pfad im Tool-Log — und
-das selbstständige Merken lässt sich abschalten, dann bleibt es bei dem, worum
-du ausdrücklich bittest.
-
-Unter **Einstellungen › Gedächtnis** siehst du beide Ebenen mit allen
-Einträgen, löschst einzelne davon und schaltest jede Ebene ab. Je Ebene gehen
-höchstens 8.000 Zeichen mit; wie viel das am Kontextfenster ausmacht, steht
-einzeln in der Aufschlüsselung unter dem Eingabefeld.
-
-## MCP-Server
-
-Über das **Model Context Protocol (MCP)** bindest du Werkzeuge fremder Systeme
-ein — Jira, Confluence, Datenbanken, interne APIs — ohne dass Snotra dafür ein
-eigenes Tool mitbringen müsste. Eine neue Fähigkeit kommt per Konfiguration
-dazu, nicht per Release. Verwaltet wird das unter **Einstellungen › Tool-Einrichtung**; von
-Hand in JSON-Dateien zu schreiben ist nicht nötig.
-
-Unterstützt werden Server, die **lokal als Prozess** gestartet werden
-(stdio-Transport). Server, die nur über HTTP oder SSE erreichbar sind, gehen
-noch nicht.
-
-### Einen Server eintragen
-
-„Server hinzufügen“ öffnet ein kleines Formular:
-
-| Feld | Bedeutung |
-| ---- | --------- |
-| **Kennung** | Kleinbuchstaben, Ziffern, `.`, `-`, `_`. Sie steckt später im Tool-Namen und lässt sich nachträglich nicht ändern; einen Server unter einer schon vergebenen Kennung hinzuzufügen wird abgelehnt |
-| **Anzeigename** | Frei wählbar, nur für die Liste |
-| **Kommando** und **Argumente** | Was gestartet wird, z. B. `npx` mit `-y @modelcontextprotocol/server-github` |
-| **Arbeitsverzeichnis** | Optional; leer heißt dein Home-Ordner, und ein relativer Pfad beginnt dort |
-| **Umgebungsvariablen** | Name/Wert-Paare für den Prozess |
-
-**Umgebungsvariablen sind vorbelegt geheim.** Ein geheimer Wert wird über
-Electrons `safeStorage` verschlüsselt abgelegt und danach nicht mehr angezeigt
-— nur ersetzt oder gelöscht. Um so eine Variable umzubenennen oder lesbar
-abzulegen, gibst du den Wert neu ein. Wer einen Wert bewusst lesbar halten will (etwa
-`LANG=de_DE`), nimmt das Häkchen weg; er steht dann im Klartext in der
-Konfiguration. Vergessen soll nicht der teure Fall sein. Lässt sich auf dem
-System nicht verschlüsseln, wird gar nicht erst gespeichert, statt ein Token
-offen abzulegen.
-
-**„Verbindung testen“** startet den gespeicherten Server einmal und zeigt, ob er antwortet
-und welche Tools er anbietet — oder eine verständliche Fehlermeldung samt
-`stderr`, wenn er nicht startet. Seine Tools schaltest du wie jedes andere Tool
-einzeln unter Einstellungen › Tools & Sicherheit › *Externe Dienste*. Solange das
-Formular ungespeicherte Änderungen hat, wartet der Knopf — speichere sie zuerst.
-
-### Server importieren
-
-Wer MCP schon in Claude Desktop, Claude Code oder Cursor nutzt, muss seine
-Server nicht abtippen: **„Importieren“** nimmt einen eingefügten
-`mcpServers`-Block entgegen — mit oder ohne umschließendes `mcpServers`,
-Markdown-Zäune, Kommentare und angehängte Kommas stören nicht. Während du
-einfügst, erscheint darunter, was erkannt wurde.
-
-Die Vorschau nennt zu jedem Eintrag den Namen, die daraus abgeleitete Kennung
-und das Startkommando, dazu die Punkte, die eine Entscheidung verlangen: Werte,
-die als geheim vorgemerkt sind (Schlüsselnamen wie `*_TOKEN` oder bekannte
-Tokenformate) und solche, die im Klartext abgelegt werden, das
-Arbeitsverzeichnis, noch nicht ausgefüllte Platzhalter und Kennungen, die einen
-vorhandenen Server ersetzen würden. Einträge, die nicht gehen — HTTP-/SSE-
-Transport, fehlendes Kommando — stehen mit Begründung darunter, statt
-stillschweigend zu verschwinden. Jeder Eintrag ist einzeln abwählbar.
-
-**Importierte Server sind zunächst ausgeschaltet.** Der Import ist ein
-Abtipp-Ersatz, keine Freigabe: Einschalten startet einen Prozess und bringt
-dessen Tools ins Modell, und das bleibt ein bewusster Schritt.
-
-Gelesen wird ausschließlich, was du einfügst. Snotra öffnet keine fremden
-Konfigurationsdateien.
-
-### Wie MCP-Tools im Chat auftauchen
-
-Tools eingeschalteter Server erreichen das Modell mit vorangestelltem
-Namensraum: `mcp__<kennung>__<toolname>`. Das hält sie von den eingebauten
-Tools getrennt und macht in der Tool-Zeile sichtbar, woher ein Aufruf kommt.
-Zusammengesetzte Namen über 64 Zeichen lässt Snotra aus und weist sie unter der
-Serverliste aus — ein Name, den das Modell nicht zuverlässig adressieren kann,
-nützt niemandem.
-
-Für die [Tool-Berechtigungen](#konfiguration) gelten MCP-Tools grundsätzlich als
-`execute` **und** `external`: Ein fremder Prozess läuft, und Daten verlassen
-die App. Meldet ein Server ein Tool ausdrücklich als destruktiv, kommt `delete`
-dazu. Strenger einstufen kann ein Server sich also selbst, milder nicht —
-sonst entschiede der fremde Server darüber, wie streng wir ihn behandeln.
-
-Ein Server, der nicht startet oder abstürzt, macht den Chat nicht kaputt: Der
-Fehler wird gemeldet, alles andere läuft weiter.
-
-Ein- und ausgeschaltet wird jedes Tool unter **Einstellungen › Tools & Sicherheit**, in
-der Zeile *Externe Dienste*. Dort stehen die MCP-Tools nach Server gruppiert,
-und jede Gruppe sagt, wie ihr Server verbunden ist — verbunden mit der Zahl
-seiner Tools, noch nicht verbunden, wird gestartet, ausgeschaltet oder Fehler
-beim Start mit dem Grund. Ein Server verbindet sich erst, wenn er gebraucht
-wird, merkt sich aber die Tools, die er zuletzt gemeldet hat: Die stehen schon
-vor dem ersten Chat-Lauf da, als „Bekannt aus der letzten Verbindung“, sodass
-du ein Tool abschalten kannst, bevor das Modell es je angeboten bekommt. Ein
-Server, der noch nie verbunden war, hat noch nichts zu merken — seine Tools
-erscheinen nach der ersten Verbindung.
+**Bis v1.0.4:** Beim ersten Start kopiert die App Einstellungen, Presets, Ordner-Historie und Chat-Verlauf aus dem alten `userData`-Ordner; der alte Ordner bleibt unverändert als Backup liegen. Unter macOS müssen die API-Keys einmal neu eingegeben werden, weil der Keychain-Eintrag von Electrons `safeStorage` am App-Namen hängt; die Einstellungen zeigen dann „Key neu eingeben“. Ein dadurch nicht mehr entschlüsselbarer Chat-Verlauf wird als `chat-history.json.undecryptable-<Zeitstempel>` gesichert statt überschrieben. Ein Start mit `--user-data-dir` nimmt den angegebenen Ordner, wie er ist, und kopiert nichts hinein.
 
 ## Projektstruktur
 
@@ -931,9 +281,14 @@ Welche Aktion in welchem Modus deine Freigabe braucht und was die Sandbox daran 
 Die Einzelheiten stehen im [Sicherheitskonzept](docs/security-concept.md) (englisch).
 
 - API-Keys werden **lokal** gespeichert und nicht an Dritte weitergegeben.
-- Der Workspace-Zugriff der Datei-Tools ist auf den jeweils geöffneten Projektordner beschränkt. Ausnahmen: die **Lese**-Tools erreichen zusätzlich die Verzeichnisse der eingeschalteten Skills über `skill:<name>/…` (siehe [Skills](#skills), geschrieben wird dort nie) — und die beiden **Ausführungs**-Tools `run_python` und `shell_execute` kennen diese Grenze grundsätzlich nicht: nicht Snotra greift dort auf Dateien zu, sondern der Interpreter bzw. die Shell. Beide sind deshalb im Lieferzustand abgeschaltet und brauchen außerhalb von *Auto* vor jedem Lauf eine Freigabe. Unter macOS und Linux laufen sie in einer Sandbox, die das Schreiben auf den Projektordner begrenzt und das Netzwerk auf die freigegebenen Domains (siehe [Die Sandbox je Betriebssystem](#die-sandbox-je-betriebssystem)); unter Windows nicht.
-- Jeder Tool-Aufruf durchläuft im Main-Prozess eine Policy (Risikoklasse × Modus, Sperr-Regeln, harte Grenzen); Dateiänderungen und der Zugriff auf sensible Dateien brauchen im Standardmodus eine Freigabe (siehe [Tool-Berechtigungen](#konfiguration)). Ein Tool-Text, eine Datei oder ein Skill kann keine Berechtigung erteilen.
+- Der Workspace-Zugriff der Datei-Tools ist auf den jeweils geöffneten Projektordner beschränkt. Ausnahmen: die **Lese**-Tools erreichen zusätzlich die Verzeichnisse der eingeschalteten Skills über `skill:<name>/…` (siehe [Skills nutzen](https://docs.snotra-ai.dev/de/customising/skills/), geschrieben wird dort nie) — und die beiden **Ausführungs**-Tools `run_python` und `shell_execute` kennen diese Grenze grundsätzlich nicht: nicht Snotra greift dort auf Dateien zu, sondern der Interpreter bzw. die Shell. Beide sind deshalb im Lieferzustand abgeschaltet und brauchen außerhalb von *Auto* vor jedem Lauf eine Freigabe. Unter macOS und Linux laufen sie in einer Sandbox, die das Schreiben auf den Projektordner begrenzt und das Netzwerk auf die freigegebenen Domains (siehe [Befehle in der Sandbox ausführen](https://docs.snotra-ai.dev/de/safety/sandbox/)); unter Windows nicht.
+- Jeder Tool-Aufruf durchläuft im Main-Prozess eine Policy (Risikoklasse × Modus, Sperr-Regeln, harte Grenzen); Dateiänderungen und der Zugriff auf sensible Dateien brauchen im Standardmodus eine Freigabe (siehe [Sehen und ändern, was Snotra darf](https://docs.snotra-ai.dev/de/safety/tools-and-security/)). Ein Tool-Text, eine Datei oder ein Skill kann keine Berechtigung erteilen.
 - Trotzdem gilt: lass das Modell nichts in Ordnern arbeiten, in denen sensible Daten liegen, denen du nicht traust.
+
+## Mitwirken
+
+Voraussetzungen zum Bauen, Test-Befehle und die Branch-/PR-Konventionen stehen
+in [`CONTRIBUTING.md`](./CONTRIBUTING.md) (Englisch).
 
 ## Lizenz
 
