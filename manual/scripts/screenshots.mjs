@@ -1060,6 +1060,56 @@ const MOTIFS = {
     },
   },
 
+  /**
+   * A request the provider refuses: the error under the question, in the
+   * provider's own words. Those stay English in both languages — that is what
+   * OpenAI sends.
+   */
+  'provider-error': {
+    prefs: { chatPanelWidth: WIDE_CHAT },
+    text: {
+      en: { question: 'Which beds get the most sun?' },
+      de: { question: 'Welche Beete bekommen am meisten Sonne?' },
+    },
+    async setUp({ page, model, text }) {
+      model.queueAnswer({
+        match: text.question,
+        httpError: {
+          status: 401,
+          type: 'invalid_request_error',
+          code: 'invalid_api_key',
+          message: 'Incorrect API key provided: sk-proj-****************************7Qx2. You can find your API key at https://platform.openai.com/account/api-keys.',
+        },
+      });
+      await send(page, text.question);
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('#chat-messages .chat-msg.assistant.error'))),
+        { timeoutMs: 30000, what: 'error under the question' });
+      await waitForRunEnd(page);
+      await page.mouse.move(0, 0);
+      return clipAround(page, ['#chat-messages .chat-msg.user', '#chat-messages .chat-msg.assistant.error'], 16);
+    },
+  },
+
+  /** Settings › Models on a system without encrypted storage, as on a Linux desktop without a keyring. */
+  'storage-unavailable': {
+    async setUp({ app, page }) {
+      await app.evaluate(({ safeStorage }) => { safeStorage.isEncryptionAvailable = () => false; });
+      await openSettingsPanel(app, page, 'models');
+      await poll(() => shown(page, 'modal-encryption-warning'), { what: 'the warning about encrypted storage' });
+      await page.mouse.move(0, 0);
+      // The top of the dialog — the warning, the model under it and the whole
+      // navigation — without the empty half of the panel.
+      return page.evaluate(() => {
+        const dialog = document.querySelector('#modal-settings .settings-dialog').getBoundingClientRect();
+        const list = document.getElementById('pref-model-list').getBoundingClientRect();
+        const navItems = document.querySelectorAll('#modal-settings .settings-nav-item');
+        const nav = navItems[navItems.length - 1].getBoundingClientRect();
+        const bottom = Math.min(dialog.bottom, Math.max(list.bottom, nav.bottom) + 24);
+        return { x: dialog.left, y: dialog.top, width: dialog.width, height: bottom - dialog.top };
+      });
+    },
+  },
+
   /** The history column next to the chat, with three chats of the folder. */
   history: {
     text: {
