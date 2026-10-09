@@ -1,4 +1,4 @@
-import { dismissOnFocusLeave, dismissOnOutsideClick } from '../utils/helpers.js';
+import { dismissOnFocusLeave, dismissOnOutsideClick, followColumn, keepPopupInColumn } from '../utils/helpers.js';
 import { toolModeOptions, modeLabel, describeModePill, describeWorkspaceDefault } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
@@ -169,7 +169,10 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
     }
     renderNotice(view);
     renderFooter(defaults);
-    if (open) rebuild(view.mode, defaults);
+    if (open) {
+      rebuild(view.mode, defaults);
+      keepPopupInColumn(menu, wrap);
+    }
   }
 
   function close() {
@@ -186,6 +189,7 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
     rebuild(toolPermissions.mode());
     open = true;
     menu.classList.remove('hidden');
+    keepPopupInColumn(menu, wrap);
     btn.setAttribute('aria-expanded', 'true');
     list.querySelector('[aria-selected="true"]')?.focus();
   }
@@ -293,6 +297,7 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
     ownsTarget: (t) => !!t?.closest?.('#chat-tool-mode-wrap'),
     onDismiss: close,
   });
+  followColumn(menu, wrap, () => open);
   // Tab past the menu closes it as well (#586). The checkbox is disabled
   // while main decides, which drops its focus for a moment.
   dismissOnFocusLeave({

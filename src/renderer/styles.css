@@ -1890,7 +1890,8 @@ summary:focus-visible,
                                  sich ueber das Textfeld — kein Sprung ueber
                                  die ganze Karte */
   z-index: 50;
-  min-width: min(260px, 80vw);
+  /* --popup-room: the chat column's width, set on opening (#812). */
+  min-width: min(260px, var(--popup-room, 80vw));
   max-height: 240px;
   overflow: auto;
   margin: 0;
@@ -7369,7 +7370,7 @@ select.modal-input {
 /* The popup: the notice (#396) on top, the listbox below it. Taller than the
    model menu, because three described modes and the notice need the room. */
 .chat-tool-mode-menu {
-  min-width: min(340px, 84vw);
+  min-width: min(340px, var(--popup-room, 84vw));
   max-height: min(420px, 70vh);
 }
 
@@ -7427,6 +7428,8 @@ select.modal-input {
   background: transparent;
   color: var(--ds-blue);
   font: inherit;
+  /* In a narrow column the link wraps; a button would centre it (#812). */
+  text-align: left;
   font-size: var(--ds-font-size-sm);
   font-weight: 500;
   cursor: pointer;
