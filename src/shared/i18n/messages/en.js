@@ -1010,7 +1010,7 @@ module.exports = {
   'addModel.needKey': 'Please enter an API key first.',
   'addModel.needBaseUrl': 'Please give a server URL.',
   'addModel.needModelName': 'Please enter a model name.',
-  'addModel.duplicate': 'This combination is already in the list.',
+  'addModel.duplicate': '{name} is already in the list. To change it, use the pencil next to it.',
   'addModel.models.loading': 'Loading models …',
   'addModel.models.errorManual': 'No model list: {error} — enter the model name by hand.',
   'addModel.models.error': 'Error: {error}',

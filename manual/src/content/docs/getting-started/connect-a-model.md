@@ -30,7 +30,7 @@ On the first start the list already holds one entry: *OpenAI · gpt-5-mini*, sti
 
 ![The dialog "Edit model" over the model settings: provider OpenAI, the API key typed in and shown as dots, the model gpt-5-mini, and the buttons "Load models" and "Apply changes".](screenshots/connect-model.webp)
 
-For this first key, use the pencil rather than *Add model*. Adding *OpenAI · gpt-5-mini* a second time is refused with *This combination is already in the list* ([#807](https://github.com/kkrafft1999/snotra/issues/807)). Once the key is in, *Add model* is the way to add more OpenAI models: they all share the one key.
+*Add model* with provider *OpenAI* and model *gpt-5-mini* gets you to the same place: since that entry is still missing its key, the dialog gives it yours instead of adding a second one. Once the key is in, *Add model* is the way to add more OpenAI models: they all share the one key.
 
 ## With Anthropic or Google
 
@@ -69,7 +69,7 @@ Not every local model can use tools, and Snotra needs tools to read and write fi
 ## If it doesn't work
 
 - ***Please enter an API key first.*** *Load models* needs the key to ask the provider. Paste it into *API key* first.
-- ***This combination is already in the list.*** The model is in the list already. Close the dialog and edit that entry with its pencil instead.
+- ***OpenAI · gpt-5 is already in the list.*** The message names the entry that is already there, with the same provider and model. Close the dialog and change that entry with its pencil instead.
 - **The model list stays empty** on an OpenAI-compatible server. That is not an error: the line under the field says why, and a model name typed by hand works just as well. Check that the server is running and that the *Server URL* ends in `/v1`.
 - ***Encrypted storage is not available on this system.*** Snotra does not store a key without the system's encryption. A local server that needs no key still works.
 - **The chat shows an error from the provider.** An invalid key, a used-up credit or an unknown model name are reported by the provider itself. Check the key and your account with the provider.

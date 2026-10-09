@@ -30,7 +30,7 @@ Beim ersten Start steht dort schon ein Eintrag: *OpenAI · gpt-5-mini*, noch ohn
 
 ![Der Dialog „Modell bearbeiten“ über den Modell-Einstellungen: Anbieter OpenAI, der eingegebene API-Schlüssel als Punkte, das Modell gpt-5-mini sowie die Knöpfe „Modelle laden“ und „Änderungen übernehmen“.](screenshots/connect-model.webp)
 
-Nimm für diesen ersten Schlüssel den Stift, nicht *Modell hinzufügen*. Ein zweites *OpenAI · gpt-5-mini* lehnt der Dialog mit *Diese Kombination gibt es bereits in der Liste* ab ([#807](https://github.com/kkrafft1999/snotra/issues/807)). Sobald der Schlüssel gespeichert ist, fügst du weitere OpenAI-Modelle über *Modell hinzufügen* hinzu: Sie teilen sich alle den einen Schlüssel.
+*Modell hinzufügen* mit Anbieter *OpenAI* und Modell *gpt-5-mini* führt zum selben Ergebnis: Weil diesem Eintrag noch der Schlüssel fehlt, bekommt er deinen, statt dass ein zweiter dazukommt. Sobald der Schlüssel gespeichert ist, fügst du weitere OpenAI-Modelle über *Modell hinzufügen* hinzu: Sie teilen sich alle den einen Schlüssel.
 
 ## Mit Anthropic oder Google
 
@@ -69,7 +69,7 @@ Nicht jedes lokale Modell kann Werkzeuge benutzen, und Snotra braucht Werkzeuge,
 ## Wenn es nicht klappt
 
 - ***Bitte zuerst einen API-Key eingeben.*** *Modelle laden* braucht den Schlüssel, um beim Anbieter nachzufragen. Füg ihn zuerst bei *API-Schlüssel* ein.
-- ***Diese Kombination gibt es bereits in der Liste.*** Das Modell steht schon in der Liste. Schließ den Dialog und bearbeite stattdessen diesen Eintrag mit seinem Stift.
+- ***OpenAI · gpt-5 steht schon in der Liste.*** Die Meldung nennt den Eintrag, den es mit demselben Anbieter und Modell schon gibt. Schließ den Dialog und ändere stattdessen diesen Eintrag mit seinem Stift.
 - **Die Modellliste bleibt leer** bei einem OpenAI-kompatiblen Server. Das ist kein Fehler: Die Zeile unter dem Feld sagt, warum, und ein von Hand eingetippter Modellname funktioniert genauso. Prüf, ob der Server läuft und ob die *Server-URL* auf `/v1` endet.
 - ***Verschlüsselter Speicher ist auf diesem System nicht verfügbar.*** Ohne die Verschlüsselung des Systems speichert Snotra keinen Schlüssel. Ein lokaler Server, der keinen Schlüssel braucht, funktioniert trotzdem.
 - **Der Chat zeigt einen Fehler des Anbieters.** Einen ungültigen Schlüssel, ein aufgebrauchtes Guthaben oder einen unbekannten Modellnamen meldet der Anbieter selbst. Prüf den Schlüssel und dein Konto beim Anbieter.
