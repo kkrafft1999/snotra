@@ -343,3 +343,47 @@ export function dismissOnFocusLeave({ container, isOpen, onDismiss, isPaused = (
     });
   });
 }
+
+/**
+ * A composer popup opens from its pill's left edge, inside the chat column,
+ * and the column cuts off whatever reaches past it (`overflow: hidden`). The
+ * popup moves left as far as the column allows; in a column narrower than
+ * itself it takes the column's width and lets its text wrap (#741, #812).
+ *
+ * `--popup-room` hands the room to the stylesheet, so a popup's `min-width`
+ * can give way to it — an inline `max-width` alone loses against `min-width`.
+ * Call it after the popup is shown, and again when its content changes;
+ * `followColumn` takes care of a column that changes width meanwhile.
+ */
+export function keepPopupInColumn(popup, anchor, { gutter = 8 } = {}) {
+  if (!popup) return;
+  popup.style.left = '';
+  const column = anchor?.closest('#chat-panel')?.getBoundingClientRect()
+    || { left: 0, right: window.innerWidth };
+  const left = column.left + gutter;
+  const right = column.right - gutter;
+  const room = Math.max(0, right - left);
+  popup.style.maxWidth = `${room}px`;
+  popup.style.setProperty('--popup-room', `${room}px`);
+  const box = popup.getBoundingClientRect();
+  const overflow = box.right - right;
+  if (overflow > 0) popup.style.left = `${-Math.min(overflow, box.left - left)}px`;
+}
+
+/**
+ * The column can change under an open popup — the window is resized, or the
+ * history folds away for room. Each change places the popup again, as long
+ * as `isOpen()` says it is showing. A frame later, because the composer bar
+ * may still move the pills to a row of their own in the same change (#400).
+ */
+export function followColumn(popup, anchor, isOpen) {
+  const column = anchor?.closest('#chat-panel');
+  if (!popup || !column || typeof ResizeObserver !== 'function') return;
+  let pending = 0;
+  new ResizeObserver(() => {
+    cancelAnimationFrame(pending);
+    pending = requestAnimationFrame(() => {
+      if (isOpen()) keepPopupInColumn(popup, anchor);
+    });
+  }).observe(column);
+}

@@ -98,8 +98,8 @@ function clipAround(page, selectors, margin = 24) {
 
 /**
  * The chat column for motifs that show a card or a menu in it. At the default
- * width a card is taller than the window, and the mode menu runs off its right
- * edge (#812); a reader can drag the column this wide as well.
+ * width a card is taller than the window, and the mode menu has to wrap every
+ * description (#812); a reader can drag the column this wide as well.
  */
 const WIDE_CHAT = 560;
 

@@ -1,4 +1,4 @@
-import { dismissOnFocusLeave, dismissOnOutsideClick } from '../utils/helpers.js';
+import { dismissOnFocusLeave, dismissOnOutsideClick, followColumn, keepPopupInColumn } from '../utils/helpers.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
 // Titel-Inferenz aus der Contract-Schicht: Kopfzeile und Verlaufsliste zeigen
 // denselben Kurztitel, auch bevor die Konversation gespeichert wurde.
@@ -385,7 +385,7 @@ export function initChatModelPicker({
     rebuildReasoning();
     chatModelMenuOpen = true;
     chatModelMenu.classList.remove('hidden');
-    keepMenuInWindow();
+    keepPopupInColumn(chatModelMenu, chatModelPickerWrap);
     btnChatModelPicker.setAttribute('aria-expanded', 'true');
     // Into the list, on the option that is selected (#583).
     const options = menuOptions();
@@ -394,26 +394,6 @@ export function initChatModelPicker({
 
   function menuOptions() {
     return chatModelList ? [...chatModelList.querySelectorAll('.chat-model-menu-option')] : [];
-  }
-
-  /**
-   * The popup opens from the pill's left edge, inside the chat column, which
-   * cuts off whatever reaches past it. With the levels it can be wider than
-   * the space to the right of the pill: it moves left as far as the column
-   * allows, and in a column narrower than itself it takes the column's width
-   * and lets the levels wrap.
-   */
-  function keepMenuInWindow() {
-    chatModelMenu.style.left = '';
-    chatModelMenu.style.maxWidth = '';
-    const column = chatModelPickerWrap?.closest('#chat-panel')?.getBoundingClientRect()
-      || { left: 0, right: window.innerWidth };
-    const left = column.left + 8;
-    const right = column.right - 8;
-    chatModelMenu.style.maxWidth = `${Math.max(0, right - left)}px`;
-    const box = chatModelMenu.getBoundingClientRect();
-    const overflow = box.right - right;
-    if (overflow > 0) chatModelMenu.style.left = `${-Math.min(overflow, box.left - left)}px`;
   }
 
   dismissOnOutsideClick({
@@ -526,6 +506,7 @@ export function initChatModelPicker({
     isOpen: () => chatModelMenuOpen,
     onDismiss: () => closeChatModelMenu(),
   });
+  followColumn(chatModelMenu, chatModelPickerWrap, () => chatModelMenuOpen);
 
   // The pill, the hint below the composer and the label of the live dot are
   // written at runtime, so a language change has to repaint them (#290).
