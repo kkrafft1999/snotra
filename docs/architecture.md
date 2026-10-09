@@ -293,6 +293,13 @@ card after the run offers the host with a retry like a write. What was decided
 while the command ran goes on the trace as `sandboxLive` and to the model as
 `sandbox_connections`; after a denial there is no card after the run.
 
+Both cards are driven end to end in `e2e/sandbox-approval.test.mjs`, with the
+real app, the real sandbox and its proxy: a write outside the folder allowed
+after the run and run again, a connection allowed while curl waits, one denied
+with Esc. They run in "Auto", or in "Smart" where there is no encrypted
+storage for "Auto" (a Linux runner without a keyring). The test is skipped on
+Windows; a missing sandbox elsewhere skips it only off CI.
+
 The **file tools outside the open folder** (#792, step 4) ask on the same
 kind of card, before the call. `fs-service.resolveToolPath` expands `~/`
 (`homeDir`) and, for a path outside the workspace, either maps it to a root
