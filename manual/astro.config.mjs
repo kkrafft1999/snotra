@@ -59,6 +59,11 @@ export default defineConfig({
           translations: { de: 'Aktualisieren' },
           items: [{ autogenerate: { directory: 'updating' } }],
         },
+        {
+          label: 'Troubleshooting',
+          translations: { de: 'Hilfe bei Problemen' },
+          items: [{ autogenerate: { directory: 'troubleshooting' } }],
+        },
       ],
       customCss: ['@fontsource/inter/400.css', '@fontsource/inter/600.css', './src/styles/theme.css'],
       components: {

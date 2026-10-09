@@ -103,6 +103,15 @@ export async function startFakeModel() {
       if (Number.isFinite(answer.delayMs) && answer.delayMs > 0) {
         await new Promise((resolve) => setTimeout(resolve, answer.delayMs));
       }
+      // A provider that refuses the request — a wrong key, a used-up credit
+      // (#788) — answers with an HTTP status and an OpenAI-style error body.
+      if (answer.httpError) {
+        const { status, message, type = 'invalid_request_error', code = null } = answer.httpError;
+        res.writeHead(status, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: { message, type, param: null, code } }));
+        record.finished = true;
+        return;
+      }
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -177,7 +186,7 @@ export async function startFakeModel() {
   return {
     baseUrl: `http://127.0.0.1:${port}/v1`,
     requests,
-    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, delayMs?: number, untilAbortedMs?: number, finishReason?: string, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
+    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, delayMs?: number, untilAbortedMs?: number, finishReason?: string, toolCalls?: Array<{name: string, arguments?: object}>, httpError?: { status: number, message: string, type?: string, code?: string } }} answer */
     queueAnswer(answer) { answers.push(answer); },
     /** The title the app gets for the next conversations. */
     setTitle(text) { titleText = text; },
