@@ -68,5 +68,5 @@ A server counts as local when its address is `localhost`, `127.0.0.x`, `::1` or 
 ## If it doesn't work
 
 - **The model list stays empty.** Not an error for an OpenAI-compatible server: the line under the field says why, and a typed name works as well.
-- ***This combination is already in the list.*** The provider and model are listed already; edit that row instead.
+- ***… is already in the list.*** The provider and model are listed already, under the name the message gives; edit that row instead. An entry that is only missing its key is the exception: adding it again with a key completes it.
 - **A model only ever answers in text.** Either *Send tools along* is off, or the model cannot use tools. Snotra needs tools to read and change files.

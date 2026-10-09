@@ -1121,13 +1121,9 @@ export function initSettingsModal(deps) {
       const title = document.createElement('strong');
       // No `lang`: the title holds the provider name in the interface language
       // ("OpenAI-kompatibel") or a name the user gave it (CR-B14-08).
-      // Bei Verbindung je Eintrag traegt die Zeile ihren eigenen Namen.
-      const zeilenName = pr.connection
-        ? (pr.connection.displayName?.trim() || pv.builtInName || pv.name)
-        : (draftProviderName(pr.providerId) || pv.name);
       // The buttons below are named after what the row shows, not after the
       // label stored with the draft: that one keeps the language it was made in.
-      const rowTitle = `${zeilenName} · ${pr.model || pv.defaultModel}`;
+      const rowTitle = draftRowTitle(pr);
       title.textContent = rowTitle;
       const detail = document.createElement('span');
       detail.className = presetDetailClassForDraft(pr);
@@ -2213,15 +2209,21 @@ export function initSettingsModal(deps) {
     }
 
     // Die bearbeitete Zeile ist keine Dublette ihrer selbst.
-    const dup = settingsDraftPresets.some((row) => {
+    const dup = settingsDraftPresets.find((row) => {
       if (row.id === popupEditPresetId) return false;
       const rowProvider = findProviderView(row.providerId);
       if (!rowProvider) return false;
       return presetIdentityKey(presetToWireRow(row), rowProvider) === presetIdentityKey(candidate, providerView);
     });
     if (dup) {
-      setModelStatus(t('addModel.duplicate'), true);
-      return false;
+      // An entry that only lacks its key is completed rather than refused
+      // (#807): a fresh profile lists OpenAI · gpt-5-mini without one, and
+      // adding exactly that with a key is the obvious first step.
+      if (popupEditPresetId || !completesKeylessRow(dup, providerView)) {
+        setModelStatus(t('addModel.duplicate', { name: draftRowTitle(dup) }), true);
+        return false;
+      }
+      popupEditPresetId = dup.id;
     }
     setModalError('');
 
@@ -2262,6 +2264,35 @@ export function initSettingsModal(deps) {
     if (!settingsDraftActivePresetId) settingsDraftActivePresetId = id;
     renderDraftPresetList();
     return true;
+  }
+
+  /**
+   * Whether the popup brings the key an existing entry is missing (#807): a
+   * key was typed, and the entry has none it could use — none stored, one
+   * about to be removed, or one that can no longer be decrypted.
+   */
+  function completesKeylessRow(row, providerView) {
+    if (!providerView.form?.showApiKey) return false;
+    const draft = activeDraft(providerView.id);
+    if (!(draft?.apiKey || '').trim()) return false;
+    if (usesPresetConnection(providerView)) {
+      const conn = row.connection || {};
+      return conn.hasKey !== true || conn.keyUnreadable === true;
+    }
+    // The key belongs to the provider, and the popup has just written the
+    // typed one into its draft — so only what is stored can tell.
+    const stored = activeStored(providerView.id);
+    return !stored.hasKey || stored.keyUnreadable;
+  }
+
+  /** A row's name as the list shows it. */
+  function draftRowTitle(row) {
+    const pv = findProviderView(row.providerId);
+    // With a connection per entry the row carries a name of its own (#202).
+    const name = row.connection
+      ? (row.connection.displayName?.trim() || pv?.builtInName || pv?.name)
+      : (draftProviderName(row.providerId) || pv?.name);
+    return `${name} · ${row.model || pv?.defaultModel || ''}`;
   }
 
   /**

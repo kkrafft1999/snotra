@@ -1018,7 +1018,7 @@ module.exports = {
   'addModel.needKey': 'Bitte zuerst einen API-Key eingeben.',
   'addModel.needBaseUrl': 'Bitte eine Server-URL angeben.',
   'addModel.needModelName': 'Bitte einen Modellnamen eintragen.',
-  'addModel.duplicate': 'Diese Kombination gibt es bereits in der Liste.',
+  'addModel.duplicate': '{name} steht schon in der Liste. Ändern kannst du den Eintrag mit dem Stift daneben.',
   'addModel.models.loading': 'Lade Modelle …',
   'addModel.models.errorManual': 'Keine Modellliste: {error} — Modellnamen von Hand eintragen.',
   'addModel.models.error': 'Fehler: {error}',

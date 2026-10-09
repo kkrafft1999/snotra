@@ -518,7 +518,124 @@ test('the same model on the same server is refused as a duplicate (CR-B14-05)', 
 
   assert.deepEqual(zeilenTitel(), ['LM Studio · qwen2.5']);
   assert.equal(document.getElementById('add-model-overlay').classList.contains('hidden'), false, 'the popup stays open');
-  assert.equal(document.getElementById('model-status').textContent, 'Diese Kombination gibt es bereits in der Liste.');
+  assert.equal(
+    document.getElementById('model-status').textContent,
+    'LM Studio · qwen2.5 steht schon in der Liste. Ändern kannst du den Eintrag mit dem Stift daneben.',
+  );
+});
+
+// --- #807: the key-less entry of a fresh profile -----------------------------
+
+/** OpenAI as a fresh profile sees it: no key, the one default entry. */
+const FRESH_OPENAI_VIEW = {
+  id: 'openai',
+  name: 'OpenAI',
+  builtInName: 'OpenAI',
+  configured: false,
+  hasKey: false,
+  defaultModel: 'gpt-5-mini',
+  apiBase: 'https://api.openai.com/v1',
+  capabilities: { images: true },
+  presetFields: [],
+  form: { showApiKey: true, apiKeyPlaceholder: 'sk-…' },
+};
+
+async function mountFreshProfile(t, { view = FRESH_OPENAI_VIEW } = {}) {
+  let sent = null;
+  const mounted = await mountSettings({
+    providers: [view],
+    commitSettings: async (payload) => { sent = payload; return { ok: true }; },
+  });
+  t.after(mounted.dom.cleanup);
+  mounted.appStore.llmState.presets = [
+    { id: 'default', providerId: 'openai', model: 'gpt-5-mini', menuVisible: true, label: 'OpenAI · gpt-5-mini' },
+  ];
+  mounted.appStore.llmState.activePresetId = 'default';
+  await mounted.dom.reopenSettings();
+  return { ...mounted, sent: () => sent };
+}
+
+/** Add model → OpenAI, the suggested model, optionally a key → Apply. */
+async function addOpenAiModel({ apiKey } = {}) {
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  if (apiKey) {
+    const key = document.getElementById('input-api-key');
+    key.value = apiKey;
+    key.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+  await flush();
+  document.getElementById('btn-add-preset-row').click();
+  await flush();
+}
+
+test('adding the key-less default entry with a key completes it (#807)', async (t) => {
+  const { sent } = await mountFreshProfile(t);
+
+  await addOpenAiModel({ apiKey: 'sk-first' });
+
+  assert.equal(document.getElementById('add-model-overlay').classList.contains('hidden'), true, 'the popup closes');
+  assert.deepEqual(zeilenTitel(), ['OpenAI · gpt-5-mini'], 'no second row');
+  assert.equal(document.getElementById('model-status').textContent, '');
+  // Focus lands on the entry that took the key, as after editing it.
+  assert.equal(document.activeElement?.dataset.editPresetId, 'default');
+
+  document.getElementById('btn-settings-save').click();
+  await flush();
+  assert.deepEqual(sent().presets.map((p) => p.id), ['default'], 'the entry keeps its id');
+  assert.equal(sent().activePresetId, 'default');
+  assert.equal(sent().providerPatches.openai.apiKey, 'sk-first');
+});
+
+test('the key-less entry without a key typed is still refused, naming it (#807)', async (t) => {
+  await mountFreshProfile(t);
+
+  await addOpenAiModel();
+
+  assert.equal(document.getElementById('add-model-overlay').classList.contains('hidden'), false);
+  assert.deepEqual(zeilenTitel(), ['OpenAI · gpt-5-mini']);
+  assert.equal(
+    document.getElementById('model-status').textContent,
+    'OpenAI · gpt-5-mini steht schon in der Liste. Ändern kannst du den Eintrag mit dem Stift daneben.',
+  );
+});
+
+test('an entry that already has its key is a real duplicate (#807)', async (t) => {
+  await mountFreshProfile(t, { view: { ...FRESH_OPENAI_VIEW, configured: true, hasKey: true } });
+
+  await addOpenAiModel({ apiKey: 'sk-second' });
+
+  assert.equal(document.getElementById('add-model-overlay').classList.contains('hidden'), false);
+  assert.deepEqual(zeilenTitel(), ['OpenAI · gpt-5-mini']);
+  assert.match(document.getElementById('model-status').textContent, /^OpenAI · gpt-5-mini steht schon in der Liste\./);
+});
+
+test('a key that can no longer be decrypted counts as missing (#807)', async (t) => {
+  await mountFreshProfile(t, { view: { ...FRESH_OPENAI_VIEW, hasKey: true, keyUnreadable: true } });
+
+  await addOpenAiModel({ apiKey: 'sk-again' });
+
+  assert.equal(document.getElementById('add-model-overlay').classList.contains('hidden'), true);
+  assert.deepEqual(zeilenTitel(), ['OpenAI · gpt-5-mini']);
+});
+
+test('a key-less entry with its own connection takes the key typed for it (#807)', async (t) => {
+  let sent = null;
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    commitSettings: async (payload) => { sent = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+
+  await zeileAnlegen({ name: 'Gateway', baseUrl: 'https://gw.example/v1', model: 'qwen2.5' });
+  await zeileAnlegen({ name: 'Gateway', baseUrl: 'https://gw.example/v1', model: 'qwen2.5', apiKey: 'sk-gw' });
+
+  assert.deepEqual(zeilenTitel(), ['Gateway · qwen2.5']);
+  assert.equal(document.getElementById('add-model-overlay').classList.contains('hidden'), true);
+  document.getElementById('btn-settings-save').click();
+  await flush();
+  assert.equal(sent.presets.length, 1);
+  assert.equal(sent.presets[0].connection.apiKey, 'sk-gw');
 });
 
 test('typing a key keeps a loaded model list and the model picked from it (CR-B14-05)', async (t) => {
@@ -1667,7 +1784,7 @@ test('the duplicate message lands in the announced status region (CR-B14-08)', a
 
   const status = document.getElementById('model-status');
   assert.equal(status.getAttribute('role'), 'status');
-  assert.equal(status.textContent, 'Diese Kombination gibt es bereits in der Liste.');
+  assert.equal(status.textContent, 'A · qwen2.5 steht schon in der Liste. Ändern kannst du den Eintrag mit dem Stift daneben.');
 });
 
 // --- Smaller findings of block B14 (CR-B14-09) ------------------------------
