@@ -18,6 +18,7 @@ Dieses Handbuch erklärt, wie du damit arbeitest: wie du anfängst, wie du mit D
 - **Der Arbeitsbereich:** [Dich im Fenster zurechtfinden](workspace/the-window/), [eine Datei finden](workspace/find-a-file/) und [sie ansehen](workspace/preview/).
 - **Sicherheit:** [Warum Snotra fragt, bevor es handelt](safety/why-snotra-asks/) und wie du für einen Chat oder Ordner [einen Modus wählst](safety/choose-a-mode/).
 - **Anpassen:** [Deine Modelle verwalten](customising/models/), einem Projekt [seine Anweisungen geben](customising/project-instructions/) und [Skills](customising/skills/) oder [MCP-Server](customising/mcp-servers/) dazunehmen.
+- **Referenz:** jedes [Tastenkürzel](reference/keyboard-shortcuts/), [wo Snotra seine Dateien ablegt](reference/files-and-folders/) und ein [Glossar](reference/glossary/).
 - **Download:** Die aktuelle Version für macOS, Windows und Linux findest du auf der [Release-Seite](https://github.com/kkrafft1999/snotra/releases/latest).
 - **Alle Funktionen im Überblick:** Bis jedes Kapitel dieses Handbuchs geschrieben ist, beschreibt die [README auf GitHub](https://github.com/kkrafft1999/snotra/blob/main/README.de.md) alle Funktionen an einer Stelle.
 - **Probleme und Ideen:** Melde sie als [Issue auf GitHub](https://github.com/kkrafft1999/snotra/issues/new/choose).
