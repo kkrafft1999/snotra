@@ -54,6 +54,11 @@ export default defineConfig({
           translations: { de: 'Anpassen' },
           items: [{ autogenerate: { directory: 'customising' } }],
         },
+        {
+          label: 'Updating',
+          translations: { de: 'Aktualisieren' },
+          items: [{ autogenerate: { directory: 'updating' } }],
+        },
       ],
       customCss: ['@fontsource/inter/400.css', '@fontsource/inter/600.css', './src/styles/theme.css'],
       components: {
