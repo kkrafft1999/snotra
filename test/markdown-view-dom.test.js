@@ -605,3 +605,50 @@ test('link attributes the document writes itself do nothing', async (t) => {
   assert.deepEqual(calls.opened, []);
   assert.deepEqual(calls.external, []);
 });
+
+// #822: back in the history, a Markdown file comes back as it was left — the
+// same side of the switch, the same place in it.
+async function mountWithHistory(t, files) {
+  let host = null;
+  const pane = await mountPane(t, {
+    files,
+    openFile: async (p) => {
+      await host.open(item(p));
+      return { ok: true };
+    },
+  });
+  host = pane.host;
+  return pane;
+}
+
+test('back to a Markdown file restores where the preview was scrolled to (#822)', async (t) => {
+  const { host } = await mountWithHistory(t, { '/ws/a.md': file('# A\n\ntext\n'), '/ws/b.md': file('# B\n') });
+  await host.open(item('/ws/a.md'));
+  await settle();
+  $('.md-view').scrollTop = 300;
+  await host.open(item('/ws/b.md'));
+  await settle();
+
+  assert.equal(await host.goBack(), true);
+  await settle();
+  assert.equal(host.openPath(), '/ws/a.md');
+  assert.equal($('.md-view').scrollTop, 300);
+  assert.equal($('.md-view').hidden, false);
+});
+
+test('back to a Markdown file left in the source shows the source again (#822)', async (t) => {
+  const { host } = await mountWithHistory(t, { '/ws/a.md': file('# A\n\ntext\n'), '/ws/b.md': file('# B\n') });
+  await host.open(item('/ws/a.md'));
+  await settle();
+  host.runCommand('toggle-source');
+  $('#preview-content').scrollTop = 120;
+  await host.open(item('/ws/b.md'));
+  await settle();
+
+  await host.goBack();
+  await settle();
+  assert.equal($('.md-view').hidden, true);
+  assert.equal($('.md-source').hidden, false);
+  assert.equal($$('#preview-tools input')[1].checked, true, 'the switch says so too');
+  assert.equal($('#preview-content').scrollTop, 120);
+});

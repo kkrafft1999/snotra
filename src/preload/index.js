@@ -247,6 +247,41 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // Back and forward in the preview (#822): menu "View", Cmd+[ / Cmd+] or
+  // Alt+Left / Alt+Right. The renderer holds the history.
+  onPreviewBack: (callback) => {
+    const channel = PUSH.UI_PREVIEW_BACK;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  onPreviewForward: (callback) => {
+    const channel = PUSH.UI_PREVIEW_FORWARD;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  // The menu behind ‹ or › (#822): what to list goes over, the entry picked
+  // comes back as `{ token, index }` through onPreviewHistoryChoice.
+  showPreviewHistoryMenu: (request) =>
+    ipcRenderer.invoke(REQ.UI_SHOW_PREVIEW_HISTORY_MENU, {
+      token: request?.token,
+      entries: Array.isArray(request?.entries)
+        ? request.entries.map((entry) => ({
+          index: entry?.index,
+          name: entry?.name,
+          folder: entry?.folder,
+          gone: entry?.gone === true,
+        }))
+        : [],
+      ...(request?.position ? { position: { x: request.position.x, y: request.position.y } } : {}),
+    }),
+  onPreviewHistoryChoice: (callback) => {
+    const channel = PUSH.UI_PREVIEW_HISTORY_CHOICE;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // The tree's filter (#350): menu "View" or Cmd/Ctrl+P.
   onFilterFiles: (callback) => {
     const channel = PUSH.UI_FILTER_FILES;

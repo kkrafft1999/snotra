@@ -33,6 +33,9 @@
 //                           // null for a view with reads: 'none'
 //     fragment,             // the `#section` (without `#`) of the link that
 //                           // opened this file from another view, else ''
+//     viewState,            // what `viewState()` reported when the history
+//                           // last left this file, on the way back or
+//                           // forward (#822); else null. Wins over `fragment`.
 //     api,                  // window.electronAPI, for views that need more
 //     workspaceRoot,        // the open folder, or null
 //     openFile(path, { fragment }?) → Promise<{ ok, reason? }>,
@@ -63,6 +66,10 @@
 //     command(name) → boolean,              // optional: a command from the
 //                                           // menu, e.g. 'toggle-source';
 //                                           // true when the view handled it
+//     viewState() → object,                 // optional: where the reader
+//                                           // is — scroll position, mode —
+//                                           // as plain data; it comes back
+//                                           // as `context.viewState` (#822)
 //     revalidate({ directories }?),         // optional: the text is the
 //                                           // same, what it points to may
 //                                           // not be — a Markdown file's

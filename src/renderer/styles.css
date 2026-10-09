@@ -5684,9 +5684,22 @@ select.modal-input {
   align-items: center;
   gap: 4px 12px;
   min-height: calc(var(--ds-touch-min) + 20px);
-  padding: 4px 16px;
+  /* 8px on the left: the arrow in the first round button (#822) then stands
+   * where the name used to start, 16px in. */
+  padding: 4px 16px 4px 8px;
   background: var(--ds-grey-bg);
   border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+/* ‹ › and the name: one unit that wraps together (#822). The tools go to the
+ * next row before the buttons lose their name. */
+#preview-lead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Room for the buttons and the start of a name. */
+  flex: 1 1 14em;
+  min-width: 14em;
 }
 
 #preview-filename {
@@ -5698,9 +5711,72 @@ select.modal-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  /* Room for the start of a name before the tools wrap to the next row. */
-  flex: 1 1 10em;
-  min-width: 10em;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Back and forward through the files the preview showed (#822): the round
+ * icon buttons of the title bar, as a pair. Both are always there, so the
+ * name does not move; the one with nowhere to go is disabled. */
+.preview-history {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.preview-history > :first-child {
+  margin-inline-end: calc(-1 * var(--ds-icon-btn-cluster-pull));
+}
+
+.preview-history__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--ds-motion-fast),
+    color var(--ds-motion-fast),
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
+}
+
+/* The header is --ds-grey-bg, the ground --bg-hover would vanish on: the
+ * overlay of the title bar's buttons instead. */
+.preview-history__button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text-primary) 9%, transparent);
+  color: var(--text-primary);
+}
+
+.preview-history__button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--text-primary) 16%, transparent);
+  color: var(--text-primary);
+  transform: scale(0.97);
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+.preview-history__button:focus-visible {
+  position: relative;
+  z-index: 1;
+}
+
+.preview-history__button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* On the info card of a file without a view, top left where the header
+ * would have them. */
+.preview-history--card {
+  position: absolute;
+  top: 10px;
+  left: 8px;
 }
 
 #preview-meta {
@@ -6850,6 +6926,7 @@ select.modal-input {
 /* ── File Info (binary files) ── */
 
 #file-info {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;

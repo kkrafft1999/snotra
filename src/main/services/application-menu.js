@@ -134,6 +134,21 @@ function createApplicationMenuTemplate({
         accelerator: 'CmdOrCtrl+P',
         click: () => send(PUSH.UI_FILTER_FILES),
       },
+      // #822: back and forward through the files the preview showed. Only
+      // shown: the window matches the physical key (preview-history-shortcut.js)
+      // — `[` is Option+5 on a German Mac keyboard.
+      {
+        label: t('menu.view.back'),
+        accelerator: isMac ? 'Cmd+[' : 'Alt+Left',
+        registerAccelerator: false,
+        click: () => send(PUSH.UI_PREVIEW_BACK),
+      },
+      {
+        label: t('menu.view.forward'),
+        accelerator: isMac ? 'Cmd+]' : 'Alt+Right',
+        registerAccelerator: false,
+        click: () => send(PUSH.UI_PREVIEW_FORWARD),
+      },
       // Issue #344: switches a Markdown file in the preview between the
       // rendered text and its source. Not Cmd/Ctrl+Shift+V, the shortcut of
       // other editors — on the Mac that is "Paste and Match Style" in every

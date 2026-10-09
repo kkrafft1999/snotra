@@ -4,6 +4,7 @@ const { createRendererNavigationHandler } = require('./permissions');
 const { isOpenableUrl } = require('./ipc/shell-handlers');
 const { resolveWindowBounds, createWindowStateStore } = require('./window-state');
 const { createHiddenFilesShortcutHandler } = require('./services/hidden-files-shortcut');
+const { createPreviewHistoryShortcutHandler } = require('./services/preview-history-shortcut');
 const { windowTitle } = require('./services/window-title');
 const { PUSH_CHANNELS: PUSH } = require('../shared/ipc-channels');
 
@@ -162,6 +163,13 @@ function createWindow() {
   // with the focus in the chat input as well — like a menu accelerator would.
   window.webContents.on('before-input-event', createHiddenFilesShortcutHandler({
     onToggle: () => window.webContents.send(PUSH.UI_TOGGLE_HIDDEN_FILES),
+  }));
+  // Back and forward in the preview (#822), the same way and for the same
+  // reason: by the physical key, and with the focus anywhere in the window.
+  window.webContents.on('before-input-event', createPreviewHistoryShortcutHandler({
+    onStep: (direction) => window.webContents.send(
+      direction === 'back' ? PUSH.UI_PREVIEW_BACK : PUSH.UI_PREVIEW_FORWARD,
+    ),
   }));
 
   window.loadFile(path.join(projectRoot, 'src', 'renderer', 'index.html'));

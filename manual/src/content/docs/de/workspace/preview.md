@@ -11,12 +11,23 @@ Klick im Baum auf eine Datei, und die mittlere Spalte zeigt sie. Jede Art von Da
 
 Einen geöffneten Ordner. Die Vorschau zeigt nur Dateien aus diesem Ordner.
 
+## Zurück und vor
+
+[seit 1.18] Die Vorschau merkt sich die Dateien, die sie gezeigt hat, wie ein Browser. `‹` und `›` vor dem Dateinamen führen zurück zur vorigen Datei und wieder vor; der Baum wählt die Datei dabei mit aus.
+
+- **Jeder Weg zählt,** der eine Datei in die Vorschau bringt: ein Klick im Baum, *Dateien filtern…*, ein Link in einem Markdown-Dokument, ein Link in einer Chat-Antwort, *Änderungen anzeigen*.
+- **Tastenkürzel:** `Cmd+[` und `Cmd+]` unter macOS, `Alt+←` und `Alt+→` unter Windows und Linux — auch unter *Ansicht › Zurück* und *Ansicht › Vor*. Die Seitentasten einer Maus wirken über dem Baum und der mittleren Spalte.
+- **Die ganze Liste:** Rechtsklick auf `‹` oder `›` — oder `Shift+F10` darauf — zeigt alle Dateien auf dieser Seite; wähl eine, um direkt dorthin zu springen.
+- **Wo du warst:** Zurück landet dort, wo du die Datei verlassen hast — an derselben Scrollposition und in einer Markdown-Datei auf derselben Seite von *Preview | Quelltext*.
+- **Ein neuer Schritt schneidet ab, was vor dir lag.** Gehst du zweimal zurück und öffnest eine andere Datei, liegen die Dateien, von denen du zurückgegangen bist, nicht mehr vor dir.
+- Die Liste gehört zum geöffneten Ordner. Ein Ordnerwechsel oder ein Neustart von Snotra beginnt sie leer.
+
 ## Markdown
 
 Eine `.md`-Datei öffnet sich formatiert: Überschriften, Listen, Tabellen, Code. *Preview | Quelltext* im Kopf — oder `Cmd+Shift+M` / `Strg+Shift+M`, oder *Ansicht › Preview oder Quelltext* — wechselt zum reinen Text und zurück. Das Front Matter einer `SKILL.md` steht als kompakter Block über dem Text.
 
 - Bilder aus dem geöffneten Ordner werden gezeigt. Bilder aus dem Netz werden nie geladen: Ein Platzhalter, *Bild aus dem Netz, nicht geladen*, sagt, wohin sie zeigen.
-- Ein Link auf eine andere Datei des Ordners öffnet diese Datei und wählt sie im Baum aus.
+- Ein Link auf eine andere Datei des Ordners öffnet diese Datei und wählt sie im Baum aus. `‹` bringt dich zurück dorthin, wo du ihm gefolgt bist.
 
 ## Code und Text
 
@@ -60,3 +71,4 @@ Ein Link auf eine HTML-Datei in einer Chat-Antwort öffnet sie ebenfalls hier.
 - **Die Datei zeigt über einen Link aus dem geöffneten Ordner hinaus** und wird deshalb nicht gezeigt. Die Vorschau zeigt nichts von außerhalb des Ordners.
 - ***Kein lesbares Bild* oder *Keine PDF*.** Der Inhalt passt nicht zum Dateinamen. Die Ansicht prüft, was drinsteht, nicht die Endung.
 - ***Die Seite reagiert nicht.*** Ein Skript der Seite hält sie beschäftigt. Snotra bleibt bedienbar; *Neu laden* startet die Seite neu.
+- **`‹` überspringt eine Datei, oder die Liste zeigt sie ausgegraut.** Die Datei wurde gelöscht oder außerhalb von Snotra verschoben, seit du sie angesehen hast. Eine Datei, die du im Baum umbenennst oder verschiebst, bleibt unter ihrem neuen Namen in der Liste.

@@ -38,7 +38,7 @@ export const plainTextView = {
     return isTextFile(name);
   },
 
-  mount(hostEl, { content, file }) {
+  mount(hostEl, { content, file, viewState = null }) {
     const pre = document.createElement('pre');
     pre.id = 'preview-content';
     const language = syntaxLanguageFor(file?.name);
@@ -74,10 +74,19 @@ export const plainTextView = {
     }
 
     show(content ?? '');
+    // Back to where the reader was (#822).
+    if (viewState) {
+      pre.scrollTop = Number(viewState.top) || 0;
+      pre.scrollLeft = Number(viewState.left) || 0;
+    }
 
     return {
       update({ content: next }) {
         show(next ?? '');
+      },
+      /** Where the reader is, for the way back (#822). */
+      viewState() {
+        return { top: pre.scrollTop, left: pre.scrollLeft };
       },
       unmount() {
         cancelPending();

@@ -80,6 +80,10 @@ export function initFileTree(deps) {
     confirmLeave,
     openFile: (path) => openFromPreview(path),
     getWorkspaceRoot: () => appStore.rootPath,
+    // The entries behind ‹ and › (#822), as a native menu.
+    showHistoryMenu: typeof api.showPreviewHistoryMenu === 'function'
+      ? (request) => api.showPreviewHistoryMenu(request)
+      : null,
     // What the conversation on screen changed in a file (#348).
     changesFor: (path) => fileChanges.changesFor(appStore.currentChatId, path).map((change) => change.id),
   });
@@ -341,6 +345,8 @@ export function initFileTree(deps) {
     // left (#633).
     clearSelection();
     contentPane.clear();
+    // And so does the way back through its files (#822).
+    contentPane.resetHistory();
     // The folder left goes at once, not when the queue gets round to it: its
     // rows would stay clickable under the new name meanwhile.
     treeContainer.innerHTML = '';
@@ -1232,6 +1238,7 @@ export function initFileTree(deps) {
     if (appStore.selectedPath === deletedPath || isInsideDir(appStore.selectedPath, deletedPath)) {
       clearSelection();
     }
+    contentPane.forgetPath(deletedPath);
     const openPath = contentPane.openPath();
     if (openPath === deletedPath || isInsideDir(openPath, deletedPath)) {
       await contentPane.close('file-removed');
@@ -2074,6 +2081,7 @@ export function initFileTree(deps) {
     const selectedIsDirectory = appStore.selectedIsDirectory;
     const openMoved = moved(contentPane.openPath());
     agentMarks.forget(oldPath);
+    contentPane.renamePath(oldPath, newPath);
 
     await redrawFolders([parentDir]);
     await restoreExpandedFolders(expanded);
@@ -2541,6 +2549,11 @@ export function initFileTree(deps) {
     /** The folder's README the column opens with, or null (#351). */
     readableFolderReadme,
     showFolderReadme,
+    /** Back and forward through the files the preview showed (#822). */
+    previewBack: () => contentPane.goBack(),
+    previewForward: () => contentPane.goForward(),
+    /** Main's answer to the menu behind ‹ or ›. */
+    choosePreviewHistory: (token, index) => contentPane.chooseFromHistory(token, index),
     /** A menu command for the file on show, e.g. 'toggle-source' (#344). */
     runPreviewCommand: (name) => contentPane.runCommand(name),
   };

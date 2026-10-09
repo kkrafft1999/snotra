@@ -78,6 +78,7 @@ const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
 const { registerSkillSuggestionHandlers } = require('../ipc/skill-suggestion-handlers');
 const { registerShellHandlers } = require('../ipc/shell-handlers');
+const { registerPreviewHistoryMenuHandlers } = require('../ipc/preview-history-menu-handlers');
 const { createChatApplication } = require('./create-chat-application');
 const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
 const { createProjectInstructionsAdapter } = require('../adapters/project-instructions-adapter');
@@ -785,6 +786,8 @@ function createApplication({
     ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog, getLocale: getAppLocale, pdfAssets,
     getWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
   });
+  // The menu behind ‹ and › in the preview header (#822).
+  if (Menu) registerPreviewHistoryMenuHandlers({ ipcMain, Menu, REQ, PUSH, getMainWindow });
   if (session && WebContentsView && shell) {
     const htmlPreview = createHtmlPreviewService({
       session,

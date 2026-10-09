@@ -181,12 +181,12 @@ export const markdownView = {
       }, NOTICE_MS);
     }
 
-    function setMode(next) {
+    function setMode(next, { sourceState = null } = {}) {
       if (next === mode || disposed) return;
       mode = next;
       modeSwitch.select(mode);
       if (mode === MODES.SOURCE && !sourceInstance) {
-        sourceInstance = plainTextView.mount(sourceEl, { ...context, content });
+        sourceInstance = plainTextView.mount(sourceEl, { ...context, content, viewState: sourceState });
       }
       previewEl.hidden = mode !== MODES.PREVIEW;
       sourceEl.hidden = mode !== MODES.SOURCE;
@@ -558,8 +558,33 @@ export const markdownView = {
       void render({ keepImages: true });
     });
 
+    /**
+     * Back to where the reader was when the history left this file (#822):
+     * the same side of "Preview | Source", the same place in it. Images above
+     * that place arrive later and push it down; once they are in it is set
+     * again — unless the reader has scrolled meanwhile.
+     */
+    function restoreView(state, imagesSettled) {
+      if (state.mode === MODES.SOURCE) {
+        setMode(MODES.SOURCE, { sourceState: state.source ?? null });
+        return;
+      }
+      const top = Number(state.top) || 0;
+      const left = Number(state.left) || 0;
+      previewEl.scrollTop = top;
+      previewEl.scrollLeft = left;
+      const placed = previewEl.scrollTop;
+      void imagesSettled.then(() => {
+        if (disposed || previewEl.scrollTop !== placed) return;
+        previewEl.scrollTop = top;
+        previewEl.scrollLeft = left;
+      });
+    }
+
     const firstImages = render();
-    if (context.fragment) revealOnOpen(context.fragment, firstImages);
+    // A place the reader left wins over the heading the link named.
+    if (context.viewState) restoreView(context.viewState, firstImages);
+    else if (context.fragment) revealOnOpen(context.fragment, firstImages);
 
     return {
       update({ content: next }) {
@@ -588,6 +613,15 @@ export const markdownView = {
         previewEl.removeEventListener('click', onClick);
         previewEl.removeEventListener('auxclick', onAuxClick);
         sourceInstance?.unmount();
+      },
+      /** Where the reader is, for the way back (#822). */
+      viewState() {
+        return {
+          mode,
+          top: previewEl.scrollTop,
+          left: previewEl.scrollLeft,
+          source: sourceInstance?.viewState?.() ?? null,
+        };
       },
       /** Commands from outside the view — the menu shortcut (#344). */
       command(name) {
