@@ -28,6 +28,7 @@ Eine `.md`-Datei öffnet sich formatiert: Überschriften, Listen, Tabellen, Code
 
 - Bilder aus dem geöffneten Ordner werden gezeigt. Bilder aus dem Netz werden nie geladen: Ein Platzhalter, *Bild aus dem Netz, nicht geladen*, sagt, wohin sie zeigen.
 - Ein Link auf eine andere Datei des Ordners öffnet diese Datei und wählt sie im Baum aus. `‹` bringt dich zurück dorthin, wo du ihm gefolgt bist.
+- [seit 1.19] Zoomen kannst du mit `−` und `+` im Kopf, oder mit `Cmd` / `Strg` und `+`, `−`, `0`, während die Vorschau den Fokus hat. Es wächst das ganze Dokument — Text, Bilder und Tabellen —, und jede Markdown-Datei öffnet sich in der Größe, die du zuletzt gewählt hast, auch nach einem Neustart. Der Quelltext wird nicht gezoomt.
 
 ## Code und Text
 
@@ -72,3 +73,4 @@ Ein Link auf eine HTML-Datei in einer Chat-Antwort öffnet sie ebenfalls hier.
 - ***Kein lesbares Bild* oder *Keine PDF*.** Der Inhalt passt nicht zum Dateinamen. Die Ansicht prüft, was drinsteht, nicht die Endung.
 - ***Die Seite reagiert nicht.*** Ein Skript der Seite hält sie beschäftigt. Snotra bleibt bedienbar; *Neu laden* startet die Seite neu.
 - **`‹` überspringt eine Datei, oder die Liste zeigt sie ausgegraut.** Die Datei wurde gelöscht oder außerhalb von Snotra verschoben, seit du sie angesehen hast. Eine Datei, die du im Baum umbenennst oder verschiebst, bleibt unter ihrem neuen Namen in der Liste.
+- **`Cmd` / `Strg` und `+` vergrößert das ganze Fenster statt des Dokuments.** Die Tasten zoomen das Dokument nur, während die Vorschau den Fokus hat — klick zuerst in den Text. *Ansicht › Zoom zurücksetzen* stellt das Fenster wieder her.

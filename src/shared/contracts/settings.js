@@ -60,6 +60,11 @@ const CHAT_PANEL_WIDTH_MAX = 2000;
 // „Titel + Zeitpunkt" auseinander, breiter als 800 px hat sie nichts zu zeigen.
 const CHAT_HISTORY_WIDTH_MIN = 180;
 const CHAT_HISTORY_WIDTH_MAX = 800;
+// How far the Markdown preview zooms (#829): the steps of the PDF and image
+// zoom between these two (file-views/zoom-tools.js). Below half the text is
+// unreadable, beyond three times a line holds a handful of words.
+const MARKDOWN_ZOOM_MIN = 0.5;
+const MARKDOWN_ZOOM_MAX = 3;
 const HISTORY_CHAR_LIMIT_MIN = 4000;
 const HISTORY_CHAR_LIMIT_MAX = 2_000_000;
 
@@ -81,6 +86,11 @@ function clampChatPanelWidth(raw) {
 function clampChatHistoryWidth(raw) {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
   return Math.min(CHAT_HISTORY_WIDTH_MAX, Math.max(CHAT_HISTORY_WIDTH_MIN, Math.round(raw)));
+}
+
+function clampMarkdownZoom(raw) {
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
+  return Math.round(Math.min(MARKDOWN_ZOOM_MAX, Math.max(MARKDOWN_ZOOM_MIN, raw)) * 100) / 100;
 }
 
 function clampHistoryCharLimit(raw) {
@@ -446,6 +456,7 @@ function normalizeUiPrefs(raw) {
   const chatPanelWidth = clampChatPanelWidth(data.chatPanelWidth);
   const chatHistoryWidth = clampChatHistoryWidth(data.chatHistoryWidth);
   const historyCharLimit = clampHistoryCharLimit(data.historyCharLimit);
+  const markdownZoom = clampMarkdownZoom(data.markdownZoom);
   const activeSkills = normalizeActiveSkills(data.activeSkills);
   const activeWorkspaceSkills = normalizeActiveWorkspaceSkills(data.activeWorkspaceSkills);
   const ignoredUpdateVersion = typeof data.ignoredUpdateVersion === 'string'
@@ -527,6 +538,8 @@ function normalizeUiPrefs(raw) {
     ...(typeof chatPanelWidth === 'number' ? { chatPanelWidth } : {}),
     ...(typeof chatHistoryWidth === 'number' ? { chatHistoryWidth } : {}),
     ...(typeof historyCharLimit === 'number' ? { historyCharLimit } : {}),
+    // One size for every Markdown file (#829); absent until the user zooms.
+    ...(typeof markdownZoom === 'number' ? { markdownZoom } : {}),
     ...(typeof ignoredUpdateVersion === 'string' ? { ignoredUpdateVersion } : {}),
     pythonExecutionEnabled,
     ...(pythonInterpreterPath ? { pythonInterpreterPath } : {}),
@@ -587,6 +600,10 @@ function normalizeUiPrefsPatch(raw) {
   const historyCharLimit = clampHistoryCharLimit(patch.historyCharLimit);
   if (typeof historyCharLimit === 'number') {
     out.historyCharLimit = historyCharLimit;
+  }
+  const markdownZoom = clampMarkdownZoom(patch.markdownZoom);
+  if (typeof markdownZoom === 'number') {
+    out.markdownZoom = markdownZoom;
   }
   const disabledTools = normalizeDisabledTools(patch.disabledTools);
   if (disabledTools) {
@@ -938,11 +955,14 @@ module.exports = {
   CHAT_HISTORY_WIDTH_MAX,
   HISTORY_CHAR_LIMIT_MIN,
   HISTORY_CHAR_LIMIT_MAX,
+  MARKDOWN_ZOOM_MIN,
+  MARKDOWN_ZOOM_MAX,
   clampMaxToolRounds,
   clampSidebarWidth,
   clampChatPanelWidth,
   clampChatHistoryWidth,
   clampHistoryCharLimit,
+  clampMarkdownZoom,
   isAppLocale,
   normalizeDisabledTools,
   createSettingsOk,

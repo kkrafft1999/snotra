@@ -1,13 +1,17 @@
 // The zoom steps and the small icon buttons of the header tools, shared by
-// the PDF preview (#346) and the image preview (#345, #803), so that both
-// zoom the same way and their buttons look alike.
+// the PDF preview (#346), the image preview (#345, #803) and the Markdown
+// preview (#829), so that all of them zoom the same way and their buttons
+// look alike.
 
 export const ZOOM_STEPS = Object.freeze([0.25, 0.33, 0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4]);
 
-/** The next zoom step in a direction, from wherever the zoom stands now. */
-export function nextZoom(current, direction) {
-  if (direction > 0) return ZOOM_STEPS.find((step) => step > current + 0.001) ?? ZOOM_STEPS.at(-1);
-  return [...ZOOM_STEPS].reverse().find((step) => step < current - 0.001) ?? ZOOM_STEPS[0];
+/**
+ * The next zoom step in a direction, from wherever the zoom stands now.
+ * `steps` for a view that only uses part of the range.
+ */
+export function nextZoom(current, direction, steps = ZOOM_STEPS) {
+  if (direction > 0) return steps.find((step) => step > current + 0.001) ?? steps.at(-1);
+  return [...steps].reverse().find((step) => step < current - 0.001) ?? steps[0];
 }
 
 function icon(path) {

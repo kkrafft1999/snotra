@@ -475,6 +475,32 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // Nothing of the document reaches into the window around it (#635).
   assert.deepEqual(await page.evaluate(hijackState, ['preview', HIJACK_ATTRIBUTES]),
     { survivors: [], chatPanelIsColumn: true });
+  // The header zoom scales the whole document in real Chromium — text and
+  // images alike — and the tables still fit the column (#829).
+  const zoomed = await page.evaluate(() => {
+    const measure = () => ({
+      heading: document.querySelector('.md-doc h1, .md-doc h2').getBoundingClientRect().height,
+      image: document.querySelector('.md-doc img.md-image').getBoundingClientRect().width,
+    });
+    const before = measure();
+    document.querySelector('#preview-tools .pdf-tools__zoom-in').click();
+    document.querySelector('#preview-tools .pdf-tools__zoom-in').click();
+    const after = measure();
+    const result = {
+      value: document.querySelector('#preview-tools .pdf-tools__zoom').textContent,
+      heading: after.heading / before.heading,
+      image: after.image / before.image,
+      tableOverflow: [...document.querySelectorAll('.md-doc .md-table-frame')]
+        .map((frame) => frame.scrollWidth - frame.clientWidth),
+    };
+    document.querySelector('.md-view').dispatchEvent(new KeyboardEvent('keydown', { key: '0', metaKey: true, bubbles: true }));
+    return { ...result, reset: document.querySelector('#preview-tools .pdf-tools__zoom').textContent };
+  });
+  assert.equal(zoomed.value, '125\u00a0%');
+  assert.ok(Math.abs(zoomed.heading - 1.25) < 0.05, `the heading grows with the zoom: ${zoomed.heading}`);
+  assert.ok(zoomed.image > 1.05, `the image grows with the zoom: ${zoomed.image}`);
+  assert.ok(zoomed.tableOverflow.every((px) => px === 0), `tables still fit at 125 %: ${zoomed.tableOverflow}`);
+  assert.equal(zoomed.reset, '100\u00a0%');
   // A click on the label's text leaves the shell switch where it was.
   assert.deepEqual(await page.evaluate(() => {
     const shell = document.getElementById('input-shell-enabled');

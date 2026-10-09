@@ -28,6 +28,7 @@ A `.md` file opens formatted: headings, lists, tables, code. *Preview | Source* 
 
 - Images from the open folder are shown. Images from the web are never loaded: a placeholder, *Image from the web, not loaded*, says where they point.
 - A link to another file of the folder opens that file and selects it in the tree. `‹` takes you back to where you followed it.
+- [since 1.19] Zoom with `−` and `+` in the header, or with `Cmd` / `Ctrl` and `+`, `−`, `0` while the preview has the focus. The whole document grows — text, images and tables — and every Markdown file opens at the size you chose last, after a restart too. The source is not zoomed.
 
 ## Code and text
 
@@ -72,3 +73,4 @@ A link to an HTML file in a chat answer opens it here as well.
 - ***Not a readable image* or *Not a PDF*.** The content does not match the file name. The view checks what is inside, not the extension.
 - ***The page is not responding.*** A script in the page keeps it busy. Snotra stays usable; *Reload* starts the page again.
 - **`‹` skips a file, or the list shows it greyed out.** The file was deleted, or moved outside Snotra, since you looked at it. A file you rename or move in the tree stays in the list under its new name.
+- **`Cmd` / `Ctrl` and `+` makes the whole window larger, not the document.** The keys zoom the document only while the preview has the focus — click into the text first. *View › Actual Size* puts the window back.

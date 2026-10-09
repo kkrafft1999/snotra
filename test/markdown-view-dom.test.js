@@ -42,8 +42,12 @@ async function mountPane(t, { files, openFile, images = {}, openExternal, listin
   globalThis.DOMPurify = { addHook() {}, sanitize: (html) => html };
 
   const { createFileViewHost } = await importRenderer('file-views', 'host.js');
-  const calls = { images: [], opened: [], external: [], listings: [] };
+  const calls = { images: [], opened: [], external: [], listings: [], prefs: [] };
   const api = {
+    setUIPrefs: async (patch) => {
+      calls.prefs.push(patch);
+      return {};
+    },
     // The folder listing of the tree, which the view uses to see whether an
     // image changed before it reads it again (#640). Absent unless asked for.
     ...(listings && {
@@ -651,4 +655,105 @@ test('back to a Markdown file left in the source shows the source again (#822)',
   assert.equal($('.md-source').hidden, false);
   assert.equal($$('#preview-tools input')[1].checked, true, 'the switch says so too');
   assert.equal($('#preview-content').scrollTop, 120);
+});
+
+/** The zoom group in the header (#829), next to the switch. */
+function zoomTools() {
+  return {
+    group: $('#preview-tools .md-zoom'),
+    out: $('#preview-tools .pdf-tools__zoom-out'),
+    value: $('#preview-tools .pdf-tools__zoom'),
+    in: $('#preview-tools .pdf-tools__zoom-in'),
+  };
+}
+
+const zoomOf = () => $('.md-doc').style.getPropertyValue('--md-zoom');
+
+async function resetZoom() {
+  const { restoreMarkdownZoom } = await importRenderer('file-views', 'markdown-zoom.js');
+  restoreMarkdownZoom(undefined);
+}
+
+test('the header zooms the whole document and remembers it for every Markdown file (#829)', async (t) => {
+  await resetZoom();
+  const { host, calls } = await mountPane(t, { files: { '/ws/a.md': file('# A\n'), '/ws/b.md': file('# B\n') } });
+  await host.open(item('/ws/a.md'));
+  await settle();
+
+  const tools = zoomTools();
+  assert.equal(tools.group.getAttribute('aria-label'), 'Zoom');
+  assert.equal(tools.out.getAttribute('aria-label'), 'Zoom out');
+  assert.equal(tools.in.getAttribute('aria-label'), 'Zoom in');
+  assert.equal(tools.value.textContent, '100\u00a0%');
+  assert.equal(zoomOf(), '1');
+  assert.deepEqual(calls.prefs, [], 'opening a file stores nothing');
+
+  tools.in.click();
+  tools.in.click();
+  assert.equal(zoomTools().value.textContent, '125\u00a0%');
+  assert.equal(zoomOf(), '1.25');
+  assert.deepEqual(calls.prefs, [{ markdownZoom: 1.1 }, { markdownZoom: 1.25 }]);
+
+  await host.open(item('/ws/b.md'));
+  await settle();
+  assert.equal($('.md-doc h1').textContent, 'B');
+  assert.equal(zoomTools().value.textContent, '125\u00a0%', 'the next file opens at the same size');
+  assert.equal(zoomOf(), '1.25');
+});
+
+test('the zoom stops at 50 % and 300 %, and the keys zoom while the preview has focus (#829)', async (t) => {
+  await resetZoom();
+  const { host } = await mountPane(t, { files: { '/ws/a.md': file('# A\n') } });
+  await host.open(item('/ws/a.md'));
+  await settle();
+
+  for (let i = 0; i < 20; i += 1) zoomTools().out.click();
+  assert.equal(zoomTools().value.textContent, '50\u00a0%');
+  assert.equal(zoomTools().out.disabled, true);
+  for (let i = 0; i < 20; i += 1) zoomTools().in.click();
+  assert.equal(zoomTools().value.textContent, '300\u00a0%');
+  assert.equal(zoomTools().in.disabled, true);
+
+  const view = $('.md-view');
+  const key = (k, extra = {}) => {
+    const event = new KeyboardEvent('keydown', { key: k, metaKey: true, bubbles: true, cancelable: true, ...extra });
+    view.dispatchEvent(event);
+    return event.defaultPrevented;
+  };
+  assert.equal(key('0'), true);
+  assert.equal(zoomTools().value.textContent, '100\u00a0%');
+  assert.equal(key('-'), true);
+  assert.equal(zoomTools().value.textContent, '90\u00a0%');
+  assert.equal(key('='), true);
+  assert.equal(key('+'), true);
+  assert.equal(zoomTools().value.textContent, '110\u00a0%');
+  assert.equal(key('+', { metaKey: false }), false, 'without the modifier the key is the page\'s');
+  assert.equal(key('+', { altKey: true }), false);
+  assert.equal(zoomTools().value.textContent, '110\u00a0%');
+});
+
+test('the zoom leaves the header while the source is on show (#829)', async (t) => {
+  await resetZoom();
+  const { host } = await mountPane(t, { files: { '/ws/a.md': file('# A\n') } });
+  await host.open(item('/ws/a.md'));
+  await settle();
+
+  const [preview, source] = $$('#preview-tools input[type="radio"]');
+  source.checked = true;
+  source.dispatchEvent(new Event('change', { bubbles: true }));
+  assert.equal(zoomTools().group, null);
+  assert.equal($$('#preview-tools input[type="radio"]').length, 2, 'the switch stays');
+
+  $$('#preview-tools input[type="radio"]')[0].checked = true;
+  $$('#preview-tools input[type="radio"]')[0].dispatchEvent(new Event('change', { bubbles: true }));
+  assert.notEqual(zoomTools().group, null);
+  assert.equal(preview.isConnected, true, 'the same switch, not a new one');
+});
+
+test('a stored zoom outside the range falls back into it, an unusable one to 100 % (#829)', async () => {
+  const { restoreMarkdownZoom, markdownZoom } = await importRenderer('file-views', 'markdown-zoom.js');
+  restoreMarkdownZoom(12);
+  assert.equal(markdownZoom(), 3);
+  restoreMarkdownZoom('large');
+  assert.equal(markdownZoom(), 1);
 });

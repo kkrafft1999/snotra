@@ -25,6 +25,7 @@ import { initMemoryPanel } from './components/MemoryPanel.js';
 import { initAppVersionBadge } from './components/AppVersionBadge.js';
 import { initWorkspaceHeader } from './components/WorkspaceHeader.js';
 import { contentPaneVisibleOnStart } from './utils/startupLayout.js';
+import { restoreMarkdownZoom } from './file-views/markdown-zoom.js';
 import { t, setLocale, onLocaleChange } from './i18n.js';
 
 const api = window.electronAPI;
@@ -636,6 +637,8 @@ trackChatSwitch((async () => {
     setLocale(uiPrefs.appLocale, { force: true });
     // Before the folder opens, so its first listing already follows the
     // switch (#436). The stored value is no new wish: not written back.
+    // Before a Markdown file can be on show, which would open at 100 % (#829).
+    restoreMarkdownZoom(uiPrefs.markdownZoom);
     await fileTree.setShowHiddenFiles(uiPrefs.showHiddenFiles === true, { persist: false });
   } catch {
     setSidebarVisible(true, { animate: false });
