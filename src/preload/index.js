@@ -351,6 +351,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // A system notification about a card waiting out of sight (#792, step 5).
+  showApprovalNotification: ({ requestId, chatId, title, body } = {}) =>
+    ipcRenderer.invoke(REQ.APPROVAL_NOTIFICATION_SHOW, { requestId, chatId, title, body }),
+  closeApprovalNotification: (requestId) => ipcRenderer.invoke(REQ.APPROVAL_NOTIFICATION_CLOSE, { requestId }),
+  onApprovalNotificationOpen: (callback) => {
+    const channel = PUSH.APPROVAL_NOTIFICATION_OPEN;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // Beides geht ueber den Main-Prozess; die Protokollpruefung sitzt dort.
   openExternal: (url) => ipcRenderer.invoke(REQ.SHELL_OPEN_EXTERNAL, url),
   writeClipboardText: (text) =>

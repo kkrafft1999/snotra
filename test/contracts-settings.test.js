@@ -316,6 +316,14 @@ test('normalizeUiPrefs schickt Umgebungsinformationen standardmäßig mit', () =
   assert.equal('projectInstructionsEnabled' in normalizeUiPrefsPatch({ projectInstructionsEnabled: 0 }), false);
   assert.equal(normalizeUiPrefsPatch({ projectInstructionsEnabled: false }).projectInstructionsEnabled, false);
   assert.equal(normalizeUiPrefsPatch({ projectInstructionsEnabled: true }).projectInstructionsEnabled, true);
+
+  // A notification about a card waiting out of sight (#792, step 5) — on
+  // unless switched off.
+  assert.equal(normalizeUiPrefs({}).approvalNotificationsEnabled, true);
+  assert.equal(normalizeUiPrefs({ approvalNotificationsEnabled: 'no' }).approvalNotificationsEnabled, true);
+  assert.equal(normalizeUiPrefs({ approvalNotificationsEnabled: false }).approvalNotificationsEnabled, false);
+  assert.equal('approvalNotificationsEnabled' in normalizeUiPrefsPatch({ approvalNotificationsEnabled: 0 }), false);
+  assert.equal(normalizeUiPrefsPatch({ approvalNotificationsEnabled: false }).approvalNotificationsEnabled, false);
 });
 
 test('normalizeUiPrefsPatch räumt den Interpreter-Pfad auf', () => {

@@ -469,6 +469,10 @@ function normalizeUiPrefs(raw) {
   // sie von dem, der einen fremden Ordner oeffnet und dessen Anweisungen
   // nicht uebernehmen will — deshalb `!== false` statt `=== true`.
   const projectInstructionsEnabled = data.projectInstructionsEnabled !== false;
+  // A system notification when an approval card waits out of sight (#792,
+  // step 5): on unless switched off, since a run that waits for the user
+  // stands still until they notice it.
+  const approvalNotificationsEnabled = data.approvalNotificationsEnabled !== false;
   // Gedaechtnis (Issue #166), je Ebene ein Schalter. Beide standardmaessig an:
   // Wer nichts gemerkt hat, hat auch keine Datei, und dann kostet der Schalter
   // nichts. Die Ordner-Ebene ist zugleich die Notbremse fuer einen fremden
@@ -530,6 +534,7 @@ function normalizeUiPrefs(raw) {
     shellExecutionEnabled,
     environmentInfoEnabled,
     projectInstructionsEnabled,
+    approvalNotificationsEnabled,
     memoryWorkspaceEnabled,
     memoryUserEnabled,
     memorySelfEnabled,
@@ -612,6 +617,9 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.projectInstructionsEnabled === 'boolean') {
     out.projectInstructionsEnabled = patch.projectInstructionsEnabled;
+  }
+  if (typeof patch.approvalNotificationsEnabled === 'boolean') {
+    out.approvalNotificationsEnabled = patch.approvalNotificationsEnabled;
   }
   if (typeof patch.memoryWorkspaceEnabled === 'boolean') {
     out.memoryWorkspaceEnabled = patch.memoryWorkspaceEnabled;

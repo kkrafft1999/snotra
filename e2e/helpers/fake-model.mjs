@@ -98,6 +98,11 @@ export async function startFakeModel() {
         ? answers.splice(index, 1)[0]
         : { text: record.isTitleRequest ? titleText : 'Kurz.', chunkDelayMs: 0 };
       record.answer = answer;
+      // A model that takes its time before it answers at all (#792, step 5:
+      // the card then arrives while the user looks at another chat).
+      if (Number.isFinite(answer.delayMs) && answer.delayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, answer.delayMs));
+      }
       res.writeHead(200, {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
@@ -172,7 +177,7 @@ export async function startFakeModel() {
   return {
     baseUrl: `http://127.0.0.1:${port}/v1`,
     requests,
-    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, untilAbortedMs?: number, finishReason?: string, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
+    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, delayMs?: number, untilAbortedMs?: number, finishReason?: string, toolCalls?: Array<{name: string, arguments?: object}> }} answer */
     queueAnswer(answer) { answers.push(answer); },
     /** The title the app gets for the next conversations. */
     setTitle(text) { titleText = text; },

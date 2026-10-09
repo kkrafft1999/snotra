@@ -33,6 +33,8 @@ export function initToolApprovalCards({
   // Program allowances (#408): home folder for `~` paths, the way to the list.
   getHomeDir = () => '',
   onOpenAllowanceSettings = null,
+  // The title of a chat, for the notification about its card (#792, step 5).
+  getChatTitle = () => '',
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
   const queue = createToolApprovalQueue();
@@ -724,12 +726,54 @@ export function initToolApprovalCards({
       box.appendChild(card);
       if (chatMessagesEl) chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
     }
+    notifyIfOutOfSight(entry, view);
     notifyPendingChanged();
+  }
+
+  /** The card's headline as one plain sentence, for the notification. */
+  function headlineText(view) {
+    const h = view?.headline || {};
+    const tool = h.tool || t('tools.line.generic.fallbackName');
+    return String(h.template || '')
+      .replace(/\{command\}/g, h.command || '')
+      .replace(/\{host\}/g, h.host || '')
+      .replace(/\{tool\}/g, tool)
+      .replace(/\{target\}/g, h.targetLabel || '');
+  }
+
+  /**
+   * A card the user cannot see right now (#792, step 5): Snotra is in the
+   * background, or the card waits in a chat other than the one on screen.
+   * The system then says so; main keeps the switch and shows it. Whether a
+   * notification went up changes nothing here — the history row says
+   * "Needs your approval" either way.
+   */
+  function notifyIfOutOfSight(entry, view) {
+    if (typeof api.showApprovalNotification !== 'function') return;
+    const inBackground = typeof document.hasFocus === 'function' && !document.hasFocus();
+    if (!inBackground && isOnScreen(entry)) return;
+    let chat = '';
+    try {
+      chat = getChatTitle(chatOf(entry)) || '';
+    } catch {
+      chat = '';
+    }
+    // The system names the app; the title names the chat, the text what waits.
+    Promise.resolve(api.showApprovalNotification({
+      requestId: entry.dto.requestId,
+      chatId: chatOf(entry),
+      title: chat || t('chat.title.new'),
+      body: t('notify.approval.body', { what: headlineText(view) }),
+    })).catch(() => {});
   }
 
   function onResolved(payload) {
     const entry = queue.resolve(payload);
     if (!entry) return;
+    // Decided or expired: a notification about it would lead nowhere.
+    if (typeof api.closeApprovalNotification === 'function') {
+      Promise.resolve(api.closeApprovalNotification(entry.dto.requestId)).catch(() => {});
+    }
     // Decided now, not when the card is next drawn: by then the run may be gone.
     entry.aborted = runAborted(entry);
     const card = cards.get(entry.dto.requestId);

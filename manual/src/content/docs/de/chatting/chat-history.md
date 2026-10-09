@@ -25,7 +25,7 @@ Klick auf den Knopf ganz rechts in der Titelleiste, *Chat-Verlauf einblenden*. D
 
 ## Was dann passiert
 
-- **Ein Chat arbeitet im Hintergrund weiter.** Wechselst du zu einem anderen Chat, während Snotra noch antwortet, läuft die Antwort weiter. Der Verlauf markiert diesen Chat mit *Arbeitet…*, oder mit *Wartet auf deine Freigabe*, wenn dort eine Karte auf dich wartet.
+- **Ein Chat arbeitet im Hintergrund weiter.** Wechselst du zu einem anderen Chat, während Snotra noch antwortet, läuft die Antwort weiter. Der Verlauf markiert diesen Chat mit *Arbeitet…*, oder mit *Wartet auf deine Freigabe*, wenn dort eine Karte auf dich wartet; [seit 1.18] eine Systembenachrichtigung sagt es dir zusätzlich.
 - **Snotra macht da weiter, wo du aufgehört hast.** Beim nächsten Start öffnet es den jüngsten Chat des Ordners.
 - **Ein neuer Chat beginnt frisch:** ohne das frühere Gespräch, ohne Markierungen im Baum, im Standardmodus des Ordners.
 

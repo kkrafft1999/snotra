@@ -749,6 +749,12 @@ and the global skill folders are never offered, and neither are places with
 credentials (such as `~/.ssh`) or shell start-up files for writing. Denied, the
 call does not run and the model is told not to work around it.
 
+**Told when a card waits.** A run stands still until you answer its card. When
+Snotra is in the background, or the card waits in a chat you are not looking
+at, a system notification names the chat and what waits; a click brings Snotra
+up with that chat. The chat's row in the history says *Needs your approval*
+either way. The notifications can be switched off under Settings › General.
+
 **Switching it off for one workspace.** When the sandbox gets in the way of
 something legitimate in a project — writing to a sibling repository or to
 `~/.config`, `gh` or `terraform` needing the network, an older `pip` in a venv —

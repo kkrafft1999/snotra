@@ -1087,6 +1087,28 @@
               </details>
             </div>
             <div class="modal-field-group">
+              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.notifications.label">Notifications</div>
+              <div class="settings-switch-row">
+                <label for="input-approval-notifications" class="settings-switch-row__label" data-i18n="settings.general.notifications.toggle">Notify me when Snotra waits for my approval</label>
+                <span id="status-approval-notifications" class="settings-instant-status" role="status"></span>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-approval-notifications" aria-describedby="hint-approval-notifications">
+              </div>
+              <details id="hint-approval-notifications" class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span data-i18n="settings.general.notifications.note.summary">A system notification when an approval card waits while Snotra is in the background or in another chat.</span>
+                </summary>
+                <div class="settings-note__body" data-i18n-html="settings.general.notifications.note.body">
+                  <p>
+                    A run stands still until you answer its card. When you are in another app, or the card
+                    waits in a chat you are not looking at, the system says so; a click on the notification
+                    brings Snotra up with that chat. The chat&rsquo;s row in the history shows
+                    &ldquo;Needs your approval&rdquo; either way. Whether notifications appear at all is
+                    decided by the system&rsquo;s own notification settings for Snotra Agent.
+                  </p>
+                </div>
+              </details>
+            </div>
+            <div class="modal-field-group">
               <div class="modal-field-label eyebrow-row" data-i18n="settings.general.maxToolRounds.label">Max. tool rounds</div>
               <label class="visually-hidden" for="input-max-tool-rounds" data-i18n="settings.general.maxToolRounds.select">Maximum tool rounds</label>
               <input

@@ -25,7 +25,7 @@ Click the rightmost button in the title bar, *Show chat history*. The history ap
 
 ## What happens
 
-- **A chat works on in the background.** Switch to another chat while Snotra is still answering, and the answer carries on. The history marks that chat *Working…*, or *Needs your approval* when a card waits for you there.
+- **A chat works on in the background.** Switch to another chat while Snotra is still answering, and the answer carries on. The history marks that chat *Working…*, or *Needs your approval* when a card waits for you there; [since 1.18] a system notification says so as well.
 - **Snotra picks up where you left off.** At the next start it opens the folder's most recent chat.
 - **A new chat starts fresh:** without the earlier conversation, without marks in the tree, in the folder's default mode.
 

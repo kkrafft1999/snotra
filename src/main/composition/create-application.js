@@ -31,6 +31,7 @@ const { createPythonRunnerService } = require('../services/python-runner-service
 const { createShellRunnerService } = require('../services/shell-runner-service');
 const { createSandboxService, sensitiveReadPaths } = require('../services/sandbox-service');
 const { createOutsideAccess } = require('../services/outside-access');
+const { createApprovalNotifier } = require('../services/approval-notifier');
 const { createProgramAllowances } = require('../services/program-allowances-service');
 const { existsSync } = require('fs');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
@@ -105,6 +106,8 @@ function createApplication({
   Menu = null,
   shell = null,
   clipboard = null,
+  /** Electron's, for a card waiting out of sight (#792, step 5); without it, none. */
+  Notification = null,
   REQ,
   PUSH,
   LIMITS,
@@ -770,6 +773,26 @@ function createApplication({
   registerDialogHandlers({
     ipcMain, dialog, getMainWindow, workspaceActivation, workspaceFolderStore, REQ, getLocale: getAppLocale,
   });
+  // A card waiting while Snotra is in the background or in another chat
+  // (#792, step 5). The renderer knows when and writes the words; main shows
+  // it, keeps the switch, and on a click brings the window and the chat up.
+  const approvalNotifier = createApprovalNotifier({
+    Notification,
+    getMainWindow,
+    isEnabled: async () => (await uiPrefsStore.readUIPrefs()).approvalNotificationsEnabled !== false,
+    openChat: (chatId) => {
+      const win = getMainWindow();
+      if (win && !win.isDestroyed()) win.webContents.send(PUSH.APPROVAL_NOTIFICATION_OPEN, { chatId });
+    },
+  });
+  ipcMain.handle(REQ.APPROVAL_NOTIFICATION_SHOW, async (_event, payload) => ({
+    ok: true,
+    shown: await approvalNotifier.show(payload && typeof payload === 'object' ? payload : {}),
+  }));
+  ipcMain.handle(REQ.APPROVAL_NOTIFICATION_CLOSE, async (_event, payload) => ({
+    ok: true,
+    closed: approvalNotifier.close(payload?.requestId),
+  }));
   // clipboard: „Informationen“ bietet den vollen Pfad zum Kopieren an (#123).
   const fileContextMenu = Menu && shell
     ? createFileContextMenu({ Menu, shell, dialog, clipboard, getLocale: getAppLocale, trashItem: moveToTrash })
