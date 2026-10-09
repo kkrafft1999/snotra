@@ -20,7 +20,7 @@ Dieses Handbuch erklärt, wie du damit arbeitest: wie du anfängst, wie du mit D
 - **Anpassen:** [Deine Modelle verwalten](customising/models/), einem Projekt [seine Anweisungen geben](customising/project-instructions/) und [Skills](customising/skills/) oder [MCP-Server](customising/mcp-servers/) dazunehmen.
 - **Wenn etwas schiefgeht:** was du bei [einem Fehler des Modells](troubleshooting/provider-errors/) oder [einer Schlüsselbund-Frage](troubleshooting/keychain-and-storage/) tust, und [wie du ein Problem meldest](troubleshooting/logs-and-reports/).
 - **Download:** Die aktuelle Version für macOS, Windows und Linux findest du auf der [Release-Seite](https://github.com/kkrafft1999/snotra/releases/latest).
-- **Alle Funktionen im Überblick:** Bis jedes Kapitel dieses Handbuchs geschrieben ist, beschreibt die [README auf GitHub](https://github.com/kkrafft1999/snotra/blob/main/README.de.md) alle Funktionen an einer Stelle.
+- **Tastenkürzel:** Bis das Nachschlage-Kapitel geschrieben ist, steht die vollständige Liste in der [README auf GitHub](https://github.com/kkrafft1999/snotra/blob/main/README.de.md#tastenkürzel).
 - **Probleme und Ideen:** Melde sie als [Issue auf GitHub](https://github.com/kkrafft1999/snotra/issues/new/choose).
 
 ## Hilf mit, dieses Handbuch zu verbessern

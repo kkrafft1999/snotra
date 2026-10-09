@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('../src/main/services/application-menu');
+const { createApplicationMenuTemplate, MENU_ITEM_IDS, MANUAL_URLS } = require('../src/main/services/application-menu');
 
 const PUSH = {
   UI_OPEN_SETTINGS: 'ui:open-settings',
@@ -135,10 +135,23 @@ test('Hilfe: Update-Pruefung und GitHub-Link haengen an den Callbacks', () => {
   const { template, opened, updateChecks } = buildTemplate('darwin');
   const help = menuNamed(template, 'Help');
   assert.equal(help.role, 'help');
-  help.submenu.find((item) => item.label.startsWith('Check for Updates')).click();
+  help.submenu.find((item) => item.label?.startsWith('Check for Updates')).click();
   help.submenu.find((item) => item.label === 'Project on GitHub').click();
   assert.deepEqual(updateChecks, [true]);
   assert.deepEqual(opened, ['https://github.com/kkrafft1999/snotra']);
+});
+
+test('Help opens the manual in the language of the UI, GitHub stays a second entry (#789)', () => {
+  const en = buildTemplate('darwin');
+  menuNamed(en.template, 'Help').submenu.find((item) => item.label === 'Snotra User Manual').click();
+  assert.deepEqual(en.opened, ['https://docs.snotra-ai.dev/']);
+
+  const de = buildTemplate('darwin', { locale: 'de' });
+  const help = menuNamed(de.template, 'Hilfe');
+  help.submenu.find((item) => item.label === 'Snotra-Handbuch').click();
+  help.submenu.find((item) => item.label === 'Projekt auf GitHub').click();
+  assert.deepEqual(de.opened, [MANUAL_URLS.de, 'https://github.com/kkrafft1999/snotra']);
+  assert.equal(MANUAL_URLS.de, 'https://docs.snotra-ai.dev/de/');
 });
 
 test('the menu follows the chosen language (epic #277)', () => {
