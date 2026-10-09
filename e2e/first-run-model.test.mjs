@@ -86,6 +86,38 @@ test('first run: adding a model makes the chat usable next to the default entry'
     document.getElementById('add-model-overlay').classList.contains('hidden')),
   { what: 'add-model dialog closed' });
 
+  // Playwright's own click timeout says only "not visible, enabled and stable".
+  // Wait for the button the same way, and name the part that was missing (#819).
+  const applyState = () => page.evaluate(() => {
+    const button = document.getElementById('btn-settings-save');
+    const rect = button.getBoundingClientRect();
+    const style = getComputedStyle(button);
+    const hit = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    const classes = (id) => document.getElementById(id)?.className ?? null;
+    return {
+      disabled: button.disabled,
+      display: style.display,
+      visibility: style.visibility,
+      box: `${Math.round(rect.x)},${Math.round(rect.y)} ${Math.round(rect.width)}×${Math.round(rect.height)}`,
+      hitsButton: Boolean(hit) && button.contains(hit),
+      topElementAtCentre: hit ? `${hit.tagName}#${hit.id}.${hit.className}` : null,
+      settingsDialog: classes('modal-settings'),
+      addModelOverlay: classes('add-model-overlay'),
+      saveError: document.getElementById('modal-save-error')?.textContent ?? null,
+    };
+  });
+  let lastBox = null;
+  await poll(async () => {
+    const state = await applyState();
+    const steady = state.box === lastBox;
+    lastBox = state.box;
+    return steady && !state.disabled && state.display !== 'none' && state.visibility === 'visible'
+      && state.hitsButton;
+  }, {
+    what: 'Apply button clickable',
+    timeoutMs: 30000,
+    explain: async () => JSON.stringify(await applyState(), null, 1),
+  });
   await page.click('#btn-settings-save');
   await poll(() => page.evaluate(() =>
     document.getElementById('modal-settings').classList.contains('hidden')),
