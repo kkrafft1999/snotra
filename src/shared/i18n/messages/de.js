@@ -1487,7 +1487,6 @@ module.exports = {
   'approval.targetKind.tree': 'Ordnerbaum',
   'approval.note.sensitive': 'sensibel',
   'approval.note.sensitiveReason': 'sensibel ({reason})',
-  'approval.note.version': 'Stand {version}',
   'approval.note.new': 'neu',
   'approval.note.trash': 'Kopie in den Papierkorb',
   'approval.note.skill': 'aus dem Skill {name}',

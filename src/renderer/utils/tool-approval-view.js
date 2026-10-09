@@ -253,10 +253,10 @@ function describeTarget(target) {
       ? t('approval.note.sensitiveReason', { reason: target.sensitiveReason })
       : t('approval.note.sensitive'));
   }
-  if (typeof target?.version === 'string' && target.version) {
-    out.version = target.version;
-    out.notes.push(t('approval.note.version', { version: target.version }));
-  }
+  // The version token (size and mtime) binds the approval to the file the
+  // model saw; it stays on the view but is no note — nobody can read it, and
+  // the session scope already says it applies to this file version (#811).
+  if (typeof target?.version === 'string' && target.version) out.version = target.version;
   if (target?.kind === 'file' && !out.exists) out.notes.push(t('approval.note.new'));
   if (target?.recovery === 'trash') out.notes.push(t('approval.note.trash'));
   // A file in a skill folder names its skill (#427); only reading reaches
