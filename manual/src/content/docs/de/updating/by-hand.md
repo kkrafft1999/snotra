@@ -49,6 +49,7 @@ Einige ältere Versionen brauchen einmal einen Schritt von Hand. Danach funktion
 - **Windows bis Version 1.13.2.** Das Selbst-Update beendete die App, ließ aber die alte Version stehen, mit einem Ordner `.snotra-new-…` daneben. Beende Snotra, benenne den App-Ordner um (etwa in `Snotra-Agent.old`), entpacke die neue `.zip` unter dem alten Ordnernamen und starte sie. Lösche die übrig gebliebenen Ordner danach.
 - **Windows und der Linux-Tarball, Version 1.16.0 und älter.** Sie können das umbenannte Paket *Snotra Agent* nicht selbst installieren. Aktualisiere einmal von Hand, auf dieselbe Weise; Verknüpfungen auf `Snotra AI.exe` musst du neu anlegen.
 - **macOS, von Snotra AI zu Snotra Agent.** Das Selbst-Update ersetzt `Snotra AI.app` durch `Snotra Agent.app`; lege die neue App im Dock noch einmal ab. Hast du von Hand aus dem Disk-Image installiert, lösche danach die alte `Snotra AI.app`.
+- **Das AppImage und das `.deb`-Paket** laufen wie bisher weiter.
 
 ## Wenn es nicht klappt
 

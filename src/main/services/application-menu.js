@@ -25,6 +25,12 @@ function createSettingsItem(openSettings, t) {
   };
 }
 
+/** The user manual (#777); the German pages live under `/de/`. */
+const MANUAL_URLS = Object.freeze({
+  en: 'https://docs.snotra-ai.dev/',
+  de: 'https://docs.snotra-ai.dev/de/',
+});
+
 /** Ids of the items the main process changes after the menu is built. */
 const MENU_ITEM_IDS = Object.freeze({
   SHOW_HIDDEN_FILES: 'view.showHiddenFiles',
@@ -190,6 +196,11 @@ function createApplicationMenuTemplate({
     role: 'help',
     submenu: [
       {
+        label: t('menu.help.manual'),
+        click: () => shell.openExternal(MANUAL_URLS[locale] ?? MANUAL_URLS.en),
+      },
+      { type: 'separator' },
+      {
         label: t('menu.help.checkUpdates'),
         click: () => { onCheckForUpdates(); },
       },
@@ -211,4 +222,4 @@ function createApplicationMenuTemplate({
   ];
 }
 
-module.exports = { createApplicationMenuTemplate, MENU_ITEM_IDS };
+module.exports = { createApplicationMenuTemplate, MENU_ITEM_IDS, MANUAL_URLS };
