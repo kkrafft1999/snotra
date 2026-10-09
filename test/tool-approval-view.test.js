@@ -102,7 +102,7 @@ test('card: a new file is "create", overwriting warns about the trash copy', asy
   assert.match(noRecovery.actions.session.hint, /Overwrite with no way back.*single decision/);
 });
 
-test('card: a sensitive read shows provider, file version and the file-access title', async () => {
+test('card: a sensitive read shows provider and the file-access title, keeps the file version hidden', async () => {
   const { buildApprovalCardView } = await load();
   const view = buildApprovalCardView(
     dto({
@@ -119,7 +119,9 @@ test('card: a sensitive read shows provider, file version and the file-access ti
   assert.equal(view.sensitive, true);
   assert.equal(view.providerLabel, 'OpenAI');
   assert.ok(view.targets[0].notes.some((n) => n.startsWith('sensitive (Dateiname .env)')));
-  assert.ok(view.targets[0].notes.includes('as of 1725000000:120'));
+  // The version token is kept for the binding but never shown (#811).
+  assert.equal(view.targets[0].version, '1725000000:120');
+  assert.ok(!view.targets[0].notes.some((n) => n.includes('1725000000')));
   assert.match(view.scopeNote, /this file version and the chosen provider/);
 });
 

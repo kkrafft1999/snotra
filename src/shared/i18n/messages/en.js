@@ -1479,7 +1479,6 @@ module.exports = {
   'approval.targetKind.tree': 'Folder tree',
   'approval.note.sensitive': 'sensitive',
   'approval.note.sensitiveReason': 'sensitive ({reason})',
-  'approval.note.version': 'as of {version}',
   'approval.note.new': 'new',
   'approval.note.trash': 'copy to the trash',
   'approval.note.skill': 'from skill {name}',
