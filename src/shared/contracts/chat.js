@@ -376,6 +376,37 @@ function normalizeSandboxLive(value) {
   return out.length ? out : null;
 }
 
+/**
+ * What the user decided on a card before a file tool reached outside the
+ * open folder (#792, step 4), as the tool row keeps it: read or write, the
+ * path, allowed — for the call or the session, and as which file or folder —
+ * or denied. Null when nothing usable is left.
+ */
+function normalizeSandboxOutside(value) {
+  if (!Array.isArray(value)) return null;
+  const text = (v) => (typeof v === 'string' ? v.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) : '');
+  const out = [];
+  for (const raw of value) {
+    if (out.length >= SANDBOX_LIVE_LIMIT) break;
+    if (!raw || typeof raw !== 'object' || (raw.outcome !== 'allowed' && raw.outcome !== 'denied')) continue;
+    const target = text(raw.target);
+    if (!target) continue;
+    const kind = raw.kind === 'write' ? 'write' : 'read';
+    if (raw.outcome === 'denied') {
+      out.push({ kind, target, outcome: 'denied' });
+      continue;
+    }
+    out.push({
+      kind,
+      target,
+      outcome: 'allowed',
+      duration: raw.duration === 'session' ? 'session' : 'call',
+      pattern: text(raw.pattern) || target,
+    });
+  }
+  return out.length ? out : null;
+}
+
 /** chat:progress with type='workspace': a reading tool read the file (#347). */
 function createWorkspaceFileReadEvent(relativePath) {
   return {
@@ -453,6 +484,7 @@ module.exports = {
   normalizeSandboxBlocked,
   normalizeSandboxDecision,
   normalizeSandboxLive,
+  normalizeSandboxOutside,
   SANDBOX_BLOCKED_KINDS,
   SANDBOX_BLOCKED_LIMITS,
   createPermissionProgressEvent,

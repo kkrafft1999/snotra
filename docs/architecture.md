@@ -293,6 +293,31 @@ card after the run offers the host with a retry like a write. What was decided
 while the command ran goes on the trace as `sandboxLive` and to the model as
 `sandbox_connections`; after a denial there is no card after the run.
 
+The **file tools outside the open folder** (#792, step 4) ask on the same
+kind of card, before the call. `fs-service.resolveToolPath` expands `~/`
+(`homeDir`) and, for a path outside the workspace, either maps it to a root
+the user opened (`outsideRoots`: a folder, or a file as its folder plus that
+one name, compared as given and by realpath, so a link out of it stays
+closed) or reports it with `code: 'outside_workspace'` and the absolute path.
+The planner turns such a report into a target with `outside.offers` — what
+`main/services/outside-access.js` allows: exactly the file or folder and the
+folder around it (`widerFolder`), never a disk's root, the home folder or
+above, Snotra's storage, a folder around a place with credentials, and for
+writing no place with credentials, global skill folder or shell start-up file,
+all checked by realpath too. What may not be offered stays the hard limit it
+was. The engine checks the policy first (a block rule still blocks), then
+`openOutsidePaths` shows the card with `before: true`; it is the call's
+approval in every mode, with the access card's preview. On allow it plans
+again with the grant (`outsideGrants` in the plan and execute context, which
+the planner and the adapter check again and turn into roots) and runs only if
+the classes and the targets' versions are what the card showed. "For this
+session" is a session grant of kind `outsideRead` / `outsideWrite`, handed on
+by `sandboxPaths().outside`. Paths through a granted root are reported with
+the root as prefix, so the model reads absolute paths and no rule of the open
+folder matches them (`rulePaths` stay absolute). The decision goes on the
+trace as `sandboxOutside` and into the box under the tool log; a denial is
+remembered under `${planKey}#sandbox` like the other sandbox cards.
+
 The **per-workspace opt-out** ([#357](https://github.com/kkrafft1999/snotra/issues/357))
 is policy, not isolation, and lives in the signed policy file next to the rules
 (`main/services/tool-policy-store.js`, a list of canonical roots). The planner

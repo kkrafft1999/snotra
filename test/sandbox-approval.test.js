@@ -178,8 +178,8 @@ test('session grants keep a sandbox path per scope, and it allows no tool call',
   grants.grant({ scopeKey: 's1', tool: 'shell_execute', targets: [{ path: '/opt/c' }], riskClasses: ['write'], sandbox: { kind: 'write', path: '/opt/c' } });
   grants.grant({ scopeKey: 's1', tool: 'run_python', targets: [{ path: '/k' }], riskClasses: ['read-sensitive'], sandbox: { kind: 'read', path: '/k' } });
   grants.grant({ scopeKey: 's2', tool: 'shell_execute', targets: [{ path: '/opt/d' }], riskClasses: ['write'], sandbox: { kind: 'write', path: '/opt/d' } });
-  assert.deepEqual(grants.sandboxPaths('s1'), { writePaths: ['/opt/c'], readPaths: ['/k'], hosts: [] });
-  assert.deepEqual(grants.sandboxPaths('other'), { writePaths: [], readPaths: [], hosts: [] });
+  assert.deepEqual(grants.sandboxPaths('s1'), { writePaths: ['/opt/c'], readPaths: ['/k'], hosts: [], outside: [] });
+  assert.deepEqual(grants.sandboxPaths('other'), { writePaths: [], readPaths: [], hosts: [], outside: [] });
   assert.equal(grants.find({ scopeKey: 's1', tool: 'shell_execute', targets: [{ path: '/opt/c' }], riskClasses: ['write'] }), null);
   assert.equal(grants.list().length, 3, 'listed and revocable like any other');
 });

@@ -364,9 +364,12 @@ function createToolRegistry(initialDefinitions = []) {
           ? 'No folder is open, so the read tools reach only the folders of the switched-on ' +
             'skills, as "skill:<name>/<path>"; they handle files up to 2 MB and report an ' +
             'error beyond that.'
-          : 'Paths for the file tools are always relative to the folder root ' +
+          : 'Paths for the file tools are relative to the folder root ' +
             '("" or "." for the root, "src/index.js" for a file); ' +
-            'they handle files up to 2 MB and report an error beyond that.'
+            'they handle files up to 2 MB and report an error beyond that. ' +
+            // Outside the open folder (#792, step 4): asked about on a card.
+            'A file or folder outside it can be given as an absolute path or starting with "~/"; ' +
+            'the user is then asked on a card before the call, and may refuse.'
       );
     }
 
@@ -583,8 +586,8 @@ function createWorkspaceToolRegistry({
           },
         },
       },
-      handler: (args, { workspaceRoot, skillRoots, sensitivity }) =>
-        fsService.runListDirectoryTool(args, workspaceRoot, { skillRoots, sensitivity }),
+      handler: (args, { workspaceRoot, skillRoots, outsideRoots, sensitivity }) =>
+        fsService.runListDirectoryTool(args, workspaceRoot, { skillRoots, outsideRoots, sensitivity }),
     },
     {
       name: LOAD_SKILL_TOOL,
@@ -673,8 +676,8 @@ function createWorkspaceToolRegistry({
         },
         required: ['relative_path'],
       },
-      handler: (args, { workspaceRoot, skillRoots }) =>
-        fsService.runReadFileTextTool(args, workspaceRoot, { skillRoots }),
+      handler: (args, { workspaceRoot, skillRoots, outsideRoots }) =>
+        fsService.runReadFileTextTool(args, workspaceRoot, { skillRoots, outsideRoots }),
     },
     {
       name: 'read_file_lines',
@@ -727,8 +730,8 @@ function createWorkspaceToolRegistry({
         },
         required: ['relative_path'],
       },
-      handler: (args, { workspaceRoot, skillRoots }) =>
-        fsService.runReadFileLinesTool(args, workspaceRoot, { skillRoots }),
+      handler: (args, { workspaceRoot, skillRoots, outsideRoots }) =>
+        fsService.runReadFileLinesTool(args, workspaceRoot, { skillRoots, outsideRoots }),
     },
     {
       name: 'search_in_files',
@@ -804,8 +807,8 @@ function createWorkspaceToolRegistry({
         required: ['query'],
       },
       // The signal lets Stop end a long search at once (#644).
-      handler: (args, { workspaceRoot, skillRoots, sensitivity, abortSignal }) =>
-        fsService.runSearchInFilesTool(args, workspaceRoot, { skillRoots, sensitivity, abortSignal }),
+      handler: (args, { workspaceRoot, skillRoots, outsideRoots, sensitivity, abortSignal }) =>
+        fsService.runSearchInFilesTool(args, workspaceRoot, { skillRoots, outsideRoots, sensitivity, abortSignal }),
     },
     {
       name: 'find_files',
@@ -849,8 +852,8 @@ function createWorkspaceToolRegistry({
         },
         required: ['pattern'],
       },
-      handler: (args, { workspaceRoot, skillRoots, sensitivity, abortSignal }) =>
-        fsService.runFindFilesTool(args, workspaceRoot, { skillRoots, sensitivity, abortSignal }),
+      handler: (args, { workspaceRoot, skillRoots, outsideRoots, sensitivity, abortSignal }) =>
+        fsService.runFindFilesTool(args, workspaceRoot, { skillRoots, outsideRoots, sensitivity, abortSignal }),
     },
     {
       name: 'stat_path',
@@ -880,8 +883,8 @@ function createWorkspaceToolRegistry({
         },
         required: ['relative_path'],
       },
-      handler: (args, { workspaceRoot, skillRoots }) =>
-        fsService.runStatPathTool(args, workspaceRoot, { skillRoots }),
+      handler: (args, { workspaceRoot, skillRoots, outsideRoots }) =>
+        fsService.runStatPathTool(args, workspaceRoot, { skillRoots, outsideRoots }),
     },
     {
       name: 'outline_file',
@@ -917,8 +920,8 @@ function createWorkspaceToolRegistry({
         },
         required: ['relative_path'],
       },
-      handler: (args, { workspaceRoot, skillRoots }) =>
-        fsService.runOutlineFileTool(args, workspaceRoot, { skillRoots }),
+      handler: (args, { workspaceRoot, skillRoots, outsideRoots }) =>
+        fsService.runOutlineFileTool(args, workspaceRoot, { skillRoots, outsideRoots }),
     },
     {
       name: 'extract_document_text',
@@ -969,11 +972,11 @@ function createWorkspaceToolRegistry({
         },
         required: ['relative_path'],
       },
-      handler: (args, { workspaceRoot, skillRoots, abortSignal }) => {
+      handler: (args, { workspaceRoot, skillRoots, outsideRoots, abortSignal }) => {
         if (!documentText) {
           return JSON.stringify({ error: 'Reading documents is not available in this installation.' });
         }
-        return documentText.runExtractDocumentTextTool(args, workspaceRoot, { skillRoots, abortSignal });
+        return documentText.runExtractDocumentTextTool(args, workspaceRoot, { skillRoots, outsideRoots, abortSignal });
       },
     },
     {
@@ -1019,8 +1022,8 @@ function createWorkspaceToolRegistry({
           },
         },
       },
-      handler: (args, { workspaceRoot, skillRoots, sensitivity }) =>
-        fsService.runListDirectoryTreeTool(args, workspaceRoot, { skillRoots, sensitivity }),
+      handler: (args, { workspaceRoot, skillRoots, outsideRoots, sensitivity }) =>
+        fsService.runListDirectoryTreeTool(args, workspaceRoot, { skillRoots, outsideRoots, sensitivity }),
     },
     {
       name: 'write_file_text',
@@ -1048,8 +1051,8 @@ function createWorkspaceToolRegistry({
         required: ['relative_path', 'content'],
       },
       riskClass: TOOL_RISK_CLASSES.WRITE,
-      handler: (args, { workspaceRoot, recovery, onWritten }) =>
-        fsService.runWriteFileTextTool(args, workspaceRoot, { recovery, onWritten }),
+      handler: (args, { workspaceRoot, outsideRoots, recovery, onWritten }) =>
+        fsService.runWriteFileTextTool(args, workspaceRoot, { outsideRoots, recovery, onWritten }),
     },
     {
       name: 'edit_file',
@@ -1087,8 +1090,8 @@ function createWorkspaceToolRegistry({
         required: ['relative_path', 'old_string', 'new_string'],
       },
       riskClass: TOOL_RISK_CLASSES.WRITE,
-      handler: (args, { workspaceRoot, onWritten }) =>
-        fsService.runEditFileTool(args, workspaceRoot, { onWritten }),
+      handler: (args, { workspaceRoot, outsideRoots, onWritten }) =>
+        fsService.runEditFileTool(args, workspaceRoot, { outsideRoots, onWritten }),
     },
     {
       name: 'apply_patch',
@@ -1164,8 +1167,8 @@ function createWorkspaceToolRegistry({
         },
       },
       riskClass: TOOL_RISK_CLASSES.WRITE,
-      handler: (args, { workspaceRoot, onWritten }) =>
-        fsService.runApplyPatchTool(args, workspaceRoot, { onWritten }),
+      handler: (args, { workspaceRoot, outsideRoots, onWritten }) =>
+        fsService.runApplyPatchTool(args, workspaceRoot, { outsideRoots, onWritten }),
     },
     {
       name: 'run_python',

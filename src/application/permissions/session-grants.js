@@ -21,8 +21,13 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { isMessage } = require('../../shared/contracts/message');
 
-/** What a sandbox card can open for a session (#792). */
-const SANDBOX_GRANT_KINDS = Object.freeze(['write', 'read', 'network']);
+/**
+ * What a sandbox card can open for a session (#792): for the shell and
+ * Python runs a folder to write in, a path to read, a host to connect to;
+ * for the file tools a file or folder outside the open folder, to read or to
+ * write in (step 4).
+ */
+const SANDBOX_GRANT_KINDS = Object.freeze(['write', 'read', 'network', 'outsideRead', 'outsideWrite']);
 
 function pathsKey(targets) {
   const paths = (Array.isArray(targets) ? targets : [])
@@ -79,7 +84,7 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
     // `external` never is for a call.
     const sandboxGrant = sandbox && SANDBOX_GRANT_KINDS.includes(sandbox.kind)
       && typeof sandbox.path === 'string' && sandbox.path
-      ? { kind: sandbox.kind, path: sandbox.path }
+      ? { kind: sandbox.kind, path: sandbox.path, ...(sandbox.file === true ? { file: true } : {}) }
       : null;
     const classes = sandboxGrant ? normalizeRiskClasses(riskClasses) : sessionGrantableClasses(riskClasses);
     if (!classes || typeof tool !== 'string' || !tool || typeof scopeKey !== 'string') return null;
@@ -179,15 +184,22 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
   /**
    * What sandbox cards opened for the rest of a session (#792): the folders
    * a run may write in, the protected paths it may read and the hosts it may
-   * connect to, for every shell and Python run under this scope.
+   * connect to, for every shell and Python run under this scope — and, for
+   * the file tools, what they may use outside the open folder (`outside`).
    */
   function sandboxPaths(scopeKey) {
     const sets = { write: new Set(), read: new Set(), network: new Set() };
+    const outside = [];
     for (const entry of grants) {
       if (!entry.sandbox || entry.scopeKey !== scopeKey) continue;
-      sets[entry.sandbox.kind]?.add(entry.sandbox.path);
+      const { kind, path, file } = entry.sandbox;
+      if (kind === 'outsideRead' || kind === 'outsideWrite') {
+        outside.push({ path, file: file === true, access: kind === 'outsideWrite' ? 'write' : 'read' });
+        continue;
+      }
+      sets[kind]?.add(path);
     }
-    return { writePaths: [...sets.write], readPaths: [...sets.read], hosts: [...sets.network] };
+    return { writePaths: [...sets.write], readPaths: [...sets.read], hosts: [...sets.network], outside };
   }
 
   /** Called whenever the set of approvals changes; returns the unsubscribe. */

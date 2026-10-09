@@ -18,6 +18,7 @@ const { constants: fsConstants } = require('fs');
 const { randomBytes } = require('crypto');
 const { readRegularFile, NOT_A_REGULAR_FILE_ERROR } = require('./read-regular-file');
 const { renameWithRetry } = require('./rename-with-retry');
+const { OUTSIDE_WORKSPACE } = require('./outside-access');
 const {
   ITEM_FAILURE_REASONS,
   validateItemName,
@@ -1238,6 +1239,12 @@ function createFsService({
    * Wechsel ohne Neustart greift.
    */
   getLocale = () => undefined,
+  /**
+   * The user's home folder, for a tool path that starts with `~/` (#792):
+   * the model writes a path outside the open folder that way as often as
+   * absolute. Without it, `~` stays a name like any other.
+   */
+  homeDir = '',
 }) {
   /** Übersetzer für genau diesen Aufruf, in der gerade eingestellten Sprache. */
   const ui = () => createTranslator(getLocale());
@@ -1281,6 +1288,20 @@ function createFsService({
     missing: 'Skill folder not found.',
     required: 'A path is required.',
   };
+  // A path outside the open folder the user opened on a card (#792, step 4).
+  const OUTSIDE_LABELS = {
+    outside: 'Path is outside what the user allowed outside the workspace folder.',
+    missing: 'The allowed folder outside the workspace no longer exists.',
+    required: 'A path is required.',
+  };
+
+  /** `~` and `~/…` (or `~\…`) as the home folder; anything else as it is. */
+  function expandHome(raw) {
+    if (!homeDir || typeof raw !== 'string') return raw;
+    if (raw === '~') return path.resolve(homeDir);
+    if (raw.startsWith('~/') || raw.startsWith('~\\')) return path.join(path.resolve(homeDir), raw.slice(2));
+    return raw;
+  }
 
   function resolvePathInRoot(rootPath, relativePath, labels) {
     if (typeof rootPath !== 'string' || !rootPath.trim()) {
@@ -1521,16 +1542,77 @@ function createFsService({
     return false;
   }
 
+  /**
+   * The root a path outside the open folder may use (#792, step 4): one the
+   * user opened on a card, for reading or for writing. A file grant matches
+   * exactly its one name, a folder grant everything inside it — compared as
+   * given and by realpath, like the skill folders. Whether the path stays
+   * inside is checked afterwards, against that root, like any path.
+   *
+   * @param {string} target  the absolute path the tool was given
+   * @param {Array<{root: string, only: string|null, access: 'read'|'write'}>} [outsideRoots]
+   */
+  async function outsideRootFor(target, outsideRoots, access) {
+    const entries = (Array.isArray(outsideRoots) ? outsideRoots : [])
+      .filter((entry) => entry && typeof entry.root === 'string' && path.isAbsolute(entry.root))
+      .filter((entry) => access !== 'write' || entry.access === 'write');
+    if (entries.length === 0) return null;
+    let realTarget;
+    try {
+      realTarget = await resolveExistingRealPath(target);
+    } catch {
+      realTarget = null;
+    }
+    for (const entry of entries) {
+      const roots = [path.resolve(entry.root)];
+      try {
+        const real = await fs.realpath(roots[0]);
+        if (real !== roots[0]) roots.push(real);
+      } catch {
+        /* a missing folder matches only as given */
+      }
+      for (const root of roots) {
+        for (const candidate of [target, realTarget]) {
+          if (!candidate) continue;
+          const hit = entry.only
+            ? path.resolve(candidate) === path.join(root, entry.only)
+            : containsPath(root, candidate);
+          if (!hit) continue;
+          // The path as the tool spelled it, relative to the root as granted.
+          const rel = path.relative(roots[0], target);
+          return { root: roots[0], rel: rel.startsWith('..') ? path.relative(root, candidate) : rel };
+        }
+      }
+    }
+    return null;
+  }
+
   async function resolveToolPath(workspaceRoot, relativePath, options = {}) {
     const access = options.access === 'write' ? 'write' : 'read';
-    const asSkillPath = await skillPathForAbsolute(workspaceRoot, relativePath, options.skillRoots);
-    const chosen = resolveAccessRoot(
+    const given = expandHome(typeof relativePath === 'string' ? relativePath.trim() : relativePath);
+    const asSkillPath = await skillPathForAbsolute(workspaceRoot, given, options.skillRoots);
+    let chosen = resolveAccessRoot(
       workspaceRoot,
-      asSkillPath || relativePath,
+      asSkillPath || given,
       options.skillRoots,
       access
     );
     if (chosen.error) return { error: chosen.error };
+    let outside = false;
+    if (!chosen.prefix && typeof workspaceRoot === 'string' && workspaceRoot.trim()) {
+      const target = path.resolve(workspaceRoot, chosen.rel.length ? chosen.rel : '.');
+      if (!containsPath(workspaceRoot, target)) {
+        // Outside the open folder (#792, step 4): through a root the user
+        // opened on a card, or reported as such, so that a card may offer it.
+        const granted = await outsideRootFor(target, options.outsideRoots, access);
+        if (!granted) return { error: chosen.labels.outside, code: OUTSIDE_WORKSPACE, absPath: target };
+        // What a listing or search reports there reads as absolute paths, the
+        // way the tool was given them — never as paths of the open folder.
+        const prefix = `${granted.root.split(path.sep).join('/').replace(/\/$/, '')}/`;
+        chosen = { root: granted.root, rel: granted.rel, prefix, labels: OUTSIDE_LABELS };
+        outside = true;
+      }
+    }
     const lexical = resolvePathInRoot(chosen.root, chosen.rel, chosen.labels);
     if (lexical.error) return lexical;
     const checked = await assertPathAccessibleInRoot(chosen.root, lexical.absPath, chosen.labels);
@@ -1545,18 +1627,20 @@ function createFsService({
       root: path.resolve(chosen.root),
       prefix: chosen.prefix,
       skillName: chosen.skillName || null,
+      ...(outside ? { outside: true } : {}),
     };
   }
 
   /**
-   * The path of a write tool: the workspace only. A `skill:` path fails with
-   * a clear message instead of landing in the workspace as a file named
-   * "skill:…" (#548), and so does a path into a global skill folder inside
-   * the workspace (#650) — checked again here, at execution, not only when
-   * the call was planned.
+   * The path of a write tool: the workspace, or a folder outside it the user
+   * opened for writing on a card (#792). A `skill:` path fails with a clear
+   * message instead of landing in the workspace as a file named "skill:…"
+   * (#548), and so does a path into a global skill folder inside the
+   * workspace (#650) — checked again here, at execution, not only when the
+   * call was planned.
    */
-  async function resolveWorkspacePathForAccess(workspaceRoot, relativePath) {
-    return resolveToolPath(workspaceRoot, relativePath, { access: 'write' });
+  async function resolveWorkspacePathForAccess(workspaceRoot, relativePath, options = {}) {
+    return resolveToolPath(workspaceRoot, relativePath, { access: 'write', outsideRoots: options.outsideRoots });
   }
 
   async function runListDirectoryTool(args, workspaceRoot, options = {}) {
@@ -1928,7 +2012,7 @@ function createFsService({
 
   /** The part of a write both tools share; returns the result as an object. */
   async function writeFileForTool(rel, content, byteLength, workspaceRoot, options = {}) {
-    const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel, options);
     if (error) return { error };
     if (path.resolve(absPath) === path.resolve(root)) {
       return { error: 'The project folder itself cannot be written as a file.' };
@@ -2048,7 +2132,7 @@ function createFsService({
     if (args.old_string === args.new_string) {
       return JSON.stringify({ error: 'old_string and new_string must differ.' });
     }
-    const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     try {
       const original = await readFileForEdit(absPath);
@@ -2097,7 +2181,7 @@ function createFsService({
         error: `Too many steps in edits (${args.edits.length} > ${PATCH_MAX_EDITS}). Split them across several calls.`,
       });
     }
-    const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel);
+    const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel, options);
     if (error) return JSON.stringify({ error });
     try {
       const original = await readFileForEdit(absPath);
@@ -2185,7 +2269,7 @@ function createFsService({
 
     const planned = [];
     for (const file of parsed.files) {
-      const resolved = await resolveWorkspacePathForAccess(workspaceRoot, file.relativePath);
+      const resolved = await resolveWorkspacePathForAccess(workspaceRoot, file.relativePath, options);
       if (resolved.error) {
         return JSON.stringify({ error: `"${file.relativePath}": ${resolved.error}` });
       }

@@ -48,7 +48,7 @@ const { buildEnvironmentSystemPrompt } = require('./environment-prompt');
 const { normalizeLocale } = require('../../shared/i18n');
 const { createMessage } = require('../../shared/contracts/message');
 const {
-  sanitizeChatId, normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive,
+  sanitizeChatId, normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive, normalizeSandboxOutside,
 } = require('../../shared/contracts/chat');
 const { FINISH_REASONS, isCutOff } = require('../../shared/contracts/finish-reason');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
@@ -728,7 +728,20 @@ const SANDBOX_KIND_CLASSES = Object.freeze({
   read: TOOL_RISK_CLASSES.READ_SENSITIVE,
   write: TOOL_RISK_CLASSES.WRITE,
   network: TOOL_RISK_CLASSES.EXTERNAL,
+  // What the file tools may use outside the open folder (step 4).
+  outsideRead: TOOL_RISK_CLASSES.READ,
+  outsideWrite: TOOL_RISK_CLASSES.WRITE,
 });
+
+/**
+ * What the user allowed on the card before a call outside the open folder
+ * (#792, step 4), so that the call that then runs is the one the card
+ * showed: the same classes, the same places in the same state.
+ */
+function outsideApprovalKey(plan) {
+  const targets = (Array.isArray(plan?.targets) ? plan.targets : []).map((t) => [t.absPath, t.exists, t.version]);
+  return JSON.stringify([normalizeRiskClasses(plan?.riskClasses) || [], targets]);
+}
 
 /**
  * What the user decided about connections while the command waited (#792),
@@ -1604,10 +1617,101 @@ function createChatEngine({
         return { outcome: 'allowed', pattern };
       }
 
-      /** What sandbox cards allowed for the rest of this chat (#792), or null. */
+      /** What sandbox cards allowed for the shell and Python runs of this chat (#792), or null. */
       function sessionSandboxGrants(scopeKey) {
         const granted = sessionGrants.sandboxPaths?.(scopeKey);
-        return granted && (granted.writePaths.length || granted.readPaths.length || granted.hosts?.length) ? granted : null;
+        if (!granted || !(granted.writePaths.length || granted.readPaths.length || granted.hosts?.length)) return null;
+        return { writePaths: granted.writePaths, readPaths: granted.readPaths, hosts: granted.hosts || [] };
+      }
+
+      /** What cards opened outside the open folder for this chat's file tools (#792, step 4). */
+      function sessionOutsideGrants(scopeKey) {
+        const granted = sessionGrants.sandboxPaths?.(scopeKey);
+        return Array.isArray(granted?.outside) ? granted.outside : [];
+      }
+
+      /**
+       * A file tool names a path outside the open folder that no card has
+       * opened yet (#792, step 4). The card asks before the call, in every
+       * mode: open exactly that file or folder, or the folder around it, for
+       * this call or the session. It is the call's approval as well — with
+       * the preview of a write — so no second card follows. Returns the grants
+       * to plan again with, and the source the call is audited with, or a
+       * refusal.
+       */
+      async function openOutsidePaths({ entry, callIndex, toolName, plan, policy, scopeKey, riskClasses }) {
+        const offered = (plan.targets || [])
+          .filter((t) => t && t.outside && Array.isArray(t.outside.offers) && t.outside.offers.length > 0)
+          .slice(0, SANDBOX_CARD_ENTRIES);
+        const details = { riskClasses, mode: policy.mode, targets: plan.targets };
+        const answer = await askUser({
+          entry,
+          callIndex,
+          toolName,
+          plan: { ...plan, planKey: sandboxPlanKey(plan) },
+          verdict: { askClasses: riskClasses },
+          policy,
+          checkpoint: 'sandbox',
+          sandbox: {
+            before: true,
+            command: '',
+            run: { exitCode: null, durationMs: null, timedOut: false },
+            output: '',
+            entries: offered.map((t) => ({
+              kind: t.access === 'write' ? 'write' : 'read',
+              target: t.absPath,
+              count: 1,
+              folder: t.kind !== 'file',
+              ...(t.sensitive === true ? { sensitive: true } : {}),
+              allow: t.outside.offers.map((o) => o.path),
+            })),
+            others: [],
+            raw: [],
+          },
+        });
+        const what = offered.map((t) => `${t.access === 'write' ? 'writing to' : 'reading'} ${t.absPath}`).join(', ');
+        const record = (outcome, extra = () => ({})) => {
+          entry.sandboxOutside = normalizeSandboxOutside(offered.map((t, i) => ({
+            kind: t.access === 'write' ? 'write' : 'read',
+            target: t.absPath,
+            outcome,
+            ...extra(t, i),
+          })));
+        };
+        if (answer.invalidated || answer.reason === PERMISSION_DENIAL_REASONS.REPEATED_DENIAL) {
+          return { refusal: refusalFromAnswer(answer, entry, details) };
+        }
+        if (answer.response === APPROVAL_RESPONSES.DENY) {
+          record('denied');
+          return {
+            refusal: permissionDenied(entry, {
+              ...details,
+              reason: PERMISSION_DENIAL_REASONS.USER_DENIED,
+              message: `The user denied ${what} outside the workspace folder. Do not work around it — no other path, `
+                + 'tool or command. Tell the user what the task needs there.',
+            }),
+          };
+        }
+        // The card may only choose among what it offered; anything else is the first offer.
+        const chosen = offered.map((t, i) => {
+          const pick = answer.sandboxPaths?.[i];
+          return t.outside.offers.find((o) => o.path === pick) || t.outside.offers[0];
+        });
+        const session = answer.response === APPROVAL_RESPONSES.ALLOW_SESSION;
+        if (session) {
+          for (const grant of chosen) {
+            grantSandboxForSession({
+              scopeKey,
+              toolName,
+              grant: { kind: grant.access === 'write' ? 'outsideWrite' : 'outsideRead', path: grant.path, file: grant.file },
+            });
+          }
+        }
+        record('allowed', (t, i) => ({ duration: session ? 'session' : 'call', pattern: chosen[i].path }));
+        return {
+          grants: chosen,
+          source: session ? PERMISSION_DECISION_SOURCES.ALLOW_SESSION : PERMISSION_DECISION_SOURCES.ALLOW_ONCE,
+        };
       }
 
       /**
@@ -1741,12 +1845,19 @@ function createChatEngine({
           : disabledNames.includes(toolName);
         let forcedClasses = [];
         let lastPlanKey = null;
+        const scopeKey = buildScopeKey(policy);
+        // What a card before this call opened outside the open folder (#792,
+        // step 4), and the call it approved.
+        const callOutsideGrants = [];
+        let outsideApproval = null;
+        const outsideGrants = () => [...sessionOutsideGrants(scopeKey), ...callOutsideGrants];
 
         for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt += 1) {
           if (abortSignal.aborted) throw createChatAbortError();
           const plan = await tools.plan(toolName, args, {
             workspaceRoot,
             skillRoots,
+            outsideGrants: outsideGrants(),
             sensitivePathPatterns: policy.sensitivePathPatterns,
             forcedClasses,
             // The preview on the card speaks the user's language (#555).
@@ -1781,7 +1892,6 @@ function createChatEngine({
               targets: plan.targets,
             }, PERMISSION_DENIAL_REASONS.REPEATED_DENIAL);
           }
-          const scopeKey = buildScopeKey(policy);
           const grant = riskClasses
             ? sessionGrants.find({ scopeKey, tool: toolName, targets: plan.targets, riskClasses, providerKey })
             : null;
@@ -1809,9 +1919,31 @@ function createChatEngine({
             });
           }
 
+          // A path outside the open folder (#792, step 4): the card asks
+          // before anything else, in every mode, and then the call is planned
+          // again with what it opened.
+          if (plan.outside) {
+            if (outsideApproval) {
+              return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
+            }
+            const opened = await openOutsidePaths({ entry, callIndex, toolName, plan, policy, scopeKey, riskClasses });
+            if (opened.refusal) return opened.refusal;
+            callOutsideGrants.push(...opened.grants);
+            outsideApproval = { key: outsideApprovalKey(plan), source: opened.source };
+            continue;
+          }
+
           let source = verdict.source;
           let ruleId = verdict.ruleId;
-          if (verdict.decision === POLICY_DECISIONS.ASK) {
+          // The card before the call was its approval, whatever the mode would
+          // have asked; what runs must be what it showed.
+          if (outsideApproval) {
+            if (outsideApprovalKey(plan) !== outsideApproval.key) {
+              return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
+            }
+            source = outsideApproval.source;
+            ruleId = undefined;
+          } else if (verdict.decision === POLICY_DECISIONS.ASK) {
             const answer = await askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint: 'access' });
             const refusal = refusalFromAnswer(answer, entry, { riskClasses, mode: policy.mode, targets: plan.targets });
             if (refusal) return refusal;
@@ -1827,6 +1959,7 @@ function createChatEngine({
             const recheck = await tools.plan(toolName, args, {
               workspaceRoot,
               skillRoots,
+              outsideGrants: outsideGrants(),
               sensitivePathPatterns: policy.sensitivePathPatterns,
               forcedClasses,
             });
@@ -1874,6 +2007,8 @@ function createChatEngine({
             // and the question about a connection while it waits (#792).
             sandboxGrants,
             onSandboxNetworkAsk,
+            // What a card opened outside the open folder for the file tools (step 4).
+            outsideGrants: outsideGrants(),
           });
           const firstRun = await executeWith(sessionSandboxGrants(scopeKey));
           if (live.repeated) {
@@ -2129,6 +2264,9 @@ function createChatEngine({
             const liveDecisions = normalizeSandboxLive(entry.sandboxLive);
             if (liveDecisions) entry.sandboxLive = liveDecisions;
             else delete entry.sandboxLive;
+            const outsideDecisions = normalizeSandboxOutside(entry.sandboxOutside);
+            if (outsideDecisions) entry.sandboxOutside = outsideDecisions;
+            else delete entry.sandboxOutside;
           } catch (error) {
             if (isAbortError(error)) {
               return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);

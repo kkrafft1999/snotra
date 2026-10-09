@@ -71,12 +71,88 @@ function reasonOf(kind) {
 }
 
 /**
+ * The card before a file tool reaches outside the open folder (#792, step
+ * 4), decided on 2026-10-08 from a mockup with three variants (two cards,
+ * one sandbox card, the old card extended): one sandbox card that is the
+ * call's approval too. It names the tool and what it would read or write,
+ * shows a write's preview, and opens exactly that or the folder around it,
+ * for the call or the session. Nothing has run yet, so there is no run, no
+ * output and no raw sandbox line.
+ */
+function buildOutsideCardView(dto, sandbox, { homeDir }) {
+  const entries = sandbox.entries.filter((entry) => entry.kind === 'read' || entry.kind === 'write');
+  if (entries.length === 0) return null;
+  const writes = entries.some((entry) => entry.kind === 'write');
+  const headlineKey = entries.length > 1
+    ? 'approval.sandbox.headline.outsideSeveral'
+    : writes
+      ? 'approval.sandbox.headline.outsideWrite'
+      : entries[0].folder ? 'approval.sandbox.headline.outsideReadFolder' : 'approval.sandbox.headline.outsideRead';
+  const sensitive = entries.some((entry) => entry.sensitive === true);
+  return {
+    kind: 'sandbox',
+    before: true,
+    live: false,
+    title: t('approval.sandbox.title.outside'),
+    badge: t('approval.sandbox.badge'),
+    // `{tool}` is rendered as code, wherever the language puts it.
+    headline: { template: t(headlineKey), tool: typeof dto.tool === 'string' ? dto.tool : '' },
+    entries: entries.map((entry) => ({
+      kind: entry.kind,
+      kindLabel: t(`toolLog.sandbox.kind.${entry.kind}`),
+      target: sandboxPath(entry.target, homeDir),
+      title: entry.target,
+      detail: entry.sensitive ? t('approval.badge.sensitive') : '',
+      legend: t('approval.sandbox.scope.legend.outside'),
+      options: entry.allow.map((value, i) => ({
+        value,
+        label: sandboxPath(value, homeDir),
+        hint: t(i > 0 ? 'approval.sandbox.scope.around' : entry.folder ? 'approval.sandbox.scope.exactFolder' : 'approval.sandbox.scope.exactFile'),
+      })),
+    })),
+    domains: [],
+    waitedMs: 0,
+    others: [],
+    command: '',
+    run: '',
+    reason: t('approval.sandbox.reason.outside'),
+    // What may hold credentials goes to the provider once allowed — said as on the access card.
+    note: sensitive
+      ? (dto.providerLabel
+          ? t('approval.reason.sensitiveAccess', { provider: dto.providerLabel })
+          : t('approval.reason.sensitiveAccess.plain'))
+      : '',
+    outputLabel: '',
+    outputEmpty: '',
+    output: '',
+    raw: '',
+    durations: dto.sessionAllowed === true
+      ? [
+          { value: 'run', label: t('approval.sandbox.duration.call') },
+          { value: 'session', label: t('approval.sandbox.duration.session') },
+        ]
+      : [],
+    warning: '',
+    actions: {
+      once: {
+        response: APPROVAL_RESPONSES.ALLOW_ONCE,
+        label: t(writes ? 'approval.sandbox.action.outsideWrite' : 'approval.sandbox.action.outsideRead'),
+        enabled: true,
+      },
+      deny: { response: APPROVAL_RESPONSES.DENY, label: t('approval.action.deny'), enabled: true },
+    },
+    actionOrder: ['once', 'deny'],
+  };
+}
+
+/**
  * @param {object} dto  a tool approval request with `checkpoint: 'sandbox'`
  * @returns {null|object} the view, or null when the DTO carries no sandbox card
  */
 export function buildSandboxCardView(dto, { homeDir = '' } = {}) {
   const sandbox = dto?.checkpoint === 'sandbox' ? dto.sandbox : null;
   if (!sandbox || !Array.isArray(sandbox.entries) || sandbox.entries.length === 0) return null;
+  if (sandbox.before === true) return buildOutsideCardView(dto, sandbox, { homeDir });
   const live = sandbox.live === true;
   const isPath = (kind) => kind === 'write' || kind === 'read';
   const show = (p, kind) => (isPath(kind) ? sandboxPath(p, homeDir) : p);
@@ -158,8 +234,22 @@ export function buildSandboxCardView(dto, { homeDir = '' } = {}) {
  * card about a waiting connection (`live`) lets the command carry on rather
  * than run it again, and expires on its own when the command gives up.
  */
-export function describeSandboxOutcome({ response, invalidated, reason, aborted } = {}, { live = false } = {}) {
+export function describeSandboxOutcome({ response, invalidated, reason, aborted } = {}, { live = false, before = false } = {}) {
   if (aborted === true) return null;
+  // The card before a call outside the open folder (#792, step 4): the call runs, or it does not.
+  if (before) {
+    if (invalidated === true) return null;
+    if (response === APPROVAL_RESPONSES.DENY) {
+      return { status: 'denied', label: t('approval.outcome.denied.label'), detail: t('approval.outcome.outsideDenied.detail') };
+    }
+    if (response === APPROVAL_RESPONSES.ALLOW_SESSION) {
+      return { status: 'allowed', label: t('approval.outcome.sandboxSession.label'), detail: t('approval.outcome.outsideSession.detail') };
+    }
+    if (response === APPROVAL_RESPONSES.ALLOW_ONCE) {
+      return { status: 'allowed', label: t('approval.outcome.sandboxCall.label'), detail: t('approval.outcome.outsideAllowed.detail') };
+    }
+    return null;
+  }
   if (invalidated === true) {
     if (live && reason === PERMISSION_DENIAL_REASONS.SANDBOX_RUN_ENDED) {
       return { status: 'invalidated', label: t('approval.outcome.sandboxGaveUp.label'), detail: t('approval.outcome.sandboxGaveUp.detail') };

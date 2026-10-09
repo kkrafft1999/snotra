@@ -16,6 +16,7 @@ const {
   normalizeSandboxBlocked,
   normalizeSandboxDecision,
   normalizeSandboxLive,
+  normalizeSandboxOutside,
 } = require('../../shared/contracts/chat');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
@@ -173,7 +174,9 @@ function toolTraceEntryForStore(entry) {
   const sandboxDecision = sandboxBlocked ? normalizeSandboxDecision(entry?.sandboxDecision) : null;
   // What the user decided about connections while a command waited (#792).
   const sandboxLive = normalizeSandboxLive(entry?.sandboxLive);
-  if (!tool && !skill && !permission && !round && !schema && !changes && !sandboxBlocked && !sandboxLive) return line;
+  // …and on a card before a file tool reached outside the open folder (#792, step 4).
+  const sandboxOutside = normalizeSandboxOutside(entry?.sandboxOutside);
+  if (!tool && !skill && !permission && !round && !schema && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside) return line;
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
@@ -184,6 +187,7 @@ function toolTraceEntryForStore(entry) {
   if (sandboxBlocked) out.sandboxBlocked = sandboxBlocked;
   if (sandboxDecision) out.sandboxDecision = sandboxDecision;
   if (sandboxLive) out.sandboxLive = sandboxLive;
+  if (sandboxOutside) out.sandboxOutside = sandboxOutside;
   return out;
 }
 

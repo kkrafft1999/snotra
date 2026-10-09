@@ -667,10 +667,14 @@ function sanitizeSandboxApproval(sandbox) {
       count: Number.isSafeInteger(raw.count) && raw.count > 0 ? raw.count : 1,
       folder: raw.folder === true,
       allow,
+      // A place that may hold credentials (#792, step 4): the card says so.
+      ...(raw.sensitive === true ? { sensitive: true } : {}),
     });
   }
   if (entries.length === 0) return null;
   const run = sandbox.run && typeof sandbox.run === 'object' ? sandbox.run : {};
+  // The card before a file tool reaches outside the open folder (#792, step 4).
+  const before = sandbox.before === true && sandbox.live !== true ? { before: true } : {};
   const live = sandbox.live === true
     ? {
         live: true,
@@ -679,6 +683,7 @@ function sanitizeSandboxApproval(sandbox) {
       }
     : {};
   return {
+    ...before,
     ...live,
     command: text(sandbox.command, L.COMMAND),
     run: {

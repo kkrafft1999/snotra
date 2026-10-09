@@ -739,6 +739,16 @@ Denied, the connection stays closed and the model is told not to work around
 it. If the command gives up before you decide, a card after the run offers the
 host with a retry.
 
+**File tools outside the project folder.** When the model names a file or
+folder outside the open folder — absolute, or starting with `~/` — a card asks
+before the call, in every mode, *Auto* included: open exactly that file or
+folder, or the folder around it, for this call or for the session. The card is
+the call's approval as well, with the preview of a change, so no second card
+follows. Your home folder as a whole, the root of a disk, Snotra's own storage
+and the global skill folders are never offered, and neither are places with
+credentials (such as `~/.ssh`) or shell start-up files for writing. Denied, the
+call does not run and the model is told not to work around it.
+
 **Switching it off for one workspace.** When the sandbox gets in the way of
 something legitimate in a project — writing to a sibling repository or to
 `~/.config`, `gh` or `terraform` needing the network, an older `pip` in a venv —

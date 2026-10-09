@@ -316,3 +316,102 @@ test('the box under the tool log keeps a connection let through while the comman
   assert.equal(denied.querySelectorAll('.chat-sandbox-blocked-entry').length, 1, 'a denial is among the refusals once');
   assert.equal(denied.querySelector('.chat-sandbox-blocked-reason').textContent, 'You denied this connection while the command ran.');
 }));
+
+// ── A file tool outside the open folder (#792, step 4) ──────────────────────
+
+const TODO = `${HOME}/notes/todo.md`;
+function outsideDto(requestId, { write = true, sensitive = false, target = TODO } = {}) {
+  return dto(requestId, {
+    tool: write ? 'edit_file' : 'read_file_text',
+    riskClasses: write ? ['write'] : ['read', ...(sensitive ? ['read-sensitive'] : [])],
+    ...(write ? { preview: { kind: 'replace', text: '--- old\n- boxes\n+++ new\n- order boxes', truncated: false, masked: false } } : {}),
+    ...(sensitive ? { providerLabel: 'OpenAI' } : {}),
+    sandbox: {
+      before: true,
+      command: '',
+      run: { exitCode: null, durationMs: null, timedOut: false },
+      output: '',
+      entries: [{
+        kind: write ? 'write' : 'read', target, count: 1, folder: false,
+        ...(sensitive ? { sensitive: true } : {}),
+        allow: [target, target.slice(0, target.lastIndexOf('/'))],
+      }],
+      others: [],
+      raw: [],
+    },
+  });
+}
+
+test('the card before a call outside the open folder: the tool, its target, a write\'s preview — no run yet', withDom(async () => {
+  const page = await mount();
+  page.request(outsideDto('o1'));
+  const el = card('o1');
+  assert.equal(el.querySelector('.chat-approval-card__title').textContent, 'Outside the project · approval needed');
+  assert.equal(el.querySelector('.chat-approval-card__headline').textContent, 'edit_file wants to write a file outside the project folder.');
+  assert.equal(el.querySelector('.chat-approval-card__headline code').textContent, 'edit_file');
+  const facts = [...el.querySelectorAll('.chat-approval-card__fact')].map((f) => f.textContent.replace(/\s+/g, ' ').trim());
+  assert.deepEqual(facts, [
+    'TargetWrite~/notes/todo.md',
+    'ReasonThe file tools work only in the project folder. Snotra opens what lies outside only after you allow it.',
+  ]);
+  assert.match(el.querySelector('.chat-approval-card__preview pre').textContent, /order boxes/, 'what would be written');
+  assert.equal(el.querySelector('.chat-approval-card__report'), null, 'nothing has run');
+  assert.equal(el.querySelector('.chat-approval-card__warning'), null);
+
+  const [scope, duration] = el.querySelectorAll('.chat-approval-card__choice');
+  assert.equal(scope.querySelector('legend').textContent, 'Allow for');
+  assert.deepEqual([...scope.querySelectorAll('.chat-approval-card__option')].map((o) => o.textContent),
+    ['~/notes/todo.mdexactly this file', '~/notesthe folder around it']);
+  assert.deepEqual([...duration.querySelectorAll('.chat-approval-card__option')].map((o) => o.textContent),
+    ['Only this call', 'For this session']);
+  const allow = el.querySelector('.chat-approval-card__actions button[data-response="allow-once"]');
+  assert.equal(allow.textContent, 'Allow and write');
+  scope.querySelectorAll('input')[1].click();
+  el.querySelector('input[value="session"]').click();
+  allow.click();
+  assert.deepEqual(page.calls.at(-1), { requestId: 'o1', response: 'allow-session', extra: { sandboxPaths: [`${HOME}/notes`] } });
+}));
+
+test('a read of a place with credentials says where its content goes', withDom(async () => {
+  const page = await mount();
+  page.request(outsideDto('o1', { write: false, sensitive: true, target: `${HOME}/.ssh/config` }));
+  const el = card('o1');
+  assert.equal(el.querySelector('.chat-approval-card__headline').textContent, 'read_file_text wants to read a file outside the project folder.');
+  assert.equal(el.querySelector('.chat-approval-card__blocked-detail').textContent, 'sensitive');
+  const facts = [...el.querySelectorAll('.chat-approval-card__fact')].map((f) => f.textContent.replace(/\s+/g, ' ').trim());
+  assert.match(facts.at(-1), /^NoteThis file may contain credentials\. Once approved, the content is passed to OpenAI\./);
+  assert.equal(el.querySelector('.chat-approval-card__actions button[data-response="allow-once"]').textContent, 'Allow');
+}));
+
+test('a decided card before a call says whether the call runs', withDom(async () => {
+  const page = await mount();
+  const result = (id) => card(id).querySelector('.chat-approval-card__result').textContent;
+  page.request(outsideDto('o1'));
+  page.resolve({ requestId: 'o1', response: 'allow-once' });
+  assert.equal(result('o1'), 'Allowed for this call The call runs with exactly this opened; everything else outside the project folder stays closed.');
+  page.request(outsideDto('o2'));
+  page.resolve({ requestId: 'o2', response: 'allow-session' });
+  assert.match(result('o2'), /^Allowed for this session Later calls in this chat reach it without this card/);
+  page.request(outsideDto('o3'));
+  page.resolve({ requestId: 'o3', response: 'deny' });
+  assert.equal(result('o3'), 'Denied The call is not carried out, and the model is told not to work around it.');
+}));
+
+test('the box under the tool log keeps what was decided before a call outside', withDom(async () => {
+  const { buildSandboxBlockedBox, blockedRunsOf } = await importRenderer('chat', 'sandboxBlocked.js');
+  const box = buildSandboxBlockedBox(blockedRunsOf([{
+    line: 'Edit: ~/notes/todo.md',
+    tool: 'edit_file',
+    sandboxOutside: [{ kind: 'write', target: TODO, outcome: 'allowed', duration: 'session', pattern: `${HOME}/notes` }],
+  }, {
+    line: 'Read: ~/.ssh/config',
+    tool: 'read_file_text',
+    sandboxOutside: [{ kind: 'read', target: `${HOME}/.ssh/config`, outcome: 'denied' }],
+  }]), { homeDir: HOME });
+  assert.equal(box.querySelector('.chat-sandbox-blocked-heading').textContent, 'Asked about 2 paths outside the project folder');
+  const entries = [...box.querySelectorAll('.chat-sandbox-blocked-entry')].map((e) => [...e.children].map((c) => c.textContent));
+  assert.deepEqual(entries, [
+    ['Write', '~/notes/todo.md · ~/notes', 'Allowed outside the project folder · this session'],
+    ['Read', '~/.ssh/config', 'Denied outside the project folder'],
+  ]);
+}));

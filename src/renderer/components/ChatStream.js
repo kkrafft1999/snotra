@@ -1123,7 +1123,10 @@ export function initChatStream({
     const sandboxBlocked = phase === 'done' ? payload?.sandboxBlocked : undefined;
     const sandboxDecision = phase === 'done' ? payload?.sandboxDecision : undefined;
     const sandboxLive = phase === 'done' ? payload?.sandboxLive : undefined;
-    const entry = toolTraceEntryForStore({ line, tool, skill, permission, changes, sandboxBlocked, sandboxDecision, sandboxLive });
+    const sandboxOutside = phase === 'done' ? payload?.sandboxOutside : undefined;
+    const entry = toolTraceEntryForStore({
+      line, tool, skill, permission, changes, sandboxBlocked, sandboxDecision, sandboxLive, sandboxOutside,
+    });
     if (phase === 'pending') {
       const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
       if (existing) {
@@ -1192,7 +1195,7 @@ export function initChatStream({
       setToolLineDone(doneRow, line);
       applyPermissionToRow(doneRow, permission);
       if (changes) applyChangesToRow(doneRow, changes);
-      if (changes || (entry && typeof entry === 'object' && (entry.sandboxBlocked || entry.sandboxLive))) {
+      if (changes || (entry && typeof entry === 'object' && (entry.sandboxBlocked || entry.sandboxLive || entry.sandboxOutside))) {
         syncMessageChanges(wrap.parentElement, last);
       }
     } else {

@@ -1176,4 +1176,5 @@ module.exports = {
   SANDBOX_REASONS,
   LINUX_PACKAGES,
   DENY_WRITE_DEFAULTS,
+  isAlwaysUnwritable,
 };

@@ -33,8 +33,22 @@ Read the card, then choose one of its buttons:
 
 The tool line in the chat shows how it ended, for example *denied* or *blocked*, also later in the chat history. An allowance for the session shows up under *Settings › Tools & security* at the bottom of the page, where you can revoke it; a remembered command is listed in the row *Execute*. See [See and change what Snotra may do](../tools-and-security/).
 
+## A file outside the open folder
+
+[since 1.18] When a file tool wants to read or write a file or folder outside the open folder — a note in `~/notes`, a data set in `/opt/data` — a card *Outside the project · approval needed* appears before the call, in every mode, *Auto* included. It stands in for the card above: one card, with the preview when something would be written.
+
+1. Check the tool, the target and, for a change, the preview.
+2. Under *Allow for*, choose exactly this file or folder, or the folder around it. A folder many programs share, such as `~/Documents`, is offered as the exact file only.
+3. Under *How long*, choose *Only this call* or *For this session*.
+4. Click *Allow* — *Allow and write* for a change — or *Deny*. *Esc* denies as well.
+
+Allowed, the call runs with exactly that opened; everything else outside stays closed. Allowed *for this session*, later calls in the same chat reach it without this card, and the mode decides about them as inside the open folder; the allowance is listed under *Settings › Tools & security* with the session allowances. Denied, the call does not run, and the model is told not to work around it; the same call again ends the run. The box under the tool steps keeps what you decided.
+
+Never offered: your home folder as a whole, the root of a disk, Snotra's own storage, the global skill folders, and for writing places with credentials such as `~/.ssh` and shell start-up files such as `.zshrc`. A file in a place with credentials can be read; the card marks it *sensitive* and names the provider its content would go to.
+
 ## If it doesn't work
 
 - ***Allow for this session* is missing.** It only exists for reading, reading sensitive data and ordinary changes, and not in *Always ask*. Overwriting with no way back, commands and external services can only be allowed one call at a time.
 - ***Always allow this command* is not available.** The line below the buttons says why: only a simple command can be remembered — one program with plain arguments, without chaining, pipes, redirection, variables or quotes. It also needs an open folder and the system's encrypted storage.
 - **The card says *Request expired*.** The chat, the folder, the mode or a rule changed while the card was open. The run ends; ask again if you still want it.
+- **A path outside the open folder is refused without a card.** It is one that is never offered — the home folder as a whole, a disk's root, Snotra's storage, or for writing a place with credentials. Name a folder inside it, or open that folder in Snotra.

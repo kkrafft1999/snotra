@@ -33,8 +33,22 @@ Lies die Karte und wähle dann einen ihrer Knöpfe:
 
 Die Tool-Zeile im Chat zeigt, wie es ausgegangen ist, zum Beispiel *abgelehnt* oder *blockiert*, auch später im Verlauf. Eine Freigabe für die Sitzung erscheint unten auf der Seite *Einstellungen › Tools & Sicherheit*, wo du sie widerrufen kannst; ein gemerkter Befehl steht in der Zeile *Ausführen*. Siehe [Sehen und ändern, was Snotra darf](../tools-and-security/).
 
+## Eine Datei außerhalb des geöffneten Ordners
+
+[seit 1.18] Will ein Datei-Tool eine Datei oder einen Ordner außerhalb des geöffneten Ordners lesen oder schreiben — eine Notiz in `~/notizen`, einen Datensatz in `/opt/daten` —, erscheint vor dem Aufruf eine Karte *Außerhalb des Projekts · Freigabe nötig*, in jedem Modus, auch in *Auto*. Sie steht für die Karte oben: eine Karte, mit der Vorschau, wenn etwas geschrieben würde.
+
+1. Sieh nach, welches Tool es ist, welches Ziel und bei einer Änderung die Vorschau.
+2. Wähle unter *Freigeben für* genau diese Datei oder diesen Ordner oder den Ordner darum. Ein Ordner, den sich viele Programme teilen, etwa `~/Documents`, wird nur als genau diese Datei angeboten.
+3. Wähle unter *Wie lange* *Nur dieser Aufruf* oder *Für diese Sitzung*.
+4. Klick auf *Freigeben* — bei einer Änderung *Freigeben und schreiben* — oder auf *Ablehnen*. *Esc* lehnt ebenfalls ab.
+
+Freigegeben läuft der Aufruf mit genau dieser Freigabe; alles andere außerhalb bleibt zu. Für *diese Sitzung* freigegeben erreichen spätere Aufrufe im selben Chat das Ziel ohne diese Karte, und der Modus entscheidet über sie wie im geöffneten Ordner; die Freigabe steht unter *Einstellungen › Tools & Sicherheit* bei den Sitzungsfreigaben. Abgelehnt läuft der Aufruf nicht, und das Modell hat die Ansage, nicht auszuweichen; derselbe Aufruf noch einmal beendet den Lauf. Der Kasten unter den Tool-Schritten hält fest, wie du entschieden hast.
+
+Nie angeboten: dein Home-Ordner als Ganzes, das Wurzelverzeichnis eines Laufwerks, Snotras eigener Speicher, die globalen Skill-Ordner und zum Schreiben Orte mit Zugangsdaten wie `~/.ssh` und Startdateien der Shell wie `.zshrc`. Eine Datei an einem Ort mit Zugangsdaten lässt sich lesen; die Karte markiert sie als *sensibel* und nennt den Anbieter, an den ihr Inhalt ginge.
+
 ## Wenn es nicht klappt
 
 - ***Für diese Sitzung erlauben* fehlt.** Das gibt es nur für Lesen, das Lesen sensibler Daten und gewöhnliche Änderungen, und nicht in *Immer fragen*. Überschreiben ohne Rückweg, Befehle und externe Dienste lassen sich nur Aufruf für Aufruf erlauben.
 - ***Diesen Befehl immer erlauben* geht nicht.** Die Zeile unter den Knöpfen sagt, warum: Merken lässt sich nur ein einfacher Befehl — ein Programm mit schlichten Argumenten, ohne Verkettung, Pipes, Umleitungen, Variablen oder Anführungszeichen. Außerdem braucht es einen geöffneten Ordner und den verschlüsselten Speicher des Systems.
 - **Die Karte sagt *Anfrage verfallen*.** Chat, Ordner, Modus oder eine Regel haben sich geändert, während die Karte offen war. Der Lauf endet; frag noch einmal, wenn du es weiterhin willst.
+- **Ein Pfad außerhalb des geöffneten Ordners wird ohne Karte abgelehnt.** Er gehört zu dem, was nie angeboten wird — der Home-Ordner als Ganzes, das Wurzelverzeichnis, Snotras Speicher oder zum Schreiben ein Ort mit Zugangsdaten. Nenne einen Ordner darin, oder öffne diesen Ordner in Snotra.

@@ -1086,3 +1086,156 @@ test('live connection: the command gave up — the card expires saying so, and t
   assert.equal(result.toolTrace[0].sandboxLive, undefined, 'nothing was decided while it waited');
   assert.match(JSON.parse(toolMessageOf(llm).content).sandbox_decision, /allowed connecting to download\.pytorch\.org:443 for this run/);
 });
+
+// ── A file tool outside the open folder (#792, step 4) ──────────────────────
+
+const OUTSIDE = '/home/u/notes/todo.md';
+const OUTSIDE_FOLDER = '/home/u/notes';
+
+/**
+ * The planner's answer for a path outside the open folder: offered on a card
+ * until a grant covers it, then planned like any other. `version` may change
+ * between the plans, as a file changed in between would.
+ */
+function outsidePlan({ access = 'read', version = () => '8:1', preview = null } = {}) {
+  return (toolName, args, context) => {
+    const granted = (context.outsideGrants || []).some((g) => g.path === OUTSIDE || OUTSIDE.startsWith(`${g.path}/`));
+    const target = {
+      path: args.relative_path, absPath: OUTSIDE, kind: 'file', access, exists: true, version: version(granted),
+      sensitive: false, rulePaths: [OUTSIDE],
+    };
+    const plan = {
+      tool: toolName,
+      riskClasses: [access === 'write' ? 'write' : 'read'],
+      planKey: JSON.stringify([toolName, args, granted]),
+      ...(preview ? { preview } : {}),
+    };
+    if (granted) return { ...plan, targets: [{ ...target, outsideGranted: true }] };
+    const offers = [{ path: OUTSIDE, file: true, access }, { path: OUTSIDE_FOLDER, file: false, access }];
+    return { ...plan, outside: true, targets: [{ ...target, outside: { offers } }] };
+  };
+}
+
+test('outside: asks before the call even where the mode would not, and runs it with what the card opened', async () => {
+  const approvals = makeApprovals((request) => {
+    assert.equal(request.checkpoint, 'sandbox');
+    assert.equal(request.sandbox.before, true);
+    assert.deepEqual(request.sandbox.entries, [
+      { kind: 'read', target: OUTSIDE, count: 1, folder: false, allow: [OUTSIDE, OUTSIDE_FOLDER] },
+    ]);
+    assert.equal(request.sessionAllowed, true);
+    return { response: 'allow-once', sandboxPaths: [OUTSIDE_FOLDER] };
+  });
+  const tools = makeToolPort({ plan: outsidePlan() });
+  const { engine } = makeEngine([assistantToolCall('c1', 'read_file_text', { relative_path: '~/notes/todo.md' }), assistantText('ok')],
+    { tools, approvals, toolPolicy: policy() });
+
+  const result = await send(engine);
+
+  assert.equal(approvals.requests.length, 1, 'one card, and no other');
+  assert.equal(tools.calls.length, 1);
+  assert.deepEqual(tools.calls[0].context.outsideGrants, [{ path: OUTSIDE_FOLDER, file: false, access: 'read' }]);
+  const entry = result.toolTrace[0];
+  assert.deepEqual(entry.sandboxOutside, [
+    { kind: 'read', target: OUTSIDE, outcome: 'allowed', duration: 'call', pattern: OUTSIDE_FOLDER },
+  ]);
+  assert.equal(entry.permission.source, 'allow-once', 'the card was the approval');
+  assert.equal(entry.permission.status, 'executed');
+});
+
+test('outside: a write in Smart gets the one card with its preview, not a second one', async () => {
+  const preview = { kind: 'replace', text: '--- old\n- boxes\n+++ new\n- order boxes' };
+  const approvals = makeApprovals((request) => {
+    assert.equal(request.sandbox.before, true);
+    assert.equal(request.preview.text, preview.text, 'what would be written');
+    return { response: 'allow-once', sandboxPaths: [OUTSIDE] };
+  });
+  const tools = makeToolPort({ plan: outsidePlan({ access: 'write', preview }) });
+  const { engine } = makeEngine([
+    assistantToolCall('c1', 'edit_file', { relative_path: OUTSIDE, old_string: 'boxes', new_string: 'order boxes' }),
+    assistantText('ok'),
+  ], { tools, approvals });
+
+  await send(engine);
+
+  assert.equal(approvals.requests.length, 1);
+  assert.equal(tools.calls.length, 1);
+  assert.deepEqual(tools.calls[0].context.outsideGrants, [{ path: OUTSIDE, file: true, access: 'write' }]);
+});
+
+test('outside: in Auto the card comes all the same', async () => {
+  const approvals = makeApprovals({ response: 'allow-once', sandboxPaths: [OUTSIDE] });
+  const tools = makeToolPort({ plan: outsidePlan({ access: 'write' }) });
+  const { engine } = makeEngine([assistantToolCall('c1', 'write_file_text', { relative_path: OUTSIDE, content: 'x' }), assistantText('ok')],
+    { tools, approvals, toolPolicy: policy({ mode: 'auto' }) });
+  await send(engine);
+  assert.equal(sandboxRequests(approvals).length, 1);
+  assert.equal(tools.calls.length, 1);
+});
+
+test('outside: for the session, the next call into the folder needs no card, and the settings list it', async () => {
+  const approvals = makeApprovals({ response: 'allow-session', sandboxPaths: [OUTSIDE_FOLDER] });
+  const tools = makeToolPort({ plan: outsidePlan() });
+  const { engine, grants } = makeEngine([
+    assistantToolCall('c1', 'read_file_text', { relative_path: OUTSIDE }),
+    assistantToolCall('c2', 'read_file_lines', { relative_path: OUTSIDE }),
+    assistantText('ok'),
+  ], { tools, approvals });
+
+  const result = await send(engine, { chatId: 'chat-1' });
+
+  assert.equal(approvals.requests.length, 1);
+  assert.equal(tools.calls.length, 2);
+  assert.deepEqual(tools.planCalls.at(-1).context.outsideGrants, [{ path: OUTSIDE_FOLDER, file: false, access: 'read' }]);
+  assert.equal(result.toolTrace[0].sandboxOutside[0].duration, 'session');
+  assert.equal(result.toolTrace[1].sandboxOutside, undefined);
+  const listed = grants.list();
+  assert.equal(listed.length, 1);
+  assert.deepEqual(listed[0].classes, ['read']);
+  assert.equal(listed[0].scope.key, 'approval.sandbox.sessionScope.outsideRead');
+  assert.deepEqual(listed[0].scope.params, { path: OUTSIDE_FOLDER });
+});
+
+test('outside: denied, the call does not run and the model is told not to work around it; the same call again ends the run', async () => {
+  const approvals = makeApprovals('deny');
+  const tools = makeToolPort({ plan: outsidePlan() });
+  const llm = makeLlmPort([
+    assistantToolCall('c1', 'read_file_text', { relative_path: OUTSIDE }),
+    assistantToolCall('c2', 'read_file_text', { relative_path: OUTSIDE }),
+    assistantText('never'),
+  ]);
+  const { engine } = makeEngine(null, { tools, approvals, llm });
+
+  const result = await send(engine);
+
+  assert.equal(tools.calls.length, 0);
+  assert.equal(approvals.requests.length, 1, 'asked once');
+  const first = JSON.parse(llm.calls[1].messages.find((m) => m.role === 'tool').content);
+  assert.equal(first.error, 'permission_denied');
+  assert.match(first.message, /^The user denied reading \/home\/u\/notes\/todo\.md outside the workspace folder\. Do not work around it/);
+  assert.deepEqual(result.toolTrace[0].sandboxOutside, [{ kind: 'read', target: OUTSIDE, outcome: 'denied' }]);
+  assert.equal(result.toolTrace[1].permission.reason, 'repeated_denial');
+  assert.notEqual(result.content, 'never');
+});
+
+test('outside: a call that changed after the card is not run', async () => {
+  const approvals = makeApprovals({ response: 'allow-once', sandboxPaths: [OUTSIDE] });
+  const tools = makeToolPort({ plan: outsidePlan({ version: (granted) => (granted ? '9:2' : '8:1') }) });
+  const { engine } = makeEngine([assistantToolCall('c1', 'read_file_text', { relative_path: OUTSIDE }), assistantText('never')],
+    { tools, approvals });
+  const result = await send(engine);
+  assert.equal(tools.calls.length, 0);
+  assert.equal(result.toolTrace[0].permission.reason, 'request_invalidated');
+});
+
+test('outside: a block rule decides before any card', async () => {
+  const approvals = makeApprovals('allow-once');
+  const tools = makeToolPort({ plan: outsidePlan() });
+  const rules = [{ id: 'block', effect: 'deny', scope: 'global', tool: 'read_file_text', riskClass: null, pathPattern: '**' }];
+  const { engine } = makeEngine([assistantToolCall('c1', 'read_file_text', { relative_path: OUTSIDE }), assistantText('ok')],
+    { tools, approvals, toolPolicy: policy({ rules }) });
+  const result = await send(engine);
+  assert.equal(approvals.requests.length, 0);
+  assert.equal(tools.calls.length, 0);
+  assert.equal(result.toolTrace[0].permission.reason, 'policy_denied');
+});
