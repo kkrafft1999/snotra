@@ -264,7 +264,11 @@
         </div>
         <div id="file-preview" class="hidden">
           <div id="preview-header">
-            <span id="preview-filename"></span>
+            <!-- ‹ › for the files shown before and after (#822) come in here,
+                 in front of the name, from file-views/host.js. -->
+            <div id="preview-lead">
+              <span id="preview-filename"></span>
+            </div>
             <div id="preview-tools" hidden></div>
             <span id="preview-meta"></span>
           </div>

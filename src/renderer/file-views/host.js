@@ -27,6 +27,12 @@
 // path stays with the host and reaches the view mounted for that path as
 // `context.fragment` (#641) — the tree only ever opens the file.
 //
+// **History (#822).** Every file the pane shows is a step in
+// `preview-history.js`, whichever way it came; ‹ › in the header, the menu
+// shortcuts and the mouse's side buttons walk it. Going back goes through
+// `openFile` like a link, so the tree selects the file as well, and the view
+// mounted for it gets back what it reported as it was left (`viewState`).
+//
 // The interface of a view is documented in the header of `registry.js`.
 
 import { t, onLocaleChange } from '../i18n.js';
@@ -35,10 +41,21 @@ import { READ_FAILURES, readFailureMessageKey, readFailureOf } from './read-fail
 import { fileViews, readsText } from './registry.js';
 import { changesView } from './changes-view.js';
 import { buildSegmentedSwitch } from './mode-switch.js';
+import { createPreviewHistory } from './preview-history.js';
 
 const keepEditing = async () => 'cancel';
 
 const noOpener = async () => ({ ok: false, reason: 'not-found' });
+
+const isMac = () => typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent ?? '');
+
+const isInside = (child, dir) => typeof child === 'string' && typeof dir === 'string' && dir !== ''
+  && child.length > dir.length && child.startsWith(dir) && (child[dir.length] === '/' || child[dir.length] === '\\');
+
+const ARROWS = {
+  back: '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M10 3.5 5.5 8 10 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  forward: '<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
 
 export function createFileViewHost({
   api,
@@ -49,9 +66,13 @@ export function createFileViewHost({
   // The ids of what the agent changed in a file, in the conversation on
   // screen, oldest first (#348). A file with any gets "Content | Changes".
   changesFor = () => [],
+  // The menu of the entries behind ‹ or › (#822): main shows it and answers
+  // through `chooseFromHistory`. Without one, a right click does nothing.
+  showHistoryMenu = null,
 }) {
   const welcomeEl = document.getElementById('welcome');
   const filePreview = document.getElementById('file-preview');
+  const previewLead = document.getElementById('preview-lead');
   const previewFilename = document.getElementById('preview-filename');
   const previewTools = document.getElementById('preview-tools');
   const previewMeta = document.getElementById('preview-meta');
@@ -77,10 +98,18 @@ export function createFileViewHost({
   // tree opens the file, and the next open() of that path hands it to the
   // view it mounts. Any other open() drops it.
   let pendingFragment = null;
+  // A step the history asked for (#822): `{ path, index, state }`. Like the
+  // fragment, only the next open() of that path takes it.
+  let pendingStep = null;
+  const history = createPreviewHistory();
+  // Every menu shown draws a number; an answer for an older one is dropped.
+  let historyMenuToken = 0;
+  const historyNav = buildHistoryNav();
 
   function teardown() {
     const shown = current;
     current = null;
+    if (shown?.instance && shown.view !== changesView) rememberViewState(shown);
     if (shown?.instance) {
       try {
         shown.instance.unmount();
@@ -138,6 +167,163 @@ export function createFileViewHost({
     if (focus) shown.changesSwitch.element.querySelector(':checked')?.focus();
   }
 
+  /** What the view reports about where the reader is, kept with its entry. */
+  function rememberViewState(shown) {
+    if (typeof shown.instance.viewState !== 'function') return;
+    try {
+      history.saveState(shown.file.path, shown.instance.viewState() ?? null);
+    } catch (err) {
+      console.warn(`File view "${shown.view.id}" failed to report its state:`, err?.message ?? err);
+    }
+  }
+
+  function buildHistoryNav() {
+    const group = document.createElement('div');
+    group.className = 'preview-history';
+    group.setAttribute('role', 'group');
+    const make = (direction) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'preview-history__button';
+      button.dataset.direction = direction;
+      button.innerHTML = ARROWS[direction];
+      button.setAttribute('aria-keyshortcuts', isMac()
+        ? (direction === 'back' ? 'Meta+BracketLeft' : 'Meta+BracketRight')
+        : (direction === 'back' ? 'Alt+ArrowLeft' : 'Alt+ArrowRight'));
+      button.addEventListener('click', () => {
+        void (direction === 'back' ? goBack() : goForward());
+      });
+      // Right click, or Shift+F10 and the menu key on the focused button:
+      // the entries on that side, as in a browser.
+      button.addEventListener('contextmenu', (event) => {
+        event.preventDefault();
+        if (!button.disabled) openHistoryMenu(direction, button);
+      });
+      return button;
+    };
+    const back = make('back');
+    const forward = make('forward');
+    group.append(back, forward);
+    return { group, back, forward };
+  }
+
+  function shortcutOf(direction) {
+    if (isMac()) return direction === 'back' ? '\u2318[' : '\u2318]';
+    return t(direction === 'back' ? 'preview.history.back.shortcut' : 'preview.history.forward.shortcut');
+  }
+
+  /** ‹ and ›: on or off, and named after the file they lead to. */
+  function renderHistoryNav() {
+    const focused = ['back', 'forward'].find((direction) => document.activeElement === historyNav[direction]);
+    for (const direction of ['back', 'forward']) {
+      const button = historyNav[direction];
+      const step = history.step(direction === 'back' ? -1 : 1);
+      const name = step ? baseName(step.entry.path) : '';
+      button.disabled = !step;
+      const label = name
+        ? t(`preview.history.${direction}.to`, { name })
+        : t(`preview.history.${direction}`);
+      button.setAttribute('aria-label', label);
+      button.title = `${label} (${shortcutOf(direction)})`;
+    }
+    historyNav.group.setAttribute('aria-label', t('preview.history.label'));
+    // A button that has just been disabled hands the focus to its partner,
+    // or the keyboard would be left on nothing.
+    if (focused && historyNav[focused].disabled) {
+      const other = historyNav[focused === 'back' ? 'forward' : 'back'];
+      if (!other.disabled) other.focus();
+      else historyNav[focused].blur();
+    }
+  }
+
+  function baseName(path) {
+    const parts = String(path).split(/[\\/]/);
+    return parts[parts.length - 1] || String(path);
+  }
+
+  /** The nav belongs to whichever of the two panes shows a file. */
+  function placeHistoryNav(which) {
+    // Moved only when it has to: moving a node takes the focus off it.
+    const home = which === 'preview' ? previewLead : which === 'info' ? fileInfo : null;
+    if (!home) historyNav.group.remove();
+    else if (home.firstElementChild !== historyNav.group) home.prepend(historyNav.group);
+    historyNav.group.classList.toggle('preview-history--card', which === 'info');
+    renderHistoryNav();
+  }
+
+  /**
+   * One step back (-1) or forward (+1). A file that is gone is skipped, and
+   * marked so in the menu; a folder switched meanwhile ends the walk.
+   */
+  async function walk(direction) {
+    for (;;) {
+      const step = history.step(direction);
+      if (!step) return false;
+      const outcome = await goToEntry(step.index, step.entry);
+      if (outcome !== 'gone') return outcome === 'shown';
+    }
+  }
+
+  async function goToEntry(index, entry) {
+    pendingStep = { path: entry.path, index, state: entry.state };
+    // A position the view reported wins over the heading the link named.
+    pendingFragment = !entry.state && entry.fragment ? { path: entry.path, fragment: entry.fragment } : null;
+    let result;
+    try {
+      result = await openFile(entry.path);
+    } catch (err) {
+      console.warn('History step failed:', err?.message ?? err);
+      result = { ok: false };
+    }
+    if (result?.ok) return 'shown';
+    if (pendingStep?.path === entry.path) pendingStep = null;
+    if (pendingFragment?.path === entry.path) pendingFragment = null;
+    if (result?.reason === 'not-found') {
+      history.markGone(entry.path);
+      renderHistoryNav();
+      return 'gone';
+    }
+    return 'failed';
+  }
+
+  const goBack = () => walk(-1);
+  const goForward = () => walk(1);
+
+  function openHistoryMenu(direction, button) {
+    if (typeof showHistoryMenu !== 'function') return;
+    const entries = history.list(direction === 'back' ? -1 : 1).map((entry) => ({
+      index: entry.index,
+      name: baseName(entry.path),
+      folder: folderLabel(entry.path),
+      gone: entry.gone,
+    }));
+    if (entries.length === 0) return;
+    const box = button.getBoundingClientRect();
+    const token = ++historyMenuToken;
+    Promise.resolve(showHistoryMenu({
+      token,
+      entries,
+      position: { x: Math.round(box.left), y: Math.round(box.bottom) },
+    })).catch((err) => console.warn('History menu failed:', err?.message ?? err));
+  }
+
+  /** The folder of a path, relative to the open one; '' at its top. */
+  function folderLabel(path) {
+    const root = getWorkspaceRoot();
+    const dir = String(path).replace(/[\\/][^\\/]*$/, '');
+    if (!root || dir === root || !isInside(dir, root)) return '';
+    return dir.slice(root.length + 1).replaceAll('\\', '/');
+  }
+
+  /** Main's answer to the menu: the entry picked, for the menu `token`. */
+  async function chooseFromHistory(token, index) {
+    if (token !== historyMenuToken || !Number.isInteger(index)) return false;
+    historyMenuToken += 1;
+    const entry = history.entryAt(index);
+    if (!entry || entry.gone) return false;
+    return (await goToEntry(index, entry)) === 'shown';
+  }
+
   function idsFor(path) {
     try {
       const ids = changesFor(path);
@@ -151,6 +337,7 @@ export function createFileViewHost({
     welcomeEl.classList.toggle('hidden', which !== 'welcome');
     filePreview.classList.toggle('hidden', which !== 'preview');
     fileInfo.classList.toggle('hidden', which !== 'info');
+    placeHistoryNav(which);
   }
 
   function showWelcome() {
@@ -204,7 +391,7 @@ export function createFileViewHost({
     renderInfo();
   }
 
-  async function mountView(view, item, result, fragment = '', { changes = null, focusSwitch = false } = {}) {
+  async function mountView(view, item, result, fragment = '', { changes = null, focusSwitch = false, viewState = null } = {}) {
     teardown();
     const file = {
       path: item.path,
@@ -233,6 +420,7 @@ export function createFileViewHost({
       file: { ...file },
       content: result.content,
       fragment,
+      viewState,
       api,
       workspaceRoot: getWorkspaceRoot() ?? null,
       openFile: (path, options) => (current === shown
@@ -320,10 +508,24 @@ export function createFileViewHost({
    * true when the pane now shows it, false when an editor kept the pane or a
    * newer open() overtook this one.
    */
-  async function open(item, { changes = null, content = false, focusSwitch = false } = {}) {
-    // Only the open a view's link asked for gets the fragment it named.
+  async function open(item, options = {}) {
+    // Only the open a view's link asked for gets the fragment it named, and
+    // only the open the history asked for is a step back or forward.
     const fragment = pendingFragment?.path === item.path ? pendingFragment.fragment : '';
     pendingFragment = null;
+    const step = pendingStep?.path === item.path ? pendingStep : null;
+    pendingStep = null;
+    const shown = await show(item, options, fragment, step);
+    if (shown && current?.file.path === item.path) {
+      history.visit(item.path, { workspaceRoot: getWorkspaceRoot() ?? null, target: step?.index ?? null });
+      if (fragment) history.saveFragment(item.path, fragment);
+      renderHistoryNav();
+    }
+    return shown;
+  }
+
+  async function show(item, { changes = null, content = false, focusSwitch = false } = {}, fragment = '', step = null) {
+    const viewState = step?.state ?? null;
     // The same file again is a refresh — unless the other side of
     // "Content | Changes" is asked for (#348).
     const switching = Boolean(changes) || (content && current?.view === changesView);
@@ -350,7 +552,7 @@ export function createFileViewHost({
     }
     if (!readsText(view)) {
       // The view reads the file itself (#345); size and date come from the tree.
-      await mountView(view, item, { content: null, size: item.size, modified: item.modified }, fragment, { focusSwitch });
+      await mountView(view, item, { content: null, size: item.size, modified: item.modified }, fragment, { focusSwitch, viewState });
       return ticket === generation;
     }
     const result = await api.readFile(item.path);
@@ -359,7 +561,7 @@ export function createFileViewHost({
       showReadFailure(item, result, view);
       return true;
     }
-    await mountView(view, item, result, fragment, { focusSwitch });
+    await mountView(view, item, result, fragment, { focusSwitch, viewState });
     return ticket === generation;
   }
 
@@ -466,6 +668,7 @@ export function createFileViewHost({
   // The info card's reason is a catalogue key since #641, so a language
   // switch only has to draw the card again; it no longer reads the file.
   const stopFollowingLocale = onLocaleChange(() => {
+    renderHistoryNav();
     if (!current) return;
     current.changesSwitch?.applyLabels();
     if (current.view === changesView) current.instance?.applyLabels?.();
@@ -491,6 +694,27 @@ export function createFileViewHost({
     /** Is the diff on show, rather than the file? */
     showsChanges: () => current?.view === changesView,
     openPath: () => current?.file.path ?? null,
+    /** Back and forward through what the pane showed (#822). */
+    goBack,
+    goForward,
+    canGoBack: () => history.canGo(-1),
+    canGoForward: () => history.canGo(1),
+    chooseFromHistory,
+    /** The tree renamed or moved `oldPath`: the history follows. */
+    renamePath(oldPath, newPath) {
+      history.rename(oldPath, newPath, isInside);
+      renderHistoryNav();
+    },
+    /** `path` — a file, or a folder and all in it — was deleted. */
+    forgetPath(path) {
+      history.markGoneUnder(path, isInside);
+      renderHistoryNav();
+    },
+    /** Another folder: its history starts empty. */
+    resetHistory() {
+      history.reset();
+      renderHistoryNav();
+    },
     hasUnsavedChanges: () => Boolean(current?.dirty),
     /** Unmount the view and stop listening — for a pane that goes away. */
     dispose() {

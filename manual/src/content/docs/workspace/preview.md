@@ -11,12 +11,23 @@ Click a file in the tree and the middle column shows it. Each kind of file gets 
 
 An open folder. The preview shows files from that folder only.
 
+## Back and forward
+
+[since 1.18] The preview remembers the files it showed, like a browser. `‹` and `›` in front of the file name go back to the file before and forward again; the tree selects the file along with it.
+
+- **Every way counts** that brings a file into the preview: a click in the tree, *Filter Files…*, a link in a Markdown document, a link in a chat answer, *Show changes*.
+- **Shortcuts:** `Cmd+[` and `Cmd+]` on macOS, `Alt+←` and `Alt+→` on Windows and Linux — also in *View › Back* and *View › Forward*. The side buttons of a mouse work over the tree and the middle column.
+- **The whole list:** right-click `‹` or `›` — or press `Shift+F10` on it — for every file on that side; pick one to jump straight there.
+- **Where you were:** going back lands where you left the file — the same scroll position, and in a Markdown file the same side of *Preview | Source*.
+- **A new step cuts off what lay ahead.** Go back twice and open another file, and the files you went back from are no longer ahead of you.
+- The list belongs to the open folder. Switching folders or restarting Snotra starts it empty.
+
 ## Markdown
 
 A `.md` file opens formatted: headings, lists, tables, code. *Preview | Source* in the header — or `Cmd+Shift+M` / `Ctrl+Shift+M`, or *View › Preview or Source* — switches to the plain text and back. The front matter of a `SKILL.md` shows as a compact block above the text.
 
 - Images from the open folder are shown. Images from the web are never loaded: a placeholder, *Image from the web, not loaded*, says where they point.
-- A link to another file of the folder opens that file and selects it in the tree.
+- A link to another file of the folder opens that file and selects it in the tree. `‹` takes you back to where you followed it.
 
 ## Code and text
 
@@ -60,3 +71,4 @@ A link to an HTML file in a chat answer opens it here as well.
 - **The file points out of the open folder through a link,** so it is not shown. The preview shows nothing from outside the folder.
 - ***Not a readable image* or *Not a PDF*.** The content does not match the file name. The view checks what is inside, not the extension.
 - ***The page is not responding.*** A script in the page keeps it busy. Snotra stays usable; *Reload* starts the page again.
+- **`‹` skips a file, or the list shows it greyed out.** The file was deleted, or moved outside Snotra, since you looked at it. A file you rename or move in the tree stays in the list under its new name.

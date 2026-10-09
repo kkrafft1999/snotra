@@ -49,6 +49,8 @@ const REQUEST_CHANNELS = Object.freeze({
   FS_LIST_WORKSPACE_PATHS: 'fs:listWorkspacePaths',
   /** Natives Kontextmenü für Datei oder Ordner im Dateibaum (Issues #58, #120). */
   FS_SHOW_FILE_CONTEXT_MENU: 'fs:showFileContextMenu',
+  /** The entries behind ‹ or › in the preview header, as a native menu (#822). */
+  UI_SHOW_PREVIEW_HISTORY_MENU: 'ui:showPreviewHistoryMenu',
   /**
    * Import von außen (Issue #101): Drop aus Finder/Explorer in den Dateibaum.
    * Eigene Kanäle, weil hier bewusst nur das **Ziel** gegen den Workspace
@@ -271,6 +273,11 @@ const PUSH_CHANNELS = Object.freeze({
   UI_TOGGLE_HIDDEN_FILES: 'ui:toggle-hidden-files',
   /** Menu "View > Filter Files…" or Cmd/Ctrl+P (#350). */
   UI_FILTER_FILES: 'ui:filter-files',
+  /** Menu "View > Back / Forward", Cmd+[ / Cmd+] or Alt+Left / Alt+Right (#822). */
+  UI_PREVIEW_BACK: 'ui:preview-back',
+  UI_PREVIEW_FORWARD: 'ui:preview-forward',
+  /** The entry picked in the menu behind ‹ or ›: `{ token, index }` (#822). */
+  UI_PREVIEW_HISTORY_CHOICE: 'ui:preview-history-choice',
 });
 
 module.exports = {

@@ -557,6 +557,25 @@ api.onFilterFiles?.(() => {
   fileTree.openFilter();
 });
 
+// Back and forward through the files the preview showed (#822): menu "View",
+// Cmd+[ / Cmd+] or Alt+Left / Alt+Right — main matches the key — and the
+// mouse's side buttons over the tree or the middle column.
+api.onPreviewBack?.(() => {
+  void fileTree.previewBack();
+});
+api.onPreviewForward?.(() => {
+  void fileTree.previewForward();
+});
+api.onPreviewHistoryChoice?.((choice) => {
+  void fileTree.choosePreviewHistory(choice?.token, choice?.index);
+});
+document.addEventListener('mouseup', (event) => {
+  if (event.button !== 3 && event.button !== 4) return;
+  if (!event.target?.closest?.('#sidebar, #content')) return;
+  event.preventDefault();
+  void (event.button === 3 ? fileTree.previewBack() : fileTree.previewForward());
+});
+
 async function openFolderViaDialog() {
   const folderPath = await api.openFolder();
   if (folderPath) {
