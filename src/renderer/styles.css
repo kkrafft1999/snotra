@@ -6073,7 +6073,12 @@ select.modal-input {
  * narrowing and `.md-view` scrolls sideways instead of wrapping into a column
  * of a few words. */
 .md-doc {
-  min-width: 40ch;
+  /* The zoom of the header (#829) scales the whole document, images and
+     tables included; set by markdown-view.js. The minimum width (#740) is
+     divided by it, so that a zoomed document wraps in the column instead of
+     scrolling sideways — only a column narrower than 40ch at 100 % does. */
+  zoom: var(--md-zoom, 1);
+  min-width: calc(40ch / var(--md-zoom, 1));
   font-size: var(--ds-font-size-base);
   line-height: 1.6;
   color: var(--text-primary);

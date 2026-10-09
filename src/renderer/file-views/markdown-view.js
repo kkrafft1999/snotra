@@ -12,6 +12,10 @@
 // key/value block, and images from the web as a placeholder with their
 // address — they are never loaded (the CSP forbids it, and so does this view).
 //
+// Decided on 2026-10-09 (#829): the preview zooms with the same "− 100 % +"
+// group as the PDF and image previews, as a whole document — images and
+// tables grow with the text — and at one size for every Markdown file.
+//
 // The interface it implements is documented in the header of `registry.js`.
 
 import contracts from '../generated/contracts.js';
@@ -27,6 +31,8 @@ import {
   splitDocument,
 } from './markdown-document.js';
 import { MODES, buildModeSwitch } from './mode-switch.js';
+import { MARKDOWN_ZOOM_STEPS, markdownZoom, rememberMarkdownZoom } from './markdown-zoom.js';
+import { ZOOM_IN_ICON, ZOOM_OUT_ICON, iconButton, nextZoom } from './zoom-tools.js';
 import { plainTextView } from './plain-text-view.js';
 
 const {
@@ -169,7 +175,66 @@ export const markdownView = {
     }
 
     const modeSwitch = buildModeSwitch((next) => setMode(next));
-    context.setTools([modeSwitch.element]);
+
+    // ── Header tools: zoom (#829) ─────────────────────────────────────────
+
+    const zoomEl = document.createElement('div');
+    zoomEl.className = 'pdf-tools md-zoom';
+    zoomEl.setAttribute('role', 'group');
+    const zoomOutButton = iconButton('pdf-tools__zoom-out', ZOOM_OUT_ICON);
+    const zoomValue = document.createElement('output');
+    zoomValue.className = 'pdf-tools__zoom';
+    zoomValue.setAttribute('aria-live', 'off');
+    const zoomInButton = iconButton('pdf-tools__zoom-in', ZOOM_IN_ICON);
+    zoomEl.append(zoomOutButton, zoomValue, zoomInButton);
+    let zoom = markdownZoom();
+
+    function applyToolLabels() {
+      zoomEl.setAttribute('aria-label', t('fileView.markdown.zoom.label'));
+      zoomOutButton.setAttribute('aria-label', t('fileView.markdown.zoom.out'));
+      zoomOutButton.title = zoomOutButton.getAttribute('aria-label');
+      zoomInButton.setAttribute('aria-label', t('fileView.markdown.zoom.in'));
+      zoomInButton.title = zoomInButton.getAttribute('aria-label');
+    }
+
+    function renderZoomTools() {
+      zoomValue.textContent = `${Math.round(zoom * 100)}\u00a0%`;
+      zoomOutButton.disabled = zoom <= MARKDOWN_ZOOM_STEPS[0] + 0.001;
+      zoomInButton.disabled = zoom >= MARKDOWN_ZOOM_STEPS.at(-1) - 0.001;
+    }
+
+    /**
+     * Zooms the document and keeps the reader's place: the scroll position
+     * moves by the share of the document it stood at, since the text wraps
+     * anew and the height does not grow in proportion.
+     */
+    function applyZoom() {
+      const before = previewEl.scrollHeight;
+      const share = before > 0 ? previewEl.scrollTop / before : 0;
+      articleEl.style.setProperty('--md-zoom', String(zoom));
+      if (share > 0) previewEl.scrollTop = Math.round(share * previewEl.scrollHeight);
+      fitTables();
+      renderZoomTools();
+    }
+
+    function setZoom(next) {
+      const applied = rememberMarkdownZoom(next, api);
+      if (applied === zoom) return;
+      zoom = applied;
+      applyZoom();
+    }
+
+    /** The header: the zoom while the preview is on show, and the switch. */
+    function showTools() {
+      context.setTools(mode === MODES.PREVIEW ? [modeSwitch.element, zoomEl] : [modeSwitch.element]);
+    }
+
+    zoomOutButton.addEventListener('click', () => setZoom(nextZoom(zoom, -1, MARKDOWN_ZOOM_STEPS)));
+    zoomInButton.addEventListener('click', () => setZoom(nextZoom(zoom, 1, MARKDOWN_ZOOM_STEPS)));
+
+    applyToolLabels();
+    applyZoom();
+    showTools();
 
     function showNotice(message) {
       clearTimeout(noticeTimer);
@@ -190,6 +255,7 @@ export const markdownView = {
       }
       previewEl.hidden = mode !== MODES.PREVIEW;
       sourceEl.hidden = mode !== MODES.SOURCE;
+      showTools();
     }
 
     /**
@@ -550,11 +616,23 @@ export const markdownView = {
       if (event.target.closest?.('a') && articleEl.contains(event.target)) event.preventDefault();
     }
 
+    /** ⌘+ / ⌘− / ⌘0 while the preview has focus, as in the image preview. */
+    function onKeyDown(event) {
+      if (event.altKey || !(event.metaKey || event.ctrlKey)) return;
+      if (event.key === '+' || event.key === '=') setZoom(nextZoom(zoom, 1, MARKDOWN_ZOOM_STEPS));
+      else if (event.key === '-') setZoom(nextZoom(zoom, -1, MARKDOWN_ZOOM_STEPS));
+      else if (event.key === '0') setZoom(1);
+      else return;
+      event.preventDefault();
+    }
+
     previewEl.addEventListener('click', onClick);
     previewEl.addEventListener('auxclick', onAuxClick);
+    previewEl.addEventListener('keydown', onKeyDown);
 
     const stopFollowingLocale = onLocaleChange(() => {
       modeSwitch.applyLabels();
+      applyToolLabels();
       void render({ keepImages: true });
     });
 
@@ -612,6 +690,7 @@ export const markdownView = {
         stopFollowingLocale();
         previewEl.removeEventListener('click', onClick);
         previewEl.removeEventListener('auxclick', onAuxClick);
+        previewEl.removeEventListener('keydown', onKeyDown);
         sourceInstance?.unmount();
       },
       /** Where the reader is, for the way back (#822). */

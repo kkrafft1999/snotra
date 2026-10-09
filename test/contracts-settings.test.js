@@ -442,3 +442,12 @@ test('a preset field only gets the control its options allow (#414)', () => {
   assert.equal(control('plain'), 'dropdown');
   assert.equal('toggleLabel' in views.find((v) => v.key === 'plain'), false);
 });
+
+test('the Markdown zoom is stored within 50 % and 300 %, and absent until chosen (#829)', () => {
+  assert.equal('markdownZoom' in normalizeUiPrefs({}), false);
+  assert.equal(normalizeUiPrefs({ markdownZoom: 1.25 }).markdownZoom, 1.25);
+  assert.equal(normalizeUiPrefs({ markdownZoom: 10 }).markdownZoom, 3);
+  assert.equal('markdownZoom' in normalizeUiPrefs({ markdownZoom: '2' }), false);
+  assert.deepEqual(normalizeUiPrefsPatch({ markdownZoom: 0.1 }), { markdownZoom: 0.5 });
+  assert.deepEqual(normalizeUiPrefsPatch({ markdownZoom: Number.NaN }), {});
+});
