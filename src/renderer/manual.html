@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; media-src 'none'; connect-src 'none'; base-uri 'none'; form-action 'none';">
+  <title>Snotra Agent</title>
+  <link rel="stylesheet" href="styles/inter.css">
+  <link rel="stylesheet" href="styles/tokens.css">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles/manual.css">
+</head>
+<body class="manual-body">
+  <div class="manual" id="manual">
+    <aside class="manual-side" id="manual-side">
+      <div class="manual-side__head">
+        <span class="manual-side__title" data-i18n="manual.window.title">User manual</span>
+        <span class="manual-side__version" id="manual-version"></span>
+        <button type="button" class="manual-side__close" id="manual-side-close" data-i18n-attr="aria-label:manual.contents.close;title:manual.contents.close">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <nav class="manual-nav" id="manual-nav" data-i18n-attr="aria-label:manual.nav.label"></nav>
+    </aside>
+    <div class="manual-scrim" id="manual-scrim" hidden></div>
+
+    <main class="manual-main">
+      <header class="manual-toolbar">
+        <div class="preview-history manual-history" role="group" data-i18n-attr="aria-label:manual.history.label">
+          <button type="button" class="preview-history__button" id="manual-back" disabled data-i18n-attr="aria-label:manual.history.back;title:manual.history.back">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M10 3.5 5.5 8 10 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button type="button" class="preview-history__button" id="manual-forward" disabled data-i18n-attr="aria-label:manual.history.forward;title:manual.history.forward">
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M6 3.5 10.5 8 6 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+        <button type="button" class="manual-contents-button" id="manual-contents" aria-expanded="false" aria-controls="manual-side" data-i18n-attr="aria-label:manual.contents.open">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span data-i18n="manual.contents.open">Contents</span>
+        </button>
+        <nav class="manual-crumbs" id="manual-crumbs" data-i18n-attr="aria-label:manual.breadcrumbs.label"></nav>
+        <div class="manual-toolbar__end">
+          <div class="pdf-tools manual-zoom" id="manual-zoom" role="group"></div>
+          <button type="button" class="manual-web" id="manual-web" data-i18n-attr="title:manual.web.title;aria-label:manual.web.open">
+            <span data-i18n="manual.web.open">Open on the web</span>
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true" focusable="false"><path d="M4.5 2.5h5v5M9.5 2.5 3 9" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="manual-scroll" id="manual-scroll">
+        <div class="manual-layout">
+          <article class="md-doc manual-doc" id="manual-doc"></article>
+          <nav class="manual-outline" id="manual-outline" aria-labelledby="manual-outline-title" hidden>
+            <p class="manual-outline__title" id="manual-outline-title" data-i18n="manual.outline.label">On this page</p>
+            <ul class="manual-outline__list" id="manual-outline-list"></ul>
+          </nav>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="vendor/marked.umd.js"></script>
+  <script src="vendor/purify.min.js"></script>
+  <script type="module" src="./manual/manual-app.js"></script>
+</body>
+</html>

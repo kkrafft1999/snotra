@@ -3,6 +3,7 @@ import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import remarkScreenshots from './src/plugins/remark-screenshots.mjs';
 import remarkSinceMarker from './src/plugins/remark-since-marker.mjs';
+import chapters from './chapters.json' with { type: 'json' };
 
 export default defineConfig({
   site: 'https://docs.snotra-ai.dev',
@@ -27,48 +28,19 @@ export default defineConfig({
       },
       // One group per chapter of #777; the pages inside are ordered by their
       // `sidebar.order`. Starlight finds the German page at the same path.
+      // The list lives in chapters.json, which the in-app manual reads as
+      // well (#790), so both show the same chapters in the same order.
       sidebar: [
-        { slug: 'index', label: 'Overview', translations: { de: 'Überblick' } },
         {
-          label: 'Getting started',
-          translations: { de: 'Erste Schritte' },
-          items: [{ autogenerate: { directory: 'getting-started' } }],
+          slug: chapters.overview.slug,
+          label: chapters.overview.label.en,
+          translations: { de: chapters.overview.label.de },
         },
-        {
-          label: 'Chatting',
-          translations: { de: 'Chatten' },
-          items: [{ autogenerate: { directory: 'chatting' } }],
-        },
-        {
-          label: 'The workspace',
-          translations: { de: 'Der Arbeitsbereich' },
-          items: [{ autogenerate: { directory: 'workspace' } }],
-        },
-        {
-          label: 'Modes, permissions and safety',
-          translations: { de: 'Modi, Freigaben und Sicherheit' },
-          items: [{ autogenerate: { directory: 'safety' } }],
-        },
-        {
-          label: 'Customising',
-          translations: { de: 'Anpassen' },
-          items: [{ autogenerate: { directory: 'customising' } }],
-        },
-        {
-          label: 'Updating',
-          translations: { de: 'Aktualisieren' },
-          items: [{ autogenerate: { directory: 'updating' } }],
-        },
-        {
-          label: 'Troubleshooting',
-          translations: { de: 'Hilfe bei Problemen' },
-          items: [{ autogenerate: { directory: 'troubleshooting' } }],
-        },
-        {
-          label: 'Reference',
-          translations: { de: 'Referenz' },
-          items: [{ autogenerate: { directory: 'reference' } }],
-        },
+        ...chapters.chapters.map(({ directory, label }) => ({
+          label: label.en,
+          translations: { de: label.de },
+          items: [{ autogenerate: { directory } }],
+        })),
       ],
       customCss: ['@fontsource/inter/400.css', '@fontsource/inter/600.css', './src/styles/theme.css'],
       components: {

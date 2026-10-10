@@ -21,6 +21,7 @@ Diese Kürzel wirken auch, wenn der Fokus im Chat-Eingabefeld liegt.
 | Zu der Datei zurück, die die Vorschau davor gezeigt hat [seit 1.18] | `Cmd+[` | `Alt+←` | *Ansicht › Zurück* |
 | Wieder vor [seit 1.18] | `Cmd+]` | `Alt+→` | *Ansicht › Vor* |
 | Eine Markdown- oder SVG-Datei zwischen Vorschau und Quelltext umschalten | `Cmd+Shift+M` | `Strg+Shift+M` | *Ansicht › Preview oder Quelltext* |
+| Dieses Handbuch öffnen [seit 1.19] | `F1` | `F1` | *Hilfe › Snotra-Handbuch* |
 
 Versteckte Dateien, *Zurück* und *Vor* folgen der **Taste**, nicht dem Zeichen darauf: `Cmd+Shift+.` funktioniert auch auf einer deutschen Tastatur, auf der `Shift+.` einen Doppelpunkt tippt, und `Cmd+[` und `Cmd+]` wirken auf den Tasten an ihrer Stelle. Die Einstellungen haben bewusst keinen Knopf im Fenster — siehe [Dich in den Einstellungen zurechtfinden](../../customising/settings/).
 

@@ -23,6 +23,15 @@ Dieses Handbuch erklärt, wie du damit arbeitest: wie du anfängst, wie du mit D
 - **Download:** Die aktuelle Version für macOS, Windows und Linux findest du auf der [Release-Seite](https://github.com/kkrafft1999/snotra/releases/latest).
 - **Probleme und Ideen:** Melde sie als [Issue auf GitHub](https://github.com/kkrafft1999/snotra/issues/new/choose).
 
+## Das Handbuch in Snotra
+
+[seit 1.19] *Hilfe › Snotra-Handbuch* — oder `F1` — öffnet dieses Handbuch in einem eigenen Fenster in Snotra. Es ist die Fassung, die mit deiner Version der App gekommen ist: Sie beschreibt genau das, was du installiert hast, und funktioniert ohne Internetverbindung. Sie folgt der Sprache und dem hellen oder dunklen Erscheinungsbild, das du für Snotra gewählt hast.
+
+- Links stehen die Kapitel; in einem schmalen Fenster liegen sie hinter *Inhalt*. *Auf dieser Seite* rechts springt zu einem Abschnitt.
+- `‹` und `›` gehen in den gelesenen Seiten zurück und vor, mit denselben Tasten wie in der Vorschau: `Cmd+[` und `Cmd+]` auf macOS, `Alt+←` und `Alt+→` unter Windows und Linux.
+- `−` und `+` — oder `Cmd` / `Strg` mit `+`, `−` und `0` — machen den Text größer oder kleiner.
+- *Im Web öffnen* zeigt dieselbe Seite auf docs.snotra-ai.dev, die immer das neueste Release beschreibt.
+
 ## Hilf mit, dieses Handbuch zu verbessern
 
-Unten auf jeder Seite gibt es den Link *Seite bearbeiten*. Das Handbuch liegt im selben Repository wie die App, auf Englisch und Deutsch, und Änderungen laufen wie jede andere Änderung über einen Pull Request.
+Auf docs.snotra-ai.dev gibt es unten auf jeder Seite den Link *Seite bearbeiten*. Das Handbuch liegt im selben Repository wie die App, auf Englisch und Deutsch, und Änderungen laufen wie jede andere Änderung über einen Pull Request.

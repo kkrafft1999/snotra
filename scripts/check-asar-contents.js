@@ -18,7 +18,8 @@ const path = require('path');
 const ROOT = path.resolve(__dirname, '..');
 
 // Pfade, die im Archiv zwingend vorhanden sein muessen.
-const REQUIRED_ENTRIES = ['/package.json', '/src/main/index.js', '/system-skills'];
+// The help window reads the bundled manual from here (#790).
+const REQUIRED_ENTRIES = ['/package.json', '/src/main/index.js', '/system-skills', '/src/manual/index.json'];
 
 // Top-Level-Eintraege, die nie ausgeliefert werden duerfen (Kernanliegen des
 // Issues) – unabhaengig davon, wie die Allowlist gerade formuliert ist.

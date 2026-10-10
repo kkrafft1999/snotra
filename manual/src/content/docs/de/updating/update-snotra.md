@@ -41,7 +41,7 @@ Bist du auf dem neuesten Stand, sagt der Dialog das und nennt deine Version.
 
 ## Was passiert
 
-Deine Chats, Einstellungen und Schlüssel bleiben, wo sie sind: Sie liegen im [Profilordner](../../getting-started/install/#was-passiert), den ein Update nicht anfasst.
+Deine Chats, Einstellungen und Schlüssel bleiben, wo sie sind: Sie liegen im [Profilordner](../../getting-started/install/#was-dann-passiert), den ein Update nicht anfasst.
 
 Snotra lädt nur die Datei, die GitHub für deine Installation nennt, und prüft sie, bevor etwas ersetzt wird: Der Download muss zur Prüfsumme passen, die GitHub dafür angibt, und unter macOS muss die App darin Snotra Agent in der angekündigten Version sein. Schlägt eine Prüfung fehl, wird die Datei verworfen, und die laufende Version bleibt unangetastet.
 

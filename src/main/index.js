@@ -1,5 +1,6 @@
 const {
-  app, ipcMain, dialog, safeStorage, Menu, shell, clipboard, protocol, session, WebContentsView, Notification,
+  app, BrowserWindow, ipcMain, dialog, safeStorage, Menu, shell, clipboard, protocol, session, WebContentsView,
+  Notification,
 } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
@@ -19,6 +20,8 @@ const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('./services/app
 const { claimSingleInstance, createStartupFailureHandler, holdQuitForPendingWrites } = require('./app-lifecycle');
 const { guardIpcMain } = require('./ipc/trusted-sender');
 const { HTML_PREVIEW_SCHEME_PRIVILEGES } = require('./services/html-preview-service');
+const { createManualService } = require('./services/manual-service');
+const { createManualWindowController } = require('./manual-window');
 
 // The storage identity first (#795): userData and the safeStorage key are
 // derived from the name the app has at this point, and stay with it. The app
@@ -42,6 +45,7 @@ protocol.registerSchemesAsPrivileged([HTML_PREVIEW_SCHEME_PRIVILEGES]);
 const DEFAULT_PROVIDER = 'openai';
 
 let application = null;
+let manualWindow = null;
 
 // One instance per userData folder (#507). A second launch brings the first
 // window to the front and ends before it has started anything.
@@ -53,6 +57,14 @@ const isPrimaryInstance = claimSingleInstance({
 });
 
 if (isPrimaryInstance) start();
+
+// Off macOS the app ends with its last window. The help window must not be
+// that window: without the app window there is no way back to it (#790).
+function watchMainWindow(window) {
+  window?.once('closed', () => {
+    if (process.platform !== 'darwin') manualWindow?.close();
+  });
+}
 
 function start() {
   app.whenReady().then(async () => {
@@ -84,6 +96,12 @@ function start() {
         onCheckForUpdates: () => { void application.runUpdateCheck({ silent: false }); },
         locale: application?.getAppLocale?.(),
         showHiddenFiles: application?.getShowHiddenFiles?.(),
+        onOpenManual: () => { manualWindow?.open(); },
+        routeHistoryStep: (direction, focusedWindow) => {
+          if (!manualWindow?.isManualWindow(focusedWindow)) return false;
+          manualWindow.stepHistory(direction);
+          return true;
+        },
       })));
     }
 
@@ -120,8 +138,26 @@ function start() {
       defaultProviderId: DEFAULT_PROVIDER,
       watchFile,
       realpathNative: realpathSync.native,
-      onAppLocaleChanged: () => applyApplicationMenu(),
+      onAppLocaleChanged: () => {
+        applyApplicationMenu();
+        manualWindow?.onLocaleChanged();
+      },
       onShowHiddenFilesChanged: syncHiddenFilesMenuItem,
+    });
+
+    // The help window with the manual that ships with the app (#790). It reads
+    // `src/manual/` alone and has channels of its own, see manual-window.js.
+    manualWindow = createManualWindowController({
+      BrowserWindow,
+      ipcMain,
+      shell,
+      app,
+      manual: createManualService({
+        fs: require('fs'),
+        path,
+        bundleDir: path.join(__dirname, '..', 'manual'),
+      }),
+      getLocale: () => application?.getAppLocale?.(),
     });
 
     // The stored language is only known once the preferences have been read.
@@ -134,7 +170,7 @@ function start() {
     // wieder aktiviert (Issue #68). So zeigt die Oberflaeche immer genau den
     // Ordner, der auch die Vertrauensgrenze der Tools ist.
 
-    createWindow();
+    watchMainWindow(createWindow());
 
     // Interpreter suchen und den Stand der Tool-Einstellungen uebernehmen
     // (Issues #63, #86). Bewusst nicht abgewartet: das Fenster soll nicht auf
@@ -147,7 +183,7 @@ function start() {
 
     app.on('activate', () => {
       if (!getMainWindow()) {
-        createWindow();
+        watchMainWindow(createWindow());
       }
     });
   })

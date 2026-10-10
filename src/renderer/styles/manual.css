@@ -1,0 +1,508 @@
+/* ── Help window (#790) ──────────────────────────────────────────────────────
+ * The user manual that ships with the app, layout A of the mockup: chapters on
+ * the left, the page in the middle, *On this page* on the right. Below 800 px
+ * the chapters fold into a *Contents* button and slide in over the page (the
+ * fallback to layout B). The page itself is a `.md-doc`, styled by styles.css
+ * exactly like a Markdown file in the preview.
+ */
+
+.manual-body {
+  background: var(--bg-primary);
+}
+
+.manual {
+  --manual-side-width: 272px;
+  --manual-outline-width: 200px;
+  --manual-toolbar-height: 52px;
+  display: grid;
+  grid-template-columns: var(--manual-side-width) minmax(0, 1fr);
+  height: 100%;
+}
+
+/* ── Sidebar ───────────────────────────────────────────────────────────── */
+
+.manual-side {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--ds-grey-bg);
+  border-right: 1px solid var(--ds-grey-divider);
+}
+
+.manual-side__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--manual-toolbar-height);
+  flex-shrink: 0;
+  padding: 0 12px 0 20px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.manual-side__title {
+  font-size: var(--ds-font-size-lg);
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--text-primary);
+}
+
+.manual-side__version {
+  font-size: var(--ds-font-size-xs);
+  font-variant-numeric: var(--ds-font-numeric-tabular);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--ds-radius-pill);
+  padding: 0 7px;
+  line-height: 18px;
+}
+
+.manual-side__close {
+  display: none;
+  margin-left: auto;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.manual-side__close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.manual-side__close:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.manual-nav {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 10px 24px;
+  font-size: var(--ds-font-size-md);
+}
+
+.manual-nav ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.manual-nav__chapter {
+  margin-top: 2px;
+}
+
+.manual-nav__chapter > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ds-touch-min);
+  padding: 4px 8px;
+  border-radius: var(--ds-radius-md);
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--text-primary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.manual-nav__chapter > summary::-webkit-details-marker {
+  display: none;
+}
+
+.manual-nav__chapter > summary::before {
+  content: '';
+  flex: none;
+  width: 10px;
+  height: 10px;
+  background: currentColor;
+  color: var(--text-secondary);
+  /* The chevron of the file tree, as a mask so that it takes the text colour. */
+  mask: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M3 1l4 4-4 4" stroke="black" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>') center / contain no-repeat;
+  transition: transform var(--ds-motion-fast);
+}
+
+.manual-nav__chapter[open] > summary::before {
+  transform: rotate(90deg);
+}
+
+.manual-nav__chapter > summary:hover,
+.manual-nav__link:hover {
+  background: var(--bg-hover);
+}
+
+.manual-nav__chapter > summary:focus-visible,
+.manual-nav__link:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: -2px;
+}
+
+.manual-nav__link,
+.manual-nav__link:visited {
+  display: block;
+  padding: 6px 8px 6px 26px;
+  border-radius: var(--ds-radius-md);
+  color: var(--text-secondary);
+  text-decoration: none;
+  line-height: var(--ds-line-height-base);
+}
+
+.manual-nav__link.manual-nav__top {
+  padding-left: 8px;
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--text-primary);
+}
+
+.manual-nav__link[aria-current='page'] {
+  background: var(--ds-blue-soft);
+  color: var(--ds-blue-strong);
+  font-weight: var(--ds-font-weight-medium);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+/* ── Main column and toolbar ───────────────────────────────────────────── */
+
+.manual-main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.manual-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--manual-toolbar-height);
+  flex-shrink: 0;
+  padding: 0 16px 0 12px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.manual-contents-button {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  height: var(--ds-touch-min);
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--ds-radius-md);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--ds-font-size-md);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.manual-contents-button:hover {
+  background: var(--bg-hover);
+}
+
+.manual-contents-button[aria-expanded='true'] {
+  border-color: var(--ds-blue-border);
+  background: var(--ds-blue-soft);
+  color: var(--ds-blue-strong);
+}
+
+.manual-contents-button:focus-visible,
+.manual-web:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.manual-crumbs {
+  flex: 1;
+  min-width: 0;
+}
+
+.manual-crumbs ol {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.manual-crumbs li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.manual-crumbs li:not(:last-child) {
+  flex-shrink: 1;
+}
+
+.manual-crumbs li:last-child {
+  flex-shrink: 0;
+  max-width: 100%;
+}
+
+.manual-crumbs li + li::before {
+  content: '›';
+  padding: 0 6px;
+}
+
+.manual-crumbs [aria-current='page'] {
+  color: var(--text-primary);
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.manual-toolbar__end {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.manual-web {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: var(--ds-touch-min);
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--ds-radius-md);
+  background: transparent;
+  color: var(--ds-blue-strong);
+  font: inherit;
+  font-size: var(--ds-font-size-md);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.manual-web:hover {
+  background: var(--ds-blue-soft);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* ── The page ──────────────────────────────────────────────────────────── */
+
+.manual-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: var(--bg-primary);
+}
+
+.manual-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 40px;
+  max-width: calc(760px + var(--manual-outline-width) + 40px);
+  margin: 0 auto;
+  padding: 32px 40px 64px;
+}
+
+.manual-doc {
+  min-width: 0;
+  max-width: 760px;
+  font-size: var(--ds-font-size-lg);
+}
+
+.manual-doc h1 {
+  font-size: 28px;
+  line-height: var(--ds-line-height-tight);
+  margin-bottom: 8px;
+  outline: none;
+}
+
+/* The heading takes the focus after a page change or a jump to a section, so
+ * that a screen reader starts reading there and Tab continues from there. It
+ * is a reading position, not a control: no ring. */
+.manual-doc h1:focus,
+.manual-doc [data-md-anchor]:focus {
+  outline: none;
+}
+
+.manual-doc [data-md-anchor] {
+  scroll-margin-top: 16px;
+}
+
+.manual-doc .manual-lead {
+  margin: 0 0 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+  color: var(--text-secondary);
+  font-size: var(--ds-font-size-lg);
+}
+
+.manual-shot {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--ds-radius-md);
+  box-shadow: 0 0 0 1px var(--ds-grey-divider);
+}
+
+.manual-shot:not([src]) {
+  aspect-ratio: 16 / 10;
+  width: 100%;
+  background: var(--ds-grey-card);
+}
+
+.manual-shot-missing {
+  display: inline-block;
+  padding: 8px 12px;
+  border: 1px dashed var(--ds-grey-control-border);
+  border-radius: var(--ds-radius-md);
+  color: var(--text-secondary);
+  font-size: var(--ds-font-size-md);
+}
+
+.manual-since {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 0 7px;
+  border: 1px solid var(--ds-blue-border);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-blue-soft);
+  color: var(--ds-blue-strong);
+  font-size: var(--ds-font-size-xs);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: 18px;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
+.manual-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding-top: 24px;
+  color: var(--text-secondary);
+}
+
+/* ── On this page ──────────────────────────────────────────────────────── */
+
+.manual-outline {
+  display: none;
+  position: sticky;
+  top: 32px;
+  align-self: start;
+  max-height: calc(100vh - var(--manual-toolbar-height) - 64px);
+  overflow-y: auto;
+  font-size: var(--ds-font-size-md);
+}
+
+.manual-outline__title {
+  margin: 4px 0 10px;
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.manual-outline__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-left: 1px solid var(--ds-grey-divider);
+}
+
+.manual-outline__link,
+.manual-outline__link:visited {
+  display: block;
+  margin-left: -1px;
+  padding: 4px 0 4px 12px;
+  border-left: 2px solid transparent;
+  color: var(--text-secondary);
+  text-decoration: none;
+  line-height: var(--ds-line-height-base);
+}
+
+.manual-outline__link:hover {
+  color: var(--text-primary);
+}
+
+.manual-outline__link[aria-current='location'] {
+  border-left-color: var(--accent);
+  color: var(--ds-blue-strong);
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.manual-outline__link:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: 0;
+}
+
+@media (min-width: 1180px) {
+  .manual-layout {
+    grid-template-columns: minmax(0, 760px) var(--manual-outline-width);
+    justify-content: center;
+  }
+
+  .manual-outline:not([hidden]) {
+    display: block;
+  }
+}
+
+/* ── Narrow: the chapters fold into *Contents* (layout B) ─────────────── */
+
+@media (max-width: 799px) {
+  .manual {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .manual-side {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 20;
+    width: min(var(--manual-side-width), 88vw);
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform var(--ds-motion-medium) ease, visibility 0s linear var(--ds-motion-medium);
+    box-shadow: var(--ds-overlay-shadow);
+  }
+
+  .manual--nav-open .manual-side {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--ds-motion-medium) ease;
+  }
+
+  .manual-side__close {
+    display: inline-flex;
+  }
+
+  .manual-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    background: var(--ds-backdrop);
+  }
+
+  .manual-contents-button {
+    display: inline-flex;
+  }
+
+  .manual-layout {
+    padding: 24px 20px 48px;
+  }
+}
+
+@media (max-width: 599px) {
+  .manual-contents-button span,
+  .manual-web span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .manual-side,
+  .manual--nav-open .manual-side {
+    transition: none;
+  }
+}

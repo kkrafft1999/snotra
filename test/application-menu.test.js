@@ -154,6 +154,37 @@ test('Help opens the manual in the language of the UI, GitHub stays a second ent
   assert.equal(MANUAL_URLS.de, 'https://docs.snotra-ai.dev/de/');
 });
 
+test('Help › User manual opens the help window with the bundled manual, F1 included (#790)', () => {
+  const calls = [];
+  const { template, opened } = buildTemplate('darwin', { onOpenManual: () => calls.push('manual') });
+  const item = menuNamed(template, 'Help').submenu.find((entry) => entry.id === MENU_ITEM_IDS.MANUAL);
+  assert.equal(item.label, 'Snotra User Manual');
+  assert.equal(item.accelerator, 'F1');
+  item.click();
+  assert.deepEqual(calls, ['manual']);
+  assert.deepEqual(opened, [], 'the web stays the fallback without a help window');
+});
+
+test('View › Back and Forward step the help window when it has the focus (#790)', () => {
+  const routed = [];
+  const helpWindow = { id: 'help' };
+  const { template, sent } = buildTemplate('darwin', {
+    routeHistoryStep: (direction, focused) => {
+      if (focused !== helpWindow) return false;
+      routed.push(direction);
+      return true;
+    },
+  });
+  const view = menuNamed(template, 'View').submenu;
+  const back = view.find((entry) => entry.label === 'Back');
+  const forward = view.find((entry) => entry.label === 'Forward');
+  back.click(null, helpWindow);
+  forward.click(null, helpWindow);
+  back.click(null, { id: 'main' });
+  assert.deepEqual(routed, ['back', 'forward']);
+  assert.deepEqual(sent, [PUSH.UI_PREVIEW_BACK]);
+});
+
 test('the menu follows the chosen language (epic #277)', () => {
   const { template: en } = buildTemplate('darwin');
   assert.deepEqual(en.map((m) => m.label), ['Snotra AI', 'File', 'Edit', 'View', 'Window', 'Help']);

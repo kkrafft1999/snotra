@@ -23,6 +23,15 @@ This manual explains how to use it: how to get started, how to work with files a
 - **Download:** the latest release for macOS, Windows and Linux is on the [releases page](https://github.com/kkrafft1999/snotra/releases/latest).
 - **Problems and ideas:** report them as an [issue on GitHub](https://github.com/kkrafft1999/snotra/issues/new/choose).
 
+## The manual inside Snotra
+
+[since 1.19] *Help › Snotra User Manual* — or `F1` — opens this manual in a window of its own inside Snotra. It is the copy that came with your version of the app, so it describes exactly what you have installed and works without an internet connection. It follows the language and the light or dark theme you chose for Snotra.
+
+- The chapters are on the left; on a narrow window they move behind *Contents*. *On this page* on the right jumps to a section.
+- `‹` and `›` go back and forward through the pages you read, with the same keys as in the preview: `Cmd+[` and `Cmd+]` on macOS, `Alt+←` and `Alt+→` on Windows and Linux.
+- `−` and `+` — or `Cmd` / `Ctrl` with `+`, `−` and `0` — make the text larger or smaller.
+- *Open on the web* shows the same page on docs.snotra-ai.dev, which always describes the latest release.
+
 ## Help improve this manual
 
-Every page has an *Edit page* link at the bottom. The manual lives in the same repository as the app, in English and German, and changes go through a pull request like any other change.
+On docs.snotra-ai.dev, every page has an *Edit page* link at the bottom. The manual lives in the same repository as the app, in English and German, and changes go through a pull request like any other change.

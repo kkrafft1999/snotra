@@ -1,0 +1,13 @@
+{
+  "overview": { "slug": "index", "label": { "en": "Overview", "de": "Überblick" } },
+  "chapters": [
+    { "directory": "getting-started", "label": { "en": "Getting started", "de": "Erste Schritte" } },
+    { "directory": "chatting", "label": { "en": "Chatting", "de": "Chatten" } },
+    { "directory": "workspace", "label": { "en": "The workspace", "de": "Der Arbeitsbereich" } },
+    { "directory": "safety", "label": { "en": "Modes, permissions and safety", "de": "Modi, Freigaben und Sicherheit" } },
+    { "directory": "customising", "label": { "en": "Customising", "de": "Anpassen" } },
+    { "directory": "updating", "label": { "en": "Updating", "de": "Aktualisieren" } },
+    { "directory": "troubleshooting", "label": { "en": "Troubleshooting", "de": "Hilfe bei Problemen" } },
+    { "directory": "reference", "label": { "en": "Reference", "de": "Referenz" } }
+  ]
+}
