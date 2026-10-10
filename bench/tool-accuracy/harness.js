@@ -33,9 +33,11 @@ const { LIMITS } = src('shared/limits');
 const { wrapRegistryForArm } = require('./arms');
 
 const FIXTURE = path.join(__dirname, 'fixture');
-// Stored under another name so that it does not hide the fixture's own files
-// from git; restored when the fixture is copied.
-const FIXTURE_RENAMES = { 'dot-gitignore': '.gitignore' };
+// Stored under other names and restored when the fixture is copied: a real
+// .gitignore would hide the fixture's own files from git, and a real
+// package.json would be scanned by Dependabot for packages that are never
+// installed (#841).
+const FIXTURE_RENAMES = { 'dot-gitignore': '.gitignore', 'dot-package.json': 'package.json' };
 
 const STUB_RESULTS = {
   run_python: () => ({

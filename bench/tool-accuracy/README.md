@@ -50,8 +50,10 @@ answer is *no* call (or no write, no command, no network); without them
 over-triggering of the write tools would never show.
 
 Every task runs in a fresh copy of [`fixture/`](fixture), a small Node project
-with hidden files, a `.gitignore` and ignored folders. Its own `.gitignore` is
-stored as `dot-gitignore` so it does not hide the fixture from git.
+with hidden files, a `.gitignore` and ignored folders. Two of its files are
+stored under other names and restored in the copy: `dot-gitignore`, so it does
+not hide the fixture from git, and `dot-package.json`, so Dependabot does not
+raise alerts for packages the fixture names but never installs (#841).
 
 ## How the engine is wired
 
