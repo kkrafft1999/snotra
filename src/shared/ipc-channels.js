@@ -49,6 +49,8 @@ const REQUEST_CHANNELS = Object.freeze({
   FS_LIST_WORKSPACE_PATHS: 'fs:listWorkspacePaths',
   /** Natives Kontextmenü für Datei oder Ordner im Dateibaum (Issues #58, #120). */
   FS_SHOW_FILE_CONTEXT_MENU: 'fs:showFileContextMenu',
+  /** "Reveal" from the information dialog (#849); main checks the path against the workspace. */
+  FS_REVEAL_ITEM: 'fs:revealItem',
   /** The entries behind ‹ or › in the preview header, as a native menu (#822). */
   UI_SHOW_PREVIEW_HISTORY_MENU: 'ui:showPreviewHistoryMenu',
   /**
@@ -229,6 +231,12 @@ const PUSH_CHANNELS = Object.freeze({
   FS_CLEAR_AGENT_MARK: 'fs:clear-agent-mark',
   /** "Show changes" in the context menu of a file (#348). */
   FS_SHOW_CHANGES: 'fs:show-changes',
+  /**
+   * "Information" in the context menu (#849): `{ itemPath, name, path, kind,
+   * type, summary, details, revealLabel }`, already worded in the interface
+   * language; the renderer draws its own dialog from it.
+   */
+  FS_SHOW_INFO: 'fs:show-info',
   /**
    * What happened in an HTML page (#479): `{ id, type, … }` with type
    * `blocked` (the refused requests so far), `open-file` (a link to another

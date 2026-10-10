@@ -242,6 +242,13 @@ function registerFsHandlers({
             }
           }
         : null,
+      // "Information" in Snotra's own dialog (#849). Whether it reached a
+      // window decides whether the native dialog stands in.
+      onShowInfo: (info) => {
+        if (!PUSH || !win || win.isDestroyed()) return false;
+        win.webContents.send(PUSH.FS_SHOW_INFO, { ...info, itemPath: filePath });
+        return true;
+      },
       // Nach dem Löschen (Papierkorb) den Baum im Renderer nachziehen.
       onDeleted: (deletedPath) => {
         if (PUSH && win && !win.isDestroyed()) {
@@ -249,6 +256,16 @@ function registerFsHandlers({
         }
       },
     });
+    return { ok: true };
+  });
+
+  // "Reveal" from the information dialog (#849): the same check as the menu
+  // above, so the renderer can only point at what lies in the workspace.
+  ipcMain.handle(REQ.FS_REVEAL_ITEM, async (_event, filePath) => {
+    if (!fileContextMenu?.reveal) return { error: createTranslator(getLocale())('import.noContextMenu') };
+    const { absPath, error } = await filesystem.resolveCheckedWorkspacePath(filePath);
+    if (error) return { error };
+    fileContextMenu.reveal(absPath);
     return { ok: true };
   });
 }

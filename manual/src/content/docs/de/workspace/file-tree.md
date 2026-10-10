@@ -27,7 +27,7 @@ Klick mit der rechten Maustaste auf eine Zeile — oder mit `Cmd` / `Strg` gedr�
 
 - ***Öffnen*** öffnet die Datei in der App, die dein System dafür nimmt. Bei einem Programm oder Skript — `setup.bat`, einer `.app`, einer ausführbar markierten Datei — heißt Öffnen Ausführen, mit deinen Rechten und außerhalb von Snotras Sandbox, deshalb fragt Snotra vorher, mit *Abbrechen* vorausgewählt.
 - ***Im Finder anzeigen*** (*Im Explorer anzeigen* unter Windows, *Im Dateimanager anzeigen* unter Linux).
-- ***Informationen*** zeigt Name, vollständigen Pfad, Typ, Größe, die Datumsangaben und die App, die *Öffnen* nehmen würde; *Pfad kopieren* legt den Pfad in die Zwischenablage. Bei einem Ordner zählt es die Einträge direkt darin.
+- ***Informationen*** öffnet ein kleines Fenster zum Eintrag: oben der Name mit Typ und Größe, darunter der vollständige Pfad, dann die Datumsangaben und die App, die *Öffnen* nehmen würde. Der Knopf neben dem Pfad legt ihn in die Zwischenablage; ***Im Finder anzeigen*** unten zeigt den Eintrag in seinem Ordner. Bei einem Ordner zählt es die Einträge direkt darin. `Esc` oder *OK* schließt das Fenster. [seit 1.19]
 - ***Neue Datei…***, ***Neuer Ordner…*** und ***Umbenennen…*** — siehe [Anlegen, umbenennen, verschieben und löschen](../manage-files/).
 - ***Löschen…*** verschiebt die Datei oder den Ordner in den Papierkorb, nachdem du es bestätigt hast.
 - ***Änderungen anzeigen*** und ***Markierung entfernen*** bei Dateien, die Snotra geändert hat — siehe unten.

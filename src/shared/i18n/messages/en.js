@@ -1897,6 +1897,15 @@ module.exports = {
   'contextMenu.delete.cancel': 'Cancel',
   'contextMenu.delete.failedTitle': 'Delete failed',
   'contextMenu.info.unavailable': 'Information not available',
+  // Snotra's own information dialog (#849); the facts in it come from main.
+  'fileInfoDialog.location': 'Location',
+  'fileInfoDialog.details': 'Details',
+  'fileInfoDialog.copyPath': 'Copy path',
+  'fileInfoDialog.copied': 'Path copied',
+  'fileInfoDialog.copyFailed': 'The path could not be copied.',
+  'fileInfoDialog.revealFailed': 'The folder could not be shown.',
+  'fileInfoDialog.ok': 'OK',
+  'fileInfoDialog.close': 'Close dialog',
   // Validation messages from the contract layer (issue #293). They arise in
   // the main process and are shown in the renderer, so they travel as a key
   // plus its placeholders and are put into words here.

@@ -1905,6 +1905,15 @@ module.exports = {
   'contextMenu.delete.cancel': 'Abbrechen',
   'contextMenu.delete.failedTitle': 'Löschen fehlgeschlagen',
   'contextMenu.info.unavailable': 'Informationen nicht verfügbar',
+  // Snotra's own information dialog (#849); the facts in it come from main.
+  'fileInfoDialog.location': 'Ort',
+  'fileInfoDialog.details': 'Details',
+  'fileInfoDialog.copyPath': 'Pfad kopieren',
+  'fileInfoDialog.copied': 'Pfad kopiert',
+  'fileInfoDialog.copyFailed': 'Der Pfad ließ sich nicht kopieren.',
+  'fileInfoDialog.revealFailed': 'Der Ordner ließ sich nicht anzeigen.',
+  'fileInfoDialog.ok': 'OK',
+  'fileInfoDialog.close': 'Dialog schließen',
   // Validierungsmeldungen aus der Contract-Schicht (Issue #293).
   // Connection errors in the MCP status (#338). The model reads the English
   // sentences written next to them in mcp-stdio-transport.js, not these.

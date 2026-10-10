@@ -754,10 +754,18 @@ redraw the field away; the open folder's own menu, from the empty space below
 the rows, offers "New" but neither rename nor delete.
 
 The information behind it lives in `services/file-info.js` (issue
-[#123](https://github.com/kkrafft1999/snotra/issues/123)) and returns a field
-list that the menu shows as a `dialog.showMessageBox` — the same make as the
-delete confirmation, no separate renderer code. Three decisions in it are
-deliberate:
+[#123](https://github.com/kkrafft1999/snotra/issues/123)) and returns the
+facts already worded in the interface language. Since
+[#849](https://github.com/kkrafft1999/snotra/issues/849) the menu pushes them as
+`fs:show-info` (`{ itemPath, name, path, kind, type, summary, details,
+revealLabel }`) and the renderer draws Snotra's own dialog
+(`components/FileInfoDialog.js`): a header card with name, type and size, the
+path with a copy button, the rest as a list. Copying goes over
+`shell:writeClipboardText`; "Reveal" comes back as `fs:revealItem`, which binds
+the path to the workspace like every other fs channel before it reaches
+`shell.showItemInFolder`. Only when no window can take the push does the old
+`dialog.showMessageBox` with the flat field list stand in. Three decisions in
+the information itself are deliberate:
 
 - **Folders are not counted recursively.** What is shown is the number of
   *direct* entries; summing up everything below can become arbitrarily expensive

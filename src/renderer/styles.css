@@ -7265,6 +7265,226 @@ select.modal-input {
   outline: none;
 }
 
+/* ── File information (#849) ──────────────────────────────────────────────
+ * The file's own header card instead of a title bar: an icon tile, the name
+ * as the heading and type plus size under it. The path follows in a box of
+ * its own — monospace, breaking after the separators — with the copy button
+ * inside, the remaining fields as an aligned two-column list below. */
+.file-info-dialog[tabindex='-1']:focus-visible {
+  outline: none;
+}
+
+.file-info-dialog__hero {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+  padding: 20px 16px 18px 24px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.file-info-dialog__tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--ds-blue-border);
+  border-radius: 6px;
+  background: var(--ds-blue-soft);
+  color: var(--ds-blue);
+}
+
+.file-info-dialog__icon--folder,
+.file-info-dialog--folder .file-info-dialog__icon--file {
+  display: none;
+}
+
+.file-info-dialog--folder .file-info-dialog__icon--folder {
+  display: block;
+}
+
+.file-info-dialog__heading {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.file-info-dialog__name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.file-info-dialog__summary {
+  margin: 2px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.file-info-dialog__summary:empty {
+  display: none;
+}
+
+.file-info-dialog__hero .modal-dialog__close {
+  align-self: flex-start;
+}
+
+.file-info-dialog__body {
+  padding: 18px 24px 20px;
+}
+
+.file-info-dialog__eyebrow {
+  margin: 0 0 8px;
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.file-info-dialog__path {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: 6px;
+  background: var(--ds-grey-card);
+}
+
+.file-info-dialog__path-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 20px;
+  color: var(--text-primary);
+  background: none;
+  overflow-wrap: break-word;
+  user-select: text;
+}
+
+.file-info-dialog__copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted-strong);
+  cursor: pointer;
+  transition:
+    background var(--ds-motion-fast),
+    color var(--ds-motion-fast),
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
+}
+
+.file-info-dialog__copy:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.file-info-dialog__copy:active {
+  background: var(--bg-active);
+  transform: scale(0.97);
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+.file-info-dialog__check-icon,
+.file-info-dialog__copy--done .file-info-dialog__copy-icon {
+  display: none;
+}
+
+.file-info-dialog__copy--done .file-info-dialog__check-icon {
+  display: block;
+}
+
+.file-info-dialog__copy--done,
+.file-info-dialog__copy--done:hover {
+  color: var(--ds-blue-strong);
+}
+
+.file-info-dialog__details {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: 20px;
+  row-gap: 10px;
+  margin: 0;
+}
+
+.file-info-dialog__details dt {
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-secondary);
+}
+
+.file-info-dialog__details dd {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.file-info-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+}
+
+.file-info-dialog__secondary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.file-info-dialog__reveal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.file-info-dialog__reveal.hidden {
+  display: none;
+}
+
+.file-info-dialog__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ds-blue-strong);
+}
+
+.file-info-dialog__status--error {
+  color: var(--ds-error);
+}
+
+.file-info-dialog__status:empty {
+  display: none;
+}
+
 /* Der leise Knopf bekommt eine eigene Zeile ueber den beiden anderen und
    steht dort links: ein Angebot, keine Empfehlung. Drei Knoepfe nebeneinander
    passen in 480px nicht zuverlaessig — „Release-Seite öffnen" allein misst

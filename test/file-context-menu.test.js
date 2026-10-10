@@ -322,6 +322,65 @@ test('„Informationen“: ein abstürzender Dialog reißt den Main-Prozess nich
   assert.match(warnings.join(' '), /Fenster ist weg/);
 });
 
+test('Information goes to Snotra\'s own dialog when a window takes it (#849)', async () => {
+  const { shell, Menu, calls, makeDialog, clipboard, makeFileInfo } = createFakes();
+  const presented = [];
+  const menu = createFileContextMenu({
+    Menu,
+    shell,
+    dialog: makeDialog(0),
+    clipboard,
+    platform: 'darwin',
+    fileInfo: makeFileInfo({
+      name: 'notes.md',
+      path: '/ws/notes.md',
+      fields: [['Name', 'notes.md']],
+      kind: 'file',
+      type: 'File (.md)',
+      summary: '2.2 KB',
+      details: [['Size', '2.2 KB (2,296 bytes)']],
+    }),
+  });
+  menu.buildTemplate('/ws/notes.md', {
+    onShowInfo: (info) => { presented.push(info); return true; },
+  })[2].click();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(presented, [{
+    name: 'notes.md',
+    path: '/ws/notes.md',
+    kind: 'file',
+    type: 'File (.md)',
+    summary: '2.2 KB',
+    details: [['Size', '2.2 KB (2,296 bytes)']],
+    revealLabel: 'Reveal in Finder',
+  }]);
+  assert.deepEqual(calls.dialogs, [], 'no native dialog on top of it');
+});
+
+test('Information falls back to the native dialog when no window takes it (#849)', async () => {
+  const { shell, Menu, calls, makeDialog, clipboard, makeFileInfo } = createFakes();
+  const menu = createFileContextMenu({
+    Menu, shell, dialog: makeDialog(0), clipboard, platform: 'darwin', fileInfo: makeFileInfo(),
+  });
+  const result = await menu.showInfo('/ws/a.txt', null, { present: () => false });
+  assert.deepEqual(result, { shown: true });
+  assert.equal(calls.dialogs[0].type, 'info');
+});
+
+test('Information needs no native dialog object when the window shows it (#849)', async () => {
+  const { shell, Menu, makeFileInfo } = createFakes();
+  const menu = createFileContextMenu({ Menu, shell, platform: 'linux', fileInfo: makeFileInfo() });
+  const result = await menu.showInfo('/ws/a.txt', null, { present: () => true });
+  assert.deepEqual(result, { presented: true });
+});
+
+test('reveal hands the path to shell.showItemInFolder (#849)', () => {
+  const { shell, Menu, calls } = createFakes();
+  const menu = createFileContextMenu({ Menu, shell, platform: 'darwin' });
+  menu.reveal('/ws/a.txt');
+  assert.deepEqual(calls.showItemInFolder, ['/ws/a.txt']);
+});
+
 test('"Remove mark" appears only for a marked row and hands the path back (#347)', () => {
   const { shell, Menu } = createFakes();
   const menu = createFileContextMenu({ Menu, shell, platform: 'darwin' });
