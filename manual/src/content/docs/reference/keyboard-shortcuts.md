@@ -21,6 +21,7 @@ These work with the focus in the chat input as well.
 | Go back to the file the preview showed before [since 1.18] | `Cmd+[` | `Alt+←` | *View › Back* |
 | Go forward again [since 1.18] | `Cmd+]` | `Alt+→` | *View › Forward* |
 | Switch a Markdown or SVG file between its preview and its source | `Cmd+Shift+M` | `Ctrl+Shift+M` | *View › Preview or Source* |
+| Open this manual [since 1.19] | `F1` | `F1` | *Help › Snotra User Manual* |
 
 Hidden files, *Back* and *Forward* follow the **key**, not the character on it: `Cmd+Shift+.` works on a German keyboard, where `Shift+.` types a colon, and `Cmd+[` and `Cmd+]` work on the keys in their place. The settings have no button in the window on purpose — see [Find your way around the settings](../../customising/settings/).
 

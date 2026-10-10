@@ -59,6 +59,8 @@ const IDENTICAL_ON_PURPOSE = new Set([
   'settings.models.connection',
   // A remembered command in the rule list: placeholders only (#121).
   'permissions.rule.text.command',
+  // "Version" is the German word too; the rest is the number (#790).
+  'manual.version',
 ]);
 
 test('no value is empty, and none was left identical in both languages by accident', () => {

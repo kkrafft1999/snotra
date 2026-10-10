@@ -34,6 +34,9 @@ const ELECTRON_ENTRY_POINTS = new Map([
   ['preload/index.js', 'braucht contextBridge aus dem Preload-Kontext'],
   ['preload/bundle.js', 'erzeugtes Preload-Bundle, ebenfalls contextBridge'],
   ['renderer/app.js', 'verdrahtet die Oberflaeche beim Laden, braucht window.electronAPI'],
+  ['preload/manual.js', 'preload of the help window (#790), needs contextBridge'],
+  ['preload/manual-bundle.js', 'generated bundle of that preload, contextBridge as well'],
+  ['renderer/manual/manual-app.js', 'wires the help window on load, needs window.manualApi and localStorage'],
 ]);
 
 /** Alle .js-Dateien unter `base`, als Pfade relativ zu `base` mit "/" als Trenner. */

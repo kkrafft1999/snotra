@@ -17,6 +17,9 @@ src/renderer/vendor/*.js
 src/renderer/vendor/pdfjs/
 src/renderer/vendor/prism/
 src/preload/bundle.js
+src/preload/manual-bundle.js
+# The user manual for the help window, copied from manual/ (#790)
+src/manual/
 
 # Auto-generated ESM-Bundle der Contract-Schicht fuer den Renderer
 src/renderer/generated/

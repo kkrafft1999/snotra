@@ -19,6 +19,20 @@ function isTrustedRendererUrl(rawUrl) {
   );
 }
 
+/** The help window's page (#790). It gets the manual channels and nothing else. */
+const MANUAL_URL = pathToFileURL(path.resolve(__dirname, '..', 'renderer', 'manual.html')).href;
+
+function isManualRendererUrl(rawUrl) {
+  if (typeof rawUrl !== 'string' || rawUrl === '') {
+    return false;
+  }
+  return (
+    rawUrl === MANUAL_URL ||
+    rawUrl.startsWith(`${MANUAL_URL}#`) ||
+    rawUrl.startsWith(`${MANUAL_URL}?`)
+  );
+}
+
 function createRendererNavigationHandler() {
   return (event, url) => {
     if (!isTrustedRendererUrl(url)) {
@@ -64,5 +78,7 @@ module.exports = {
   createPermissionRequestHandler,
   createRendererNavigationHandler,
   isTrustedRendererUrl,
+  isManualRendererUrl,
   RENDERER_URL,
+  MANUAL_URL,
 };

@@ -25,7 +25,11 @@ function createSettingsItem(openSettings, t) {
   };
 }
 
-/** The user manual (#777); the German pages live under `/de/`. */
+/**
+ * The user manual on the web (#777); the German pages live under `/de/`. Since
+ * #790 *Help › User manual* opens the copy that ships with the app; the web
+ * stays the way without a bundled manual (`onOpenManual` not given).
+ */
 const MANUAL_URLS = Object.freeze({
   en: 'https://docs.snotra-ai.dev/',
   de: 'https://docs.snotra-ai.dev/de/',
@@ -34,6 +38,7 @@ const MANUAL_URLS = Object.freeze({
 /** Ids of the items the main process changes after the menu is built. */
 const MENU_ITEM_IDS = Object.freeze({
   SHOW_HIDDEN_FILES: 'view.showHiddenFiles',
+  MANUAL: 'help.manual',
 });
 
 /**
@@ -50,6 +55,8 @@ function createApplicationMenuTemplate({
   onCheckForUpdates,
   locale,
   showHiddenFiles = false,
+  onOpenManual = null,
+  routeHistoryStep = null,
 }) {
   const t = createTranslator(locale);
   // Auf macOS muss das ERSTE Submenu den App-Namen als label tragen — das ist
@@ -147,13 +154,19 @@ function createApplicationMenuTemplate({
         label: t('menu.view.back'),
         accelerator: isMac ? 'Cmd+[' : 'Alt+Left',
         registerAccelerator: false,
-        click: () => send(PUSH.UI_PREVIEW_BACK),
+        click: (_item, focusedWindow) => {
+          if (routeHistoryStep?.('back', focusedWindow)) return;
+          send(PUSH.UI_PREVIEW_BACK);
+        },
       },
       {
         label: t('menu.view.forward'),
         accelerator: isMac ? 'Cmd+]' : 'Alt+Right',
         registerAccelerator: false,
-        click: () => send(PUSH.UI_PREVIEW_FORWARD),
+        click: (_item, focusedWindow) => {
+          if (routeHistoryStep?.('forward', focusedWindow)) return;
+          send(PUSH.UI_PREVIEW_FORWARD);
+        },
       },
       // Issue #344: switches a Markdown file in the preview between the
       // rendered text and its source. Not Cmd/Ctrl+Shift+V, the shortcut of
@@ -196,8 +209,13 @@ function createApplicationMenuTemplate({
     role: 'help',
     submenu: [
       {
+        id: MENU_ITEM_IDS.MANUAL,
         label: t('menu.help.manual'),
-        click: () => shell.openExternal(MANUAL_URLS[locale] ?? MANUAL_URLS.en),
+        accelerator: 'F1',
+        click: () => {
+          if (onOpenManual) onOpenManual();
+          else shell.openExternal(MANUAL_URLS[locale] ?? MANUAL_URLS.en);
+        },
       },
       { type: 'separator' },
       {

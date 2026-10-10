@@ -17,6 +17,15 @@ esbuild.buildSync({
   external: ['electron'],
   outfile: path.join(root, 'src', 'preload', 'bundle.js'),
 });
+// The help window's preload (#790), for the same reason: it shares the channel
+// names with main through `src/shared/manual-channels.js`.
+esbuild.buildSync({
+  entryPoints: [path.join(root, 'src', 'preload', 'manual.js')],
+  bundle: true,
+  platform: 'node',
+  external: ['electron'],
+  outfile: path.join(root, 'src', 'preload', 'manual-bundle.js'),
+});
 
 // ── Contract-Schicht als ESM fuer den Renderer bereitstellen ────────────────
 // Die Verträge (src/shared/contracts, CommonJS) sind die Single Source of Truth
@@ -168,3 +177,10 @@ fs.copyFileSync(
   path.join(interSrc, 'LICENSE'),
   path.join(fontsDir, 'inter-LICENSE.txt')
 );
+
+// ── The user manual for the help window (#790) ─────────────────────────────
+// Pages, chapter list and screenshots from `manual/` into `src/manual/`.
+require('./bundle-manual.js').bundleManual({
+  manualDir: path.join(root, 'manual'),
+  targetDir: path.join(root, 'src', 'manual'),
+});

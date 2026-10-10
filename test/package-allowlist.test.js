@@ -18,6 +18,10 @@ test('allowlist keeps runtime files', () => {
     '/src/renderer/vendor/marked.min.js',
     '/src/renderer/generated/contracts.js',
     '/src/preload/bundle.js',
+    '/src/preload/manual-bundle.js',
+    '/src/manual/index.json',
+    '/src/manual/pages/de/index.md',
+    '/src/manual/screenshots/overview.en.dark.webp',
     '/system-skills',
     '/system-skills/snotra-capabilities/SKILL.md',
     '/node_modules',
@@ -66,7 +70,7 @@ test('allowlist drops development, documentation and local files', () => {
 
 test('findViolations accepts a clean archive listing', () => {
   const result = findViolations(
-    ['/package.json', '/src', '/src/main', '/src/main/index.js', '/system-skills', '/node_modules/foo/index.js', '/LICENSE'],
+    ['/package.json', '/src', '/src/main', '/src/main/index.js', '/src/manual/index.json', '/system-skills', '/node_modules/foo/index.js', '/LICENSE'],
     patterns
   );
   assert.equal(result.ok, true);
@@ -82,7 +86,7 @@ test('findViolations reports forbidden entries and missing required files', () =
   );
   assert.equal(result.ok, false);
   assert.deepEqual(result.ignored, ['/.claude/settings.local.json', '/docs/roadmap.md', '/test/x.test.js']);
-  assert.deepEqual(result.missing, ['/system-skills']);
+  assert.deepEqual(result.missing, ['/system-skills', '/src/manual/index.json']);
 });
 
 test('findViolations flags forbidden top-level folders even if the allowlist were loosened', () => {

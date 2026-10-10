@@ -30,7 +30,7 @@ Die Datei für dein System von der [Release-Seite](https://github.com/kkrafft199
 2. Lade unter *Assets* die Datei für dein System herunter.
 3. Beende Snotra Agent.
 4. Installiere sie so wie beim ersten Mal: Unter macOS ziehst du die App auf *Programme* und bestätigst *Ersetzen*; unter Windows entpackst du die `.zip` über den alten Ordner oder in einen neuen und löschst den alten; unter Linux installierst du das `.deb` erneut oder ersetzt das AppImage bzw. den Ordner.
-5. Starte Snotra Agent. Deine Chats, Einstellungen und Schlüssel sind noch da: Sie liegen im [Profilordner](../../getting-started/install/#was-passiert), nicht in der App.
+5. Starte Snotra Agent. Deine Chats, Einstellungen und Schlüssel sind noch da: Sie liegen im [Profilordner](../../getting-started/install/#was-dann-passiert), nicht in der App.
 
 ## Was passiert
 
