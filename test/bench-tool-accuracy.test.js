@@ -7,11 +7,13 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 
 const { TASKS } = require('../bench/tool-accuracy/tasks');
 const { UNCUT_TOOLS, UNCUT_PROMPT_LINES, wrapRegistryForArm, propertyAt } = require('../bench/tool-accuracy/arms');
 const { scoreTask, normalisePath, specsOf, toolsOf, GROUPS } = require('../bench/tool-accuracy/score');
-const { createScriptedLlm, runTask } = require('../bench/tool-accuracy/harness');
+const { FIXTURE, createScriptedLlm, prepareWorkspace, removeWorkspace, runTask } = require('../bench/tool-accuracy/harness');
 const { mcnemarExact, comparePaired } = require('../bench/tool-accuracy/report');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 
@@ -170,6 +172,22 @@ test('harness: a write call is approved and executed, not silently denied', asyn
   assert.equal(observation.files['docs/faq.md'], '# FAQ\n');
   assert.equal(observation.rounds.length, 2);
   assert.equal(scoreTask(task, observation).correct, true);
+});
+
+test('harness: the fixture stores package.json and .gitignore under other names and restores them', async () => {
+  // Stored as package.json, the fixture's manifest would be scanned by
+  // Dependabot and raise alerts for packages that are never installed (#841).
+  assert.equal(fs.existsSync(path.join(FIXTURE, 'package.json')), false);
+  assert.equal(fs.existsSync(path.join(FIXTURE, '.gitignore')), false);
+  const dir = await prepareWorkspace();
+  try {
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+    assert.equal(manifest.name, 'invoice-tool');
+    assert.equal(fs.existsSync(path.join(dir, '.gitignore')), true);
+    assert.deepEqual(fs.readdirSync(dir).filter((name) => name.startsWith('dot-')), []);
+  } finally {
+    await removeWorkspace(dir);
+  }
 });
 
 test('harness: the fixture has its hidden and ignored files, and apply_patch works on it', async () => {
