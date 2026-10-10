@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('manualApi', {
   context: () => ipcRenderer.invoke(REQ.CONTEXT),
   index: (locale) => ipcRenderer.invoke(REQ.INDEX, locale),
   page: (locale, slug) => ipcRenderer.invoke(REQ.PAGE, locale, slug),
+  pages: (locale) => ipcRenderer.invoke(REQ.PAGES, locale),
   screenshot: (motif, locale, theme) => ipcRenderer.invoke(REQ.SCREENSHOT, motif, locale, theme),
   openExternal: (url) => ipcRenderer.invoke(REQ.OPEN_EXTERNAL, url),
   onNavigate: (callback) => subscribe(PUSH.NAVIGATE, callback),

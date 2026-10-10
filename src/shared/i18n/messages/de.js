@@ -1891,6 +1891,13 @@ module.exports = {
   'manual.image.missing': 'Screenshot nicht verfügbar',
   'manual.page.error': 'Diese Seite ließ sich nicht öffnen.',
   'manual.page.toOverview': 'Zum Überblick',
+  // Search in the help window (#847)
+  'manual.search.label': 'Handbuch durchsuchen',
+  'manual.search.open': 'Suchen',
+  'manual.search.results.label': 'Suchergebnisse',
+  'manual.search.results.one': '{count} Seite',
+  'manual.search.results.other': '{count} Seiten',
+  'manual.search.empty': 'Keine Seiten gefunden',
   'menu.help.checkUpdates': 'Nach Updates suchen…',
   'menu.help.github': 'Projekt auf GitHub',
 

@@ -68,6 +68,37 @@ test('Help › User manual opens the bundled manual and navigates it', { timeout
     document.querySelector('.manual-nav [aria-current="page"]')?.dataset.page === 'safety/choose-a-mode'),
   { what: 'back on "Choose a mode"' });
 
+  // Search (#847): Cmd/Ctrl+F, a query, ↓ to the second result, Enter.
+  await help.keyboard.press(process.platform === 'darwin' ? 'Meta+f' : 'Control+f');
+  assert.equal(await help.evaluate(() => document.activeElement?.id), 'manual-search');
+  // A word both languages use, so that the test does not depend on the profile's language.
+  await help.keyboard.type('sandbox');
+  await poll(() => help.evaluate(() => document.querySelectorAll('#manual-results [role="option"]').length > 1),
+    { what: 'search results' });
+  assert.equal(await help.evaluate(() => document.getElementById('manual-nav').hidden), true,
+    'the results take the place of the chapters');
+  await help.keyboard.press('ArrowDown');
+  const chosen = await help.evaluate(() => {
+    const input = document.getElementById('manual-search');
+    const option = document.getElementById(input.getAttribute('aria-activedescendant'));
+    return option.querySelector('.manual-result__title').textContent;
+  });
+  await help.keyboard.press('Enter');
+  await poll(() => help.evaluate((title) =>
+    document.querySelector('#manual-doc h1')?.textContent === title, chosen),
+  { what: `the page "${chosen}"` });
+  const landed = await help.evaluate(() => ({
+    anchor: document.activeElement?.dataset?.mdAnchor ?? null,
+    lit: document.activeElement?.classList.contains('manual-hit') ?? false,
+  }));
+  assert.ok(landed.anchor, 'the section the words were found in has the focus');
+  assert.equal(landed.lit, true, 'and is lit up');
+
+  await help.keyboard.press(process.platform === 'darwin' ? 'Meta+f' : 'Control+f');
+  await help.keyboard.press('Escape');
+  assert.equal(await help.evaluate(() => document.getElementById('manual-nav').hidden), false,
+    'Escape brings the chapters back');
+
   // The help page has its own bridge and nothing of the app's.
   const bridges = await help.evaluate(() => ({ app: typeof window.api, manual: typeof window.manualApi }));
   assert.deepEqual(bridges, { app: 'undefined', manual: 'object' });

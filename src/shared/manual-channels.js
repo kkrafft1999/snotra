@@ -15,6 +15,8 @@ const MANUAL_REQUEST_CHANNELS = Object.freeze({
   INDEX: 'manual:index',
   /** (locale, slug) → { slug, title, description, chapter, markdown } */
   PAGE: 'manual:page',
+  /** (locale) → every page with its Markdown, for the search (#847) */
+  PAGES: 'manual:pages',
   /** (motif, locale, theme) → data URL of the screenshot variant */
   SCREENSHOT: 'manual:screenshot',
   /** (url) → opens an https link of the manual in the browser */

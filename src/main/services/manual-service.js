@@ -68,6 +68,12 @@ function createManualService({ fs, path, bundleDir }) {
     return { slug, ...pages[slug], markdown };
   }
 
+  /** Every page of a language at once — the search indexes them in the window (#847). */
+  function getAllPages(locale) {
+    const normalized = normalizeManualLocale(locale);
+    return Object.keys(localeIndex(normalized).pages).map((slug) => getPage(normalized, slug));
+  }
+
   function getScreenshot(motif, locale, theme) {
     if (typeof motif !== 'string' || !MOTIF.test(motif)) throw new Error('Invalid screenshot motif.');
     const variant = `${motif}.${normalizeManualLocale(locale)}.${THEMES.includes(theme) ? theme : 'light'}.webp`;
@@ -75,7 +81,7 @@ function createManualService({ fs, path, bundleDir }) {
     return `data:image/webp;base64,${bytes.toString('base64')}`;
   }
 
-  return { isAvailable, getIndex, getPage, getScreenshot };
+  return { isAvailable, getIndex, getPage, getAllPages, getScreenshot };
 }
 
 module.exports = {
