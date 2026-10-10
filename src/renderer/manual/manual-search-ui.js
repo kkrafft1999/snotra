@@ -6,6 +6,11 @@
  * the result list: ↑ and ↓ choose, Enter opens the page at the section the
  * words were found in. The index is built the first time it is needed, from
  * every page of the current language, and again after a language change.
+ *
+ * The results are drawn a moment after the last keystroke. ↑, ↓ and Enter
+ * always act on the results for what is in the field: a key pressed before
+ * they are drawn runs the search first (#854), and until then the list is
+ * `aria-busy`.
  */
 
 import { t, tPlural } from '../i18n.js';
@@ -26,6 +31,10 @@ export function createManualSearch({ els, api, getLocale, chapterLabel, onOpen }
   /** Typed since the results were last drawn. */
   let pending = false;
   let generation = 0;
+  /** The query the results on screen belong to. */
+  let drawnFor = '';
+  /** The search started last, while it runs. */
+  let searching = null;
 
   key.textContent = /Mac/.test(navigator.userAgent ?? '') ? '⌘F' : 'Ctrl+F';
 
@@ -64,6 +73,7 @@ export function createManualSearch({ els, api, getLocale, chapterLabel, onOpen }
     const run = ++generation;
     if (queryTerms(query).length === 0) {
       showChapters();
+      drawn(query);
       return;
     }
     const built = await ensureIndex();
@@ -71,6 +81,22 @@ export function createManualSearch({ els, api, getLocale, chapterLabel, onOpen }
     results = searchManual(built, query);
     active = results.length ? 0 : -1;
     render();
+    drawn(query);
+  }
+
+  function drawn(query) {
+    drawnFor = query;
+    list.removeAttribute('aria-busy');
+  }
+
+  /** Resolves once the results on screen are those for the field's value. */
+  function settled() {
+    if (drawnFor === input.value) return Promise.resolve();
+    if (pending) {
+      clearTimeout(timer);
+      searching = run();
+    }
+    return searching ?? Promise.resolve();
   }
 
   function render() {
@@ -144,32 +170,39 @@ export function createManualSearch({ els, api, getLocale, chapterLabel, onOpen }
     input.value = '';
     key.hidden = false;
     showChapters();
+    drawn('');
   }
 
   input.addEventListener('input', () => {
     pending = true;
+    list.setAttribute('aria-busy', 'true');
     clearTimeout(timer);
-    timer = setTimeout(() => { void run(); }, INPUT_DELAY_MS);
+    timer = setTimeout(() => { searching = run(); }, INPUT_DELAY_MS);
   });
   // The first focus builds the index, so that the first letters find it ready.
   input.addEventListener('focus', () => { void ensureIndex().catch(() => {}); });
 
   input.addEventListener('keydown', (event) => {
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      if (!results.length) return;
+      const current = drawnFor === input.value;
+      if (current && !results.length) return;
       event.preventDefault();
       const step = event.key === 'ArrowDown' ? 1 : -1;
-      active = Math.min(results.length - 1, Math.max(0, active + step));
-      renderActive();
+      // Typed a moment ago: choose among the results for the whole query, not
+      // among those still on screen for the first letters (#854).
+      void settled().then(() => {
+        if (!results.length) return;
+        active = Math.min(results.length - 1, Math.max(0, active + step));
+        renderActive();
+      });
     } else if (event.key === 'Enter') {
       event.preventDefault();
-      if (!pending) {
+      if (drawnFor === input.value) {
         open(active);
         return;
       }
       // Enter right after typing: search first, then open the best hit.
-      clearTimeout(timer);
-      void run().then(() => open(Math.max(active, 0)));
+      void settled().then(() => open(Math.max(active, 0)));
     } else if (event.key === 'Escape' && input.value) {
       // The first Escape empties the field; the next one closes the contents.
       event.preventDefault();
