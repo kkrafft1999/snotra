@@ -205,17 +205,23 @@ function createFileContextMenu({
    *
    * Der zweite Knopf legt den vollständigen Pfad in die Zwischenablage; ohne
    * `clipboard` gibt es ihn nicht, statt einen toten Knopf zu zeigen.
-   * Ergebnis: { shown } | { copied } | { error }.
+   *
+   * Since #849 the information is shown in Snotra's own dialog when `present`
+   * is given: it receives what the renderer draws and returns whether it
+   * reached a window. Only when it did not — or without `present` — does the
+   * native dialog above come up, so there is always something on screen.
+   * Ergebnis: { presented } | { shown } | { copied } | { error }.
    */
-  async function showInfo(filePath, window, { isDirectory = false } = {}) {
+  async function showInfo(filePath, window, { isDirectory = false, present = null } = {}) {
     const t = createTranslator(getLocale());
-    if (!dialog) return { error: t('contextMenu.noDialog') };
+    if (!dialog && typeof present !== 'function') return { error: t('contextMenu.noDialog') };
 
     // Die Sprache geht mit: Die Feldnamen, die Typangaben und die Zahlen- und
     // Datumsformate der Tabelle entstehen erst in `describe()` (#292).
     const described = await info.describe(filePath, { isDirectory, locale: t.locale });
     if (described.error) {
       logger.warn('[file-context-menu] The information could not be read:', described.error);
+      if (!dialog) return { error: described.error };
       await showMessageBox(window, {
         type: 'error',
         buttons: [t('contextMenu.ok')],
@@ -225,6 +231,19 @@ function createFileContextMenu({
       });
       return { error: described.error };
     }
+
+    if (typeof present === 'function' && present({
+      name: described.name,
+      path: described.path,
+      kind: described.kind,
+      type: described.type,
+      summary: described.summary,
+      details: described.details,
+      revealLabel: revealLabelForPlatform(platform, getLocale()),
+    })) {
+      return { presented: true };
+    }
+    if (!dialog) return { error: t('contextMenu.noDialog') };
 
     const canCopy = Boolean(clipboard && typeof clipboard.writeText === 'function');
     const { response } = await showMessageBox(window, {
@@ -251,7 +270,7 @@ function createFileContextMenu({
    */
   function buildTemplate(filePath, {
     window = null, onDeleted = null, isDirectory = false, onClearAgentMark = null, onShowChanges = null,
-    onCreate = null, onRename = null, isRoot = false,
+    onCreate = null, onRename = null, isRoot = false, onShowInfo = null,
   } = {}) {
     const t = createTranslator(getLocale());
     // Der Klick-Handler wird nicht abgewartet: Eine Ablehnung — etwa weil
@@ -285,7 +304,10 @@ function createFileContextMenu({
       { label: revealLabelForPlatform(platform, getLocale()), click: () => revealInFileManager(filePath) },
       {
         label: t('contextMenu.info'),
-        click: () => guarded(showInfo(filePath, window, { isDirectory }), 'The information could not be shown'),
+        click: () => guarded(
+          showInfo(filePath, window, { isDirectory, present: onShowInfo }),
+          'The information could not be shown',
+        ),
       },
       // Only when the row carries what the agent read or changed (#347).
       ...(typeof onClearAgentMark === 'function' ? [{
@@ -327,10 +349,10 @@ function createFileContextMenu({
    */
   function popup(filePath, window, {
     onDeleted = null, isDirectory = false, onClearAgentMark = null, onShowChanges = null, position = null,
-    onCreate = null, onRename = null, isRoot = false,
+    onCreate = null, onRename = null, isRoot = false, onShowInfo = null,
   } = {}) {
     const menu = Menu.buildFromTemplate(buildTemplate(filePath, {
-      window, onDeleted, isDirectory, onClearAgentMark, onShowChanges, onCreate, onRename, isRoot,
+      window, onDeleted, isDirectory, onClearAgentMark, onShowChanges, onCreate, onRename, isRoot, onShowInfo,
     }));
     menu.popup({ ...(window ? { window } : {}), ...(position ?? {}) });
     return menu;
@@ -342,6 +364,8 @@ function createFileContextMenu({
     get revealLabel() { return revealLabelForPlatform(platform, getLocale()); },
     deleteWithConfirmation,
     showInfo,
+    // "Reveal" from the information dialog (#849); the caller has checked the path.
+    reveal: revealInFileManager,
   };
 }
 

@@ -14,6 +14,7 @@ import { createSkillCatalogSource } from './chat/skillCatalogSource.js';
 import { initChatHistoryPanel } from './components/ChatHistoryPanel.js';
 import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateDialog } from './components/UpdateDialog.js';
+import { initFileInfoDialog } from './components/FileInfoDialog.js';
 import { initToolPermissionState } from './state/tool-permissions.js';
 import { initToolModePicker } from './components/ToolModePicker.js';
 import { initFolderSandboxShield } from './components/FolderSandboxShield.js';
@@ -457,6 +458,8 @@ api.onApprovalNotificationOpen?.((payload) => {
 });
 
 const updateDialog = initUpdateDialog({ api });
+// "Information" from the tree's context menu, in Snotra's own dialog (#849).
+initFileInfoDialog({ api });
 
 const settingsModal = initSettingsModal({
   api,

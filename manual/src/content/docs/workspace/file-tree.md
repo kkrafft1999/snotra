@@ -27,7 +27,7 @@ Right-click a row — or `Cmd`-click / `Ctrl`-click it, or press `Shift+F10` on 
 
 - ***Open*** opens the file in the app your system uses for it. For a program or a script — `setup.bat`, an `.app`, a file marked executable — opening means running it, with your rights and outside Snotra's sandbox, so Snotra asks first, with *Cancel* preselected.
 - ***Reveal in Finder*** (*Show in Explorer* on Windows, *Show in file manager* on Linux).
-- ***Information*** shows the name, the full path, the type, the size, the dates and the app *Open* would use; *Copy path* puts the path on the clipboard. For a folder it counts the entries directly inside it.
+- ***Information*** opens a small window about the entry: the name with its type and size at the top, the full path below it, then the dates and the app *Open* would use. The button next to the path copies it to the clipboard; ***Reveal in Finder*** at the bottom shows the entry in its folder. For a folder it counts the entries directly inside it. `Esc` or *OK* closes the window. [since 1.19]
 - ***New File…***, ***New Folder…*** and ***Rename…*** — see [Create, rename, move and delete](../manage-files/).
 - ***Delete…*** moves the file or folder to the trash, after you confirm it.
 - ***Show changes*** and ***Remove mark*** for files Snotra changed — see below.

@@ -88,6 +88,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ? { position: { x: options.position.x, y: options.position.y } }
         : {}),
     }),
+  revealItem: (filePath) => ipcRenderer.invoke(REQ.FS_REVEAL_ITEM, filePath),
+  onFsShowInfo: (callback) => {
+    const channel = PUSH.FS_SHOW_INFO;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   onFsShowChanges: (callback) => {
     const channel = PUSH.FS_SHOW_CHANGES;
     const listener = (_event, payload) => callback(payload);

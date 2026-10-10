@@ -280,7 +280,11 @@ function createFileInfo({
    * @param {{isDirectory?: boolean, locale?: string}} [options]
    *   `locale` ist die Sprache der Oberfläche; der Dialog wird bei jedem
    *   Öffnen neu gebaut, deshalb reicht der Wert von genau diesem Moment (#292).
-   * @returns {Promise<{fields: Array<[string,string]>, name: string, path: string}|{error: string}>}
+   * @returns {Promise<{fields: Array<[string,string]>, name: string, path: string,
+   *   kind: 'file'|'folder', type: string, summary: string, details: Array<[string,string]>}|{error: string}>}
+   *   `fields` is the whole list for the native fallback; `type`, `summary`
+   *   and `details` split it up for Snotra's own dialog (#849): type and the
+   *   short size or entry count sit under the name, the rest below the path.
    */
   async function describe(absPath, { isDirectory = false, locale } = {}) {
     const t = createTranslator(locale);
@@ -321,31 +325,47 @@ function createFileInfo({
         : t(`fileInfo.type.symlink.plain.${kind}`);
     }
 
+    const details = [];
+    // The short form under the name: the size alone, or the entry count.
+    let summary = '';
+
+    if (directory) {
+      const count = await countEntries(absPath);
+      const contents = count === null
+        ? unknown(t.locale)
+        : t.plural('fileInfo.entries', count, { count: groupDigits(count, t.locale) });
+      details.push([t('fileInfo.field.contents'), contents]);
+      if (count !== null) summary = contents;
+    } else {
+      const known = !brokenLink && Number.isFinite(stats.size) && stats.size >= 0;
+      details.push([t('fileInfo.field.size'), known ? formatSize(stats.size, t.locale) : unknown(t.locale)]);
+      if (known) summary = formatBytes(stats.size, t.locale);
+    }
+
+    details.push([t('fileInfo.field.modified'), formatTimestamp(stats.mtime, t.locale)]);
+    details.push([t('fileInfo.field.created'), formatTimestamp(stats.birthtime, t.locale)]);
+
+    if (!directory) {
+      const app = brokenLink ? null : await resolver.resolve(absPath, { fs });
+      details.push([t('fileInfo.field.openWith'), app || unknown(t.locale)]);
+    }
+
     const fields = [
       [t('fileInfo.field.name'), name],
       [t('fileInfo.field.path'), absPath],
       [t('fileInfo.field.type'), type],
+      ...details,
     ];
 
-    if (directory) {
-      const count = await countEntries(absPath);
-      fields.push([
-        t('fileInfo.field.contents'),
-        count === null ? unknown(t.locale) : t.plural('fileInfo.entries', count, { count: groupDigits(count, t.locale) }),
-      ]);
-    } else {
-      fields.push([t('fileInfo.field.size'), brokenLink ? unknown(t.locale) : formatSize(stats.size, t.locale)]);
-    }
-
-    fields.push([t('fileInfo.field.modified'), formatTimestamp(stats.mtime, t.locale)]);
-    fields.push([t('fileInfo.field.created'), formatTimestamp(stats.birthtime, t.locale)]);
-
-    if (!directory) {
-      const app = brokenLink ? null : await resolver.resolve(absPath, { fs });
-      fields.push([t('fileInfo.field.openWith'), app || unknown(t.locale)]);
-    }
-
-    return { name, path: absPath, fields };
+    return {
+      name,
+      path: absPath,
+      fields,
+      kind: directory ? 'folder' : 'file',
+      type,
+      summary,
+      details,
+    };
   }
 
   return { describe };

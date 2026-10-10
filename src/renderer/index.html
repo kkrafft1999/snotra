@@ -1512,6 +1512,69 @@
     </div>
   </div>
 
+  <!-- "Information" from the file tree's context menu (#849). Main gathers
+       the facts and pushes them already worded (fs:show-info); this only
+       draws them: a header card with name, type and size, the path with a
+       copy button, the remaining fields as a list. -->
+  <div id="modal-file-info" class="modal modal-file-info hidden" aria-hidden="true">
+    <div class="modal-backdrop" id="modal-file-info-backdrop"></div>
+    <div
+      class="modal-dialog file-info-dialog"
+      tabindex="-1"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-file-info-name"
+      aria-describedby="modal-file-info-summary">
+      <header class="file-info-dialog__hero">
+        <div class="file-info-dialog__tile" aria-hidden="true">
+          <svg class="file-info-dialog__icon file-info-dialog__icon--file" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+            <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 13h7M8.5 16.5h5"/>
+          </svg>
+          <svg class="file-info-dialog__icon file-info-dialog__icon--folder" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 6.5a1.5 1.5 0 0 1 1.5-1.5h4.6l2 2h8.4A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/>
+          </svg>
+        </div>
+        <div class="file-info-dialog__heading">
+          <h2 id="modal-file-info-name" class="file-info-dialog__name"></h2>
+          <p id="modal-file-info-summary" class="file-info-dialog__summary"></p>
+        </div>
+        <button type="button" id="modal-file-info-close" class="modal-dialog__close" aria-label="Close dialog" data-i18n-attr="aria-label:fileInfoDialog.close">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
+          </svg>
+        </button>
+      </header>
+      <div class="modal-dialog__body file-info-dialog__body">
+        <h3 id="modal-file-info-location" class="file-info-dialog__eyebrow" data-i18n="fileInfoDialog.location">Location</h3>
+        <div class="file-info-dialog__path">
+          <code id="modal-file-info-path" class="file-info-dialog__path-text" aria-labelledby="modal-file-info-location"></code>
+          <button type="button" id="modal-file-info-copy" class="file-info-dialog__copy" title="Copy path" aria-label="Copy path" data-i18n-attr="title:fileInfoDialog.copyPath;aria-label:fileInfoDialog.copyPath">
+            <svg class="file-info-dialog__copy-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true">
+              <rect x="5.5" y="5.5" width="8" height="8" rx="1.5"/><path d="M10.5 3.5v-.5a1 1 0 0 0-1-1H3.5a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5"/>
+            </svg>
+            <svg class="file-info-dialog__check-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M3 8.5l3 3 7-7"/>
+            </svg>
+          </button>
+        </div>
+        <h3 class="file-info-dialog__eyebrow" data-i18n="fileInfoDialog.details">Details</h3>
+        <dl id="modal-file-info-details" class="file-info-dialog__details"></dl>
+      </div>
+      <footer class="modal-dialog__footer file-info-dialog__footer">
+        <div class="file-info-dialog__secondary">
+          <button type="button" id="modal-file-info-reveal" class="btn-secondary file-info-dialog__reveal">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" aria-hidden="true">
+              <path d="M1.75 4.25a1 1 0 0 1 1-1h3.4l1.5 1.5h5.6a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H2.75a1 1 0 0 1-1-1z"/>
+            </svg>
+            <span id="modal-file-info-reveal-label"></span>
+          </button>
+          <p id="modal-file-info-status" class="file-info-dialog__status" role="status" aria-live="polite"></p>
+        </div>
+        <button type="button" id="modal-file-info-ok" class="btn-primary" data-i18n="fileInfoDialog.ok">OK</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- Selbst-Update (Issue #232). Ein Dialog fuer den ganzen Weg: gefunden →
        laedt → bereit → wird installiert. Kopf und Fussleiste bleiben stehen,
        Rumpf und Knoepfe wechseln je Schritt. Abgebrochen werden kann bis zum

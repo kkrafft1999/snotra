@@ -165,6 +165,40 @@ test('describe für einen Ordner: Anzahl direkter Einträge statt Größe, kein 
   assert.deepEqual(english.fields[3], ['Contents', '3 entries (direct)']);
 });
 
+test('describe splits the fields up for Snotra\'s own dialog (#849)', async () => {
+  const fs = fsStub({
+    '/ws/notes.md': {
+      lstat: statLike({ size: 2296, mtime: new Date(2026, 8, 12, 15, 49), birthtime: new Date(2026, 8, 12, 15, 49) }),
+    },
+    '/ws/docs': { lstat: statLike({ directory: true }), entries: ['a', 'b'] },
+    '/ws/locked': { lstat: statLike({ directory: true }) },
+    '/ws/dead': { lstat: statLike({ symlink: true }), link: '/gone' },
+  });
+  const info = createFileInfo({ fs, defaultAppResolver: { resolve: async () => 'Typora' } });
+
+  const file = await info.describe('/ws/notes.md', { locale: 'de' });
+  assert.equal(file.kind, 'file');
+  assert.equal(file.type, 'Datei (.md)');
+  assert.equal(file.summary, '2,2 KB');
+  assert.deepEqual(file.details, [
+    ['Größe', '2,2 KB (2.296 Bytes)'],
+    ['Geändert', '12.09.2026, 15:49'],
+    ['Erstellt', '12.09.2026, 15:49'],
+    ['Öffnen mit', 'Typora'],
+  ]);
+  // The native fallback still gets the whole list.
+  assert.deepEqual(file.fields.slice(3), file.details);
+
+  const folder = await info.describe('/ws/docs', { isDirectory: true, locale: 'en' });
+  assert.equal(folder.kind, 'folder');
+  assert.equal(folder.type, 'Folder');
+  assert.equal(folder.summary, '2 entries (direct)');
+
+  // What is unknown stays out of the line under the name.
+  assert.equal((await info.describe('/ws/locked', { isDirectory: true, locale: 'en' })).summary, '');
+  assert.equal((await info.describe('/ws/dead', { locale: 'en' })).summary, '');
+});
+
 test('describe: der Zähler folgt dem Numerus, in beiden Sprachen (#292)', async () => {
   const fs = fsStub({ '/ws/einer': { lstat: statLike({ directory: true }), entries: ['a'] } });
   const info = createFileInfo({ fs, defaultAppResolver: noApp });
