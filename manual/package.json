@@ -23,6 +23,9 @@
     "astro": "^7.3.6",
     "sharp": "^0.35.5"
   },
+  "overrides": {
+    "postcss-nested": "^7.0.2"
+  },
   "allowScripts": {
     "esbuild": true,
     "sharp": true
