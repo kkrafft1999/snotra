@@ -22,6 +22,8 @@ Alles, was du in Snotra einrichten kannst, steht an einer Stelle: in den Einstel
 | *Gedächtnis* | Was Snotra über Chats hinweg behält. Siehe [Snotra etwas merken lassen](../memory/). |
 | *Allgemein* | Anweisungen für jeden Chat, das Aussehen, die Sprache — siehe unten. |
 
+[seit 1.19] Das `?` oben neben dem Namen des Bereichs und neben vielen Überschriften darin öffnet dieses Handbuch auf der Seite und an dem Abschnitt, um die es dort geht — in dem Fenster, das [Das Handbuch in Snotra](../../#das-handbuch-in-snotra) beschreibt.
+
 ## Wann eine Änderung wirkt
 
 Die Zeile unten in jedem Bereich sagt es, weil es sich unterscheidet:

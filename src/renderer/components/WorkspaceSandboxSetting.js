@@ -67,7 +67,11 @@ export function initWorkspaceSandboxSetting({ toolPermissions, onChange = () => 
     const permissions = toolPermissions.get();
     const view = describeWorkspaceSandbox({ permissions, toolsOn, sandbox, autoLabel: modeLabel('auto') });
     card.hidden = !view.visible;
-    if (rootEl) rootEl.textContent = view.rootLabel;
+    if (rootEl) {
+      rootEl.textContent = view.rootLabel;
+      // Cut with an ellipsis next to the heading's help link (#848).
+      rootEl.title = view.rootLabel ?? '';
+    }
     if (!busy) input.checked = view.checked;
     input.disabled = !view.hasWorkspace;
     // Busy while main decides, or "off" not offered: marked rather than

@@ -5,6 +5,7 @@ import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
 import { initWorkspaceSandboxSetting } from './WorkspaceSandboxSetting.js';
 import { initProgramAllowancesSetting } from './ProgramAllowancesSetting.js';
 import { initSecurityPanel } from './SecurityPanel.js';
+import { initSettingsHelp } from './SettingsHelp.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -114,6 +115,9 @@ export function initSettingsModal(deps) {
   const modalSettings = document.getElementById('modal-settings');
   const modalSettingsBackdrop = document.getElementById('modal-settings-backdrop');
   const settingsPanelHeadingEl = document.getElementById('settings-panel-heading');
+  // The `?` next to the headings and the one in the header (#848).
+  const settingsHelp = initSettingsHelp({ root: modalSettings, api });
+  const panelHelpButton = document.getElementById('btn-settings-panel-help');
   const settingsNavTabs = [...document.querySelectorAll('.settings-nav-item[role="tab"]')];
   const prefModelList = document.getElementById('pref-model-list');
   const prefListEmpty = document.getElementById('pref-list-empty');
@@ -1669,6 +1673,8 @@ export function initSettingsModal(deps) {
     });
     activePanelKey = SETTINGS_NAV_KEYS.includes(panelKey) ? panelKey : 'models';
     settingsPanelHeadingEl.textContent = t(`settings.nav.${activePanelKey}`);
+    panelHelpButton.dataset.manualHelp = `panel.${activePanelKey}`;
+    settingsHelp.refresh();
     // A tool switched in Tools a moment ago changes the page: read it again
     // whenever it comes into view.
     if (activePanelKey === 'security' && !modalSettings.classList.contains('hidden')) void securityPanel.refresh();

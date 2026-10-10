@@ -136,6 +136,8 @@ const REQUEST_CHANNELS = Object.freeze({
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
   /** Text in die Zwischenablage legen — aus demselben Grund über den Main. */
   SHELL_WRITE_CLIPBOARD_TEXT: 'shell:writeClipboardText',
+  /** ({ slug, fragment }) → opens the help window at that page and section (#848). */
+  MANUAL_OPEN: 'help:openManual',
 
   /**
    * Tool-Berechtigungen (Issue #66). Modus, Regeln und sensible Pfadmuster

@@ -32,6 +32,7 @@ Dieses Handbuch erklärt, wie du damit arbeitest: wie du anfängst, wie du mit D
 - `‹` und `›` gehen in den gelesenen Seiten zurück und vor, mit denselben Tasten wie in der Vorschau: `Cmd+[` und `Cmd+]` auf macOS, `Alt+←` und `Alt+→` unter Windows und Linux.
 - `−` und `+` — oder `Cmd` / `Strg` mit `+`, `−` und `0` — machen den Text größer oder kleiner.
 - *Im Web öffnen* zeigt dieselbe Seite auf docs.snotra-ai.dev, die immer das neueste Release beschreibt.
+- **Aus den Einstellungen** öffnet das `?` neben einem Bereich oder einer Überschrift das Handbuch genau an der Stelle, um die es geht.
 
 ## Hilf mit, dieses Handbuch zu verbessern
 

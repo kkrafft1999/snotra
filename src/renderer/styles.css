@@ -10007,3 +10007,88 @@ select.modal-input {
 #settings-security-slots > .settings-rule-form #btn-rule-cancel {
   display: none;
 }
+
+/* ── Help links in the settings (#848) ─────────────────────────────────────
+   A `?` next to a section heading opens the manual at that section. The pair
+   sits in a row of its own; the space a heading kept below (or above) moves
+   to the row, so that the button centres on the heading's line. These rules
+   stand at the end because they override the headings' own margins. */
+.settings-help-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-help-heading > .settings-subsection-title,
+.settings-help-heading > .settings-security-subhead,
+.settings-help-heading > .settings-dialog__subtitle {
+  margin: 0;
+}
+
+.settings-tools-card > .settings-help-heading {
+  margin-bottom: 10px;
+}
+
+.settings-security-slot > .settings-help-heading {
+  margin: 10px 0 8px;
+}
+
+/* A heading that ends in the folder's path stays on one line, as the rule
+   headings do: the path is cut with an ellipsis (whole in its tooltip), so the
+   `?` stays next to the words instead of after a second line. */
+.settings-help-heading > .settings-security-subhead:has(.settings-rules-heading__root) {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.settings-help-heading > .settings-security-subhead > span {
+  flex: none;
+}
+
+.settings-help-heading > .settings-security-subhead > .settings-rules-heading__root {
+  flex: 0 1 auto;
+}
+
+.settings-dialog__header .settings-help-heading {
+  margin-top: 2px;
+}
+
+.settings-help {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 1px solid var(--ds-grey-control-border);
+  border-radius: 50%;
+  background: none;
+  color: var(--text-muted-strong);
+  font: var(--ds-font-weight-bold) var(--ds-font-size-xs) / 1 var(--ds-font-ui);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+/* The circle stays small next to the heading; the target is 32 × 32. */
+.settings-help::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+}
+
+.settings-help:hover {
+  border-color: var(--ds-blue);
+  color: var(--ds-blue-strong);
+  background: var(--ds-blue-soft);
+}
+
+/* The global ring rounds to --ds-radius-sm; this one stays a circle. */
+.settings-help:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+  border-radius: 50%;
+}

@@ -192,8 +192,35 @@ function createManualWindowController({
   };
 }
 
+const HELP_SLUG = /^[a-z0-9-]+(?:\/[a-z0-9-]+)*$/;
+const HELP_FRAGMENT = /^[\p{L}\p{N}_-]{0,120}$/u;
+
+/** A page and section the app window may ask for: the shape a heading slug has, nothing else. */
+function cleanHelpTarget(target) {
+  if (!target || typeof target !== 'object') return null;
+  const { slug, fragment = '' } = target;
+  if (typeof slug !== 'string' || !HELP_SLUG.test(slug)) return null;
+  if (typeof fragment !== 'string' || !HELP_FRAGMENT.test(fragment)) return null;
+  return { slug, fragment };
+}
+
+/**
+ * The help links next to the settings (#848): the app window asks for a page
+ * and section, and the help window opens there — or turns to it.
+ */
+function registerManualOpenHandler({ ipcMain, REQ, open }) {
+  ipcMain.handle(REQ.MANUAL_OPEN, (_event, target) => {
+    const clean = cleanHelpTarget(target);
+    if (!clean) return { ok: false };
+    open(clean);
+    return { ok: true };
+  });
+}
+
 module.exports = {
   createManualWindowController,
+  registerManualOpenHandler,
+  cleanHelpTarget,
   isManualIpcSender,
   isManualExternalUrl,
   matchManualZoomShortcut,
