@@ -73,16 +73,19 @@ test('Help › User manual opens the bundled manual and navigates it', { timeout
   assert.equal(await help.evaluate(() => document.activeElement?.id), 'manual-search');
   // A word both languages use, so that the test does not depend on the profile's language.
   await help.keyboard.type('sandbox');
-  await poll(() => help.evaluate(() => document.querySelectorAll('#manual-results [role="option"]').length > 1),
-    { what: 'search results' });
+  // The results for the whole word, not those still drawn for its first letters (#854).
+  await poll(() => help.evaluate(() => {
+    const list = document.getElementById('manual-results');
+    return !list.hasAttribute('aria-busy') && list.querySelectorAll('[role="option"]').length > 1;
+  }), { what: 'search results for "sandbox"' });
   assert.equal(await help.evaluate(() => document.getElementById('manual-nav').hidden), true,
     'the results take the place of the chapters');
   await help.keyboard.press('ArrowDown');
-  const chosen = await help.evaluate(() => {
-    const input = document.getElementById('manual-search');
-    const option = document.getElementById(input.getAttribute('aria-activedescendant'));
-    return option.querySelector('.manual-result__title').textContent;
-  });
+  await poll(() => help.evaluate(() =>
+    document.getElementById('manual-search').getAttribute('aria-activedescendant') === 'manual-result-1'),
+  { what: 'the second result chosen' });
+  const chosen = await help.evaluate(() =>
+    document.querySelector('#manual-result-1 .manual-result__title').textContent);
   await help.keyboard.press('Enter');
   await poll(() => help.evaluate((title) =>
     document.querySelector('#manual-doc h1')?.textContent === title, chosen),
