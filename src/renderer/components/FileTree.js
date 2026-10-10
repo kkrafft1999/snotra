@@ -57,6 +57,8 @@ export function initFileTree(deps) {
     activeProviderConfigured,
     insertChatReference,
     revealContentPane,
+    revealSidebar,
+    revealChatPanel,
     // Both only for tests; the app runs with the defaults of the host.
     fileViews,
     confirmLeave,
@@ -253,6 +255,7 @@ export function initFileTree(deps) {
       btn.appendChild(arrow);
 
       btn.addEventListener('click', () => {
+        revealSidebar?.();
         if (p !== appStore.rootPath) openProject(p);
       });
       item.appendChild(btn);
@@ -279,6 +282,8 @@ export function initFileTree(deps) {
       const promptKey = QUICK_ACTION_PROMPT_KEYS[action];
       if (!promptKey) return;
       const prompt = t(promptKey);
+      // Before the focus: a hidden input does not take it.
+      revealChatPanel?.();
       chatInput.value = prompt;
       onInputChanged?.();
       chatInput.focus();

@@ -16,13 +16,15 @@ A folder on your computer that you want to work on. Any folder will do; one with
 1. Click *Open folder* on the welcome page.
 2. Choose the folder in the dialog and confirm.
 
+A folder you opened before is listed under *recently opened* on the welcome page; click it to open it again.
+
 To switch later, click the name of the folder at the top of the sidebar. The menu lists the folders you opened recently; pick one, or choose *Open folder…* for a new one.
 
 ![The top left of the window with the folder menu open: under "Recently opened folders" the folder garden-planner with its path, below it "Open folder…".](screenshots/switch-folder.webp)
 
 ## What happens
 
-- The **file tree** of the folder appears on the left. Hidden files, such as `.gitignore`, stay out of sight until you show them with `Cmd+Shift+.` / `Ctrl+Shift+.`.
+- The **file tree** of the folder appears on the left — a hidden sidebar comes back for it. Hidden files, such as `.gitignore`, stay out of sight until you show them with `Cmd+Shift+.` / `Ctrl+Shift+.`.
 - If the folder has a `README.md`, it opens in the **middle column**. Otherwise the middle column stays closed and the chat gets the room — see [Find your way around the window](../../workspace/the-window/).
 - The **chat** on the right greets you with the name of the folder. From now on it works inside this folder.
 - Snotra remembers the folder and opens it again on the next start.
