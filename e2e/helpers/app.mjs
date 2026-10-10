@@ -210,13 +210,24 @@ export function composerState(page) {
  * was lost — instead of the test waiting a minute for a run that never started.
  * The two ways to fail say which part went missing: the button never became
  * enabled, or it was enabled and the click was dropped anyway.
+ *
+ * Waiting for the button also hides the case it guards against: a button that
+ * is disabled although no run is going — the provider reads as not configured
+ * — and comes back by itself. With `t`, that wait is reported as a diagnostic
+ * with the composer and the evidence, so a pass does not swallow it (#809).
  */
-export async function sendChat(page, text, { explain = null } = {}) {
+export async function sendChat(page, text, { explain = null, t = null } = {}) {
   const state = async () => JSON.stringify({ composer: await composerState(page) });
+  const evidence = async () => (explain ? await Promise.resolve().then(explain).catch((e) => `explain failed: ${e?.message ?? e}`) : '');
   const withEvidence = async (error) => {
-    const extra = explain ? await Promise.resolve().then(explain).catch((e) => `explain failed: ${e?.message ?? e}`) : '';
+    const extra = await evidence();
     throw new Error(`${error.message}\n${await state()}${extra ? `\n${extra}` : ''}`);
   };
+  const before = await composerState(page);
+  if (t && before?.sendDisabled === true && before.running === false) {
+    const extra = await evidence();
+    t.diagnostic(`send button disabled with no run going before "${text}": ${JSON.stringify(before)}${extra ? `\n${extra}` : ''}`);
+  }
   await poll(() => page.evaluate(() => {
     const button = document.getElementById('btn-chat-send');
     return Boolean(button) && !button.disabled && !button.classList.contains('chat-send--stop');

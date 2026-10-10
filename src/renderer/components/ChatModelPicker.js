@@ -3,6 +3,7 @@ import { onLocaleChange, t, tMessage } from '../i18n.js';
 // Titel-Inferenz aus der Contract-Schicht: Kopfzeile und Verlaufsliste zeigen
 // denselben Kurztitel, auch bevor die Konversation gespeichert wurde.
 import contracts from '../generated/contracts.js';
+import { toolLogDebug } from '../chat/toolLogDebug.js';
 
 const { resolveChatTitle } = contracts;
 
@@ -247,6 +248,11 @@ export function initChatModelPicker({
         model: m?.model || '',
       };
     }
+    // What the send button and sendChatMessage decide by (#809).
+    toolLogDebug.recordIfChanged('llm state', {
+      providerId: appStore.llmState.chatTarget?.providerId ?? null,
+      configured: activeProviderConfigured(),
+    });
     updateChatChrome();
     onLlmStateChanged?.();
   }

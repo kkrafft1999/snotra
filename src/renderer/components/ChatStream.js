@@ -280,6 +280,9 @@ export function initChatStream({
     const inFlight = !!appStore.chatInFlight;
     btnChatSend.classList.toggle('chat-send--stop', inFlight);
     btnChatSend.disabled = inFlight ? false : !activeProviderConfigured();
+    // A click on a disabled button never reaches sendChatMessage, so the
+    // button's own changes go into the debug buffer as well (#809).
+    toolLogDebug.recordIfChanged('send button', { inFlight, disabled: btnChatSend.disabled });
     const sendLabel = t(inFlight ? 'chat.send.abort' : 'chat.send');
     btnChatSend.title = sendLabel;
     btnChatSend.setAttribute('aria-label', sendLabel);
@@ -1298,8 +1301,24 @@ export function initChatStream({
     void persistCurrentChat();
   }
 
+  /**
+   * A send that a guard turns away leaves its text in the input and nothing
+   * else behind. The debug buffer keeps the reason, so a lost send can be told
+   * apart afterwards — in an e2e failure as much as in an exported log (#809).
+   */
+  function recordSendRefused(reason) {
+    toolLogDebug.record('send refused', {
+      reason,
+      chatId: appStore.currentChatId ?? null,
+      providerId: appStore.llmState?.chatTarget?.providerId ?? null,
+    });
+  }
+
   async function sendChatMessage() {
-    if (appStore.chatInFlight || draftWaitingForChat) return;
+    if (appStore.chatInFlight || draftWaitingForChat) {
+      recordSendRefused(appStore.chatInFlight ? 'run in flight' : 'draft waiting for its chat');
+      return;
+    }
     // An image pasted a moment ago is still being scaled. The send waits for
     // it rather than leaving without it (#589).
     if (preparingImages > 0) {
@@ -1309,7 +1328,11 @@ export function initChatStream({
     stopChatVoiceListening();
     const text = chatInput.value.trim();
     // Ein Screenshot ohne Begleitfrage ist eine gueltige Eingabe (Issue #84).
-    if ((!text && pendingAttachments.length === 0) || !activeProviderConfigured()) return;
+    if (!text && pendingAttachments.length === 0) return;
+    if (!activeProviderConfigured()) {
+      recordSendRefused('provider not configured');
+      return;
+    }
     chatInput.value = '';
     onInputChanged();
     const userMessage = { role: 'user', content: text };
@@ -1327,6 +1350,7 @@ export function initChatStream({
       }
       // The chat that came up may have its own run still going (#320).
       if (appStore.chatInFlight) {
+        recordSendRefused('chat came up running');
         returnDraft(userMessage);
         return;
       }

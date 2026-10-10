@@ -61,7 +61,7 @@ test('generate_image draws through the Images API into the workspace', { timeout
 
   // Without a key the tool is not offered at all.
   model.queueAnswer({ match: 'Without a key', text: 'No image tool here.' });
-  await sendChat(page, 'Without a key: can you draw?', { explain: evidence });
+  await sendChat(page, 'Without a key: can you draw?', { explain: evidence, t });
   await poll(() => page.evaluate(() => !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
     { what: 'first answer', explain: evidence });
   assert.equal(toolNamesOf(model.requestFor('Without a key')).includes('generate_image'), false);
@@ -92,7 +92,7 @@ test('generate_image draws through the Images API into the workspace', { timeout
     }],
   });
   model.queueAnswer({ match: 'bytes_written', text: 'The image is at assets/header.png.' });
-  await sendChat(page, 'Draw a header image.', { explain: evidence });
+  await sendChat(page, 'Draw a header image.', { explain: evidence, t });
   await approveUntilDone(page, 'image run through', evidence, () => model.requestFor('bytes_written'));
 
   assert.ok(toolNamesOf(model.requestFor('Draw a header')).includes('generate_image'), 'offered with a key');
@@ -147,7 +147,7 @@ test('generate_image draws through the Images API into the workspace', { timeout
     toolCalls: [{ name: 'generate_image', arguments: { prompt: 'refused', relative_path: 'assets/refused.png' } }],
   });
   model.queueAnswer({ match: 'refused to draw', text: 'OpenAI refused that one.' });
-  await sendChat(page, 'Draw something refused.', { explain: evidence });
+  await sendChat(page, 'Draw something refused.', { explain: evidence, t });
   await approveUntilDone(page, 'refused run through', evidence, () => model.requestFor('refused to draw'));
   assert.equal((await images.requests()).length, 2);
   assert.match(JSON.stringify(model.requestFor('refused to draw')?.body ?? {}), /Rejected by the safety system/,

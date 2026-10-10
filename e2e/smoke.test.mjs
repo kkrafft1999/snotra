@@ -1325,7 +1325,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     `renderer tool events: ${await rendererToolEvents(page)}`,
     `main:\n${snotra.mainOutput()}`,
   ].join('\n');
-  await sendChat(page, MEMORY_QUESTION, { explain: rememberEvidence });
+  await sendChat(page, MEMORY_QUESTION, { explain: rememberEvidence, t });
 
   const approval = await poll(() => page.evaluate(() => {
     const card = document.querySelector('.chat-approval-card');
