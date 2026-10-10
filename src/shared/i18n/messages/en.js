@@ -1883,6 +1883,13 @@ module.exports = {
   'manual.image.missing': 'Screenshot not available',
   'manual.page.error': 'This page could not be opened.',
   'manual.page.toOverview': 'Go to the overview',
+  // Search in the help window (#847)
+  'manual.search.label': 'Search the manual',
+  'manual.search.open': 'Search',
+  'manual.search.results.label': 'Search results',
+  'manual.search.results.one': '{count} page',
+  'manual.search.results.other': '{count} pages',
+  'manual.search.empty': 'No pages found',
   'menu.help.checkUpdates': 'Check for Updates…',
   'menu.help.github': 'Project on GitHub',
 

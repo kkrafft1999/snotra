@@ -28,6 +28,7 @@ Dieses Handbuch erklärt, wie du damit arbeitest: wie du anfängst, wie du mit D
 [seit 1.19] *Hilfe › Snotra-Handbuch* — oder `F1` — öffnet dieses Handbuch in einem eigenen Fenster in Snotra. Es ist die Fassung, die mit deiner Version der App gekommen ist: Sie beschreibt genau das, was du installiert hast, und funktioniert ohne Internetverbindung. Sie folgt der Sprache und dem hellen oder dunklen Erscheinungsbild, das du für Snotra gewählt hast.
 
 - Links stehen die Kapitel; in einem schmalen Fenster liegen sie hinter *Inhalt*. *Auf dieser Seite* rechts springt zu einem Abschnitt.
+- **Die Suche** steht über den Kapiteln — oder drück `Cmd+F` / `Strg+F`. Gib ein paar Wörter ein: Die Seiten, auf denen alle vorkommen, treten an die Stelle der Kapitel, jede mit dem Abschnitt und einer Zeile Text um die Fundstelle. Groß- und Kleinschreibung und Akzente spielen keine Rolle. `↑` `↓` wählen einen Treffer, `Enter` öffnet die Seite an diesem Abschnitt, `Esc` bringt die Kapitel zurück. In einem schmalen Fenster öffnet die Lupe neben *Inhalt* die Suche.
 - `‹` und `›` gehen in den gelesenen Seiten zurück und vor, mit denselben Tasten wie in der Vorschau: `Cmd+[` und `Cmd+]` auf macOS, `Alt+←` und `Alt+→` unter Windows und Linux.
 - `−` und `+` — oder `Cmd` / `Strg` mit `+`, `−` und `0` — machen den Text größer oder kleiner.
 - *Im Web öffnen* zeigt dieselbe Seite auf docs.snotra-ai.dev, die immer das neueste Release beschreibt.

@@ -84,6 +84,7 @@ function createManualWindowController({
   }));
   guarded.handle(REQ.INDEX, (_event, locale) => manual.getIndex(locale));
   guarded.handle(REQ.PAGE, (_event, locale, slug) => manual.getPage(locale, slug));
+  guarded.handle(REQ.PAGES, (_event, locale) => manual.getAllPages(locale));
   guarded.handle(REQ.SCREENSHOT, (_event, motif, locale, theme) => manual.getScreenshot(motif, locale, theme));
   guarded.handle(REQ.OPEN_EXTERNAL, async (_event, url) => {
     if (!isManualExternalUrl(url)) return false;

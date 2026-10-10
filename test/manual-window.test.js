@@ -47,6 +47,7 @@ test('the service reads pages by slug and screenshots by motif, nothing else', (
     assert.equal(manual.getIndex('fr').locale, 'en', 'an unknown language falls back to English');
     assert.equal(manual.getPage('de', 'index').markdown, 'Hallo');
     assert.equal(manual.getPage('en', 'index').title, 'Manual');
+    assert.deepEqual(manual.getAllPages('de').map((page) => page.markdown), ['Hallo']);
     assert.throws(() => manual.getPage('en', '../secret'), /No manual page/);
     assert.throws(() => manual.getPage('en', 'constructor'), /No manual page/);
     assert.equal(manual.getScreenshot('overview', 'de', 'dark'), `data:image/webp;base64,${Buffer.from('webp').toString('base64')}`);
@@ -132,6 +133,7 @@ function makeController({ available = true } = {}) {
     isAvailable: () => available,
     getIndex: (locale) => ({ locale }),
     getPage: (locale, slug) => ({ locale, slug }),
+    getAllPages: (locale) => [{ locale, slug: 'index' }],
     getScreenshot: () => 'data:',
   };
   const controller = createManualWindowController({
@@ -192,6 +194,8 @@ test('the manual channels answer the help page and refuse the app window', async
   });
   assert.deepEqual(await handlers.get(REQ.PAGE)(fromHelp, 'en', 'index'), { locale: 'en', slug: 'index' });
   assert.throws(() => handlers.get(REQ.PAGE)(fromApp, 'en', 'index'), /not the app window/);
+  assert.deepEqual(handlers.get(REQ.PAGES)(fromHelp, 'de'), [{ locale: 'de', slug: 'index' }]);
+  assert.throws(() => handlers.get(REQ.PAGES)(fromApp, 'de'), /not the app window/);
   assert.equal(await handlers.get(REQ.OPEN_EXTERNAL)(fromHelp, 'https://docs.snotra-ai.dev/'), true);
   assert.equal(await handlers.get(REQ.OPEN_EXTERNAL)(fromHelp, 'file:///etc/passwd'), false);
   assert.deepEqual(opened, ['https://docs.snotra-ai.dev/']);

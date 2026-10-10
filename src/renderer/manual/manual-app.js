@@ -14,6 +14,7 @@ import { classifyLink, renderMarkdownFragment } from '../file-views/markdown-doc
 import { MARKDOWN_ZOOM_STEPS } from '../file-views/markdown-zoom.js';
 import { ZOOM_IN_ICON, ZOOM_OUT_ICON, iconButton, nextZoom } from '../file-views/zoom-tools.js';
 import { initTheme } from '../components/ThemeManager.js';
+import { createManualSearch } from './manual-search-ui.js';
 import {
   SINCE_MARKER,
   manualWebUrl,
@@ -48,6 +49,12 @@ const els = {
   doc: document.getElementById('manual-doc'),
   outline: document.getElementById('manual-outline'),
   outlineList: document.getElementById('manual-outline-list'),
+  searchInput: document.getElementById('manual-search'),
+  searchKey: document.getElementById('manual-search-key'),
+  searchButton: document.getElementById('manual-search-button'),
+  resultsPanel: document.getElementById('manual-results-panel'),
+  resultsCount: document.getElementById('manual-results-count'),
+  results: document.getElementById('manual-results'),
 };
 
 const state = {
@@ -62,9 +69,18 @@ const state = {
   /** Bumped on every page change, so that a late screenshot lands nowhere. */
   render: 0,
   navOpen: false,
+  /** The button that opened the contents on a narrow window, for the focus. */
+  navOpener: null,
 };
 
 const theme = initTheme();
+const search = createManualSearch({
+  els,
+  api,
+  getLocale,
+  chapterLabel: (chapter) => chapterLabel(chapter),
+  onOpen: (result) => { void openResult(result); },
+});
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
@@ -96,6 +112,7 @@ async function changeLocale(locale) {
   applyZoomLabels();
   els.version.title = t('manual.version', { version: state.context.version });
   await loadIndex();
+  search.refreshLocale();
   if (state.current) {
     const top = els.scroll.scrollTop;
     await showPage(state.current.slug, '', { scrollTop: top, focus: false });
@@ -156,6 +173,7 @@ async function showPage(slug, fragment, { scrollTop = null, focus = true } = {})
     : t('manual.document.title', { page: page.title });
 
   markCurrentInNav(slug);
+  search.markCurrent(slug);
   renderCrumbs(slug, page.title);
   renderOutline();
   renderHistoryButtons();
@@ -168,6 +186,19 @@ async function showPage(slug, fragment, { scrollTop = null, focus = true } = {})
   updateOutlineCurrent();
 
   if (focus) focusHeading(heading ?? els.doc.querySelector('h1'));
+}
+
+/** A search result: the page, at the section the words were found in (#847). */
+async function openResult(result) {
+  await openPage(result.slug, result.anchor ?? '');
+  const target = result.anchor
+    ? els.doc.querySelector(`[data-md-anchor="${CSS.escape(result.anchor)}"]`)
+    : els.doc.querySelector('h1');
+  if (!target) return;
+  target.classList.remove('manual-hit');
+  void target.offsetWidth;
+  target.classList.add('manual-hit');
+  target.addEventListener('animationend', () => target.classList.remove('manual-hit'), { once: true });
 }
 
 function showError() {
@@ -501,15 +532,19 @@ function applyNarrow() {
   // While the chapters lie over the page, the page behind them is out of reach.
   els.main.inert = narrow && state.navOpen;
   els.contents.setAttribute('aria-expanded', String(narrow && state.navOpen));
+  els.searchButton.setAttribute('aria-expanded', String(narrow && state.navOpen));
 }
 
-function openNav() {
+/** `focus` is where the focus goes in the contents: the chapters or the search. */
+function openNav({ focus = 'nav', opener = els.contents } = {}) {
   if (!NARROW.matches) return;
   state.navOpen = true;
+  state.navOpener = opener;
   els.root.classList.add('manual--nav-open');
   els.scrim.hidden = false;
   applyNarrow();
-  (els.nav.querySelector('[aria-current="page"]') ?? els.nav.querySelector('a'))?.focus();
+  if (focus === 'search' || !els.nav.querySelector('a') || els.nav.hidden) search.focus();
+  else (els.nav.querySelector('[aria-current="page"]') ?? els.nav.querySelector('a'))?.focus();
 }
 
 function closeNav({ restoreFocus = true } = {}) {
@@ -518,16 +553,27 @@ function closeNav({ restoreFocus = true } = {}) {
   els.root.classList.remove('manual--nav-open');
   els.scrim.hidden = true;
   applyNarrow();
-  if (restoreFocus) els.contents.focus();
+  if (restoreFocus) (state.navOpener ?? els.contents).focus();
 }
 
 els.contents.addEventListener('click', () => (state.navOpen ? closeNav() : openNav()));
+els.searchButton.addEventListener('click', () => (state.navOpen
+  ? closeNav()
+  : openNav({ focus: 'search', opener: els.searchButton })));
 els.sideClose.addEventListener('click', () => closeNav());
 els.scrim.addEventListener('click', () => closeNav());
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape' && state.navOpen) {
     event.preventDefault();
     closeNav();
+    return;
+  }
+  // Cmd+F / Ctrl+F: into the search field, wherever the focus is (#847).
+  const modifier = isMac ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  if (modifier && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'f') {
+    event.preventDefault();
+    if (NARROW.matches && !state.navOpen) openNav({ focus: 'search', opener: els.searchButton });
+    else search.focus();
   }
 });
 NARROW.addEventListener('change', applyNarrow);

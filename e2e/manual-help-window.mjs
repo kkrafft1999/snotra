@@ -96,6 +96,23 @@ try {
   await help.evaluate(() => document.querySelector('img.manual-shot')?.scrollIntoView({ block: 'center' }));
   await wait(400);
   await shoot(help, 'en-light-screenshot');
+  // Search (#847): results in place of the chapters, then the hit opened.
+  await help.keyboard.press(process.platform === 'darwin' ? 'Meta+f' : 'Control+f');
+  await help.keyboard.type('default mode');
+  await poll(() => help.evaluate(() => document.querySelectorAll('.manual-result').length > 0), { what: 'results' });
+  await wait(300);
+  await shoot(help, 'en-light-search');
+  await help.keyboard.press('ArrowDown');
+  await help.keyboard.press('Enter');
+  await wait(250);
+  await shoot(help, 'en-light-search-opened');
+  await help.keyboard.press(process.platform === 'darwin' ? 'Meta+f' : 'Control+f');
+  await help.keyboard.type('xyzzy');
+  await wait(400);
+  await shoot(help, 'en-light-search-empty');
+  await help.keyboard.press('Escape');
+  await wait(300);
+
   await setTheme('dark');
   await shoot(help, 'en-dark-page');
   await setHelpSize(1000, 820);
@@ -106,6 +123,12 @@ try {
   await help.evaluate(() => document.getElementById('manual-contents').click());
   await wait(500);
   await shoot(help, 'en-dark-narrow-contents');
+  await help.keyboard.press('Escape');
+  await help.evaluate(() => document.getElementById('manual-search-button').click());
+  await help.keyboard.type('Schlüssel');
+  await wait(500);
+  await shoot(help, 'en-dark-narrow-search');
+  await help.keyboard.press('Escape');
   await help.keyboard.press('Escape');
   await setTheme('light');
   await shoot(help, 'en-light-narrow');

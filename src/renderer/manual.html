@@ -20,6 +20,15 @@
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         </button>
       </div>
+      <div class="manual-search" role="search">
+        <svg class="manual-search__icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.5 10.5 3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        <input type="search" class="manual-search__input" id="manual-search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="manual-results" autocomplete="off" spellcheck="false" data-i18n-attr="placeholder:manual.search.label;aria-label:manual.search.label">
+        <kbd class="manual-search__key" id="manual-search-key" aria-hidden="true"></kbd>
+      </div>
+      <div class="manual-results" id="manual-results-panel" hidden>
+        <p class="manual-results__count" id="manual-results-count" role="status"></p>
+        <ul class="manual-results__list" id="manual-results" role="listbox" data-i18n-attr="aria-label:manual.search.results.label"></ul>
+      </div>
       <nav class="manual-nav" id="manual-nav" data-i18n-attr="aria-label:manual.nav.label"></nav>
     </aside>
     <div class="manual-scrim" id="manual-scrim" hidden></div>
@@ -37,6 +46,9 @@
         <button type="button" class="manual-contents-button" id="manual-contents" aria-expanded="false" aria-controls="manual-side" data-i18n-attr="aria-label:manual.contents.open">
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M2.5 4h11M2.5 8h11M2.5 12h11" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
           <span data-i18n="manual.contents.open">Contents</span>
+        </button>
+        <button type="button" class="manual-search-button" id="manual-search-button" aria-controls="manual-side" data-i18n-attr="aria-label:manual.search.open;title:manual.search.open">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.5 10.5 3 3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
         </button>
         <nav class="manual-crumbs" id="manual-crumbs" data-i18n-attr="aria-label:manual.breadcrumbs.label"></nav>
         <div class="manual-toolbar__end">
