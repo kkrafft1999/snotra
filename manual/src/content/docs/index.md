@@ -32,6 +32,7 @@ This manual explains how to use it: how to get started, how to work with files a
 - `‹` and `›` go back and forward through the pages you read, with the same keys as in the preview: `Cmd+[` and `Cmd+]` on macOS, `Alt+←` and `Alt+→` on Windows and Linux.
 - `−` and `+` — or `Cmd` / `Ctrl` with `+`, `−` and `0` — make the text larger or smaller.
 - *Open on the web* shows the same page on docs.snotra-ai.dev, which always describes the latest release.
+- **From the settings**, the `?` next to a section or a heading opens the manual right at the part about it.
 
 ## Help improve this manual
 

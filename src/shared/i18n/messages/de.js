@@ -580,6 +580,7 @@ module.exports = {
   // ── Settings: frame ────────────────────────────────────────────────────────
   'settings.title': 'Einstellungen',
   'settings.area': 'Bereich:',
+  'settings.help.label': 'Hilfe: {target}',
   'settings.close': 'Einstellungen schließen',
   'settings.nav.label': 'Einstellungsbereiche',
   'settings.nav.models': 'Modelle',

@@ -407,4 +407,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url) => ipcRenderer.invoke(REQ.SHELL_OPEN_EXTERNAL, url),
   writeClipboardText: (text) =>
     ipcRenderer.invoke(REQ.SHELL_WRITE_CLIPBOARD_TEXT, String(text ?? '')),
+  // The help links next to the settings (#848).
+  openManual: (target) => ipcRenderer.invoke(REQ.MANUAL_OPEN, target),
 });

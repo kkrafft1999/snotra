@@ -485,9 +485,12 @@
       <header class="settings-dialog__header">
         <div>
           <h2 id="modal-settings-title" class="settings-dialog__title" data-i18n="settings.title">Settings</h2>
-          <p id="modal-settings-desc" class="settings-dialog__subtitle">
-            <span data-i18n="settings.area">Section:</span> <span id="settings-panel-heading">Models</span>
-          </p>
+          <div class="settings-help-heading">
+            <p id="modal-settings-desc" class="settings-dialog__subtitle">
+              <span data-i18n="settings.area">Section:</span> <span id="settings-panel-heading">Models</span>
+            </p>
+            <button type="button" class="settings-help" data-manual-help="panel.models" id="btn-settings-panel-help" aria-label="Help">?</button>
+          </div>
         </div>
         <button type="button" id="btn-settings-close" class="settings-dialog__icon-close" aria-label="Close settings" data-i18n-attr="aria-label:settings.close">
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
@@ -529,7 +532,10 @@
             <p id="modal-encryption-warning" class="modal-warning hidden" data-i18n="settings.models.encryptionWarning">Encrypted storage is not available on this system. A key cannot be stored safely.</p>
 
             <div class="settings-panel-models__head">
-              <h3 class="settings-subsection-title" id="heading-pref-models" data-i18n="settings.models.heading">Preferred models</h3>
+              <div class="settings-help-heading">
+                <h3 class="settings-subsection-title" id="heading-pref-models" data-i18n="settings.models.heading">Preferred models</h3>
+                <button type="button" class="settings-help" data-manual-help="preferredModels" aria-label="Help">?</button>
+              </div>
               <button type="button" id="btn-open-add-model" class="btn-secondary" aria-haspopup="dialog" aria-controls="dialog-add-model" data-i18n="settings.models.add">
                 Add model
               </button>
@@ -573,7 +579,10 @@
               <p id="settings-permissions-integrity" class="modal-warning hidden" role="alert"></p>
               <p id="settings-permissions-migration" class="modal-hint settings-permissions-migration hidden"></p>
               <div class="settings-workspace-mode-row" id="settings-security-mode-row">
-                <span id="settings-security-mode-legend" class="settings-workspace-mode-row__label" data-i18n="security.header.defaultMode">Default mode</span>
+                <div class="settings-help-heading">
+                  <span id="settings-security-mode-legend" class="settings-workspace-mode-row__label" data-i18n="security.header.defaultMode">Default mode</span>
+                  <button type="button" class="settings-help" data-manual-help="defaultMode" aria-label="Help">?</button>
+                </div>
                 <div id="settings-security-mode-options" class="settings-segmented" role="radiogroup" aria-labelledby="settings-security-mode-legend heading-security-workspace" aria-describedby="settings-security-mode-state settings-security-mode-note"></div>
                 <span id="status-security-mode" class="settings-instant-status" role="status"></span>
               </div>
@@ -587,7 +596,10 @@
             <p id="settings-permissions-error" class="modal-hint error hidden" role="alert"></p>
             <div class="settings-tools-card" id="settings-grants-card">
               <div class="settings-grants__head">
-                <h3 class="settings-subsection-title" id="heading-session-grants" data-i18n="settings.grants.heading">Session allowances</h3>
+                <div class="settings-help-heading">
+                  <h3 class="settings-subsection-title" id="heading-session-grants" data-i18n="settings.grants.heading">Session allowances</h3>
+                  <button type="button" class="settings-help" data-manual-help="sessionGrants" aria-label="Help">?</button>
+                </div>
                 <span id="status-session-grants" class="settings-instant-status" role="status"></span>
               </div>
               <p class="settings-grants__note" data-i18n="settings.grants.note">Each applies only in its own chat. It ends when you leave that chat, change its mode or a rule, or restart Snotra.</p>
@@ -598,7 +610,10 @@
               </div>
             </div>
             <div class="settings-tools-card" id="settings-reset-card">
-              <h3 class="settings-subsection-title" id="heading-permission-reset" data-i18n="settings.reset.heading">Reset</h3>
+              <div class="settings-help-heading">
+                <h3 class="settings-subsection-title" id="heading-permission-reset" data-i18n="settings.reset.heading">Reset</h3>
+                <button type="button" class="settings-help" data-manual-help="permissionReset" aria-label="Help">?</button>
+              </div>
               <div id="settings-reset-actions" class="settings-reset-actions" aria-labelledby="heading-permission-reset"></div>
             </div>
             <!-- Controls that live in a row (#449). They are moved into the open
@@ -669,7 +684,10 @@
               </details>
             </div>
             <div class="settings-security-slot" id="settings-sandbox-card">
-              <h4 class="settings-security-subhead" id="heading-workspace-sandbox"><span data-i18n="settings.sandbox.workspace.heading">Sandbox for this workspace</span> <code id="settings-sandbox-workspace-name" class="settings-rules-heading__root"></code></h4>
+              <div class="settings-help-heading">
+                <h4 class="settings-security-subhead" id="heading-workspace-sandbox"><span data-i18n="settings.sandbox.workspace.heading">Sandbox for this workspace</span> <code id="settings-sandbox-workspace-name" class="settings-rules-heading__root"></code></h4>
+                <button type="button" class="settings-help" data-manual-help="workspaceSandbox" aria-label="Help">?</button>
+              </div>
               <details class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
                   <span data-i18n-html="settings.sandbox.workspace.note.summary">Applies to <code>run_python</code> and <code>shell_execute</code>, in this folder only.</span>
@@ -701,7 +719,10 @@
               <p id="settings-sandbox-state" class="modal-hint error" role="status" hidden></p>
             </div>
             <div class="settings-security-slot" id="settings-allowances-card">
-              <h4 class="settings-security-subhead" id="heading-program-allowances" data-i18n="settings.allowances.heading">Program allowances</h4>
+              <div class="settings-help-heading">
+                <h4 class="settings-security-subhead" id="heading-program-allowances" data-i18n="settings.allowances.heading">Program allowances</h4>
+                <button type="button" class="settings-help" data-manual-help="programAllowances" aria-label="Help">?</button>
+              </div>
               <details class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
                   <span data-i18n="settings.allowances.note.summary">Extra rights inside the sandbox for programs you trust, in every workspace.</span>
@@ -728,7 +749,10 @@
               <p id="settings-allowance-error" class="modal-hint error hidden" role="alert"></p>
             </div>
             <div class="settings-security-slot" id="settings-sensitive-card">
-              <h4 class="settings-security-subhead" id="heading-sensitive-paths" data-i18n="settings.sensitive.own">Your own patterns</h4>
+              <div class="settings-help-heading">
+                <h4 class="settings-security-subhead" id="heading-sensitive-paths" data-i18n="settings.sensitive.own">Your own patterns</h4>
+                <button type="button" class="settings-help" data-manual-help="sensitivePaths" aria-label="Help">?</button>
+              </div>
               <ul id="settings-sensitive-list" class="settings-rule-list" aria-labelledby="heading-sensitive-paths"></ul>
               <p id="settings-sensitive-empty" class="settings-empty-hint" data-i18n="settings.sensitive.empty">No patterns of your own.</p>
               <div class="modal-row settings-sensitive-row">
@@ -789,7 +813,10 @@
           <section class="settings-panel" id="panel-settings-tools" role="tabpanel" aria-labelledby="tab-settings-tools" hidden>
             <p class="settings-security-intro" data-i18n-html="settings.tools.intro">Settings for the tools that need them, and the MCP servers that bring more. Which tools the model may use, and when Snotra asks first, is on the <strong>Tools &amp; security</strong> page.</p>
             <div class="settings-tools-card" id="settings-python-interpreter-card">
-              <h3 class="settings-subsection-title" id="heading-python" data-i18n="settings.python.interpreter.heading">Python interpreter</h3>
+              <div class="settings-help-heading">
+                <h3 class="settings-subsection-title" id="heading-python" data-i18n="settings.python.interpreter.heading">Python interpreter</h3>
+                <button type="button" class="settings-help" data-manual-help="python" aria-label="Help">?</button>
+              </div>
               <p class="modal-hint" data-i18n="settings.python.interpreter.where">Whether the model may run Python is switched under Tools &amp; security.</p>
               <div class="modal-field-group">
                 <label for="input-python-interpreter" class="modal-field-label eyebrow-row" data-i18n="settings.python.interpreter.label">
@@ -810,7 +837,10 @@
             </div>
 
             <div class="settings-tools-card" id="settings-web-search-card">
-              <h3 class="settings-subsection-title" id="heading-web-search" data-i18n="settings.webSearch.heading">Web search</h3>
+              <div class="settings-help-heading">
+                <h3 class="settings-subsection-title" id="heading-web-search" data-i18n="settings.webSearch.heading">Web search</h3>
+                <button type="button" class="settings-help" data-manual-help="webSearch" aria-label="Help">?</button>
+              </div>
               <details class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
                   <span data-i18n-html="settings.webSearch.note.summary"><code>web_search</code> asks <strong>Tavily</strong> &mdash; without a key the tool
@@ -836,7 +866,10 @@
             </div>
 
             <div class="settings-tools-card" id="settings-image-generation-card">
-              <h3 class="settings-subsection-title" id="heading-image-generation" data-i18n="settings.imageGeneration.heading">Image generation</h3>
+              <div class="settings-help-heading">
+                <h3 class="settings-subsection-title" id="heading-image-generation" data-i18n="settings.imageGeneration.heading">Image generation</h3>
+                <button type="button" class="settings-help" data-manual-help="imageGeneration" aria-label="Help">?</button>
+              </div>
               <details class="settings-note settings-note--tight">
                 <summary class="settings-note__summary">
                   <span data-i18n-html="settings.imageGeneration.note.summary"><code>generate_image</code> draws with your <strong>OpenAI</strong> key &mdash; without one the tool is not offered to the model at all.</span>
@@ -858,7 +891,10 @@
 
             <div class="settings-tools-mcp">
               <div class="settings-panel-models__head">
-                <h3 class="settings-subsection-title" id="heading-mcp-servers" data-i18n="settings.mcp.heading">MCP servers</h3>
+                <div class="settings-help-heading">
+                  <h3 class="settings-subsection-title" id="heading-mcp-servers" data-i18n="settings.mcp.heading">MCP servers</h3>
+                  <button type="button" class="settings-help" data-manual-help="mcpServers" aria-label="Help">?</button>
+                </div>
                 <div class="settings-mcp-head__actions">
                   <button type="button" id="btn-reload-mcp" class="btn-secondary" data-i18n="settings.mcp.reload">Reload</button>
                   <button type="button" id="btn-import-mcp-servers" class="btn-secondary" aria-haspopup="dialog" aria-controls="dialog-mcp-import" data-i18n="settings.mcp.import">
@@ -928,7 +964,10 @@
                 </p>
               </div>
               <div class="settings-panel-models__head">
-                <h3 class="settings-subsection-title" id="heading-skill-catalog" data-i18n="settings.skills.catalog.heading">Available skills</h3>
+                <div class="settings-help-heading">
+                  <h3 class="settings-subsection-title" id="heading-skill-catalog" data-i18n="settings.skills.catalog.heading">Available skills</h3>
+                  <button type="button" class="settings-help" data-manual-help="skillCatalog" aria-label="Help">?</button>
+                </div>
                 <button type="button" id="btn-reload-skills" class="btn-secondary" data-i18n="settings.skills.reload">Reload skills</button>
               </div>
               <ul id="settings-skill-list" class="settings-tool-list" aria-labelledby="heading-skill-catalog"></ul>

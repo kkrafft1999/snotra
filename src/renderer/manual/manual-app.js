@@ -93,7 +93,10 @@ async function start() {
   await loadIndex();
 
   const query = new URLSearchParams(window.location.search);
-  await openPage(query.get('page') || 'index', query.get('section') || '', { focus: false });
+  // Opened for a section (a `?` in the settings, #848): the focus goes to its
+  // heading, as it does when the open window turns to one.
+  const section = query.get('section') || '';
+  await openPage(query.get('page') || 'index', section, { focus: section !== '' });
 
   api.onNavigate(({ slug, fragment }) => { void openPage(slug, fragment); });
   api.onHistory((direction) => { void step(direction === 'back' ? -1 : 1); });

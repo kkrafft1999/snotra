@@ -21,7 +21,7 @@ const { claimSingleInstance, createStartupFailureHandler, holdQuitForPendingWrit
 const { guardIpcMain } = require('./ipc/trusted-sender');
 const { HTML_PREVIEW_SCHEME_PRIVILEGES } = require('./services/html-preview-service');
 const { createManualService } = require('./services/manual-service');
-const { createManualWindowController } = require('./manual-window');
+const { createManualWindowController, registerManualOpenHandler } = require('./manual-window');
 
 // The storage identity first (#795): userData and the safeStorage key are
 // derived from the name the app has at this point, and stay with it. The app
@@ -158,6 +158,12 @@ function start() {
         bundleDir: path.join(__dirname, '..', 'manual'),
       }),
       getLocale: () => application?.getAppLocale?.(),
+    });
+    // The `?` next to a settings section opens it at its page (#848).
+    registerManualOpenHandler({
+      ipcMain: guardIpcMain(ipcMain),
+      REQ,
+      open: (target) => manualWindow.open(target),
     });
 
     // The stored language is only known once the preferences have been read.

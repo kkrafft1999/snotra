@@ -22,6 +22,8 @@ Everything you can set up in Snotra is in one place: the settings. They open ove
 | *Memory* | What Snotra remembers across chats. See [Let Snotra remember](../memory/). |
 | *General* | Instructions for every chat, the look, the language — see below. |
 
+[since 1.19] The `?` next to the name of the section at the top, and next to many headings inside a section, opens this manual at the page and section about it — in the window described in [The manual inside Snotra](../../#the-manual-inside-snotra).
+
 ## When a change takes effect
 
 The line at the bottom of each section says it, because it differs:

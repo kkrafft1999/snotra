@@ -573,6 +573,7 @@ module.exports = {
   // ── Settings: frame ──────────────────────────────────────────────────────
   'settings.title': 'Settings',
   'settings.area': 'Section:',
+  'settings.help.label': 'Help: {target}',
   'settings.close': 'Close settings',
   'settings.nav.label': 'Settings sections',
   'settings.nav.models': 'Models',
