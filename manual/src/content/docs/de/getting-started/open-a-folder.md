@@ -16,13 +16,15 @@ Einen Ordner auf deinem Rechner, an dem du arbeiten willst. Jeder Ordner geht; e
 1. Klick auf der Willkommensseite auf *Ordner öffnen*.
 2. Wähl den Ordner im Dialog aus und bestätige.
 
+Einen Ordner, den du schon einmal geöffnet hast, findest du auf der Willkommensseite unter *zuletzt geöffnet*; ein Klick öffnet ihn wieder.
+
 Später wechselst du, indem du oben in der Seitenleiste auf den Namen des Ordners klickst. Das Menü zeigt die Ordner, die du zuletzt geöffnet hast; wähl einen davon oder *Ordner öffnen …* für einen neuen.
 
 ![Die linke obere Ecke des Fensters mit geöffnetem Ordner-Menü: unter „Zuletzt geöffnete Ordner“ der Ordner gartenplaner mit seinem Pfad, darunter „Ordner öffnen …“.](screenshots/switch-folder.webp)
 
 ## Was dann passiert
 
-- Links erscheint der **Dateibaum** des Ordners. Versteckte Dateien wie `.gitignore` bleiben ausgeblendet, bis du sie mit `Cmd+Shift+.` / `Strg+Shift+.` einblendest.
+- Links erscheint der **Dateibaum** des Ordners — eine ausgeblendete Seitenleiste kommt dafür zurück. Versteckte Dateien wie `.gitignore` bleiben ausgeblendet, bis du sie mit `Cmd+Shift+.` / `Strg+Shift+.` einblendest.
 - Hat der Ordner eine `README.md`, öffnet sie sich in der **mittleren Spalte**. Sonst bleibt die mittlere Spalte zu, und der Chat bekommt den Platz — siehe [Dich im Fenster zurechtfinden](../../workspace/the-window/).
 - Der **Chat** rechts begrüßt dich mit dem Namen des Ordners. Ab jetzt arbeitet er in diesem Ordner.
 - Snotra merkt sich den Ordner und öffnet ihn beim nächsten Start wieder.

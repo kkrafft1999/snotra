@@ -30,6 +30,7 @@ async function setup(t, { paths = [POSIX, WINDOWS, UNC], chosenFolder = null } =
   let history = [...paths];
   const removed = [];
   const dialogs = [];
+  const revealed = [];
   const tree = initFileTree({
     api: {
       activateFolder: async () => ({ ok: true }),
@@ -53,6 +54,8 @@ async function setup(t, { paths = [POSIX, WINDOWS, UNC], chosenFolder = null } =
     onProjectOpened() {},
     sendChatMessage() {},
     activeProviderConfigured: () => true,
+    revealSidebar: () => revealed.push('sidebar'),
+    revealChatPanel: () => revealed.push('chat'),
   });
   await flush();
 
@@ -67,6 +70,7 @@ async function setup(t, { paths = [POSIX, WINDOWS, UNC], chosenFolder = null } =
     appStore,
     removed,
     dialogs,
+    revealed,
     button,
     menu,
     items,
@@ -276,6 +280,28 @@ test('a recent-folder chip is a button inside a list item, without a role of its
   assert.equal(labelledName(document, first), `snotra ${POSIX}`);
   const path = first.querySelector('.chip-recent-path > bdi[dir="ltr"]');
   assert.equal(path?.textContent, POSIX);
+});
+
+test('a recent-folder chip opens the sidebar, also for the folder already open', async (t) => {
+  const { document, tree, appStore, revealed } = await setup(t);
+  await tree.refreshWelcomeRecent();
+  const chip = () => document.querySelector('#welcome-recent-list .chip--recent');
+  chip().click();
+  await flush();
+  await flush();
+  assert.equal(appStore.rootPath, POSIX);
+  assert.deepEqual(revealed, ['sidebar']);
+  chip().click();
+  await flush();
+  assert.deepEqual(revealed, ['sidebar', 'sidebar']);
+});
+
+test('a quick-start chip opens the chat and leaves the sidebar alone', async (t) => {
+  const { document, revealed } = await setup(t);
+  document.querySelector('#welcome-actions-list .chip[data-action="review"]').click();
+  await flush();
+  assert.deepEqual(revealed, ['chat']);
+  assert.match(document.getElementById('chat-input').value, /^Do a code review/);
 });
 
 // ── "Open folder…" (#676) ────────────────────────────────────────────────────

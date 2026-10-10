@@ -246,6 +246,13 @@ async function toggleSidebar() {
   }
 }
 
+// A folder chosen on the start screen is opened to be looked at: a hidden
+// sidebar comes back with it, and stays back.
+function revealSidebar() {
+  if (!appRoot.classList.contains('app--no-sidebar')) return;
+  void toggleSidebar();
+}
+
 btnToggleSidebar.addEventListener('click', () => {
   void toggleSidebar();
 });
@@ -534,6 +541,10 @@ const fileTree = initFileTree({
     contentPaneToggledByUser = true;
     setContentPaneVisible(true);
   },
+  // The start screen's links open the column they lead to: a recent folder
+  // the sidebar, a quick action the chat.
+  revealSidebar,
+  revealChatPanel,
   workspacePaths,
 });
 
