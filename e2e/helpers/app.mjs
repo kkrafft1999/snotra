@@ -204,6 +204,21 @@ export function composerState(page) {
 }
 
 /**
+ * Waits until the open folder's chat is on screen. `launchApp` only waits for
+ * the page, and the chat comes a round trip later: `showChatForWorkspace`
+ * empties the composer and then draws the chat — its history or the greeting.
+ * Text a test writes into the composer before that is wiped (#869). A send
+ * waits for the chat by itself (#721); anything else that touches the composer
+ * right after the start waits here first. Needs a folder: without one there is
+ * no greeting to wait for.
+ */
+export async function waitForFolderChat(page, { explain = null } = {}) {
+  await poll(() => page.evaluate(() => !!document.querySelector('#chat-messages > .chat-msg')), {
+    what: "the folder's chat on screen", explain,
+  });
+}
+
+/**
  * Types `text` into the composer and sends it, and checks that the send took.
  * The input is emptied only once the message has passed every guard of
  * `sendChatMessage`, so text that is still there afterwards names a send that
