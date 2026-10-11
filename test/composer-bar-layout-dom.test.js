@@ -1,5 +1,6 @@
-// The composer bar in a narrow chat (#400): below 400 px the model and mode
-// pill take a row of their own above the mic, the token counter and send.
+// The composer bar in a narrow chat (#400): below STACK_BAR_BELOW the pills
+// (model, mode, and since #773 skills) take a row of their own above the mic,
+// the token counter and send.
 //
 // happy-dom has no layout (see test/helpers/dom.js), so the width is handed
 // in rather than measured, and what is checked is the contract: where the

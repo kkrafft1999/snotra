@@ -11,7 +11,7 @@ Snotra bringt eigene Tools zum Lesen, Ändern, Ausführen und Suchen mit. Die me
 
 | Risikoklasse | Tools | Bereit? |
 | --- | --- | --- |
-| *Lesen* | `read_file_text`, `read_file_lines`, `list_directory_tree`, `find_files`, `search_in_files`, `stat_path`, `outline_file`, `extract_document_text` (PDF, Word, Excel, PowerPoint) | ja |
+| *Lesen* | `read_file_text`, `read_file_lines`, `list_directory_tree`, `find_files`, `search_in_files`, `stat_path`, `outline_file`, `extract_document_text` (PDF, Word, Excel, PowerPoint), `get_configuration` (welche Skills und Tools dieser Chat hat) | ja |
 | *Ändern* | `write_file_text`, `edit_file`, `apply_patch`, `remember`, `generate_image` | ja — `generate_image` braucht einen OpenAI-Schlüssel |
 | *Ausführen* | `shell_execute`, `run_python` | aus, bis du sie einschaltest |
 | *Externe Dienste* | `fetch_url`, `web_search` | `web_search` braucht einen Tavily-Schlüssel |
@@ -44,4 +44,4 @@ Die Suchanfrage verlässt deinen Rechner, deshalb fragt Snotra in *Intelligent* 
 
 - ***Kein Python 3 gefunden.*** Installier Python 3 oder trag den Pfad deines Interpreters ein. Die Zeile unter dem Feld sagt, wo Snotra gesucht hat.
 - **Das Modell sucht nicht im Web.** Ohne Tavily-Schlüssel wird `web_search` dem Modell gar nicht angeboten.
-- **Ein Tool wird nie benutzt.** Es ist vielleicht unter *Einstellungen › Tools & Sicherheit* ausgeschaltet; die Zeile steht auf *Aus* oder nennt das Tool als ausgeschaltet.
+- **Ein Tool wird nie benutzt.** Klick auf die Skills-Pille in der Chat-Leiste: Ein fehlendes Tool steht dort oben, mit dem Grund und einem Knopf zur Einstellung. Unter *Einstellungen › Tools & Sicherheit* steht seine Zeile auf *Aus* oder nennt das Tool als ausgeschaltet.

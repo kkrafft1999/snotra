@@ -1,6 +1,6 @@
 /**
  * The composer bar in a narrow chat (#400). Docked next to an open file, the
- * bar has no room for the mic, both pills, the token counter and send in one
+ * bar has no room for the mic, the pills, the token counter and send in one
  * row; the model and mode pill then take a row of their own above the others.
  *
  * The pill group is moved in the DOM rather than reordered with CSS `order`:
@@ -8,8 +8,12 @@
  * then mic, token counter and send.
  */
 
-/** Below this bar width the pills get their own row. */
-export const STACK_BAR_BELOW = 400;
+/**
+ * Below this bar width the pills get their own row. Raised from 400 to 430
+ * with the third pill (#773): mic, mode, skills, counter and send take about
+ * 290 px, and below 430 a model name would keep less than 140 px.
+ */
+export const STACK_BAR_BELOW = 430;
 
 /**
  * Puts the pill group where a bar of `width` px has room for it.

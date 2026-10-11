@@ -22,6 +22,7 @@ const { createSessionGrants } = require('../../application/permissions/session-g
 const { PERMISSION_DENIAL_REASONS, DEFAULT_TOOL_PERMISSION_MODE } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/workspace-tree');
 const { createMessage } = require('../../shared/contracts/message');
+const { TOOL_SETUPS } = require('../../shared/contracts/chat-configuration');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createMcpService } = require('../services/mcp-service');
 const { createMcpAdapter } = require('../adapters/mcp-adapter');
@@ -80,6 +81,8 @@ const { createChatSessionSettings } = require('../services/chat-session-settings
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
 const { registerSkillSuggestionHandlers } = require('../ipc/skill-suggestion-handlers');
+const { registerChatConfigurationHandlers } = require('../ipc/chat-configuration-handlers');
+const { createChatConfigurationService } = require('../services/chat-configuration-service');
 const { registerShellHandlers } = require('../ipc/shell-handlers');
 const { registerPreviewHistoryMenuHandlers } = require('../ipc/preview-history-menu-handlers');
 const { createChatApplication } = require('./create-chat-application');
@@ -437,6 +440,8 @@ function createApplication({
   });
   const shellRunner = {
     isAvailable: () => shellExecutionEnabled && shellRunnerService.isAvailable(),
+    // What is missing while it is not (#773): the switch, or a shell.
+    setupNeeded: () => (shellExecutionEnabled ? TOOL_SETUPS.SHELL : TOOL_SETUPS.SHELL_SWITCH),
     run: (request) => shellRunnerService.run(request),
   };
   const shellSettings = {
@@ -473,6 +478,7 @@ function createApplication({
   });
   const pythonRunner = {
     isAvailable: () => pythonExecutionEnabled && pythonRunnerService.isAvailable(),
+    setupNeeded: () => (pythonExecutionEnabled ? TOOL_SETUPS.PYTHON : TOOL_SETUPS.PYTHON_SWITCH),
     run: (request) => pythonRunnerService.run(request),
   };
   const pythonSettings = {
@@ -518,6 +524,8 @@ function createApplication({
     fsService,
     extractor: createDocumentTextExtractor({ pdfjsDir: PDFJS_VENDOR_DIR }),
   });
+  // Which skills and tools a chat has (#773); assigned once the skills exist.
+  let chatConfiguration = null;
   const toolRegistry = createWorkspaceToolRegistry({
     fsService,
     webSearch,
@@ -527,6 +535,8 @@ function createApplication({
     memory,
     documentText,
     imageGeneration: imageGenerationSettings.adapter,
+    // Built further down: it needs the skills and the MCP servers (#773).
+    configuration: { describeForModel: (input) => chatConfiguration.describeForModel(input) },
   });
 
   // MCP-Server (Issue #106/#107). Verbunden wird traege — `setServers` startet
@@ -605,6 +615,13 @@ function createApplication({
   // Ausweg, ist aber nicht mehr noetig. Ohne watch-Implementierung (Tests)
   // laeuft alles wie vorher, nur ohne Watcher.
   dropSkillScans = () => skillsService.reload();
+
+  chatConfiguration = createChatConfigurationService({
+    skills: skillsService,
+    toolRegistry,
+    uiPrefsStore,
+    mcpConfigStore,
+  });
 
   // A watch that fails — the kernel out of watches, the folder cap reached,
   // a folder that cannot be watched — is said in the log, naming the folder
@@ -887,6 +904,12 @@ function createApplication({
     uiPrefsStore,
   });
   registerSkillSuggestionHandlers({ ipcMain, skillSuggestionService, uiPrefsStore, REQ });
+  registerChatConfigurationHandlers({
+    ipcMain,
+    chatConfiguration,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    REQ,
+  });
 
   registerChatHandlers({
     ipcMain,

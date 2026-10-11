@@ -50,6 +50,10 @@ workspace tools · any CLI on your machine
   questions — workspace boundaries, blocks and the protection of Snotra's own
   keys stay. You switch it on deliberately, for one chat or as the default of
   a folder you trust.
+- **You see what it has.** A pill next to the model counts the skills that
+  are on in the chat; its list shows every skill and tool, what is missing and
+  why, and leads to the setting. The model reads the same list instead of
+  guessing — switching things on stays with you.
 - **Your models, your keys.** Cloud and local models sit side by side in one
   list; you switch per conversation. Keys are stored with the operating
   system's encryption.

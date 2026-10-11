@@ -988,6 +988,7 @@ data lives next to its topic and is tested there:
 | Masking the status of an MCP server | `services/mcp-status-masking.js` |
 | The model's skill suggestion (`SKILLS_SUGGEST`) | `ipc/skill-suggestion-handlers.js` |
 | What Settings › Tools & security and the mode pill read | `services/security-page-data.js` |
+| Which skills and tools a chat has — the composer pill (`CHAT_GET_CONFIGURATION`) and the model's `get_configuration` (#773) | `services/chat-configuration-service.js`, `ipc/chat-configuration-handlers.js`; why a tool is not offered: `whyNotOffered` in `tools/workspace-tool-registry.js` |
 | The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |
 
 What stays in the module are the small state holders the wiring needs — the
@@ -2249,8 +2250,8 @@ issue #276) — it never goes through the catalogue.
 The chat surface is built at runtime from beginning to end — there is no markup
 for `data-i18n` to reach. So it goes through `t()` and repaints on
 `onLocaleChange`: `ChatStream` (greeting, token figure, send button,
-attachments), `ToolApprovalCard`, `ChatModelPicker`, `ToolModePicker` and the
-token breakdown panel. The approval card is rebuilt from the entry the queue
+attachments), `ToolApprovalCard`, `ChatModelPicker`, `ToolModePicker`,
+`ChatConfigIndicator` and the token breakdown panel. The approval card is rebuilt from the entry the queue
 still holds, so a resolved card keeps its outcome and a decision already on its
 way keeps its buttons locked ([#290](https://github.com/kkrafft1999/snotra/issues/290)).
 

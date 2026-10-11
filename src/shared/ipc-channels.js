@@ -124,6 +124,8 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_RELOAD_SKILLS: 'settings:reloadSkills',
   /** Passenden Skill zur Eingabe vom Modell vorschlagen lassen (Issue #125). */
   SKILLS_SUGGEST: 'skills:suggest',
+  /** Which skills and tools the open chat has, for the indicator at the composer (#773). */
+  CHAT_GET_CONFIGURATION: 'chat:getConfiguration',
   /** Gedaechtnis beider Ebenen samt Eintraegen und Pfaden lesen (Issue #166). */
   SETTINGS_GET_MEMORY: 'settings:getMemory',
   /** Einen einzelnen Gedaechtnis-Eintrag vergessen (Issue #166). */

@@ -74,6 +74,9 @@ export function initSettingsModal(deps) {
     getTheme = null,
     setTheme = null,
     DEFAULT_MAX_TOOL_ROUNDS = 14,
+    // Called once the dialog is closed — whatever changed in it, the chat's
+    // skills and tools are read again (#773).
+    onClosed = null,
   } = deps;
 
   // The drafts of one opening. Each open starts them afresh (CR-B14-06): a
@@ -2031,6 +2034,12 @@ export function initSettingsModal(deps) {
       // With a jump target the focus is on the switch it means, otherwise on
       // the selected section's tab.
       if (jump?.skillName && focusSkillSwitch(jump.skillName)) return;
+      // From the skills and tools of a chat (#773): the section that sets
+      // up what is missing, its heading focused.
+      if (jump?.target) {
+        navigateToSetting(jump.panel, jump.target);
+        return;
+      }
       // From the approval card's "Sandbox setting" and "Program allowances"
       // links, the mode pill and the folder shield (#357, #408, #449): the
       // execute row of the Security page, opened on the control.
@@ -2086,6 +2095,7 @@ export function initSettingsModal(deps) {
       try { appStore.lastFocusBeforeModal.focus(); } catch { /* ignore */ }
     }
     appStore.lastFocusBeforeModal = null;
+    onClosed?.();
   }
 
   async function loadModelsForPopup() {

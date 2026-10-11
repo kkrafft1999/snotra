@@ -14,6 +14,7 @@
 const { parseQualifiedMcpToolName } = require('../contracts/mcp');
 const { parseSkillPath } = require('../runtime/skill-path');
 const { LOAD_SKILL_TOOL, workspaceSkillOfPath } = require('../contracts/skills');
+const { GET_CONFIGURATION_TOOL } = require('../contracts/chat-configuration');
 const { DEFAULT_LOCALE, createTranslator } = require('../i18n');
 
 function truncateToolLabel(value, max = 48) {
@@ -137,6 +138,10 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOC
   if (toolName === 'stat_path') return lineFor(t, 'stat_path', isDone, { path: pathOf() });
   if (toolName === 'outline_file') return lineFor(t, 'outline_file', isDone, { path: pathOf() });
   if (toolName === 'extract_document_text') return lineFor(t, 'extract_document_text', isDone, { path: pathOf() });
+  // Nothing to name but the step itself (#773).
+  if (toolName === GET_CONFIGURATION_TOOL) {
+    return t(isDone ? 'tools.line.getConfiguration.done' : 'tools.line.getConfiguration.start');
+  }
   if (toolName === 'list_directory_tree') return lineFor(t, 'list_directory_tree', isDone, { path: pathOf() });
   if (toolName === 'run_python') {
     const count = String(args?.code ?? '').split('\n').filter((line) => line.trim()).length;

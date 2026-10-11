@@ -419,6 +419,31 @@
                   </div>
                 </div>
               </span>
+              <!-- Skills and tools of this chat (#773): counts the skills that
+                   are on, and the popover lists skills and tools with their
+                   state and the way to the setting. Hidden until the first
+                   answer, so it never claims "No skills" while loading. -->
+              <span class="chat-model-picker-wrap chat-config-wrap hidden" id="chat-config-wrap">
+                <button
+                  type="button"
+                  id="btn-chat-config"
+                  class="chat-model-pill chat-model-pill--btn chat-config-pill"
+                  aria-haspopup="dialog"
+                  aria-expanded="false"
+                  aria-controls="chat-config-popup">
+                  <svg class="chat-config-icon" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true">
+                    <rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.2"/>
+                    <rect x="9" y="1.5" width="5.5" height="5.5" rx="1.2"/>
+                    <rect x="1.5" y="9" width="5.5" height="5.5" rx="1.2"/>
+                    <rect x="9" y="9" width="5.5" height="5.5" rx="1.2"/>
+                  </svg>
+                  <span id="chat-config-label"></span>
+                  <svg class="chat-model-pill-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
+                    <path fill="currentColor" d="M0 0l5 6 5-6z"/>
+                  </svg>
+                </button>
+                <div id="chat-config-popup" class="chat-model-menu chat-config-popup hidden" role="dialog" tabindex="-1" aria-label="Skills and tools of this chat" data-i18n-attr="aria-label:chat.config.dialog"></div>
+              </span>
               <p id="chat-tool-mode-status" class="chat-voice-status chat-tool-mode-status hidden" role="status" aria-live="polite"></p>
               </div>
             </div>

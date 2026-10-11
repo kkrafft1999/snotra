@@ -22,6 +22,7 @@
 
 const path = require('path');
 const { TOOL_RISK_CLASSES } = require('../../shared/contracts/tool-permissions');
+const { TOOL_SETUPS } = require('../../shared/contracts/chat-configuration');
 const {
   IMAGE_GENERATION_ERROR_CODES,
   IMAGE_SIZES,
@@ -184,6 +185,7 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
     mayOverwrite: true,
     targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'write', overwrite: true }],
     isAvailable: () => imageGeneration?.isConfigured() === true,
+    setup: TOOL_SETUPS.IMAGE_GENERATION,
     descriptionKey: 'tools.desc.generate_image',
     modelDescription:
       'Generates an image from a text prompt with an image model and saves it as a file in the project. '

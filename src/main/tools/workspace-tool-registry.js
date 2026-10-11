@@ -4,6 +4,11 @@ const { SANDBOX_REASONS } = require('../services/sandbox-service');
 const { LIST_DIRECTORY_MAX_ENTRIES } = require('../services/fs-service');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
+const {
+  GET_CONFIGURATION_TOOL,
+  TOOL_OFFER_REASONS,
+  TOOL_SETUPS,
+} = require('../../shared/contracts/chat-configuration');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
 const { createTranslator } = require('../../shared/i18n');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
@@ -122,7 +127,17 @@ function createToolRegistry(initialDefinitions = []) {
       targets: typeof definition.targets === 'function' ? definition.targets : () => [],
       isAvailable:
         typeof definition.isAvailable === 'function' ? definition.isAvailable : () => true,
+      // What an unavailable tool lacks (#773): a key, a switch, a server. A
+      // function, because the answer can change at run time (switch on, but
+      // no interpreter found). An MCP tool's server is its setup.
+      setup: normalizeSetup(definition),
     };
+  }
+
+  function normalizeSetup(definition) {
+    if (typeof definition.setup === 'function') return definition.setup;
+    if (typeof definition.setup === 'string' && definition.setup) return () => definition.setup;
+    return () => (definition.mcp ? TOOL_SETUPS.MCP : null);
   }
 
   function register(definition) {
@@ -186,7 +201,21 @@ function createToolRegistry(initialDefinitions = []) {
     return getDefinition(name)?.essential !== true;
   }
 
-  function getAvailableDefinitions({
+  function isConfigured(definition) {
+    try {
+      return definition.isAvailable() === true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Why a tool is not offered to the model, or `null` when it is. The one
+   * place that decides it: what the model gets (`getTools`) and what the
+   * composer indicator and `get_configuration` report (#773) must not drift
+   * apart, or the indicator would call a tool on that the model never sees.
+   */
+  function whyNotOffered(definition, {
     allowedNames,
     disabledNames,
     workspaceOpen = true,
@@ -198,26 +227,59 @@ function createToolRegistry(initialDefinitions = []) {
     // Said, and not empty: only then are there skill folders without a workspace.
     const skillsSwitchedOn = Array.isArray(skillNames) && skillNames.length > 0;
     const allowed = toAllowedNameSet(allowedNames);
-    return allDefinitions().filter(
-      (definition) =>
-        (!allowed || allowed.has(definition.name)) &&
-        // Die Haekchen des Nutzers gelten nicht fuer die Grundausstattung; eine
-        // programmatische Allowlist (Tests, kuenftige Modi) schon — sie ist
-        // keine Einstellung, sondern eine Zusicherung des Aufrufers.
-        !isSwitchedOff(definition.name, disabledNames) &&
-        // Ohne Ordner bleiben nur die Tools ohne Ordnerbezug uebrig (Issue #96),
-        // and the read tools while there are skill folders to reach (#429).
-        (workspaceOpen !== false
-          || definition.requiresWorkspace === false
-          || (definition.skillPaths === true && skillsSwitchedOn)) &&
-        // Ohne eingeschalteten Skill hat `load_skill` nichts zu laden und
-        // kostet nur ein Schema in jeder Anfrage (Issue #173).
-        (skillsAvailable || definition.requiresSkills !== true) &&
-        // Tools, die eine Konfiguration brauchen (Issue #63: Schluessel fuer
-        // die Websuche), werden dem Modell ohne sie gar nicht erst gezeigt —
-        // besser als ein Aufruf, der zur Laufzeit scheitert.
-        definition.isAvailable() === true
-    );
+    // Die Haekchen des Nutzers gelten nicht fuer die Grundausstattung; eine
+    // programmatische Allowlist (Tests, kuenftige Modi) schon — sie ist
+    // keine Einstellung, sondern eine Zusicherung des Aufrufers.
+    if (allowed && !allowed.has(definition.name)) return TOOL_OFFER_REASONS.NOT_ALLOWED;
+    if (isSwitchedOff(definition.name, disabledNames)) return TOOL_OFFER_REASONS.SWITCHED_OFF;
+    // Tools, die eine Konfiguration brauchen (Issue #63: Schluessel fuer
+    // die Websuche), werden dem Modell ohne sie gar nicht erst gezeigt —
+    // besser als ein Aufruf, der zur Laufzeit scheitert.
+    if (!isConfigured(definition)) return TOOL_OFFER_REASONS.NOT_CONFIGURED;
+    // Ohne Ordner bleiben nur die Tools ohne Ordnerbezug uebrig (Issue #96),
+    // and the read tools while there are skill folders to reach (#429).
+    if (workspaceOpen === false
+      && definition.requiresWorkspace !== false
+      && !(definition.skillPaths === true && skillsSwitchedOn)) {
+      return TOOL_OFFER_REASONS.NO_FOLDER;
+    }
+    // Ohne eingeschalteten Skill hat `load_skill` nichts zu laden und
+    // kostet nur ein Schema in jeder Anfrage (Issue #173).
+    if (!skillsAvailable && definition.requiresSkills === true) return TOOL_OFFER_REASONS.NO_SKILL;
+    return null;
+  }
+
+  function getAvailableDefinitions(options = {}) {
+    return allDefinitions().filter((definition) => whyNotOffered(definition, options) === null);
+  }
+
+  /**
+   * Every tool the user can switch, with whether the model is offered it and
+   * why not (#773). The essential tools are left out, as in the settings:
+   * they are not a choice (#195).
+   */
+  function describeOffers(options = {}) {
+    return allDefinitions()
+      .filter((definition) => definition.essential !== true)
+      .map((definition) => {
+        const reason = whyNotOffered(definition, options);
+        let setup = null;
+        if (reason === TOOL_OFFER_REASONS.NOT_CONFIGURED) {
+          try {
+            setup = definition.setup() || null;
+          } catch {
+            setup = null;
+          }
+        }
+        return {
+          name: definition.name,
+          mcpServer: definition.mcp
+            ? String(definition.shortDescriptionParams?.server || definition.mcp.serverId || '')
+            : null,
+          reason,
+          setup,
+        };
+      });
   }
 
   /**
@@ -453,6 +515,7 @@ function createToolRegistry(initialDefinitions = []) {
     buildSystemPrompt,
     listCatalog,
     listRiskCatalog,
+    describeOffers,
     getDefinition,
     isSwitchedOff,
     execute,
@@ -557,6 +620,8 @@ function createWorkspaceToolRegistry({
   memory = null,
   documentText = null,
   imageGeneration = null,
+  /** Reads the chat's skills and tools for `get_configuration` (#773). */
+  configuration = null,
 }) {
   return createToolRegistry([
     {
@@ -1180,6 +1245,8 @@ function createWorkspaceToolRegistry({
       riskClass: TOOL_RISK_CLASSES.EXECUTE,
       targets: () => [],
       isAvailable: () => pythonRunner?.isAvailable() === true,
+      // Off by default; once on, the interpreter still has to be found (#773).
+      setup: () => pythonRunner?.setupNeeded?.() || TOOL_SETUPS.PYTHON,
       descriptionKey: 'tools.desc.run_python',
       modelDescription:
         'Runs a Python 3 program and returns stdout, stderr and the exit code. The working '
@@ -1275,6 +1342,7 @@ function createWorkspaceToolRegistry({
       riskClass: TOOL_RISK_CLASSES.EXECUTE,
       targets: () => [],
       isAvailable: () => shellRunner?.isAvailable() === true,
+      setup: () => shellRunner?.setupNeeded?.() || TOOL_SETUPS.SHELL,
       descriptionKey: 'tools.desc.shell_execute',
       modelDescription:
         'Runs a command in the operating system shell (macOS/Linux in the user\'s login shell, '
@@ -1397,6 +1465,7 @@ function createWorkspaceToolRegistry({
       requiresWorkspace: false,
       targets: () => [],
       isAvailable: () => webSearch?.isConfigured() === true,
+      setup: TOOL_SETUPS.WEB_SEARCH,
       descriptionKey: 'tools.desc.web_search',
       modelDescription:
         'Searches the web and returns a compact list of hits (title, URL, short excerpt, date '
@@ -1584,6 +1653,37 @@ function createWorkspaceToolRegistry({
           });
         } catch (error) {
           return JSON.stringify({ error: error?.message || 'The entry could not be saved.' });
+        }
+      },
+    },
+    {
+      name: GET_CONFIGURATION_TOOL,
+      // Reads Snotra's own settings, no file and nothing outside: `read`
+      // (#773). It changes nothing — switching stays with the user.
+      riskClass: TOOL_RISK_CLASSES.READ,
+      requiresWorkspace: false,
+      targets: () => [],
+      isAvailable: () => configuration !== null,
+      descriptionKey: 'tools.desc.get_configuration',
+      modelDescription:
+        'Reads which skills and tools this chat has: every skill with its state (on/off) and a '
+        + 'short description, the tools that are on, and the tools that are off with the reason '
+        + 'and the settings page that changes it. Call it when something fails, when a capability '
+        + 'seems to be missing, or when the user asks what is switched on — before you guess. '
+        + 'It cannot switch anything; only the user can.',
+      shortDescriptionKey: 'tools.short.get_configuration',
+      parameters: { type: 'object', properties: {} },
+      handler: async (_args, { workspaceRoot, skillRoots } = {}) => {
+        if (!configuration) {
+          return JSON.stringify({ error: 'The configuration cannot be read in this installation.' });
+        }
+        try {
+          // Skills on in this run — the settings' plus those invoked with
+          // "/name" — so a chat-only skill is reported as on (#124).
+          const chatSkillNames = Array.isArray(skillRoots) ? skillRoots.map((entry) => entry?.name) : [];
+          return JSON.stringify(await configuration.describeForModel({ workspaceRoot, chatSkillNames }));
+        } catch (error) {
+          return JSON.stringify({ error: error?.message || 'The configuration could not be read.' });
         }
       },
     },

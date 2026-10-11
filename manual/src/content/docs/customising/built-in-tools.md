@@ -11,7 +11,7 @@ Snotra comes with its own tools for reading, changing, running and searching. Mo
 
 | Risk class | Tools | Ready? |
 | --- | --- | --- |
-| *Read* | `read_file_text`, `read_file_lines`, `list_directory_tree`, `find_files`, `search_in_files`, `stat_path`, `outline_file`, `extract_document_text` (PDF, Word, Excel, PowerPoint) | yes |
+| *Read* | `read_file_text`, `read_file_lines`, `list_directory_tree`, `find_files`, `search_in_files`, `stat_path`, `outline_file`, `extract_document_text` (PDF, Word, Excel, PowerPoint), `get_configuration` (which skills and tools this chat has) | yes |
 | *Change* | `write_file_text`, `edit_file`, `apply_patch`, `remember`, `generate_image` | yes — `generate_image` needs an OpenAI key |
 | *Execute* | `shell_execute`, `run_python` | off until you switch them on |
 | *External services* | `fetch_url`, `web_search` | `web_search` needs a Tavily key |
@@ -44,4 +44,4 @@ The search query leaves your computer, so in *Smart* Snotra asks before every se
 
 - ***No Python 3 found.*** Install Python 3, or enter the path of your interpreter. The line under the field says where Snotra looked.
 - **The model does not search the web.** Without a Tavily key, `web_search` is not offered to the model at all.
-- **A tool is never used.** It may be switched off under *Settings › Tools & security*; the row says *Off* or names the tool as switched off.
+- **A tool is never used.** Click the skills pill in the chat bar: a missing tool is listed first, with the reason and a button to the setting. Under *Settings › Tools & security* its row says *Off* or names the tool as switched off.
