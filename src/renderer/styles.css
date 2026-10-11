@@ -10029,6 +10029,326 @@ select.modal-input {
   margin-top: 0;
 }
 
+/* ── Skills and tools of the chat (#773) ─────────────────────────────────────
+ * The pill next to model and mode counts the skills that are on; its popover
+ * lists skills and tools with their state. State is carried by the dot's
+ * shape (filled / ring) and by words, never by colour alone. */
+
+.chat-model-pill.chat-config-pill {
+  /* A German word in it, as in the mode pill. */
+  font-family: var(--font-ui);
+  font-weight: 500;
+  gap: 5px;
+}
+
+/* The count is what the pill is looked at for: it never gives way. */
+.chat-config-wrap {
+  flex-shrink: 0;
+}
+
+.chat-config-icon {
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.chat-composer-bar .chat-model-pill.chat-config-pill[aria-expanded='true'] {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.chat-model-menu.chat-config-popup {
+  width: min(340px, var(--popup-room, 340px));
+  max-height: min(440px, 60vh);
+  overflow: auto;
+  padding: 4px 0 0;
+  container-type: inline-size;
+}
+
+.chat-config-popup:focus {
+  outline: none;
+}
+
+.chat-config-popup:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: -2px;
+}
+
+.chat-config-section + .chat-config-section {
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.chat-config-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.chat-config-count {
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-config-list,
+.chat-config-groups {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-config-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 6px 12px;
+}
+
+.chat-config-mark {
+  flex-shrink: 0;
+  box-sizing: border-box;
+  width: 8px;
+  height: 8px;
+  margin-top: 6px;
+  border: 1.5px solid var(--ds-grey-muted);
+  border-radius: 50%;
+}
+
+.chat-config-mark--on {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue);
+}
+
+.chat-config-row-main {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 8px;
+  min-width: 0;
+}
+
+.chat-config-name {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-md);
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-config-row--off .chat-config-name {
+  color: var(--text-muted);
+}
+
+.chat-config-state,
+.chat-config-sub,
+.chat-config-src {
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted);
+}
+
+.chat-config-state {
+  flex-shrink: 0;
+}
+
+.chat-config-sub {
+  flex-basis: 100%;
+  min-width: 0;
+}
+
+/* A skill is one line: name, state, and its source on the right, which gives
+ * way first. In a narrow popover the source drops to a line of its own. */
+.chat-config-row--skill {
+  align-items: center;
+  padding: 5px 12px;
+}
+
+.chat-config-row--skill .chat-config-mark {
+  margin-top: 0;
+}
+
+.chat-config-row--skill .chat-config-row-main {
+  flex-wrap: nowrap;
+}
+
+.chat-config-src {
+  flex-shrink: 10000;
+  min-width: 0;
+  margin-left: auto;
+  padding-left: 12px;
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@container (max-width: 300px) {
+  .chat-config-row--skill {
+    align-items: flex-start;
+  }
+
+  .chat-config-row--skill .chat-config-mark {
+    margin-top: 6px;
+  }
+
+  .chat-config-row--skill .chat-config-row-main {
+    flex-wrap: wrap;
+  }
+
+  .chat-config-src {
+    flex-basis: 100%;
+    margin-left: 0;
+    padding-left: 0;
+    text-align: left;
+  }
+}
+
+.chat-config-tag {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border: 1px solid var(--ds-blue-border);
+  border-radius: 999px;
+  background: var(--ds-blue-soft);
+  color: var(--ds-blue-strong);
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.chat-config-empty {
+  margin: 2px 12px 6px;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+/* The way to the setting that switches it on: an inviting chip. */
+.chat-config-action {
+  flex-shrink: 0;
+  margin: 1px 0 0;
+  padding: 2px 9px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ds-blue);
+  font: inherit;
+  font-size: var(--ds-font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    border-color var(--ds-motion-fast),
+    background var(--ds-motion-fast);
+}
+
+.chat-config-action:hover {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.chat-config-action:focus-visible,
+.chat-config-summary:focus-visible,
+.chat-config-link:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.chat-config-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  margin: 0;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--ds-font-size-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-config-summary:hover {
+  background: var(--bg-hover);
+}
+
+.chat-config-summary .chat-config-mark {
+  margin-top: 0;
+}
+
+.chat-config-chevron {
+  flex-shrink: 0;
+  margin-left: auto;
+  opacity: 0.55;
+  transform: rotate(-90deg);
+  transition: transform var(--ds-motion-fast);
+}
+
+.chat-config-summary[aria-expanded='true'] .chat-config-chevron {
+  transform: none;
+}
+
+.chat-config-groups[hidden] {
+  display: none;
+}
+
+.chat-config-group {
+  padding: 3px 12px 3px 30px;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.45;
+}
+
+.chat-config-group-name {
+  display: block;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.chat-config-group-tools {
+  display: block;
+  overflow-wrap: anywhere;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-xs);
+  color: var(--text-muted);
+}
+
+/* The links stay in view while the lists scroll. */
+.chat-config-footer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  margin-top: 6px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--ds-grey-divider);
+  background: var(--bg-primary);
+}
+
+.chat-config-link {
+  padding: 2px 0;
+  border: none;
+  background: transparent;
+  color: var(--ds-blue);
+  font: inherit;
+  font-size: var(--ds-font-size-sm);
+  font-weight: 500;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
 /* ── Settings › Security: the controls in the rows (#449) ───────────────── */
 .settings-security-item__end {
   display: inline-flex;

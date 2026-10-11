@@ -50,6 +50,10 @@ eingebauten Workspace-Werkzeugen · jedem CLI auf deinem Rechner
   die Rückfragen weg — Workspace-Grenzen, Sperren und der Schutz der
   Snotra-Schlüssel bleiben. Du schaltest ihn bewusst ein, für einen Chat oder
   als Standard eines Ordners, dem du vertraust.
+- **Du siehst, was er hat.** Eine Pille neben dem Modell zählt die Skills, die
+  im Chat eingeschaltet sind; ihre Liste zeigt jeden Skill und jedes Tool, was
+  fehlt und warum, und führt zur Einstellung. Das Modell liest dieselbe Liste,
+  statt zu raten — einschalten bleibt deine Sache.
 - **Deine Modelle, deine Schlüssel.** Cloud- und lokale Modelle stehen in einer
   Liste nebeneinander; du wechselst je Unterhaltung. Schlüssel liegen in der
   Verschlüsselung des Betriebssystems.

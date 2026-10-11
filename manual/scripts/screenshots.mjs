@@ -622,6 +622,28 @@ const MOTIFS = {
     },
   },
 
+  /**
+   * The skills and tools of the chat, opened from the pill in the composer
+   * (#773). The demo folder's skill is there but off, web search has no key.
+   */
+  'chat-config': {
+    prefs: { chatPanelWidth: WIDE_CHAT },
+    async prepare({ workspace, locale }) {
+      const skill = DEMO_SKILL[locale];
+      await mkdir(path.join(workspace, '.agents', 'skills', skill.name), { recursive: true });
+      await writeFile(path.join(workspace, '.agents', 'skills', skill.name, 'SKILL.md'), skill.file, 'utf8');
+    },
+    async setUp({ page, locale }) {
+      await poll(() => shown(page, 'chat-config-wrap'), { what: 'skills pill' });
+      await page.click('#btn-chat-config');
+      await poll(() => page.evaluate((name) => document.getElementById('chat-config-popup')?.textContent.includes(name),
+        DEMO_SKILL[locale].name), { what: 'the folder skill in the popover' });
+      await page.mouse.move(0, 0);
+      await pause(200);
+      return clipAround(page, ['#chat-config-popup', '#btn-chat-config'], 16);
+    },
+  },
+
   /** Settings › Tools & security for the demo project, shell commands on. */
   'tools-and-security': {
     prefs: { shellExecutionEnabled: true },

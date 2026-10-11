@@ -65,7 +65,7 @@ blocked; there is no implicit `read` default.
 
 | Class | Meaning | Assignment / example |
 | --- | --- | --- |
-| `read` | Reading ordinary data, or an action without side effects | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `extract_document_text`, `list_directory_tree`, `load_skill` |
+| `read` | Reading ordinary data, or an action without side effects | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `extract_document_text`, `list_directory_tree`, `load_skill`, `get_configuration` (#773) |
 | `read-sensitive` | Sensitive content, or targeted access to a sensitive path | A dynamic escalation of the read tools, including under `skill:` |
 | `write` | Creating a file, changing it selectively, or overwriting it with a recovery copy | `write_file_text` for a new file, or with a recovery copy created successfully (section 9); `edit_file`, `apply_patch`; `generate_image` (#85), always together with `external` |
 | `delete` | Deleting, or overwriting completely without a secured recovery | `write_file_text` or `generate_image` on an existing file when the recovery copy cannot be created; a future delete tool |
@@ -1074,6 +1074,30 @@ Not covered: a DNS prefetch the page asks for through `<link rel=dns-prefetch>`
 may still resolve a host name — no content goes with it. "Open in browser"
 hands the file to the system browser on the user's click, where these limits
 no longer apply; that is the point of the button.
+
+### Revision: the model reads the configuration (#773)
+
+Decided on 2026-10-06, built on 2026-10-11. A skill that is off is invisible
+to the model, so it failed silently where it could have said "the skill X would
+fit, but it is off". `get_configuration` lets it read which skills and tools
+the chat has — and nothing more:
+
+- **Read only, class `read`.** It reads Snotra's own settings, no file, and
+  changes nothing. Switching a skill or tool on stays a click of the user's in
+  the settings; prompt injection cannot widen what the model may do through it.
+  A proposal the user confirms for one chat is the next step (#774).
+- **Never a skill's instructions.** The answer carries a skill's name, state,
+  origin and description — the body of a skill that is off stays where it is
+  (#18). `test/chat-configuration-service.test.js` and
+  `e2e/chat-config.test.mjs` check that a marker in such a body reaches neither
+  the answer nor any request to the model.
+- **A folder skill's description is data.** It is somebody else's text, so it
+  goes out cut to 200 characters and with a note that descriptions are data,
+  not instructions — as in the skill suggestion (#125).
+- **The same state as the user sees.** The indicator at the composer reads the
+  same service, and whether a tool is offered is decided in one place of the
+  registry for both, so the model is never told a tool is on that it does not
+  have.
 
 ## 10. Comparison with the official references
 

@@ -17,6 +17,7 @@ import { initUpdateDialog } from './components/UpdateDialog.js';
 import { initFileInfoDialog } from './components/FileInfoDialog.js';
 import { initToolPermissionState } from './state/tool-permissions.js';
 import { initToolModePicker } from './components/ToolModePicker.js';
+import { initChatConfigIndicator } from './components/ChatConfigIndicator.js';
 import { initFolderSandboxShield } from './components/FolderSandboxShield.js';
 import { initComposerBarLayout } from './components/ComposerBarLayout.js';
 import { initToolApprovalCards } from './components/ToolApprovalCard.js';
@@ -300,6 +301,15 @@ const openSandboxSettings = () => settingsModal.openSettingsModal({ panel: 'secu
 const openAllowanceSettings = () => settingsModal.openSettingsModal({ panel: 'security', focus: 'allowances' });
 const openSecuritySettings = () => settingsModal.openSettingsModal({ panel: 'security' });
 initToolModePicker({ toolPermissions, onOpenSandboxSettings: openSandboxSettings, onOpenSecuritySettings: openSecuritySettings });
+// Skills and tools of the open chat (#773). The settings are built further
+// down and only reached on a click.
+const chatConfig = initChatConfigIndicator({
+  api,
+  appStore,
+  onOpenSettings: ({ panel, target }) => settingsModal.openSettingsModal({ panel, target }),
+});
+// A tool switched in the settings changes the list.
+toolPermissions.subscribe(() => void chatConfig.refresh());
 // A narrow chat puts the pills on a row of their own (#400).
 initComposerBarLayout();
 initFolderSandboxShield({ toolPermissions, onOpenSandboxSettings: openSandboxSettings });
@@ -390,6 +400,8 @@ const skillSuggestion = initSkillSuggestion({
 skillCatalog.onInvalidated(() => {
   skillAutocomplete.refresh();
   skillSuggestion.refresh();
+  // A new folder and a changed skill folder both end up here (#773).
+  void chatConfig.refresh();
 });
 api.onSkillsChanged?.(() => skillCatalog.invalidate());
 
@@ -410,7 +422,11 @@ const chatStream = initChatStream({
     return fileTree.notifyExternalFileWrite(relativePath);
   },
   onWorkspaceFileRead: (relativePath, chatId) => fileTree.recordAgentFile('read', relativePath, chatId),
-  onChatSwitched: () => fileTree.syncAgentMarks(),
+  onChatSwitched: () => {
+    fileTree.syncAgentMarks();
+    // A skill invoked with "/name" is on in its own chat only (#773).
+    void chatConfig.refresh();
+  },
   showFileChanges: (request) => fileTree.showFileChanges(request),
   openWorkspaceFile: (path, options) => fileTree.openWorkspaceFile(path, options),
   getHomeDir: () => toolPermissions.get()?.homeDir || '',
@@ -424,6 +440,7 @@ const chatStream = initChatStream({
   // Zeitpunkt gleich zeigen statt erst beim naechsten Einblenden.
   onChatPersisted: () => {
     if (chatHistory.isHistoryOpen()) void chatHistory.renderHistoryList();
+    void chatConfig.refresh();
   },
   onRunsChanged: () => syncRunMarkers(),
 });
@@ -485,6 +502,7 @@ const settingsModal = initSettingsModal({
   getTheme: theme.getTheme,
   setTheme: theme.setTheme,
   DEFAULT_MAX_TOOL_ROUNDS,
+  onClosed: () => void chatConfig.refresh(),
 });
 
 // Grundrauschen gegen den Chromium-Default (Issue #101): ein Drop *neben*
@@ -699,4 +717,6 @@ trackChatSwitch((async () => {
     startupLayoutApplied = true;
   }
   syncChatInputHeight();
+  // The chat and its folder are known now (#773).
+  void chatConfig.refresh();
 })());

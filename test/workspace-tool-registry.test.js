@@ -409,9 +409,12 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   // Without its extractor the model does not see it, the catalogue does (#42).
   assert.equal(names.includes('extract_document_text'), false);
   assert.equal(classes.extract_document_text, 'read');
-  // 19 registrierte Tools minus die beiden essenziellen list_directory und
+  // Reads Snotra's own settings (#773); without the service nobody answers.
+  assert.equal(names.includes('get_configuration'), false);
+  assert.equal(classes.get_configuration, 'read');
+  // 20 registrierte Tools minus die beiden essenziellen list_directory und
   // load_skill, die niemand abwaehlt (#195).
-  assert.equal(Object.keys(classes).length, 17);
+  assert.equal(Object.keys(classes).length, 18);
   assert.equal(Object.hasOwn(classes, 'list_directory'), false);
   assert.equal(Object.hasOwn(classes, 'load_skill'), false);
 });
@@ -795,4 +798,80 @@ test('workspace registry beschreibt die Zielpfade jedes Tools für den Planer (I
   assert.deepEqual(targets('apply_patch', { relative_path: 'a.js', edits: [] }), [
     { path: 'a.js', kind: 'file', access: 'write' },
   ]);
+});
+
+// What the composer indicator and `get_configuration` report (#773) comes from
+// the same check as what the model is offered — they must not drift apart.
+test('describeOffers names why a tool is not offered, from the same check as getTools', () => {
+  const registry = createWorkspaceToolRegistry({
+    fsService: makeFsServiceStub(),
+    pythonRunner: { isAvailable: () => false, setupNeeded: () => 'python' },
+  });
+  const options = { disabledNames: ['find_files'], workspaceOpen: false, skillNames: [] };
+  const offers = Object.fromEntries(registry.describeOffers(options).map((offer) => [offer.name, offer]));
+  const offered = new Set(registry.getTools(options).map((tool) => tool.function.name));
+
+  assert.equal(offers.find_files.reason, 'switchedOff');
+  assert.equal(offers.write_file_text.reason, 'noFolder');
+  assert.equal(offers.web_search.reason, 'notConfigured');
+  assert.equal(offers.web_search.setup, 'webSearch');
+  assert.equal(offers.run_python.setup, 'python');
+  // A switched-off tool says so, not what it would lack besides.
+  assert.equal(offers.find_files.setup, null);
+  // The essentials are no choice and not listed (#195).
+  assert.equal(Object.hasOwn(offers, 'list_directory'), false);
+  for (const offer of Object.values(offers)) {
+    assert.equal(offer.reason === null, offered.has(offer.name), offer.name);
+  }
+});
+
+test('an MCP tool lacks its server; a throwing availability check counts as not configured', () => {
+  const registry = createToolRegistry([]);
+  registry.setDynamicDefinitions([{
+    name: 'mcp__github__get_issue',
+    description: 'Gets an issue.',
+    riskClass: TOOL_RISK_CLASSES.EXECUTE,
+    requiresWorkspace: false,
+    parameters: { type: 'object', properties: {} },
+    handler: () => '',
+    mcp: { serverId: 'github' },
+    shortDescriptionParams: { server: 'GitHub' },
+    isAvailable: () => { throw new Error('gone'); },
+  }]);
+  const [offer] = registry.describeOffers({});
+  assert.deepEqual(offer, { name: 'mcp__github__get_issue', mcpServer: 'GitHub', reason: 'notConfigured', setup: 'mcp' });
+  assert.deepEqual(registry.getTools({}), []);
+});
+
+test('get_configuration reads through the service with the skills on in this run', async () => {
+  const calls = [];
+  const registry = createWorkspaceToolRegistry({
+    fsService: makeFsServiceStub(),
+    configuration: {
+      describeForModel: async (input) => {
+        calls.push(input);
+        return { skills: [], tools_on: ['read_file_text'] };
+      },
+    },
+  });
+  const tool = registry.getTools({ workspaceOpen: false, skillNames: [] }).find((entry) => entry.function.name === 'get_configuration');
+  assert.ok(tool, 'offered without a folder');
+  assert.deepEqual(tool.function.parameters, { type: 'object', properties: {} });
+
+  const result = await registry.execute('get_configuration', {}, {
+    ...APPROVED,
+    workspaceRoot: '/project',
+    skillRoots: [{ name: 'release', dir: '/project/.agents/skills/release' }],
+  });
+  assert.deepEqual(JSON.parse(result), { skills: [], tools_on: ['read_file_text'] });
+  assert.deepEqual(calls, [{ workspaceRoot: '/project', chatSkillNames: ['release'] }]);
+});
+
+test('get_configuration turns a failure into an error the model can read', async () => {
+  const registry = createWorkspaceToolRegistry({
+    fsService: makeFsServiceStub(),
+    configuration: { describeForModel: async () => { throw new Error('prefs unreadable'); } },
+  });
+  const result = JSON.parse(await registry.execute('get_configuration', {}, APPROVED));
+  assert.deepEqual(result, { error: 'prefs unreadable' });
 });

@@ -48,6 +48,20 @@ Schreib deine Bitte und tipp dann `/`. Unter dem Eingabefeld schlägt Snotra ein
 
 Ein Vorschlag wird nie von selbst eingeschaltet.
 
+## Sehen, welche Skills ein Chat hat
+
+[seit 1.20] In der Chat-Leiste, neben Modell und Modus, zählt eine Pille die Skills, die in diesem Chat eingeschaltet sind: *3 Skills* oder *Keine Skills*. Ein Klick darauf zeigt das ganze Bild:
+
+![Das Popover der Pille „3 Skills“: unter Skills die drei System-Skills an und aussaat-tipps aus dem Ordner aus; unter Tools run_python und shell_execute ausgeschaltet mit je einem Knopf „Einschalten“, web_search und generate_image mit „Einrichten“, darunter zugeklappt „14 eingeschaltet“; ganz unten Links zu Einstellungen › Skills und Einstellungen › Tools & Sicherheit.](screenshots/chat-config.webp)
+
+- **Skills** – jeder Skill, die eingeschalteten zuerst, jeweils mit seiner Herkunft. Ein Skill, den du mit `/name` aufgerufen hast, trägt die Marke *nur dieser Chat*.
+- **Tools** – was fehlt, steht oben, mit dem Grund, etwa *ausgeschaltet* oder *kein Suchdienst-Schlüssel*. *Einschalten* oder *Einrichten* öffnet die Einstellung, die das ändert. Die eingeschalteten Tools sind in einer Zeile zusammengefasst; ein Klick darauf zeigt sie nach Gruppen.
+- Die beiden Links unten öffnen *Einstellungen › Skills* und *Einstellungen › Tools & Sicherheit*.
+
+Die Pille zeigt nur an. Was du ein- oder ausschaltest, bleibt eine Entscheidung in den Einstellungen.
+
+Das Modell sieht dieselbe Liste. Scheitert etwas oder scheint eine Fähigkeit zu fehlen, schaut es dort nach, statt zu raten, und sagt dir zum Beispiel, dass *pdf-export* passen würde, aber aus ist – und wo du ihn einschaltest. Selbst einschalten kann es nichts, und die Anleitung eines ausgeschalteten Skills erreicht es nie.
+
 ## Was dann passiert
 
 Das Modell liest die Anweisungen eines eingeschalteten Skills, wenn es sie braucht, zusammen mit den Dateien neben seiner `SKILL.md`, etwa `references/` oder `assets/`. Die sind schreibgeschützt: Was ein Skill behalten will, schreibt er nach `.agents/data/` im geöffneten Ordner, wie jede andere Änderung, die du freigibst.
@@ -56,6 +70,7 @@ Snotra beobachtet die Skill-Ordner, ein neuer oder geänderter Skill erscheint a
 
 ## Wenn es nicht klappt
 
+- **Das Modell nutzt einen Skill nicht, den du erwartet hast.** Klick auf die Skills-Pille in der Chat-Leiste: Ein ausgeschalteter Skill steht dort mit seiner Herkunft. Ein Skill aus dem Ordner braucht seinen Haken für genau diesen Ordner.
 - **Ein Skill ist ausgegraut, mit einem Grund.** Seine `SKILL.md` fehlt, hat kein Front Matter, oder ihr `name` passt nicht zum Ordner. Der Grund steht daneben.
 - **Ein Skill ist mit *Überdeckt von …* markiert.** Ein anderer Skill gleichen Namens kommt zuerst — der des Ordners vor deinen eigenen. Der Pfad sagt, welcher.
 - **Dein eigener Skill ist in einem Projekt aus.** Das Projekt hat einen Skill gleichen Namens; er überdeckt deinen dort und braucht seinen eigenen Haken.
