@@ -322,8 +322,16 @@ session" is a session grant of kind `outsideRead` / `outsideWrite`, handed on
 by `sandboxPaths().outside`. Paths through a granted root are reported with
 the root as prefix, so the model reads absolute paths and no rule of the open
 folder matches them (`rulePaths` stay absolute). The decision goes on the
-trace as `sandboxOutside` and into the box under the tool log; a denial is
-remembered under `${planKey}#sandbox` like the other sandbox cards.
+trace as `sandboxOutside` — with `folder` and `sensitive` when the card said
+so — and into the box under the tool log; a denial is remembered under
+`${planKey}#sandbox` like the other sandbox cards. A box that holds only such
+answers folds to one line (`sandboxBlocked.js`) and carries, open, what the
+decided card said: the sentence it asked, the consequence and the reason.
+Once the trace holds a card's answer, `ToolApprovalCard.retireRecorded` takes
+the card away, so the box is the one record — drawn from the stored trace, it
+also outlives the next turn and a restart. Decided cards of every other kind
+keep the message they arrived in (`entry.owner`) across later runs and leave
+only with their chat.
 
 Any approval card that arrives **out of sight** (#792, step 5) — Snotra not
 focused (`document.hasFocus()`), or the card's chat not the one on screen —

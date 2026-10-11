@@ -4,6 +4,14 @@
 // folded away. Decided on 2026-10-08 from a mockup with three variants
 // (strip, marker in the row, box). The colour stays neutral: amber means
 // "runs without isolation" and red a real error, and this is neither.
+//
+// A box that only records what the user was asked outside the open folder
+// (#792, step 4) has nothing to warn about: it folds to one line and holds,
+// open, what the approval card said as well — the sentence it asked, the
+// consequence of the answer, the reason — so that the card is not a second
+// box next to it (2026-10-11). The box is drawn from the stored tool trace,
+// which is why it outlives the card: it is still there after the next turn
+// and after a restart.
 import contracts from '../generated/contracts.js';
 import { toolLineText } from '../utils/tool-log-summary.js';
 import { sandboxPath } from '../utils/program-allowance-view.js';
@@ -15,6 +23,9 @@ const SHIELD_OFF_ICON_HTML =
   '<svg class="chat-sandbox-blocked-icon" viewBox="0 0 16 16" aria-hidden="true">'
   + '<path d="M8 1.8 3.2 3.6v3.9c0 3 2.1 5.4 4.8 6.4 2.7-1 4.8-3.4 4.8-6.4V3.6z"/>'
   + '<path d="M2.6 2.6l10.8 10.8"/></svg>';
+
+const CHEVRON_ICON_HTML =
+  '<svg class="chat-sandbox-blocked-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
 
 const DENY_LIST_REASON = 'host is on the deny list';
 const USER_DENIED_REASON = 'user denied';
@@ -37,6 +48,7 @@ export function blockedRunsOf(trace) {
     if (!blocked && allowed.length === 0 && outside.length === 0) continue;
     runs.push({
       line: toolLineText(entry),
+      tool: typeof entry?.tool === 'string' ? entry.tool : '',
       blocked: blocked || NO_ENTRIES,
       decision: blocked ? normalizeSandboxDecision(entry?.sandboxDecision) : null,
       allowed,
@@ -68,7 +80,65 @@ function buildOutsideEntry(decision, homeDir) {
     ? `toolLog.sandbox.outside.${decision.duration}`
     : 'toolLog.sandbox.outside.denied');
   item.append(kind, target, reason);
+  if (decision.sensitive) {
+    const badge = document.createElement('span');
+    badge.className = 'chat-sandbox-blocked-badge';
+    badge.textContent = t('approval.badge.sensitive');
+    badge.title = t('approval.badge.sensitive.title');
+    reason.append(badge);
+  }
   return item;
+}
+
+/** The sentence the card asked — which tool wants what — with the tool as code, wherever the language puts it. */
+function buildOutsideAsk(run) {
+  const decisions = run.outside;
+  const key = decisions.length > 1
+    ? 'approval.sandbox.headline.outsideSeveral'
+    : decisions[0].kind === 'write'
+      ? 'approval.sandbox.headline.outsideWrite'
+      : decisions[0].folder ? 'approval.sandbox.headline.outsideReadFolder' : 'approval.sandbox.headline.outsideRead';
+  const ask = document.createElement('p');
+  ask.className = 'chat-sandbox-blocked-ask';
+  for (const part of t(key).split(/(\{tool\})/)) {
+    if (!part) continue;
+    if (part === '{tool}') {
+      const tool = document.createElement('code');
+      tool.className = 'chat-sandbox-blocked-tool';
+      tool.lang = 'en';
+      tool.textContent = run.tool || t('tools.line.generic.fallbackName');
+      ask.append(tool);
+    } else {
+      ask.append(part);
+    }
+  }
+  return ask;
+}
+
+/** What the answer means and why the card was there, below the paths — as the card said when it was decided. */
+function buildOutsideNotes(run) {
+  const first = run.outside[0];
+  const consequence = first.outcome === 'denied'
+    ? 'approval.outcome.outsideDenied.detail'
+    : first.duration === 'session' ? 'approval.outcome.outsideSession.detail' : 'approval.outcome.outsideAllowed.detail';
+  const notes = [t(consequence)];
+  if (run.outside.some((decision) => decision.outcome === 'allowed' && decision.sensitive)) {
+    notes.push(t('approval.reason.sensitiveAccess.plain'));
+  }
+  notes.push(t('approval.sandbox.reason.outside'));
+  return notes.map((text) => {
+    const note = document.createElement('p');
+    note.className = 'chat-sandbox-blocked-note';
+    note.textContent = text;
+    return note;
+  });
+}
+
+/** "allowed", "denied" or "partly allowed" — the answer to everything this box was asked. */
+function outsideSummary(runs) {
+  const decisions = runs.flatMap((run) => run.outside || []);
+  const allowed = decisions.filter((decision) => decision.outcome === 'allowed').length;
+  return t(`toolLog.sandbox.outside.summary.${allowed === decisions.length ? 'allowed' : allowed === 0 ? 'denied' : 'mixed'}`);
 }
 
 function reasonOf(entry) {
@@ -140,6 +210,7 @@ function buildRun(run, homeDir, { withLine }) {
     line.textContent = run.line;
     part.append(line);
   }
+  if (run.outside?.length) part.append(buildOutsideAsk(run));
   const list = document.createElement('ul');
   list.className = 'chat-sandbox-blocked-list';
   for (const entry of run.blocked.entries) list.append(buildEntry(entry, homeDir));
@@ -152,6 +223,7 @@ function buildRun(run, homeDir, { withLine }) {
   for (const decision of run.allowed || []) list.append(buildAllowedEntry(decision));
   for (const decision of run.outside || []) list.append(buildOutsideEntry(decision, homeDir));
   part.append(list);
+  if (run.outside?.length) part.append(...buildOutsideNotes(run));
   if (run.decision) {
     const decision = document.createElement('p');
     decision.className = 'chat-sandbox-blocked-decision';
@@ -186,25 +258,37 @@ function buildRun(run, homeDir, { withLine }) {
 
 let boxIds = 0;
 
+// Messages whose folded box the reader opened, by their tool trace — a stable
+// object across redraws, so a new turn or a language change keeps it open.
+const openBoxes = new WeakSet();
+
 /**
  * The box for `runs` (from `blockedRunsOf`), or null when nothing was
  * blocked. One run names its command in the title; several get a line each.
+ * A box that only holds what the user was asked and answered outside the
+ * open folder folds to its title line; `open` says whether it starts open and
+ * `onToggle` hears when the reader changes that.
  */
-export function buildSandboxBlockedBox(runs, { homeDir = '' } = {}) {
+export function buildSandboxBlockedBox(runs, { homeDir = '', open = false, onToggle = null } = {}) {
   if (!Array.isArray(runs) || runs.length === 0) return null;
   const box = document.createElement('div');
   box.className = 'chat-sandbox-blocked';
   box.setAttribute('role', 'group');
-  const titleId = `chat-sandbox-blocked-title-${(boxIds += 1)}`;
+  const id = (boxIds += 1);
+  const titleId = `chat-sandbox-blocked-title-${id}`;
   box.setAttribute('aria-labelledby', titleId);
 
   const resources = runs.reduce((sum, run) => sum + run.blocked.entries.length + run.blocked.moreEntries, 0);
   const asked = runs.reduce((sum, run) => sum + (run.allowed?.length || 0), 0);
   const outside = runs.reduce((sum, run) => sum + (run.outside?.length || 0), 0);
-  const title = document.createElement('p');
-  title.className = 'chat-sandbox-blocked-title';
+  // Nothing refused and nothing let through while a command waited: only the
+  // answers outside the open folder are left to read.
+  const foldable = resources === 0 && asked === 0 && outside > 0;
+  const title = document.createElement(foldable ? 'button' : 'p');
+  title.className = foldable ? 'chat-sandbox-blocked-title chat-sandbox-blocked-toggle' : 'chat-sandbox-blocked-title';
   title.id = titleId;
-  title.insertAdjacentHTML('afterbegin', SHIELD_OFF_ICON_HTML);
+  if (foldable) title.insertAdjacentHTML('afterbegin', CHEVRON_ICON_HTML);
+  title.insertAdjacentHTML('beforeend', SHIELD_OFF_ICON_HTML);
   const heading = document.createElement('span');
   heading.className = 'chat-sandbox-blocked-heading';
   // Nothing refused, only connections let through on the card (#792).
@@ -213,14 +297,47 @@ export function buildSandboxBlockedBox(runs, { homeDir = '' } = {}) {
     : asked > 0
       ? tPlural('toolLog.sandbox.titleAllowed', asked, { count: asked })
       : tPlural('toolLog.sandbox.titleOutside', outside, { count: outside });
-  title.append(heading);
   const context = document.createElement('span');
   context.className = 'chat-sandbox-blocked-context';
   context.textContent = runs.length === 1 ? `· ${runs[0].line}` : `· ${t('toolLog.sandbox.inRuns', { count: runs.length })}`;
-  title.append(context);
+  if (foldable) {
+    // One piece of text next to the icons: folded it is cut at the end of
+    // the line, open it wraps as a sentence does.
+    const summary = document.createElement('span');
+    summary.className = 'chat-sandbox-blocked-summary';
+    summary.textContent = `· ${outsideSummary(runs)}`;
+    const line = document.createElement('span');
+    line.className = 'chat-sandbox-blocked-line';
+    line.append(heading, summary, context);
+    title.append(line);
+  } else {
+    title.append(heading, context);
+  }
   box.append(title);
 
-  for (const run of runs) box.append(buildRun(run, homeDir, { withLine: runs.length > 1 }));
+  const parts = runs.map((run) => buildRun(run, homeDir, { withLine: runs.length > 1 }));
+  if (!foldable) {
+    box.append(...parts);
+    return box;
+  }
+  box.classList.add('chat-sandbox-blocked--foldable');
+  const body = document.createElement('div');
+  body.className = 'chat-sandbox-blocked-body';
+  body.id = `chat-sandbox-blocked-body-${id}`;
+  body.append(...parts);
+  title.type = 'button';
+  title.setAttribute('aria-controls', body.id);
+  const show = (opened) => {
+    title.setAttribute('aria-expanded', String(opened));
+    body.hidden = !opened;
+  };
+  show(open === true);
+  title.addEventListener('click', () => {
+    const opened = title.getAttribute('aria-expanded') !== 'true';
+    show(opened);
+    if (typeof onToggle === 'function') onToggle(opened);
+  });
+  box.append(body);
   return box;
 }
 
@@ -234,7 +351,16 @@ export function syncSandboxBlocked(messageEl, trace, { homeDir = '' } = {}) {
   const log = messageEl.querySelector(':scope > .chat-tool-log');
   const old = messageEl.querySelector(':scope > .chat-sandbox-blocked');
   const runs = log ? blockedRunsOf(trace) : [];
-  const box = buildSandboxBlockedBox(runs, { homeDir });
+  const traceKey = trace && typeof trace === 'object' ? trace : null;
+  const box = buildSandboxBlockedBox(runs, {
+    homeDir,
+    open: traceKey ? openBoxes.has(traceKey) : false,
+    onToggle: (opened) => {
+      if (!traceKey) return;
+      if (opened) openBoxes.add(traceKey);
+      else openBoxes.delete(traceKey);
+    },
+  });
   if (!box) {
     old?.remove();
     return;
@@ -243,7 +369,10 @@ export function syncSandboxBlocked(messageEl, trace, { homeDir = '' } = {}) {
   if (old) {
     const opened = [...old.querySelectorAll('.chat-sandbox-blocked-raw')].map((d) => d.open);
     box.querySelectorAll('.chat-sandbox-blocked-raw').forEach((d, i) => { d.open = opened[i] === true; });
+    // The line that was in focus is drawn again: the focus follows it.
+    const refocus = old.contains(document.activeElement) && document.activeElement.classList.contains('chat-sandbox-blocked-title');
     old.replaceWith(box);
+    if (refocus) box.querySelector('.chat-sandbox-blocked-title')?.focus({ preventScroll: true });
   } else {
     log.after(box);
   }

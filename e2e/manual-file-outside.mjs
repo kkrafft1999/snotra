@@ -6,12 +6,15 @@
 //  3. in "Auto", writes ~/notes/new.md: the card comes all the same, allowed
 //     for the session, and a second write into ~/notes needs no card; the
 //     session allowance is photographed in the settings.
-// The box under each tool log is photographed after the decision.
+// The box under each tool log is photographed after the decision: the
+// decided card has gone into it, it is folded to one line, and opened it
+// holds what the card said. After the next question the first one is still
+// there (2026-10-11).
 // Not a test — a look.
 //
 //   node e2e/manual-file-outside.mjs [en|de]
 //
-// Result: out/mockup/file-outside-<locale>-{read,readbox,write,denied,auto,session}-{light,dark}.png
+// Result: out/mockup/file-outside-<locale>-{read,readbox,readbox-open,write,denied,later,auto,session}-{light,dark}.png
 
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -77,6 +80,11 @@ const lastToolResult = () => model.requests
   .map((r) => r.body?.messages?.findLast?.((m) => m.role === 'tool')?.content).filter(Boolean).at(-1) || '';
 const pendingCard = () => page.locator('#chat-messages .chat-approval-card--sandbox[data-state="pending"]').last();
 const box = () => page.locator('#chat-messages .chat-sandbox-blocked').last();
+const answers = () => page.evaluate(() => [...document.querySelectorAll('#chat-messages .chat-msg.assistant')].map((li) => ({
+  boxes: li.querySelectorAll('.chat-sandbox-blocked').length,
+  cards: li.querySelectorAll('.chat-approval-card').length,
+  folded: li.querySelector('.chat-sandbox-blocked-title')?.getAttribute('aria-expanded') ?? null,
+})));
 
 try {
   await poll(() => page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length > 0),
@@ -100,8 +108,13 @@ try {
   });
   await idle();
   console.log('box:', await lastBox());
+  console.log('answers (one box, no card):', JSON.stringify(await answers()));
   console.log('model reads:', lastToolResult().slice(0, 160));
   await shoot(box(), 'readbox');
+  await page.evaluate(() => [...document.querySelectorAll('#chat-messages .chat-sandbox-blocked-title')].at(-1).click());
+  await pause(400);
+  await shoot(box(), 'readbox-open');
+  await page.evaluate(() => [...document.querySelectorAll('#chat-messages .chat-sandbox-blocked-title')].at(-1).click());
 
   // 2. Edit outside (Smart): one card with the preview, denied with Esc.
   model.queueAnswer({ match: SECOND, toolCalls: [{ name: 'edit_file', arguments: {
@@ -118,6 +131,8 @@ try {
   console.log('model reads:', lastToolResult().slice(0, 240));
   console.log('todo.md unchanged:', (await readFile(path.join(home, 'notes', 'todo.md'), 'utf8')) === '- boxes\n');
   await shoot(box(), 'denied');
+  console.log('answers after the next question:', JSON.stringify(await answers()));
+  await shoot(page.locator('#chat-messages'), 'later');
 
   // 3. Auto: the card all the same, for the session; the second write without one.
   await app.evaluate(({ dialog }) => { dialog.showMessageBox = async () => ({ response: 0 }); });

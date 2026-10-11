@@ -2672,6 +2672,154 @@ button.chat-change-file:hover {
   overflow-wrap: anywhere;
 }
 
+/* A box that only records what the user was asked outside the open folder
+ * folds to its title line — the question, the answer, the step — and the
+ * line is the button that opens it. It gives its padding to the line and the
+ * body, so the whole line is the click target; the chevron is the one of the
+ * tool log and the folded approval card. Open, the title may wrap. */
+.chat-sandbox-blocked--foldable {
+  padding: 0;
+}
+
+.chat-sandbox-blocked-toggle {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 7px 12px;
+  border: none;
+  border-radius: var(--ds-radius-md);
+  background: transparent;
+  font: inherit;
+  line-height: 1.5;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.chat-sandbox-blocked-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.chat-sandbox-blocked-toggle:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.chat-sandbox-blocked-chevron {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  stroke: var(--text-muted-strong);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--ds-motion-medium) ease-out;
+}
+
+.chat-sandbox-blocked-toggle[aria-expanded='true'] .chat-sandbox-blocked-chevron {
+  transform: rotate(90deg);
+}
+
+/* Folded, the heading gives way before the answer does: on a narrow column
+   the line still says whether it was allowed. */
+.chat-sandbox-blocked-line {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-sandbox-blocked-line > .chat-sandbox-blocked-heading {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-sandbox-blocked-summary {
+  flex-shrink: 0;
+  font-weight: var(--ds-font-weight-bold);
+}
+
+.chat-sandbox-blocked-line > .chat-sandbox-blocked-context {
+  flex: 1 1 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+
+/* Open, the chevron and the shield stay on the first line and the text wraps
+   beside them. */
+.chat-sandbox-blocked-toggle[aria-expanded='true'] {
+  align-items: flex-start;
+  border-radius: var(--ds-radius-md) var(--ds-radius-md) 0 0;
+  white-space: normal;
+}
+
+.chat-sandbox-blocked-toggle[aria-expanded='true'] > svg {
+  margin-top: 3px;
+}
+
+.chat-sandbox-blocked-toggle[aria-expanded='true'] .chat-sandbox-blocked-line {
+  display: block;
+}
+
+.chat-sandbox-blocked-toggle[aria-expanded='true'] .chat-sandbox-blocked-line > * + * {
+  margin-left: 6px;
+}
+
+.chat-sandbox-blocked-toggle[aria-expanded='true'] .chat-sandbox-blocked-context {
+  overflow-wrap: anywhere;
+}
+
+.chat-sandbox-blocked-body {
+  padding: 2px 12px 10px;
+}
+
+.chat-sandbox-blocked-ask,
+.chat-sandbox-blocked-note {
+  margin: 0 0 6px;
+}
+
+.chat-sandbox-blocked-note {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+}
+
+.chat-sandbox-blocked-tool {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--ds-grey-card);
+  font-family: var(--ds-font-mono);
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
+}
+
+.chat-sandbox-blocked-badge {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--text-muted-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-sandbox-blocked-chevron {
+    transition: none;
+  }
+}
+
 /* ── Generated images under the line of changed files (#85) ──────────────
  * One image up to 320 px, several as two columns — large enough to judge the
  * result without leaving the chat, small enough to keep the answer in view.

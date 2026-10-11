@@ -31,7 +31,7 @@ Lies die Karte und wähle dann einen ihrer Knöpfe:
 
 ## Was dann passiert
 
-[seit 1.20] Sobald entschieden ist, klappt die Karte zu einer Zeile zusammen: deine Entscheidung und die Frage, auf die sie antwortet, zum Beispiel *Einmal erlaubt · Snotra möchte `notizen/fruehjahr-2026.md` ändern*. Ein Klick auf die Zeile öffnet die ganze Karte wieder — die Angaben, die Vorschau und was deine Entscheidung bedeutet —, ein zweiter klappt sie wieder zu.
+[seit 1.20] Sobald entschieden ist, klappt die Karte zu einer Zeile zusammen: deine Entscheidung und die Frage, auf die sie antwortet, zum Beispiel *Einmal erlaubt · Snotra möchte `notizen/fruehjahr-2026.md` ändern*. Ein Klick auf die Zeile öffnet die ganze Karte wieder — die Angaben, die Vorschau und was deine Entscheidung bedeutet —, ein zweiter klappt sie wieder zu. [seit 1.21] Die Zeile bleibt bei ihrer Antwort, wenn du die nächste Frage stellst, bis du einen anderen Chat öffnest.
 
 Die Tool-Zeile im Chat zeigt, wie es ausgegangen ist, zum Beispiel *abgelehnt* oder *blockiert*, auch später im Verlauf. Eine Freigabe für die Sitzung erscheint unten auf der Seite *Einstellungen › Tools & Sicherheit*, wo du sie widerrufen kannst; ein gemerkter Befehl steht in der Zeile *Ausführen*. Siehe [Sehen und ändern, was Snotra darf](../tools-and-security/).
 
@@ -44,7 +44,9 @@ Die Tool-Zeile im Chat zeigt, wie es ausgegangen ist, zum Beispiel *abgelehnt* o
 3. Wähle unter *Wie lange* *Nur dieser Aufruf* oder *Für diese Sitzung*.
 4. Klick auf *Freigeben* — bei einer Änderung *Freigeben und schreiben* — oder auf *Ablehnen*. *Esc* lehnt ebenfalls ab.
 
-Freigegeben läuft der Aufruf mit genau dieser Freigabe; alles andere außerhalb bleibt zu. Für *diese Sitzung* freigegeben erreichen spätere Aufrufe im selben Chat das Ziel ohne diese Karte, und der Modus entscheidet über sie wie im geöffneten Ordner; die Freigabe steht unter *Einstellungen › Tools & Sicherheit* bei den Sitzungsfreigaben. Abgelehnt läuft der Aufruf nicht, und das Modell hat die Ansage, nicht auszuweichen; derselbe Aufruf noch einmal beendet den Lauf. Der Kasten unter den Tool-Schritten hält fest, wie du entschieden hast.
+Freigegeben läuft der Aufruf mit genau dieser Freigabe; alles andere außerhalb bleibt zu. Für *diese Sitzung* freigegeben erreichen spätere Aufrufe im selben Chat das Ziel ohne diese Karte, und der Modus entscheidet über sie wie im geöffneten Ordner; die Freigabe steht unter *Einstellungen › Tools & Sicherheit* bei den Sitzungsfreigaben. Abgelehnt läuft der Aufruf nicht, und das Modell hat die Ansage, nicht auszuweichen; derselbe Aufruf noch einmal beendet den Lauf.
+
+[seit 1.21] Ist der Aufruf durch, weicht die Karte einer einzigen Zeile unter den Tool-Schritten, zum Beispiel *Bei 1 Pfad außerhalb des Projektordners nachgefragt · freigegeben · Datei ~/notizen/todo.md gelesen*. Ein Klick darauf zeigt alles, was die Karte gesagt hat: welches Tool was wollte, den Pfad und was du freigegeben hast, was deine Entscheidung bedeutet und warum Snotra gefragt hat. Die Zeile bleibt beim Chat, auch wenn du ihn später wieder öffnest.
 
 Nie angeboten: dein Home-Ordner als Ganzes, das Wurzelverzeichnis eines Laufwerks, Snotras eigener Speicher, die globalen Skill-Ordner und zum Schreiben Orte mit Zugangsdaten wie `~/.ssh` und Startdateien der Shell wie `.zshrc`. Eine Datei an einem Ort mit Zugangsdaten lässt sich lesen; die Karte markiert sie als *sensibel* und nennt den Anbieter, an den ihr Inhalt ginge.
 

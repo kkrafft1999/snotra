@@ -1,6 +1,7 @@
 // The sandbox card (#792, step 2) as a component: what it shows, which path
 // and duration the answer carries, Escape, the outcome — and the decision in
-// the box under the tool log afterwards. The engine's side is in
+// the box under the tool log afterwards, which takes the place of a decided
+// card before a call outside the open folder (2026-10-11). The engine's side is in
 // chat-engine-permissions.test.js, main's in sandbox-approval.test.js.
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -64,8 +65,8 @@ async function mount() {
   const bubble = document.createElement('li');
   bubble.className = 'chat-msg assistant';
   document.getElementById('chat-messages').appendChild(bubble);
-  initToolApprovalCards({ api, appStore: { currentChatId: 'chat-a', chatRuns: new Map() }, getHomeDir: () => HOME });
-  return { calls, request: (v) => handlers.request(v), resolve: (v) => handlers.resolved(v) };
+  const cards = initToolApprovalCards({ api, appStore: { currentChatId: 'chat-a', chatRuns: new Map() }, getHomeDir: () => HOME });
+  return { calls, cards, bubble, request: (v) => handlers.request(v), resolve: (v) => handlers.resolved(v) };
 }
 
 const card = (id) => document.querySelector(`.chat-approval-card[data-request-id="${id}"]`);
@@ -420,4 +421,153 @@ test('the box under the tool log keeps what was decided before a call outside', 
     ['Write', '~/notes/todo.md · ~/notes', 'Allowed outside the project folder · this session'],
     ['Read', '~/.ssh/config', 'Denied outside the project folder'],
   ]);
+}));
+
+test('a box of answers outside folds to one line — question, answer, step — and holds what the card said', withDom(async () => {
+  const { buildSandboxBlockedBox, blockedRunsOf } = await importRenderer('chat', 'sandboxBlocked.js');
+  const opened = [];
+  const box = buildSandboxBlockedBox(blockedRunsOf([{
+    line: 'Read: ~/.ssh/config',
+    tool: 'read_file_text',
+    sandboxOutside: [{ kind: 'read', target: `${HOME}/.ssh/config`, outcome: 'allowed', duration: 'call', pattern: `${HOME}/.ssh/config`, sensitive: true }],
+  }]), { homeDir: HOME, onToggle: (value) => opened.push(value) });
+  const toggle = box.querySelector('.chat-sandbox-blocked-title');
+  const body = box.querySelector('.chat-sandbox-blocked-body');
+  assert.equal(toggle.tagName, 'BUTTON');
+  assert.equal(toggle.textContent, 'Asked about 1 path outside the project folder· allowed· Read: ~/.ssh/config');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(toggle.getAttribute('aria-controls'), body.id);
+  assert.equal(body.hidden, true, 'folded to its line');
+  assert.equal(box.getAttribute('aria-labelledby'), toggle.id);
+
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(body.hidden, false);
+  assert.deepEqual(opened, [true]);
+  assert.equal(body.querySelector('.chat-sandbox-blocked-ask').textContent, 'read_file_text wants to read a file outside the project folder.');
+  assert.equal(body.querySelector('.chat-sandbox-blocked-ask code').textContent, 'read_file_text');
+  assert.deepEqual([...body.querySelector('.chat-sandbox-blocked-entry').children].map((c) => c.textContent),
+    ['Read', '~/.ssh/config', 'Allowed outside the project folder · this callsensitive']);
+  assert.deepEqual([...body.querySelectorAll('.chat-sandbox-blocked-note')].map((n) => n.textContent), [
+    'The call runs with exactly this opened; everything else outside the project folder stays closed.',
+    'This file may contain credentials. Once approved, the content is passed to the chosen provider.',
+    'The file tools work only in the project folder. Snotra opens what lies outside only after you allow it.',
+  ]);
+  toggle.click();
+  assert.equal(body.hidden, true);
+  assert.deepEqual(opened, [true, false]);
+}));
+
+test('the folded line sums up several answers; a folder and a denial read as such', withDom(async () => {
+  const { buildSandboxBlockedBox, blockedRunsOf } = await importRenderer('chat', 'sandboxBlocked.js');
+  const box = buildSandboxBlockedBox(blockedRunsOf([{
+    line: 'List: ~/notes',
+    tool: 'list_directory',
+    sandboxOutside: [{ kind: 'read', target: `${HOME}/notes`, outcome: 'allowed', duration: 'session', pattern: `${HOME}/notes`, folder: true }],
+  }, {
+    line: 'Read: ~/.ssh/config',
+    tool: 'read_file_text',
+    sandboxOutside: [{ kind: 'read', target: `${HOME}/.ssh/config`, outcome: 'denied', sensitive: true }],
+  }]), { homeDir: HOME, open: true });
+  assert.equal(box.querySelector('.chat-sandbox-blocked-summary').textContent, '· partly allowed');
+  assert.equal(box.querySelector('.chat-sandbox-blocked-title').getAttribute('aria-expanded'), 'true', 'starts open when asked to');
+  assert.deepEqual([...box.querySelectorAll('.chat-sandbox-blocked-ask')].map((a) => a.textContent), [
+    'list_directory wants to read a folder outside the project folder.',
+    'read_file_text wants to read a file outside the project folder.',
+  ]);
+  const notes = [...box.querySelectorAll('.chat-sandbox-blocked-note')].map((n) => n.textContent);
+  assert.match(notes[0], /^Later calls in this chat reach it without this card/);
+  assert.equal(notes.filter((n) => /credentials/.test(n)).length, 0, 'nothing went to the provider');
+  assert.match(notes.at(-2), /^The call is not carried out/);
+
+  const blocked = buildSandboxBlockedBox(blockedRunsOf([{
+    line: 'Shell: mkdir x',
+    tool: 'shell_execute',
+    sandboxBlocked: { entries: [{ kind: 'write', target: '/opt/x', count: 1 }], moreEntries: 0, total: 1, raw: [] },
+  }]));
+  assert.equal(blocked.querySelector('.chat-sandbox-blocked-title').tagName, 'P', 'a refusal stays open to read');
+  assert.equal(blocked.querySelector('.chat-sandbox-blocked-body'), null);
+}));
+
+test('a decided card before a call goes into the box once the trace holds its answer; an expired one stays', withDom(async () => {
+  const { syncSandboxBlocked } = await importRenderer('chat', 'sandboxBlocked.js');
+  const page = await mount();
+  const message = { toolTrace: [] };
+  page.cards.beginRun('chat-a', message);
+  const log = document.createElement('details');
+  log.className = 'chat-tool-log';
+  page.bubble.prepend(log);
+  page.request(outsideDto('o1', { write: false }));
+  page.resolve({ requestId: 'o1', response: 'allow-once' });
+  page.request(outsideDto('o2', { write: false, target: `${HOME}/notes/b.md` }));
+  page.resolve({ requestId: 'o2', invalidated: true, reason: 'request_invalidated' });
+  card('o1').querySelector('.chat-approval-card__toggle').focus();
+  await settle();
+
+  // The call is done: its row carries the answer, and the box says it.
+  message.toolTrace.push({
+    line: 'Read: ~/notes/todo.md',
+    tool: 'read_file_text',
+    sandboxOutside: [{ kind: 'read', target: TODO, outcome: 'allowed', duration: 'call', pattern: TODO }],
+  });
+  syncSandboxBlocked(page.bubble, message.toolTrace, { homeDir: HOME });
+  page.cards.retireRecorded(page.bubble, message);
+  assert.equal(card('o1'), null, 'one box, not two');
+  assert.ok(card('o2'), 'an expiry is not on the trace');
+  assert.equal(document.activeElement, page.bubble.querySelector('.chat-sandbox-blocked-title'), 'the focus goes to the box');
+
+  // Drawn again, the card does not come back.
+  page.cards.mount(page.bubble, message);
+  assert.equal(card('o1'), null);
+  assert.ok(page.bubble.contains(card('o2')));
+}));
+
+test('a folded box stays open across a redraw and a new turn, and keeps the focus on its line', withDom(async () => {
+  const { syncSandboxBlocked } = await importRenderer('chat', 'sandboxBlocked.js');
+  const trace = [{
+    line: 'Read: ~/notes/todo.md',
+    tool: 'read_file_text',
+    sandboxOutside: [{ kind: 'read', target: TODO, outcome: 'denied' }],
+  }];
+  const draw = () => {
+    const message = document.createElement('li');
+    const log = document.createElement('details');
+    log.className = 'chat-tool-log';
+    message.append(log);
+    document.getElementById('chat-messages').replaceChildren(message);
+    syncSandboxBlocked(message, trace, { homeDir: HOME });
+    return message;
+  };
+  let message = draw();
+  const toggle = () => message.querySelector('.chat-sandbox-blocked-title');
+  assert.equal(toggle().getAttribute('aria-expanded'), 'false');
+  toggle().click();
+  toggle().focus();
+  syncSandboxBlocked(message, trace, { homeDir: HOME });
+  assert.equal(toggle().getAttribute('aria-expanded'), 'true');
+  assert.equal(document.activeElement, toggle(), 'the focus follows the line');
+
+  // The whole list is drawn again, as for the next question.
+  message = draw();
+  assert.equal(toggle().getAttribute('aria-expanded'), 'true');
+  assert.equal(message.querySelector('.chat-sandbox-blocked-body').hidden, false);
+  // Another trace — another chat, or the same one after a restart — starts folded.
+  syncSandboxBlocked(message, trace.map((entry) => ({ ...entry })), { homeDir: HOME });
+  assert.equal(toggle().getAttribute('aria-expanded'), 'false');
+}));
+
+test('an answer that arrives after the call\'s row goes into the box right away', withDom(async () => {
+  const page = await mount();
+  const message = { toolTrace: [] };
+  page.cards.beginRun('chat-a', message);
+  page.request(outsideDto('o1'));
+  message.toolTrace.push({
+    line: 'Edit: ~/notes/todo.md',
+    tool: 'edit_file',
+    sandboxOutside: [{ kind: 'write', target: TODO, outcome: 'denied' }],
+  });
+  page.cards.retireRecorded(page.bubble, message);
+  assert.ok(card('o1'), 'not decided yet');
+  page.resolve({ requestId: 'o1', response: 'deny' });
+  assert.equal(card('o1'), null);
 }));

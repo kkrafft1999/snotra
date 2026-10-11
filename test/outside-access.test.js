@@ -225,3 +225,15 @@ test('the decisions before a call outside, kept with the tool row and in the his
   assert.deepEqual(normalizeSandboxOutside(decisions), expected);
   assert.deepEqual(toolTraceEntryForStore({ line: 'Read: /opt/a', tool: 'read_file_text', sandboxOutside: decisions }).sandboxOutside, expected);
 });
+
+test('a decision outside keeps that its target was a folder or may hold credentials, and only then', () => {
+  assert.deepEqual(normalizeSandboxOutside([
+    { kind: 'read', target: '/opt/notes', outcome: 'allowed', duration: 'call', folder: true, sensitive: false },
+    { kind: 'read', target: '/Users/me/.ssh/config', outcome: 'denied', folder: false, sensitive: true },
+    { kind: 'read', target: '/opt/a', outcome: 'allowed', folder: 'yes', sensitive: 1 },
+  ]), [
+    { kind: 'read', target: '/opt/notes', outcome: 'allowed', duration: 'call', pattern: '/opt/notes', folder: true },
+    { kind: 'read', target: '/Users/me/.ssh/config', outcome: 'denied', sensitive: true },
+    { kind: 'read', target: '/opt/a', outcome: 'allowed', duration: 'call', pattern: '/opt/a' },
+  ]);
+});

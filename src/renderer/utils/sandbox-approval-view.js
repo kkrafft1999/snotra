@@ -7,7 +7,7 @@ import contracts from '../generated/contracts.js';
 import { t, tPlural, getLocale } from '../i18n.js';
 import { sandboxPath } from './program-allowance-view.js';
 
-const { APPROVAL_RESPONSES, PERMISSION_DENIAL_REASONS } = contracts;
+const { APPROVAL_RESPONSES, PERMISSION_DENIAL_REASONS, normalizeSandboxOutside } = contracts;
 
 /** "0:07", "1:23", "12:05" — how long a connection has waited (#792). */
 export function formatWaited(ms) {
@@ -271,4 +271,24 @@ export function describeSandboxOutcome({ response, invalidated, reason, aborted 
     return { status: 'allowed', label: t('approval.outcome.sandboxRun.label'), detail: allowed };
   }
   return null;
+}
+
+/**
+ * Whether the stored tool trace holds the answer to a card before a call
+ * outside the open folder (#792, step 4) already. Then the box under the tool
+ * log says all the card said, and the card would be a second box next to it
+ * (2026-10-11). An expired or cancelled card is not on the trace: it stays.
+ */
+export function outsideAnswerRecorded(dto, outcome, trace) {
+  if (dto?.checkpoint !== 'sandbox' || dto.sandbox?.before !== true) return false;
+  if (!outcome || outcome.invalidated === true || !Array.isArray(trace)) return false;
+  const expected = outcome.response === APPROVAL_RESPONSES.DENY
+    ? 'denied'
+    : outcome.response === APPROVAL_RESPONSES.ALLOW_ONCE || outcome.response === APPROVAL_RESPONSES.ALLOW_SESSION
+      ? 'allowed'
+      : null;
+  if (!expected) return false;
+  const targets = new Set((dto.sandbox.entries || []).map((entry) => entry?.target).filter(Boolean));
+  return trace.some((entry) => (normalizeSandboxOutside(entry?.sandboxOutside) || [])
+    .some((decision) => decision.outcome === expected && targets.has(decision.target)));
 }

@@ -379,8 +379,9 @@ function normalizeSandboxLive(value) {
 /**
  * What the user decided on a card before a file tool reached outside the
  * open folder (#792, step 4), as the tool row keeps it: read or write, the
- * path, allowed — for the call or the session, and as which file or folder —
- * or denied. Null when nothing usable is left.
+ * path (a folder, or a file that may hold credentials, when it was), allowed —
+ * for the call or the session, and as which file or folder — or denied. Null
+ * when nothing usable is left.
  */
 function normalizeSandboxOutside(value) {
   if (!Array.isArray(value)) return null;
@@ -392,8 +393,11 @@ function normalizeSandboxOutside(value) {
     const target = text(raw.target);
     if (!target) continue;
     const kind = raw.kind === 'write' ? 'write' : 'read';
+    // What the card said about the target, kept only when it held: a folder
+    // and a file that may hold credentials read differently afterwards.
+    const about = { ...(raw.folder === true ? { folder: true } : {}), ...(raw.sensitive === true ? { sensitive: true } : {}) };
     if (raw.outcome === 'denied') {
-      out.push({ kind, target, outcome: 'denied' });
+      out.push({ kind, target, outcome: 'denied', ...about });
       continue;
     }
     out.push({
@@ -402,6 +406,7 @@ function normalizeSandboxOutside(value) {
       outcome: 'allowed',
       duration: raw.duration === 'session' ? 'session' : 'call',
       pattern: text(raw.pattern) || target,
+      ...about,
     });
   }
   return out.length ? out : null;
