@@ -871,8 +871,10 @@ export function initChatStream({
    * opens the diff of that file — every change this message made to it.
    */
   function syncMessageChanges(messageEl, message) {
-    // What the sandbox refused (#792) stands first, right under the log.
+    // What the sandbox refused (#792) stands first, right under the log —
+    // and takes the place of an approval card whose answer it holds now.
     syncSandboxBlocked(messageEl, message?.toolTrace, { homeDir: getHomeDir() });
+    approvalCards?.retireRecorded?.(messageEl, message);
     syncChangesStrip(messageEl, changedFilesOf(message?.toolTrace), {
       isLive: changesAreLive,
       onOpen: (file) => showFileChanges({ relativePath: file.relativePath, changes: file.changes }),

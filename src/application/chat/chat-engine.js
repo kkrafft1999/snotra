@@ -1675,6 +1675,8 @@ function createChatEngine({
             kind: t.access === 'write' ? 'write' : 'read',
             target: t.absPath,
             outcome,
+            folder: t.kind !== 'file',
+            sensitive: t.sensitive === true,
             ...extra(t, i),
           })));
         };

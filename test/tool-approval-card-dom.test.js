@@ -348,6 +348,35 @@ test('a background chat\'s card waits for its message, and leaves with its chat 
   assert.equal(page.cards.pendingCount(), 0);
 }));
 
+test('a decided card stays with its message when the next run begins, and the new run\'s cards go to the new one', withDom(async () => {
+  const page = await mountCards();
+  const first = { id: 'm-1' };
+  page.cards.beginRun('chat-a', first);
+  page.request(dto('r1'));
+  page.resolve({ requestId: 'r1', response: 'allow-once' });
+  assert.ok(card('r1').classList.contains('chat-approval-card--folded'));
+
+  // The follow-up question: a new run, and the list drawn again from scratch.
+  const second = { id: 'm-2' };
+  page.cards.beginRun('chat-a', second);
+  const messages = document.getElementById('chat-messages');
+  const [bubble1, bubble2] = [first, second].map(() => {
+    const bubble = document.createElement('li');
+    bubble.className = 'chat-msg assistant';
+    return bubble;
+  });
+  messages.replaceChildren(bubble1, bubble2);
+  page.cards.mount(bubble1, first);
+  page.cards.mount(bubble2, second);
+  assert.ok(bubble1.contains(card('r1')), 'still where it was asked');
+  assert.ok(card('r1').classList.contains('chat-approval-card--folded'), 'and still folded');
+
+  page.request(dto('r2'));
+  assert.ok(bubble2.contains(card('r2')));
+  page.cards.mount(bubble1, first);
+  assert.ok(bubble2.contains(card('r2')), 'the earlier message does not take it');
+}));
+
 test('"cancelled" only for a run stopped here; otherwise an expiry says why', withDom(async () => {
   const page = await mountCards();
   page.request(dto('r1'));

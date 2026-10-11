@@ -1,6 +1,6 @@
 import { buildApprovalCardView, describeApprovalOutcome } from '../utils/tool-approval-view.js';
 import {
-  buildSandboxCardView, describeSandboxOutcome, describeLiveRun, describeLiveWaited,
+  buildSandboxCardView, describeSandboxOutcome, describeLiveRun, describeLiveWaited, outsideAnswerRecorded,
 } from '../utils/sandbox-approval-view.js';
 import contracts from '../generated/contracts.js';
 import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-approval-queue.js';
@@ -48,12 +48,14 @@ export function initToolApprovalCards({
       return '';
     }
   };
-  /** requestId → Karten-Element des laufenden Zuges. */
+  /** requestId → card element, of the running turn and of earlier turns of the chats still kept. */
   const cards = new Map();
   /**
-   * Chat → the message its cards belong to (a store object, so it survives a
+   * Chat → the message of its current run (a store object, so it survives a
    * rebuild of the list). One per chat since #320: a run in the background
-   * collects its cards until its chat is on screen again.
+   * collects its cards until its chat is on screen again. A card takes the
+   * message it arrived in as its own (`entry.owner`) and keeps it when the
+   * next run begins, so a decided card stays where it was asked.
    */
   const owners = new Map();
 
@@ -770,6 +772,7 @@ export function initToolApprovalCards({
     // A request without a chat comes from a main that predates #320; it can
     // only mean the chat on screen.
     entry.chatId = dto.chatId || appStore.currentChatId || null;
+    entry.owner = owners.get(entry.chatId) || null;
     const view = viewOf(dto);
     if (!view) return;
     const card = buildCard(entry, view);
@@ -835,6 +838,8 @@ export function initToolApprovalCards({
     entry.aborted = runAborted(entry);
     const card = cards.get(entry.dto.requestId);
     if (card) applyOutcome(card, entry);
+    // The call's row may have come in first: then the box holds the answer already.
+    if (card && entry.owner) retireRecorded(card.closest('.chat-msg'), entry.owner);
     syncTicker();
     notifyPendingChanged();
   }
@@ -872,6 +877,24 @@ export function initToolApprovalCards({
       }
     }
   });
+
+  /**
+   * Takes away the decided cards of `message` whose answer its tool trace
+   * holds now (#792, step 4): the box under the tool log says it from here
+   * on, also after the next turn and a restart. The focus goes to that box.
+   */
+  function retireRecorded(bubble, message) {
+    if (!message) return;
+    for (const [requestId, card] of [...cards]) {
+      const entry = queue.get(requestId);
+      if (!entry || entry.owner !== message || entry.state !== APPROVAL_ENTRY_STATES.RESOLVED) continue;
+      if (!outsideAnswerRecorded(entry.dto, entry.outcome, message.toolTrace)) continue;
+      const hadFocus = card.contains(document.activeElement);
+      card.remove();
+      cards.delete(requestId);
+      if (hadFocus) bubble?.querySelector(':scope > .chat-sandbox-blocked > button.chat-sandbox-blocked-title')?.focus({ preventScroll: true });
+    }
+  }
 
   /** Sichtbar heißt: nimmt Platz im Layout ein – Klassen allein sagen bei verschachtelten Overlays nichts. */
   function isVisible(node) {
@@ -936,29 +959,32 @@ export function initToolApprovalCards({
 
   return {
     /**
-     * Nach einem Neuaufbau der Nachrichtenliste die Karten wieder in die
-     * Bubble ihrer Nachricht einhängen – auch nach Ende des Laufs, damit
-     * Verfall, Abbruch und Entscheidung sichtbar bleiben.
+     * Puts the cards of `message` back into its bubble after the list was
+     * rebuilt — also after its run and after later turns, so that a decision,
+     * an expiry and a cancellation stay visible until the chat is left. What
+     * the box under the tool log says already is not drawn twice.
      */
     mount(bubble, message) {
       if (cards.size === 0 || !message) return;
+      retireRecorded(bubble, message);
       let box = null;
       for (const [requestId, card] of cards) {
         const entry = queue.get(requestId);
-        if (!entry || owners.get(chatOf(entry)) !== message) continue;
+        if (!entry || entry.owner !== message) continue;
         box = box || ensureContainer(bubble);
         if (!box) return;
         box.appendChild(card);
       }
     },
-    /** Neuer Zug: Karten dieses Chats gehören ab jetzt zur neuen Assistant-Nachricht. */
+    /** The tool trace of `message` changed: a decided card the box says now goes (#792, step 4). */
+    retireRecorded,
+    /**
+     * A new run: the chat's next cards belong to its new message. The cards
+     * of earlier turns stay with theirs — until 2026-10-11 they were dropped
+     * here, and a decided card vanished with the next question.
+     */
     beginRun(chatId, message) {
-      const key = chatId || null;
-      for (const entry of queue.forgetWhere((e) => chatOf(e) === key && e.state === APPROVAL_ENTRY_STATES.RESOLVED)) {
-        cards.delete(entry.dto.requestId);
-      }
-      syncTicker();
-      owners.set(key, message || null);
+      owners.set(chatId || null, message || null);
     },
     /**
      * Keep only the cards of the given chats — the one on screen and those

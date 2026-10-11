@@ -1097,12 +1097,12 @@ const OUTSIDE_FOLDER = '/home/u/notes';
  * until a grant covers it, then planned like any other. `version` may change
  * between the plans, as a file changed in between would.
  */
-function outsidePlan({ access = 'read', version = () => '8:1', preview = null } = {}) {
+function outsidePlan({ access = 'read', version = () => '8:1', preview = null, kind = 'file', sensitive = false } = {}) {
   return (toolName, args, context) => {
     const granted = (context.outsideGrants || []).some((g) => g.path === OUTSIDE || OUTSIDE.startsWith(`${g.path}/`));
     const target = {
-      path: args.relative_path, absPath: OUTSIDE, kind: 'file', access, exists: true, version: version(granted),
-      sensitive: false, rulePaths: [OUTSIDE],
+      path: args.relative_path, absPath: OUTSIDE, kind, access, exists: true, version: version(granted),
+      sensitive, rulePaths: [OUTSIDE],
     };
     const plan = {
       tool: toolName,
@@ -1216,6 +1216,19 @@ test('outside: denied, the call does not run and the model is told not to work a
   assert.deepEqual(result.toolTrace[0].sandboxOutside, [{ kind: 'read', target: OUTSIDE, outcome: 'denied' }]);
   assert.equal(result.toolTrace[1].permission.reason, 'repeated_denial');
   assert.notEqual(result.content, 'never');
+});
+
+test('outside: the tool row keeps that the card was about a folder that may hold credentials', async () => {
+  const approvals = makeApprovals('deny');
+  const tools = makeToolPort({ plan: outsidePlan({ kind: 'directory', sensitive: true }) });
+  const { engine } = makeEngine([assistantToolCall('c1', 'list_directory', { relative_path: OUTSIDE }), assistantText('ok')],
+    { tools, approvals, toolPolicy: policy() });
+
+  const result = await send(engine);
+
+  assert.deepEqual(result.toolTrace[0].sandboxOutside, [
+    { kind: 'read', target: OUTSIDE, outcome: 'denied', folder: true, sensitive: true },
+  ]);
 });
 
 test('outside: a call that changed after the card is not run', async () => {
