@@ -61,6 +61,8 @@ const IDENTICAL_ON_PURPOSE = new Set([
   'permissions.rule.text.command',
   // "Version" is the German word too; the rest is the number (#790).
   'manual.version',
+  // A label and its shortcut in brackets: placeholders only (#859).
+  'chat.mic.withShortcut',
 ]);
 
 test('no value is empty, and none was left identical in both languages by accident', () => {

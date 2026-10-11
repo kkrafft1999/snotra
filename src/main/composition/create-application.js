@@ -9,6 +9,7 @@ const { createChatAttachmentStore } = require('../services/chat-attachment-store
 const { createFsService } = require('../services/fs-service');
 const { createFileChangeRecorder } = require('../services/file-change-recorder');
 const { createWhisperService } = require('../services/whisper-service');
+const { createRealtimeTranscriptionService } = require('../services/realtime-transcription-service');
 const { createUpdateService } = require('../services/update-service');
 const { createSkillsService } = require('../services/skills-service');
 const { createSkillsWatcher } = require('../services/skills-watcher');
@@ -69,6 +70,7 @@ const { createMoveToTrash } = require('../services/move-to-trash');
 const { withHomeDir } = require('../services/home-dir');
 const { DEFAULT_LOCALE, normalizeLocale } = require('../../shared/i18n');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
+const { registerVoiceHandlers } = require('../ipc/voice-handlers');
 const {
   registerSettingsHandlers,
   applyActivePreset,
@@ -671,16 +673,20 @@ function createApplication({
     : null;
   workspaceWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
 
+  // Live voice input (#859), and Whisper as its fallback.
+  const speechLocale = async () => (await uiPrefsStore.readUIPrefs()).appLocale;
+  const realtimeTranscription = createRealtimeTranscriptionService({
+    credentials,
+    speechProviderId,
+    getAppLocale: speechLocale,
+  });
   const whisperService = createWhisperService({
     fetchImpl,
     credentials,
     speechProviderId,
-    getAppLocale: async () => {
-      const prefs = await uiPrefsStore.readUIPrefs();
-      return prefs.appLocale;
-    },
+    getAppLocale: speechLocale,
   });
-  const speech = createSpeechAdapter(whisperService);
+  const speech = createSpeechAdapter(realtimeTranscription, whisperService);
 
   const updates = updatesOverride || createUpdateAdapter(createUpdateService({
     app,
@@ -828,6 +834,7 @@ function createApplication({
     });
     registerHtmlPreviewHandlers({ ipcMain, htmlPreview, REQ });
   }
+  registerVoiceHandlers({ ipcMain, speech, REQ, PUSH });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
   registerSettingsHandlers({
     ipcMain,

@@ -196,7 +196,7 @@
   <text class="note" x="1527" y="712">without an external system.</text>
 
   <rect class="ext" x="1515" y="808" width="185" height="60" rx="9"/>
-  <text class="chip tt-ext" x="1607" y="834">Whisper API</text><text class="chipsub" x="1607" y="852">Speech to text</text>
+  <text class="chip tt-ext" x="1607" y="834">OpenAI speech</text><text class="chipsub" x="1607" y="852">Realtime &#183; Whisper</text>
   <rect class="ext" x="1515" y="876" width="185" height="60" rx="9"/>
   <text class="chip tt-ext" x="1607" y="902">GitHub Releases</text><text class="chipsub" x="1607" y="920">Update check</text>
 

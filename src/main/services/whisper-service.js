@@ -49,7 +49,12 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
 
     const language = await resolveLanguage(options);
     const boundary = `----ElectronWhisper${Date.now()}`;
-    const fileName = 'voice.webm';
+    // The fallback of live voice input (#859) sends WAV; a recording of its
+    // own would be WebM. Whisper goes by the file name.
+    const bytes = bytesOf(audioBuffer);
+    const isWav = bytes.length >= 12 && bytes.toString('latin1', 0, 4) === 'RIFF' && bytes.toString('latin1', 8, 12) === 'WAVE';
+    const fileName = isWav ? 'voice.wav' : 'voice.webm';
+    const mimeType = isWav ? 'audio/wav' : 'audio/webm';
 
     const fieldParts = [];
     fieldParts.push(
@@ -62,11 +67,11 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
       `--${boundary}\r\nContent-Disposition: form-data; name="response_format"\r\n\r\njson\r\n`
     );
     const fileHeader = Buffer.from(
-      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: audio/webm\r\n\r\n`
+      `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${fileName}"\r\nContent-Type: ${mimeType}\r\n\r\n`
     );
     const fileFooter = Buffer.from(`\r\n--${boundary}--\r\n`);
     const textParts = Buffer.from(fieldParts.join(''));
-    const fileBuf = bytesOf(audioBuffer);
+    const fileBuf = bytes;
     const body = Buffer.concat([textParts, fileHeader, fileBuf, fileFooter]);
 
     let res;

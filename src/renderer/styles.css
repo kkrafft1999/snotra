@@ -3236,7 +3236,22 @@ button.chat-image-open:hover {
   border-color: var(--chat-composer-border);
 }
 
+/* The text metrics are shared with the mirror behind the field (#859): it has
+ * to break every line where the textarea breaks it. */
+#chat-input,
+.chat-input-mirror {
+  padding: 10px 10px 6px;
+  font-size: 14px;
+  line-height: 1.45;
+  font-family: var(--font-ui);
+  font-weight: 400;
+  letter-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
 #chat-input {
+  display: block;
   width: 100%;
   min-width: 0;
   min-height: 36px;
@@ -3244,14 +3259,43 @@ button.chat-image-open:hover {
   resize: none;
   overflow: hidden;
   scrollbar-width: none;
-  padding: 10px 10px 6px;
-  font-size: 14px;
-  line-height: 1.45;
-  font-family: var(--font-ui);
   color: var(--text-primary);
   background: transparent;
   border: none;
   user-select: text;
+}
+
+/* ── Live dictation (#859) ───────────────────────────────────────────────────
+ * While a recording runs, the textarea keeps the text, the caret and the
+ * selection, but draws its text transparent; the mirror behind it draws the
+ * same text, with the dictation grey and slanted. */
+.chat-input-field {
+  position: relative;
+  min-width: 0;
+}
+
+.chat-input-mirror {
+  display: none;
+}
+
+.chat-input-field[data-dictating='true'] .chat-input-mirror {
+  display: block;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--text-primary);
+}
+
+.chat-input-field[data-dictating='true'] #chat-input {
+  position: relative;
+  color: transparent;
+  caret-color: var(--text-primary);
+}
+
+.chat-dictation {
+  color: var(--ds-dictation-text);
+  font-style: italic;
 }
 
 #chat-input::-webkit-scrollbar {
@@ -3638,6 +3682,58 @@ button.chat-msg-attachment:hover {
 #btn-chat-send.chat-send--stop:active:not(:disabled) {
   transform: scale(0.97);
   box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+/* While dictating, the level, the status and the clock take the room the
+ * model and mode pills and the token counter had; they come back with the
+ * stop (#859). One row, also in a narrow chat: the bar must not wrap and push
+ * send onto a line of its own. */
+.chat-composer-bar[data-dictating='true'] {
+  flex-wrap: nowrap;
+}
+
+.chat-composer-bar[data-dictating='true'] .chat-composer-pills,
+.chat-composer-bar[data-dictating='true'] .chat-token-usage-wrap {
+  display: none;
+}
+
+/* The level of the microphone: proof that it hears you. Red belongs to the
+ * recording state, like the mic button's. */
+.chat-voice-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.chat-voice-level i {
+  display: block;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--ds-mic-recording);
+  transform: scaleY(calc(0.2 + 0.8 * var(--voice-level, 0) * var(--voice-bar, 1)));
+  transition: transform 90ms linear;
+}
+
+.chat-voice-level i:nth-child(1) { --voice-bar: 0.55; }
+.chat-voice-level i:nth-child(3) { --voice-bar: 0.8; }
+.chat-voice-level i:nth-child(4) { --voice-bar: 0.45; }
+
+.chat-voice-time {
+  flex-shrink: 0;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.3;
+  color: var(--text-muted-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-voice-level i {
+    transform: scaleY(0.6);
+    transition: none;
+  }
 }
 
 .chat-voice-status {

@@ -3,7 +3,7 @@ import { appStore } from './state/store.js';
 import { initTheme } from './components/ThemeManager.js';
 import { initSidebarResizer } from './components/SidebarResizer.js';
 import { initFileTree } from './components/FileTree.js';
-import { initWhisperRecorder } from './voice/WhisperRecorder.js';
+import { initVoiceRecorder } from './voice/VoiceRecorder.js';
 import { initChatModelPicker } from './components/ChatModelPicker.js';
 import { initChatStream } from './components/ChatStream.js';
 import { initMentionAutocomplete } from './components/MentionAutocomplete.js';
@@ -344,7 +344,7 @@ function activateChatSession(chatId, activation = contracts.CHAT_ACTIVATION.EXPL
   })());
 }
 
-const voice = initWhisperRecorder({
+const voice = initVoiceRecorder({
   api,
   onInputChanged: syncChatInputHeight,
 });

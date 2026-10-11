@@ -255,7 +255,7 @@ Was Snotra zu den üblichen Systemkürzeln hinzufügt. Kopieren, Einfügen, Rüc
 │   │   ├── ports/       Infrastruktur-Port-Schnittstellen
 │   │   ├── ipc/         dünne IPC-Handler
 │   │   ├── providers/   LLM-Provider-Implementierungen
-│   │   ├── services/    Infrastruktur (Storage, FS, Whisper, Updates, Präsentation)
+│   │   ├── services/    Infrastruktur (Storage, FS, Sprache, Updates, Präsentation)
 │   │   └── tools/       Workspace-Tool-Registry
 │   ├── preload/         sichere Bridge zwischen Main und Renderer (gebundelt)
 │   ├── renderer/        UI (HTML, CSS, JS) — reine Präsentationsschicht

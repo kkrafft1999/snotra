@@ -31,10 +31,18 @@ Not every model understands images. OpenAI's models do; an OpenAI-compatible ser
 
 ## Dictate
 
-1. Click the microphone in the input field and speak.
-2. Click it again to stop. Snotra transcribes what you said and adds it to the input field, where you can still change it before sending.
+1. Click the microphone in the input field, or press `Cmd+D` (`Ctrl+D` on Windows and Linux), and speak.
+2. What you say appears in the input field while you speak, where the caret was — grey and slanted for as long as the recording runs [since 1.20]. A red level next to the microphone shows that it hears you, a clock how long it has been running.
+3. Spot a misheard word? Correct it straight away: a sentence is finished as soon as you pause, and from then on you can change it while you go on speaking. Only the sentence you are still in can't be edited.
+4. Click the microphone again, or press `Cmd+D` / `Ctrl+D`, to stop. Snotra finishes the last sentence, and everything turns into ordinary text, ready to change or send.
 
-Dictation uses OpenAI's speech recognition and needs an OpenAI key under *Settings › Models*. A recording stops by itself after five minutes; half a minute before, the line under the input says so.
+![The input field during a recording: a typed "Note for the sowing calendar:" and after it, grey and slanted, the dictated sentences. Below, the red microphone, a level, "Recording …" and the time.](screenshots/dictation.webp)
+
+While you dictate, the model and mode pills and the token counter make room for the recording; they come back when you stop. Sending the message ends the recording, and what was dictated goes with it. The shortcut is also in the menu, *Edit › Voice Input*.
+
+Dictation uses OpenAI's speech recognition and needs an OpenAI key under *Settings › Models*, even when the chat runs on another provider; OpenAI bills it by the minute. A recording stops by itself after five minutes; half a minute before, the line next to the microphone says so.
+
+If the live text can't be had — a network that blocks the connection, say — the recording goes on without it, and the text comes when you stop. How to tell, and what to do: [When dictation doesn't work](../../troubleshooting/voice-input/).
 
 ## See what a request costs
 
@@ -44,4 +52,5 @@ Next to the send button, the input field shows the size of the last request in t
 
 - **The send button stays disabled.** No model is connected, or the connected one is missing its key: see [Connect a model](../../getting-started/connect-a-model/).
 - **Pasting an image does nothing but show a note.** The model of this chat does not take images. Switch to one that does — [Switch the model](../model-and-reasoning/) — or switch on *Allow image attachments* for an OpenAI-compatible server whose model understands images.
-- ***No OpenAI key stored (Whisper needs one).*** Dictation needs an OpenAI key, even when the chat runs on another provider.
+- ***No OpenAI key stored (voice input needs one).*** Dictation needs an OpenAI key, even when the chat runs on another provider. Without one the microphone does not even switch on.
+- **Dictation shows no text while you speak, or none at all.** See [When dictation doesn't work](../../troubleshooting/voice-input/).

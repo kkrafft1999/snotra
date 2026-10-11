@@ -105,6 +105,9 @@ test('createApplication registers IPC handlers and disposes provider runtime', a
   assert.ok(ipcMain.handlers.has(REQ.CHAT_HISTORY_GET));
   assert.ok(ipcMain.handlers.has(REQ.FS_READ_DIRECTORY));
   assert.ok(ipcMain.handlers.has(REQ.WHISPER_TRANSCRIBE));
+  assert.ok(ipcMain.handlers.has(REQ.VOICE_START));
+  assert.ok(ipcMain.handlers.has(REQ.VOICE_AUDIO));
+  assert.ok(ipcMain.handlers.has(REQ.VOICE_STOP));
   assert.ok(ipcMain.handlers.has(REQ.UPDATE_GET_VERSION));
   assert.ok(ipcMain.handlers.has(REQ.CHAT_SEND));
 
