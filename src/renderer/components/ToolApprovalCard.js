@@ -1,6 +1,6 @@
 import { buildApprovalCardView, describeApprovalOutcome } from '../utils/tool-approval-view.js';
 import {
-  buildSandboxCardView, describeSandboxOutcome, describeLiveRun, describeLiveWaited, outsideAnswerRecorded,
+  buildSandboxCardView, describeSandboxOutcome, describeLiveRun, describeLiveWaited, sandboxAnswerRecorded,
 } from '../utils/sandbox-approval-view.js';
 import contracts from '../generated/contracts.js';
 import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-approval-queue.js';
@@ -879,16 +879,16 @@ export function initToolApprovalCards({
   });
 
   /**
-   * Takes away the decided cards of `message` whose answer its tool trace
-   * holds now (#792, step 4): the box under the tool log says it from here
-   * on, also after the next turn and a restart. The focus goes to that box.
+   * Takes away the decided sandbox cards of `message` whose answer its tool
+   * trace holds now (#792): the box under the tool log says it from here on,
+   * also after the next turn and a restart. The focus goes to that box.
    */
   function retireRecorded(bubble, message) {
     if (!message) return;
     for (const [requestId, card] of [...cards]) {
       const entry = queue.get(requestId);
       if (!entry || entry.owner !== message || entry.state !== APPROVAL_ENTRY_STATES.RESOLVED) continue;
-      if (!outsideAnswerRecorded(entry.dto, entry.outcome, message.toolTrace)) continue;
+      if (!sandboxAnswerRecorded(entry.dto, entry.outcome, message.toolTrace)) continue;
       const hadFocus = card.contains(document.activeElement);
       card.remove();
       cards.delete(requestId);
@@ -976,7 +976,7 @@ export function initToolApprovalCards({
         box.appendChild(card);
       }
     },
-    /** The tool trace of `message` changed: a decided card the box says now goes (#792, step 4). */
+    /** The tool trace of `message` changed: a decided card the box says now goes (#792). */
     retireRecorded,
     /**
      * A new run: the chat's next cards belong to its new message. The cards

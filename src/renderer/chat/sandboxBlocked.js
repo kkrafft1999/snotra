@@ -5,13 +5,13 @@
 // (strip, marker in the row, box). The colour stays neutral: amber means
 // "runs without isolation" and red a real error, and this is neither.
 //
-// A box that only records what the user was asked outside the open folder
-// (#792, step 4) has nothing to warn about: it folds to one line and holds,
-// open, what the approval card said as well — the sentence it asked, the
-// consequence of the answer, the reason — so that the card is not a second
-// box next to it (2026-10-11). The box is drawn from the stored tool trace,
-// which is why it outlives the card: it is still there after the next turn
-// and after a restart.
+// A box in which every question was answered — a path outside the open
+// folder (#792, step 4), a refusal after a run, a connection while it waited
+// — has nothing left to warn about: it folds to one line and holds, open,
+// what the decided approval card said as well, so that the card is not a
+// second box next to it (2026-10-11). The box is drawn from the stored tool
+// trace, which is why it outlives the card: it is still there after the next
+// turn and after a restart.
 import contracts from '../generated/contracts.js';
 import { toolLineText } from '../utils/tool-log-summary.js';
 import { sandboxPath } from '../utils/program-allowance-view.js';
@@ -134,11 +134,60 @@ function buildOutsideNotes(run) {
   });
 }
 
+const isUserDenied = (entry) => entry.kind === 'network' && entry.reason === USER_DENIED_REASON;
+const isAnswer = (decision) => decision?.outcome === 'allowed' || decision?.outcome === 'denied';
+
+/**
+ * Whether the user was asked about everything the sandbox refused in `run`
+ * and answered: the card after the run, without a second refusal, or a
+ * connection they turned down while it waited. Connections let through and
+ * paths outside were answers anyway.
+ */
+function isAnswered(run) {
+  if (run.decision) return isAnswer(run.decision) && !run.decision.retry?.blocked;
+  return run.blocked.moreEntries === 0 && run.blocked.entries.every(isUserDenied);
+}
+
+/** Every answer the user gave in `runs`, as 'allowed' or 'denied'. */
+function answersOf(runs) {
+  return runs.flatMap((run) => [
+    ...(run.decision && isAnswer(run.decision) ? [run.decision.outcome] : run.blocked.entries.filter(isUserDenied).map(() => 'denied')),
+    ...(run.allowed || []).map(() => 'allowed'),
+    ...(run.outside || []).map((decision) => decision.outcome),
+  ]);
+}
+
 /** "allowed", "denied" or "partly allowed" — the answer to everything this box was asked. */
-function outsideSummary(runs) {
-  const decisions = runs.flatMap((run) => run.outside || []);
-  const allowed = decisions.filter((decision) => decision.outcome === 'allowed').length;
-  return t(`toolLog.sandbox.outside.summary.${allowed === decisions.length ? 'allowed' : allowed === 0 ? 'denied' : 'mixed'}`);
+function answerSummary(answers) {
+  const allowed = answers.filter((answer) => answer === 'allowed').length;
+  return t(`toolLog.sandbox.outside.summary.${allowed === answers.length ? 'allowed' : allowed === 0 ? 'denied' : 'mixed'}`);
+}
+
+/**
+ * What the answers about a run meant, as the card said when it was decided:
+ * the connection went through or stayed closed, the command was not run
+ * again. That it ran again, and how, the decision line says.
+ */
+function buildAnswerNotes(run) {
+  const keys = [];
+  if (run.decision?.outcome === 'denied') keys.push('approval.outcome.sandboxDenied.detail');
+  if (run.allowed?.length) keys.push('approval.outcome.sandboxConnected.detail');
+  if (!run.decision && run.blocked.entries.some(isUserDenied)) keys.push('approval.outcome.sandboxConnectionDenied.detail');
+  return keys.map((key) => {
+    const note = document.createElement('p');
+    note.className = 'chat-sandbox-blocked-note';
+    note.textContent = t(key);
+    return note;
+  });
+}
+
+/** "Opened: ~/Library/Caches/prisma/engines (Write)" — what the card after the run opened. */
+function openedText(decision, homeDir) {
+  const paths = (decision.paths || []).map((grant) => {
+    const shown = grant.kind === 'network' ? grant.path : sandboxPath(grant.path, homeDir);
+    return `${shown} (${t(`toolLog.sandbox.kind.${grant.kind}`)})`;
+  });
+  return paths.length ? t('toolLog.sandbox.decision.opened', { paths: paths.join(', ') }) : '';
 }
 
 function reasonOf(entry) {
@@ -230,6 +279,13 @@ function buildRun(run, homeDir, { withLine }) {
     decision.dataset.outcome = run.decision.outcome;
     decision.textContent = decisionText(run.decision);
     part.append(decision);
+    const opened = run.decision.outcome === 'allowed' ? openedText(run.decision, homeDir) : '';
+    if (opened) {
+      const note = document.createElement('p');
+      note.className = 'chat-sandbox-blocked-note';
+      note.textContent = opened;
+      part.append(note);
+    }
     const again = run.decision.retry?.blocked;
     if (again) {
       const lead = document.createElement('p');
@@ -241,6 +297,7 @@ function buildRun(run, homeDir, { withLine }) {
       part.append(lead, second);
     }
   }
+  part.append(...buildAnswerNotes(run));
   if (run.blocked.raw.length) {
     const raw = document.createElement('details');
     raw.className = 'chat-sandbox-blocked-raw';
@@ -265,9 +322,9 @@ const openBoxes = new WeakSet();
 /**
  * The box for `runs` (from `blockedRunsOf`), or null when nothing was
  * blocked. One run names its command in the title; several get a line each.
- * A box that only holds what the user was asked and answered outside the
- * open folder folds to its title line; `open` says whether it starts open and
- * `onToggle` hears when the reader changes that.
+ * A box in which the user answered every question folds to its title line;
+ * `open` says whether it starts open and `onToggle` hears when the reader
+ * changes that.
  */
 export function buildSandboxBlockedBox(runs, { homeDir = '', open = false, onToggle = null } = {}) {
   if (!Array.isArray(runs) || runs.length === 0) return null;
@@ -281,9 +338,9 @@ export function buildSandboxBlockedBox(runs, { homeDir = '', open = false, onTog
   const resources = runs.reduce((sum, run) => sum + run.blocked.entries.length + run.blocked.moreEntries, 0);
   const asked = runs.reduce((sum, run) => sum + (run.allowed?.length || 0), 0);
   const outside = runs.reduce((sum, run) => sum + (run.outside?.length || 0), 0);
-  // Nothing refused and nothing let through while a command waited: only the
-  // answers outside the open folder are left to read.
-  const foldable = resources === 0 && asked === 0 && outside > 0;
+  // Every question answered: nothing is left to warn about, only to read.
+  const answers = answersOf(runs);
+  const foldable = answers.length > 0 && runs.every(isAnswered);
   const title = document.createElement(foldable ? 'button' : 'p');
   title.className = foldable ? 'chat-sandbox-blocked-title chat-sandbox-blocked-toggle' : 'chat-sandbox-blocked-title';
   title.id = titleId;
@@ -305,7 +362,7 @@ export function buildSandboxBlockedBox(runs, { homeDir = '', open = false, onTog
     // the line, open it wraps as a sentence does.
     const summary = document.createElement('span');
     summary.className = 'chat-sandbox-blocked-summary';
-    summary.textContent = `· ${outsideSummary(runs)}`;
+    summary.textContent = `· ${answerSummary(answers)}`;
     const line = document.createElement('span');
     line.className = 'chat-sandbox-blocked-line';
     line.append(heading, summary, context);

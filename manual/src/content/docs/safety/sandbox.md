@@ -64,6 +64,8 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 **What happens then.** Allowed, the connection goes through and the command simply carries on; nothing runs twice. Allowed *for this session*, later commands in the same chat reach the host without asking, listed among the session allowances like a path. Denied, the connection stays closed and the command fails on its own; it is not asked about any further host, and the model is told not to work around it. If the command gives up before you decide — `pip` does after 15 seconds — the card says *Stopped waiting*, and a second card after the run offers the host with *Allow and run again*.
 
+**Once you have answered.** [since 1.21] When the command is through, the card gives way to the box under the tool steps. If you answered everything it asked, the box folds to a single line — for example *The sandbox blocked 1 resource · denied · Command “cat ~/.ssh/config” run* — and a click opens it: what was blocked and why, what you decided and what that opened, how the second run went, and the raw lines of the sandbox. A box with something nobody answered, or with a refusal on the second run, stays open. A card the command gave up on (*Stopped waiting*) stays as it is. The output of the first run, which the card showed, is not kept.
+
 **What cannot be allowed.** A connection a program makes directly instead of through the sandbox's proxy — `psql`, `ssh` — can only be shown: the sandbox cannot open a single host for it. Snotra's own storage, your home folder as a whole and the files the sandbox always keeps closed, such as `.bashrc` or `.git/hooks`, are never offered.
 
 ## Switch the sandbox off for one folder
