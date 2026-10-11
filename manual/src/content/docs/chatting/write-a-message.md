@@ -38,7 +38,7 @@ Not every model understands images. OpenAI's models do; an OpenAI-compatible ser
 
 ![The input field during a recording: a typed "Note for the sowing calendar:" and after it, grey and slanted, the dictated sentences. Below, the red microphone, a level, "Recording …" and the time.](screenshots/dictation.webp)
 
-While you dictate, the model and mode pills and the token counter make room for the recording; they come back when you stop. Sending the message ends the recording, and what was dictated goes with it. The shortcut is also in the menu, *Edit › Voice Input*.
+While you dictate, the pills next to the microphone and the token counter make room for the recording; they come back when you stop. Sending the message ends the recording, and what was dictated goes with it. The shortcut is also in the menu, *Edit › Voice Input*.
 
 Dictation uses OpenAI's speech recognition and needs an OpenAI key under *Settings › Models*, even when the chat runs on another provider; OpenAI bills it by the minute. A recording stops by itself after five minutes; half a minute before, the line next to the microphone says so.
 

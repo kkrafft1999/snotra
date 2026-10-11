@@ -38,7 +38,7 @@ Nicht jedes Modell versteht Bilder. Die Modelle von OpenAI tun es; ein OpenAI-ko
 
 ![Das Eingabefeld während einer Aufnahme: getippt „Notiz für den Aussaatkalender:“ und dahinter, grau und schräg, die diktierten Sätze. Darunter das rote Mikrofon, ein Pegel, „Aufnahme läuft …“ und die Zeit.](screenshots/dictation.webp)
 
-Während du diktierst, machen die Pillen für Modell und Modus und die Token-Anzeige der Aufnahme Platz; beim Stoppen kommen sie zurück. Schickst du die Nachricht ab, endet die Aufnahme, und was diktiert ist, geht mit. Das Kürzel steht auch im Menü, *Bearbeiten › Spracheingabe*.
+Während du diktierst, machen die Pillen neben dem Mikrofon und die Token-Anzeige der Aufnahme Platz; beim Stoppen kommen sie zurück. Schickst du die Nachricht ab, endet die Aufnahme, und was diktiert ist, geht mit. Das Kürzel steht auch im Menü, *Bearbeiten › Spracheingabe*.
 
 Das Diktat nutzt die Spracherkennung von OpenAI und braucht einen OpenAI-Schlüssel unter *Einstellungen › Modelle*, auch wenn der Chat bei einem anderen Anbieter läuft; OpenAI rechnet nach Minuten ab. Eine Aufnahme hört nach fünf Minuten von selbst auf; eine halbe Minute vorher sagt es die Zeile neben dem Mikrofon.
 

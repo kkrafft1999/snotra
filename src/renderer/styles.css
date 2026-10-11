@@ -3685,7 +3685,7 @@ button.chat-msg-attachment:hover {
 }
 
 /* While dictating, the level, the status and the clock take the room the
- * model and mode pills and the token counter had; they come back with the
+ * pills and the token counter had; they come back with the
  * stop (#859). One row, also in a narrow chat: the bar must not wrap and push
  * send onto a line of its own. */
 .chat-composer-bar[data-dictating='true'] {
