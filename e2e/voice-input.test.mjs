@@ -10,7 +10,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, waitForFolderChat } from './helpers/app.mjs';
 import { startFakeRealtime, routeRealtime, feedMicrophone, speechLikeWav } from './helpers/fake-realtime.mjs';
 
 async function launchWithMicrophone(t, realtimeOptions) {
@@ -96,6 +96,9 @@ test('the transcript appears while speaking, grey and slanted, and settles at th
     t.skip('no encrypted storage here (a Linux runner without a keyring): no OpenAI key to dictate with');
     return;
   }
+  // The folder's chat empties the composer when it arrives; on the macOS
+  // runner that was after "Note:" had been written (#869).
+  await waitForFolderChat(page, { explain: evidence });
   await page.evaluate(() => {
     const input = document.getElementById('chat-input');
     input.value = 'Note:';
