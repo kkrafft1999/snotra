@@ -31,6 +31,8 @@ Lies die Karte und wähle dann einen ihrer Knöpfe:
 
 ## Was dann passiert
 
+[seit 1.20] Sobald entschieden ist, klappt die Karte zu einer Zeile zusammen: deine Entscheidung und die Frage, auf die sie antwortet, zum Beispiel *Einmal erlaubt · Snotra möchte `notizen/fruehjahr-2026.md` ändern*. Ein Klick auf die Zeile öffnet die ganze Karte wieder — die Angaben, die Vorschau und was deine Entscheidung bedeutet —, ein zweiter klappt sie wieder zu.
+
 Die Tool-Zeile im Chat zeigt, wie es ausgegangen ist, zum Beispiel *abgelehnt* oder *blockiert*, auch später im Verlauf. Eine Freigabe für die Sitzung erscheint unten auf der Seite *Einstellungen › Tools & Sicherheit*, wo du sie widerrufen kannst; ein gemerkter Befehl steht in der Zeile *Ausführen*. Siehe [Sehen und ändern, was Snotra darf](../tools-and-security/).
 
 ## Eine Datei außerhalb des geöffneten Ordners

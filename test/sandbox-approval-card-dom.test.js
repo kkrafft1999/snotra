@@ -162,6 +162,12 @@ test('Escape denies, and a decided card keeps its choice but takes no more', wit
   assert.equal(el.dataset.state, 'denied');
   assert.match(el.querySelector('.chat-approval-card__result').textContent, /^Denied The command is not run again/);
   assert.ok([...el.querySelectorAll('.chat-approval-card__choice')].every((f) => f.disabled));
+  // Decided, it folds to one line: the decision and the command it was about.
+  const toggle = el.querySelector('.chat-approval-card__toggle');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(el.querySelector('.chat-approval-card__body').hidden, true);
+  assert.equal(toggle.querySelector('.chat-approval-card__toggle-label').textContent, 'Denied');
+  assert.ok(toggle.querySelector('.chat-approval-card__toggle-headline .chat-approval-card__code'));
 }));
 
 test('allowed for the session, the card says so', withDom(async () => {

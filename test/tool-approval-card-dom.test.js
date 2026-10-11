@@ -147,8 +147,60 @@ test('a decision by keyboard keeps the focus on the card, not at the top of the 
   await settle();
   page.resolve({ requestId: 'r1', response: 'allow-once' });
   focusFixup();
-  assert.equal(document.activeElement === card('r1'), true);
+  // Folded, the card's one line takes it: the button that opens it again.
+  assert.equal(document.activeElement === card('r1').querySelector('.chat-approval-card__toggle'), true);
   assert.equal(card('r1').tabIndex, -1);
+}));
+
+test('a decided card folds to one line that names the decision and the question, and opens again', withDom(async () => {
+  const page = await mountCards();
+  page.request(dto('r1'));
+  assert.equal(card('r1').querySelector('.chat-approval-card__toggle'), null, 'an open request does not fold');
+  page.resolve({ requestId: 'r1', response: 'deny' });
+  const toggle = card('r1').querySelector('.chat-approval-card__toggle');
+  const body = card('r1').querySelector('.chat-approval-card__body');
+  assert.equal(card('r1').firstElementChild === toggle, true);
+  assert.equal(card('r1').classList.contains('chat-approval-card--folded'), true);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(toggle.getAttribute('aria-controls'), body.id);
+  assert.equal(body.hidden, true);
+  assert.equal(toggle.querySelector('.chat-approval-card__toggle-label').textContent, 'Denied');
+  const line = toggle.querySelector('.chat-approval-card__toggle-headline');
+  assert.match(line.textContent, /src\/config\.js/);
+  assert.equal(line.querySelectorAll('[id]').length, 0, 'the copied headline carries no ids');
+  // Everything the card said stays in the fold, the result included.
+  assert.equal(body.contains(card('r1').querySelector('.chat-approval-card__facts')), true);
+  assert.match(body.querySelector('.chat-approval-card__result').textContent, /^Denied/);
+  // The status line stays outside, for the screen reader only.
+  const status = card('r1').querySelector('.chat-approval-card__status');
+  assert.equal(body.contains(status), false);
+  assert.equal(status.classList.contains('sr-only'), true);
+  assert.equal(status.textContent, 'Denied.');
+
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(body.hidden, false);
+  assert.equal(card('r1').classList.contains('chat-approval-card--folded'), false);
+  toggle.click();
+  assert.equal(body.hidden, true);
+}));
+
+test('an opened decided card stays open across a language change (#290)', withDom(async () => {
+  const { setLocale } = await importRenderer('i18n.js');
+  const page = await mountCards();
+  page.request(dto('r1'));
+  page.resolve({ requestId: 'r1', response: 'allow-once' });
+  card('r1').querySelector('.chat-approval-card__toggle').click();
+  try {
+    setLocale('de');
+    const toggle = card('r1').querySelector('.chat-approval-card__toggle');
+    assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+    assert.equal(card('r1').querySelector('.chat-approval-card__body').hidden, false);
+    assert.equal(toggle.querySelector('.chat-approval-card__toggle-label').textContent, 'Einmal erlaubt');
+    assert.equal(card('r1').querySelectorAll('.chat-approval-card__toggle').length, 1);
+  } finally {
+    setLocale('en');
+  }
 }));
 
 test('a failed answer gives the buttons back, says why, and the focus returns to the button', withDom(async () => {

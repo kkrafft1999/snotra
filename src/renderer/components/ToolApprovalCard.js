@@ -9,6 +9,9 @@ import { isCancelledResult } from '../state/tool-permissions.js';
 
 const { APPROVAL_RESPONSES } = contracts;
 
+const CHEVRON_HTML =
+  '<svg class="chat-approval-card__chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
+
 /**
  * Bestätigungskarte im Chat (Issue #67, Konzept §4/§6).
  *
@@ -658,8 +661,62 @@ export function initToolApprovalCards({
     result.appendChild(el('strong', null, outcome.label));
     if (outcome.detail) result.append(` ${outcome.detail}`);
     card.querySelector('.chat-approval-card__result')?.remove();
-    card.insertBefore(result, card.querySelector('.chat-approval-card__status'));
+    const body = card.querySelector('.chat-approval-card__body');
+    if (body) body.appendChild(result);
+    else card.insertBefore(result, card.querySelector('.chat-approval-card__status'));
     setStatus(card, t('approval.status.resolved', { label: outcome.label }));
+    foldResolved(card, entry, outcome);
+  }
+
+  /**
+   * A decided card folds to one line: the decision and the question it
+   * answered, so the chat reads on and still shows that something was asked.
+   * A click opens the full card again. Open or folded is the entry's, so a
+   * card rebuilt for a language change keeps it. The status line stays out of
+   * the fold, visually hidden, so the decision is still announced.
+   */
+  function foldResolved(card, entry, outcome) {
+    const hadFocus = card.contains(document.activeElement);
+    const status = card.querySelector('.chat-approval-card__status');
+    let body = card.querySelector('.chat-approval-card__body');
+    let toggle = card.querySelector('.chat-approval-card__toggle');
+    if (!body) {
+      body = el('div', 'chat-approval-card__body');
+      body.id = domId(entry.dto.requestId, 'body');
+      for (const child of [...card.childNodes]) {
+        if (child !== status) body.appendChild(child);
+      }
+      toggle = el('button', 'chat-approval-card__toggle');
+      toggle.type = 'button';
+      toggle.setAttribute('aria-controls', body.id);
+      toggle.addEventListener('click', () => {
+        entry.expanded = !entry.expanded;
+        syncFold(card, entry);
+      });
+      card.prepend(toggle, body);
+    }
+    toggle.replaceChildren();
+    toggle.insertAdjacentHTML('afterbegin', CHEVRON_HTML);
+    toggle.appendChild(el('strong', 'chat-approval-card__toggle-label', outcome.label));
+    const headline = card.querySelector('.chat-approval-card__headline');
+    if (headline) {
+      toggle.appendChild(el('span', 'chat-approval-card__toggle-sep', '·'));
+      const line = el('span', 'chat-approval-card__toggle-headline');
+      line.append(...[...headline.childNodes].map((node) => node.cloneNode(true)));
+      toggle.appendChild(line);
+    }
+    status?.classList.add('sr-only');
+    syncFold(card, entry);
+    // The focus was on the card or a button that is folded away now.
+    if (hadFocus) toggle.focus({ preventScroll: true });
+  }
+
+  function syncFold(card, entry) {
+    const open = entry.expanded === true;
+    card.classList.toggle('chat-approval-card--folded', !open);
+    card.querySelector('.chat-approval-card__toggle')?.setAttribute('aria-expanded', String(open));
+    const body = card.querySelector('.chat-approval-card__body');
+    if (body) body.hidden = !open;
   }
 
   async function respond(requestId, response, extra) {
@@ -810,7 +867,8 @@ export function initToolApprovalCards({
       }
       if (focused !== null) {
         const button = focused ? fresh.querySelector(`.chat-approval-card__actions button[data-response="${focused}"]`) : null;
-        (button && !button.disabled && !button.closest('[hidden]') ? button : fresh).focus({ preventScroll: true });
+        const fallback = fresh.querySelector('.chat-approval-card__toggle') || fresh;
+        (button && !button.disabled && !button.closest('[hidden]') ? button : fallback).focus({ preventScroll: true });
       }
     }
   });
