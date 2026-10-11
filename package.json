@@ -112,7 +112,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@anthropic-ai/sandbox-runtime": "0.0.78",
+    "@anthropic-ai/sandbox-runtime": "0.0.79",
     "undici": "^8.11.2"
   },
   "devDependencies": {
