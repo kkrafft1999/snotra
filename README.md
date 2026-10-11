@@ -198,49 +198,9 @@ The finished artifacts land in `out/` (excluded via `.gitignore`).
 
 ## Keyboard shortcuts
 
-*The manual has no reference chapter yet ([#787](https://github.com/kkrafft1999/snotra/issues/787)); until it does, the shortcuts live here.*
-
-What Snotra adds on top of the usual system shortcuts. Copy, paste, undo, zoom
-and full screen behave as in any other app on your platform and sit in the
-*Edit*, *View* and *Window* menus.
-
-**Anywhere in the window**
-
-| What it does | macOS | Windows / Linux |
-| --- | --- | --- |
-| Open the settings | `Cmd+,` | `Ctrl+,` |
-| Show or hide the sidebar | `Cmd+B` | `Ctrl+B` |
-| Show or hide hidden files in the tree | `Cmd+Shift+.` | `Ctrl+Shift+.` |
-| Filter the file tree | `Cmd+P` | `Ctrl+P` |
-| Copy the tool log diagnostics as JSON to the clipboard — useful for a bug report | `Cmd+Shift+D` | `Ctrl+Shift+D` |
-
-**Chat input**
-
-| What it does | macOS | Windows / Linux |
-| --- | --- | --- |
-| Send the message | `Enter` | `Enter` |
-| Insert a line break | `Shift+Enter` | `Shift+Enter` |
-| Paste an image from the clipboard as an attachment | `Cmd+V` | `Ctrl+V` |
-| In the `@` file list or the `/` skill list: select · accept · close | `↑`/`↓` · `Enter` or `Tab` · `Esc` | `↑`/`↓` · `Enter` or `Tab` · `Esc` |
-| Deny the tool approval card that is on screen | `Esc` | `Esc` |
-
-**File tree and columns**
-
-| What it does | macOS | Windows / Linux |
-| --- | --- | --- |
-| Open the context menu of a row (instead of a right-click) | `Cmd`-click | `Ctrl`-click |
-| Start the filter with a letter | type it into the focused tree | type it into the focused tree |
-| In the filter: select · open · close | `↑`/`↓` · `Enter` · `Esc` | `↑`/`↓` · `Enter` · `Esc` |
-| Rename the focused row · take the name · leave it unchanged | `F2` · `Enter` · `Esc` | `F2` · `Enter` · `Esc` |
-| Recently used folders: open · remove from the list | `Enter` or `Space` · `Delete` or `Backspace` | `Enter` or `Space` · `Delete` or `Backspace` |
-| Focused column divider: move it · in larger steps · to its end position | `←`/`→` · `Shift+←`/`→` · `Home`/`End` | `←`/`→` · `Shift+←`/`→` · `Home`/`End` |
-
-**Dialogs and menus**
-
-| What it does | macOS | Windows / Linux |
-| --- | --- | --- |
-| Settings: move to the previous or next section · to the first or last | `↑`/`↓` or `←`/`→` · `Home`/`End` | `↑`/`↓` or `←`/`→` · `Home`/`End` |
-| Close a dialog, a menu or an enlarged image | `Esc` | `Esc` |
+Every shortcut Snotra adds to the usual system ones — in the window, the chat
+input, the file tree and the dialogs — is listed in the manual under
+[Find a keyboard shortcut](https://docs.snotra-ai.dev/reference/keyboard-shortcuts/).
 
 ## Migrating from "Weyouze Anything"
 

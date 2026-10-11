@@ -199,47 +199,9 @@ Die fertigen Artefakte landen im Ordner `out/` (per `.gitignore` ausgeschlossen)
 
 ## Tastenkürzel
 
-*Das Handbuch hat noch kein Nachschlage-Kapitel ([#787](https://github.com/kkrafft1999/snotra/issues/787)); bis dahin stehen die Kürzel hier.*
-
-Was Snotra zu den üblichen Systemkürzeln hinzufügt. Kopieren, Einfügen, Rückgängig, Zoom und Vollbild verhalten sich wie in jeder anderen App deiner Plattform und stehen in den Menüs *Bearbeiten*, *Ansicht* und *Fenster*.
-
-**Überall im Fenster**
-
-| Was es tut | macOS | Windows / Linux |
-| --- | --- | --- |
-| Einstellungen öffnen | `Cmd+,` | `Strg+,` |
-| Seitenleiste ein- oder ausblenden | `Cmd+B` | `Strg+B` |
-| Versteckte Dateien im Baum zeigen oder verbergen | `Cmd+Shift+.` | `Strg+Shift+.` |
-| Den Dateibaum filtern | `Cmd+P` | `Strg+P` |
-| Tool-Log-Diagnose als JSON in die Zwischenablage kopieren — nützlich für einen Fehlerbericht | `Cmd+Shift+D` | `Strg+Shift+D` |
-
-**Chat-Eingabe**
-
-| Was es tut | macOS | Windows / Linux |
-| --- | --- | --- |
-| Nachricht abschicken | `Enter` | `Enter` |
-| Zeilenumbruch einfügen | `Shift+Enter` | `Shift+Enter` |
-| Bild aus der Zwischenablage als Anhang einfügen | `Cmd+V` | `Strg+V` |
-| In der `@`-Dateiliste oder der `/`-Skill-Liste: wählen · übernehmen · schließen | `↑`/`↓` · `Enter` oder `Tab` · `Esc` | `↑`/`↓` · `Enter` oder `Tab` · `Esc` |
-| Die sichtbare Freigabekarte eines Tools ablehnen | `Esc` | `Esc` |
-
-**Dateibaum und Spalten**
-
-| Was es tut | macOS | Windows / Linux |
-| --- | --- | --- |
-| Kontextmenü einer Zeile öffnen (statt Rechtsklick) | `Cmd`-Klick | `Strg`-Klick |
-| Den Filter mit einem Buchstaben beginnen | in den fokussierten Baum tippen | in den fokussierten Baum tippen |
-| Im Filter: wählen · öffnen · schließen | `↑`/`↓` · `Enter` · `Esc` | `↑`/`↓` · `Enter` · `Esc` |
-| Zeile mit Fokus umbenennen · Namen übernehmen · unverändert lassen | `F2` · `Enter` · `Esc` | `F2` · `Enter` · `Esc` |
-| Zuletzt verwendete Ordner: öffnen · aus der Liste entfernen | `Enter` oder `Leertaste` · `Entf` oder `Rücktaste` | `Enter` oder `Leertaste` · `Entf` oder `Rücktaste` |
-| Fokussierter Spaltentrenner: verschieben · in größeren Schritten · bis zur Endlage | `←`/`→` · `Shift+←`/`→` · `Pos1`/`Ende` | `←`/`→` · `Shift+←`/`→` · `Pos1`/`Ende` |
-
-**Dialoge und Menüs**
-
-| Was es tut | macOS | Windows / Linux |
-| --- | --- | --- |
-| Einstellungen: zum vorigen oder nächsten Bereich · zum ersten oder letzten | `↑`/`↓` oder `←`/`→` · `Pos1`/`Ende` | `↑`/`↓` oder `←`/`→` · `Pos1`/`Ende` |
-| Dialog, Menü oder vergrößertes Bild schließen | `Esc` | `Esc` |
+Alle Kürzel, die Snotra zu den üblichen Systemkürzeln hinzufügt — im Fenster,
+in der Chat-Eingabe, im Dateibaum und in den Dialogen —, stehen im Handbuch
+unter [Ein Tastenkürzel finden](https://docs.snotra-ai.dev/de/reference/keyboard-shortcuts/).
 
 ## Umstieg von „Weyouze Anything“
 
