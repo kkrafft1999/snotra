@@ -31,6 +31,8 @@ Read the card, then choose one of its buttons:
 
 ## What happens
 
+[since 1.20] Once decided, the card folds to a single line: your decision and the question it answered, for example *Allowed once · Snotra wants to change `notes/spring-2026.md`*. Click the line to open the full card again — the details, the preview and what your decision meant — and click it once more to fold it.
+
 The tool line in the chat shows how it ended, for example *denied* or *blocked*, also later in the chat history. An allowance for the session shows up under *Settings › Tools & security* at the bottom of the page, where you can revoke it; a remembered command is listed in the row *Execute*. See [See and change what Snotra may do](../tools-and-security/).
 
 ## A file outside the open folder

@@ -8215,8 +8215,105 @@ select.modal-input {
 
 .chat-approval-card[data-state='denied'] .chat-approval-card__result strong,
 .chat-approval-card[data-state='invalidated'] .chat-approval-card__result strong,
-.chat-approval-card[data-state='cancelled'] .chat-approval-card__result strong {
+.chat-approval-card[data-state='cancelled'] .chat-approval-card__result strong,
+.chat-approval-card[data-state='denied'] .chat-approval-card__toggle-label,
+.chat-approval-card[data-state='invalidated'] .chat-approval-card__toggle-label,
+.chat-approval-card[data-state='cancelled'] .chat-approval-card__toggle-label {
   color: var(--text-muted-strong);
+}
+
+/* A decided card folds to one line (the decision · the question), the same
+   chevron as the tool log; the line is the button that opens it again. The
+   card gives its padding to the line and the body, so the whole line is the
+   click target. */
+.chat-approval-card:has(> .chat-approval-card__toggle) {
+  padding: 0;
+}
+
+.chat-approval-card__toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 14px;
+  border: none;
+  border-radius: var(--ds-radius-md);
+  background: transparent;
+  font: inherit;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.5;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--text-muted-strong);
+  cursor: pointer;
+}
+
+.chat-approval-card__toggle:hover {
+  background: var(--bg-hover);
+}
+
+.chat-approval-card__toggle:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.chat-approval-card__chevron {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  stroke: var(--text-muted-strong);
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform var(--ds-motion-medium) ease-out;
+}
+
+.chat-approval-card__toggle[aria-expanded='true'] .chat-approval-card__chevron {
+  transform: rotate(90deg);
+}
+
+.chat-approval-card__toggle-label {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chat-approval-card__toggle-sep {
+  flex-shrink: 0;
+}
+
+.chat-approval-card__toggle-headline {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-approval-card__toggle-headline .chat-approval-card__code {
+  overflow-wrap: normal;
+}
+
+/* Open, the card's own headline stands right below: the line keeps only the
+   decision. */
+.chat-approval-card__toggle[aria-expanded='true'] {
+  border-radius: var(--ds-radius-md) var(--ds-radius-md) 0 0;
+}
+
+.chat-approval-card__toggle[aria-expanded='true'] .chat-approval-card__toggle-sep,
+.chat-approval-card__toggle[aria-expanded='true'] .chat-approval-card__toggle-headline {
+  display: none;
+}
+
+.chat-approval-card__body {
+  padding: 2px 16px 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-approval-card__chevron {
+    transition: none;
+  }
 }
 
 /* Einstellungen › Tools › Berechtigungen */
