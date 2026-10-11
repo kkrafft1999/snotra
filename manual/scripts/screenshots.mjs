@@ -23,6 +23,7 @@ import sharp from 'sharp';
 import { startFakeModel } from '../../e2e/helpers/fake-model.mjs';
 import { launchApp, makeTempDir, poll, prepareUserData } from '../../e2e/helpers/app.mjs';
 import { routeOpenAiImages } from '../../e2e/helpers/fake-images.mjs';
+import { startFakeRealtime, routeRealtime, feedMicrophone, speechLikeWav } from '../../e2e/helpers/fake-realtime.mjs';
 
 const MANUAL_DIR = fileURLToPath(new URL('..', import.meta.url));
 const REPO_DIR = path.resolve(MANUAL_DIR, '..');
@@ -695,6 +696,47 @@ const MOTIFS = {
   },
 
   /**
+   * Dictation while the recording runs (#859): a typed start, then a settled
+   * sentence and one still being spoken, grey and slanted. The realtime server
+   * only accepts the connection; the transcript is pushed the way main would,
+   * so that both themes show the same words.
+   */
+  dictation: {
+    prefs: { chatPanelWidth: WIDE_CHAT },
+    // The OpenAI key is stored with an OpenAI entry; the fake model stays active.
+    configure(config) {
+      config.presets.push({ id: 'gpt-5-mini', providerId: 'openai', model: 'gpt-5-mini', menuVisible: true });
+    },
+    text: {
+      en: {
+        typed: 'Note for the sowing calendar:',
+        settled: 'Move the tomatoes to the south bed in mid-May.',
+        live: 'and water them every',
+      },
+      de: {
+        typed: 'Notiz für den Aussaatkalender:',
+        settled: 'Die Tomaten Mitte Mai ins Südbeet setzen.',
+        live: 'und alle zwei Tage',
+      },
+    },
+    async setUp({ app, page, config, text }) {
+      await storeOpenAiKey(page, config);
+      await routeRealtime(app, realtime.port);
+      await feedMicrophone(page, speechLikeWav({ sampleRate: 24000 }));
+      await page.fill('#chat-input', text.typed);
+      await page.click('#btn-chat-mic');
+      await poll(() => page.evaluate(() => document.getElementById('chat-input-field').dataset.dictating === 'true'),
+        { what: 'recording', explain: () => page.evaluate(() => document.getElementById('chat-voice-status').textContent) });
+      await app.evaluate(({ BrowserWindow }, payload) => {
+        BrowserWindow.getAllWindows()[0].webContents.send('voice:transcript', payload);
+      }, { id: 1, turns: [{ text: text.settled, final: true }, { text: text.live, final: false }], settledBytes: 0 });
+      await poll(() => page.evaluate((live) => document.getElementById('chat-input').value.endsWith(live), text.live),
+        { what: 'dictation in the field' });
+      return clipAround(page, ['#chat-input-row'], 24);
+    },
+  },
+
+  /**
    * The model menu: two OpenAI models and a local one, with the reasoning
    * levels of the chosen OpenAI model below them.
    */
@@ -1300,6 +1342,9 @@ execFileSync(process.execPath, [path.join(REPO_DIR, 'scripts', 'sync-renderer-ve
 
 await mkdir(OUT_DIR, { recursive: true });
 const model = await startFakeModel();
+// The realtime transcription for the dictation motif: it only has to accept
+// the connection.
+const realtime = await startFakeRealtime({ mode: 'silent' });
 try {
   for (const name of names) {
     console.log(name);
@@ -1307,4 +1352,5 @@ try {
   }
 } finally {
   await model.close();
+  await realtime.close();
 }

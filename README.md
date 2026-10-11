@@ -268,7 +268,7 @@ copies nothing into it.
 │   │   ├── ports/       infrastructure port interfaces
 │   │   ├── ipc/         thin IPC handlers
 │   │   ├── providers/   LLM provider implementations
-│   │   ├── services/    infrastructure (storage, FS, Whisper, updates, presentation)
+│   │   ├── services/    infrastructure (storage, FS, speech, updates, presentation)
 │   │   └── tools/       workspace tool registry
 │   ├── preload/         secure bridge between main and renderer (bundled)
 │   ├── renderer/        UI (HTML, CSS, JS) — pure presentation layer

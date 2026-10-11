@@ -216,6 +216,18 @@ const REQUEST_CHANNELS = Object.freeze({
   /** What one or more writing calls changed in a file (#348). */
   CHAT_FILE_CHANGES: 'chat:file-changes',
 
+  /**
+   * Live voice input (#859). START (invoke, `{ id }`) opens the transcription
+   * and answers once it is up; AUDIO (send, `{ id, audio }`) carries 100 ms of
+   * 16-bit PCM; STOP (invoke, `{ id }`) answers with the settled turns; CANCEL
+   * (invoke) drops the recording. The transcript comes back over
+   * PUSH_CHANNELS.VOICE_TRANSCRIPT.
+   */
+  VOICE_START: 'voice:start',
+  VOICE_AUDIO: 'voice:audio',
+  VOICE_STOP: 'voice:stop',
+  VOICE_CANCEL: 'voice:cancel',
+  /** The fallback when live voice input fails (#859): one recording, in one piece, to Whisper. */
   WHISPER_CANCEL: 'whisper:cancel',
   WHISPER_TRANSCRIBE: 'whisper:transcribe',
 });
@@ -226,6 +238,8 @@ const PUSH_CHANNELS = Object.freeze({
   CHAT_DELTA: 'chat:delta',
   CHAT_TOOL_LINE: 'chat:tool-line',
   CHAT_PROGRESS: 'chat:progress',
+  /** The transcript of a recording so far (#859): `{ id, turns }` or `{ id, error }`. */
+  VOICE_TRANSCRIPT: 'voice:transcript',
   UPDATE_AVAILABLE: 'update:available',
   /** Fortschritt des laufenden Update-Downloads (Issue #232). */
   UPDATE_PROGRESS: 'update:progress',
@@ -279,6 +293,8 @@ const PUSH_CHANNELS = Object.freeze({
   UI_OPEN_SETTINGS: 'ui:open-settings',
   /** Menu "File > New Chat" or Cmd/Ctrl+N (issue #381). */
   UI_NEW_CHAT: 'ui:new-chat',
+  /** Menu "Edit > Voice Input" or Cmd/Ctrl+D (#859): start or stop a recording. */
+  UI_TOGGLE_VOICE_INPUT: 'ui:toggle-voice-input',
   /** Menu "View > Preview or Source" or Cmd/Ctrl+Shift+M (#344, #345). */
   UI_TOGGLE_MARKDOWN_SOURCE: 'ui:toggle-markdown-source',
   /** Menu "View > Show Hidden Files" or Cmd+Shift+. / Ctrl+Shift+. (#436). */

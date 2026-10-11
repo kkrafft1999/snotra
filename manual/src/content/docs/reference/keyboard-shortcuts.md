@@ -14,6 +14,7 @@ These work with the focus in the chat input as well.
 | What it does | macOS | Windows / Linux | Menu |
 | --- | --- | --- | --- |
 | Start a new chat | `Cmd+N` | `Ctrl+N` | *File › New Chat* |
+| Start or stop dictation [since 1.20] | `Cmd+D` | `Ctrl+D` | *Edit › Voice Input* |
 | Open the settings | `Cmd+,` | `Ctrl+,` | *Snotra Agent › Settings…* on macOS, *View › Settings…* elsewhere |
 | Show or hide the sidebar | `Cmd+B` | `Ctrl+B` | *View › Toggle Sidebar* |
 | Show or hide hidden files in the tree | `Cmd+Shift+.` | `Ctrl+Shift+.` | *View › Show Hidden Files* |

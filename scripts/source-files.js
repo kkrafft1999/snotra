@@ -36,6 +36,7 @@ const ELECTRON_ENTRY_POINTS = new Map([
   ['renderer/app.js', 'verdrahtet die Oberflaeche beim Laden, braucht window.electronAPI'],
   ['preload/manual.js', 'preload of the help window (#790), needs contextBridge'],
   ['preload/manual-bundle.js', 'generated bundle of that preload, contextBridge as well'],
+  ['renderer/voice/pcm-capture-worklet.js', 'runs in the AudioWorkletGlobalScope (#859), needs AudioWorkletProcessor'],
   ['renderer/manual/manual-app.js', 'wires the help window on load, needs window.manualApi and localStorage'],
 ]);
 

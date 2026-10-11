@@ -210,6 +210,14 @@ for (const platform of ['darwin', 'win32', 'linux']) {
     assert.deepEqual(sent, [PUSH.UI_NEW_CHAT]);
   });
 
+  test(`${platform}: Edit > Voice Input with CmdOrCtrl+D (#859)`, () => {
+    const { template, sent } = buildTemplate(platform);
+    const item = menuNamed(template, 'Edit').submenu.find((entry) => entry.label === 'Voice Input');
+    assert.equal(item.accelerator, 'CmdOrCtrl+D');
+    item.click();
+    assert.deepEqual(sent, [PUSH.UI_TOGGLE_VOICE_INPUT]);
+  });
+
   test(`${platform}: View > Preview or Source with CmdOrCtrl+Shift+M (#344)`, () => {
     const { template, sent } = buildTemplate(platform);
     const item = menuNamed(template, 'View').submenu.find((entry) => entry.label === 'Preview or Source');

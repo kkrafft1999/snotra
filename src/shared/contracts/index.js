@@ -186,8 +186,10 @@ const {
 } = require('./item-name');
 const {
   MAX_VOICE_RECORDING_MS,
-  MAX_VOICE_RECORDING_BYTES,
   VOICE_STOP_WARNING_MS,
+  VOICE_SAMPLE_RATE,
+  MAX_VOICE_CHUNK_BYTES,
+  isVoiceChunk,
   MAX_TRANSCRIPTION_UPLOAD_BYTES,
   checkTranscriptionPayload,
 } = require('./voice');
@@ -527,8 +529,10 @@ module.exports = {
   isMemoryScope,
   parseMemoryEntries,
   MAX_VOICE_RECORDING_MS,
-  MAX_VOICE_RECORDING_BYTES,
   VOICE_STOP_WARNING_MS,
+  VOICE_SAMPLE_RATE,
+  MAX_VOICE_CHUNK_BYTES,
+  isVoiceChunk,
   MAX_TRANSCRIPTION_UPLOAD_BYTES,
   checkTranscriptionPayload,
   PROGRAM_ALLOWANCE_LIMITS,

@@ -168,7 +168,7 @@
   <rect class="module" x="950" y="640" width="330" height="120"/>
   <text class="eyebrow" x="980" y="678">VOICE</text>
   <text class="heading" x="980" y="715">Voice input</text>
-  <text class="description" x="980" y="745">Whisper transcription</text>
+  <text class="description" x="980" y="745">Live text &#183; Whisper fallback</text>
 
   <rect class="module" x="950" y="800" width="330" height="120"/>
   <text class="eyebrow" x="980" y="838">VERSION</text>

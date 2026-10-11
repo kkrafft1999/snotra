@@ -75,6 +75,9 @@
    * --ds-surface, the composer's ground too); dark has a value of its own,
    * see there (CR-B15-03). */
   --ds-placeholder: var(--ds-grey-muted);
+  /* Dictation while the recording runs (#859): grey and slanted until the
+   * stop. Light it is the secondary grey, 5.0:1 on the composer. */
+  --ds-dictation-text: var(--ds-grey-muted);
   /* The moving highlight of a running tool line. Light needs a darker sweep:
    * a light one fades the text to 1.4:1 on the chat ground (CR-B15-03).
    * --ds-blue keeps 4.9:1 there. */
@@ -315,6 +318,9 @@
   /* --ds-grey-muted reaches only 4.4:1 on the composer (#3C3A38). 4.85:1 there,
    * 7.1:1 on --ds-surface, and still 1.45:1 apart from typed text. */
   --ds-placeholder: #ADA9A4;
+  /* --ds-grey-muted would reach only 4.4:1 on the composer; the placeholder's
+   * grey holds 4.85:1. The two never show together. */
+  --ds-dictation-text: var(--ds-placeholder);
 
   --ds-blue: #3FB8E5;          /* 7,6:1 auf --ds-grey-bg */
   --ds-blue-strong: var(--ds-blue); /* the wash is dark here, --ds-blue holds */

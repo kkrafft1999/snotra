@@ -222,3 +222,20 @@ test('transcribeAudio accepts an ArrayBuffer as it arrives over IPC', async (t) 
   assert.deepEqual(res, { text: 'ok' });
   assert.equal(calls.length, 1);
 });
+
+// The fallback of live voice input (#859) sends WAV; Whisper goes by the name.
+test('transcribeAudio names a WAV recording as one', async (t) => {
+  const { fetchImpl, calls } = makeFetchStub(t, async () => ({ ok: true, json: async () => ({ text: 'ok' }) }));
+  const svc = createWhisperService({
+    fetchImpl,
+    credentials: { getApiKey: async () => 'sk-test' },
+    getAppLocale: async () => 'de',
+  });
+  const wav = Buffer.alloc(48);
+  wav.write('RIFF', 0, 'latin1');
+  wav.write('WAVE', 8, 'latin1');
+  await svc.transcribeAudio(wav);
+  const bodyText = calls[0].options.body.toString('latin1');
+  assert.match(bodyText, /name="file"; filename="voice\.wav"/);
+  assert.match(bodyText, /Content-Type: audio\/wav/);
+});

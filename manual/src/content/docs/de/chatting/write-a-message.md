@@ -31,10 +31,18 @@ Nicht jedes Modell versteht Bilder. Die Modelle von OpenAI tun es; ein OpenAI-ko
 
 ## Diktieren
 
-1. Klick auf das Mikrofon im Eingabefeld und sprich.
-2. Klick noch einmal darauf, um aufzuhören. Snotra schreibt auf, was du gesagt hast, und fügt es ins Eingabefeld ein, wo du es vor dem Abschicken noch ändern kannst.
+1. Klick auf das Mikrofon im Eingabefeld oder drück `Cmd+D` (`Strg+D` unter Windows und Linux) und sprich.
+2. Was du sagst, erscheint schon während des Sprechens im Eingabefeld, dort, wo der Cursor stand — grau und schräg, solange die Aufnahme läuft [seit 1.20]. Ein roter Pegel neben dem Mikrofon zeigt, dass es dich hört, eine Uhr, wie lange die Aufnahme schon läuft.
+3. Ein Wort falsch verstanden? Korrigier es gleich: Ein Satz ist fertig, sobald du eine Pause machst, und ab dann kannst du ihn ändern, während du weitersprichst. Nur der Satz, in dem du gerade bist, lässt sich noch nicht bearbeiten.
+4. Klick noch einmal auf das Mikrofon oder drück `Cmd+D` / `Strg+D`, um aufzuhören. Snotra schließt den letzten Satz ab, und alles wird zu normalem Text, den du ändern oder abschicken kannst.
 
-Das Diktat nutzt die Spracherkennung von OpenAI und braucht einen OpenAI-Schlüssel unter *Einstellungen › Modelle*. Eine Aufnahme hört nach fünf Minuten von selbst auf; eine halbe Minute vorher sagt es die Zeile unter dem Eingabefeld.
+![Das Eingabefeld während einer Aufnahme: getippt „Notiz für den Aussaatkalender:“ und dahinter, grau und schräg, die diktierten Sätze. Darunter das rote Mikrofon, ein Pegel, „Aufnahme läuft …“ und die Zeit.](screenshots/dictation.webp)
+
+Während du diktierst, machen die Pillen neben dem Mikrofon und die Token-Anzeige der Aufnahme Platz; beim Stoppen kommen sie zurück. Schickst du die Nachricht ab, endet die Aufnahme, und was diktiert ist, geht mit. Das Kürzel steht auch im Menü, *Bearbeiten › Spracheingabe*.
+
+Das Diktat nutzt die Spracherkennung von OpenAI und braucht einen OpenAI-Schlüssel unter *Einstellungen › Modelle*, auch wenn der Chat bei einem anderen Anbieter läuft; OpenAI rechnet nach Minuten ab. Eine Aufnahme hört nach fünf Minuten von selbst auf; eine halbe Minute vorher sagt es die Zeile neben dem Mikrofon.
+
+Ist der Live-Text nicht zu haben — weil ein Netzwerk die Verbindung sperrt, zum Beispiel —, läuft die Aufnahme ohne ihn weiter, und der Text kommt beim Stoppen. Woran du das erkennst und was du tun kannst: [Wenn das Diktat nicht klappt](../../troubleshooting/voice-input/).
 
 ## Sehen, was eine Anfrage kostet
 
@@ -44,4 +52,5 @@ Neben dem Senden-Knopf zeigt das Eingabefeld die Größe der letzten Anfrage in 
 
 - **Der Senden-Knopf bleibt gesperrt.** Es ist kein Modell angebunden, oder dem angebundenen fehlt sein Schlüssel: siehe [Ein Modell anbinden](../../getting-started/connect-a-model/).
 - **Ein Bild einzufügen, zeigt nur einen Hinweis.** Das Modell dieses Chats nimmt keine Bilder. Wechsle zu einem, das es tut — [Das Modell wechseln](../model-and-reasoning/) —, oder schalte *Bild-Anhänge erlauben* für einen OpenAI-kompatiblen Server ein, dessen Modell Bilder versteht.
-- ***Kein OpenAI-Key hinterlegt (Whisper braucht einen).*** Das Diktat braucht einen OpenAI-Schlüssel, auch wenn der Chat bei einem anderen Anbieter läuft.
+- ***Kein OpenAI-Key hinterlegt (die Spracheingabe braucht einen).*** Das Diktat braucht einen OpenAI-Schlüssel, auch wenn der Chat bei einem anderen Anbieter läuft. Ohne ihn geht das Mikrofon gar nicht erst an.
+- **Das Diktat zeigt beim Sprechen keinen Text, oder gar keinen.** Siehe [Wenn das Diktat nicht klappt](../../troubleshooting/voice-input/).

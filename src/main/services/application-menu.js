@@ -110,6 +110,14 @@ function createApplicationMenuTemplate({
       { role: 'copy', label: t('menu.edit.copy') },
       { role: 'paste', label: t('menu.edit.paste') },
       { role: 'selectAll', label: t('menu.edit.selectAll') },
+      { type: 'separator' },
+      // #859: dictation into the chat input. On the item, like Cmd/Ctrl+N, so
+      // the shortcut works with the focus in the input — where it is wanted.
+      {
+        label: t('menu.edit.voiceInput'),
+        accelerator: 'CmdOrCtrl+D',
+        click: () => send(PUSH.UI_TOGGLE_VOICE_INPUT),
+      },
     ],
   };
 

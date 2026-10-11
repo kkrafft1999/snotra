@@ -2395,6 +2395,41 @@ without `appLocale`, however, comes from a time when there was only German;
 an existing one. The addition happens on every read and needs no migration step
 of its own.
 
+## Live voice input ([#859](https://github.com/kkrafft1999/snotra/issues/859))
+
+The transcript appears in the chat input while the user speaks. Four parts,
+each testable on its own:
+
+- **Capture** (`renderer/voice/microphone-capture.js`,
+  `pcm-capture-worklet.js`): an `AudioContext` at 24 kHz, an AudioWorklet that
+  turns the samples into 16-bit PCM and posts 100 ms at a time with its level.
+  The worklet is a script from the app, so the CSP needs nothing new.
+- **Session** (`main/services/realtime-transcription-service.js`): one WebSocket
+  per recording to OpenAI's realtime transcription (`gpt-live-transcribe`),
+  opened by main so the key stays there. The model detects no pauses itself;
+  `turn-detector.js` commits the audio buffer at the first pause after speech,
+  and only a commit settles a turn. Main pushes every turn so far plus
+  `settledBytes`, the audio the settled turns cover.
+- **IPC** (`main/ipc/voice-handlers.js`): `voice:start` answers once a key is
+  there — the microphone is not opened without one — and audio sent before the
+  connection is up waits in main. Everything carries the renderer's recording
+  number; nothing of an abandoned recording reaches the next.
+- **Field** (`renderer/voice/DictationField.js`): settled turns are written into
+  the textarea once and then belong to the user; the turn still being spoken
+  is rewritten with every word and guarded against edits. While recording, the
+  textarea draws its text transparent and a mirror behind it draws it, the
+  dictation grey and slanted. The synthetic slant keeps every glyph's width, so
+  caret and selection stay aligned.
+
+**Fallback.** The renderer keeps the recording's audio. When the session fails —
+at the start or mid-way — recording goes on without live text, and at the stop
+the audio from `settledBytes` on goes to Whisper as WAV through the old
+`whisper:transcribe` channel; its text joins the settled turns. Without a key
+there is no fallback: both need it.
+
+The shortcut `Cmd/Ctrl+D` hangs on *Edit › Voice Input*, like `Cmd/Ctrl+N` on
+its item, so it works with the focus in the input.
+
 ## Further functional modules
 
 The skill system ([#18](https://github.com/kkrafft1999/snotra/issues/18)) is

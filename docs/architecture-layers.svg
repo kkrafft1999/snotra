@@ -84,7 +84,7 @@
     <rect class="ui" x="746"  y="200" width="218" height="42" rx="8"/>
     <text class="chip tt-ui" x="855" y="218">UpdateBanner</text><text class="chipsub" x="855" y="233">Update notice</text>
     <rect class="ui" x="978"  y="200" width="218" height="42" rx="8"/>
-    <text class="chip tt-ui" x="1087" y="218">WhisperRecorder</text><text class="chipsub" x="1087" y="233">Voice input</text>
+    <text class="chip tt-ui" x="1087" y="218">VoiceRecorder</text><text class="chipsub" x="1087" y="233">Voice input</text>
   </g>
 
   <rect x="50" y="252" width="1148" height="58" rx="8" fill="#f8fbff" stroke="#2f6db3" stroke-width="1" stroke-dasharray="4 3"/>
@@ -266,7 +266,7 @@
     <rect class="ext" x="220" y="1398" width="176" height="80" rx="9"/>
     <text class="chip tt-ext" x="308" y="1431">LLM APIs</text><text class="chipsub" x="308" y="1447">OpenAI · Anthropic</text><text class="chipsub" x="308" y="1460">Google · Ollama · compatible</text>
     <rect class="ext" x="408" y="1398" width="176" height="80" rx="9"/>
-    <text class="chip tt-ext" x="496" y="1431">Whisper API</text><text class="chipsub" x="496" y="1447">OpenAI speech to text</text>
+    <text class="chip tt-ext" x="496" y="1431">OpenAI speech</text><text class="chipsub" x="496" y="1447">Realtime &#183; Whisper</text>
     <rect class="ext" x="596" y="1398" width="176" height="80" rx="9"/>
     <text class="chip tt-ext" x="684" y="1431">App storage</text><text class="chipsub" x="684" y="1447">safeStorage (encrypted)</text><text class="chipsub" x="684" y="1460">JSON on disk</text>
     <rect class="ext" x="784" y="1398" width="176" height="80" rx="9"/>

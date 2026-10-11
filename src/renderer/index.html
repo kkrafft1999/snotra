@@ -313,7 +313,13 @@
           <ul id="chat-mention-menu" class="chat-mention-menu hidden" role="listbox" aria-label="Files and folders in the project" data-i18n-attr="aria-label:chat.mentionMenu"></ul>
           <ul id="chat-skill-menu" class="chat-mention-menu hidden" role="listbox" aria-label="Available skills" data-i18n-attr="aria-label:chat.skillMenu"></ul>
           <ul id="chat-attachments" class="chat-attachments hidden" aria-label="Attached images" data-i18n-attr="aria-label:chat.attachments"></ul>
-          <textarea id="chat-input" rows="1" placeholder="Message…" data-i18n-attr="placeholder:chat.input.placeholder" autocomplete="off" aria-autocomplete="list" aria-controls="chat-mention-menu chat-skill-menu"></textarea>
+          <!-- While dictating (#859) the textarea draws its text transparent and
+               the mirror behind it draws the same text, the dictation grey and
+               slanted. Only the textarea is read and edited. -->
+          <div id="chat-input-field" class="chat-input-field">
+            <div id="chat-input-mirror" class="chat-input-mirror" aria-hidden="true"></div>
+            <textarea id="chat-input" rows="1" placeholder="Message…" data-i18n-attr="placeholder:chat.input.placeholder" autocomplete="off" aria-autocomplete="list" aria-controls="chat-mention-menu chat-skill-menu"></textarea>
+          </div>
           <p id="chat-skill-suggestion" class="chat-skill-suggestion hidden" aria-live="polite"></p>
           <div class="chat-composer-bar" role="toolbar" aria-label="Composer tools" data-i18n-attr="aria-label:chat.composer.toolbar">
             <div class="chat-composer-bar-start">
@@ -323,7 +329,10 @@
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
                 </svg>
               </button>
+              <!-- Level and clock stay out of the live region (#859). -->
+              <span id="chat-voice-level" class="chat-voice-level hidden" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
               <p id="chat-voice-status" class="chat-voice-status hidden" aria-live="polite"></p>
+              <span id="chat-voice-time" class="chat-voice-time hidden" aria-hidden="true"></span>
               <!-- Model and mode pill. In a narrow bar ComposerBarLayout moves
                    this group onto a row of its own above the mic (#400). -->
               <div class="chat-composer-pills" id="chat-composer-pills">

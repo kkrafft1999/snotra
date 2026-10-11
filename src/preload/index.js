@@ -214,8 +214,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
-  cancelTranscription: () => ipcRenderer.invoke(REQ.WHISPER_CANCEL),
+  // Live voice input (#859). The renderer numbers its recordings; main opens
+  // the connection and holds the key.
+  startVoice: (id) => ipcRenderer.invoke(REQ.VOICE_START, { id }),
+  sendVoiceAudio: (id, audio) => ipcRenderer.send(REQ.VOICE_AUDIO, { id, audio }),
+  stopVoice: (id) => ipcRenderer.invoke(REQ.VOICE_STOP, { id }),
+  cancelVoice: () => ipcRenderer.invoke(REQ.VOICE_CANCEL),
+  // The fallback when live fails: the recording to Whisper in one piece.
   transcribeAudio: (audioBuffer) => ipcRenderer.invoke(REQ.WHISPER_TRANSCRIBE, audioBuffer),
+  cancelTranscription: () => ipcRenderer.invoke(REQ.WHISPER_CANCEL),
+  onVoiceTranscript: (callback) => {
+    const channel = PUSH.VOICE_TRANSCRIPT;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  onToggleVoiceInput: (callback) => {
+    const channel = PUSH.UI_TOGGLE_VOICE_INPUT;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
 
   // Selbst-Update (Issue #232). Der Renderer nennt nie eine Adresse — er
   // stoesst nur an; was geladen wird, entscheidet der Main-Prozess.
