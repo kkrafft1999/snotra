@@ -571,3 +571,100 @@ test('an answer that arrives after the call\'s row goes into the box right away'
   page.resolve({ requestId: 'o1', response: 'deny' });
   assert.equal(card('o1'), null);
 }));
+
+// ── The card after a run and the card about a waiting connection ────────────
+
+const PRISMA = `${HOME}/Library/Caches/prisma/engines/5.22.0`;
+const shellRow = (patch) => ({
+  line: 'Shell: npx prisma generate',
+  tool: 'shell_execute',
+  sandboxBlocked: { entries: [{ kind: 'write', target: PRISMA, count: 1 }, { kind: 'network', target: 'binaries.prisma.sh:443', count: 1 }], raw: ['deny(1) file-write-create'] },
+  ...patch,
+});
+const liveRow = (patch) => ({ line: 'Shell: pip install -r requirements.txt', tool: 'shell_execute', ...patch });
+
+test('a box whose refusals were all answered folds to one line and says what the card opened', withDom(async () => {
+  const { buildSandboxBlockedBox, blockedRunsOf } = await importRenderer('chat', 'sandboxBlocked.js');
+  const draw = (rows) => buildSandboxBlockedBox(blockedRunsOf(rows), { homeDir: HOME });
+  const lineOf = (box) => box.querySelector('.chat-sandbox-blocked-title').textContent;
+  const notesOf = (box) => [...box.querySelectorAll('.chat-sandbox-blocked-note')].map((n) => n.textContent);
+
+  const allowed = draw([shellRow({ sandboxDecision: {
+    outcome: 'allowed', duration: 'run', paths: [{ kind: 'write', path: `${HOME}/Library/Caches/prisma/engines` }], retry: { exitCode: 0 },
+  } })]);
+  assert.equal(allowed.querySelector('.chat-sandbox-blocked-title').tagName, 'BUTTON');
+  assert.equal(allowed.querySelector('.chat-sandbox-blocked-body').hidden, true);
+  assert.equal(lineOf(allowed), 'The sandbox blocked 2 resources· allowed· Shell: npx prisma generate');
+  assert.equal(allowed.querySelector('.chat-sandbox-blocked-decision').textContent, 'Allowed for this run · ran again, exit code 0');
+  assert.deepEqual(notesOf(allowed), ['Opened: ~/Library/Caches/prisma/engines (Write)']);
+  assert.equal(allowed.querySelectorAll('.chat-sandbox-blocked-entry').length, 2, 'what could not be opened is inside too');
+  assert.ok(allowed.querySelector('details.chat-sandbox-blocked-raw'), 'and the raw lines');
+
+  const denied = draw([shellRow({ sandboxDecision: { outcome: 'denied' } })]);
+  assert.equal(lineOf(denied), 'The sandbox blocked 2 resources· denied· Shell: npx prisma generate');
+  assert.deepEqual(notesOf(denied), ['The command is not run again, and the model is told not to work around it.']);
+
+  // Not answered, refused again, or never asked: there is something to read, so it stays open.
+  for (const decision of [{ outcome: 'unanswered' }, null, {
+    outcome: 'allowed', duration: 'run', paths: [], retry: { exitCode: 1, blocked: { entries: [{ kind: 'read', target: `${HOME}/.ssh/id_ed25519`, count: 1 }], raw: [] } },
+  }]) {
+    const box = draw([shellRow({ sandboxDecision: decision })]);
+    assert.equal(box.querySelector('.chat-sandbox-blocked-title').tagName, 'P', JSON.stringify(decision));
+    assert.equal(box.querySelector('.chat-sandbox-blocked-summary'), null);
+  }
+}));
+
+test('connections answered while the command waited fold to one line too', withDom(async () => {
+  const { buildSandboxBlockedBox, blockedRunsOf } = await importRenderer('chat', 'sandboxBlocked.js');
+  const draw = (rows) => buildSandboxBlockedBox(blockedRunsOf(rows), { homeDir: HOME });
+  const lineOf = (box) => box.querySelector('.chat-sandbox-blocked-title').textContent;
+  const notesOf = (box) => [...box.querySelectorAll('.chat-sandbox-blocked-note')].map((n) => n.textContent);
+
+  const allowed = draw([liveRow({ sandboxLive: [{ target: HOST, outcome: 'allowed', duration: 'session', pattern: '*.pytorch.org' }] })]);
+  assert.equal(lineOf(allowed), 'The sandbox asked about 1 connection· allowed· Shell: pip install -r requirements.txt');
+  assert.deepEqual([...allowed.querySelector('.chat-sandbox-blocked-entry').children].map((c) => c.textContent),
+    ['Connection', `${HOST} · *.pytorch.org`, 'Allowed while the command waited · this session']);
+  assert.deepEqual(notesOf(allowed), ['The connection goes through, and the command carries on.']);
+
+  const userDenied = { kind: 'network', target: HOST, count: 1, reason: 'user denied' };
+  const denied = draw([liveRow({
+    sandboxBlocked: { entries: [userDenied], raw: [] },
+    sandboxLive: [{ target: HOST, outcome: 'denied' }],
+  })]);
+  assert.equal(lineOf(denied), 'The sandbox blocked 1 resource· denied· Shell: pip install -r requirements.txt');
+  assert.deepEqual(notesOf(denied), ['The connection stays closed, and the model is told not to work around it.']);
+
+  // A refusal nobody was asked about next to it keeps the box open.
+  const mixed = draw([liveRow({
+    sandboxBlocked: { entries: [userDenied, { kind: 'write', target: PRISMA, count: 1 }], raw: [] },
+    sandboxLive: [{ target: HOST, outcome: 'denied' }],
+  })]);
+  assert.equal(mixed.querySelector('.chat-sandbox-blocked-title').tagName, 'P');
+}));
+
+test('a decided card after a run, or about a waiting connection, goes into the box; one the command gave up on stays', withDom(async () => {
+  const page = await mount();
+  const message = { toolTrace: [] };
+  page.cards.beginRun('chat-a', message);
+  page.request(dto('s1'));
+  page.resolve({ requestId: 's1', response: 'allow-once' });
+  page.request(liveDto('n1'));
+  page.resolve({ requestId: 'n1', response: 'deny' });
+  page.request(liveDto('n2', { requestId: 'n2' }));
+  page.resolve({ requestId: 'n2', invalidated: true, reason: 'sandbox_run_ended' });
+
+  // A decision that does not match the card does not take it.
+  message.toolTrace.push(shellRow({ sandboxDecision: { outcome: 'denied' } }));
+  page.cards.retireRecorded(page.bubble, message);
+  assert.ok(card('s1'), 'denied on the trace, allowed on the card');
+
+  message.toolTrace.splice(0, 1, shellRow({ sandboxDecision: { outcome: 'allowed', duration: 'run', paths: [], retry: { exitCode: 0 } } }));
+  message.toolTrace.push(liveRow({
+    sandboxBlocked: { entries: [{ kind: 'network', target: HOST, count: 1, reason: 'user denied' }], raw: [] },
+    sandboxLive: [{ target: HOST, outcome: 'denied' }],
+  }));
+  page.cards.retireRecorded(page.bubble, message);
+  assert.equal(card('s1'), null);
+  assert.equal(card('n1'), null);
+  assert.ok(card('n2'), '"stopped waiting" is not on the trace');
+}));

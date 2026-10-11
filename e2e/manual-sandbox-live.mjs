@@ -8,7 +8,8 @@
 //  3. curl with a short time limit that nobody answers: the card says it
 //     stopped waiting, a card after the run offers the host, and the command
 //     runs again.
-// The box under each tool log is photographed after the decision.
+// The box under each tool log is photographed after the decision, folded
+// and open: the decided card has gone into it, the one curl gave up on stays.
 // Not a test — a look. Needs the network (www.example.com, www.iana.org,
 // www.wikipedia.org).
 //
@@ -17,7 +18,7 @@
 // macOS does not nest sandboxes: run it outside of one (a Claude Code session
 // needs the sandbox bypass for it).
 //
-// Result: out/mockup/sandbox-live-<locale>-{waiting,card,allowed,denied,gaveup,retrycard,retried}-{light,dark}.png
+// Result: out/mockup/sandbox-live-<locale>-{waiting,card,allowed,allowed-open,denied,denied-open,gaveup,retrycard,retried,retried-open}-{light,dark}.png
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -83,6 +84,22 @@ async function shoot(locator, state) {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 }
 
+// The decided card has gone into the box (2026-10-11): what is left in the
+// last answer, and the box opened to what the card said.
+const leftInLastAnswer = () => page.evaluate(() => {
+  const answer = [...document.querySelectorAll('#chat-messages .chat-msg.assistant')].at(-1);
+  return {
+    cards: [...answer.querySelectorAll('.chat-approval-card')].map((c) => c.dataset.state),
+    folded: answer.querySelector('.chat-sandbox-blocked-title')?.getAttribute('aria-expanded') ?? null,
+  };
+});
+async function shootOpen(state) {
+  await page.evaluate(() => [...document.querySelectorAll('#chat-messages button.chat-sandbox-blocked-title')].at(-1)?.click());
+  await pause(400);
+  await shoot(page.locator('#chat-messages .chat-sandbox-blocked').last(), state);
+  await page.evaluate(() => [...document.querySelectorAll('#chat-messages button.chat-sandbox-blocked-title')].at(-1)?.click());
+}
+
 const lastBox = () => page.evaluate(() => {
   const boxes = document.querySelectorAll('#chat-messages .chat-sandbox-blocked');
   return boxes.length ? boxes[boxes.length - 1].textContent.replace(/\s+/g, ' ').trim() : null;
@@ -119,6 +136,8 @@ try {
   console.log('box:', await lastBox());
   console.log('model reads:', lastToolResult().stdout, '·', lastToolResult().sandbox_connections);
   await shoot(lastAnswer(), 'allowed');
+  console.log('left in the answer:', JSON.stringify(await leftInLastAnswer()));
+  await shootOpen('allowed-open');
 
   // 2. Another host, denied with Esc.
   model.queueAnswer({ match: SECOND, toolCalls: [{ name: 'shell_execute', arguments: { command: curl('https://www.iana.org') } }] });
@@ -129,6 +148,8 @@ try {
   console.log('box:', await lastBox());
   console.log('model reads:', lastToolResult().sandbox_connections);
   await shoot(lastAnswer(), 'denied');
+  console.log('left in the answer:', JSON.stringify(await leftInLastAnswer()));
+  await shootOpen('denied-open');
 
   // 3. Nobody answers; curl gives up after 4 s, the card after the run asks for a retry.
   model.queueAnswer({ match: THIRD, toolCalls: [{ name: 'shell_execute', arguments: { command: curl('https://www.wikipedia.org', 4) } }] });
@@ -145,6 +166,8 @@ try {
   console.log('box:', await lastBox());
   console.log('model reads:', lastToolResult().stdout, '·', lastToolResult().sandbox_decision);
   await shoot(page.locator('#chat-messages .chat-sandbox-blocked').last(), 'retried');
+  console.log('left in the answer:', JSON.stringify(await leftInLastAnswer()));
+  await shootOpen('retried-open');
   console.log('Screenshots in', SHOTS);
 } catch (error) {
   // What the app saw, before stopping it: a run still waiting can hold the quit.

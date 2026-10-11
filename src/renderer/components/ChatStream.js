@@ -872,7 +872,7 @@ export function initChatStream({
    */
   function syncMessageChanges(messageEl, message) {
     // What the sandbox refused (#792) stands first, right under the log —
-    // and takes the place of an approval card whose answer it holds now.
+    // and takes the place of a sandbox card whose answer it holds now.
     syncSandboxBlocked(messageEl, message?.toolTrace, { homeDir: getHomeDir() });
     approvalCards?.retireRecorded?.(messageEl, message);
     syncChangesStrip(messageEl, changedFilesOf(message?.toolTrace), {

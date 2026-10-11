@@ -527,6 +527,7 @@ module.exports = {
   'toolLog.sandbox.decision.sessionNoCode': 'Für diese Sitzung freigegeben · noch einmal gelaufen',
   'toolLog.sandbox.decision.denied': 'Abgelehnt · nicht wiederholt',
   'toolLog.sandbox.decision.unanswered': 'Nicht beantwortet · nicht wiederholt',
+  'toolLog.sandbox.decision.opened': 'Geöffnet: {paths}',
   'toolLog.sandbox.decision.retryBlocked': 'Beim zweiten Lauf erneut blockiert',
   'toolLog.sandbox.live.run': 'Freigegeben, während der Befehl wartete · dieser Lauf',
   'toolLog.sandbox.live.session': 'Freigegeben, während der Befehl wartete · diese Sitzung',

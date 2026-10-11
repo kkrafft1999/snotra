@@ -327,9 +327,14 @@ so — and into the box under the tool log; a denial is remembered under
 `${planKey}#sandbox` like the other sandbox cards. A box that holds only such
 answers folds to one line (`sandboxBlocked.js`) and carries, open, what the
 decided card said: the sentence it asked, the consequence and the reason.
-Once the trace holds a card's answer, `ToolApprovalCard.retireRecorded` takes
-the card away, so the box is the one record — drawn from the stored trace, it
-also outlives the next turn and a restart. Decided cards of every other kind
+The same holds for the other sandbox cards: a box whose every refusal was
+answered — `sandboxDecision` allowed or denied without a refusal on the
+retry, a connection turned down or let through while it waited — folds too,
+and names what the card opened (`sandboxDecision.paths`). Once the trace holds
+a card's answer (`sandboxAnswerRecorded`), `ToolApprovalCard.retireRecorded`
+takes the card away, so the box is the one record — drawn from the stored
+trace, it also outlives the next turn and a restart. An expired card, or one
+the command gave up on, is no answer and stays. Decided cards of every other kind
 keep the message they arrived in (`entry.owner`) across later runs and leave
 only with their chat.
 

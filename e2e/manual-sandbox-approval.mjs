@@ -7,7 +7,8 @@
 //  2. a second command writing into the same cache: no card, the session
 //     approval carries it;
 //  3. a command reading a protected location: the card is denied with Esc.
-// The box under each tool log is photographed after the decision.
+// The box under each tool log is photographed after the decision, folded
+// and open: the decided card has gone into it.
 // Not a test — a look.
 //
 //   node e2e/manual-sandbox-approval.mjs [en|de]
@@ -15,7 +16,7 @@
 // macOS does not nest sandboxes: run it outside of one (a Claude Code session
 // needs the sandbox bypass for it).
 //
-// Result: out/mockup/sandbox-approval-<locale>-{card,allowed,denied}-{light,dark}.png
+// Result: out/mockup/sandbox-approval-<locale>-{card,allowed,allowed-open,denied,denied-open}-{light,dark}.png
 
 import { mkdir, writeFile, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -79,6 +80,22 @@ async function shoot(locator, state) {
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 }
 
+// The decided card has gone into the box (2026-10-11): what is left in the
+// last answer, and the box opened to what the card said.
+const leftInLastAnswer = () => page.evaluate(() => {
+  const answer = [...document.querySelectorAll('#chat-messages .chat-msg.assistant')].at(-1);
+  return {
+    cards: [...answer.querySelectorAll('.chat-approval-card')].map((c) => c.dataset.state),
+    folded: answer.querySelector('.chat-sandbox-blocked-title')?.getAttribute('aria-expanded') ?? null,
+  };
+});
+async function shootOpen(state) {
+  await page.evaluate(() => [...document.querySelectorAll('#chat-messages button.chat-sandbox-blocked-title')].at(-1)?.click());
+  await pause(400);
+  await shoot(page.locator('#chat-messages .chat-sandbox-blocked').last(), state);
+  await page.evaluate(() => [...document.querySelectorAll('#chat-messages button.chat-sandbox-blocked-title')].at(-1)?.click());
+}
+
 const lastBox = () => page.evaluate(() => {
   const boxes = document.querySelectorAll('#chat-messages .chat-sandbox-blocked');
   return boxes.length ? boxes[boxes.length - 1].textContent.replace(/\s+/g, ' ').trim() : null;
@@ -122,6 +139,8 @@ try {
   console.log('box:', await lastBox());
   console.log('model reads:', JSON.parse(lastToolResult()).sandbox_decision);
   await shoot(page.locator('#chat-messages .chat-sandbox-blocked').last(), 'allowed');
+  console.log('left in the answer:', JSON.stringify(await leftInLastAnswer()));
+  await shootOpen('allowed-open');
 
   // 2. The same cache again: the session approval carries it, no card.
   model.queueAnswer({ match: SECOND, toolCalls: [{ name: 'shell_execute', arguments: {
@@ -163,6 +182,8 @@ try {
   console.log('box:', await lastBox());
   console.log('model reads:', JSON.parse(lastToolResult()).sandbox_decision);
   await shoot(page.locator('#chat-messages .chat-sandbox-blocked').last(), 'denied');
+  console.log('left in the answer:', JSON.stringify(await leftInLastAnswer()));
+  await shootOpen('denied-open');
   console.log('Screenshots in', SHOTS);
 } finally {
   await page.evaluate(() => window.electronAPI.setToolPermissionMode('smart')).catch(() => {});

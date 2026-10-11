@@ -520,6 +520,7 @@ module.exports = {
   'toolLog.sandbox.decision.sessionNoCode': 'Allowed for this session · ran again',
   'toolLog.sandbox.decision.denied': 'Denied · not run again',
   'toolLog.sandbox.decision.unanswered': 'Not answered · not run again',
+  'toolLog.sandbox.decision.opened': 'Opened: {paths}',
   'toolLog.sandbox.decision.retryBlocked': 'Blocked again on the second run',
   'toolLog.sandbox.live.run': 'Allowed while the command waited · this run',
   'toolLog.sandbox.live.session': 'Allowed while the command waited · this session',
