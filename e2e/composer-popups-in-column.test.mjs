@@ -17,6 +17,7 @@ import { randomUUID } from 'node:crypto';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { STACK_BAR_BELOW } from '../src/renderer/components/ComposerBarLayout.js';
 
 const LONG_NAME = 'qwen3-coder-480b-a35b-instruct-mlx-community-8bit-with-a-much-longer-name';
 
@@ -48,7 +49,9 @@ function measure(page, { button, menu, wrap }) {
     if (!popup.classList.contains('hidden')) document.getElementById(button).click();
     await new Promise((resolve) => requestAnimationFrame(resolve));
     document.getElementById(button).click();
-    await new Promise((resolve) => requestAnimationFrame(resolve));
+    // Two frames: an open popup follows a column change a frame later
+    // (followColumn), and that is the state the user sees.
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     const column = panel.getBoundingClientRect();
     const box = popup.getBoundingClientRect();
     const anchor = (document.getElementById(wrap) || popup.parentElement).getBoundingClientRect();
@@ -111,6 +114,17 @@ test('both composer popups stay inside the chat column at every width', { timeou
         chat: document.getElementById('chat-panel').getBoundingClientRect().width,
       })),
     });
+  // The column has its width before the composer bar has reacted to it: the
+  // bar's ResizeObserver puts the pills on a row of their own only in the
+  // next frame. A menu opened in between is placed from a pill that is still
+  // about to move (#867).
+  await poll(() => page.evaluate((stackBelow) => {
+    const bar = document.querySelector('.chat-composer-bar');
+    // The observer reads the content box, padding excluded.
+    const style = getComputedStyle(bar);
+    const width = bar.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+    return (width < stackBelow) === (bar.dataset.stacked === 'true');
+  }, STACK_BAR_BELOW), { what: 'composer bar laid out for the column' });
 
   const widths = [];
   for (const layout of LAYOUTS) {
