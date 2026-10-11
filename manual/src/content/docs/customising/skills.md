@@ -48,6 +48,20 @@ Write your request, then type `/`. Below the input field Snotra suggests a fitti
 
 A suggestion is never switched on by itself.
 
+## See which skills a chat has
+
+[since 1.20] In the chat bar, next to the model and the mode, a pill counts the skills that are on in this chat: *3 skills*, or *No skills*. Click it to see the whole picture:
+
+![The popover of the pill "3 skills": under Skills the three system skills on and sowing-advice from the folder off; under Tools run_python and shell_execute switched off with a "Switch on" button each, web_search and generate_image with "Set up", and "14 switched on" folded; below, links to Settings › Skills and Settings › Tools & security.](screenshots/chat-config.webp)
+
+- **Skills** — every skill, those that are on first, each with where it comes from. A skill you called with `/name` is marked *this chat only*.
+- **Tools** — what is missing comes first, with the reason, such as *switched off* or *no search service key*. *Switch on* or *Set up* opens the setting that changes it. The tools that are on are summed up in one line; click it to see them by group.
+- The two links at the bottom open *Settings › Skills* and *Settings › Tools & security*.
+
+The pill only shows. What you switch on or off stays a choice in the settings.
+
+The model sees the same list. When something fails or a capability seems to be missing, it looks it up instead of guessing and tells you, for example, that *pdf-export* would fit but is off — and where to switch it on. It cannot switch anything itself, and the instructions of a skill that is off never reach it.
+
 ## What happens
 
 The model reads a switched-on skill's instructions when it needs them, together with the files next to its `SKILL.md`, such as `references/` or `assets/`. Those are read-only: what a skill wants to keep, it writes into `.agents/data/` in the open folder, like any other change you approve.
@@ -56,6 +70,7 @@ Snotra watches the skill folders, so a new or changed skill shows up in the sett
 
 ## If it doesn't work
 
+- **The model does not use a skill you expected.** Click the skills pill in the chat bar: a skill that is off is listed there with where it comes from. A skill from the folder has to be ticked for this folder.
 - **A skill is greyed out with a reason.** Its `SKILL.md` is missing, has no front matter, or its `name` does not match its folder. The reason is shown next to it.
 - **A skill is marked *Shadowed by …*.** Another skill of the same name comes first — the folder's before your own ones. The path says which.
 - **Your own skill is off in a project.** That project has a skill of the same name; it shadows yours there and needs its own tick.
