@@ -1870,10 +1870,13 @@ reproduced by the helper itself. A real Finder/Explorer drop stays manual.
 
 ## Smoke test in the real app
 
-What a DOM stand-in cannot deliver is checked by a run through the live Electron
-app: `npm run test:e2e` (not part of `npm test`). Deliberately **one** test — the
-Electron level is the most expensive per bug found, and a run that touches
-everything once at startup catches the bulk of it. It takes about three seconds.
+What a DOM stand-in cannot deliver is checked by runs through the live Electron
+app: `npm run test:e2e` (not part of `npm test`). It started as **one** smoke
+test of about three seconds; since then every feature that needs the real
+window has added a file of its own — 24 on 2026-10-11, 30–40 s locally and up to
+a minute in CI. The Electron level stays the most expensive per bug found, so a
+check belongs here only when the DOM stand-in cannot make it. How the levels
+divide the work, and what runs when, is in [`test-concept.md`](./test-concept.md).
 
 - **Driver:** `playwright-core` (`_electron.launch`) as a devDependency. No
   browser download, no second test runner: `node --test` stays.

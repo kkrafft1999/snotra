@@ -78,15 +78,16 @@ Two levels, both required to be green before a pull request is opened:
 
 ```bash
 npm test         # unit and DOM tests (node --test, happy-dom)
-npm run test:e2e # smoke test against the running Electron app (playwright-core)
+npm run test:e2e # end-to-end tests against the running Electron app (playwright-core)
 ```
 
 `npm test` covers the wiring: the application core, the main-process adapters
 and the renderer components against a `happy-dom` DOM. `npm run test:e2e`
 launches the real Electron app against a fake OpenAI-compatible model server and
 checks what a DOM stand-in cannot — sanitizing with the real DOMPurify, layout
-and focus in the running window. It takes a few seconds and is **not** part of
-`npm test`.
+and focus in the running window. It is **not** part of `npm test`. Which level
+is responsible for what, and what runs when, is described in
+[`docs/test-concept.md`](./docs/test-concept.md).
 
 The e2e test opens a real window and therefore needs a display. On a headless
 Linux machine or in a container, run it under Xvfb the way CI does:
