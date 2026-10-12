@@ -54,13 +54,43 @@ Ein Vorschlag wird nie von selbst eingeschaltet.
 
 ![Das Popover der Pille „3 Skills“: unter Skills die drei System-Skills an und aussaat-tipps aus dem Ordner aus; unter Tools run_python und shell_execute ausgeschaltet mit je einem Knopf „Einschalten“, web_search und generate_image mit „Einrichten“, darunter zugeklappt „14 eingeschaltet“; ganz unten Links zu Einstellungen › Skills und Einstellungen › Tools & Sicherheit.](screenshots/chat-config.webp)
 
-- **Skills** – jeder Skill, die eingeschalteten zuerst, jeweils mit seiner Herkunft. Ein Skill, den du mit `/name` aufgerufen hast, trägt die Marke *nur dieser Chat*.
+- **Skills** – jeder Skill, die eingeschalteten zuerst, jeweils mit seiner Herkunft. Ein Skill, den du mit `/name` aufgerufen oder auf einer Karte für diesen Chat eingeschaltet hast, trägt die Marke *nur dieser Chat*.
 - **Tools** – was fehlt, steht oben, mit dem Grund, etwa *ausgeschaltet* oder *kein Suchdienst-Schlüssel*. *Einschalten* oder *Einrichten* öffnet die Einstellung, die das ändert. Die eingeschalteten Tools sind in einer Zeile zusammengefasst; ein Klick darauf zeigt sie nach Gruppen.
 - Die beiden Links unten öffnen *Einstellungen › Skills* und *Einstellungen › Tools & Sicherheit*.
 
-Die Pille zeigt nur an. Was du ein- oder ausschaltest, bleibt eine Entscheidung in den Einstellungen.
+Die Pille zeigt nur an. Was du dauerhaft ein- oder ausschaltest, bleibt eine Entscheidung in den Einstellungen.
 
 Das Modell sieht dieselbe Liste. Scheitert etwas oder scheint eine Fähigkeit zu fehlen, schaut es dort nach, statt zu raten, und sagt dir zum Beispiel, dass *pdf-export* passen würde, aber aus ist – und wo du ihn einschaltest. Selbst einschalten kann es nichts, und die Anleitung eines ausgeschalteten Skills erreicht es nie.
+
+## Wenn das Modell vorschlägt, etwas einzuschalten
+
+[seit 1.21] Würde ein ausgeschalteter Skill oder ein Tool bei deiner Anfrage helfen, kann das Modell vorschlagen, ihn einzuschalten – nur für diesen Chat. Snotra zeigt dann eine Karte im Chat:
+
+![Eine Karte mit dem Titel „Für diesen Chat einschalten“: das Tool fetch_url mit seiner Beschreibung von Snotra, darunter „Externe Dienste · nur dieser Chat“, eine zugeklappte Zeile „Begründung des Modells“, die Knöpfe „Einschalten“ und „Ablehnen“ und der Hinweis, dass neue Chats deine Einstellungen behalten.](screenshots/config-proposal.webp)
+
+### Was die Karte zeigt
+
+- **Den Namen und was er tut**, in Snotras eigenen Worten. Bei einem Skill aus einem Ordner oder aus deinen eigenen Skills stammt die Beschreibung von seinem Autor, und die Karte sagt das.
+- **Die Risikoklasse** eines Tools – *Lesen*, *Ändern*, *Ausführen*, *Externe Dienste* – oder **die Herkunft** eines Skills, dazu *nur dieser Chat*.
+- ***Begründung des Modells***, zugeklappt. Klapp sie auf, um zu lesen, warum das Modell fragt; es ist der Satz des Modells, nicht der von Snotra.
+
+### Schritte
+
+- ***Einschalten*** schaltet ihn für diesen Chat ein. Das Modell arbeitet sofort damit weiter.
+- ***Ablehnen*** lässt ihn aus. Denselben Vorschlag zeigt Snotra in diesem Chat nicht noch einmal. `Esc` lehnt ebenfalls ab.
+
+Das Modell kann auch vorschlagen, etwas für einen Chat auszuschalten – etwa wenn du es gebeten hast, nur mit deinen Dokumenten zu arbeiten. Diese Karte fragt *Ausschalten* oder *Anlassen*.
+
+### Was passiert
+
+Die Änderung gilt nur für diesen Chat. Sie bleibt, wenn du einen anderen Chat öffnest und zurückkommst, und auch nach einem Neustart; ein neuer Chat beginnt wieder mit deinen Einstellungen. Die Skills-Pille markiert die Änderung mit *nur dieser Chat*. Dauerhaft einschalten kannst du unter [*Einstellungen › Tools & Sicherheit*](../../safety/tools-and-security/) oder [*Einstellungen › Skills*](#einen-skill-einschalten).
+
+Ein so eingeschaltetes Tool verhält sich wie eines aus den Einstellungen: Im Modus *Intelligent* fragt es weiterhin vor jedem Aufruf, der eine Freigabe braucht.
+
+### Wenn es nicht klappt
+
+- **Das Modell sagt, ein Tool lasse sich im Chat nicht einschalten.** Es muss erst eingerichtet werden – ein Schlüssel, ein Programm oder der Schalter für Python oder Shell-Befehle unter *Einstellungen › Tools & Sicherheit*. Das bleibt in den Einstellungen.
+- **Du hast versehentlich abgelehnt.** Schalte es in den Einstellungen ein, oder beginne einen neuen Chat und frag noch einmal.
 
 ## Was dann passiert
 

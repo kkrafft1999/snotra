@@ -201,3 +201,76 @@ test('a broken skill folder leaves the tools standing', async (t) => {
   assert.deepEqual(config.skills, []);
   assert.ok(config.tools.length > 0);
 });
+
+// What a chat switched on a card (#774) shows as this chat's, in the popover
+// and for the model, and changes what the model is offered.
+test('a chat\'s overrides: on and off for this chat only, the setting untouched', async (t) => {
+  const { service, workspace } = await makeSetup(t, { prefs: { disabledTools: ['search_in_files'] } });
+  const overrides = { tools: { on: ['search_in_files'], off: ['find_files'] }, skills: { on: ['meeting-notes'], off: ['release'] } };
+  const config = await service.describe({ workspaceRoot: workspace, overrides });
+  const skill = (name) => config.skills.find((entry) => entry.name === name);
+  const tool = (name) => config.tools.find((entry) => entry.name === name);
+
+  assert.equal(skill('meeting-notes').state, 'on');
+  assert.equal(skill('meeting-notes').chatOnly, true);
+  assert.equal(skill('meeting-notes').chatCard, true);
+  assert.equal(skill('release').state, 'off');
+  assert.equal(skill('release').chatCard, true);
+  assert.deepEqual([tool('search_in_files').on, tool('search_in_files').chatOnly], [true, true]);
+  assert.deepEqual([tool('find_files').on, tool('find_files').chatOnly], [false, true]);
+  assert.equal(Object.hasOwn(tool('read_file_text'), 'chatOnly'), false);
+
+  const forModel = await service.describeForModel({ workspaceRoot: workspace, overrides, canPropose: true });
+  assert.equal(forModel.skills.find((entry) => entry.name === 'release').state, 'off for this chat only');
+  assert.equal(forModel.skills.find((entry) => entry.name === 'meeting-notes').state, 'on for this chat only');
+  assert.deepEqual(forModel.tools_changed_for_this_chat.sort(), ['find_files', 'search_in_files']);
+  assert.equal(forModel.tools_off.find((entry) => entry.name === 'find_files').reason, 'switched off for this chat only');
+  assert.match(forModel.note, /propose_config_change/);
+  const without = await service.describeForModel({ workspaceRoot: workspace });
+  assert.doesNotMatch(without.note, /propose_config_change/);
+});
+
+test('prepareProposal: only a change the catalogue knows and allows becomes a card', async (t) => {
+  const { service, workspace } = await makeSetup(t, { prefs: { disabledTools: ['search_in_files'] } });
+  const prepare = (proposal, overrides = null) => service.prepareProposal({ workspaceRoot: workspace, overrides, proposal });
+
+  // A tool that is switched off: the card carries the catalogue's facts.
+  const tool = await prepare({ kind: 'tool', name: 'search_in_files', enable: true, reason: '  To find\nthe notes. ' });
+  assert.deepEqual(tool.card, {
+    kind: 'tool', name: 'search_in_files', enable: true, reason: 'To find the notes.',
+    description: tool.card.description,
+    descriptionKey: 'tools.short.search_in_files',
+    riskClasses: ['read'],
+    settingsMenu: 'settings.security',
+  });
+  assert.ok(tool.card.description.length > 10);
+
+  // A folder skill's description is its author's text.
+  const skill = await prepare({ kind: 'skill', name: 'pdf-export', enable: true, reason: 'x' });
+  assert.equal(skill.card.description, 'Folder version.');
+  assert.equal(skill.card.descriptionIsData, true);
+  assert.equal(skill.card.origin, 'folder');
+  assert.equal(skill.card.settingsMenu, 'settings.skills');
+  // A skill's body never travels.
+  assert.equal(JSON.stringify(skill).includes(BODY_MARKER), false);
+
+  // What never reaches a card.
+  assert.match((await prepare({ kind: 'tool', name: 'rm_everything', enable: true })).error, /no tool named/);
+  assert.match((await prepare({ kind: 'skill', name: 'nonexistent', enable: true })).error, /no skill named/);
+  assert.match((await prepare({ kind: 'tool', name: 'read_file_text', enable: true })).error, /is on in this chat already/);
+  assert.match((await prepare({ kind: 'skill', name: 'release', enable: true })).error, /is on in this chat already/);
+  assert.match((await prepare({ kind: 'skill', name: 'broken', enable: true })).error, /cannot be read/);
+  assert.match((await prepare({ kind: 'tool', name: 'web_search', enable: true })).error, /cannot be switched on from a chat: no web search key.*Settings › Tool setup/);
+  assert.match((await prepare({ kind: 'tool', name: 'get_configuration', enable: false })).error, /cannot be switched from a chat/);
+  assert.match((await prepare({ kind: 'tool', name: 'propose_config_change', enable: false })).error, /cannot be switched from a chat/);
+  assert.match((await prepare({ kind: 'thing', name: 'x', enable: true })).error, /needs "kind"/);
+  assert.match((await prepare({ kind: 'tool', name: 'fetch_url', enable: 'yes' })).error, /needs "kind"/);
+
+  // Switching off is fine; a declined proposal is reported as such.
+  assert.ok((await prepare({ kind: 'tool', name: 'read_file_text', enable: false })).card);
+  assert.deepEqual(await prepare({ kind: 'tool', name: 'search_in_files', enable: true }, { declined: ['tool:on:search_in_files'] }), { declined: true });
+  // Accepted before: on in this chat already.
+  assert.match((await prepare({ kind: 'tool', name: 'search_in_files', enable: true }, { tools: { on: ['search_in_files'] } })).error, /on in this chat already/);
+  // Not configured here, so not for a chat to switch on either.
+  assert.match((await prepare({ kind: 'tool', name: 'fetch_url', enable: true })).error, /cannot be switched on from a chat/);
+});

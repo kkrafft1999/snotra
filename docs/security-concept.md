@@ -65,7 +65,7 @@ blocked; there is no implicit `read` default.
 
 | Class | Meaning | Assignment / example |
 | --- | --- | --- |
-| `read` | Reading ordinary data, or an action without side effects | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `extract_document_text`, `list_directory_tree`, `load_skill`, `get_configuration` (#773) |
+| `read` | Reading ordinary data, or an action without side effects | `list_directory`, `read_file_text`, `read_file_lines`, `search_in_files`, `find_files`, `stat_path`, `outline_file`, `extract_document_text`, `list_directory_tree`, `load_skill`, `get_configuration` (#773), `propose_config_change` (#774 — its card is the approval) |
 | `read-sensitive` | Sensitive content, or targeted access to a sensitive path | A dynamic escalation of the read tools, including under `skill:` |
 | `write` | Creating a file, changing it selectively, or overwriting it with a recovery copy | `write_file_text` for a new file, or with a recovery copy created successfully (section 9); `edit_file`, `apply_patch`; `generate_image` (#85), always together with `external` |
 | `delete` | Deleting, or overwriting completely without a secured recovery | `write_file_text` or `generate_image` on an existing file when the recovery copy cannot be created; a future delete tool |
@@ -1085,7 +1085,7 @@ the chat has — and nothing more:
 - **Read only, class `read`.** It reads Snotra's own settings, no file, and
   changes nothing. Switching a skill or tool on stays a click of the user's in
   the settings; prompt injection cannot widen what the model may do through it.
-  A proposal the user confirms for one chat is the next step (#774).
+  A proposal the user confirms for one chat followed with #774, below.
 - **Never a skill's instructions.** The answer carries a skill's name, state,
   origin and description — the body of a skill that is off stays where it is
   (#18). `test/chat-configuration-service.test.js` and
@@ -1106,6 +1106,45 @@ the chat has — and nothing more:
   state, which stays out of the prompt because it would cost tokens on every
   request (#172/#173). The pointer
   widens nothing: it leads to a read.
+
+### Revision: the model proposes, the user switches — for one chat (#774)
+
+Decided on 2026-10-06, card agreed on 2026-10-12 (compact variant), built on
+2026-10-12. Reading the configuration let the model say "the skill X would
+fit, but it is off"; `propose_config_change` lets it ask for exactly that —
+and still switch nothing:
+
+- **The card is the switch.** The call itself changes nothing, so its class is
+  `read` and no approval card asks before it. It puts a card in front of the
+  user (approval checkpoint `config`), and only the user's click switches.
+  Without a window to ask in, the proposal is refused. Prompt injection can
+  make the model propose; it cannot make the click.
+- **The card speaks with the catalogue's voice.** Main checks the proposal
+  against the catalogue before any card is shown: an unknown name, a change
+  that changes nothing, a broken skill, a tool that needs setting up (a key,
+  a program, the Python or shell switch) or the configuration's own two tools
+  come back to the model as an error and never reach the user. What passes is
+  shown with the catalogue's description and the tool's risk classes; a
+  folder skill's or an MCP tool's description is labelled as its author's.
+  The model's reason is folded away under *The model's reason* and never the
+  headline — an injected reason can be read, but it does not speak for Snotra.
+- **For this chat only.** An accepted change goes into the chat's own row in
+  the history (`configOverrides`), next to its model, mode and level; it
+  survives a chat switch and a restart, and a new chat starts from the
+  settings. The renderer never sends overrides: main writes them from the
+  card's answer and reads them for every run and for the pill.
+- **Nothing beyond what a setting could do.** A card switches exactly what the
+  user could untick or tick under *Settings › Tools & security* or
+  *Settings › Skills*; the policy, the sandbox and every approval stay as they
+  are. A tool switched on this way still asks before each call in *Smart*.
+  A skill switched on is listed for `load_skill` like one from the settings,
+  not written into the prompt like a "/name" call (#173).
+- **A decline holds for the chat.** The same proposal (kind, name, direction)
+  is then refused without a card; the tool log says so in one muted line. The
+  worst a prompt injection gets out of repeating itself is that line.
+- **Switching off asks too.** Taking a capability away is no injection path,
+  but a card for both directions keeps one rule and leaves the user in charge
+  of every change in the chat.
 
 ## 10. Comparison with the official references
 

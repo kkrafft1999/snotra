@@ -524,3 +524,42 @@ test('a chat without an alias is left alone (#726)', async () => {
   assert.equal(result.reasoningEffort, null);
   assert.equal('reasoningEffort' in history.store.sessions[0], false);
 });
+
+// What a chat switched on a card (#774) is the chat's own: kept in its row,
+// read back after a switch, and absent from every other chat.
+test('a chat\'s overrides are its own and survive a chat switch (#774)', async () => {
+  const { settings, history } = setup({ sessions: [{ id: 'chat-a' }, { id: 'chat-b' }] });
+  await settings.activate('chat-a');
+  assert.equal(await settings.configOverridesFor('chat-a'), null);
+
+  await settings.acceptConfigProposal('chat-a', { kind: 'tool', name: 'fetch_url', enable: true });
+  await settings.declineConfigProposal('chat-a', { kind: 'skill', name: 'release', enable: false });
+  const expected = { tools: { on: ['fetch_url'] }, declined: ['skill:off:release'] };
+  assert.deepEqual(await settings.configOverridesFor('chat-a'), expected);
+  assert.deepEqual(history.store.sessions.find((s) => s.id === 'chat-a').configOverrides, expected);
+
+  // Another chat, and a new one, start without them.
+  await settings.activate('chat-b');
+  assert.equal(await settings.configOverridesFor('chat-b'), null);
+  assert.equal(await settings.configOverridesFor('chat-new'), null);
+  // Back on the first chat — and after the service forgot it, from the row.
+  await settings.activate('chat-a');
+  assert.deepEqual(await settings.configOverridesFor('chat-a'), expected);
+  settings.forget('chat-a');
+  assert.deepEqual(await settings.configOverridesFor('chat-a'), expected);
+
+  // Switching back drops the entry; the row loses the field.
+  await settings.acceptConfigProposal('chat-a', { kind: 'tool', name: 'fetch_url', enable: false });
+  assert.deepEqual(await settings.configOverridesFor('chat-a'), { declined: ['skill:off:release'] });
+  // Without a chat there is nothing to look up or to keep.
+  assert.equal(await settings.configOverridesFor(null), null);
+  assert.equal(await settings.acceptConfigProposal('', { kind: 'tool', name: 'x', enable: true }), null);
+});
+
+test('a chat not saved yet takes its overrides along on the first save (#774)', async () => {
+  const { settings, history } = setup();
+  await settings.activate('chat-new');
+  await settings.acceptConfigProposal('chat-new', { kind: 'tool', name: 'fetch_url', enable: true });
+  assert.equal(history.store.sessions.length, 0);
+  assert.deepEqual(settings.valuesFor('chat-new').configOverrides, { tools: { on: ['fetch_url'] } });
+});

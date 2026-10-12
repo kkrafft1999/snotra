@@ -761,6 +761,13 @@ function createApplication({
     resolveReasoningLevel: (chatId) => chatSessionSettings.reasoningEffortFor(chatId),
     // A run that ended off screen takes its approvals with it.
     onRunSettled: () => pruneChatScopedPermissions(),
+    // The chat's own skills and tools, and the card that changes them (#774).
+    configProposals: {
+      overridesFor: (chatId) => chatSessionSettings.configOverridesFor(chatId),
+      prepare: (input) => chatConfiguration.prepareProposal(input),
+      accept: (chatId, proposal) => chatSessionSettings.acceptConfigProposal(chatId, proposal),
+      decline: (chatId, proposal) => chatSessionSettings.declineConfigProposal(chatId, proposal),
+    },
     toolAdapterDeps: {
       fsService,
       fileChangeRecorder,
@@ -908,6 +915,8 @@ function createApplication({
     ipcMain,
     chatConfiguration,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    // What the chat on screen switched on a card (#774).
+    getChatOverrides: () => chatSessionSettings.configOverridesFor(chatSessionSettings.getCurrentChatId()),
     REQ,
   });
 

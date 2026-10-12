@@ -554,6 +554,7 @@ function createToolApprovalRequestDto({
   alwaysUnavailableReason,
   checkpoint,
   sandbox,
+  config,
 } = {}) {
   const classes = normalizeRiskClasses(riskClasses) || [];
   const dto = {
@@ -583,6 +584,9 @@ function createToolApprovalRequestDto({
   if (APPROVAL_CHECKPOINTS.includes(checkpoint)) dto.checkpoint = checkpoint;
   const sandboxView = checkpoint === 'sandbox' ? sanitizeSandboxApproval(sandbox) : null;
   if (sandboxView) dto.sandbox = sandboxView;
+  // A proposal to switch a skill or tool for the chat (#774).
+  const configView = checkpoint === 'config' ? sanitizeConfigProposal(config) : null;
+  if (configView) dto.config = configView;
   // "Always allow this command in this workspace" (#121): whether the card
   // offers it, and if not, why. The rule itself stays in main.
   if (alwaysAllowed === true) dto.alwaysAllowed = true;
@@ -633,7 +637,37 @@ function createToolApprovalRequestDto({
   return dto;
 }
 
-const APPROVAL_CHECKPOINTS = Object.freeze(['access', 'output', 'sandbox']);
+const APPROVAL_CHECKPOINTS = Object.freeze(['access', 'output', 'sandbox', 'config']);
+
+/**
+ * What a proposal card shows (#774): the catalogue's facts about the skill or
+ * tool, and the model's reason as its own, bounded text. Main checked the
+ * name against the catalogue before; here it is only bounded.
+ */
+function sanitizeConfigProposal(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  if (raw.kind !== 'skill' && raw.kind !== 'tool') return null;
+  if (typeof raw.name !== 'string' || !raw.name.trim() || typeof raw.enable !== 'boolean') return null;
+  const text = (value, max) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+  const out = { kind: raw.kind, name: raw.name.trim().slice(0, 128), enable: raw.enable };
+  const reason = text(raw.reason, 300);
+  if (reason) out.reason = reason;
+  const description = text(raw.description, 300);
+  if (description) out.description = description;
+  if (typeof raw.descriptionKey === 'string' && /^tools\.short\.[a-z0-9_]{1,64}$/.test(raw.descriptionKey)) {
+    out.descriptionKey = raw.descriptionKey;
+  }
+  if (raw.descriptionIsData === true) out.descriptionIsData = true;
+  if (raw.origin === 'system' || raw.origin === 'folder' || raw.origin === 'user') out.origin = raw.origin;
+  const mcpServer = text(raw.mcpServer, 200);
+  if (mcpServer) out.mcpServer = mcpServer;
+  const classes = normalizeRiskClasses(raw.riskClasses);
+  if (classes && classes.length) out.riskClasses = classes;
+  if (typeof raw.settingsMenu === 'string' && /^settings\.[a-zA-Z]{1,32}$/.test(raw.settingsMenu)) {
+    out.settingsMenu = raw.settingsMenu;
+  }
+  return out;
+}
 const SANDBOX_CARD_LIMITS = Object.freeze({
   ENTRIES: 10, OPTIONS: 2, OTHERS: 10, RAW: 20, PATH: 1024, COMMAND: 4000, OUTPUT: 4000, DOMAINS: 40, DOMAIN: 253,
 });

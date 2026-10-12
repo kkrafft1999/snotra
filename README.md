@@ -53,7 +53,9 @@ workspace tools · any CLI on your machine
 - **You see what it has.** A pill next to the model counts the skills that
   are on in the chat; its list shows every skill and tool, what is missing and
   why, and leads to the setting. The model reads the same list instead of
-  guessing — switching things on stays with you.
+  guessing. When a skill or tool that is off would help, it can suggest
+  switching it on for the chat — on a card you accept or decline; your
+  settings stay as they are.
 - **Your models, your keys.** Cloud and local models sit side by side in one
   list; you switch per conversation. Keys are stored with the operating
   system's encryption.

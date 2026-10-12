@@ -52,7 +52,7 @@ import { generatedImagesOf, syncGeneratedImages } from '../chat/generatedImages.
 import { resolveNative } from '../utils/nativePath.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 
-const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, isDerivedChatTitle } = contracts;
+const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, isDerivedChatTitle, PROPOSE_CONFIG_CHANGE_TOOL } = contracts;
 
 const CHAT_SEND_ICON_HTML =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
@@ -155,6 +155,8 @@ export function initChatStream({
   // A run started, ended or changed its state — the history column marks
   // running chats (#320).
   onRunsChanged = () => {},
+  // A card in a run switched a skill or tool for its chat (#774).
+  onConfigChanged = () => {},
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
   const chatInput = document.getElementById('chat-input');
@@ -1107,6 +1109,9 @@ export function initChatStream({
     // Main liefert fertige Anzeige-Zeilen in payload.line (Rohdaten optional für Debug).
     const line = typeof payload?.line === 'string' ? payload.line : '';
     if (!line) return;
+    // The proposal's done line comes after main saved the answer, so the
+    // composer pill reads the new state from here on (#774).
+    if (phase === 'done' && payload?.tool === PROPOSE_CONFIG_CHANGE_TOOL) onConfigChanged(run.chatId ?? null);
     const callIndex = Number.isInteger(payload?.callIndex) ? payload.callIndex : null;
     // Ein Tool-Ereignis beendet die Denkpause; 'done' allein nicht — danach
     // kommt sofort 'waiting' für die nächste Runde (Issue #87).

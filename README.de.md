@@ -53,7 +53,9 @@ eingebauten Workspace-Werkzeugen · jedem CLI auf deinem Rechner
 - **Du siehst, was er hat.** Eine Pille neben dem Modell zählt die Skills, die
   im Chat eingeschaltet sind; ihre Liste zeigt jeden Skill und jedes Tool, was
   fehlt und warum, und führt zur Einstellung. Das Modell liest dieselbe Liste,
-  statt zu raten — einschalten bleibt deine Sache.
+  statt zu raten. Würde ein ausgeschalteter Skill oder ein Tool helfen, kann es
+  vorschlagen, ihn für den Chat einzuschalten – auf einer Karte, die du annimmst
+  oder ablehnst; deine Einstellungen bleiben, wie sie sind.
 - **Deine Modelle, deine Schlüssel.** Cloud- und lokale Modelle stehen in einer
   Liste nebeneinander; du wechselst je Unterhaltung. Schlüssel liegen in der
   Verschlüsselung des Betriebssystems.

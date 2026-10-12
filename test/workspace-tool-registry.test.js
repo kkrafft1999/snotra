@@ -412,9 +412,12 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   // Reads Snotra's own settings (#773); without the service nobody answers.
   assert.equal(names.includes('get_configuration'), false);
   assert.equal(classes.get_configuration, 'read');
-  // 20 registrierte Tools minus die beiden essenziellen list_directory und
+  // A proposal changes nothing by itself; its card is the approval (#774).
+  assert.equal(names.includes('propose_config_change'), false);
+  assert.equal(classes.propose_config_change, 'read');
+  // 21 registrierte Tools minus die beiden essenziellen list_directory und
   // load_skill, die niemand abwaehlt (#195).
-  assert.equal(Object.keys(classes).length, 18);
+  assert.equal(Object.keys(classes).length, 19);
   assert.equal(Object.hasOwn(classes, 'list_directory'), false);
   assert.equal(Object.hasOwn(classes, 'load_skill'), false);
 });
@@ -864,7 +867,7 @@ test('get_configuration reads through the service with the skills on in this run
     skillRoots: [{ name: 'release', dir: '/project/.agents/skills/release' }],
   });
   assert.deepEqual(JSON.parse(result), { skills: [], tools_on: ['read_file_text'] });
-  assert.deepEqual(calls, [{ workspaceRoot: '/project', chatSkillNames: ['release'] }]);
+  assert.deepEqual(calls, [{ workspaceRoot: '/project', chatSkillNames: ['release'], overrides: null, canPropose: true }]);
 });
 
 test('get_configuration turns a failure into an error the model can read', async () => {

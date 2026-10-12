@@ -2,6 +2,7 @@ import { buildApprovalCardView, describeApprovalOutcome } from '../utils/tool-ap
 import {
   buildSandboxCardView, describeSandboxOutcome, describeLiveRun, describeLiveWaited, sandboxAnswerRecorded,
 } from '../utils/sandbox-approval-view.js';
+import { buildConfigProposalCardView, describeConfigProposalOutcome } from '../utils/config-proposal-view.js';
 import contracts from '../generated/contracts.js';
 import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-approval-queue.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
@@ -263,8 +264,12 @@ export function initToolApprovalCards({
     }
   }
 
-  /** The view of a card: the sandbox card (#792), or the card before a call or for its output. */
+  /**
+   * The view of a card: a proposal for the chat (#774), the sandbox card
+   * (#792), or the card before a call or for its output.
+   */
   function viewOf(dto) {
+    if (dto?.checkpoint === 'config') return buildConfigProposalCardView(dto);
     const homeDir = readHomeDir();
     return buildSandboxCardView(dto, { homeDir }) || buildApprovalCardView(dto, { homeDir });
   }
@@ -487,7 +492,74 @@ export function initToolApprovalCards({
     return card;
   }
 
+  /**
+   * The proposal card (#774), compact: the name and the catalogue's sentence
+   * about it, its risk or origin, the model's reason folded away. Accepting
+   * switches for this chat only; Esc declines, like on every card.
+   */
+  function buildConfigCard(entry, view) {
+    const requestId = entry.dto.requestId;
+    const card = el('section', 'chat-approval-card chat-approval-card--config');
+    card.dataset.requestId = requestId;
+    card.dataset.state = 'pending';
+    card.setAttribute('role', 'group');
+    card.setAttribute('aria-labelledby', domId(requestId, 'title'));
+    card.setAttribute('aria-describedby', domId(requestId, 'headline'));
+    card.tabIndex = -1;
+
+    const title = el('h3', 'chat-approval-card__title', view.title);
+    title.id = domId(requestId, 'title');
+    card.appendChild(title);
+
+    const headline = el('p', 'chat-approval-card__headline');
+    headline.id = domId(requestId, 'headline');
+    headline.appendChild(code(view.name, 'en'));
+    if (view.description) {
+      const description = el('span', 'chat-approval-card__headline-desc');
+      if (view.descriptionIsData) {
+        description.appendChild(el('span', 'chat-approval-card__author', view.authorLabel));
+        description.append(` “${view.description}”`);
+      } else {
+        description.textContent = view.description;
+      }
+      headline.append(' ', description);
+    }
+    card.appendChild(headline);
+
+    const meta = el('p', 'chat-approval-card__meta');
+    view.meta.forEach((part, index) => {
+      if (index > 0) {
+        const sep = el('span', 'chat-approval-card__meta-sep', '·');
+        sep.setAttribute('aria-hidden', 'true');
+        meta.appendChild(sep);
+      }
+      meta.appendChild(el('span', null, part));
+    });
+    card.appendChild(meta);
+
+    if (view.reason) {
+      const why = el('details', 'chat-approval-card__why');
+      why.appendChild(el('summary', null, view.reasonLabel));
+      why.appendChild(el('p', 'chat-approval-card__why-text', view.reason));
+      card.appendChild(why);
+    }
+
+    const { actions } = buildActions(view, requestId);
+    card.appendChild(actions);
+    const status = el('p', 'chat-approval-card__status', view.status);
+    status.setAttribute('role', 'status');
+    status.setAttribute('aria-live', 'polite');
+    card.appendChild(status);
+    actions.addEventListener('click', (e) => {
+      const button = e.target.closest('button[data-response]');
+      if (!button || button.disabled) return;
+      void respond(requestId, button.dataset.response);
+    });
+    return card;
+  }
+
   function buildCard(entry, view) {
+    if (view.kind === 'config') return buildConfigCard(entry, view);
     if (view.kind === 'sandbox') return buildSandboxCard(entry, view);
     const requestId = entry.dto.requestId;
     const card = el('section', 'chat-approval-card');
@@ -634,6 +706,8 @@ export function initToolApprovalCards({
     const resolved = { ...(entry.outcome || {}), aborted: entry.aborted === true && entry.outcome?.invalidated === true };
     const outcome = (entry.dto?.checkpoint === 'sandbox'
       && describeSandboxOutcome(resolved, { live: entry.dto.sandbox?.live === true, before: entry.dto.sandbox?.before === true }))
+      || (entry.dto?.checkpoint === 'config'
+        && describeConfigProposalOutcome(resolved, { enable: entry.dto.config?.enable === true }))
       || describeApprovalOutcome(resolved);
     // A decided card about a waiting connection (#792) says how long it
     // waited, not that the command is still running. Taken once, so that a
@@ -705,6 +779,8 @@ export function initToolApprovalCards({
       toggle.appendChild(el('span', 'chat-approval-card__toggle-sep', '·'));
       const line = el('span', 'chat-approval-card__toggle-headline');
       line.append(...[...headline.childNodes].map((node) => node.cloneNode(true)));
+      // A proposal folds to its name (#774); the description stays inside.
+      line.querySelector('.chat-approval-card__headline-desc')?.remove();
       toggle.appendChild(line);
     }
     status?.classList.add('sr-only');

@@ -144,6 +144,18 @@ export function initChatConfigIndicator({ api, appStore, onOpenSettings }) {
     section.setAttribute('aria-labelledby', 'chat-config-tools-heading');
     section.append(sectionHead('chat-config-tools-heading', t('chat.config.tools.heading'), view.total ? view.count : ''));
     const list = el('ul', 'chat-config-list');
+    for (const tool of view.changed) {
+      const item = el('li', `chat-config-row chat-config-row--tool${tool.on ? '' : ' chat-config-row--off'}`);
+      item.append(mark(tool.on));
+      const main = el('span', 'chat-config-row-main');
+      const name = el('span', 'chat-config-name', tool.name);
+      name.lang = 'en';
+      const tag = el('span', 'chat-config-tag', tool.tag);
+      tag.title = tool.tagTitle;
+      main.append(name, tag, el('span', 'chat-config-sub', tool.reason));
+      item.append(main);
+      list.append(item);
+    }
     for (const tool of view.missing) {
       const item = el('li', 'chat-config-row chat-config-row--tool chat-config-row--off');
       item.append(mark(false));

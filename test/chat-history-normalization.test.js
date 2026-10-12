@@ -405,3 +405,24 @@ test('normalizeSessionForStore keeps titles that only look like a fallback', () 
   });
   assert.equal(named.title, 'Screenshot of the login page');
 });
+
+// What a chat switched on a card (#774) is kept with the chat, bounded, and
+// left out when there is nothing.
+test('a session keeps its config overrides, cleaned, and drops an empty set', () => {
+  const opts = { normalizeWorkspaceRoot: (p) => p };
+  const row = (configOverrides) => ({ id: 'c', messages: [{ role: 'user', content: 'hi' }], configOverrides });
+  const kept = normalizeSessionForStore(row({
+    tools: { on: ['fetch_url', 'fetch_url', 42], off: ['find_files'] },
+    skills: { on: [], off: ['release'] },
+    declined: ['tool:on:shell_execute'],
+    extra: 'dropped',
+  }), opts);
+  assert.deepEqual(kept.configOverrides, {
+    tools: { on: ['fetch_url'], off: ['find_files'] },
+    skills: { off: ['release'] },
+    declined: ['tool:on:shell_execute'],
+  });
+  assert.deepEqual(normalizeSessionForLoad({ ...kept }).configOverrides, kept.configOverrides);
+  assert.equal(Object.hasOwn(normalizeSessionForStore(row({ tools: { on: [] } }), opts), 'configOverrides'), false);
+  assert.equal(Object.hasOwn(normalizeSessionForStore(row('nonsense'), opts), 'configOverrides'), false);
+});

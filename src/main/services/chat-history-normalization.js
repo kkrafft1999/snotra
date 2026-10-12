@@ -18,6 +18,7 @@ const {
   normalizeSandboxLive,
   normalizeSandboxOutside,
 } = require('../../shared/contracts/chat');
+const { normalizeChatConfigOverrides } = require('../../shared/contracts/chat-configuration');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
 const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
@@ -383,6 +384,9 @@ function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existing
   if (toolPermissionMode) out.toolPermissionMode = toolPermissionMode;
   const reasoningEffort = chatReasoningEffortForStore(sessionRow.reasoningEffort);
   if (reasoningEffort) out.reasoningEffort = reasoningEffort;
+  // What this chat switched beyond the settings (#774).
+  const configOverrides = normalizeChatConfigOverrides(sessionRow.configOverrides);
+  if (configOverrides) out.configOverrides = configOverrides;
   return out;
 }
 
@@ -402,6 +406,9 @@ function normalizeSessionForLoad(sessionRow) {
   if (toolPermissionMode) out.toolPermissionMode = toolPermissionMode;
   const reasoningEffort = chatReasoningEffortForStore(sessionRow.reasoningEffort);
   if (reasoningEffort) out.reasoningEffort = reasoningEffort;
+  // What this chat switched beyond the settings (#774).
+  const configOverrides = normalizeChatConfigOverrides(sessionRow.configOverrides);
+  if (configOverrides) out.configOverrides = configOverrides;
   return out;
 }
 

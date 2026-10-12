@@ -408,6 +408,8 @@ api.onSkillsChanged?.(() => skillCatalog.invalidate());
 const chatStream = initChatStream({
   api,
   appStore,
+  // The pill follows what a proposal card switched (#774).
+  onConfigChanged: () => void chatConfig.refresh(),
   onInputChanged: syncChatInputHeight,
   stopChatVoiceListening: voice.stopChatVoiceListening,
   activeProviderConfigured: () => modelPicker.activeProviderConfigured(),

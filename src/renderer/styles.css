@@ -8093,6 +8093,53 @@ select.modal-input {
   overflow-wrap: anywhere;
 }
 
+/* The proposal card (#774), compact: the name and the catalogue's sentence in
+   one headline, risk or origin below, the model's reason folded away. */
+.chat-approval-card__headline-desc {
+  font-size: var(--ds-font-size-base);
+  font-weight: 400;
+}
+
+.chat-approval-card__author {
+  color: var(--text-muted);
+}
+
+.chat-approval-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
+  margin: -4px 0 8px;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-muted-strong);
+}
+
+.chat-approval-card__why {
+  margin: 0 0 4px;
+  font-size: var(--ds-font-size-md);
+}
+
+.chat-approval-card__why > summary {
+  width: fit-content;
+  padding: 2px 0;
+  border-radius: 4px;
+  color: var(--ds-blue);
+  cursor: pointer;
+}
+
+.chat-approval-card__why > summary:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.chat-approval-card__why-text {
+  margin: 4px 0 0;
+  padding-left: 12px;
+  border-left: 2px solid var(--ds-grey-divider);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
 .chat-approval-card__code {
   font-family: var(--ds-font-mono);
   font-size: 0.92em;

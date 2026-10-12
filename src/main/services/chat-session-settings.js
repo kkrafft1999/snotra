@@ -52,6 +52,11 @@ const {
   chatReasoningEffortForStore,
 } = require('./chat-history-normalization');
 const { CHAT_ACTIVATION } = require('../../shared/contracts/chat');
+const {
+  normalizeChatConfigOverrides,
+  applyConfigProposal,
+  declineConfigProposal,
+} = require('../../shared/contracts/chat-configuration');
 
 /** So viele Chats behält der Speicher — deutlich mehr als der Verlauf hält. */
 const MAX_REMEMBERED_CHATS = 500;
@@ -94,6 +99,12 @@ function createChatSessionSettings({
    * @type {Map<string, string|null>}
    */
   const storedLevels = new Map();
+  /**
+   * What each chat switched beyond the settings (#774), as far as it was
+   * read. Every run asks for it; only this service writes it.
+   * @type {Map<string, object|null>}
+   */
+  const storedOverrides = new Map();
   /** The switch still in progress; the next one waits for it (#559). */
   let activationQueue = Promise.resolve();
 
@@ -357,6 +368,60 @@ function createChatSessionSettings({
     }
   }
 
+  function rememberStoredOverrides(chatId, overrides) {
+    storedOverrides.delete(chatId);
+    storedOverrides.set(chatId, overrides);
+    while (storedOverrides.size > MAX_REMEMBERED_CHATS) {
+      storedOverrides.delete(storedOverrides.keys().next().value);
+    }
+  }
+
+  /**
+   * The skills and tools a chat switched for itself (#774), or `null`. Unlike
+   * the level, it is a chat's own and never the screen's: without a chat
+   * there is nothing to look up.
+   */
+  async function configOverridesFor(rawChatId) {
+    const chatId = normalizeChatId(rawChatId);
+    if (!chatId) return null;
+    if (remembered.has(chatId) && Object.hasOwn(remembered.get(chatId), 'configOverrides')) {
+      return remembered.get(chatId).configOverrides;
+    }
+    if (storedOverrides.has(chatId)) return storedOverrides.get(chatId);
+    try {
+      const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
+      const session = store.sessions.find((s) => s && s.id === chatId);
+      const overrides = normalizeChatConfigOverrides(session?.configOverrides);
+      // Not saved yet: nothing to remember — the first save brings what the
+      // card set through `valuesFor`.
+      if (session) rememberStoredOverrides(chatId, overrides);
+      return overrides;
+    } catch {
+      return null;
+    }
+  }
+
+  async function writeOverrides(chatId, overrides) {
+    rememberLocal(chatId, { configOverrides: overrides });
+    rememberStoredOverrides(chatId, overrides);
+    await persist(chatId, { configOverrides: overrides ?? undefined });
+    return overrides;
+  }
+
+  /** A proposal the user accepted on its card (#774), for that chat only. */
+  async function acceptConfigProposal(rawChatId, proposal) {
+    const chatId = normalizeChatId(rawChatId);
+    if (!chatId) return null;
+    return writeOverrides(chatId, applyConfigProposal(await configOverridesFor(chatId), proposal));
+  }
+
+  /** A proposal the user declined: the same one is not asked again in this chat. */
+  async function declineConfigProposalFor(rawChatId, proposal) {
+    const chatId = normalizeChatId(rawChatId);
+    if (!chatId) return null;
+    return writeOverrides(chatId, declineConfigProposal(await configOverridesFor(chatId), proposal));
+  }
+
   async function rememberMode(rawMode) {
     const mode = chatToolPermissionModeForStore(rawMode);
     if (!currentChatId || !mode) return;
@@ -380,6 +445,7 @@ function createChatSessionSettings({
     remembered.delete(chatId);
     backgroundModes.delete(chatId);
     storedLevels.delete(chatId);
+    storedOverrides.delete(chatId);
     if (currentChatId === chatId) currentChatId = null;
   }
 
@@ -389,6 +455,9 @@ function createChatSessionSettings({
     rememberMode,
     rememberReasoningEffort,
     reasoningEffortFor,
+    configOverridesFor,
+    acceptConfigProposal,
+    declineConfigProposal: declineConfigProposalFor,
     valuesFor,
     forget,
     modeFor,

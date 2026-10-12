@@ -14,7 +14,7 @@
 const { parseQualifiedMcpToolName } = require('../contracts/mcp');
 const { parseSkillPath } = require('../runtime/skill-path');
 const { LOAD_SKILL_TOOL, workspaceSkillOfPath } = require('../contracts/skills');
-const { GET_CONFIGURATION_TOOL } = require('../contracts/chat-configuration');
+const { GET_CONFIGURATION_TOOL, PROPOSE_CONFIG_CHANGE_TOOL } = require('../contracts/chat-configuration');
 const { DEFAULT_LOCALE, createTranslator } = require('../i18n');
 
 function truncateToolLabel(value, max = 48) {
@@ -217,9 +217,40 @@ function permissionSuffix(entry, phase, t) {
  * Formats a tool trace entry into a display line. Strings that are already
  * formatted (persisted older sessions) pass through unchanged.
  */
+/**
+ * A proposal's line (#774) says what was proposed and, once done, how it
+ * ended — the engine records the outcome on the entry. A refused proposal
+ * drops the name: it may be one the catalogue does not know.
+ */
+function proposalLine(entry, phase, t) {
+  const args = entry?.args || {};
+  const name = typeof args.name === 'string' ? truncateToolLabel(args.name.trim(), 32) : '';
+  const direction = args.enable === false ? 'off' : 'on';
+  if (phase !== 'done') {
+    if (!name) return t('tools.line.proposeConfig.refused');
+    return direction === 'off'
+      ? t('tools.line.proposeConfig.start.off', { name })
+      : t('tools.line.proposeConfig.start.on', { name });
+  }
+  const outcome = entry?.configProposal?.outcome;
+  if (outcome === 'accepted') {
+    return direction === 'off'
+      ? t('tools.line.proposeConfig.accepted.off', { name })
+      : t('tools.line.proposeConfig.accepted.on', { name });
+  }
+  if (outcome === 'declined') {
+    return direction === 'off'
+      ? t('tools.line.proposeConfig.declined.off', { name })
+      : t('tools.line.proposeConfig.declined.on', { name });
+  }
+  if (outcome === 'suppressed') return t('tools.line.proposeConfig.suppressed', { name });
+  return t('tools.line.proposeConfig.refused');
+}
+
 function formatToolDisplayLine(entry, phase = 'start', locale = DEFAULT_LOCALE) {
   if (typeof entry === 'string') return entry;
   const t = createTranslator(locale);
+  if (entry?.tool === PROPOSE_CONFIG_CHANGE_TOOL) return proposalLine(entry, phase, t);
   // A skill file reached by its absolute path is shown in the skill's own
   // spelling, which the planner worked out (#427).
   const args = typeof entry?.skillPath === 'string' && entry.skillPath

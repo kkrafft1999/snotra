@@ -78,6 +78,17 @@ function sourceLabel(source) {
  * The skills, those that are on first; within each state the catalogue's
  * order, which is the order of the sources.
  */
+/** Why a skill is on or off in this chat only: called by name, or switched on a card (#774). */
+function chatOnlyTitle(skill) {
+  if (!skill.chatOnly) return '';
+  if (skill.chatCard) {
+    return skill.state === CONFIG_SKILL_STATES.ON
+      ? t('chat.config.chatOnly.cardOn')
+      : t('chat.config.chatOnly.cardOff');
+  }
+  return t('chat.config.chatOnly.title', { name: skill.name });
+}
+
 export function describeSkillRows(config) {
   const skills = skillsOf(config);
   const rank = (skill) => (skill.state === CONFIG_SKILL_STATES.ON ? 0 : skill.state === CONFIG_SKILL_STATES.OFF ? 1 : 2);
@@ -90,7 +101,7 @@ export function describeSkillRows(config) {
       state: skill.state,
       stateLabel: t(`chat.config.state.${skill.state === CONFIG_SKILL_STATES.INVALID ? 'invalid' : skill.state === CONFIG_SKILL_STATES.ON ? 'on' : 'off'}`),
       chatOnly: skill.chatOnly === true,
-      chatOnlyTitle: skill.chatOnly ? t('chat.config.chatOnly.title', { name: skill.name }) : '',
+      chatOnlyTitle: chatOnlyTitle(skill),
       source: sourceLabel(skill.source),
       description: typeof skill.description === 'string' ? skill.description : '',
     }));
@@ -136,7 +147,20 @@ export function describeToolSections(config) {
   const tools = toolsOf(config);
   const on = tools.filter((tool) => tool.on);
   const off = tools.filter((tool) => !tool.on);
+  // Switched on a card for this chat (#774): their own rows on top, so that
+  // a tool on here and off in the settings is not read as a setting.
+  const changed = tools
+    .filter((tool) => tool.chatOnly === true)
+    .map((tool) => ({
+      name: tool.name,
+      on: tool.on,
+      reason: t(tool.on ? 'chat.config.reason.chatOn' : 'chat.config.reason.chatOff'),
+      tag: t('chat.config.chatOnly'),
+      tagTitle: t(tool.on ? 'chat.config.chatOnly.cardOn' : 'chat.config.chatOnly.cardOff'),
+    }));
+  const changedNames = new Set(changed.map((tool) => tool.name));
   const missing = off
+    .filter((tool) => !changedNames.has(tool.name))
     .filter((tool) => tool.reason !== TOOL_OFFER_REASONS.NO_FOLDER)
     .map((tool) => ({
       name: tool.name,
@@ -146,7 +170,7 @@ export function describeToolSections(config) {
   const noFolderCount = off.length - missing.length;
 
   const byGroup = new Map();
-  for (const tool of on) {
+  for (const tool of on.filter((entry) => !changedNames.has(entry.name))) {
     const key = tool.group === CONFIG_TOOL_GROUPS.MCP ? `mcp:${tool.mcpServer || ''}` : tool.group;
     if (!byGroup.has(key)) byGroup.set(key, { group: tool.group, server: tool.mcpServer || '', names: [] });
     byGroup.get(key).names.push(tool.name);
@@ -169,6 +193,7 @@ export function describeToolSections(config) {
     on: on.length,
     total: tools.length,
     count: t('chat.config.count', { on: on.length, total: tools.length }),
+    changed,
     missing,
     noFolder: noFolderCount > 0 ? tPlural('chat.config.noFolder', noFolderCount, { count: noFolderCount }) : '',
     onSummary: t('chat.config.tools.onSummary', { count: on.length }),

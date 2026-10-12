@@ -6,6 +6,11 @@ const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
 const { normalizeAttachments, attachmentsCharCost } = require('../../shared/contracts/attachments');
 const { extractInvokedSkillNames } = require('../../shared/contracts/skill-invocation');
 const { LOAD_SKILL_TOOL, SKILL_SOURCES } = require('../../shared/contracts/skills');
+const {
+  PROPOSE_CONFIG_CHANGE_TOOL,
+  CONFIG_PROPOSAL_KINDS,
+  effectiveDisabledTools,
+} = require('../../shared/contracts/chat-configuration');
 const { parseQualifiedMcpToolName } = require('../../shared/contracts/mcp');
 const {
   CONTEXT_PART_GROUPS,
@@ -806,6 +811,8 @@ function createChatEngine({
   maxToolRounds,
   // Called once a run has ended, however it ended (#320).
   onRunSettled = () => {},
+  // What a chat switched for itself, and the card that changes it (#774).
+  configProposals = null,
 }) {
   /**
    * One run per window *and* chat (#320). Until then a window had exactly one
@@ -1056,7 +1063,18 @@ function createChatEngine({
       const uiPrefs = await preferences.read();
       const appLocale = resolveAppLocale(uiPrefs);
       const systemPrompt = typeof uiPrefs.baseSystemPrompt === 'string' ? uiPrefs.baseSystemPrompt.trim() : '';
-      const disabledNames = Array.isArray(uiPrefs.disabledTools) ? uiPrefs.disabledTools : [];
+      // What this chat switched for itself on a card (#774): read when the
+      // run starts, and again after a card in this run changed it.
+      const readConfigOverrides = async () => {
+        if (!configProposals || typeof configProposals.overridesFor !== 'function') return null;
+        try {
+          return await configProposals.overridesFor(chatId);
+        } catch {
+          return null;
+        }
+      };
+      let configOverrides = await readConfigOverrides();
+      let disabledNames = [];
       // Deaktivierte Tools bleiben unsichtbar und gesperrt; der Modus allein
       // versteckt keine Tools (Konzept §8) — pro Aufruf entscheidet die Policy.
       // Nicht mehr „Ordner offen = Tools an": jedes Tool sagt selbst, ob es
@@ -1073,78 +1091,108 @@ function createChatEngine({
       // Verzeichnisse der eingeschalteten Skills sind zusätzliche Lesewurzeln
       // für die Lese-Tools (Issue #61); Schreib-Tools sehen sie nie (#548).
       let skillRoots = [];
-      if (skills) {
-        try {
-          activeSkills = await skills.getActiveSkills({
-            workspaceRoot,
-            activeSkills: Array.isArray(uiPrefs.activeSkills) ? uiPrefs.activeSkills : null,
-            // A workspace skill is on only where it was ticked (#576).
-            activeWorkspaceSkills: uiPrefs.activeWorkspaceSkills || null,
-            // Aufrufe aus dem gesamten Verlauf, nicht nur aus der letzten
-            // Nachricht: Ein einmal gerufener Skill soll auch die Folgeantworten
-            // prägen (Issue #124).
-            invokedSkills: collectInvokedSkillNames(messages),
-            // The system skills quote settings pages by name so the model can
-            // point at one. The quotation follows the interface (#294); the
-            // instructions around it stay English (#276).
-            locale: appLocale,
-          });
-          activeSkills = guardEmbeddedSkills(activeSkills, await readOwnSecretList());
-          skillRoots = activeSkills
-            .filter((skill) => skill && skill.name && typeof skill.path === 'string' && skill.path)
-            .map((skill) => ({ name: skill.name, dir: skill.path }));
-        } catch {
-          // Ein kaputtes Skill-Verzeichnis darf den Chat nicht blockieren.
-          activeSkills = [];
-          skillRoots = [];
-        }
-      }
-      const skillSignature = skillRoots.map((entry) => entry.name).sort().join(',');
-
-      const toolOptions = {
-        disabledNames,
-        workspaceOpen,
-        // Die eingeschalteten Skills: ohne sie hat `load_skill` nichts zu tun
-        // und wird gar nicht erst angeboten, mit ihnen stehen sie als enum in
-        // seinem Schema (Issue #173).
-        skillNames: skillRoots.map((entry) => entry.name),
-      };
-      // Tools, die erst zur Laufzeit feststehen, einmal je Lauf auffrischen
-      // (Issue #107). Danach ist die Liste fuer diesen Lauf fest — ein Server,
-      // der mittendrin dazukommt, wirkt ab der naechsten Nachricht.
-      if (typeof tools.prepare === 'function') await tools.prepare(toolOptions);
-      const toolsPrompt = tools.buildSystemPrompt(toolOptions);
-      const availableToolDefs = tools.getTools(toolOptions);
-      // Gibt es keinen Weg zur Anleitung, fällt der Prompt auf das alte
-      // Verhalten zurück, statt Skills still wirkungslos zu lassen (#173).
-      // Über die Einstellungen passiert das nicht mehr — `load_skill` ist
-      // Grundausstattung (#195); siehe buildSkillsSystemPrompt.
-      const canLoadSkills = availableToolDefs.some(
-        (definition) => definition?.function?.name === LOAD_SKILL_TOOL
-      );
+      let toolOptions = null;
+      let toolsPrompt = '';
+      let availableToolDefs = [];
+      let canLoadSkills = false;
+      let skillFilesWithoutFolder = false;
+      let skillsSystem = '';
+      let skillContextParts = [];
+      let workspaceSystem = '';
       // Without a folder the read tools are still there while a skill is
       // switched on — for its folder and nothing else (#429, #548).
       const skillPathTool = (toolName) =>
         skillRoots.length > 0
         && typeof tools.supportsSkillPaths === 'function'
         && tools.supportsSkillPaths(toolName) === true;
-      const skillFilesWithoutFolder = !workspaceOpen
-        && availableToolDefs.some((definition) => skillPathTool(definition?.function?.name));
-      const { text: skillsSystem, parts: skillContextParts } = buildSkillsSystemPrompt(
-        activeSkills,
-        { toolsAvailable: workspaceOpen || skillFilesWithoutFolder, canLoadSkills, workspaceOpen }
-      );
-      // Ohne diesen Kontext sieht das Modell nur die rohen Tool-Schemas und weiß
-      // nicht, dass überhaupt ein Ordner offen ist — es antwortet dann gern, es
-      // könne keine Dateien lesen oder schreiben.
-      const workspaceSystem = workspaceRoot
-        ? buildWorkspaceSystemPrompt({
-            folderName: workspacePaths.basename(workspaceRoot),
-            toolsPrompt,
-            selectedRelPath: selection?.relativePath || null,
-            selectedIsDirectory: selection?.isDirectory === true,
-          })
-        : buildNoWorkspaceSystemPrompt({ toolsPrompt, skillFiles: skillFilesWithoutFolder });
+
+      /**
+       * The run's skills and tools, and the prompt parts that name them.
+       * Worked out when the run starts and again when a card in it switched
+       * something (#774): everything below reads these bindings, so the rest
+       * of the run goes on with the new set.
+       */
+      async function setupCapabilities({ refresh = false } = {}) {
+        disabledNames = effectiveDisabledTools(uiPrefs.disabledTools, configOverrides);
+        const invokedByName = collectInvokedSkillNames(messages);
+        const cardSkillsOff = new Set(configOverrides?.skills?.off || []);
+        activeSkills = [];
+        skillRoots = [];
+        if (skills) {
+          try {
+            const loaded = await skills.getActiveSkills({
+              workspaceRoot,
+              activeSkills: Array.isArray(uiPrefs.activeSkills) ? uiPrefs.activeSkills : null,
+              // A workspace skill is on only where it was ticked (#576).
+              activeWorkspaceSkills: uiPrefs.activeWorkspaceSkills || null,
+              // Aufrufe aus dem gesamten Verlauf, nicht nur aus der letzten
+              // Nachricht: Ein einmal gerufener Skill soll auch die Folgeantworten
+              // prägen (Issue #124). A skill a card switched on for this chat
+              // comes in the same way (#774).
+              invokedSkills: [...invokedByName, ...(configOverrides?.skills?.on || [])],
+              // The system skills quote settings pages by name so the model can
+              // point at one. The quotation follows the interface (#294); the
+              // instructions around it stay English (#276).
+              locale: appLocale,
+            });
+            activeSkills = guardEmbeddedSkills(loaded, await readOwnSecretList())
+              .filter((skill) => !cardSkillsOff.has(skill?.name))
+              // Switched on by a card, not called by name: listed and loaded
+              // on demand like a skill from the settings (#173), not written
+              // out in full like a "/name" call.
+              .map((skill) => (skill?.invoked && !invokedByName.includes(skill.name) ? { ...skill, invoked: false } : skill));
+            skillRoots = activeSkills
+              .filter((skill) => skill && skill.name && typeof skill.path === 'string' && skill.path)
+              .map((skill) => ({ name: skill.name, dir: skill.path }));
+          } catch {
+            // Ein kaputtes Skill-Verzeichnis darf den Chat nicht blockieren.
+            activeSkills = [];
+            skillRoots = [];
+          }
+        }
+
+        toolOptions = {
+          disabledNames,
+          workspaceOpen,
+          // Die eingeschalteten Skills: ohne sie hat `load_skill` nichts zu tun
+          // und wird gar nicht erst angeboten, mit ihnen stehen sie als enum in
+          // seinem Schema (Issue #173).
+          skillNames: skillRoots.map((entry) => entry.name),
+        };
+        // Tools, die erst zur Laufzeit feststehen, einmal je Lauf auffrischen
+        // (Issue #107). Danach ist die Liste fuer diesen Lauf fest — ein Server,
+        // der mittendrin dazukommt, wirkt ab der naechsten Nachricht.
+        if (!refresh && typeof tools.prepare === 'function') await tools.prepare(toolOptions);
+        toolsPrompt = tools.buildSystemPrompt(toolOptions);
+        availableToolDefs = tools.getTools(toolOptions);
+        // Gibt es keinen Weg zur Anleitung, fällt der Prompt auf das alte
+        // Verhalten zurück, statt Skills still wirkungslos zu lassen (#173).
+        // Über die Einstellungen passiert das nicht mehr — `load_skill` ist
+        // Grundausstattung (#195); siehe buildSkillsSystemPrompt.
+        canLoadSkills = availableToolDefs.some(
+          (definition) => definition?.function?.name === LOAD_SKILL_TOOL
+        );
+        skillFilesWithoutFolder = !workspaceOpen
+          && availableToolDefs.some((definition) => skillPathTool(definition?.function?.name));
+        ({ text: skillsSystem, parts: skillContextParts } = buildSkillsSystemPrompt(
+          activeSkills,
+          { toolsAvailable: workspaceOpen || skillFilesWithoutFolder, canLoadSkills, workspaceOpen }
+        ));
+        // Ohne diesen Kontext sieht das Modell nur die rohen Tool-Schemas und weiß
+        // nicht, dass überhaupt ein Ordner offen ist — es antwortet dann gern, es
+        // könne keine Dateien lesen oder schreiben.
+        workspaceSystem = workspaceRoot
+          ? buildWorkspaceSystemPrompt({
+              folderName: workspacePaths.basename(workspaceRoot),
+              toolsPrompt,
+              selectedRelPath: selection?.relativePath || null,
+              selectedIsDirectory: selection?.isDirectory === true,
+            })
+          : buildNoWorkspaceSystemPrompt({ toolsPrompt, skillFiles: skillFilesWithoutFolder });
+      }
+      await setupCapabilities();
+      // The session approvals stay bound to the skills the run started with.
+      const skillSignature = skillRoots.map((entry) => entry.name).sort().join(',');
 
       // Umgebungsangaben (Issue #138). Abschaltbar, weil der absolute Pfad den
       // Benutzernamen enthält und mit jeder Anfrage zum Anbieter geht; der
@@ -1219,36 +1267,42 @@ function createChatEngine({
       // stehen bewusst *vor* dem Ordner-/Tool-Block: Der trägt die Regel, dass
       // Tool-Ergebnisse Daten sind, und die soll nicht das Letzte sein, was
       // eine fremde AGENTS.md überschreiben könnte.
-      const combinedSystem = [
-        systemPrompt,
-        memorySystem,
-        skillsSystem,
-        environmentSystem,
-        projectInstructionsSystem,
-        folderMemorySystem,
-        workspaceSystem,
-        // Nur wenn die App selbst englisches Geruest beisteuert (Ordner-/Tool-
-        // Block oder Skill-Rahmen). Steht im Prompt ausschliesslich, was der
-        // Nutzer geschrieben hat, gibt es nichts, was die Antwortsprache
-        // verziehen koennte — dann waere der Satz nur Ballast in jeder Anfrage.
-        skillsSystem || workspaceSystem ? REPLY_LANGUAGE_RULE : '',
-      ]
-        .filter((part) => typeof part === 'string' && part.trim())
-        .join('\n\n');
+      let combinedSystem = '';
+      let staticContextParts = [];
+      // The system message and what it is made of, again after a card (#774).
+      const composeSystem = () => {
+        combinedSystem = [
+          systemPrompt,
+          memorySystem,
+          skillsSystem,
+          environmentSystem,
+          projectInstructionsSystem,
+          folderMemorySystem,
+          workspaceSystem,
+          // Nur wenn die App selbst englisches Geruest beisteuert (Ordner-/Tool-
+          // Block oder Skill-Rahmen). Steht im Prompt ausschliesslich, was der
+          // Nutzer geschrieben hat, gibt es nichts, was die Antwortsprache
+          // verziehen koennte — dann waere der Satz nur Ballast in jeder Anfrage.
+          skillsSystem || workspaceSystem ? REPLY_LANGUAGE_RULE : '',
+        ]
+          .filter((part) => typeof part === 'string' && part.trim())
+          .join('\n\n');
 
-      // Woraus dieser Prompt besteht (Issue #174). Die Teile stehen jetzt fest;
-      // nur der Verlauf waechst mit jeder Tool-Runde und wird dort gezaehlt.
-      const staticContextParts = buildStaticContextParts({
-        systemPrompt,
-        memoryParts,
-        skillParts: skillContextParts,
-        environmentSystem,
-        projectInstructionParts,
-        folderMemoryParts,
-        workspaceSystem,
-        toolsPrompt,
-        toolDefs: availableToolDefs,
-      });
+        // Woraus dieser Prompt besteht (Issue #174). Die Teile stehen jetzt fest;
+        // nur der Verlauf waechst mit jeder Tool-Runde und wird dort gezaehlt.
+        staticContextParts = buildStaticContextParts({
+          systemPrompt,
+          memoryParts,
+          skillParts: skillContextParts,
+          environmentSystem,
+          projectInstructionParts,
+          folderMemoryParts,
+          workspaceSystem,
+          toolsPrompt,
+          toolDefs: availableToolDefs,
+        });
+      };
+      composeSystem();
 
       const apiMessages = [];
       if (combinedSystem) apiMessages.push({ role: 'system', content: combinedSystem });
@@ -1290,7 +1344,22 @@ function createChatEngine({
 
       // Eine leere Liste ist kein „keine Tools": manche Provider lehnen ein
       // leeres tools-Array ab. Ohne Tools bleibt das Feld weg wie bisher.
-      const toolDefs = availableToolDefs.length > 0 ? availableToolDefs : undefined;
+      let toolDefs = availableToolDefs.length > 0 ? availableToolDefs : undefined;
+      /**
+       * After a card switched a skill or tool for this chat (#774): the next
+       * round goes out with the new tool list and the system message that
+       * names it. The history and its budget stay as they were.
+       */
+      async function refreshCapabilities() {
+        configOverrides = await readConfigOverrides();
+        await setupCapabilities({ refresh: true });
+        composeSystem();
+        const hasSystem = apiMessages[0]?.role === 'system';
+        if (combinedSystem && hasSystem) apiMessages[0] = { role: 'system', content: combinedSystem };
+        else if (combinedSystem) apiMessages.unshift({ role: 'system', content: combinedSystem });
+        else if (hasSystem) apiMessages.shift();
+        toolDefs = availableToolDefs.length > 0 ? availableToolDefs : undefined;
+      }
       // Ohne Ordner gilt der Zusatz „kein Ordner geöffnet" nur noch für Tools,
       // die tatsächlich einen brauchen (Issue #96).
       const needsWorkspace = (toolName) =>
@@ -1498,6 +1567,134 @@ function createChatEngine({
           return { response: APPROVAL_RESPONSES.ALLOW_ONCE };
         }
         return { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+      }
+
+      /**
+       * The model asks to switch a skill or tool for this chat (#774). Main
+       * checks the proposal against the catalogue first — an unknown name or
+       * a change that changes nothing never reaches the user. What passes is
+       * put on a card; only the user's click switches, and only for this
+       * chat. A proposal declined before is not shown again.
+       */
+      async function proposeConfigChange({ entry, callIndex, args, policy }) {
+        const proposal = {
+          kind: args?.kind,
+          name: typeof args?.name === 'string' ? args.name.trim() : '',
+          enable: args?.enable,
+          reason: args?.reason,
+        };
+        const refuse = (error) => {
+          entry.configProposal = { outcome: 'refused' };
+          return { content: JSON.stringify({ error }) };
+        };
+        let prepared;
+        try {
+          prepared = await configProposals.prepare({
+            chatId,
+            workspaceRoot,
+            chatSkillNames: collectInvokedSkillNames(messages),
+            overrides: configOverrides,
+            proposal,
+          });
+        } catch (error) {
+          prepared = { error: error?.message || 'The proposal could not be checked.' };
+        }
+        if (prepared?.declined) {
+          entry.configProposal = { outcome: 'suppressed' };
+          return {
+            content: JSON.stringify({
+              accepted: false,
+              message: 'The user declined this change earlier in this chat, so it was not shown again. '
+                + 'Carry on without it.',
+            }),
+          };
+        }
+        if (!prepared?.card) return refuse(prepared?.error || 'The proposal could not be checked.');
+        if (!chatId || !approvals || typeof approvals.requestApproval !== 'function' || !approvals.isAvailable?.(sessionId)) {
+          return refuse('There is no window to ask the user in. Point them to the settings page instead.');
+        }
+        const { card } = prepared;
+        const change = { kind: card.kind, name: card.name, enable: card.enable };
+        emit(
+          onEvent,
+          CHAT_ENGINE_EVENTS.PROGRESS,
+          createPermissionProgressEvent(PERMISSION_PROGRESS_EVENTS.AWAITING, { callIndex, tool: PROPOSE_CONFIG_CHANGE_TOOL })
+        );
+        let outcome;
+        try {
+          outcome = await approvals.requestApproval({
+            sessionId,
+            abortSignal,
+            request: {
+              tool: PROPOSE_CONFIG_CHANGE_TOOL,
+              riskClasses: [],
+              targets: [],
+              mode: policy.mode,
+              chatId,
+              checkpoint: 'config',
+              config: card,
+            },
+          });
+        } catch (error) {
+          if (isAbortError(error)) throw error;
+          outcome = { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+        }
+        if (abortSignal.aborted) throw createChatAbortError();
+        emit(
+          onEvent,
+          CHAT_ENGINE_EVENTS.PROGRESS,
+          createPermissionProgressEvent(PERMISSION_PROGRESS_EVENTS.RESOLVED, {
+            callIndex,
+            tool: PROPOSE_CONFIG_CHANGE_TOOL,
+            response: outcome?.invalidated ? undefined : outcome?.response,
+            reason: outcome?.invalidated ? outcome.reason || PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED : undefined,
+          })
+        );
+        // A card that lapsed ends the run, as an approval card does (§6).
+        if (!outcome || outcome.invalidated) {
+          entry.configProposal = { outcome: 'refused' };
+          return {
+            content: JSON.stringify({ error: 'The card lapsed before the user answered.' }),
+            endRun: true,
+            invalidatedReason: outcome?.reason || PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED,
+          };
+        }
+        const what = `${card.kind === CONFIG_PROPOSAL_KINDS.SKILL ? 'The skill' : 'The tool'} "${card.name}"`;
+        if (outcome.response !== APPROVAL_RESPONSES.ALLOW_ONCE) {
+          try {
+            configOverrides = await configProposals.decline(chatId, change);
+          } catch {
+            // Not remembered: the next proposal of it asks again — no harm.
+          }
+          entry.configProposal = { outcome: 'declined' };
+          return {
+            content: JSON.stringify({
+              accepted: false,
+              message: `The user declined: ${what} stays ${card.enable ? 'off' : 'on'}. Carry on without `
+                + 'the change and do not propose it again in this chat.',
+            }),
+          };
+        }
+        try {
+          await configProposals.accept(chatId, change);
+        } catch {
+          return refuse('The change could not be saved; nothing was switched.');
+        }
+        await refreshCapabilities();
+        entry.configProposal = { outcome: 'accepted' };
+        let next = 'It is no longer available in this chat.';
+        if (card.enable) {
+          next = card.kind === CONFIG_PROPOSAL_KINDS.SKILL
+            ? 'Load it with load_skill when it fits the task.'
+            : 'You can call it from your next step on.';
+        }
+        return {
+          content: JSON.stringify({
+            accepted: true,
+            message: `${what} is ${card.enable ? 'on' : 'off'} for this chat now — new chats keep the user's `
+              + `settings. ${next}`,
+          }),
+        };
       }
 
       /** A denial that also ends the run, without another provider request (§6). */
@@ -1845,6 +2042,12 @@ function createChatEngine({
         const toolDisabled = typeof tools.isSwitchedOff === 'function'
           ? tools.isSwitchedOff(toolName, disabledNames) === true
           : disabledNames.includes(toolName);
+        // A proposal is answered by its own card (#774), not by the policy:
+        // the call changes nothing, the click does. Switched off, it is
+        // refused like any other tool below.
+        if (toolName === PROPOSE_CONFIG_CHANGE_TOOL && !toolDisabled && configProposals) {
+          return proposeConfigChange({ entry, callIndex, args, policy });
+        }
         let forcedClasses = [];
         let lastPlanKey = null;
         const scopeKey = buildScopeKey(policy);
@@ -2011,6 +2214,8 @@ function createChatEngine({
             onSandboxNetworkAsk,
             // What a card opened outside the open folder for the file tools (step 4).
             outsideGrants: outsideGrants(),
+            // What this chat switched on a card, for get_configuration (#774).
+            configOverrides,
           });
           const firstRun = await executeWith(sessionSandboxGrants(scopeKey));
           if (live.repeated) {
