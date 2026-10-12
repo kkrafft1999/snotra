@@ -891,3 +891,43 @@ test('Linux-Ordner: a package under the other name is swapped in and started und
   const script = await fsp.readFile(launches[0].args[0], 'utf8');
   assert.ok(script.endsWith(`exec ${shQuote(path.join(installDir, OTHER_NAME))}\n`));
 });
+
+test('Windows: staging folders an earlier attempt left behind are removed, nothing else (#914)', async (t) => {
+  if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
+  const dir = makeTempDir(t);
+  const tools = path.join(dir, 'tools');
+  const installDir = path.join(tools, 'Snotra Agent-win32-x64');
+  await fsp.mkdir(installDir, { recursive: true });
+  await fsp.writeFile(path.join(installDir, 'Snotra Agent.exe'), 'old');
+  // What a failed install up to 1.20.1 left: the archive and nothing else.
+  await writeAppAsar(path.join(tools, '.snotra-new-1760000000000'));
+  await fsp.mkdir(path.join(tools, '.snotra-new-1760000000001.app'));
+  // Not ours to remove.
+  for (const name of ['.snotra-old-1760000000000', '.snotra-new-notes', 'other-tool']) {
+    await fsp.mkdir(path.join(tools, name));
+  }
+  const zip = path.join(dir, 'new.zip');
+  await fsp.writeFile(zip, 'zip');
+
+  // This attempt fails as well: the archive brings an app.asar, but no program.
+  const { installer, launches } = makeInstaller({
+    onRun: async (cmd, args) => {
+      const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
+      await writeAppAsar(dest);
+      return '';
+    },
+  });
+  const res = await installer.install({
+    filePath: zip,
+    version: '1.13.0',
+    target: { kind: 'windows-dir', canSelfUpdate: true, installDir },
+    workDir: path.join(dir, 'work'),
+  });
+
+  assert.equal(res.ok, false);
+  assert.match(de(res.error), /fehlt „Snotra Agent\.exe“/);
+  assert.deepEqual(launches, []);
+  assert.deepEqual((await fsp.readdir(tools)).sort(), [
+    '.snotra-new-notes', '.snotra-old-1760000000000', 'Snotra Agent-win32-x64', 'other-tool',
+  ]);
+});
