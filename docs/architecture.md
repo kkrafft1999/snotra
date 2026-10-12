@@ -239,7 +239,16 @@ checked against the rules the runtime had at start — before any workspace — 
 each run checks them again against its own writable and protected folders.
 Seatbelt's lines come through `log stream` and can trail the process by a few
 hundred milliseconds under load; a failed run waits up to 600 ms for them — 2 s
-when the program itself reported a refused permission — a successful one 100 ms. The runner puts the summary on
+when the program itself reported a refused permission — a successful one 100 ms.
+Waiting is not the whole story, though: the runtime's monitor read only the
+first entry of every chunk `log stream` handed over, and under load several
+arrive in one chunk — the rest were lost, often the very refusal a run was
+about, however long it waited ([#881](https://github.com/kkrafft1999/snotra/issues/881)).
+`scripts/patch-sandbox-runtime.js` therefore puts `snotraOnLogEntry` in front of
+the monitor, which hands it one entry at a time, each deny line with the
+command line under it; `test/sandbox-log-monitor.test.js` drives the installed
+monitor with entries that arrive together and fails when an update of the
+runtime moves the patched line. The runner puts the summary on
 the result as `sandboxBlocked` and `annotate()` replaces the runtime's raw
 `<sandbox_violations>` block in stderr with a short `<sandbox_blocked>` list for
 the model. From there it takes the same road as the file changes of #348: the
