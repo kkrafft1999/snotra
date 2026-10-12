@@ -21,6 +21,23 @@ const { createFsService } = require('../src/main/services/fs-service');
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
+ * The watcher's own debounce, injected short: this test asks whether
+ * `fs.watch` delivers each change, not how long the watcher coalesces
+ * them. That the real default (250 ms) has a sensible value is the business
+ * of `workspace-watcher.test.js`; here it only stretched every step by a
+ * quarter of a second (#883).
+ */
+const DEBOUNCE_MS = 25;
+/**
+ * How long nothing may have been reported before the next step starts, so that
+ * one step's late report is not taken for the next one's. It is a multiple of
+ * the debounce, which is what separates two reports of one burst. A too short
+ * pause cannot make a step fail, only let a late report stand in for the
+ * next — and a lost change then still shows up in one of the later steps.
+ */
+const QUIET_MS = 8 * DEBOUNCE_MS;
+
+/**
  * The runs: the platform's own way, and — on macOS, where it can be watched
  * live — the Linux way on a real file system as well. Windows is left out of
  * the second: a folder with a watch of its own cannot be removed there while
@@ -54,6 +71,7 @@ for (const { label, platform } of MODES) {
       // The question is whether `fs.watch` reports each change, not whether
       // the report after the start (#478) would cover for it.
       startRecheckMs: 0,
+      debounceMs: DEBOUNCE_MS,
     });
     const fsService = createFsService({
       fs: nodeFs.promises,
@@ -89,7 +107,7 @@ for (const { label, platform } of MODES) {
     /** Waits until nothing has been reported for a while, so one step's report is not taken for the next. */
     const quiet = async () => {
       const deadline = Date.now() + 5000;
-      while (Date.now() - lastReportAt < 700 && Date.now() < deadline) await sleep(50);
+      while (Date.now() - lastReportAt < QUIET_MS && Date.now() < deadline) await sleep(DEBOUNCE_MS);
     };
     const step = async (what, change, matches = namesNotes) => {
       await quiet();
@@ -104,7 +122,10 @@ for (const { label, platform } of MODES) {
     // and on Linux the watch on `notes/` is set a moment later. So the first
     // write is repeated until one is reported; from then on the watch is
     // known to be live, and every later step has to be reported first time.
-    const liveBy = Date.now() + 15000;
+    // A loaded machine can take long to start the stream (a dense CI run was
+    // seen to need more than 15 s), so the deadline sits well inside the
+    // test's own timeout instead of at a few seconds.
+    const liveBy = Date.now() + 40000;
     for (let attempt = 0; ; attempt += 1) {
       const from = reports.length;
       await writeAtomically(`v0-${attempt}`);
