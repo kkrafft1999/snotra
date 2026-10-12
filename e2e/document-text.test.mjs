@@ -13,7 +13,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents, sendChat } from './helpers/app.mjs';
 import { makeEncryptedPdf, makeTextPdf } from './helpers/pdf-fixtures.mjs';
 
 const require = createRequire(import.meta.url);
@@ -51,11 +51,12 @@ test('the model reads a PDF and a workbook through extract_document_text', { tim
     ],
   });
   model.queueAnswer({ text: 'Done.' });
-  await page.evaluate(() => {
-    const input = document.getElementById('chat-input');
-    input.value = 'Summarise the documents.';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
+  // A send that a guard turns away leaves nothing behind, and the wait below
+  // would run for a minute for a run that never started (#809). sendChat waits
+  // for the button and checks that the send took.
+  await sendChat(page, 'Summarise the documents.', {
+    t,
+    explain: async () => `model requests: ${JSON.stringify(model.describeRequests(), null, 1)}\nmain:\n${snotra.mainOutput()}`,
   });
 
   const toolResults = () => {
