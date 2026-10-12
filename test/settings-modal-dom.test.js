@@ -9,6 +9,19 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom, flush, focusFixup } = require('./helpers/dom.js');
 
+/**
+ * Waits for a state instead of a stretch of time: polls `predicate` until it
+ * holds, and fails with `what` once the deadline has passed. The deadline only
+ * bounds a test that is going to fail anyway, so it can be generous.
+ */
+async function until(predicate, what, { timeoutMs = 5000 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() > deadline) assert.fail(`timed out waiting for: ${what}`);
+    await new Promise((resolve) => { setTimeout(resolve, 2); });
+  }
+}
+
 async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
   const dom = setupRendererDom();
   const { initSettingsModal } = await importRenderer('components', 'SettingsModal.js');
@@ -60,6 +73,20 @@ async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
 
   await modal.openSettingsModal();
   await flush();
+  // The renderer modules are loaded once per file, and what a mount registers
+  // with `onLocaleChange` stays registered for good: every later `setLocale`
+  // runs the callbacks of all earlier mounts, and the dialog's own one does a
+  // full redraw while its element is not `hidden` -- against the *current*
+  // global document, with the stale state of a finished test. That made every
+  // subtest slower than the one before (45 ms for the first, 600 ms for the
+  // last) and let a leftover refresh land in a later test. Closing the dialog
+  // and emptying its window at cleanup turns those callbacks into no-ops.
+  const cleanup = dom.cleanup;
+  dom.cleanup = () => {
+    dom.document.getElementById('modal-settings')?.classList.add('hidden');
+    dom.document.body.replaceChildren();
+    cleanup();
+  };
   dom.reopenSettings = async () => {
     modal.closeSettingsModal?.();
     await modal.openSettingsModal();
@@ -1814,12 +1841,25 @@ test('"Reload skills" keeps an unsaved untick; a new skill takes its saved state
 });
 
 test('two tool switches in quick succession both land (CR-B14-09, 7)', async (t) => {
-  // A store that answers a moment later, like IPC does.
+  // A store that answers a moment later, like IPC does. `inFlight` and `writes`
+  // are what the test waits for: the state itself, not a stretch of time.
   const store = { baseSystemPrompt: '', appLocale: 'de', disabledTools: ['run_python', 'shell_execute'] };
-  const later = (value) => new Promise((resolve) => { setTimeout(() => resolve(structuredClone(value)), 5); });
+  let inFlight = 0;
+  let writes = 0;
+  const later = async (value) => {
+    inFlight += 1;
+    await new Promise((resolve) => { setTimeout(resolve, 5); });
+    inFlight -= 1;
+    return structuredClone(value);
+  };
   const { dom } = await mountSettings({
     getUIPrefs: () => later(store),
-    setUIPrefs: async (patch) => { await later(null); Object.assign(store, patch); return structuredClone(store); },
+    setUIPrefs: async (patch) => {
+      await later(null);
+      Object.assign(store, patch);
+      writes += 1;
+      return structuredClone(store);
+    },
   });
   t.after(dom.cleanup);
 
@@ -1827,7 +1867,7 @@ test('two tool switches in quick succession both land (CR-B14-09, 7)', async (t)
   // read-modify-writes of the same list, overlapping.
   document.getElementById('input-python-enabled').click();
   document.getElementById('input-shell-enabled').click();
-  await new Promise((resolve) => { setTimeout(resolve, 120); });
+  await until(() => writes >= 2 && inFlight === 0, 'both switches written');
 
   assert.deepEqual(store.disabledTools, [], 'one switch undid the other');
 });
