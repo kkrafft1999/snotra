@@ -937,7 +937,9 @@ function createSandboxService({
           return summary;
         }
         const refused = failed && PERMISSION_ERROR.test(String(output || ''));
-        await settleViolations(collector, { settleMs: violationSettleMs, failed, refused });
+        await settleViolations(collector, {
+          settleMs: violationSettleMs, failed, refused, hasRefusal: () => summarize() !== null,
+        });
         existingFolders = await foldersThatExist(collector.lines);
         summary = summarize();
         if (summary) {
@@ -1046,19 +1048,33 @@ const VIOLATIONS_QUIET_MS = 50;
  * Waits for refusals still on their way (#792). Seatbelt's lines come
  * through `log stream`, a child process; under load they arrive a few hundred
  * milliseconds after the run's process has closed. Every run waits the
- * settle time. A failed run waits longer: until lines have come and gone
- * quiet, or six times the settle time when none come at all — twenty when
- * the program itself reported a refused permission, where a line is all but
- * certain to come.
+ * settle time. A failed run waits longer: until a refusal has come and the
+ * lines have gone quiet, or six times the settle time when none comes at all —
+ * twenty when the program itself reported a refused permission, where a line
+ * is all but certain to come.
+ *
+ * Only a refusal ends the wait early. The system queries every run makes reach
+ * the log too, and first; when they ended it, the refusal behind them missed
+ * the run under load and no card was shown (#906).
+ *
+ * @param {{ lines: string[], lastAt: () => number }} collector
+ * @param {{ settleMs: number, failed: boolean, refused?: boolean, hasRefusal?: () => boolean }} options
  */
-async function settleViolations(collector, { settleMs, failed, refused = false }) {
+async function settleViolations(collector, { settleMs, failed, refused = false, hasRefusal = () => true }) {
   if (!(settleMs > 0)) return;
   const started = Date.now();
   await pause(settleMs);
   if (!failed) return;
   const longest = settleMs * (refused ? REFUSED_RUN_SETTLE_FACTOR : FAILED_RUN_SETTLE_FACTOR);
+  // Looked at again only when a line has come since.
+  let looked = 0;
+  let found = false;
   while (Date.now() - started < longest) {
-    if (collector.lines.length > 0 && Date.now() - collector.lastAt() >= VIOLATIONS_QUIET_MS) return;
+    if (collector.lines.length !== looked) {
+      looked = collector.lines.length;
+      found = hasRefusal();
+    }
+    if (found && Date.now() - collector.lastAt() >= VIOLATIONS_QUIET_MS) return;
     await pause(VIOLATIONS_QUIET_MS / 2);
   }
 }

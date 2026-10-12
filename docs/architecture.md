@@ -240,6 +240,9 @@ each run checks them again against its own writable and protected folders.
 Seatbelt's lines come through `log stream` and can trail the process by a few
 hundred milliseconds under load; a failed run waits up to 600 ms for them — 2 s
 when the program itself reported a refused permission — a successful one 100 ms.
+Only a line that is a refusal ends that wait early: the system queries reach
+the log first, and when any line counted, the refusal behind them missed the
+run and no card came ([#906](https://github.com/kkrafft1999/snotra/issues/906)).
 Waiting is not the whole story, though: the runtime's monitor read only the
 first entry of every chunk `log stream` handed over, and under load several
 arrive in one chunk — the rest were lost, often the very refusal a run was
