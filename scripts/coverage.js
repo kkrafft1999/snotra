@@ -92,6 +92,7 @@ const fmt = (value) => `${value.toFixed(2).padStart(6)} %`;
 function main() {
   const lcovPath = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-coverage-')), 'lcov.info');
   const result = spawnSync(process.execPath, [
+    '--no-use-system-ca',
     '--test',
     '--experimental-test-coverage',
     '--test-coverage-include=src/**',
