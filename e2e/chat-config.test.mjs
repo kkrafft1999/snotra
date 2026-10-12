@@ -1,7 +1,8 @@
 // The skills and tools of a chat in the real app (#773): the pill at the
 // composer counts what main reports, the popover leads into the settings, and
 // the model reads the same state with get_configuration — without the
-// instructions of a skill that is off ever reaching it.
+// instructions of a skill that is off ever reaching it. The prompt points the
+// model to it before it says that something is not possible (#916).
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -70,6 +71,14 @@ test('pill, popover and get_configuration report the same skills and tools', { t
   assert.deepEqual(answer.tools_off.find((tool) => tool.name === 'fetch_url'),
     { name: 'fetch_url', reason: 'switched off by the user', settings: 'Settings › Tools & security' });
   assert.ok(answer.tools_on.includes('read_file_text'));
+  // web_search has no key here, so it is not in the model's list — and the
+  // prompt tells the model to look before it says it cannot search (#916).
+  assert.ok(answer.tools_off.some((tool) => tool.name === 'web_search' && tool.settings), JSON.stringify(answer.tools_off));
+  const asked = model.requests.find((r) => !r.isTitleRequest
+    && r.body.messages?.some((m) => m.role === 'user' && String(m.content).includes('What is switched on')));
+  assert.equal(asked.body.tools.some((tool) => tool.function.name === 'web_search'), false);
+  const system = asked.body.messages.filter((m) => m.role === 'system').map((m) => m.content).join('\n');
+  assert.match(system, /Before you tell the user that something is not possible, call "get_configuration"/);
   // The instructions of a skill that is off reach the model nowhere — not in
   // this result, not in any prompt (#18).
   assert.equal(JSON.stringify(model.requests.map((r) => r.body)).includes(BODY_MARKER), false);
