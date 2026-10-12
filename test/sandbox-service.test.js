@@ -601,6 +601,18 @@ test('a run that reports a refused permission waits longer for its line (#792)',
   assert.equal(blocked?.entries[0].target, '/home/u/.ssh/config', 'past six settle times, within twenty');
 });
 
+test('lines that are no refusal do not end the wait for one (#906)', posixOnly, async () => {
+  // Every run's system queries reach the log as well, and come first. Before
+  // #906 the wait ended once any line had come and gone quiet, so under load
+  // the refusal that followed missed the run and no card was shown.
+  const { store, prepared } = await preparedWithStore('shell-9', { violationSettleMs: 20 });
+  store.add('shell-9', 'sh(1) deny(1) sysctl-read kern.iossupportversion');
+  store.add('shell-9', 'deny openat /home/u/project/inside.txt');
+  setTimeout(() => store.add('shell-9', 'zsh(1) deny(1) file-write-create /home/u/Library/Caches/x'), 250);
+  const blocked = await prepared.blocked({ failed: true, output: 'zsh:1: operation not permitted: /home/u/Library/Caches/x' });
+  assert.deepEqual(blocked?.entries.map((e) => e.target), ['/home/u/Library/Caches/x']);
+});
+
 test('a failed run without refusals gives up after six settle times (#792)', posixOnly, async () => {
   const { prepared } = await preparedWithStore('shell-9', { violationSettleMs: 20 });
   const started = Date.now();
