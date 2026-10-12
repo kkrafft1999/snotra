@@ -127,6 +127,9 @@ function registerChatHistoryHandlers({
         // nothing was chosen: a row without a level is one from before #726,
         // which takes the level of its old entry when it comes on screen.
         reasoningEffort: existing ? existing.reasoningEffort : DEFAULT_REASONING_LEVEL,
+        // What the chat switched for itself (#774) — accepted on a card in
+        // main, never sent by the renderer.
+        configOverrides: existing?.configOverrides,
         ...chatSessionSettings.valuesFor(sessionId),
       };
       const normalized = chatHistoryStore.normalizeSessionForStore(

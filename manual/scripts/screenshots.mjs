@@ -585,6 +585,35 @@ const MOTIFS = {
     },
   },
 
+  /** The model suggests switching on a tool for this chat (#774). */
+  'config-proposal': {
+    prefs: { chatPanelWidth: WIDE_CHAT, disabledTools: ['fetch_url'] },
+    text: {
+      en: {
+        title: 'Frost dates for the beds',
+        question: 'Read the frost calendar at example.org/frost and tell me when to plant out the tomatoes.',
+        reason: 'To read the frost calendar you linked.',
+      },
+      de: {
+        title: 'Frosttermine für die Beete',
+        question: 'Lies den Frostkalender auf example.org/frost und sag mir, wann die Tomaten raus dürfen.',
+        reason: 'Um den Frostkalender zu lesen, den du verlinkt hast.',
+      },
+    },
+    async setUp({ page, model, text }) {
+      model.queueAnswer({
+        match: text.question,
+        toolCalls: [{
+          name: 'propose_config_change',
+          arguments: { kind: 'tool', name: 'fetch_url', enable: true, reason: text.reason },
+        }],
+      });
+      await send(page, text.question);
+      await waitForCard(page);
+      return clipAround(page, PENDING_CARD, 16);
+    },
+  },
+
   /** An approval card for a shell command, run in the sandbox. */
   'shell-approval': {
     prefs: { shellExecutionEnabled: true, chatPanelWidth: WIDE_CHAT },

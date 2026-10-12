@@ -238,3 +238,35 @@ test('a failed read says so in the popover rather than showing an empty list', a
   await open();
   assert.match(byId('chat-config-popup').textContent, /could not be read/);
 });
+
+// What a card switched for this chat (#774) has rows of its own on top: a tool
+// on here and off in the settings is not read as a setting, and has no button
+// that would lead to a setting saying the opposite.
+test('a tool or skill switched on a card is marked as this chat\'s', async (t) => {
+  const base = config();
+  const { dom, document, open } = await setup({
+    answers: [config({
+      skills: [{ ...base.skills[0], state: 'on', chatOnly: true, chatCard: true }, ...base.skills.slice(1)],
+      tools: [
+        ...base.tools,
+        { name: 'fetch_url', mcpServer: null, group: 'web', on: true, reason: null, setup: null, chatOnly: true },
+        { name: 'search_in_files', mcpServer: null, group: 'read', on: false, reason: 'switchedOff', setup: null, chatOnly: true },
+      ],
+    })],
+  });
+  t.after(dom.cleanup);
+  await open();
+  const rows = [...document.querySelectorAll('#chat-config-popup .chat-config-row--tool')];
+  const row = (name) => rows.find((item) => item.querySelector('.chat-config-name')?.textContent === name);
+  assert.equal(rows.indexOf(row('fetch_url')), 0, 'changed rows come first');
+  assert.equal(row('fetch_url').querySelector('.chat-config-tag').textContent, 'this chat only');
+  assert.equal(row('fetch_url').querySelector('.chat-config-sub').textContent, 'on in this chat; off in the settings');
+  assert.equal(row('fetch_url').classList.contains('chat-config-row--off'), false);
+  assert.equal(row('search_in_files').querySelector('.chat-config-sub').textContent, 'off in this chat; on in the settings');
+  assert.equal(row('search_in_files').querySelector('.chat-config-action'), null);
+  // Not listed a second time among the tools that are off.
+  assert.equal(rows.filter((item) => item.textContent.includes('search_in_files')).length, 1);
+  const skill = [...document.querySelectorAll('#chat-config-popup .chat-config-row--skill')]
+    .find((item) => item.textContent.includes('pdf-export'));
+  assert.equal(skill.querySelector('.chat-config-tag').title, 'Switched on for this chat on a card; the setting stays as it is.');
+});

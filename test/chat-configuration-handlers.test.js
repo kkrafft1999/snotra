@@ -11,13 +11,14 @@ const { registerChatConfigurationHandlers } = require('../src/main/ipc/chat-conf
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 
-function setup() {
+function setup({ getChatOverrides } = {}) {
   const ipcMain = createMockIpcMain();
   const asked = [];
   registerChatConfigurationHandlers({
     ipcMain,
     REQ,
     getActiveWorkspaceRoot: () => '/project',
+    ...(getChatOverrides ? { getChatOverrides } : {}),
     chatConfiguration: { describe: async (input) => { asked.push(input); return { skills: [], tools: [] }; } },
   });
   return { ipcMain, asked };
@@ -26,7 +27,20 @@ function setup() {
 test('the active folder and the invoked skills go to the service', async () => {
   const { ipcMain, asked } = setup();
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_GET_CONFIGURATION, { invokedSkills: ['release'] }), { skills: [], tools: [] });
-  assert.deepEqual(asked, [{ workspaceRoot: '/project', chatSkillNames: ['release'] }]);
+  assert.deepEqual(asked, [{ workspaceRoot: '/project', chatSkillNames: ['release'], overrides: null }]);
+});
+
+// What the chat on screen switched on a card (#774) is main's to know; a
+// renderer that sends overrides of its own is not listened to.
+test('the chat\'s own overrides come from main, never from the request', async () => {
+  const overrides = { tools: { on: ['fetch_url'] } };
+  const { ipcMain, asked } = setup({ getChatOverrides: async () => overrides });
+  await ipcMain.invoke(REQ.CHAT_GET_CONFIGURATION, { invokedSkills: [], overrides: { tools: { on: ['shell_execute'] } } });
+  assert.deepEqual(asked[0].overrides, overrides);
+
+  const broken = setup({ getChatOverrides: async () => { throw new Error('history unreadable'); } });
+  await broken.ipcMain.invoke(REQ.CHAT_GET_CONFIGURATION, {});
+  assert.equal(broken.asked[0].overrides, null);
 });
 
 test('a request without a list, or with something else, invokes nothing', async () => {

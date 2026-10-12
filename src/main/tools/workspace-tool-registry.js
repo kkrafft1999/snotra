@@ -6,6 +6,9 @@ const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const {
   GET_CONFIGURATION_TOOL,
+  PROPOSE_CONFIG_CHANGE_TOOL,
+  CONFIG_PROPOSAL_KINDS,
+  MAX_PROPOSAL_REASON_CHARS,
   TOOL_OFFER_REASONS,
   TOOL_SETUPS,
 } = require('../../shared/contracts/chat-configuration');
@@ -1687,19 +1690,65 @@ function createWorkspaceToolRegistry({
         + 'relying on it. It cannot switch anything; only the user can.',
       shortDescriptionKey: 'tools.short.get_configuration',
       parameters: { type: 'object', properties: {} },
-      handler: async (_args, { workspaceRoot, skillRoots } = {}) => {
+      handler: async (_args, { workspaceRoot, skillRoots, configOverrides = null, disabledNames = [] } = {}) => {
         if (!configuration) {
           return JSON.stringify({ error: 'The configuration cannot be read in this installation.' });
         }
         try {
           // Skills on in this run — the settings' plus those invoked with
-          // "/name" — so a chat-only skill is reported as on (#124).
+          // "/name" — so a chat-only skill is reported as on (#124); what
+          // this chat switched on a card comes with it (#774).
           const chatSkillNames = Array.isArray(skillRoots) ? skillRoots.map((entry) => entry?.name) : [];
-          return JSON.stringify(await configuration.describeForModel({ workspaceRoot, chatSkillNames }));
+          return JSON.stringify(await configuration.describeForModel({
+            workspaceRoot,
+            chatSkillNames,
+            overrides: configOverrides,
+            // Whether the answer may point to a proposal: not when its tool is off.
+            canPropose: !(Array.isArray(disabledNames) && disabledNames.includes(PROPOSE_CONFIG_CHANGE_TOOL)),
+          }));
         } catch (error) {
           return JSON.stringify({ error: error?.message || 'The configuration could not be read.' });
         }
       },
+    },
+    {
+      name: PROPOSE_CONFIG_CHANGE_TOOL,
+      // The call itself changes nothing: it puts a card in front of the user,
+      // and only the click switches — for this chat (#774). The card is the
+      // approval, so the class is `read` and no second card asks first.
+      riskClass: TOOL_RISK_CLASSES.READ,
+      requiresWorkspace: false,
+      targets: () => [],
+      isAvailable: () => configuration !== null,
+      descriptionKey: 'tools.desc.propose_config_change',
+      modelDescription:
+        'Asks the user to switch a skill or tool on or off for this chat only. The user sees a card '
+        + 'with what the skill or tool does and decides; you never switch anything yourself. Use it '
+        + 'when a skill or tool that is off (see get_configuration) would clearly help with what the '
+        + 'user asked, or when one that is on stands in the way of it. Give the name exactly as '
+        + 'get_configuration lists it, and one sentence of reason addressed to the user. Accepted, '
+        + 'the change applies from your next step on; declined, carry on without it and do not '
+        + 'propose the same change again in this chat. A tool that still needs setting up (a key, a '
+        + 'program) cannot be switched on this way — point the user to its settings page instead.',
+      shortDescriptionKey: 'tools.short.propose_config_change',
+      parameters: {
+        type: 'object',
+        properties: {
+          kind: { type: 'string', enum: Object.values(CONFIG_PROPOSAL_KINDS), description: 'skill or tool' },
+          name: { type: 'string', description: 'The skill or tool, as get_configuration names it.' },
+          enable: { type: 'boolean', description: 'true to switch it on, false to switch it off' },
+          reason: {
+            type: 'string',
+            maxLength: MAX_PROPOSAL_REASON_CHARS,
+            description: 'One sentence for the user: why this chat needs the change.',
+          },
+        },
+        required: ['kind', 'name', 'enable', 'reason'],
+      },
+      // The chat engine answers the call: it needs the chat, the card and the
+      // run's tool list, none of which a handler has. Reached only where no
+      // engine stands in between.
+      handler: async () => JSON.stringify({ error: 'A change can only be proposed in a chat.' }),
     },
   ]);
 }

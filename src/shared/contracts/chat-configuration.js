@@ -13,6 +13,21 @@ const { TOOL_CATEGORIES, toolCategory } = require('./tool-categories');
 const GET_CONFIGURATION_TOOL = 'get_configuration';
 
 /**
+ * The model's way to ask for a change (#774): a card the user confirms, for
+ * the one chat. The model never switches anything itself.
+ */
+const PROPOSE_CONFIG_CHANGE_TOOL = 'propose_config_change';
+
+/** What a proposal can switch. */
+const CONFIG_PROPOSAL_KINDS = Object.freeze({ SKILL: 'skill', TOOL: 'tool' });
+
+/** The model's reason travels to the card as its own text, cut to this. */
+const MAX_PROPOSAL_REASON_CHARS = 300;
+
+/** A chat holds at most this many names per list — a bound, not a budget. */
+const MAX_CHAT_OVERRIDE_NAMES = 64;
+
+/**
  * Descriptions are cut to this length, like in the skill suggestion: a folder
  * skill's description is third-party text and goes to the model as data.
  */
@@ -103,6 +118,7 @@ const GROUP_BY_TOOL = Object.freeze({
   web_search: CONFIG_TOOL_GROUPS.WEB,
   fetch_url: CONFIG_TOOL_GROUPS.WEB,
   [GET_CONFIGURATION_TOOL]: CONFIG_TOOL_GROUPS.READ,
+  [PROPOSE_CONFIG_CHANGE_TOOL]: CONFIG_TOOL_GROUPS.READ,
 });
 
 /** The group a tool is summed up in; an MCP tool goes by its server. */
@@ -127,8 +143,86 @@ function clipConfigDescription(text, max = MAX_CONFIG_DESCRIPTION_CHARS) {
   return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
+function cleanOverrideNames(raw) {
+  if (!Array.isArray(raw)) return [];
+  const names = raw
+    .filter((name) => typeof name === 'string' && name.trim() && name.length <= 128)
+    .map((name) => name.trim());
+  return [...new Set(names)].slice(0, MAX_CHAT_OVERRIDE_NAMES);
+}
+
+/**
+ * What one chat switched beyond the settings (#774): skills and tools on or
+ * off for this chat only, and the proposals the user declined in it. Empty
+ * lists are left out, and an empty result is `null` — a chat without
+ * changes carries nothing.
+ *
+ * @returns {{ tools?: {on?: string[], off?: string[]}, skills?: {on?: string[], off?: string[]}, declined?: string[] } | null}
+ */
+function normalizeChatConfigOverrides(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const out = {};
+  for (const kind of ['tools', 'skills']) {
+    const on = cleanOverrideNames(raw[kind]?.on);
+    const off = cleanOverrideNames(raw[kind]?.off).filter((name) => !on.includes(name));
+    if (on.length || off.length) {
+      out[kind] = {};
+      if (on.length) out[kind].on = on;
+      if (off.length) out[kind].off = off;
+    }
+  }
+  const declined = cleanOverrideNames(raw.declined);
+  if (declined.length) out.declined = declined;
+  return Object.keys(out).length ? out : null;
+}
+
+/** The key a declined proposal is remembered by: same kind, name and direction. */
+function proposalKey({ kind, name, enable }) {
+  return `${kind}:${enable ? 'on' : 'off'}:${name}`;
+}
+
+/**
+ * The tools switched off in a chat: the settings' list, without what the chat
+ * switched on and with what it switched off.
+ */
+function effectiveDisabledTools(disabledTools, overrides) {
+  const base = Array.isArray(disabledTools) ? disabledTools : [];
+  const on = new Set(overrides?.tools?.on || []);
+  const off = overrides?.tools?.off || [];
+  return [...new Set([...base.filter((name) => !on.has(name)), ...off])];
+}
+
+/**
+ * The overrides after one accepted proposal. Switching back to what the
+ * settings say drops the entry instead of recording it twice.
+ */
+function applyConfigProposal(overrides, { kind, name, enable }) {
+  const key = kind === CONFIG_PROPOSAL_KINDS.SKILL ? 'skills' : 'tools';
+  const current = normalizeChatConfigOverrides(overrides) || {};
+  const lists = { on: [...(current[key]?.on || [])], off: [...(current[key]?.off || [])] };
+  const [add, drop] = enable ? ['on', 'off'] : ['off', 'on'];
+  if (lists[drop].includes(name)) lists[drop] = lists[drop].filter((entry) => entry !== name);
+  else if (!lists[add].includes(name)) lists[add].push(name);
+  return normalizeChatConfigOverrides({ ...current, [key]: lists });
+}
+
+/** The overrides with one more declined proposal. */
+function declineConfigProposal(overrides, proposal) {
+  const current = normalizeChatConfigOverrides(overrides) || {};
+  return normalizeChatConfigOverrides({ ...current, declined: [...(current.declined || []), proposalKey(proposal)] });
+}
+
 module.exports = {
   GET_CONFIGURATION_TOOL,
+  PROPOSE_CONFIG_CHANGE_TOOL,
+  CONFIG_PROPOSAL_KINDS,
+  MAX_PROPOSAL_REASON_CHARS,
+  MAX_CHAT_OVERRIDE_NAMES,
+  normalizeChatConfigOverrides,
+  proposalKey,
+  effectiveDisabledTools,
+  applyConfigProposal,
+  declineConfigProposal,
   MAX_CONFIG_DESCRIPTION_CHARS,
   CONFIG_SKILL_STATES,
   TOOL_OFFER_REASONS,

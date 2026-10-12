@@ -42,6 +42,8 @@ function createChatApplication({
   resolveReasoningLevel = async () => null,
   // Called when a run ends, so that main can drop what only lived for it.
   onRunSettled = () => {},
+  // What a chat switched for itself, and the model's proposals (#774).
+  configProposals = null,
 }) {
   const llm = createProviderLlmAdapter({
     providerRuntime,
@@ -92,6 +94,7 @@ function createChatApplication({
     sessionGrants,
     maxToolRounds,
     onRunSettled,
+    configProposals,
   });
 
   return {

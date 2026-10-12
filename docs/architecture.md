@@ -1014,6 +1014,7 @@ data lives next to its topic and is tested there:
 | The model's skill suggestion (`SKILLS_SUGGEST`) | `ipc/skill-suggestion-handlers.js` |
 | What Settings › Tools & security and the mode pill read | `services/security-page-data.js` |
 | Which skills and tools a chat has — the composer pill (`CHAT_GET_CONFIGURATION`) and the model's `get_configuration` (#773) | `services/chat-configuration-service.js`, `ipc/chat-configuration-handlers.js`; why a tool is not offered: `whyNotOffered` in `tools/workspace-tool-registry.js` |
+| The model's proposal to switch a skill or tool for one chat (`propose_config_change`, #774): checked in main, asked on a card (approval checkpoint `config`), kept in the chat's row | engine: `proposeConfigChange` / `refreshCapabilities` in `application/chat/chat-engine.js`, port `application/ports/config-proposal-port.js`; check: `prepareProposal` in `services/chat-configuration-service.js`; storage: `configOverridesFor` in `services/chat-session-settings.js`; arithmetic: `contracts/chat-configuration.js`; card: `renderer/utils/config-proposal-view.js` |
 | The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |
 
 What stays in the module are the small state holders the wiring needs — the
