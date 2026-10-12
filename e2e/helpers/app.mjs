@@ -17,8 +17,8 @@
 
 import { execFile } from 'node:child_process';
 import { rmSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
-import { homedir, tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
@@ -68,43 +68,6 @@ async function testHomeFor(userDataDir) {
   const key = path.resolve(userDataDir);
   if (!testHomes.has(key)) testHomes.set(key, await makeTempDir('snotra-home-'));
   return testHomes.get(key);
-}
-
-/**
- * macOS looks for the login keychain below $HOME. In an empty home the app
- * would run without safeStorage, and that is a mode of its own (#419, #658),
- * not the one the tests are about. So the test home reaches the real keychain
- * folder, and only that: memory, instructions and skills stay its own.
- */
-async function reachKeychain(home) {
-  if (process.platform !== 'darwin') return;
-  const link = path.join(home, 'Library', 'Keychains');
-  await mkdir(path.dirname(link), { recursive: true });
-  await symlink(path.join(homedir(), 'Library', 'Keychains'), link).catch((error) => {
-    if (error?.code !== 'EEXIST') throw error;
-  });
-}
-
-/** Where safeStorage keeps its key: Chromium names the item "<app name> Safe Storage". */
-// The key belongs to the platform and kept its name through the rename (#795).
-export const KEYCHAIN_SERVICE = 'Snotra AI Safe Storage';
-
-/**
- * How many keychain items hold the app's safeStorage key — on a CI runner
- * only, where the keychain belongs to the run; a developer's keychain is not
- * listed (#689). The item is created by the first start that finds none, so
- * more than one means two starts created it at once, and a later start may
- * read the other key than the one its data was written with.
- */
-export async function keychainItemCount() {
-  if (process.platform !== 'darwin' || !process.env.CI) return null;
-  const listing = await new Promise((resolve) => {
-    execFile('security', ['dump-keychain'], { maxBuffer: 64 * 1024 * 1024, timeout: 15000 },
-      (error, stdout) => resolve(error ? null : stdout));
-  });
-  if (listing === null) return null;
-  const marker = `"svce"<blob>="${KEYCHAIN_SERVICE}"`;
-  return listing.split('\n').filter((line) => line.includes(marker)).length;
 }
 
 /**
@@ -317,7 +280,6 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
   const isolateHome = home !== false;
   const homeDir = isolateHome ? (home ?? await testHomeFor(userDataDir)) : null;
   if (homeDir) {
-    await reachKeychain(homeDir);
     env.SNOTRA_HOME_DIR = homeDir;
     if (process.platform !== 'win32') env.HOME = homeDir;
   }
@@ -343,6 +305,11 @@ export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {
       // text only reaches the DOM in a frame. Going to software from the start
       // skips the attempt. macOS and Windows keep their GPU path.
       ...(process.platform === 'linux' ? ['--disable-gpu'] : []),
+      // safeStorage takes a fixed test key instead of the login keychain's, so
+      // no run asks macOS for access and none reaches the installed app's key
+      // (#885). Not left to Playwright, which sets the switch from inside the
+      // app, after safeStorage has read the command line. Ignored elsewhere.
+      '--use-mock-keychain',
       ...extraArgs,
     ],
     env,

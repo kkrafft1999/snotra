@@ -1901,16 +1901,27 @@ divide the work, and what runs when, is in [`test-concept.md`](./test-concept.md
   reads global memory, instructions and skills below it. `launchApp` therefore
   sets `HOME` to a temp folder of its own, one per profile so that a restart
   finds the same one. Not on Windows yet: there the home folder comes from
-  `USERPROFILE`, and with that moved Electron did not start at all. On macOS only
-  `Library/Keychains` links to the real folder, since without the login keychain
-  the app would run without safeStorage. On a fresh runner that keychain has no
-  "Snotra Agent Safe Storage" item yet, and test files starting side by side each
-  created one — a restart then read another key than its first start had
-  written with. `pretest:e2e` therefore starts the app once beforehand
-  (`e2e/helpers/warm-keychain.mjs`) so that the item exists before any test
-  runs ([#689](https://github.com/kkrafft1999/snotra/issues/689)). A caller can hand over a prepared home
-  (`home`), and a script that runs a real program with its real login keeps the
-  real one (`home: false`)
+  `USERPROFILE`, and with that moved Electron did not start at all.
+- **Keychain:** no launch touches the login keychain. `launchApp` puts
+  `--use-mock-keychain` on the real command line, so safeStorage encrypts with
+  a fixed test key instead of the "Snotra AI Safe Storage" item. That keeps two
+  things out of the test runs: the macOS dialog that came after every Electron
+  update (a new binary asks again; an unattended run waited hours for it), and
+  the access of a binary that any dependency update can replace to the key that
+  encrypts the installed app's data. Playwright's Electron loader sets the same
+  switch, but from inside the app via `app.commandLine.appendSwitch`, too late
+  for safeStorage — only the command line counts. There is no item left to
+  create, so the race of test files creating it side by side
+  ([#689](https://github.com/kkrafft1999/snotra/issues/689)) and the warm-up
+  script of that fix are gone, and the test home no longer links
+  `Library/Keychains`. The path without encryption stays covered where it was:
+  `isEncryptionAvailable` replaced in the app, or injected in the unit tests.
+  `e2e/safe-storage.test.mjs` guards it: safeStorage is available in an empty
+  home, what it encrypts decrypts with the mock key in plain Node (so it is not
+  the keychain's key), and a restart of the same profile decrypts it again.
+- **Prepared home:** a caller can hand over a prepared home (`home`), and a
+  script that runs a real program with its real login keeps the real one
+  (`home: false`)
   ([#702](https://github.com/kkrafft1999/snotra/issues/702),
   `e2e/home-isolation.test.mjs`).
 - **Model:** `e2e/helpers/fake-model.mjs`, a small OpenAI-compatible SSE server.

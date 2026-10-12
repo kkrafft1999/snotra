@@ -8,7 +8,7 @@
     "postinstall": "node scripts/sync-renderer-vendor.js && node scripts/patch-sandbox-runtime.js",
     "pretest": "node scripts/sync-renderer-vendor.js",
     "test": "node --no-use-system-ca --test \"test/**/*.test.js\"",
-    "pretest:e2e": "node scripts/sync-renderer-vendor.js && node e2e/helpers/warm-keychain.mjs",
+    "pretest:e2e": "node scripts/sync-renderer-vendor.js",
     "test:e2e": "node --no-use-system-ca --test e2e/*.test.mjs",
     "precoverage": "node scripts/sync-renderer-vendor.js",
     "coverage": "node scripts/coverage.js",
