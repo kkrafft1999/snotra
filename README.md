@@ -80,6 +80,27 @@ Get the latest release from the
   warns on first launch. Unzip, start `Snotra Agent.exe`, then *SmartScreen › More
   info › Run anyway*.
 
+### Code signing policy
+
+Windows builds are to be signed through the SignPath Foundation; until the
+project is admitted, they are unsigned
+([#19](https://github.com/kkrafft1999/snotra/issues/19)).
+
+Free code signing provided by [SignPath.io](https://about.signpath.io),
+certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [Konrad Krafft](https://github.com/kkrafft1999)
+- Approvers: [Konrad Krafft](https://github.com/kkrafft1999)
+
+Only binaries built by the release workflow of this repository from a release
+tag are signed, and each signing request is approved by hand.
+
+**Privacy.** Snotra sends data only where you point it: to the model providers
+you set up, to the MCP servers you add, and to web pages when a model uses the
+web search or fetch tools you allowed. At every start it asks GitHub whether a
+newer release exists, and it downloads one only after you click. There is no
+telemetry and no server of ours.
+
 ## Why Snotra?
 
 Open source, any model, MCP and Skills are what every agent desktop offers by
