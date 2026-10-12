@@ -13,6 +13,8 @@ const { pipeline } = require('stream/promises');
 const { Readable } = require('stream');
 const { createMessage } = require('../../shared/contracts/message');
 const { assetDigest } = require('./update-targets');
+// The work dir may hold an unpacked package, `app.asar` included (#914).
+const { removeTree } = require('./raw-fs');
 
 /** Nur von dort holen wir Dateien — GitHub-Releases und deren Ablage. */
 const ALLOWED_HOSTS = Object.freeze([
@@ -59,7 +61,7 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
   let ready = null;
 
   async function removeWorkDir() {
-    await fsp.rm(workDir, { recursive: true, force: true }).catch(() => {});
+    await removeTree(workDir).catch(() => {});
   }
 
   /**

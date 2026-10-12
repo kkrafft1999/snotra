@@ -21,12 +21,9 @@
 
 const fs = require('fs');
 const fsp = require('fs/promises');
-// Inside Electron, `fs` treats an `.asar` file as a folder and will not hand
-// out its raw bytes; `original-fs` is the unpatched module. Outside Electron
-// (the tests) there is no such module and plain `fs` does the same job.
-const rawFs = (() => {
-  try { return require('original-fs'); } catch { return fs; }
-})();
+// A package carries `resources/app.asar`, which Electron's `fs` takes for a
+// folder: reading it and removing a package go through the unpatched module.
+const { rawFs, removeTree } = require('./raw-fs');
 const path = require('path');
 const { execFile, spawn } = require('child_process');
 
@@ -382,6 +379,19 @@ function helperOutputFile(logFile) {
   return `${logFile.slice(0, logFile.length - ext.length)}-output${ext}`;
 }
 
+// A staging folder an earlier attempt left next to the app: a failed install
+// up to 1.20.1 removed everything in it but `resources/app.asar`, and every
+// retry added another one (#914). No helper can still be waiting on one when
+// the next install starts — a started helper ends this app.
+const STALE_STAGING = /^\.snotra-new-\d+(\.app)?$/;
+
+async function removeStaleStaging(parentDir) {
+  const names = await fsp.readdir(parentDir).catch(() => []);
+  await Promise.all(names
+    .filter((name) => STALE_STAGING.test(name))
+    .map((name) => removeTree(path.join(parentDir, name)).catch(() => {})));
+}
+
 /**
  * Entries of the app folder that the new package does not bring along — the
  * ZIP the app came in, or files of the user's when the app was extracted into
@@ -510,6 +520,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     const appBundlePath = target.appBundlePath;
     const parentDir = path.dirname(appBundlePath);
     await assertWritable(parentDir, 'update.place.appFolder');
+    await removeStaleStaging(parentDir);
 
     const stamp = Date.now();
     let targetPath = appBundlePath;
@@ -537,7 +548,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     try {
       await verifyMacBundle(stagedPath, version);
     } catch (err) {
-      await fsp.rm(stagedPath, { recursive: true, force: true }).catch(() => {});
+      await removeTree(stagedPath).catch(() => {});
       throw err;
     }
     // Die Datei kam nicht ueber den Browser, traegt also keine Quarantaene.
@@ -550,7 +561,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
       await fsp.rename(stagedPath, targetPath);
     } catch (err) {
       await fsp.rename(backupPath, appBundlePath).catch(() => {});
-      await fsp.rm(stagedPath, { recursive: true, force: true }).catch(() => {});
+      await removeTree(stagedPath).catch(() => {});
       throw err;
     }
 
@@ -566,6 +577,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     const installDir = target.installDir;
     const parentDir = path.win32.dirname(installDir);
     await assertWritable(parentDir, 'update.place.installFolder');
+    await removeStaleStaging(parentDir);
 
     const stamp = Date.now();
     const stagedDir = path.join(parentDir, `.snotra-new-${stamp}`);
@@ -588,14 +600,14 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
       if (exeName) {
         rootDir = path.join(stagedDir, single);
       } else {
-        await fsp.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
+        await removeTree(stagedDir).catch(() => {});
         throw installError('update.error.archiveMissing', { file: WINDOWS_EXE_NAME });
       }
     }
     try {
       verifyPackageFolder(rootDir, version);
     } catch (err) {
-      await fsp.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
+      await removeTree(stagedDir).catch(() => {});
       throw err;
     }
 
@@ -637,7 +649,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
       launched = { ok: false, error: err?.message || String(err) };
     }
     if (!launched.ok) {
-      await fsp.rm(stagedDir, { recursive: true, force: true }).catch(() => {});
+      await removeTree(stagedDir).catch(() => {});
       throw installError('update.error.helperFailed', { error: launched.error });
     }
     return { ok: true, relaunching: true, logFile: helperLog };
@@ -663,6 +675,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     const installDir = target.installDir;
     const parentDir = path.posix.dirname(installDir);
     await assertWritable(parentDir, 'update.place.installFolder');
+    await removeStaleStaging(parentDir);
 
     const stamp = Date.now();
     const extractDir = path.join(workDir, `extract-${stamp}`);
@@ -674,13 +687,13 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     const extracted = rootName ? path.join(extractDir, rootName) : extractDir;
     const binaryName = findExecutable(extracted, LINUX_BINARY_NAMES);
     if (!binaryName) {
-      await fsp.rm(extractDir, { recursive: true, force: true }).catch(() => {});
+      await removeTree(extractDir).catch(() => {});
       throw installError('update.error.archiveMissing', { file: LINUX_BINARY_NAME });
     }
     try {
       verifyPackageFolder(extracted, version);
     } catch (err) {
-      await fsp.rm(extractDir, { recursive: true, force: true }).catch(() => {});
+      await removeTree(extractDir).catch(() => {});
       throw err;
     }
 
