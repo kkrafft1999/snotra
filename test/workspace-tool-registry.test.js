@@ -875,3 +875,22 @@ test('get_configuration turns a failure into an error the model can read', async
   const result = JSON.parse(await registry.execute('get_configuration', {}, APPROVED));
   assert.deepEqual(result, { error: 'prefs unreadable' });
 });
+
+// A tool that is off is missing from the list, so the model takes its absence
+// for a limit of its own; the prompt points it to get_configuration (#916).
+test('the tool prompt points to get_configuration only while it is offered', () => {
+  const configuration = { describeForModel: async () => ({}) };
+  const pointer = /Before you tell the user that something is not possible, call "get_configuration"/;
+
+  const registry = createWorkspaceToolRegistry({ fsService: makeFsServiceStub(), configuration });
+  assert.match(registry.buildSystemPrompt(), pointer);
+  assert.match(registry.buildSystemPrompt({ workspaceOpen: false, skillNames: [] }), pointer, 'without a folder');
+  assert.doesNotMatch(registry.buildSystemPrompt({ disabledNames: ['get_configuration'] }), pointer);
+
+  const withoutService = createWorkspaceToolRegistry({ fsService: makeFsServiceStub() });
+  assert.doesNotMatch(withoutService.buildSystemPrompt(), pointer);
+
+  const description = registry.getTools({}).find((tool) => tool.function.name === 'get_configuration').function.description;
+  assert.match(description, /before you tell the user that something is not possible/);
+  assert.match(description, /earlier result may be outdated/);
+});

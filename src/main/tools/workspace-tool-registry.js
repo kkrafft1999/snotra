@@ -457,6 +457,17 @@ function createToolRegistry(initialDefinitions = []) {
       parts.push('Where a tool has the include_hidden parameter, true adds the hidden entries.');
     }
 
+    // A tool that is off is not in the list at all, so the model reads its
+    // absence as a limit of language models ("I can't browse the web") and
+    // never thinks of get_configuration (#916). One sentence per request, not
+    // the full listing #773 rejected for its cost.
+    if (available.some((definition) => definition.name === GET_CONFIGURATION_TOOL)) {
+      parts.push(
+        'Tools and skills can be switched off or still need setting up, and then they are not ' +
+          `in your list. Before you tell the user that something is not possible, call "${GET_CONFIGURATION_TOOL}".`
+      );
+    }
+
     // Hier stand bis #268 ein Vorbehalt gegen Schreib-Tools („nutze sie
     // zurueckhaltend"). Er hat das Gegenteil bewirkt: Manche Modelle haben
     // daraufhin gar nicht mehr geschrieben, auch auf ausdrueckliche Bitte
@@ -1668,9 +1679,12 @@ function createWorkspaceToolRegistry({
       modelDescription:
         'Reads which skills and tools this chat has: every skill with its state (on/off) and a '
         + 'short description, the tools that are on, and the tools that are off with the reason '
-        + 'and the settings page that changes it. Call it when something fails, when a capability '
-        + 'seems to be missing, or when the user asks what is switched on — before you guess. '
-        + 'It cannot switch anything; only the user can.',
+        + 'and the settings page that changes it. Call it before you tell the user that something '
+        + 'is not possible or not available, when something fails, or when the user asks what is '
+        + 'switched on — a tool that is off is missing from your list, so its absence does not mean '
+        + 'Snotra cannot do it. The tool list of the current request is authoritative: an earlier '
+        + 'result may be outdated once the user changed a setting, so call it again rather than '
+        + 'relying on it. It cannot switch anything; only the user can.',
       shortDescriptionKey: 'tools.short.get_configuration',
       parameters: { type: 'object', properties: {} },
       handler: async (_args, { workspaceRoot, skillRoots } = {}) => {

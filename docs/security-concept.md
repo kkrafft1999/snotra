@@ -1098,6 +1098,14 @@ the chat has — and nothing more:
   same service, and whether a tool is offered is decided in one place of the
   registry for both, so the model is never told a tool is on that it does not
   have.
+- **A pointer, not a listing (#916).** A tool that is off is absent from the
+  model's list, so it took the gap for a limit of its own ("I can't browse the
+  web") and never looked. While `get_configuration` is offered, the tool block
+  of the system prompt carries one sentence telling the model to call it before
+  saying something is not possible — a handful of tokens instead of the full
+  state, which stays out of the prompt because it would cost tokens on every
+  request (#172/#173). The pointer
+  widens nothing: it leads to a read.
 
 ## 10. Comparison with the official references
 
