@@ -37,13 +37,45 @@ function lines(text) {
   return String(text).replace(/\r\n/g, '\n').trim().split('\n');
 }
 
+// The real-shell tests run against a real, minimal shell, not against the one
+// the developer happens to have: a login shell reads the user's profile, and a
+// heavy `.zshrc` made detection take 3 s on a machine and nothing on CI (#883).
+// Windows ignores $SHELL, so nothing changes there.
+const TEST_ENV = { ...process.env, SHELL: '/bin/sh' };
+
 let shared = null;
 async function ready() {
   if (!shared) {
-    shared = createShellRunnerService({ spawn: childProcess.spawn, os });
+    shared = createShellRunnerService({ spawn: childProcess.spawn, os, env: TEST_ENV });
     await shared.detect();
   }
   return shared.isAvailable() ? shared : null;
+}
+
+/** Polls for a state with a deadline instead of sleeping and hoping (#883). */
+async function until(check, what, { timeoutMs = 10_000, intervalMs = 20 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const value = await check();
+    if (value) return value;
+    if (Date.now() > deadline) assert.fail(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+async function readPid(file) {
+  const text = await fs.readFile(file, 'utf8').catch(() => '');
+  const pid = Number.parseInt(text, 10);
+  return Number.isInteger(pid) && pid > 0 ? pid : 0;
+}
+
+function isAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e.code === 'EPERM';
+  }
 }
 
 /**
@@ -432,11 +464,18 @@ test('run beendet einen hängenden Befehl nach dem Zeitlimit', async (t) => {
   const service = await ready();
   if (!service) return t.skip('Keine Shell auf diesem Rechner.');
 
-  const started = Date.now();
-  const result = await service.run({ command: commandFor(service, 'sleep'), timeoutMs: 1000 });
+  // The shortest limit there is (clampTimeout floors it at MIN_TIMEOUT_MS).
+  const result = await service.run({
+    command: commandFor(service, 'sleep'),
+    timeoutMs: SHELL_EXECUTION_LIMITS.MIN_TIMEOUT_MS,
+  });
 
   assert.equal(result.timedOut, true);
-  assert.ok(Date.now() - started < 15_000, 'darf nicht bis zum Standard-Zeitlimit laufen');
+  // The mechanism, not the clock: a command that was ended by the limit has
+  // no regular exit (null after a signal, 1 after taskkill), one that ran to
+  // its own end after 30 s would report 0. A wall-clock bound near those 30 s
+  // failed once on a stalled CI runner (#883).
+  assert.notEqual(result.exitCode, 0, 'the limit must end the command, not wait for it');
 });
 
 test('run bricht bei AbortSignal ab — „Stop" im Chat beendet auch den Befehl', async (t) => {
@@ -462,23 +501,23 @@ test('disposeSync ends a running command and its grandchild when the app quits (
   const posix = state.invocation === INVOCATIONS.LOGIN || state.invocation === INVOCATIONS.POSIX;
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-sh-dispose-'));
-  const marker = path.join(dir, 'enkel.txt');
+  const pidFile = path.join(dir, 'enkel.pid');
   try {
-    const started = Date.now();
     const pending = service.run({
-      // POSIX: a grandchild that writes late, as in the "Stop" test below.
-      command: posix ? `(sleep 2; echo da > "${marker}") & wait` : commandFor(service, 'sleep'),
+      // POSIX: a grandchild of its own that would outlive the shell. It
+      // reports its pid, so the test knows it runs and can ask if it is gone.
+      command: posix ? `sleep 300 & echo $! > "${pidFile}"; wait` : commandFor(service, 'sleep'),
       timeoutMs: 60_000,
     });
-    setTimeout(() => service.disposeSync(), 400);
+    const grandchild = posix ? await until(() => readPid(pidFile), 'the grandchild to start') : 0;
+    if (!posix) await new Promise((resolve) => setTimeout(resolve, 400));
+    service.disposeSync();
     const result = await pending;
 
     assert.equal(result.aborted, true);
     assert.equal(result.timedOut, false);
-    assert.ok(Date.now() - started < 10_000, 'must not run until its own timeout');
     if (posix) {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      await assert.rejects(fs.access(marker), 'the grandchild must not have kept running');
+      await until(() => !isAlive(grandchild), 'the grandchild to be gone');
     }
     // Nothing left to end: a second call is harmless.
     service.disposeSync();
@@ -509,21 +548,24 @@ test('„Stop" beendet den Prozessbaum, nicht nur die Shell', async (t) => {
   }
 
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-sh-tree-'));
-  const marker = path.join(dir, 'enkel.txt');
+  const pidFile = path.join(dir, 'enkel.pid');
   try {
     const controller = new AbortController();
-    setTimeout(() => controller.abort(), 400);
-    // Ein Enkelprozess, der erst spaeter schreibt: wird nur die Shell
-    // beendet, legt er die Datei trotzdem an.
-    const result = await service.run({
-      command: `(sleep 2; echo da > "${marker}") & wait`,
+    // A grandchild of its own that reports its pid: if only the shell were
+    // ended, it would stay. The test stops the run once it is there (instead
+    // of after a guessed delay) and then asks whether it is gone (instead of
+    // sleeping past the time it would have needed to leave a trace).
+    const pending = service.run({
+      command: `sleep 300 & echo $! > "${pidFile}"; wait`,
       timeoutMs: 30_000,
       abortSignal: controller.signal,
     });
+    const grandchild = await until(() => readPid(pidFile), 'the grandchild to start');
+    controller.abort();
+    const result = await pending;
     assert.equal(result.aborted, true);
 
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    await assert.rejects(fs.access(marker), 'der Enkelprozess darf nicht weitergelaufen sein');
+    await until(() => !isAlive(grandchild), 'the grandchild to be gone');
   } finally {
     await fs.rm(dir, { recursive: true, force: true });
   }
