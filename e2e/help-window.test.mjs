@@ -77,7 +77,19 @@ test('Help › User manual opens the bundled manual and navigates it', { timeout
   await poll(() => help.evaluate(() => {
     const list = document.getElementById('manual-results');
     return !list.hasAttribute('aria-busy') && list.querySelectorAll('[role="option"]').length > 1;
-  }), { what: 'search results for "sandbox"' });
+  }), {
+    what: 'search results for "sandbox"',
+    // What the list showed instead (#907): still busy, or drawn with too few results.
+    explain: () => help.evaluate(() => {
+      const list = document.getElementById('manual-results');
+      return JSON.stringify({
+        query: document.getElementById('manual-search').value,
+        busy: list.getAttribute('aria-busy'),
+        options: list.querySelectorAll('[role="option"]').length,
+        count: document.getElementById('manual-results-count')?.textContent ?? null,
+      });
+    }),
+  });
   assert.equal(await help.evaluate(() => document.getElementById('manual-nav').hidden), true,
     'the results take the place of the chapters');
   await help.keyboard.press('ArrowDown');

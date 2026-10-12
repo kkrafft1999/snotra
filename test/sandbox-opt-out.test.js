@@ -166,7 +166,10 @@ function countingSandbox() {
 
 test('shell runner: switched off, the command runs plainly and says so', posixOnly, async (t) => {
   const sandbox = countingSandbox();
-  const shell = createShellRunnerService({ spawn: childProcess.spawn, os, fs, path: nodePath, sandbox });
+  // A plain `sh` instead of the developer's login shell and its profile (#907).
+  const shell = createShellRunnerService({
+    spawn: childProcess.spawn, os, fs, path: nodePath, sandbox, env: { ...process.env, SHELL: '/bin/sh' },
+  });
   await shell.detect();
   if (!shell.isAvailable()) return t.skip('no shell');
   const result = await shell.run({

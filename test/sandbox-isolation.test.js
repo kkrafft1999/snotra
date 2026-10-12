@@ -45,7 +45,13 @@ async function ready(t) {
         userDataPath: userData,
         readShellPath: async () => (await shellRunner.detect()).path || '',
       });
-      shellRunner = createShellRunnerService({ spawn: childProcess.spawn, os, fs, path, sandbox });
+      // Detection starts the login shell interactively, which runs the
+      // developer's own profile: 3 s of this file on a machine with a heavy
+      // `.zshrc`, and something from the machine the test should not depend
+      // on. A plain `sh` is still a real shell under the real sandbox (#907).
+      shellRunner = createShellRunnerService({
+        spawn: childProcess.spawn, os, fs, path, sandbox, env: { ...process.env, SHELL: '/bin/sh' },
+      });
       await shellRunner.detect();
       const described = await sandbox.detect();
       return { base, workspace, outside, userData, sandbox, shellRunner, described };
@@ -91,6 +97,12 @@ function run(ctx, command, extra = {}) {
  */
 async function runThroughProxy(t, ctx, label, command, extra = {}) {
   const result = await run(ctx, command, extra);
+  // The proxy let the connection through, but the host did not answer it:
+  // the sandbox did its part, the internet did not (#907). Once more, too.
+  if (/CONNECT tunnel failed, response 50[234]/.test(result.stderr)) {
+    t.diagnostic(`${label}: the proxy could not reach the host; stderr: ${result.stderr}`);
+    return run(ctx, command, extra);
+  }
   const unreachable = result.stderr.match(/<sandbox_network>[^]*?localhost:(\d+)/);
   if (!unreachable) return result;
   assert.notEqual(result.exitCode, 0);
@@ -280,7 +292,7 @@ test('a background process ends with its run and never reaches a later run\'s do
   const ctx = await ready(t);
   if (!ctx) return;
   const log = path.join(ctx.workspace, 'background-reach.txt');
-  const loop = 'for i in 1 2 3 4 5 6; do sleep 1; '
+  const loop = 'for i in 1 2 3 4 5 6; do sleep 0.5; '
     + `curl -s -m 5 -o /dev/null -w "%{http_code} " https://example.com >> "${log}"; done`;
 
   // Run A names no domain and leaves the loop behind; run B is approved for
@@ -288,7 +300,7 @@ test('a background process ends with its run and never reaches a later run\'s do
   const first = await run(ctx, `(${loop}) >/dev/null 2>&1 & echo started`, { timeoutMs: 10_000 });
   assert.equal(first.stdout.trim(), 'started');
   assert.equal(first.timedOut, false);
-  await run(ctx, 'sleep 7', { networkDomains: ['example.com'], timeoutMs: 20_000 });
+  await run(ctx, 'sleep 4', { networkDomains: ['example.com'], timeoutMs: 20_000 });
 
   const reached = await fs.readFile(log, 'utf8').catch(() => '');
   assert.doesNotMatch(reached, /\b[23]\d\d\b/, `the loop of run A got through: ${reached}`);
@@ -307,14 +319,29 @@ test('time limit and "Stop" still end the whole process tree', async (t) => {
     }
   };
 
+  /** Polls until the tree is gone; a fixed pause only guessed how long that takes (#907). */
+  const gone = async () => {
+    const deadline = Date.now() + 10_000;
+    while (alive()) {
+      if (Date.now() > deadline) return false;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return true;
+  };
+
   const timed = await run(ctx, tree, { timeoutMs: 1_500 });
   assert.equal(timed.timedOut, true);
+  assert.equal(await gone(), true, 'no sleep of the tree survives the time limit');
 
+  // "Stop" once the tree is running — not after a fixed delay, which under
+  // load could fall before the sandbox had even started it.
   const controller = new AbortController();
-  setTimeout(() => controller.abort(), 1_500);
-  const stopped = await run(ctx, tree, { abortSignal: controller.signal, timeoutMs: 60_000 });
+  const pending = run(ctx, tree, { abortSignal: controller.signal, timeoutMs: 60_000 });
+  const deadline = Date.now() + 30_000;
+  while (!alive() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 50));
+  assert.equal(alive(), true, 'the tree started');
+  controller.abort();
+  const stopped = await pending;
   assert.equal(stopped.aborted, true);
-
-  await new Promise((r) => setTimeout(r, 500));
-  assert.equal(alive(), false, 'no sleep of the tree survives');
+  assert.equal(await gone(), true, 'no sleep of the tree survives "Stop"');
 });
