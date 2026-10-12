@@ -6,9 +6,11 @@
 // DoD-Punkt „Secret-Werte erscheinen in keiner Fehlermeldung".
 
 const test = require('node:test');
+const { after } = require('node:test');
 const assert = require('node:assert/strict');
 const { MASK_TEXT } = require('../src/shared/runtime/sensitive-content');
 const fs = require('fs/promises');
+const fsSync = require('fs');
 const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
@@ -18,6 +20,27 @@ const { createApplication } = require('../src/main/composition/create-applicatio
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { MCP_CONNECTION_STATES } = require('../src/shared/contracts/mcp');
+
+// The application reads the PATH of the user's login shell once (#111), and an
+// interactive shell runs the user's own profile to do it. On a developer
+// machine that profile is the slowest thing in the whole file: 2.5 to 4.8 s
+// in every test that starts a server, up to 14 s on a busy machine — and the
+// test then depends on what a stranger's `.zshrc` does. Here the shell finds a
+// plain `sh` and an empty home, so the probe takes a few milliseconds. The MCP
+// server itself stays what it was: a real process, started through the real
+// transport (#883). Test files run in a process of their own, so the changed
+// environment reaches nothing else.
+const profileEnvBefore = { HOME: process.env.HOME, SHELL: process.env.SHELL };
+process.env.HOME = fsSync.mkdtempSync(path.join(os.tmpdir(), 'snotra-mcp-home-'));
+if (process.platform !== 'win32') process.env.SHELL = '/bin/sh';
+after(() => {
+  const emptyHome = process.env.HOME;
+  for (const [key, value] of Object.entries(profileEnvBefore)) {
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
+  fsSync.rmSync(emptyHome, { recursive: true, force: true });
+});
 
 const TOKEN = 'ghp_streng_geheim_1234567890';
 const FAKE_SERVER = path.join(__dirname, 'helpers', 'fake-mcp-server.js');
