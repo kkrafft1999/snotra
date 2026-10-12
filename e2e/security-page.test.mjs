@@ -9,18 +9,9 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const PENDING = '#chat-messages .chat-approval-card[data-state="pending"]';
-
-function ask(page, question) {
-  return page.evaluate((text) => {
-    const input = document.getElementById('chat-input');
-    input.value = text;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, question);
-}
 
 async function openSecurityPage(app, page) {
   await app.evaluate(({ Menu }) => {
@@ -103,7 +94,13 @@ test('the Security page shows main\'s state and follows it', { timeout: 180000 }
 
   // A change allowed for the session shows up as an exception of its row.
   model.queueAnswer({ match: 'README', toolCalls: [{ name: 'edit_file', arguments: { relative_path: 'README.md', old_string: 'one', new_string: 'two' } }] });
-  await ask(page, 'Change the README please.');
+  // A send that a guard turns away (a button that is still disabled) leaves
+  // nothing behind and would only show as a card that never comes (#809);
+  // sendChat waits for the button and checks that the send took.
+  await sendChat(page, 'Change the README please.', {
+    t,
+    explain: async () => `model requests: ${JSON.stringify(model.describeRequests(), null, 1)}\nmain:\n${snotra.mainOutput()}`,
+  });
   await poll(() => page.evaluate((selector) => {
     const button = [...document.querySelectorAll(selector)].at(-1)?.querySelector('button[data-response="allow-session"]');
     if (!button || button.disabled) return false;
@@ -155,11 +152,34 @@ test('the Security page shows main\'s state and follows it', { timeout: 180000 }
   assert.equal('scopeKey' in grant, false);
 
   // A new default for the folder: the page follows, the chat on screen is named.
-  await page.evaluate(() => document.querySelector('#settings-security-mode-options input[value="ask-all"]').click());
-  // The choice is saved once its status says so; until then the control
-  // keeps the focus for itself (WorkspaceModeSetting.js).
-  await poll(() => page.evaluate(() => document.getElementById('status-security-mode').classList.contains('is-visible')),
-    { what: 'default saved' });
+  //
+  // "Saved" is a flash: the status line shows it for 1.6 s and hides it again
+  // (InstantSetting.js). A poll that looks every 150 ms sees it, unless a
+  // sample takes longer than the flash, as on a starved runner: then the test
+  // waits for something that was there and is gone. So the flash is caught as
+  // it happens, by an observer, and the saved value itself is read from main.
+  // The radio takes the click only once it is enabled: it stays disabled while
+  // the page has no state for the folder, and a click on a disabled radio
+  // changes nothing, with no second try.
+  await page.evaluate(() => {
+    const status = document.getElementById('status-security-mode');
+    window.__securityModeSavedSeen = false;
+    new MutationObserver(() => {
+      if (status.classList.contains('is-visible') && !status.classList.contains('is-error')) {
+        window.__securityModeSavedSeen = true;
+      }
+    }).observe(status, { attributes: true, childList: true, characterData: true, subtree: true });
+  });
+  await poll(() => page.evaluate(() => {
+    const input = document.querySelector('#settings-security-mode-options input[value="ask-all"]');
+    if (!input || input.disabled) return false;
+    if (!input.checked) input.click();
+    return input.checked;
+  }), { what: 'the "ask all" default chosen (radio enabled)' });
+  await poll(() => page.evaluate(() => window.__securityModeSavedSeen),
+    { what: 'default saved (the status line showed "Saved")' });
+  await poll(async () => (await page.evaluate(() => window.electronAPI.getToolPermissionState())).workspaceMode === 'ask-all',
+    { what: 'main holding the new default' });
   await poll(async () => /Asks/.test(await rowText(page, 'read')), { what: 'read row asks' });
   const summary = await page.evaluate(() => document.getElementById('settings-security-summary').textContent);
   assert.match(summary, /asks before reading/);
