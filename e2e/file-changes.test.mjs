@@ -9,7 +9,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents, sendChat } from './helpers/app.mjs';
 
 test('an edit can be opened as a diff from the chat, and is gone after a restart', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
@@ -62,12 +62,10 @@ test('an edit can be opened as a diff from the chat, and is gone after a restart
     toolCalls: [{ name: 'edit_file', arguments: { relative_path: 'notes.txt', old_string: 'two', new_string: 'TWO' } }],
   });
   model.queueAnswer({ text: 'Done.' });
-  await page.evaluate(() => {
-    const input = document.getElementById('chat-input');
-    input.value = 'Fix the second line.';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  });
+  // A send that a guard turns away leaves nothing behind, and the wait below
+  // would run for a minute for a run that never started (#809). sendChat waits
+  // for the button and checks that the send took.
+  await sendChat(page, 'Fix the second line.', { t, explain: () => evidence(snotra) });
   await poll(async () => {
     await page.evaluate(() => {
       document.querySelector('.chat-approval-card button[data-response="allow-once"]:not([disabled])')?.click();
