@@ -33,7 +33,8 @@ const contentChunk = (text) => sse({
  * Zwischenfrage die Antwort des naechsten Testschritts vorsetzen.
  * `chunkDelayMs` macht den Stream langsam genug, um ihn im Test abzubrechen.
  * `untilAbortedMs` (with a `chunkDelayMs`) keeps it going until the client
- * aborts, at most that long.
+ * aborts, at most that long. `holdUntil` (a promise) holds the stream after its
+ * first chunk until it settles.
  * Was der Client geschickt hat, landet in `requests` — daran laesst sich pruefen,
  * ob ein Abbruch wirklich beim Server ankam.
  */
@@ -166,6 +167,13 @@ export async function startFakeModel() {
         if (answer.chunkDelayMs) {
           await new Promise((resolve) => setTimeout(resolve, answer.chunkDelayMs));
         }
+        // `holdUntil` stops the stream after its first chunk until the promise
+        // settles, so that a test that needs the run to be in flight at one
+        // exact moment holds it there instead of racing a chunk delay. A client
+        // that goes away ends the wait.
+        if (i === 0 && answer.holdUntil) {
+          await Promise.race([answer.holdUntil, new Promise((resolve) => res.once('close', resolve))]);
+        }
       }
       if (res.destroyed || res.writableEnded || record.aborted) return;
       // `finishReason: 'length'` plays an answer cut off at the output limit (#538).
@@ -186,7 +194,7 @@ export async function startFakeModel() {
   return {
     baseUrl: `http://127.0.0.1:${port}/v1`,
     requests,
-    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, delayMs?: number, untilAbortedMs?: number, finishReason?: string, toolCalls?: Array<{name: string, arguments?: object}>, httpError?: { status: number, message: string, type?: string, code?: string } }} answer */
+    /** @param {{ match?: string, text?: string, chunkDelayMs?: number, delayMs?: number, holdUntil?: Promise<unknown>, untilAbortedMs?: number, finishReason?: string, toolCalls?: Array<{name: string, arguments?: object}>, httpError?: { status: number, message: string, type?: string, code?: string } }} answer */
     queueAnswer(answer) { answers.push(answer); },
     /** The title the app gets for the next conversations. */
     setTitle(text) { titleText = text; },
