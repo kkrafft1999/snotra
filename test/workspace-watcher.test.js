@@ -555,13 +555,11 @@ function realWatcherTest(name, run) {
   test(name, { timeout: 15000 }, async (t) => {
     const root = await makeTempRoot('snotra-ws-watch-');
     const meldungen = [];
-    let aufwecken = null;
     const watcher = createWorkspaceWatcher({
       watch: nodeFs.watch,
       path: nodePath,
       onChange: (payload) => {
         meldungen.push(payload);
-        aufwecken?.();
       },
       // These runs ask whether `fs.watch` itself reports the change. The
       // report after the start (#478) would answer in its place.
@@ -571,21 +569,9 @@ function realWatcherTest(name, run) {
       watcher.close();
       await nodeFs.promises.rm(root, { recursive: true, force: true });
     });
-    /** Auf die nächste Meldung warten — der Watcher entprellt 250 ms. */
-    const naechsteMeldung = (fristMs = 8000) =>
-      new Promise((resolve, reject) => {
-        const frist = setTimeout(() => {
-          aufwecken = null;
-          reject(new Error(`keine Meldung binnen ${fristMs} ms`));
-        }, fristMs);
-        aufwecken = () => {
-          clearTimeout(frist);
-          aufwecken = null;
-          resolve(meldungen.at(-1));
-        };
-      });
     /**
-     * Makes a change and repeats it until the watcher reports one.
+     * Makes a change and repeats it until the watcher reports one that
+     * `matches` — the answer to the test's question, not just any report.
      *
      * On macOS `fs.watch()` returns before the FSEvents stream runs, and a
      * change in that window is lost for good, not reported late (see
@@ -595,42 +581,55 @@ function realWatcherTest(name, run) {
      * `fs.watch()` were never reported, while one made a second later always
      * was (#465). Every attempt is a change of the same kind, so whichever of
      * them is reported answers the test's question.
+     *
+     * The opposite happens as well: FSEvents hands over what the test itself
+     * did just before the watch (creating the temp folder, the `docs/` folder
+     * of the second test — measured on macOS, every time). Debounced together
+     * with the first change it is harmless; on a busy machine the debounce
+     * can fire before the change is even made, and that report names the
+     * wrong folders. So the wait is for a report that matches, polled with a
+     * deadline — not for the next report, whatever it says (#883).
      */
-    const untilReported = async (change) => {
+    const untilReported = async (change, matches) => {
+      const from = meldungen.length;
       const deadline = Date.now() + 8000;
       for (let attempt = 0; ; attempt += 1) {
         await change(attempt);
-        try {
-          return await naechsteMeldung(Math.max(0, Math.min(1000, deadline - Date.now())));
-        } catch (error) {
-          if (Date.now() >= deadline) throw error;
+        const attemptEnds = Math.min(Date.now() + 1000, deadline);
+        while (Date.now() < attemptEnds) {
+          const hit = meldungen.slice(from).find(matches);
+          if (hit) return hit;
+          await new Promise((resolve) => setTimeout(resolve, 25));
+        }
+        if (Date.now() >= deadline) {
+          assert.fail(`no matching report within 8000 ms: ${JSON.stringify(meldungen.slice(from))}`);
         }
       }
     };
-    await run({ root, watcher, naechsteMeldung, untilReported, meldungen });
+    await run({ root, watcher, untilReported, meldungen });
   });
 }
 
 realWatcherTest('meldet eine von außen angelegte Datei mit ihrem Ordner', async ({ root, watcher, untilReported }) => {
   watcher.watchWorkspace(root);
-  const meldung = await untilReported((attempt) =>
-    nodeFs.promises.mkdir(nodePath.join(root, attempt === 0 ? 'docs' : `docs-${attempt}`), { recursive: true }));
   // Der Ordner „docs" entsteht direkt unter der Wurzel — die ist betroffen.
-  assert.ok(
-    meldung.directories.includes(nodePath.resolve(root)),
-    `erwartet ${root} in ${JSON.stringify(meldung.directories)}`
+  const meldung = await untilReported(
+    (attempt) =>
+      nodeFs.promises.mkdir(nodePath.join(root, attempt === 0 ? 'docs' : `docs-${attempt}`), { recursive: true }),
+    (report) => report.directories.includes(nodePath.resolve(root))
   );
+  assert.ok(meldung.directories.includes(nodePath.resolve(root)));
 });
 
 realWatcherTest('meldet auch eine Datei tief im Baum', async ({ root, watcher, untilReported }) => {
   await nodeFs.promises.mkdir(nodePath.join(root, 'docs'), { recursive: true });
   watcher.watchWorkspace(root);
-  const meldung = await untilReported((attempt) =>
-    nodeFs.promises.writeFile(
-      nodePath.join(root, 'docs', attempt === 0 ? 'notiz.md' : `notiz-${attempt}.md`), 'hallo\n', 'utf8'));
-  assert.ok(
-    meldung.directories.includes(nodePath.join(nodePath.resolve(root), 'docs')) ||
-      meldung.complete === false,
-    `erwartet docs/ in ${JSON.stringify(meldung)}`
+  const meldung = await untilReported(
+    (attempt) =>
+      nodeFs.promises.writeFile(
+        nodePath.join(root, 'docs', attempt === 0 ? 'notiz.md' : `notiz-${attempt}.md`), 'hallo\n', 'utf8'),
+    (report) =>
+      report.directories.includes(nodePath.join(nodePath.resolve(root), 'docs')) || report.complete === false
   );
+  assert.ok(meldung);
 });
