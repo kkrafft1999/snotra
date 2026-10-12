@@ -1,9 +1,15 @@
 'use strict';
 
 // The matching budget of a `.gitignore` holds inside a single path, is small
-// enough that using it up costs a fraction of a second, and is not spent again
-// on every listing: the compiled rules are kept while the file stays the same
-// (#644). An ordinary large `.gitignore` still applies in full.
+// enough that crafted rules use it up, and is not spent again on every listing:
+// the compiled rules are kept while the file stays the same (#644). An ordinary
+// large `.gitignore` still applies in full.
+//
+// The tests assert the mechanism (the budget gives up, once, and is not spent
+// again), never a wall-clock bound: the crafted case takes only about a second
+// without a budget, so a bound that tells "budget" from "no budget" would sit
+// right at the edge and turn red whenever the machine is busy (#882). The steps
+// are counted, not timed, so the outcome is the same on every machine.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -36,12 +42,11 @@ test('one deep path against crafted rules gives up inside the path (#644)', () =
   assert.equal(ignored('keep-out.txt', false), true);
 
   const deep = Array.from({ length: 30 }, () => 'a'.repeat(200)).join('/');
-  const started = Date.now();
   assert.equal(ignored(deep, false), false);
-  const elapsed = Date.now() - started;
 
+  // With the budget the old 500-million-step limit once had, this path would
+  // run to its end instead — so this also pins the default below that.
   assert.equal(exhausted, 1, 'the budget is used up within this one path');
-  assert.ok(elapsed < 1000, `took ${elapsed} ms`);
   assert.equal(ignored('keep-out.txt', false), false, 'past the budget nothing is ignored any more');
   assert.equal(exhausted, 1);
 });
@@ -69,7 +74,7 @@ test('rules past the 10,000th are dropped (#644)', () => {
 // Windows refuses a 200-character name below the temp folder (MAX_PATH); the
 // matcher is covered above on every platform.
 test(
-  'the @ list stays fast on crafted rules, and a used-up .gitignore is not spent again (#644)',
+  'the @ list gives up on crafted rules, and a used-up .gitignore is not spent again (#644)',
   { skip: process.platform === 'win32' },
   async (t) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-gitignore-budget-'));
@@ -83,16 +88,15 @@ test(
     const svc = createFsService({ fs, path });
     const listed = async () => (await svc.listWorkspacePaths(root)).entries.map((entry) => entry.path);
 
-    let started = Date.now();
+    // The first listing matches `0-ignored.txt` while the budget lasts, then
+    // the crafted rules use it up and the long names are listed unfiltered.
     let paths = await listed();
-    assert.ok(Date.now() - started < 1000, `first listing took ${Date.now() - started} ms`);
     assert.equal(paths.includes('0-ignored.txt'), false);
     assert.equal(paths.filter((p) => p.startsWith('aaa')).length, 60);
 
-    // The same file again: off at once instead of compiled and spent anew.
-    started = Date.now();
+    // The same file again: off at once instead of compiled and spent anew. Were
+    // it spent anew, `0-ignored.txt` would be matched first and hidden again.
     paths = await listed();
-    assert.ok(Date.now() - started < 1000, `second listing took ${Date.now() - started} ms`);
     assert.equal(paths.includes('0-ignored.txt'), true);
 
     // A changed file is compiled again and applies.
