@@ -37,8 +37,15 @@ function fakeSandbox({ available = true, reason = 'platform', fail = null } = {}
   };
 }
 
+// Every test builds a runner of its own, and every runner detects its shell.
+// Detection starts the user's login shell interactively, which reads the
+// user's profile — 2.6 to 3.3 s per test on a machine with a heavy `.zshrc`,
+// 15 s of this file's 17 s (#883). A real, minimal shell does the same job
+// and takes nothing from the machine.
+const TEST_ENV = { ...process.env, SHELL: '/bin/sh' };
+
 async function shellWith(sandbox) {
-  const service = createShellRunnerService({ spawn: childProcess.spawn, os, fs, path, sandbox });
+  const service = createShellRunnerService({ spawn: childProcess.spawn, os, fs, path, sandbox, env: TEST_ENV });
   await service.detect();
   return service.isAvailable() ? service : null;
 }
@@ -86,11 +93,13 @@ test('shell: the time limit still ends the sandboxed process tree', posixOnly, a
   const shell = await shellWith(sandbox);
   if (!shell) return t.skip('no shell');
 
-  const started = Date.now();
   const result = await shell.run({ command: 'sleep 30 & sleep 30; wait', timeoutMs: 600, cwd: os.tmpdir() });
 
   assert.equal(result.timedOut, true);
-  assert.ok(Date.now() - started < 10_000);
+  // The limit ended the command: one that ran to its own end after 30 s would
+  // report 0, one that a signal ended has no exit code. Asserted instead of a
+  // wall-clock bound near those 30 s (#883).
+  assert.notEqual(result.exitCode, 0);
   assert.equal(sandbox.calls.released, 1);
 });
 
@@ -161,7 +170,9 @@ test('python: a script that cannot be written is an error, and its folder is rem
 
 test('shell: a temp dir that cannot be made is an error result, not a rejection', posixOnly, async (t) => {
   const failingFs = { ...fs, mkdtemp: async () => { throw new Error('ENOENT: no temp dir'); } };
-  const shell = createShellRunnerService({ spawn: childProcess.spawn, os, fs: failingFs, path, sandbox: fakeSandbox() });
+  const shell = createShellRunnerService({
+    spawn: childProcess.spawn, os, fs: failingFs, path, sandbox: fakeSandbox(), env: TEST_ENV,
+  });
   await shell.detect();
   if (!shell.isAvailable()) return t.skip('no shell');
 
