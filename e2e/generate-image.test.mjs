@@ -30,6 +30,14 @@ async function approveUntilDone(page, what, evidence, lastTurn) {
   }, { what, timeoutMs: 45000, explain: evidence });
 }
 
+/**
+ * What the history holds for the chats of the folder, as main has it. The
+ * renderer writes a chat after a run settles, and names it a moment later with
+ * the model's own title; both are writes the test can neither see in the DOM
+ * nor wait out with a pause.
+ */
+const storedSessions = (page) => page.evaluate(async () => (await window.electronAPI.getChatHistory())?.sessions ?? []);
+
 test('generate_image draws through the Images API into the workspace', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
   const workspace = await makeTempDir('snotra-image-');
@@ -62,9 +70,23 @@ test('generate_image draws through the Images API into the workspace', { timeout
   // Without a key the tool is not offered at all.
   model.queueAnswer({ match: 'Without a key', text: 'No image tool here.' });
   await sendChat(page, 'Without a key: can you draw?', { explain: evidence, t });
-  await poll(() => page.evaluate(() => !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
-    { what: 'first answer', explain: evidence });
+  // The model has answered *and* the run is over. An idle button alone proves
+  // nothing right after a send: the run may not have started yet (#801), and the
+  // assertion below would then pass on a request that never came.
+  await poll(() => model.requestFor('Without a key')?.finished && page.evaluate(() =>
+    !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
+  { what: 'first answer', explain: evidence });
   assert.equal(toolNamesOf(model.requestFor('Without a key')).includes('generate_image'), false);
+  // The chat is named once its first answer is in: a request to the model, then
+  // a write of the history. Both are still on their way when the run ends, and
+  // the next step stores a key and sends again — a write of the chat that
+  // overlaps that send is a second writer next to it. Wait until the title is in
+  // the history, which is the last of it. The fake model's "Kurz." is stored
+  // without its full stop.
+  await poll(async () => (await storedSessions(page)).some((session) => session.title === 'Kurz'), {
+    what: 'chat named and stored',
+    explain: async () => `${await evidence()}\nstored titles: ${JSON.stringify((await storedSessions(page)).map((session) => session.title))}`,
+  });
 
   const { encryptionAvailable } = await page.evaluate(() => window.electronAPI.getLLMState());
   if (!encryptionAvailable) {
@@ -137,6 +159,12 @@ test('generate_image draws through the Images API into the workspace', { timeout
     caption: 'assets/header.png·96 × 64 · PNG',
     afterChanges: 'chat-changes',
   });
+  // The card after a reload comes from the stored chat, and the chat is written
+  // once the run has settled — after the button went idle. Reload only when the
+  // history holds the finished answer, or the page may come back to the state
+  // before it.
+  await poll(async () => JSON.stringify(await storedSessions(page)).includes('The image is at assets/header.png.'),
+    { what: 'finished chat stored', explain: evidence });
   await page.reload();
   await poll(card, { what: 'generated image after a reload', explain: evidence });
 
