@@ -106,10 +106,15 @@ test('the transcript appears while speaking, grey and slanted, and settles at th
   });
 
   await pressVoiceShortcut(app);
-  await poll(async () => (await fieldState(page)).dictation?.includes('kannst du'), {
-    what: 'first words in the field while speaking', timeoutMs: 20000, explain: evidence,
-  });
-  const live = await fieldState(page);
+  // The state the wait saw is the one that is checked. A second read after it
+  // is another moment: the pause in the recording settles the first sentence
+  // (a capital "K" and a full stop) a second or two after the first words, and
+  // a read that is late by that much, on a stalled runner, finds a field that
+  // no longer starts with "Note: kannst du".
+  const live = await poll(async () => {
+    const state = await fieldState(page);
+    return state.dictation?.includes('kannst du') ? state : null;
+  }, { what: 'first words in the field while speaking', timeoutMs: 20000, explain: evidence });
   assert.equal(live.dictating, true);
   assert.equal(live.pressed, 'true');
   assert.match(live.value, /^Note: kannst du/);
@@ -133,8 +138,10 @@ test('the transcript appears while speaking, grey and slanted, and settles at th
   if (process.env.SNOTRA_VOICE_SHOT) await page.locator('#chat-input-row').screenshot({ path: process.env.SNOTRA_VOICE_SHOT });
 
   await page.click('#btn-chat-mic');
-  await poll(async () => !(await fieldState(page)).dictating, { what: 'dictation over', explain: evidence });
-  const done = await fieldState(page);
+  const done = await poll(async () => {
+    const state = await fieldState(page);
+    return state.dictating ? null : state;
+  }, { what: 'dictation over', explain: evidence });
   assert.match(done.value, /^Note: Kannst du die readme kürzen\. Und die screenshots neu machen\./);
   assert.equal(done.dictation, null);
   assert.notEqual(done.inputColor, 'rgba(0, 0, 0, 0)');
