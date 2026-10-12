@@ -103,6 +103,13 @@ and are required status checks on `main`. Windows in particular catches things a
 Mac does not (line endings, drive paths), so a green local run on one platform is
 not a guarantee.
 
+Both scripts (and `npm run coverage`) start Node with `--no-use-system-ca`.
+With `NODE_USE_SYSTEM_CA=1` in the environment — the Claude Code agent sets it —
+every Node process loads the macOS keychain certificates on a background thread
+and waits for it on exit, about 2 s per process. No test needs the machine's
+trust store, so the flag switches that off. If you start `node --test` by hand,
+pass it too.
+
 Optional:
 
 ```bash
