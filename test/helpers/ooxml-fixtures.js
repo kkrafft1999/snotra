@@ -104,9 +104,15 @@ function columnName(index) {
  */
 function makeXlsx({ sheets, styles, date1904 = false, title } = {}) {
   const shared = [];
+  // A Map, not shared.indexOf(): a 60 000-row sheet has 120 000 distinct
+  // strings, and the linear lookup alone took 9.5 s (#883).
+  const sharedAt = new Map();
   const sharedIndex = (text) => {
-    let at = shared.indexOf(text);
-    if (at < 0) at = shared.push(text) - 1;
+    let at = sharedAt.get(text);
+    if (at === undefined) {
+      at = shared.push(text) - 1;
+      sharedAt.set(text, at);
+    }
     return at;
   };
   const entries = {

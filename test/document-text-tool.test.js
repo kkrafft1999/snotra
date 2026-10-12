@@ -14,7 +14,7 @@ const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { createDocumentTextService } = require('../src/main/services/document-text-service');
-const { createDocumentTextExtractor, pdfjsDataUrl } = require('../src/main/services/document-text-worker');
+const { createDocumentTextExtractor, pdfjsDataUrl, DOCUMENT_TEXT_TIME_BUDGET_MS } = require('../src/main/services/document-text-worker');
 const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
 const { toolCategory } = require('../src/shared/contracts/tool-categories');
 const { makeDocx, makeXlsx, p } = require('./helpers/ooxml-fixtures');
@@ -128,6 +128,12 @@ test('worker: a stopped run and an exhausted time budget end the extraction', as
   const whole = await extractor.extract(big, { range: 'A59999:C60000' });
   assert.equal(whole.content, 'row\tA\tB\tC\n59999\tZeile 59998\t59998\tWert 59998\n60000\tZeile 59999\t59999\tWert 59999');
   t.diagnostic('the worker reads a 60 000-row sheet and answers with two rows');
+});
+
+// The test above runs out a 1 ms budget; what the real default is lives here,
+// as an instant assertion.
+test('worker: the default time budget is 30 seconds', () => {
+  assert.equal(DOCUMENT_TEXT_TIME_BUDGET_MS, 30000);
 });
 
 test('the line in the chat log names the document', () => {
