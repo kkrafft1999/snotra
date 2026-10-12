@@ -19,7 +19,7 @@ const PAGES = [
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function setup() {
+async function setup({ pages = async () => PAGES } = {}) {
   const markup = fs.readFileSync(path.join(RENDERER_DIR, 'manual.html'), 'utf8')
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
   const dom = setupRendererDom({ markup });
@@ -37,7 +37,7 @@ async function setup() {
   };
   createManualSearch({
     els,
-    api: { pages: async () => PAGES },
+    api: { pages },
     getLocale: () => 'en',
     chapterLabel: (chapter) => chapter,
     onOpen: (result) => opened.push(result.slug),
@@ -103,6 +103,31 @@ test('the list is busy from a keystroke until its results are drawn', async () =
     await wait(150);
     assert.equal(els.results.hasAttribute('aria-busy'), false, 'an emptied field settles too');
     assert.equal(els.nav.hidden, false, 'and brings the chapters back');
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('a failed load of the pages does not leave the search busy for good (#907)', async () => {
+  let calls = 0;
+  const { dom, els, type, titles } = await setup({
+    pages: async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('the pages could not be read');
+      return PAGES;
+    },
+  });
+  try {
+    type('sandbox');
+    await wait(150);
+    assert.equal(els.results.hasAttribute('aria-busy'), false, 'the failed search is over');
+    assert.deepEqual(titles(), []);
+
+    // The next keystroke loads the pages again instead of waiting on the failed load.
+    type('sandbox ');
+    await wait(150);
+    assert.equal(calls, 2);
+    assert.deepEqual(titles(), ['Sandbox', 'Modes']);
   } finally {
     dom.cleanup();
   }

@@ -50,6 +50,11 @@ export function createManualSearch({ els, api, getLocale, chapterLabel, onOpen }
           building = null;
         }
         return built;
+      }, (error) => {
+        // Forgotten, so that the next keystroke loads the pages again instead
+        // of waiting on this failure for as long as the window is open (#907).
+        if (building?.promise === promise) building = null;
+        throw error;
       });
       building = { locale, promise };
     }
@@ -76,7 +81,12 @@ export function createManualSearch({ els, api, getLocale, chapterLabel, onOpen }
       drawn(query);
       return;
     }
-    const built = await ensureIndex();
+    let built;
+    try {
+      built = await ensureIndex();
+    } catch {
+      built = [];
+    }
     if (run !== generation) return;
     results = searchManual(built, query);
     active = results.length ? 0 : -1;

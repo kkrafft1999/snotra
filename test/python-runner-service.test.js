@@ -285,14 +285,25 @@ test('disposeSync ends a running script when the app quits (#506)', async (t) =>
   const service = await ready();
   if (!service) return t.skip('Kein Python 3 auf diesem Rechner.');
 
-  const started = Date.now();
-  const pending = service.run({ code: 'import time\ntime.sleep(30)', timeoutMs: 60_000 });
-  setTimeout(() => service.disposeSync(), 400);
+  // The script says when it runs. A fixed 400 ms before disposeSync fell,
+  // under load, before the interpreter had even started: nothing was there to
+  // end, and the script ran into its own time limit (#907).
+  const marker = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-py-dispose-')), 'running');
+  t.after(() => fs.rm(path.dirname(marker), { recursive: true, force: true }));
+  const pending = service.run({
+    code: `import time\nopen(${JSON.stringify(marker)}, 'w').close()\ntime.sleep(30)`,
+    timeoutMs: 60_000,
+  });
+  const deadline = Date.now() + 30_000;
+  while (!(await fs.access(marker).then(() => true, () => false))) {
+    assert.ok(Date.now() < deadline, 'the script started');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  service.disposeSync();
   const result = await pending;
 
   assert.equal(result.aborted, true);
-  assert.equal(result.timedOut, false);
-  assert.ok(Date.now() - started < 10_000, 'must not run until its own timeout');
+  assert.equal(result.timedOut, false, 'ended by disposeSync, not by its own time limit');
 });
 
 test('run läuft gar nicht erst, wenn schon vorher abgebrochen wurde', async (t) => {
