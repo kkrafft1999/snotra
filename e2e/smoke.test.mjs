@@ -16,8 +16,17 @@ import path from 'node:path';
 import { deflateSync } from 'node:zlib';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents, composerState, sendChat } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll as pollState, makeTempDir, rendererToolEvents, composerState, sendChat } from './helpers/app.mjs';
 import { HOSTILE_HOST, makeEncryptedPdf, makeTextPdf } from './helpers/pdf-fixtures.mjs';
+
+// This test waits some fifty times, and the helper's default looks every 150 ms:
+// a state that arrives right after a look costs nearly the whole interval, which
+// added up to about a quarter of the run. A look is one cheap `evaluate`, so the
+// interval is short here. The deadline is generous: a macOS runner took 51 s
+// for this test once, with the PDF wait running out at 15 s (2026-10-04), and
+// the test's own timeout bounds the whole run anyway. A wait that acts on every
+// look (the panel toggles below) says so with an interval of its own.
+const poll = (check, options = {}) => pollState(check, { intervalMs: 40, timeoutMs: 30000, ...options });
 
 const README = '# Testprojekt\n\nZeile aus der Vorschau.\n';
 
@@ -262,16 +271,6 @@ function makeWav(samples = 800) {
   return buf;
 }
 
-/** Frage abschicken — `page.evaluate` sieht nur, was man ihm mitgibt. */
-function ask(page, question) {
-  return page.evaluate((text) => {
-    const input = document.getElementById('chat-input');
-    input.value = text;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, question);
-}
-
 /**
  * An HTML file for the preview (#479): its script writes into the page and
  * looks for the app's bridge, and an image from the web must stay unloaded.
@@ -320,6 +319,21 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   });
   const { page, app } = snotra;
   const readOpenedLinks = await snotra.captureExternalLinks();
+  // What a lost send leaves to go on: the requests the model got, the answers it
+  // was not asked for, the composer and the renderer's view of the run (#819).
+  const chatEvidence = async () => [
+    `model requests: ${JSON.stringify(model.describeRequests(), null, 1)}`,
+    `answers not taken: ${JSON.stringify(model.pendingAnswers())}`,
+    `composer: ${JSON.stringify(await composerState(page))}`,
+    `renderer tool events: ${await rendererToolEvents(page)}`,
+    `main:\n${snotra.mainOutput()}`,
+  ].join('\n');
+  // A question is sent once the composer can take it, and the send is checked:
+  // a bare click on a button that is disabled while a run goes on, or that a
+  // guard turns away, leaves no trace and the test then waits for an answer that
+  // was never asked for — which is how the `remember` card went missing on a
+  // macOS runner (#819).
+  const ask = (question) => sendChat(page, question, { explain: chatEvidence, t });
   const started = Date.now();
   const step = (name) => t.diagnostic(`${String(Date.now() - started).padStart(6)} ms  ${name}`);
   step('App gestartet');
@@ -454,9 +468,10 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     });
     return state && state.workspaceImage && state.unresolved === 0 ? state : null;
   }, { what: 'gerenderte vorschau.md mit Bildern' });
-  // Give a stray loader a moment to show itself before looking for traces.
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  page.off('request', onRequest);
+  // A stray loader that slipped past the sanitizer shows itself as a request or
+  // as a script that ran, and no state says when it is too late for one to
+  // come. Those two are therefore read once the PDF has been looked at below,
+  // a second or more later, instead of after a fixed pause.
 
   assert.deepEqual(markdown.frontMatter, ['name', 'description']);
   assert.equal(markdown.workspaceImage, 'data:image/png;base64,');
@@ -469,9 +484,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(markdown.onerror, 0, 'onerror must be removed');
   // Only the workspace link stays clickable, and not as an address.
   assert.deepEqual(markdown.hrefs, ['#']);
-  assert.equal(await page.evaluate(() => globalThis.__pwnedMd ?? null), null, 'nothing hostile ran');
   assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [], 'nothing tried to load');
-  assert.deepEqual(remoteRequests, []);
   // Nothing of the document reaches into the window around it (#635).
   assert.deepEqual(await page.evaluate(hijackState, ['preview', HIJACK_ATTRIBUTES]),
     { survivors: [], chatPanelIsColumn: true });
@@ -627,13 +640,8 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const pageBox = await page.locator('.pdf-page').first().boundingBox();
   await page.mouse.click(pageBox.x + pageBox.width * 0.3, pageBox.y + pageBox.height * 0.22);
   await page.mouse.click(pageBox.x + pageBox.width * 0.5, pageBox.y + pageBox.height * 0.45);
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  page.off('request', onPdfRequest);
-  assert.equal(await page.evaluate(() => globalThis.__pwnedPdf ?? null), null, 'PDF JavaScript did not run');
-  assert.deepEqual(await readOpenedLinks(), [], 'a link in the PDF opened nothing');
-  assert.deepEqual(pdfRequests.filter((url) => url.includes(HOSTILE_HOST)), []);
-  assert.deepEqual(pdfRequests, []);
-  assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [], 'pdf.js stayed inside the CSP');
+  // What the clicks and the rest of the markdown could have set going is read
+  // after the next step, the HTML page below, not after a fixed pause.
   step('PDF-Vorschau geprueft');
 
   // --- HTML as a live page (#479) --------------------------------------------
@@ -659,6 +667,18 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   }), { what: 'Hinweis auf das blockierte Bild' });
   assert.match(blockedHtml, /^1 Anfrage blockiert\./);
   assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [], 'the app window loaded nothing of it');
+
+  // The traces that come late, read now that the steps above have given them
+  // time: from the markdown preview, the clicks in the PDF and the PDF itself.
+  page.off('request', onRequest);
+  page.off('request', onPdfRequest);
+  assert.equal(await page.evaluate(() => globalThis.__pwnedMd ?? null), null, 'nothing hostile ran');
+  assert.deepEqual(remoteRequests, []);
+  assert.equal(await page.evaluate(() => globalThis.__pwnedPdf ?? null), null, 'PDF JavaScript did not run');
+  assert.deepEqual(await readOpenedLinks(), [], 'a link in the PDF opened nothing');
+  assert.deepEqual(pdfRequests.filter((url) => url.includes(HOSTILE_HOST)), []);
+  assert.deepEqual(pdfRequests, []);
+  assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [], 'pdf.js stayed inside the CSP');
   step('HTML-Vorschau geprueft');
 
   // A protected PDF left at its password prompt (#634). A write into its
@@ -676,8 +696,14 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   await writeFile(path.join(workspace, 'notizen', 'am-passwort.md'), '# Am Passwort\n', 'utf8');
   await poll(async () => (await folderLabels()).includes('am-passwort.md') || null,
     { what: 'am Passwort angelegte Datei im Baum' });
-  // The refresh of the open file comes after the tree has drawn the row.
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  // The refresh of the open file comes after the tree has drawn the row, in the
+  // same step of the tree's queue. A second file is drawn by the next step, and
+  // that one only starts when the first is through — so once its row is there,
+  // the refresh has run and left the prompt alone, or has stalled the queue,
+  // and then this wait fails.
+  await writeFile(path.join(workspace, 'notizen', 'danach-gezeichnet.md'), '# Danach\n', 'utf8');
+  await poll(async () => (await folderLabels()).includes('danach-gezeichnet.md') || null,
+    { what: 'tree step after the one that refreshes the open file' });
   assert.deepEqual(await page.evaluate(() => ({
     typed: document.querySelector('.pdf-view__password-input')?.value ?? null,
     focus: document.activeElement?.id ?? null,
@@ -719,7 +745,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // #327: record main's and the server's view of this abort, to tell on a
   // failed run whether the abort got lost on its way or the socket stayed open.
   const readAbortTrace = await snotra.traceChatAbort(LONG_QUESTION);
-  await ask(page, LONG_QUESTION);
+  await ask(LONG_QUESTION);
   step('lange Frage abgeschickt');
   // #327: how far the server's stream got at each wait, logged with the step.
   const serverChunks = () => model.requestFor(LONG_QUESTION)?.trace.chunksWritten ?? 0;
@@ -770,13 +796,19 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   step('Abbruch am Server angekommen');
 
   // --- Chatwechsel mitten im Lauf (#320): der Lauf arbeitet weiter ---------
-  model.queueAnswer({ match: BACKGROUND_QUESTION, text: BACKGROUND_ANSWER, chunkDelayMs: 100 });
+  // The run is held after its first chunk until the switch is checked, instead
+  // of streaming for three seconds and racing them: on a slow runner the answer
+  // could end before the history row had been looked at, and on a fast one the
+  // test sat out the stream.
+  let letBackgroundRunFinish;
+  const backgroundRunMayFinish = new Promise((resolve) => { letBackgroundRunFinish = resolve; });
+  model.queueAnswer({ match: BACKGROUND_QUESTION, text: BACKGROUND_ANSWER, holdUntil: backgroundRunMayFinish });
   const historyWasClosed = await page.evaluate(() => {
     const closed = document.getElementById('app').classList.contains('app--no-history');
     if (closed) document.getElementById('btn-toggle-chat-history').click();
     return closed;
   });
-  await ask(page, BACKGROUND_QUESTION);
+  await ask(BACKGROUND_QUESTION);
   await poll(() => page.evaluate(() => {
     const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
     return (bubbles[bubbles.length - 1]?.textContent || '').includes('Hintergrund-Antwort');
@@ -803,6 +835,8 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(background.state, 'running', 'die Zeile zeigt den laufenden Chat');
   assert.ok(background.label.length > 0, 'der Zustand steht auch als Text da');
   assert.equal(model.requestFor(BACKGROUND_QUESTION).aborted, false, 'der Wechsel bricht nichts ab');
+  assert.equal(model.requestFor(BACKGROUND_QUESTION).finished, false, 'the run is still going after the switch');
+  letBackgroundRunFinish();
 
   await poll(() => {
     const request = model.requestFor(BACKGROUND_QUESTION);
@@ -835,7 +869,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
 
   // --- Sanitizing in echtem Chromium ---------------------------------------
   model.queueAnswer({ match: LINK_QUESTION, text: ANSWER_WITH_LINKS });
-  await ask(page, LINK_QUESTION);
+  await ask(LINK_QUESTION);
   step('Link-Frage abgeschickt');
 
   const rendered = await poll(
@@ -1029,7 +1063,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     document.addEventListener('load', note, true);
     document.addEventListener('error', note, true);
   });
-  await ask(page, IMAGE_QUESTION);
+  await ask(IMAGE_QUESTION);
   step('Bild-Frage abgeschickt');
 
   const bilder = await poll(
@@ -1135,7 +1169,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       document.addEventListener(type, note, true);
     }
   });
-  await ask(page, MEDIA_QUESTION);
+  await ask(MEDIA_QUESTION);
   step('Medien-Frage abgeschickt');
 
   const medien = await poll(
@@ -1157,14 +1191,11 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     },
     { what: 'Medien-Antwort' }
   );
-  // Give a media element that did slip through the time to report itself.
-  await new Promise((resolve) => setTimeout(resolve, 500));
   assert.deepEqual(medien.elemente, [], 'no media element reaches the answer');
   assert.deepEqual(medien.urlAttribute, [], 'no element but <img> keeps a URL attribute');
-  assert.deepEqual(await page.evaluate(() => globalThis.__chatMediaEvents), [],
-    'nothing in the answer started loading');
-  assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [],
-    'nothing in the answer tried to load past the CSP');
+  // A media element that did slip through reports itself by an event, at some
+  // later point. Those events are read after the settings and memory steps
+  // below, not after a fixed pause.
   // What stays: the rest of the answer, and the task list's checkbox, an <input>.
   assert.match(medien.text, /Zelle/);
   assert.equal(medien.checkbox, 1, 'the task list still renders its checkbox');
@@ -1287,7 +1318,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     toolCalls: [{ name: 'load_skill', arguments: { name: 'snotra-capabilities' } }],
   });
   model.queueAnswer({ match: 'load_skill', text: 'Einiges.' });
-  await ask(page, SKILL_QUESTION);
+  await ask(SKILL_QUESTION);
 
   const skillResult = await poll(() => {
     for (const request of model.requests) {
@@ -1318,14 +1349,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     }],
   });
   model.queueAnswer({ match: 'remember', text: 'Hab ich mir gemerkt.' });
-  const rememberEvidence = async () => [
-    `model requests: ${JSON.stringify(model.describeRequests(), null, 1)}`,
-    `answers not taken: ${JSON.stringify(model.pendingAnswers())}`,
-    `composer: ${JSON.stringify(await composerState(page))}`,
-    `renderer tool events: ${await rendererToolEvents(page)}`,
-    `main:\n${snotra.mainOutput()}`,
-  ].join('\n');
-  await sendChat(page, MEMORY_QUESTION, { explain: rememberEvidence, t });
+  await ask(MEMORY_QUESTION);
 
   const approval = await poll(() => page.evaluate(() => {
     const card = document.querySelector('.chat-approval-card');
@@ -1338,7 +1362,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     what: 'Freigabekarte fuer remember',
     // `null` alone does not say whether the model never got the request, got it
     // and answered without the tool call, or the card was never drawn (#819).
-    explain: rememberEvidence,
+    explain: chatEvidence,
   });
   // Die Karte nennt die Reichweite und den Merksatz — einen Pfad gibt es
   // nicht, weil das Tool keinen bildet.
@@ -1363,6 +1387,12 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.ok(gemerkt.includes('Gemerkt-fuer-dieses-Projekt.'), 'der alte Eintrag steht noch da');
   step('„merk dir das" bis in die Datei geprueft');
 
+  // The media answer from above: nothing in it started loading in all this time.
+  assert.deepEqual(await page.evaluate(() => globalThis.__chatMediaEvents), [],
+    'nothing in the answer started loading');
+  assert.deepEqual(await page.evaluate(() => globalThis.__cspViolations), [],
+    'nothing in the answer tried to load past the CSP');
+
   // --- Alle Spalten weg: der Liegestuhl kommt (Issue #315) ------------------
   // Steht am Ende, weil es jede Spalte wegschaltet. Der Unit-Test haelt den
   // Vertrag zwischen Markup, Stylesheet und Datei; hier laeuft Chromium, also
@@ -1386,7 +1416,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       return open.map(([, cls]) => cls);
     }, TOGGLE_CLASSES);
     return missing.length === 0 ? true : null;
-  }, { what: 'alle vier Spalten weggeschaltet' });
+  }, { what: 'alle vier Spalten weggeschaltet', intervalMs: 150 });
 
   const canvasState = () => page.evaluate(() => {
     const el = document.getElementById('empty-canvas');
