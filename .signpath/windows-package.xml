@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration for the Windows package (#19).
+
+  SignPath does not read this file: it is the source of truth that is pasted
+  into the SignPath project as the artifact configuration "windows-package".
+  Change it here first, then in SignPath, so the two never drift apart.
+
+  The release job uploads the packaged folder (out/*-win32-x64) with
+  actions/upload-artifact, which arrives at SignPath as a zip. Only our own
+  executable is signed. The DLLs next to it come from Electron unchanged and
+  stay as they are: the SignPath Foundation signs a project's own binaries
+  only. Product name and version are checked against the version resource,
+  so a binary that is not Snotra Agent at this exact version is refused.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file path="Snotra Agent.exe" product-name="Snotra Agent" product-version="${version}">
+      <authenticode-sign/>
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

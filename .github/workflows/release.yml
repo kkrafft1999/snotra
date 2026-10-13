@@ -6,7 +6,10 @@ name: Release
 #
 # Signing (#662): the macOS app and its DMG are signed with a Developer ID,
 # notarised and stapled; the secrets are listed at the build-macos job.
-# Windows stays unsigned (SmartScreen may warn, deferred in #19). Linux needs
+# Windows (#19): `Snotra Agent.exe` is signed through the SignPath Foundation
+# once the repository variable SIGNPATH_ORGANIZATION_ID is set; until then the
+# Windows build stays unsigned and the job says so. Details at the
+# build-windows job and in docs/release/windows-signing-plan.md. Linux needs
 # no signature.
 #
 # Test-Gate: Vor den Build-Jobs laeuft die Test-Suite aus ci.yml (macOS,
@@ -228,6 +231,11 @@ jobs:
     name: Build Windows (x64)
     needs: test
     runs-on: windows-latest
+    # 'actions: read' lets the SignPath action hand SignPath a token that can
+    # download the unsigned workflow artifact (#19).
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -243,15 +251,73 @@ jobs:
       - run: npm run package:win
       - name: Check package contents (allowlist)
         run: node scripts/check-asar-contents.js
-      - name: Zip package
+      - name: Locate the package
+        id: package
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $version = "$env:GITHUB_REF_NAME".TrimStart('v')
           $dir = (Get-ChildItem -Path out -Directory -Filter '*-win32-x64' | Select-Object -First 1).FullName
           if (-not $dir) { throw 'Kein *-win32-x64 Package-Verzeichnis gefunden.' }
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+          "version=$("$env:GITHUB_REF_NAME".TrimStart('v'))" >> $env:GITHUB_OUTPUT
+      # Signing (#19) through the SignPath Foundation, free for open-source
+      # projects. The unsigned folder goes up as a workflow artifact, SignPath
+      # signs `Snotra Agent.exe` in it (.signpath/windows-package.xml) and
+      # hands the folder back. Every request waits for a manual approval in
+      # SignPath, hence the long timeout. Inactive until the repository
+      # variable SIGNPATH_ORGANIZATION_ID is set; the API token is the secret
+      # SIGNPATH_API_TOKEN. Once active, a failed signing fails the release —
+      # there is no silent fallback to an unsigned build.
+      - name: Note the unsigned build
+        if: vars.SIGNPATH_ORGANIZATION_ID == ''
+        shell: bash
+        run: echo "::warning::SIGNPATH_ORGANIZATION_ID is not set; the Windows build stays unsigned (#19)."
+      - name: Upload the unsigned package for signing
+        id: unsigned
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: windows-unsigned
+          path: ${{ steps.package.outputs.dir }}
+          retention-days: 1
+      - name: Sign through SignPath
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: snotra
+          signing-policy-slug: release-signing
+          artifact-configuration-slug: windows-package
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 18000
+          output-artifact-directory: signed
+          parameters: |
+            version: ${{ toJSON(steps.package.outputs.version) }}
+      # The signature has to be valid, timestamped and issued to SignPath
+      # Foundation — a "Valid" from some other certificate is not what we
+      # asked for.
+      - name: Verify the signature
+        if: vars.SIGNPATH_ORGANIZATION_ID != ''
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sig = Get-AuthenticodeSignature -FilePath 'signed/Snotra Agent.exe'
+          if ($sig.Status -ne 'Valid') { throw "Signature status: $($sig.Status) — $($sig.StatusMessage)" }
+          if ($sig.SignerCertificate.Subject -notmatch 'SignPath Foundation') { throw "Unexpected signer: $($sig.SignerCertificate.Subject)" }
+          if (-not $sig.TimeStamperCertificate) { throw 'The signature carries no timestamp.' }
+          Write-Host "Signed by: $($sig.SignerCertificate.Subject)"
+          Write-Host "Timestamp: $($sig.TimeStamperCertificate.Subject)"
+      - name: Zip package
+        shell: pwsh
+        env:
+          PACKAGE_DIR: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' && 'signed' || steps.package.outputs.dir }}
+          VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Compress-Archive -Path "$dir/*" -DestinationPath "dist/Snotra-Agent-$version-win-x64.zip"
+          Compress-Archive -Path "$env:PACKAGE_DIR/*" -DestinationPath "dist/Snotra-Agent-$env:VERSION-win-x64.zip"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows

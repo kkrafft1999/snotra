@@ -82,6 +82,28 @@ Die neueste Version liegt auf der
   SmartScreen beim ersten Start. ZIP entpacken, `Snotra Agent.exe` starten, dann
   *SmartScreen › Weitere Informationen › Trotzdem ausführen*.
 
+### Richtlinie zur Code-Signierung
+
+Die Windows-Builds sollen über die SignPath Foundation signiert werden; bis das
+Projekt dort aufgenommen ist, sind sie unsigniert
+([#19](https://github.com/kkrafft1999/snotra/issues/19)).
+
+Free code signing provided by [SignPath.io](https://about.signpath.io),
+certificate by [SignPath Foundation](https://signpath.org).
+
+- Committer und Reviewer: [Konrad Krafft](https://github.com/kkrafft1999)
+- Freigabe: [Konrad Krafft](https://github.com/kkrafft1999)
+
+Signiert werden nur Binaries, die der Release-Workflow dieses Repositorys aus
+einem Release-Tag baut, und jede Signieranfrage wird von Hand freigegeben.
+
+**Datenschutz.** Snotra schickt Daten nur dorthin, wohin du sie schickst: an die
+Modell-Provider, die du einrichtest, an die MCP-Server, die du hinzufügst, und
+an Webseiten, wenn ein Modell die Websuche oder den Seitenabruf nutzt, die du
+erlaubt hast. Bei jedem Start fragt Snotra bei GitHub nach, ob es eine neuere
+Version gibt, und lädt sie erst nach deinem Klick herunter. Es gibt keine
+Telemetrie und keinen eigenen Server.
+
 ## Warum Snotra?
 
 Open Source, beliebige Modelle, MCP und Skills bietet inzwischen jeder
