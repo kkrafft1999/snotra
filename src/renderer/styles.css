@@ -195,6 +195,16 @@ summary:focus-visible,
   flex-shrink: 1;
 }
 
+/* Wordmark and version, right-aligned before the column switches (#923).
+ * It does not shrink — a narrow window truncates the folder name instead. */
+.titlebar-app {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
 /* The open workspace, first (#676). With it, the brand steps back to a
  * sender; without a folder it stands alone as before. */
 #titlebar-workspace {
