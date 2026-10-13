@@ -315,15 +315,20 @@ summary:focus-visible,
   box-shadow: var(--ds-icon-btn-active-shadow);
 }
 
-/* The shield next to the folder name (#398). The icon sits where the name
-   starts without it, and the 32 px target reaches into the header padding
-   instead of pushing the name further in. */
+/* The shield next to the folder name (#398). The icon sits at the header's
+   left edge, and the 32 px target reaches into the header padding instead of
+   pushing the name further in. While hidden it keeps its column, so the name
+   does not jump to the right once the sandbox state arrives after start-up;
+   `visibility` also takes it out of the tab order and the accessibility tree. */
 #tree-header #btn-tree-sandbox {
   grid-area: shield;
   margin: 0 0 0 -9px;
 }
 
-#tree-header #btn-tree-sandbox[hidden],
+#tree-header #btn-tree-sandbox[hidden] {
+  visibility: hidden;
+}
+
 #tree-header #btn-tree-clear-marks[hidden],
 #tree-header #btn-tree-actions[hidden],
 #tree-header .workspace-path[hidden] {
