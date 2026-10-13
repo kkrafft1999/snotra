@@ -52,7 +52,7 @@ A suggestion is never switched on by itself.
 
 [since 1.20] In the chat bar, next to the model and the mode, a pill counts the skills that are on in this chat: *3 skills*, or *No skills*. Click it to see the whole picture:
 
-![The popover of the pill "3 skills": under Skills the three system skills on and sowing-advice from the folder off; under Tools run_python and shell_execute switched off with a "Switch on" button each, web_search and generate_image with "Set up", and "14 switched on" folded; below, links to Settings › Skills and Settings › Tools & security.](screenshots/chat-config.webp)
+![The popover of the pill "3 skills": under Skills the three system skills on and sowing-advice from the folder off; under Tools run_python and shell_execute switched off with a "Switch on" button each, web_search and generate_image with "Set up", and "15 switched on" folded; below, links to Settings › Skills and Settings › Tools & security.](screenshots/chat-config.webp)
 
 - **Skills** — every skill, those that are on first, each with where it comes from. A skill you called with `/name`, or switched on a card for this chat, is marked *this chat only*.
 - **Tools** — what is missing comes first, with the reason, such as *switched off* or *no search service key*. *Switch on* or *Set up* opens the setting that changes it. The tools that are on are summed up in one line; click it to see them by group.
