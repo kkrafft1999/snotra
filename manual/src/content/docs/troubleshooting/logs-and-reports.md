@@ -18,7 +18,7 @@ The chat or the dialog where the problem showed, and for a report a GitHub accou
 | A chat answer: a tool step failed, a command did nothing, a file was not changed | The tool log above the answer, and the box *The sandbox blocked …* under it: [Follow what Snotra does](../../chatting/follow-the-work/). |
 | The tool log itself shows something odd — a line stays empty, a step is missing | Press `Cmd+Shift+D` / `Ctrl+Shift+D`. Snotra copies the tool log diagnostics as JSON to the clipboard and says *Tool log diagnostics copied*. |
 | An error from the provider | The red box under your message: [When the model reports an error](../provider-errors/). |
-| The window shows something wrong or stops reacting | *View › Developer Tools*, the tab *Console*. Errors are listed in red. |
+| The window shows something wrong or stops reacting | *View › Developer Tools*, the tab *Console*. Errors are listed in red. Started from a terminal, Snotra prints them there as well. |
 | An update on Windows did not go through | `update-install.log` in the profile folder; the update dialog names its path. |
 | Snotra does not start at all | Start it from a terminal, see below; what it prints there says why. |
 

@@ -78,6 +78,37 @@ export function createToolLogDebug({ capacity = DEFAULT_CAPACITY, now = () => Da
     }
   }
 
+  /**
+   * Records what nobody caught in the renderer — an exception that ran out of
+   * an event handler, a promise rejected with no one waiting (#919). Before,
+   * such an error left no trace outside the DevTools: a send that threw after
+   * taking the draft looked exactly like a message that was never typed.
+   * Returns the function that stops listening.
+   */
+  function watchUncaught(target) {
+    if (!target || typeof target.addEventListener !== 'function') return () => {};
+    const describe = (error, fallback) => ({
+      message: error?.message || (error === undefined ? fallback : String(error)) || '',
+      stack: typeof error?.stack === 'string' ? truncate(error.stack, 1200) : '',
+    });
+    const onError = (event) => {
+      record('uncaught', {
+        source: 'error',
+        ...describe(event?.error, event?.message),
+        at: event?.filename ? `${event.filename}:${event.lineno ?? 0}` : undefined,
+      });
+    };
+    const onRejection = (event) => {
+      record('uncaught', { source: 'rejection', ...describe(event?.reason, 'unknown reason') });
+    };
+    target.addEventListener('error', onError);
+    target.addEventListener('unhandledrejection', onRejection);
+    return () => {
+      target.removeEventListener('error', onError);
+      target.removeEventListener('unhandledrejection', onRejection);
+    };
+  }
+
   function snapshot() {
     return entries.slice();
   }
@@ -96,6 +127,7 @@ export function createToolLogDebug({ capacity = DEFAULT_CAPACITY, now = () => Da
     record,
     recordIfChanged,
     guard,
+    watchUncaught,
     snapshot,
     serialize,
     clear,

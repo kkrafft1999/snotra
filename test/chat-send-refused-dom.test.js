@@ -1,4 +1,5 @@
-// A send that a guard turns away leaves a trace in the debug buffer (#809).
+// A send that a guard turns away leaves a trace in the debug buffer (#809),
+// and one that throws before its run is under way gives its draft back (#919).
 //
 // The bug behind it: on a Windows runner a message sent right after the
 // settings were saved never started a run, and nothing told which guard had
@@ -11,7 +12,7 @@ const { importRenderer, setupRendererDom } = require('./helpers/dom.js');
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-async function mount(t, { configured = true } = {}) {
+async function mount(t, { configured = true, beginRun = () => {} } = {}) {
   const dom = setupRendererDom();
   t.after(dom.cleanup);
   const { initChatStream } = await importRenderer('components', 'ChatStream.js');
@@ -50,7 +51,7 @@ async function mount(t, { configured = true } = {}) {
     syncLiveDot() {},
     syncChatTitle() {},
     onWorkspaceFileWritten() {},
-    approvalCards: { mount() {}, beginRun() {}, retainChats() {}, pendingChatIds: () => new Set() },
+    approvalCards: { mount() {}, beginRun, retainChats() {}, pendingChatIds: () => new Set() },
   });
 
   appStore.chatRuns.clear();
@@ -120,4 +121,56 @@ test('the send button records when it turns disabled and back', async (t) => {
     { inFlight: false, disabled: true },
     { inFlight: false, disabled: false },
   ]);
+});
+
+test('a send that throws before its run starts gives the draft back and records why (#919)', async (t) => {
+  let failures = 1;
+  const { chat, appStore, send, sends, input, entries } = await mount(t, {
+    beginRun() {
+      if (failures > 0) {
+        failures -= 1;
+        throw new Error('card queue broken');
+      }
+    },
+  });
+  const logged = [];
+  const consoleError = console.error;
+  console.error = (...args) => logged.push(args.map(String).join(' '));
+  t.after(() => { console.error = consoleError; });
+
+  await send('Read the page MARK-A');
+
+  assert.equal(sends.length, 0, 'no request left');
+  assert.equal(input.value, 'Read the page MARK-A');
+  assert.equal(appStore.chatInFlight, false);
+  assert.equal(appStore.chatRuns.has('chat-a'), false);
+  assert.deepEqual(appStore.chatMessages, []);
+  assert.equal(document.querySelectorAll('#chat-messages .chat-msg').length, 0);
+  assert.deepEqual(entries('send failed').map((e) => e.message), ['card queue broken']);
+  assert.match(logged.join('\n'), /\[chat\] send failed: Error: card queue broken/);
+  assert.equal(document.getElementById('chat-token-usage-value').textContent, 'Not sent');
+
+  // The next try goes through.
+  const second = send(input.value);
+  await flush();
+  assert.equal(sends.length, 1);
+  assert.equal(input.value, '');
+  sends[0].resolve({ ok: true, text: 'Done.' });
+  await second;
+  assert.deepEqual(chat && appStore.chatMessages.map((m) => m.role), ['user', 'assistant']);
+});
+
+test('a draft typed over meanwhile is not overwritten by the failed one (#919)', async (t) => {
+  const { send, input } = await mount(t, {
+    beginRun() {
+      input.value = 'typed meanwhile';
+      throw new Error('broken');
+    },
+  });
+  const consoleError = console.error;
+  console.error = () => {};
+  t.after(() => { console.error = consoleError; });
+
+  await send('first');
+  assert.equal(input.value, 'typed meanwhile');
 });

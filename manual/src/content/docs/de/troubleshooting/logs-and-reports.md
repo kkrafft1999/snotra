@@ -18,7 +18,7 @@ Den Chat oder den Dialog, in dem das Problem auftrat, und für eine Meldung ein 
 | Eine Antwort im Chat: Ein Tool-Schritt scheiterte, ein Befehl tat nichts, eine Datei wurde nicht geändert | Das Tool-Protokoll über der Antwort und der Kasten *Die Sandbox hat … blockiert* darunter: [Verfolgen, was Snotra tut](../../chatting/follow-the-work/). |
 | Das Tool-Protokoll selbst zeigt etwas Seltsames — eine Zeile bleibt leer, ein Schritt fehlt | Drück `Cmd+Shift+D` / `Ctrl+Shift+D`. Snotra kopiert die Tool-Log-Diagnose als JSON in die Zwischenablage und sagt *Tool-Log-Diagnose kopiert*. |
 | Ein Fehler vom Anbieter | Der rote Kasten unter deiner Nachricht: [Wenn das Modell einen Fehler meldet](../provider-errors/). |
-| Das Fenster zeigt etwas Falsches oder reagiert nicht mehr | *Ansicht › Entwicklertools*, der Reiter *Console*. Fehler stehen dort in Rot. |
+| Das Fenster zeigt etwas Falsches oder reagiert nicht mehr | *Ansicht › Entwicklertools*, der Reiter *Console*. Fehler stehen dort in Rot. Aus einem Terminal gestartet, gibt Snotra sie auch dort aus. |
 | Ein Update unter Windows ging nicht durch | `update-install.log` im Profilordner; der Update-Dialog nennt den Pfad. |
 | Snotra startet gar nicht | Starte es aus einem Terminal, siehe unten; was es dort ausgibt, sagt warum. |
 
