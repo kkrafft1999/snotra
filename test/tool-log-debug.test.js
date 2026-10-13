@@ -70,3 +70,30 @@ test('compactToolLinePayload lässt Argumente weg und kürzt lange Zeilen', asyn
   assert.deepEqual(compactToolLinePayload('Alt-Zeile'), { line: 'Alt-Zeile' });
   assert.deepEqual(compactToolLinePayload(null), { raw: 'null' });
 });
+
+test('watchUncaught records errors and rejections nobody caught, until it is stopped (#919)', async () => {
+  const { createToolLogDebug } = await load();
+  const debug = createToolLogDebug({ logger: { error() {} } });
+  const target = new EventTarget();
+  const stop = debug.watchUncaught(target);
+  const fire = (type, fields) => target.dispatchEvent(Object.assign(new Event(type), fields));
+
+  fire('error', { error: new Error('render failed'), message: 'Uncaught Error: render failed', filename: 'app.js', lineno: 12 });
+  fire('unhandledrejection', { reason: new TypeError('x is undefined') });
+  fire('unhandledrejection', { reason: 'plain string' });
+  fire('error', { message: 'Script error.' });
+
+  const uncaught = debug.snapshot().filter((e) => e.kind === 'uncaught').map((e) => e.data);
+  assert.deepEqual(uncaught.map(({ source, message }) => ({ source, message })), [
+    { source: 'error', message: 'render failed' },
+    { source: 'rejection', message: 'x is undefined' },
+    { source: 'rejection', message: 'plain string' },
+    { source: 'error', message: 'Script error.' },
+  ]);
+  assert.equal(uncaught[0].at, 'app.js:12');
+  assert.match(uncaught[1].stack, /TypeError: x is undefined/);
+
+  stop();
+  fire('error', { error: new Error('after stop') });
+  assert.equal(debug.snapshot().filter((e) => e.kind === 'uncaught').length, 4);
+});

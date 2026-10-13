@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { _electron } from 'playwright-core';
 import electronBinary from 'electron';
+import generatedFreshness from '../../scripts/generated-freshness.js';
 
 const APP_DIR = path.resolve(fileURLToPath(new URL('../..', import.meta.url)));
 
@@ -187,7 +188,10 @@ export async function waitForFolderChat(page, { explain = null } = {}) {
  * `sendChatMessage`, so text that is still there afterwards names a send that
  * was lost — instead of the test waiting a minute for a run that never started.
  * The two ways to fail say which part went missing: the button never became
- * enabled, or it was enabled and the click was dropped anyway.
+ * enabled, or it was enabled and the click was dropped anyway. A send that
+ * threw after taking the draft gives it back and records "send failed"
+ * (#919); that record fails the wait as well, with the error, even if the
+ * input happens to be empty when it is looked at.
  *
  * Waiting for the button also hides the case it guards against: a button that
  * is disabled although no run is going — the provider reads as not configured
@@ -195,7 +199,14 @@ export async function waitForFolderChat(page, { explain = null } = {}) {
  * with the composer and the evidence, so a pass does not swallow it (#809).
  */
 export async function sendChat(page, text, { explain = null, t = null } = {}) {
-  const state = async () => JSON.stringify({ composer: await composerState(page) });
+  const failures = (afterSeq) => page.evaluate((seq) => {
+    const debug = window.__snotraToolLogDebug;
+    return debug ? debug.snapshot().filter((e) => e.seq > seq && (e.kind === 'send failed' || e.kind === 'uncaught'))
+      .map((e) => ({ kind: e.kind, ...e.data })) : [];
+  }, afterSeq).catch(() => []);
+  const lastSeq = () => page.evaluate(() => window.__snotraToolLogDebug?.snapshot().at(-1)?.seq ?? 0).catch(() => 0);
+  let baseline = await lastSeq();
+  const state = async () => JSON.stringify({ composer: await composerState(page), rendererErrors: await failures(baseline) });
   const evidence = async () => (explain ? await Promise.resolve().then(explain).catch((e) => `explain failed: ${e?.message ?? e}`) : '');
   const withEvidence = async (error) => {
     const extra = await evidence();
@@ -210,14 +221,19 @@ export async function sendChat(page, text, { explain = null, t = null } = {}) {
     const button = document.getElementById('btn-chat-send');
     return Boolean(button) && !button.disabled && !button.classList.contains('chat-send--stop');
   }), { what: `send button ready for "${text}"`, timeoutMs: 10000 }).catch(withEvidence);
+  baseline = await lastSeq();
   await page.evaluate((value) => {
     const input = document.getElementById('chat-input');
     input.value = value;
     input.dispatchEvent(new Event('input', { bubbles: true }));
     document.getElementById('btn-chat-send').click();
   }, text);
-  await poll(() => page.evaluate(() => document.getElementById('chat-input').value === ''),
-    { what: `send taken ("${text}": the input is emptied)`, timeoutMs: 10000 }).catch(withEvidence);
+  await poll(async () => {
+    if ((await failures(baseline)).some((e) => e.kind === 'send failed')) {
+      throw new Error(`send failed ("${text}"): it threw after taking the draft`);
+    }
+    return page.evaluate(() => document.getElementById('chat-input').value === '');
+  }, { what: `send taken ("${text}": the input is emptied)`, timeoutMs: 10000 }).catch(withEvidence);
 }
 
 /**
@@ -265,6 +281,8 @@ export async function prepareUserData(userDataDir, { workspace, modelBaseUrl }) 
  * `args` adds Chromium switches (the manual's screenshots fix the scale factor).
  */
 export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {}, home, args: extraArgs = [] }) {
+  // A single file run with `node --test` skips the pretest sync (#919).
+  generatedFreshness.assertGeneratedFresh();
   const env = { ...process.env, ...extraEnv };
   delete env.ELECTRON_RUN_AS_NODE;
   // --user-data-dir moves the profile, not the home folder, and main reads

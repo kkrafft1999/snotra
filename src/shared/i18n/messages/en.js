@@ -428,6 +428,7 @@ module.exports = {
   'chat.attachment.remove.label': 'Remove the attachment {name}',
   'chat.debug.toConsole': 'Tool log diagnostics in the console',
   'chat.debug.copied': 'Tool log diagnostics copied',
+  'chat.send.failed': 'Not sent',
   'chat.live.offline': 'No AI provider configured',
   'chat.live.streaming': 'Model is answering',
   'chat.live.active': 'Connection active',

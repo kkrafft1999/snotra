@@ -52,5 +52,6 @@ Neben dem Senden-Knopf zeigt das Eingabefeld die Größe der letzten Anfrage in 
 
 - **Der Senden-Knopf bleibt gesperrt.** Es ist kein Modell angebunden, oder dem angebundenen fehlt sein Schlüssel: siehe [Ein Modell anbinden](../../getting-started/connect-a-model/).
 - **Ein Bild einzufügen, zeigt nur einen Hinweis.** Das Modell dieses Chats nimmt keine Bilder. Wechsle zu einem, das es tut — [Das Modell wechseln](../model-and-reasoning/) —, oder schalte *Bild-Anhänge erlauben* für einen OpenAI-kompatiblen Server ein, dessen Modell Bilder versteht.
+- ***Nicht gesendet*** neben dem Senden-Knopf. In Snotra ist etwas schiefgegangen, bevor die Nachricht losging. Text und Bilder stehen wieder im Eingabefeld; schick sie noch einmal ab. Passiert das wiederholt, drück direkt danach `Cmd+Shift+D` / `Ctrl+Shift+D` und häng das Ergebnis an einen Bericht: [Logs finden und ein Problem melden](../../troubleshooting/logs-and-reports/).
 - ***Kein OpenAI-Key hinterlegt (die Spracheingabe braucht einen).*** Das Diktat braucht einen OpenAI-Schlüssel, auch wenn der Chat bei einem anderen Anbieter läuft. Ohne ihn geht das Mikrofon gar nicht erst an.
 - **Das Diktat zeigt beim Sprechen keinen Text, oder gar keinen.** Siehe [Wenn das Diktat nicht klappt](../../troubleshooting/voice-input/).

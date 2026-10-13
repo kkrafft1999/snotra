@@ -435,6 +435,7 @@ module.exports = {
   'chat.attachment.remove.label': 'Anhang {name} entfernen',
   'chat.debug.toConsole': 'Tool-Log-Diagnose in der Konsole',
   'chat.debug.copied': 'Tool-Log-Diagnose kopiert',
+  'chat.send.failed': 'Nicht gesendet',
   'chat.live.offline': 'Kein KI-Anbieter konfiguriert',
   'chat.live.streaming': 'Modell antwortet',
   'chat.live.active': 'Verbindung aktiv',

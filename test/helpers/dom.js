@@ -30,11 +30,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { Window } = require('happy-dom');
+const { assertGeneratedFresh } = require('../../scripts/generated-freshness');
 
 const RENDERER_DIR = path.join(__dirname, '..', '..', 'src', 'renderer');
 
 /** Importiert ein Renderer-Modul (natives ESM) aus einem CJS-Test heraus. */
 function importRenderer(...segments) {
+  // The renderer reads src/shared through its generated copies (#919).
+  assertGeneratedFresh();
   return import(pathToFileURL(path.join(RENDERER_DIR, ...segments)).href);
 }
 

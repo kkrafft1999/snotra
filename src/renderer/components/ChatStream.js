@@ -57,6 +57,11 @@ const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, isD
 const CHAT_SEND_ICON_HTML =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
 
+// Longer than the usual note: the user has to notice it, and the text that
+// came back into the input along with it (#919). Kept as short as the token
+// count it stands in for, or the bar's pills would have to give way.
+const SEND_FAILED_NOTE_MS = 6000;
+
 const CHAT_STOP_ICON_HTML =
   '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>';
 
@@ -213,6 +218,42 @@ export function initChatStream({
   function whenChatOnScreen() {
     if (chatOnScreenSettled()) return Promise.resolve();
     return new Promise((resolve) => chatSwitchWaiters.push(resolve));
+  }
+
+  /**
+   * A send that threw before its run was under way (#919): the chat drops
+   * what it took in, the run that never started is let go, and the draft goes
+   * back into the composer. Each step on its own guard — the step that threw
+   * may well be one of them.
+   */
+  function abandonSend({ userMessage, assistantMessage, run, error }) {
+    toolLogDebug.record('send failed', {
+      message: error?.message || String(error),
+      stack: typeof error?.stack === 'string' ? error.stack.slice(0, 1200) : '',
+      chatId: appStore.currentChatId ?? null,
+    });
+    // To main's log as well (#919): it forwards the renderer's errors.
+    console.error('[chat] send failed:', error);
+    // In place: the chat's array is what its run and the history hold on to.
+    for (const message of [assistantMessage, userMessage]) {
+      const at = message ? appStore.chatMessages.indexOf(message) : -1;
+      if (at >= 0) appStore.chatMessages.splice(at, 1);
+    }
+    if (run && appStore.chatRuns.get(run.chatId) === run) {
+      appStore.chatRuns.delete(run.chatId);
+      runsAwaitingEnd.delete(run.runId);
+    }
+    toolLogDebug.guard('send failed: composer', () => {
+      syncChatInFlight();
+      returnDraft(userMessage);
+    });
+    toolLogDebug.guard('send failed: chat', () => {
+      renderChatMessages();
+      syncElapsedTicker();
+      notifyRunsChanged();
+    });
+    // The note's line is a polite live region: it is read out as well.
+    flashTokenUsageNote(t('chat.send.failed'), { ms: SEND_FAILED_NOTE_MS });
   }
 
   /** A draft that found its chat busy goes back into the composer. */
@@ -1340,73 +1381,85 @@ export function initChatStream({
       recordSendRefused('provider not configured');
       return;
     }
-    chatInput.value = '';
-    onInputChanged();
     const userMessage = { role: 'user', content: text };
-    if (pendingAttachments.length > 0) {
-      userMessage.attachments = pendingAttachments;
-      pendingAttachments = [];
-      renderAttachmentChips();
-    }
-    if (!chatOnScreenSettled()) {
-      draftWaitingForChat = true;
-      try {
-        await whenChatOnScreen();
-      } finally {
-        draftWaitingForChat = false;
+    // From here the draft has left the composer. Whatever throws before the
+    // run is under way must not take it along (#919): it goes back into the
+    // input, and the reason is recorded instead of vanishing as an unhandled
+    // rejection.
+    let assistantMessage = null;
+    let run = null;
+    let payload = null;
+    try {
+      chatInput.value = '';
+      onInputChanged();
+      if (pendingAttachments.length > 0) {
+        userMessage.attachments = pendingAttachments;
+        pendingAttachments = [];
+        renderAttachmentChips();
       }
-      // The chat that came up may have its own run still going (#320).
-      if (appStore.chatInFlight) {
-        recordSendRefused('chat came up running');
-        returnDraft(userMessage);
-        return;
+      if (!chatOnScreenSettled()) {
+        draftWaitingForChat = true;
+        try {
+          await whenChatOnScreen();
+        } finally {
+          draftWaitingForChat = false;
+        }
+        // The chat that came up may have its own run still going (#320).
+        if (appStore.chatInFlight) {
+          recordSendRefused('chat came up running');
+          returnDraft(userMessage);
+          return;
+        }
       }
+      appStore.chatMessages.push(userMessage);
+      renderChatMessages();
+
+      payload = appStore.chatMessages
+        .filter((m) => !m.greeting)
+        .map(({ role, content, attachments }) =>
+          (Array.isArray(attachments) && attachments.length > 0
+            ? { role, content, attachments }
+            : { role, content }));
+      assistantMessage = {
+        role: 'assistant',
+        content: '',
+        toolTrace: [],
+        pendingToolLines: [],
+        reasoningText: '',
+        streaming: true,
+        phase: 'waiting',
+        thinkingSince: Date.now(),
+      };
+      appStore.chatMessages.push(assistantMessage);
+
+      runSeq += 1;
+      const chatId = appStore.currentChatId;
+      run = {
+        chatId,
+        runId: `${runSeq}-${Date.now().toString(36)}`,
+        // The folder the tools work in — main takes the open one at send time.
+        toolRoot: appStore.rootPath,
+        assistantMessage,
+        aborted: false,
+        settled: false,
+        discarded: false,
+        // The chat's data while it is off screen; `null` while it is on screen.
+        chat: null,
+      };
+      appStore.chatRuns.set(chatId, run);
+      expectRunEnd(run);
+      syncChatInFlight();
+      approvalCards?.beginRun(chatId, assistantMessage);
+      renderChatMessages();
+      syncElapsedTicker();
+      notifyRunsChanged();
+      // The question is part of the chat from now on — also for the history
+      // column, which marks the chat as running while it is off screen.
+      void persistCurrentChat();
+    } catch (error) {
+      abandonSend({ userMessage, assistantMessage, run, error });
+      return;
     }
-    appStore.chatMessages.push(userMessage);
-    renderChatMessages();
-
-    const payload = appStore.chatMessages
-      .filter((m) => !m.greeting)
-      .map(({ role, content, attachments }) =>
-        (Array.isArray(attachments) && attachments.length > 0
-          ? { role, content, attachments }
-          : { role, content }));
-    const assistantMessage = {
-      role: 'assistant',
-      content: '',
-      toolTrace: [],
-      pendingToolLines: [],
-      reasoningText: '',
-      streaming: true,
-      phase: 'waiting',
-      thinkingSince: Date.now(),
-    };
-    appStore.chatMessages.push(assistantMessage);
-
-    runSeq += 1;
-    const chatId = appStore.currentChatId;
-    const run = {
-      chatId,
-      runId: `${runSeq}-${Date.now().toString(36)}`,
-      // The folder the tools work in — main takes the open one at send time.
-      toolRoot: appStore.rootPath,
-      assistantMessage,
-      aborted: false,
-      settled: false,
-      discarded: false,
-      // The chat's data while it is off screen; `null` while it is on screen.
-      chat: null,
-    };
-    appStore.chatRuns.set(chatId, run);
-    expectRunEnd(run);
-    syncChatInFlight();
-    approvalCards?.beginRun(chatId, assistantMessage);
-    renderChatMessages();
-    syncElapsedTicker();
-    notifyRunsChanged();
-    // The question is part of the chat from now on — also for the history
-    // column, which marks the chat as running while it is off screen.
-    void persistCurrentChat();
 
     let result;
     try {
@@ -1414,7 +1467,7 @@ export function initChatStream({
         selectedPath: appStore.selectedPath,
         selectedIsDirectory: appStore.selectedIsDirectory,
         // Geltungsbereich fuer Sitzungsfreigaben von Tool-Aufrufen (Issue #66).
-        chatId,
+        chatId: run.chatId,
         runId: run.runId,
       });
       // Events still on their way belong to this run (#721).
@@ -1794,7 +1847,7 @@ export function initChatStream({
   });
 
   let tokenUsageNoteTimer = 0;
-  function flashTokenUsageNote(text) {
+  function flashTokenUsageNote(text, { ms = 2500 } = {}) {
     if (!chatTokenUsageEl) return;
     clearTimeout(tokenUsageNoteTimer);
     // Nur den Text austauschen, nicht den Inhalt des Schalters: Die Anzeige
@@ -1804,7 +1857,7 @@ export function initChatStream({
     tokenUsageNoteTimer = setTimeout(() => {
       tokenUsageNoteTimer = 0;
       syncChatTokenUsageDisplay();
-    }, 2500);
+    }, ms);
   }
 
   // Diagnose-Export (Issue #87): Strg/Cmd+Shift+D kopiert den Tool-Log-Puffer

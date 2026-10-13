@@ -9,4 +9,8 @@ import { createToolLogDebug } from '../utils/tool-log-debug.js';
 // In den DevTools per window.__snotraToolLogDebug.serialize() abrufbar,
 // im Chat per Strg/Cmd+Shift+D in die Zwischenablage (Issue #87).
 export const toolLogDebug = createToolLogDebug();
-if (typeof window !== 'undefined') window.__snotraToolLogDebug = toolLogDebug;
+if (typeof window !== 'undefined') {
+  window.__snotraToolLogDebug = toolLogDebug;
+  // Errors nobody caught land in the same buffer (#919).
+  toolLogDebug.watchUncaught(window);
+}

@@ -52,5 +52,6 @@ Next to the send button, the input field shows the size of the last request in t
 
 - **The send button stays disabled.** No model is connected, or the connected one is missing its key: see [Connect a model](../../getting-started/connect-a-model/).
 - **Pasting an image does nothing but show a note.** The model of this chat does not take images. Switch to one that does — [Switch the model](../model-and-reasoning/) — or switch on *Allow image attachments* for an OpenAI-compatible server whose model understands images.
+- ***Not sent*** next to the send button. Something went wrong inside Snotra before the message left. Your text and images are back in the input field; send them again. If it keeps happening, press `Cmd+Shift+D` / `Ctrl+Shift+D` right afterwards and attach the result to a report: [Find logs and report a problem](../../troubleshooting/logs-and-reports/).
 - ***No OpenAI key stored (voice input needs one).*** Dictation needs an OpenAI key, even when the chat runs on another provider. Without one the microphone does not even switch on.
 - **Dictation shows no text while you speak, or none at all.** See [When dictation doesn't work](../../troubleshooting/voice-input/).

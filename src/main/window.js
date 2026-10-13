@@ -6,6 +6,7 @@ const { resolveWindowBounds, createWindowStateStore } = require('./window-state'
 const { createHiddenFilesShortcutHandler } = require('./services/hidden-files-shortcut');
 const { createPreviewHistoryShortcutHandler } = require('./services/preview-history-shortcut');
 const { windowTitle } = require('./services/window-title');
+const { createRendererErrorForwarder } = require('./services/renderer-console');
 const { PUSH_CHANNELS: PUSH } = require('../shared/ipc-channels');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
@@ -145,6 +146,8 @@ function createWindow() {
   window.webContents.on('preload-error', (_event, preloadPath, error) => {
     console.error('Preload failed:', preloadPath, error);
   });
+  // What throws in the renderer and nobody catches shows up here too (#919).
+  window.webContents.on('console-message', createRendererErrorForwarder());
 
   // Dieselbe Pruefung wie der IPC-Handler, damit http/https/mailto ueberall
   // gleich behandelt werden (Issue #82).
