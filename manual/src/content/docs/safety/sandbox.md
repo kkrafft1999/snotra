@@ -59,10 +59,12 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 1. Check the host, how long the connection has been waiting, which hosts are open already and what the command has printed so far.
 2. Under *Allow connections to*, choose exactly this host or every host of its domain — `*.pytorch.org` instead of `download.pytorch.org:443`. A domain that many unrelated sites share, such as `amazonaws.com` or `github.io`, is offered host by host only.
-3. Under *How long*, choose *Only this run* or *For this session*.
+3. Under *How long*, choose *Only this run*, *For this session* or — for a host this folder needs again and again — *For this workspace*.
 4. Click *Allow connection*, or *Deny*. *Esc* denies as well.
 
 **What happens then.** Allowed, the connection goes through and the command simply carries on; nothing runs twice. Allowed *for this session*, later commands in the same chat reach the host without asking, listed among the session allowances like a path. Denied, the connection stays closed and the command fails on its own; it is not asked about any further host, and the model is told not to work around it. If the command gives up before you decide — `pip` does after 15 seconds — the card says *Stopped waiting*, and a second card after the run offers the host with *Allow and run again*.
+
+**Keep a host open for the folder.** [since 1.22] *For this workspace* is the answer for a server you work with every day. The operating system asks you to confirm it first, naming the host and the folder. From then on every command and Python run in this folder reaches the host — in every chat and every mode, also after a restart — and no card asks about it again; everything else stays inside the sandbox. The host is listed under [*Settings › Tools & security*](../tools-and-security/#revoke-an-allowance-or-reset) in the row *Execute*, where you can close it again; *Reset workspace rules* closes all of them. The choice is offered only for connections, not in *Always ask*, and only where Snotra can store it encrypted. Cancelling the system dialog leaves the card open.
 
 **Once you have answered.** [since 1.21] When the command is through, the card gives way to the box under the tool steps. If you answered everything it asked, the box folds to a single line — for example *The sandbox blocked 1 resource · denied · Command “cat ~/.aws/config” run* — and a click opens it: what was blocked and why, what you decided and what that opened, how the second run went, and the raw lines of the sandbox. A box with something nobody answered, or with a refusal on the second run, stays open. A card the command gave up on (*Stopped waiting*) stays as it is. The output of the first run, which the card showed, is not kept.
 
@@ -81,7 +83,7 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 1. Ask for the Git command as usual and approve it on the card.
 2. If the host is not among the network domains of the call, the card *Sandbox · connection waiting* asks about it, for example `gitlab.example.com:22`. Allow it for *Only this run* or *For this session* — see [Allow a connection](#when-the-sandbox-blocks-something).
-3. For a remote you use every day, give `git` a [program allowance](#give-one-program-more-room) with the host under *Domains it may reach* instead; then nobody has to ask.
+3. For a remote you use every day, choose *For this workspace* on that card: from then on Git reaches the host from this folder without asking. If you need it from every folder, give `git` a [program allowance](#give-one-program-more-room) with the host under *Domains it may reach* instead.
 
 ### What happens
 

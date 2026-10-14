@@ -179,6 +179,26 @@ function commandRuleDialog(rule, t) {
   };
 }
 
+/**
+ * "For this workspace" on a connection card (#946). The dialog repeats what
+ * is kept — the hosts and the folder — because that is the whole grant.
+ */
+function workspaceHostsDialog(hosts, root, t) {
+  return {
+    type: 'warning',
+    title: t('permissionDialog.workspaceHosts.title'),
+    message: t('permissionDialog.workspaceHosts.title'),
+    detail: t('permissionDialog.workspaceHosts.detail', {
+      hosts: hosts.join('\n'),
+      root,
+      place: menuPath(t.locale, 'settings.security'),
+    }),
+    buttons: [t('permissionDialog.workspaceHosts.confirm'), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
 /** Where the sandbox switch lives, quoted in its dialog (#357). */
 const SANDBOX_SETTING_PAGE = 'settings.security';
 
@@ -398,6 +418,8 @@ function registerToolPermissionHandlers({
       globalRules: state.globalRules,
       workspaceRules: root && state.workspaceRules[root] ? state.workspaceRules[root] : [],
       workspaceRoot: root,
+      // Hosts connection cards kept open for this workspace (#946).
+      workspaceHosts: root && Array.isArray(state.workspaceHosts?.[root]) ? state.workspaceHosts[root] : [],
       // Whether the execution tools run without sandbox in this workspace (#357).
       workspaceSandboxDisabled,
       // What new chats in this workspace start with (#413); null without one.
@@ -463,6 +485,7 @@ function registerToolPermissionHandlers({
         unisolated: isolation.unisolated,
         pending: isolation.pending,
         programAllowances: Array.isArray(state.programAllowances) ? state.programAllowances : [],
+        workspaceHosts: root && Array.isArray(state.workspaceHosts?.[root]) ? state.workspaceHosts[root] : [],
       },
       sensitivePathPatterns: state.sensitivePathPatterns,
       integrity: state.integrity,
@@ -577,6 +600,19 @@ function registerToolPermissionHandlers({
     const revoked = sessionGrants.revoke(id);
     if (!event.sender.isDestroyed?.()) event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
     return { ...createSettingsOk(), revoked };
+  });
+
+  // A host kept open for the workspace (#946), by the name the page showed.
+  // Closing one only tightens: no dialog, no card or approval is voided.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_REMOVE_WORKSPACE_HOST, async (event, rawHost) => {
+    const host = typeof rawHost === 'string' ? rawHost.trim() : '';
+    if (!host || host.length > 300) return createSettingsError(createMessage('permissions.workspaceHosts.error.invalid'));
+    const root = getActiveWorkspaceRoot();
+    if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
+    const result = await toolPolicyStore.removeWorkspaceHost(root, host);
+    if (!result.ok) return createSettingsError(result.error);
+    if (!event.sender.isDestroyed?.()) event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+    return createSettingsOk();
   });
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES, async (event) => {
@@ -760,6 +796,39 @@ function registerToolPermissionHandlers({
     return { ruleId: stored.ruleId };
   }
 
+  /**
+   * "For this workspace" on a connection card (#946): confirm natively, store
+   * the hosts the card offered — the chosen ones, checked against the open
+   * request — then answer the card. The workspace is the one the run asked
+   * in, held by main; the renderer names only which offer it picked.
+   * Cancelling the dialog leaves the card open, like "Always allow".
+   */
+  async function keepHostsForWorkspace(event, { requestId, sandboxPaths }) {
+    const request = approvals.getPendingRequest?.(event.sender.id, requestId);
+    if (!request) return { error: createMessage('approval.error.noPending') };
+    const entries = request.sandbox?.entries;
+    const root = typeof request.workspaceRoot === 'string' ? request.workspaceRoot : '';
+    if (request.workspaceAllowed !== true || !root || !Array.isArray(entries) || entries.length === 0) {
+      return { stored: false };
+    }
+    const hosts = [...new Set(entries.map((entry, i) => {
+      const pick = Array.isArray(sandboxPaths) ? sandboxPaths[i] : undefined;
+      return entry.allow.includes(pick) ? pick : entry.allow[0];
+    }))];
+    const confirmed = await confirmNatively(workspaceHostsDialog(hosts, root, createTranslator(getLocale())));
+    if (!confirmed) return { error: createMessage('approval.error.workspaceNotConfirmed'), code: 'cancelled' };
+    // The command may have given up while the dialog was open; then nothing is kept.
+    if (!approvals.getPendingRequest?.(event.sender.id, requestId)) {
+      return { error: createMessage('approval.error.noPending') };
+    }
+    const stored = await toolPolicyStore.addWorkspaceHosts(root, hosts);
+    if (!stored.ok) return { error: stored.error };
+    if (event.sender && typeof event.sender.send === 'function' && !event.sender.isDestroyed?.()) {
+      event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+    }
+    return { stored: true };
+  }
+
   ipcMain.handle(REQ.TOOL_APPROVAL_RESPOND, async (event, payload) => {
     const response = normalizeToolApprovalResponse(payload);
     if (!response) return createSettingsError(createMessage('approval.error.invalidResponse'));
@@ -767,6 +836,11 @@ function registerToolPermissionHandlers({
       const remembered = await rememberCommand(event, response);
       if (remembered.error) return createSettingsError(remembered.error, remembered.code);
       response.ruleId = remembered.ruleId;
+    }
+    if (response.response === APPROVAL_RESPONSES.ALLOW_WORKSPACE) {
+      const kept = await keepHostsForWorkspace(event, response);
+      if (kept.error) return createSettingsError(kept.error, kept.code);
+      response.workspaceStored = kept.stored === true;
     }
     const result = approvals.respond(event.sender.id, response);
     if (!result.ok) return createSettingsError(result.error);
@@ -786,6 +860,7 @@ module.exports = {
   sandboxOffDialog,
   workspaceAutoDialog,
   commandRuleDialog,
+  workspaceHostsDialog,
   programAllowanceDialog,
   resetDialog,
   removePatternsDialog,

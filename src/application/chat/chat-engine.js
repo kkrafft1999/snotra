@@ -753,6 +753,13 @@ function outsideApprovalKey(plan) {
   return JSON.stringify([normalizeRiskClasses(plan?.riskClasses) || [], targets]);
 }
 
+/** How long a sandbox card opened something, as the model reads it (#792, #946). */
+const SANDBOX_DURATION_TEXT = Object.freeze({
+  workspace: 'for every run in this workspace',
+  session: 'for the rest of this chat',
+  run: 'for this run',
+});
+
 /**
  * What the user decided about connections while the command waited (#792),
  * as one sentence for the model — added to the tool result next to what a
@@ -764,7 +771,7 @@ function describeLiveDecisions(decisions) {
   const parts = [];
   if (allowed.length) {
     const what = allowed.map((d) => `${d.target}${d.pattern !== d.target ? ` (as ${d.pattern})` : ''}`
-      + ` ${d.duration === 'session' ? 'for the rest of this chat' : 'for this run'}`).join(', ');
+      + ` ${SANDBOX_DURATION_TEXT[d.duration] || SANDBOX_DURATION_TEXT.run}`).join(', ');
     parts.push(`While the command ran, the sandbox asked the user about connections it waited for, and the user allowed ${what}.`);
   }
   if (denied.length) {
@@ -966,6 +973,10 @@ function createChatEngine({
         // Whether an allow rule can be stored at all — the card offers to
         // remember a command only then (#121).
         encryptionAvailable: snapshot?.encryptionAvailable !== false,
+        // Root → hosts a connection card kept open for that workspace (#946).
+        workspaceHosts: snapshot?.workspaceHosts && typeof snapshot.workspaceHosts === 'object'
+          ? snapshot.workspaceHosts
+          : {},
       };
     } catch {
       // Fehlerhafte Sicherheitsregeln blockieren Tools, statt Sperren zu
@@ -1490,6 +1501,15 @@ function createChatEngine({
         if (sandbox) {
           request.sandbox = sandbox;
           request.sessionAllowed = policy.mode !== TOOL_PERMISSION_MODES.ASK_ALL;
+          // "For this workspace" (#946): only for connections, only where the
+          // session is offered too, and only when it can be stored signed.
+          request.workspaceAllowed = request.sessionAllowed
+            && !!workspaceRoot
+            && policy.encryptionAvailable === true
+            && sandbox.before !== true
+            && Array.isArray(sandbox.entries) && sandbox.entries.length > 0
+            && sandbox.entries.every((e) => e.kind === 'network');
+          if (request.workspaceAllowed) request.workspaceRoot = workspaceRoot;
         }
         entry.permission = createPermissionAuditEntry({
           decision: POLICY_DECISIONS.ASK,
@@ -1533,13 +1553,23 @@ function createChatEngine({
         // A sandbox card (#792) grants paths, not the call: what it allowed,
         // and for how long, is decided by the caller from the card's choice.
         if (checkpoint === 'sandbox') {
-          if (outcome.response !== APPROVAL_RESPONSES.ALLOW_ONCE && outcome.response !== APPROVAL_RESPONSES.ALLOW_SESSION) {
+          if (
+            outcome.response !== APPROVAL_RESPONSES.ALLOW_ONCE
+            && outcome.response !== APPROVAL_RESPONSES.ALLOW_SESSION
+            && outcome.response !== APPROVAL_RESPONSES.ALLOW_WORKSPACE
+          ) {
             return { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
           }
+          // Main has stored the hosts for the workspace by now (#946); the
+          // runs read them from the policy, this one gets them from the card.
+          let response = APPROVAL_RESPONSES.ALLOW_ONCE;
+          if (outcome.response === APPROVAL_RESPONSES.ALLOW_WORKSPACE && request.workspaceAllowed) {
+            response = APPROVAL_RESPONSES.ALLOW_WORKSPACE;
+          } else if (outcome.response === APPROVAL_RESPONSES.ALLOW_SESSION && request.sessionAllowed) {
+            response = APPROVAL_RESPONSES.ALLOW_SESSION;
+          }
           return {
-            response: outcome.response === APPROVAL_RESPONSES.ALLOW_SESSION && request.sessionAllowed
-              ? APPROVAL_RESPONSES.ALLOW_SESSION
-              : APPROVAL_RESPONSES.ALLOW_ONCE,
+            response,
             sandboxPaths: Array.isArray(outcome.sandboxPaths) ? outcome.sandboxPaths : [],
           };
         }
@@ -1813,17 +1843,32 @@ function createChatEngine({
         if (answer.invalidated) return { outcome: 'unanswered' };
         const pick = answer.sandboxPaths?.[0];
         const pattern = allow.includes(pick) ? pick : allow[0];
-        const session = answer.response === APPROVAL_RESPONSES.ALLOW_SESSION;
-        if (session) grantSandboxForSession({ scopeKey, toolName, grant: { kind: 'network', path: pattern } });
-        live.decisions.push({ target, outcome: 'allowed', duration: session ? 'session' : 'run', pattern });
+        const duration = sandboxDurationOf(answer.response);
+        if (duration === 'session') grantSandboxForSession({ scopeKey, toolName, grant: { kind: 'network', path: pattern } });
+        live.decisions.push({ target, outcome: 'allowed', duration, pattern });
         return { outcome: 'allowed', pattern };
       }
 
-      /** What sandbox cards allowed for the shell and Python runs of this chat (#792), or null. */
-      function sessionSandboxGrants(scopeKey) {
+      /** How long a sandbox card's answer opened something for (#792, #946). */
+      function sandboxDurationOf(response) {
+        if (response === APPROVAL_RESPONSES.ALLOW_WORKSPACE) return 'workspace';
+        return response === APPROVAL_RESPONSES.ALLOW_SESSION ? 'session' : 'run';
+      }
+
+      /**
+       * What sandbox cards allowed for the shell and Python runs of this chat
+       * (#792) — and the hosts kept open for its workspace (#946) — or null.
+       */
+      function sessionSandboxGrants(scopeKey, policy) {
         const granted = sessionGrants.sandboxPaths?.(scopeKey);
-        if (!granted || !(granted.writePaths.length || granted.readPaths.length || granted.hosts?.length)) return null;
-        return { writePaths: granted.writePaths, readPaths: granted.readPaths, hosts: granted.hosts || [] };
+        const kept = workspaceRoot && Array.isArray(policy?.workspaceHosts?.[workspaceRoot])
+          ? policy.workspaceHosts[workspaceRoot]
+          : [];
+        const writePaths = granted?.writePaths || [];
+        const readPaths = granted?.readPaths || [];
+        const hosts = [...new Set([...kept, ...(granted?.hosts || [])])];
+        if (!(writePaths.length || readPaths.length || hosts.length)) return null;
+        return { writePaths, readPaths, hosts };
       }
 
       /** What cards opened outside the open folder for this chat's file tools (#792, step 4). */
@@ -2001,17 +2046,17 @@ function createChatEngine({
           const pick = answer.sandboxPaths[i];
           return { kind: e.kind, path: e.allow.includes(pick) ? pick : e.allow[0] };
         });
-        const session = answer.response === APPROVAL_RESPONSES.ALLOW_SESSION;
-        if (session) {
+        const duration = sandboxDurationOf(answer.response);
+        if (duration === 'session') {
           for (const grant of chosen) grantSandboxForSession({ scopeKey, toolName, grant });
         }
-        const grants = mergeSandboxGrants(sessionSandboxGrants(scopeKey), chosen);
+        const grants = mergeSandboxGrants(sessionSandboxGrants(scopeKey, policy), chosen);
         const retry = await executeWith(grants);
         const retried = parseToolOutput(retry?.output);
         const retryBlocked = normalizeSandboxBlocked(retry?.sandboxBlocked);
         entry.sandboxDecision = {
           outcome: 'allowed',
-          duration: session ? 'session' : 'run',
+          duration,
           paths: chosen,
           retry: {
             exitCode: Number.isInteger(retried?.exit_code) ? retried.exit_code : null,
@@ -2019,7 +2064,7 @@ function createChatEngine({
           },
         };
         const allowedWhat = describeSandboxEntries(chosen.map((c) => ({ kind: c.kind, target: c.path })));
-        const note = `The user allowed ${allowedWhat} ${session ? 'for the rest of this chat' : 'for this run'}, `
+        const note = `The user allowed ${allowedWhat} ${SANDBOX_DURATION_TEXT[duration]}, `
           + 'and the command ran a second time. This is the result of that second run'
           + (retryBlocked ? '; the sandbox refused something again, see <sandbox_blocked>.' : '.');
         // The first refusal is on the entry; the retry's goes with the decision.
@@ -2222,7 +2267,7 @@ function createChatEngine({
             // What this chat switched on a card, for get_configuration (#774).
             configOverrides,
           });
-          const firstRun = await executeWith(sessionSandboxGrants(scopeKey));
+          const firstRun = await executeWith(sessionSandboxGrants(scopeKey, policy));
           if (live.repeated) {
             // A connection of a command whose sandbox card the user denied.
             entry.sandboxBlocked = normalizeSandboxBlocked(firstRun?.sandboxBlocked);

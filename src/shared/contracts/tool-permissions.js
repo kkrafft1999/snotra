@@ -74,6 +74,9 @@ const APPROVAL_RESPONSES = Object.freeze({
   // A shell command remembered for the workspace (#121): the card answers with
   // it, main confirms natively and stores a command rule.
   ALLOW_ALWAYS: 'allow-always',
+  // A host a connection card keeps open for the workspace (#946): main
+  // confirms natively and stores it before the card is answered.
+  ALLOW_WORKSPACE: 'allow-workspace',
   DENY: 'deny',
 });
 
@@ -545,6 +548,7 @@ function createToolApprovalRequestDto({
   reasonParts,
   mode,
   sessionAllowed,
+  workspaceAllowed,
   sessionScopeLabel,
   sessionScope,
   providerLabel,
@@ -584,6 +588,8 @@ function createToolApprovalRequestDto({
   if (APPROVAL_CHECKPOINTS.includes(checkpoint)) dto.checkpoint = checkpoint;
   const sandboxView = checkpoint === 'sandbox' ? sanitizeSandboxApproval(sandbox) : null;
   if (sandboxView) dto.sandbox = sandboxView;
+  // "For this workspace" on a connection card (#946); the root stays in main.
+  if (sandboxView && workspaceAllowed === true) dto.workspaceAllowed = true;
   // A proposal to switch a skill or tool for the chat (#774).
   const configView = checkpoint === 'config' ? sanitizeConfigProposal(config) : null;
   if (configView) dto.config = configView;

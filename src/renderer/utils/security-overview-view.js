@@ -120,8 +120,10 @@ function reasonText(row, mode, hasWorkspace) {
  * The quiet line of exceptions under the reason: allowances and remembered
  * commands (only where the mode uses them), session approvals, blocks.
  */
-function exceptionParts(row, allowancesApply) {
+function exceptionParts(row, allowancesApply, keptHosts = 0) {
   const parts = [];
+  // Hosts kept open for the workspace (#946) hold in every mode.
+  if (row.riskClass === 'execute' && keptHosts > 0) parts.push(tPlural('security.except.hosts', keptHosts));
   if (allowancesApply && row.status !== 'off') {
     if (row.allowRules.length > 0 && row.allowRules.length <= 2) {
       for (const rule of row.allowRules) parts.push(t('security.except.allow', { pattern: rule.pathPattern }));
@@ -359,12 +361,19 @@ function describeExecuteReach(overview) {
   const network = overview.defaultMode === 'auto'
     ? t('security.a.where.execute.fact.network.auto')
     : t('security.a.where.execute.fact.network');
+  // Hosts a connection card kept open for this workspace (#946), each one
+  // closable; listed whatever the sandbox state, so none is out of sight.
+  const hosts = (Array.isArray(execution.workspaceHosts) ? execution.workspaceHosts : [])
+    .filter((host) => typeof host === 'string' && host)
+    .map((host) => ({ host, removeLabel: t('security.host.remove', { host }) }));
   return {
     inactive: execution.toolsOn ? '' : t('security.a.where.execute.inactive'),
     state,
     facts: state.kind === 'isolated'
       ? [t('security.a.where.execute.fact.write'), t('security.a.where.execute.fact.secrets'), network]
       : [],
+    hostsHeading: hosts.length > 0 ? t('security.a.where.execute.hosts') : '',
+    hosts,
   };
 }
 
@@ -442,7 +451,11 @@ export function describeSecurityRow(row, overview, mcp = null) {
     name: riskClassLabel(row.riskClass),
     sub: toolCountLabel(row),
     reason: reasonText(row, overview.defaultMode, !!overview.workspace),
-    exceptions: exceptionParts(row, overview.allowancesApply === true).join(' · '),
+    exceptions: exceptionParts(
+      row,
+      overview.allowancesApply === true,
+      Array.isArray(overview.execution?.workspaceHosts) ? overview.execution.workspaceHosts.length : 0,
+    ).join(' · '),
     pill,
     noSandbox: row.noSandbox === true ? t('security.status.noSandbox') : '',
     may: describeMay(row, mcp),

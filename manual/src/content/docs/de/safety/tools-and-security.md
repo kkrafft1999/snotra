@@ -46,7 +46,8 @@ Die Zeile *Sensible Daten lesen* listet die eingebauten Muster — `.env*`, `*.p
 ## Eine Freigabe widerrufen oder zurücksetzen
 
 - ***Sitzungsfreigaben*** listet jedes *Für diese Sitzung erlauben*, das noch gilt, nach Chat gruppiert, mit dem, was es umfasst, und wann du es gegeben hast. Widerruf sie einzeln oder mit *Alle widerrufen*.
-- ***Workspace-Regeln zurücksetzen*** löscht die Sperren und Erlaubnisse nur des geöffneten Ordners, schaltet seine Sandbox wieder ein und setzt seinen Standardmodus zurück auf *Intelligent*.
+- ***Offene Verbindungen*** [seit 1.22] stehen in der Zeile *Ausführen* unter *Was kann ein Befehl erreichen?*: jeder Host, den eine Verbindungskarte *Für diesen Workspace* offen hält. Die zugeklappte Zeile zählt sie. Der Papierkorb neben einem Host schließt ihn wieder, ohne Dialog — die nächste Verbindung zu ihm fragt.
+- ***Workspace-Regeln zurücksetzen*** löscht die Sperren und Erlaubnisse nur des geöffneten Ordners, schließt die für ihn offenen Verbindungen, schaltet seine Sandbox wieder ein und setzt seinen Standardmodus zurück auf *Intelligent*.
 - ***Alle Berechtigungen zurücksetzen*** löscht jede Regel, deine eigenen sensiblen Muster, jede Freigabe pro Programm und jede Sitzungsfreigabe, schaltet die Sandbox überall wieder ein und stellt *Intelligent* wieder her, auch als Standard jedes Ordners. Das fragt immer in einem Systemdialog nach, der aufzählt, welcher Schutz dabei wegfällt.
 
 ## Wenn es nicht klappt

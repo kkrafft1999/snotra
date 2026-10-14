@@ -233,6 +233,48 @@ test('many rules: the closed row counts, the open row lists each with its scope'
   }
 });
 
+test('hosts kept open for the workspace: counted on the closed row, listed and closable when open (#946)', async () => {
+  const dom = setupRendererDom();
+  try {
+    const hosts = ['gitlab.example.com:22', '*.pytorch.org'];
+    const page = await openPage(overviewWith({ execution: { sandbox: SANDBOX, programAllowances: [], workspaceHosts: hosts } }));
+    const removed = [];
+    page.toolPermissions.removeWorkspaceHost = async (host) => {
+      removed.push(host);
+      return { ok: true };
+    };
+    const doc = dom.document;
+    const execute = row(doc, 'execute');
+    assert.equal(execute.querySelector('.settings-security-row__exceptions').textContent, '2 connections kept open');
+    execute.querySelector('.settings-security-row__toggle').click();
+    const subheads = [...row(doc, 'execute').querySelectorAll('.settings-security-subhead')].map((el) => el.textContent);
+    assert.ok(subheads.includes('Connections kept open for this workspace, in every mode:'));
+    const codes = [...row(doc, 'execute').querySelectorAll('.settings-security-item__code')].map((el) => el.textContent);
+    assert.deepEqual(codes.filter((c) => hosts.includes(c)), hosts);
+    const close = row(doc, 'execute').querySelector('button[data-host-remove="gitlab.example.com:22"]');
+    assert.equal(close.getAttribute('aria-label'), 'Close the connection to gitlab.example.com:22 for this workspace');
+    assert.equal(close.dataset.ruleRemove, undefined, 'not taken for a rule');
+    close.click();
+    await settle();
+    assert.deepEqual(removed, ['gitlab.example.com:22']);
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('no hosts kept open: neither a count nor a heading (#946)', async () => {
+  const dom = setupRendererDom();
+  try {
+    await openPage(overviewWith());
+    const doc = dom.document;
+    assert.doesNotMatch(row(doc, 'execute').querySelector('.settings-security-row__exceptions')?.textContent || '', /kept open/);
+    row(doc, 'execute').querySelector('.settings-security-row__toggle').click();
+    assert.doesNotMatch(row(doc, 'execute').textContent, /kept open for this workspace/);
+  } finally {
+    dom.cleanup();
+  }
+});
+
 test('all tools off: every row is off and the summary says so', async () => {
   const dom = setupRendererDom();
   try {

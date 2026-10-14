@@ -180,10 +180,11 @@ export function initSecurityPanel({
     return ul;
   }
 
-  function removeButton(id, label) {
+  /** A trash button; `key` names what it removes — a rule, or a kept host (#946). */
+  function removeButton(id, label, key = 'ruleRemove') {
     const button = el('button', 'settings-icon-trash settings-security-remove');
     button.type = 'button';
-    button.dataset.ruleRemove = id;
+    button.dataset[key] = id;
     button.setAttribute('aria-label', label);
     button.title = label;
     button.innerHTML = TRASH_ICON;
@@ -322,6 +323,12 @@ export function initSecurityPanel({
       const ul = el('ul', 'settings-security-facts');
       for (const fact of reach.facts) ul.appendChild(el('li', null, fact));
       body.appendChild(ul);
+    }
+    if (reach.hosts.length > 0) {
+      body.appendChild(el('p', 'settings-security-subhead', reach.hostsHeading));
+      body.appendChild(itemList(reach.hosts.map((item) => {
+        return { code: item.host, control: removeButton(item.host, item.removeLabel, 'hostRemove') };
+      })));
     }
     placeSlot('sandbox', body);
     placeSlot('allowances', body);
@@ -556,13 +563,15 @@ export function initSecurityPanel({
     }
     const remove = e.target.closest('button[data-rule-remove]');
     const revoke = e.target.closest('button[data-grant-revoke]');
-    const button = remove || revoke;
+    const closeHost = e.target.closest('button[data-host-remove]');
+    const button = remove || revoke || closeHost;
     if (!button || button.disabled) return;
     const riskClass = button.closest('.settings-security-row')?.dataset.riskClass;
     button.disabled = true;
-    const result = remove
-      ? await toolPermissions.removeRule(remove.dataset.ruleRemove)
-      : await toolPermissions.revokeSessionGrant(revoke.dataset.grantRevoke);
+    let result;
+    if (remove) result = await toolPermissions.removeRule(remove.dataset.ruleRemove);
+    else if (closeHost) result = await toolPermissions.removeWorkspaceHost(closeHost.dataset.hostRemove);
+    else result = await toolPermissions.revokeSessionGrant(revoke.dataset.grantRevoke);
     if (reportAction(result)) {
       // The item is gone after the redraw; the keyboard lands on its row.
       pendingFocus = { selector: `.settings-security-row__toggle[data-risk-class="${riskClass}"]` };

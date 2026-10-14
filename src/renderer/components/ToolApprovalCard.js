@@ -475,7 +475,7 @@ export function initToolApprovalCards({
     if (view.durations.length) card.appendChild(radioGroup(requestId, 'duration', t('approval.sandbox.duration.legend'), view.durations));
   }
 
-  /** The answer: the chosen path per resource, once or for the session. */
+  /** The answer: the chosen path per resource, once, for the session or the workspace. */
   function finishSandboxCard(card, requestId, view, actions) {
     actions.addEventListener('click', (e) => {
       const button = e.target.closest('button[data-response]');
@@ -486,8 +486,12 @@ export function initToolApprovalCards({
       }
       const chosen = (name) => card.querySelector(`input[name="${domId(requestId, name)}"]:checked`)?.value;
       const sandboxPaths = view.entries.map((item, i) => chosen(`scope-${i}`) || item.options[0].value);
-      const session = chosen('duration') === 'session';
-      void respond(requestId, session ? APPROVAL_RESPONSES.ALLOW_SESSION : button.dataset.response, { sandboxPaths });
+      // The workspace answer goes through main's own dialog first (#946).
+      const duration = chosen('duration');
+      const response = duration === 'workspace'
+        ? APPROVAL_RESPONSES.ALLOW_WORKSPACE
+        : duration === 'session' ? APPROVAL_RESPONSES.ALLOW_SESSION : button.dataset.response;
+      void respond(requestId, response, { sandboxPaths });
     });
     return card;
   }

@@ -7,7 +7,7 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { createToolPolicyStore, POLICY_FILENAME, POLICY_KEY_FILENAME } = require('../src/main/services/tool-policy-store');
+const { createToolPolicyStore, POLICY_FILENAME, POLICY_KEY_FILENAME, MAX_WORKSPACE_HOSTS } = require('../src/main/services/tool-policy-store');
 
 function makeSafeStorage(available = true) {
   return {
@@ -319,6 +319,81 @@ test('program allowances: a failed signature drops them, resetting everything cl
   // Workspace rules are per folder; allowances are global and stay.
   assert.equal((await fresh.resetWorkspaceRules('/a')).programAllowances.length, 1);
   assert.deepEqual((await fresh.resetAll()).programAllowances, []);
+});
+
+// ── Hosts kept open per workspace (#946) ────────────────────────────────────
+
+test('workspace hosts: none by default, kept per root in the card\'s form, each once', async (t) => {
+  const { store } = await makeStore(t);
+  assert.deepEqual((await store.read()).workspaceHosts, {});
+  await store.addWorkspaceHosts('/a', ['GitLab.Example.com:22']);
+  const state = await store.addWorkspaceHosts('/a', ['gitlab.example.com:22', '*.pytorch.org']);
+  assert.equal(state.ok, true);
+  assert.deepEqual(state.workspaceHosts, { '/a': ['gitlab.example.com:22', '*.pytorch.org'] });
+  // Another folder keeps nothing of it.
+  assert.equal(state.workspaceHosts['/b'], undefined);
+});
+
+test('workspace hosts: only what a card could offer is kept — no shared domain, no free text', async (t) => {
+  const { store } = await makeStore(t);
+  for (const bad of [[], ['*.amazonaws.com'], ['*.org'], ['http://x.example.com'], ['a b'], [42]]) {
+    const result = await store.addWorkspaceHosts('/a', bad);
+    assert.equal(result.ok, false, JSON.stringify(bad));
+    assert.equal(result.error.key, 'permissions.workspaceHosts.error.invalid');
+  }
+  const none = await store.addWorkspaceHosts('', ['x.example.com:22']);
+  assert.equal(none.error.key, 'permissions.error.noWorkspace');
+  assert.deepEqual((await store.read()).workspaceHosts, {});
+});
+
+test('workspace hosts: at most a fixed number per workspace', async (t) => {
+  const { store } = await makeStore(t);
+  const hosts = Array.from({ length: MAX_WORKSPACE_HOSTS }, (_, i) => `h${i}.example.com:22`);
+  assert.equal((await store.addWorkspaceHosts('/a', hosts)).ok, true);
+  const over = await store.addWorkspaceHosts('/a', ['one-more.example.com:22']);
+  assert.equal(over.ok, false);
+  assert.equal(over.error.key, 'permissions.workspaceHosts.error.tooMany');
+  assert.equal((await store.read()).workspaceHosts['/a'].length, MAX_WORKSPACE_HOSTS);
+});
+
+test('workspace hosts: without safeStorage none can be kept, and kept ones do not count', async (t) => {
+  const { dir, store } = await makeStore(t);
+  await store.addWorkspaceHosts('/a', ['gitlab.example.com:22']);
+  const locked = createToolPolicyStore({
+    app: { getPath: () => dir }, safeStorage: makeSafeStorage(false), fs, path, crypto, log: { warn() {} }, now: () => 1000,
+  });
+  assert.deepEqual((await locked.read()).workspaceHosts, {});
+  const added = await locked.addWorkspaceHosts('/a', ['other.example.com:443']);
+  assert.equal(added.ok, false);
+  assert.equal(added.error.key, 'permissions.workspaceHosts.error.needsEncryption');
+  // Closing one is a tightening and always works.
+  assert.equal((await locked.removeWorkspaceHost('/a', 'gitlab.example.com:22')).ok, true);
+});
+
+test('workspace hosts: a failed signature drops them', async (t) => {
+  const { dir, store } = await makeStore(t);
+  await store.addWorkspaceHosts('/a', ['gitlab.example.com:22']);
+  const filePath = path.join(dir, POLICY_FILENAME);
+  const file = JSON.parse(await fs.readFile(filePath, 'utf8'));
+  file.payload.workspaceHosts['/a'].push('evil.example.com:443');
+  await fs.writeFile(filePath, JSON.stringify(file), 'utf8');
+  const state = await store.read();
+  assert.equal(state.integrity, 'invalid');
+  assert.deepEqual(state.workspaceHosts, {});
+});
+
+test('workspace hosts: one can be closed; resetting the workspace or everything removes them', async (t) => {
+  const { store } = await makeStore(t);
+  await store.addWorkspaceHosts('/a', ['gitlab.example.com:22', 'pypi.org:443']);
+  await store.addWorkspaceHosts('/b', ['pypi.org:443']);
+  let state = await store.removeWorkspaceHost('/a', 'pypi.org:443');
+  assert.deepEqual(state.workspaceHosts, { '/a': ['gitlab.example.com:22'], '/b': ['pypi.org:443'] });
+  state = await store.removeWorkspaceHost('/a', 'gitlab.example.com:22');
+  assert.deepEqual(state.workspaceHosts, { '/b': ['pypi.org:443'] }, 'a folder without hosts has no entry');
+  await store.addWorkspaceHosts('/a', ['gitlab.example.com:22']);
+  state = await store.resetWorkspaceRules('/a');
+  assert.deepEqual(state.workspaceHosts, { '/b': ['pypi.org:443'] });
+  assert.deepEqual((await store.resetAll()).workspaceHosts, {});
 });
 
 // ── Default mode per workspace (#413) ───────────────────────────────────────

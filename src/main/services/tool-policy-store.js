@@ -51,11 +51,14 @@ const {
 } = require('../../shared/contracts/program-allowances');
 
 const { renameWithRetry, readFileWithRetry } = require('./rename-with-retry');
+const { grantedHosts } = require('./sandbox-violations');
 
 const POLICY_FILENAME = 'tool-policy.json';
 const POLICY_KEY_FILENAME = 'tool-policy.key';
 const POLICY_FILE_VERSION = 1;
 const HMAC_KEY_BYTES = 32;
+/** Hosts one workspace may keep open for its runs (#946). */
+const MAX_WORKSPACE_HOSTS = 10;
 
 const INTEGRITY = Object.freeze({
   OK: 'ok',
@@ -86,9 +89,26 @@ function defaultPayload() {
     unsandboxedWorkspaces: [],
     programAllowances: [],
     workspaceModes: {},
+    workspaceHosts: {},
     legacyWriteMigrated: false,
     updatedAt: 0,
   };
+}
+
+/**
+ * Root → the hosts a connection card opened for that workspace (#946), in
+ * the form the card offered them: `host:port` or `*.domain`. Anything a card
+ * could not have offered is dropped, and so is a root without hosts.
+ */
+function normalizeWorkspaceHosts(value) {
+  const out = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+  for (const [root, raw] of Object.entries(value)) {
+    if (typeof root !== 'string' || !root) continue;
+    const hosts = grantedHosts(raw).slice(0, MAX_WORKSPACE_HOSTS);
+    if (hosts.length > 0) out[root] = hosts;
+  }
+  return out;
 }
 
 /** Root → `ask-all` | `auto`; `smart` and unknown values are no entry (#413). */
@@ -235,6 +255,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     out.unsandboxedWorkspaces = normalizeWorkspaceRoots(data.unsandboxedWorkspaces);
     out.programAllowances = normalizeProgramAllowances(data.programAllowances);
     out.workspaceModes = normalizeWorkspaceModes(data.workspaceModes);
+    out.workspaceHosts = normalizeWorkspaceHosts(data.workspaceHosts);
     out.legacyWriteMigrated = data.legacyWriteMigrated === true;
     out.updatedAt = Number.isFinite(data.updatedAt) ? data.updatedAt : 0;
     return out;
@@ -258,6 +279,8 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     // is a program allowance (#408).
     out.unsandboxedWorkspaces = [];
     out.programAllowances = [];
+    // So is a host kept open for a workspace (#946).
+    out.workspaceHosts = {};
     // "Auto" as a workspace default goes with them; "Always ask" only tightens
     // and stays, like a deny rule (#413).
     for (const [root, mode] of Object.entries(out.workspaceModes)) {
@@ -362,6 +385,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       unsandboxedWorkspaces: payload.unsandboxedWorkspaces,
       programAllowances: payload.programAllowances,
       workspaceModes: payload.workspaceModes,
+      workspaceHosts: payload.workspaceHosts,
       policyVersion: policyVersionOf(payload, integrity),
       integrity,
       encryptionAvailable: encryptionAvailable(),
@@ -588,14 +612,48 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     return Array.isArray(state.programAllowances) ? state.programAllowances : [];
   }
 
+  /**
+   * Keeps hosts open for every run in one workspace (#946) — what a
+   * connection card offered, confirmed natively by the caller. A loosening,
+   * so it needs `safeStorage`. Hosts already kept are no error.
+   */
+  async function addWorkspaceHosts(root, rawHosts) {
+    return update((draft, { encryptionAvailable: enc }) => {
+      if (typeof root !== 'string' || !root) return { error: createMessage('permissions.error.noWorkspace') };
+      const hosts = grantedHosts(rawHosts);
+      if (hosts.length === 0) return { error: createMessage('permissions.workspaceHosts.error.invalid') };
+      if (!enc) return { error: createMessage('permissions.workspaceHosts.error.needsEncryption') };
+      const kept = draft.workspaceHosts[root] || [];
+      const next = [...kept, ...hosts.filter((host) => !kept.includes(host))];
+      if (next.length > MAX_WORKSPACE_HOSTS) {
+        return { error: createMessage('permissions.workspaceHosts.error.tooMany', { max: MAX_WORKSPACE_HOSTS }) };
+      }
+      draft.workspaceHosts[root] = next;
+      return null;
+    });
+  }
+
+  /** Closes one host of a workspace again (#946) — a tightening, never refused. */
+  async function removeWorkspaceHost(root, host) {
+    return update((draft) => {
+      if (typeof root !== 'string' || !root) return { error: createMessage('permissions.error.noWorkspace') };
+      const next = (draft.workspaceHosts[root] || []).filter((entry) => entry !== host);
+      if (next.length > 0) draft.workspaceHosts[root] = next;
+      else delete draft.workspaceHosts[root];
+      return null;
+    });
+  }
+
   // "Reset workspace rules" is the workspace's whole policy: the sandbox
-  // opt-out (#357) and the default mode (#413) go with the rules.
+  // opt-out (#357), the default mode (#413) and the hosts kept open (#946)
+  // go with the rules.
   async function resetWorkspaceRules(root) {
     return update((draft) => {
       if (typeof root === 'string' && root) {
         delete draft.workspaceRules[root];
         draft.unsandboxedWorkspaces = draft.unsandboxedWorkspaces.filter((entry) => entry !== root);
         delete draft.workspaceModes[root];
+        delete draft.workspaceHosts[root];
       }
       return null;
     });
@@ -611,6 +669,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       draft.unsandboxedWorkspaces = [];
       draft.programAllowances = [];
       draft.workspaceModes = {};
+      draft.workspaceHosts = {};
       draft.legacyWriteMigrated = false;
       return null;
     });
@@ -640,6 +699,8 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     setProgramAllowance,
     removeProgramAllowance,
     readProgramAllowances,
+    addWorkspaceHosts,
+    removeWorkspaceHost,
     resetWorkspaceRules,
     resetAll,
     clearLegacyMigrationNotice,
@@ -652,4 +713,5 @@ module.exports = {
   POLICY_KEY_FILENAME,
   POLICY_FILE_VERSION,
   INTEGRITY,
+  MAX_WORKSPACE_HOSTS,
 };

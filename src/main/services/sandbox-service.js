@@ -30,7 +30,7 @@
 const { normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { isPathInside } = require('../../shared/runtime/path-inside');
 const {
-  summarizeViolations, describeForModel, widerFolder, widerHost, parseViolationLine, NETWORK_REASONS,
+  summarizeViolations, describeForModel, widerFolder, widerHost, grantedHosts, parseViolationLine, NETWORK_REASONS,
 } = require('./sandbox-violations');
 
 const SANDBOX_REASONS = Object.freeze({
@@ -318,32 +318,6 @@ function createMutex() {
     tail = run.then(() => {}, () => {});
     return run;
   };
-}
-
-/**
- * A host a sandbox card may open the proxy for (#792): a name, `*.` plus a
- * domain, or an IPv4 address — each with or without a port. The card shows
- * the address itself, so unlike a domain the model declares, an address is
- * no way around what the user sees.
- */
-const GRANT_HOST = /^(?:(?:\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+|\d{1,3}(?:\.\d{1,3}){3})(?::\d{1,5})?$/;
-const MAX_GRANTED_HOSTS = 20;
-
-/**
- * What of a list of hosts a run may be given (#792). A wildcard only as the
- * card offers it: one level above a host, never a shared domain.
- */
-function grantedHosts(list) {
-  const out = [];
-  for (const raw of Array.isArray(list) ? list : []) {
-    if (typeof raw !== 'string') continue;
-    const value = raw.trim().toLowerCase();
-    if (!GRANT_HOST.test(value) || out.includes(value)) continue;
-    if (value.startsWith('*.') && widerHost(`x.${value.slice(2)}`) !== value) continue;
-    out.push(value);
-    if (out.length >= MAX_GRANTED_HOSTS) break;
-  }
-  return out;
 }
 
 /** The domains a run may reach: what its card named, and what sandbox cards opened. */
