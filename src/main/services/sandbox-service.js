@@ -148,6 +148,39 @@ function sensitiveReadPaths({ platform, userDataPath } = {}) {
  */
 const DENY_WRITE_DEFAULTS = Object.freeze(['/tmp/claude', '~/.claude/debug']);
 
+/**
+ * Git over SSH on macOS (#932). The runtime tunnels git's SSH through its
+ * proxy with `nc -X 5`, but the proxy wants credentials BSD nc cannot send,
+ * so every connection was refused with "This proxy requires authentication".
+ * `ssh-proxy.pl` opens the tunnel with an HTTP CONNECT that carries them;
+ * Perl because it ships with macOS — Snotra's own binary cannot run scripts
+ * with the RunAsNode fuse off.
+ */
+const SSH_PERL = '/usr/bin/perl';
+const SSH_PROXY_SCRIPT = 'ssh-proxy.pl';
+
+/**
+ * What SSH needs from `~/.ssh` that is no secret: the known hosts, the config,
+ * and the public keys — with `IdentitiesOnly yes` ssh picks the agent's key by
+ * its public half. The private keys stay unreadable; the agent signs (#932).
+ */
+function sshReadPaths(home) {
+  return ['known_hosts', 'config', '*.pub'].map((name) => `${home}/.ssh/${name}`);
+}
+
+/**
+ * The `GIT_SSH_COMMAND` for a sandboxed run, in place of the runtime's. The
+ * script's path travels in its own variable, so a space in it (`Snotra
+ * Agent.app`) survives both shells: git's for the command, ssh's for the
+ * ProxyCommand. Connection sharing stays off, as the runtime has it — its
+ * socket would sit in `~/.ssh`.
+ */
+function sshEnvExports(scriptPath) {
+  const proxyCommand = `${SSH_PERL} "$SNOTRA_SSH_PROXY" %h %p`;
+  const sshCommand = `ssh -o ControlMaster=no -o ControlPath=none -o ProxyCommand=${quoteArgv([proxyCommand])}`;
+  return `export SNOTRA_SSH_PROXY=${quoteArgv([scriptPath])} GIT_SSH_COMMAND=${quoteArgv([sshCommand])}`;
+}
+
 /** POSIX single-quoting, so an argv survives the trip through `sh -c`. */
 function quoteArgv(argv) {
   return argv
@@ -475,6 +508,8 @@ function createSandboxService({
    * otherwise make them writable for every command.
    */
   protectedWritePaths = [],
+  /** The SSH tunnel helper (#932); unpacked next to app.asar in a build, see package.json. */
+  sshProxyScript = path.join(__dirname, SSH_PROXY_SCRIPT),
 }) {
   let state = { status: 'unknown' };
   let runtime = null;
@@ -518,6 +553,37 @@ function createSandboxService({
       /* not resolvable (tests with a fake runtime) — the defaults apply */
     }
     return out;
+  }
+
+  /**
+   * The tunnel helper for git over SSH, or null where it does not apply: off
+   * macOS (on Linux the runtime's socat sends the credentials itself), or
+   * without Perl — then the runtime's own route stays and `annotate()` says
+   * why it fails (#932).
+   */
+  function sshTunnel() {
+    if (platform !== 'darwin') return null;
+    const script = unpackedPath(sshProxyScript, existsSync);
+    return existsSync(SSH_PERL) && existsSync(script) ? script : null;
+  }
+
+  /** The ssh-agent's socket, for a run's SSH to sign in with (#932). */
+  function agentSocket() {
+    const socket = env?.SSH_AUTH_SOCK;
+    return platform === 'darwin' && typeof socket === 'string' && path.isAbsolute(socket) ? socket : null;
+  }
+
+  /**
+   * ssh tries its key files before it asks the agent, and the sandbox refuses
+   * them every time (#932). That is the design, not something to offer on a
+   * card: the private keys stay closed, the agent signs, and a failed sign-in
+   * is explained by `annotateSsh()`. Only ssh's own reads inside `~/.ssh`;
+   * any other program reaching for them still shows up.
+   */
+  function isExpectedSshRead(line) {
+    if (platform !== 'darwin') return false;
+    const v = parseViolationLine(line);
+    return v?.kind === 'read' && v.process === 'ssh' && isPathInside(path, path.join(os.homedir(), '.ssh'), v.target);
   }
 
   const expandHome = (p) => (p === '~' ? os.homedir() : p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : p);
@@ -641,12 +707,19 @@ function createSandboxService({
       .filter((p) => typeof p === 'string' && p)
       .filter((p) => allowWrite.some((dir) => isPathInside(path, dir, p)))
       .filter((p) => !extras.some((extra) => isPathInside(path, p, extra)));
+    // Git over SSH (#932): the agent signs, ssh reads only what is no secret.
+    const socket = agentSocket();
+    const allowRead = [...grantedReads, ...(platform === 'darwin' ? sshReadPaths(os.homedir()) : [])];
     return {
       // Hosts a sandbox card opened (#792) join the domains the call named.
-      network: { allowedDomains: runDomains(allowedDomains, grants), deniedDomains: [] },
+      network: {
+        allowedDomains: runDomains(allowedDomains, grants),
+        deniedDomains: [],
+        ...(socket ? { allowUnixSockets: [socket] } : {}),
+      },
       filesystem: {
         denyRead: sensitiveReadPaths({ platform, userDataPath }),
-        ...(grantedReads.length ? { allowRead: [...new Set(grantedReads)] } : {}),
+        ...(allowRead.length ? { allowRead: [...new Set(allowRead)] } : {}),
         allowWrite,
         denyWrite: [...DENY_WRITE_DEFAULTS, ...protectedPaths],
       },
@@ -871,7 +944,14 @@ function createSandboxService({
     // The runtime sets TMPDIR to its own /tmp/claude, a directory every run
     // (and Claude Code) shares and Snotra keeps closed. The run's temp dir
     // takes its place — assigned inside, after the runtime's assignment.
-    const inner = runTmp ? `export TMPDIR=${quoteArgv([runTmp])}; ${command}` : command;
+    // GIT_SSH_COMMAND the same way: the runtime's route cannot authenticate
+    // to its own proxy on macOS (#932).
+    const ssh = sshTunnel();
+    const inner = [
+      ...(runTmp ? [`export TMPDIR=${quoteArgv([runTmp])}`] : []),
+      ...(ssh ? [sshEnvExports(ssh)] : []),
+      command,
+    ].join('; ');
     let wrapped;
     try {
       // Filesystem rules are compiled at wrap time, so update and wrap must
@@ -899,7 +979,7 @@ function createSandboxService({
     // Folders that already existed when `mkdir` was tried on them (Linux, see
     // summarizeViolations): looked up once, in `blocked()`.
     let existingFolders = new Set();
-    const summarize = () => summarizeViolations(collector.lines, {
+    const summarize = () => summarizeViolations(collector.lines.filter((line) => !isExpectedSshRead(line)), {
       homeDir: os.homedir(),
       isPermittedWrite: (target, operation) => isPermittedWrite(target)
         || (/^mkdir/.test(operation || '') && existingFolders.has(target)),
@@ -960,7 +1040,9 @@ function createSandboxService({
           } catch { /* keep stderr as it is */ }
         }
         text = annotateUnreachableProxy(text, proxyPort);
-        return platform === 'darwin' && !trustd ? annotateBlockedTrustd(text) : text;
+        if (platform !== 'darwin') return text;
+        text = annotateSsh(text, { tunnel: Boolean(ssh), agent: Boolean(agentSocket()) });
+        return trustd ? text : annotateBlockedTrustd(text);
       },
     };
   }
@@ -1174,9 +1256,45 @@ function annotateBlockedTrustd(stderr) {
   return `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n<sandbox_certificates>\n${note}\n</sandbox_certificates>\n`;
 }
 
+/**
+ * What an SSH failure inside the macOS sandbox means (#932). ssh's own words
+ * point at the wrong place — a proxy password, a broken key — while the cause
+ * is what the sandbox lets through: no key files, only the agent; no prompt
+ * to accept an unknown host; no tunnel without Perl. Only these three
+ * messages get a note, and each only once.
+ *
+ * @param {string} stderr
+ * @param {{tunnel: boolean, agent: boolean}} state  whether the run had the tunnel helper and the agent socket
+ */
+function annotateSsh(stderr, { tunnel, agent }) {
+  const text = String(stderr ?? '');
+  if (text.includes('<sandbox_ssh>')) return text;
+  let note = '';
+  if (!tunnel && /This proxy requires authentication/.test(text)) {
+    note = 'Git over SSH could not be routed through the sandbox\'s network proxy: the helper that opens '
+      + `the tunnel needs ${SSH_PERL}, which was not found. The host was not reached. Git over HTTPS works instead.`;
+  } else if (/Permission denied \(publickey/.test(text)) {
+    note = 'Inside the sandbox SSH signs in only through the ssh-agent: the private key files in ~/.ssh stay '
+      + 'unreadable for every command. '
+      + (agent
+        ? 'If the same command works in a terminal, the key is probably not loaded in the agent. '
+        : 'No ssh-agent was found for this run (SSH_AUTH_SOCK is not set). ')
+      + 'Tell the user to load it with `ssh-add --apple-use-keychain ~/.ssh/<key>`, or to add '
+      + '`AddKeysToAgent yes` and `UseKeychain yes` to ~/.ssh/config, then try again.';
+  } else if (/Host key verification failed/.test(text)) {
+    note = 'The host is not in ~/.ssh/known_hosts, and inside the sandbox SSH can neither ask whether to '
+      + 'trust it nor add it. Tell the user to connect to it once from a terminal, then try again.';
+  }
+  if (!note) return text;
+  return `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n<sandbox_ssh>\n${note}\n</sandbox_ssh>\n`;
+}
+
 module.exports = {
   createSandboxService,
   annotateBlockedTrustd,
+  annotateSsh,
+  sshEnvExports,
+  sshReadPaths,
   createDomainGate,
   createLiveRun,
   networkGrantOptions,

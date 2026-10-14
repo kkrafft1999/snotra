@@ -42,7 +42,7 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 ## When the sandbox blocks something
 
-[since 1.18] Sometimes a command needs more than the sandbox allows: a build tool writes its cache under `~/Library/Caches`, `git fetch` reads `~/.ssh/known_hosts`, `pip` wants a host the call did not name. The sandbox refuses it, and Snotra shows you what was refused instead of leaving the model to guess.
+[since 1.18] Sometimes a command needs more than the sandbox allows: a build tool writes its cache under `~/Library/Caches`, a tool reads its login from `~/.config/gcloud`, `pip` wants a host the call did not name. The sandbox refuses it, and Snotra shows you what was refused instead of leaving the model to guess.
 
 **What you see.** Right under the tool steps of the answer, a box lists what was blocked — a write, a read of a protected location or a connection — with the path or host and why. The raw lines of the sandbox are folded away underneath. The box stays with the chat when you open it again later.
 
@@ -64,9 +64,30 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 **What happens then.** Allowed, the connection goes through and the command simply carries on; nothing runs twice. Allowed *for this session*, later commands in the same chat reach the host without asking, listed among the session allowances like a path. Denied, the connection stays closed and the command fails on its own; it is not asked about any further host, and the model is told not to work around it. If the command gives up before you decide — `pip` does after 15 seconds — the card says *Stopped waiting*, and a second card after the run offers the host with *Allow and run again*.
 
-**Once you have answered.** [since 1.21] When the command is through, the card gives way to the box under the tool steps. If you answered everything it asked, the box folds to a single line — for example *The sandbox blocked 1 resource · denied · Command “cat ~/.ssh/config” run* — and a click opens it: what was blocked and why, what you decided and what that opened, how the second run went, and the raw lines of the sandbox. A box with something nobody answered, or with a refusal on the second run, stays open. A card the command gave up on (*Stopped waiting*) stays as it is. The output of the first run, which the card showed, is not kept.
+**Once you have answered.** [since 1.21] When the command is through, the card gives way to the box under the tool steps. If you answered everything it asked, the box folds to a single line — for example *The sandbox blocked 1 resource · denied · Command “cat ~/.aws/config” run* — and a click opens it: what was blocked and why, what you decided and what that opened, how the second run went, and the raw lines of the sandbox. A box with something nobody answered, or with a refusal on the second run, stays open. A card the command gave up on (*Stopped waiting*) stays as it is. The output of the first run, which the card showed, is not kept.
 
-**What cannot be allowed.** A connection a program makes directly instead of through the sandbox's proxy — `psql`, `ssh` — can only be shown: the sandbox cannot open a single host for it. Snotra's own storage, your home folder as a whole and the files the sandbox always keeps closed, such as `.bashrc` or `.git/hooks`, are never offered.
+**What cannot be allowed.** A connection a program makes directly instead of through the sandbox's proxy — `psql`, or `ssh` and `scp` called on their own — can only be shown: the sandbox cannot open a single host for it. Snotra's own storage, your home folder as a whole and the files the sandbox always keeps closed, such as `.bashrc` or `.git/hooks`, are never offered.
+
+## Use Git over SSH
+
+[since 1.22] On macOS, `git fetch`, `git pull`, `git push` and `git ls-remote` reach an SSH remote such as `git@gitlab.example.com:team/app.git` from inside the sandbox. Snotra sends Git's SSH connection through the sandbox's proxy, so it follows the same rules as any other connection, and the sandbox stays on.
+
+### What you need
+
+- **The host in `~/.ssh/known_hosts`.** Inside the sandbox SSH cannot ask whether to trust a new host. Connect to it once from a terminal — `ssh -T git@gitlab.example.com` — and accept its key.
+- **Your key in the ssh-agent.** The sandbox keeps your private key files closed; SSH signs in through the agent instead. Load the key once with `ssh-add --apple-use-keychain ~/.ssh/<key>`, or add `AddKeysToAgent yes` and `UseKeychain yes` to `~/.ssh/config` so that SSH loads it the next time you use it in a terminal.
+
+### Steps
+
+1. Ask for the Git command as usual and approve it on the card.
+2. If the host is not among the network domains of the call, the card *Sandbox · connection waiting* asks about it, for example `gitlab.example.com:22`. Allow it for *Only this run* or *For this session* — see [Allow a connection](#when-the-sandbox-blocks-something).
+3. For a remote you use every day, give `git` a [program allowance](#give-one-program-more-room) with the host under *Domains it may reach* instead; then nobody has to ask.
+
+### What happens
+
+Git reaches the host through the proxy. SSH may read `known_hosts`, `config` and the public keys (`*.pub`) in `~/.ssh`, and talk to the ssh-agent; the private keys stay closed, and SSH's attempts to read them are not shown as blocked. A command in the sandbox can use the agent to sign in to the hosts the run may reach, but it cannot read or copy a key. `git push` writes to the remote and is a command you approve like any other.
+
+Only Git's SSH takes this route. `ssh` or `scp` called on their own still connect directly, which the sandbox cannot open for a single host. On Linux, Git over SSH cannot sign in inside the sandbox yet: use the HTTPS address of the repository, or switch the sandbox off for the folder.
 
 ## Switch the sandbox off for one folder
 
@@ -103,5 +124,7 @@ The allowance applies in every folder, but only when a command runs that program
   ```
 
   It lasts until the next reboot; to keep it, put the same setting into a file under `/etc/sysctl.d/`. An AppArmor profile that grants user namespaces to `bwrap` works as well. Restart Snotra afterwards.
+- **Git over SSH: *Permission denied (publickey)*.** The key is not loaded in the ssh-agent, so SSH has nothing to sign in with. Load it with `ssh-add --apple-use-keychain ~/.ssh/<key>` and run the command again — see [Use Git over SSH](#use-git-over-ssh).
+- **Git over SSH: *Host key verification failed*.** The host is not in `~/.ssh/known_hosts` yet. Connect to it once from a terminal and accept its key.
 - **macOS: `gh`, `terraform` or another Go program cannot reach the network.** Give it a program allowance with *Check certificates through macOS*.
 - ***Sandbox for this workspace* cannot be switched off.** That needs the system's encrypted storage; where there is none, the setting stays on and says why.

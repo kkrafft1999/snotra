@@ -19,6 +19,9 @@ const {
   missingPackages,
   sensitiveReadPaths,
   annotateBlockedTrustd,
+  annotateSsh,
+  sshEnvExports,
+  sshReadPaths,
   SANDBOX_REASONS,
 } = require('../src/main/services/sandbox-service');
 const { normalizeDomains, suggestDomains, resolveNetworkDomains } = require('../src/shared/runtime/sandbox-domains');
@@ -438,6 +441,83 @@ test('the trustd note only answers Go\'s blocked certificate check, and only onc
   assert.equal(annotateBlockedTrustd(once), once);
 });
 
+// ── Git over SSH (#932) ─────────────────────────────────────────────────────
+
+// No pip probe: these tests are about SSH.
+const noPython = async () => '/nonexistent/python';
+
+test('on macOS a run gets the ssh-agent and what SSH needs from ~/.ssh, never the private keys', posixOnly, async () => {
+  const deps = { platform: 'darwin', env: { SSH_AUTH_SOCK: '/private/tmp/launchd-1/Listeners' }, existsSync: () => true, readPythonCommand: noPython };
+  const { service, calls } = makeService({ deps });
+  await service.detect();
+  (await service.prepare({ command: 'git fetch', runTmp: '/tmp/r' })).release();
+
+  const config = calls.updateConfig.at(-1);
+  assert.deepEqual(config.network.allowUnixSockets, ['/private/tmp/launchd-1/Listeners']);
+  assert.deepEqual(config.filesystem.allowRead, sshReadPaths(os.homedir()));
+  assert.deepEqual(sshReadPaths('/Users/u'), ['/Users/u/.ssh/known_hosts', '/Users/u/.ssh/config', '/Users/u/.ssh/*.pub']);
+  assert.ok(config.filesystem.denyRead.includes('~/.ssh'), 'the folder itself stays closed');
+
+  const noAgent = makeService({ deps: { ...deps, env: {} } });
+  await noAgent.service.detect();
+  (await noAgent.service.prepare({ command: 'git fetch', runTmp: '/tmp/r' })).release();
+  assert.equal('allowUnixSockets' in noAgent.calls.updateConfig.at(-1).network, false);
+});
+
+test('Linux keeps ~/.ssh closed and opens no socket: the runtime\'s own SSH route works there', posixOnly, async () => {
+  const { service, calls } = makeService({ deps: { env: { SSH_AUTH_SOCK: '/run/user/1000/ssh-agent' }, existsSync: () => true } });
+  await service.detect();
+  const prepared = await service.prepare({ command: 'git fetch', runTmp: '/tmp/r' });
+  assert.equal('allowUnixSockets' in calls.updateConfig.at(-1).network, false);
+  assert.equal('allowRead' in calls.updateConfig.at(-1).filesystem, false);
+  assert.doesNotMatch(prepared.args[1], /GIT_SSH_COMMAND/);
+  prepared.release();
+});
+
+test('on macOS git\'s SSH goes through the tunnel helper — unless Perl is missing', posixOnly, async () => {
+  const script = '/Applications/Snotra Agent.app/Contents/Resources/app.asar/src/main/services/ssh-proxy.pl';
+  const unpacked = script.replace('app.asar/', 'app.asar.unpacked/');
+  const present = new Set(['/usr/bin/perl', unpacked]);
+  const { service } = makeService({ deps: { platform: 'darwin', sshProxyScript: script, existsSync: (p) => present.has(p), readPythonCommand: noPython } });
+  await service.detect();
+  const prepared = await service.prepare({ command: 'git fetch', runTmp: '/tmp/r' });
+  assert.equal(prepared.args[1], `export TMPDIR=/tmp/r; ${sshEnvExports(unpacked)}; git fetch`);
+  prepared.release();
+
+  present.delete('/usr/bin/perl');
+  const without = await service.prepare({ command: 'git fetch', runTmp: '/tmp/r' });
+  assert.equal(without.args[1], 'export TMPDIR=/tmp/r; git fetch');
+  assert.match(without.annotate('This proxy requires authentication'), /<sandbox_ssh>[^]*\/usr\/bin\/perl/);
+  without.release();
+});
+
+test('the SSH command survives git\'s shell and ssh\'s parser, with a space in the helper\'s path', posixOnly, async (t) => {
+  const exports = sshEnvExports('/Applications/Snotra Agent.app/x/ssh-proxy.pl');
+  // git runs GIT_SSH_COMMAND through sh; `ssh -G` prints what it parsed.
+  const script = `${exports}; printf '%s\\n' "$SNOTRA_SSH_PROXY"; sh -c "$GIT_SSH_COMMAND -G example.com"`;
+  const result = childProcess.spawnSync('/bin/sh', ['-c', script], { encoding: 'utf8' });
+  if (result.error || /not found/.test(result.stderr)) {
+    t.skip('no ssh client');
+    return;
+  }
+  const lines = result.stdout.split('\n');
+  assert.equal(lines[0], '/Applications/Snotra Agent.app/x/ssh-proxy.pl');
+  assert.ok(lines.includes('proxycommand /usr/bin/perl "$SNOTRA_SSH_PROXY" %h %p'), result.stdout);
+  assert.ok(lines.includes('controlmaster false'), result.stdout);
+});
+
+test('SSH failures inside the sandbox name the real cause, once', () => {
+  const denied = 'git@gitlab.example.com: Permission denied (publickey,password).';
+  const withAgent = annotateSsh(denied, { tunnel: true, agent: true });
+  assert.match(withAgent, /<sandbox_ssh>[^]*not loaded in the agent[^]*ssh-add --apple-use-keychain/);
+  assert.equal(annotateSsh(withAgent, { tunnel: true, agent: true }), withAgent);
+  assert.match(annotateSsh(denied, { tunnel: true, agent: false }), /SSH_AUTH_SOCK is not set/);
+  assert.match(annotateSsh('Host key verification failed.', { tunnel: true, agent: true }), /known_hosts[^]*terminal/);
+  // With the tunnel in place the proxy message cannot come from SSH.
+  assert.equal(annotateSsh('This proxy requires authentication', { tunnel: true, agent: true }), 'This proxy requires authentication');
+  assert.equal(annotateSsh('fatal: repository not found', { tunnel: true, agent: true }), 'fatal: repository not found');
+});
+
 test('an unavailable sandbox prepares nothing — the runner falls back', async () => {
   const { service } = makeService({ fake: { errors: ['socat not installed'] } });
   assert.equal(await service.prepare({ command: 'ls', runTmp: '/tmp/x' }), null);
@@ -532,6 +612,22 @@ test('a run collects its own refusals, not those of other runs (#792)', posixOnl
     ['network', 'download.pytorch.org:443', 1],
   ]);
   assert.equal(await prepared.blocked(), blocked, 'looked up once');
+});
+
+test('ssh reaching for its key files is no refusal to show on macOS; any other program reaching for them is (#932)', posixOnly, async () => {
+  const { store, prepared } = await preparedWithStore('shell-9', { platform: 'darwin', readPythonCommand: async () => '/nonexistent/python' });
+  store.add('shell-9', 'ssh(64155) deny(1) file-read-data /home/u/.ssh/id_rsa');
+  store.add('shell-9', 'ssh(64155) deny(1) file-read-data /home/u/.ssh/id_ed25519');
+  store.add('shell-9', 'cat(64170) deny(1) file-read-data /home/u/.ssh/id_rsa');
+  store.add('shell-9', 'ssh(64155) deny(1) file-read-data /home/u/.aws/credentials');
+
+  const blocked = await prepared.blocked();
+
+  assert.deepEqual(blocked.entries.map((e) => [e.kind, e.target]), [
+    ['read', '/home/u/.ssh/id_rsa'],
+    ['read', '/home/u/.aws/credentials'],
+  ]);
+  assert.equal(blocked.total, 2);
 });
 
 test('a run keeps refusals past the runtime\'s hundred (#792)', posixOnly, async () => {

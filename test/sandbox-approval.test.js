@@ -11,7 +11,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 
-const { createSandboxService } = require('../src/main/services/sandbox-service');
+const { createSandboxService, sshReadPaths } = require('../src/main/services/sandbox-service');
 const { widerFolder } = require('../src/main/services/sandbox-violations');
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
 const {
@@ -145,20 +145,26 @@ test('granted folders become writable and granted paths readable — what may no
     command: 'x', workspaceRoot: `${HOME}/project`, runTmp: '/tmp/r', commandId: 'c', skipDetect: true,
     grants: {
       writePaths: [`${HOME}/Library/Caches/prisma`, HOME, '/', `${HOME}/.ssh`],
-      readPaths: [`${HOME}/.ssh/known_hosts`, `${HOME}/.config/Snotra AI/llm-config.json`],
+      readPaths: [`${HOME}/.aws/config`, `${HOME}/.config/Snotra AI/llm-config.json`],
     },
   });
   const { filesystem } = configs.at(-1);
   assert.deepEqual(filesystem.allowWrite, [`${HOME}/project`, '/tmp/r', `${HOME}/Library/Caches/prisma`]);
-  assert.deepEqual(filesystem.allowRead, [`${HOME}/.ssh/known_hosts`]);
-  assert.ok(filesystem.denyRead.includes('~/.ssh'), 'the protected list itself stays as it is');
+  // Next to what SSH always gets on macOS (#932).
+  assert.deepEqual(filesystem.allowRead, [`${HOME}/.aws/config`, ...sshReadPaths(HOME)]);
+  assert.ok(filesystem.denyRead.includes('~/.aws'), 'the protected list itself stays as it is');
 });
 
-test('without grants the run config has no allowRead', posixOnly, async () => {
+test('without grants the run config has no allowRead — on macOS only what SSH needs (#932)', posixOnly, async () => {
+  const linux = makeService({ platform: 'linux' });
+  await linux.service.detect();
+  await linux.service.prepare({ command: 'x', workspaceRoot: `${HOME}/project`, runTmp: '/tmp/r', commandId: 'c', skipDetect: true });
+  assert.equal('allowRead' in linux.configs.at(-1).filesystem, false);
+
   const { service, configs } = makeService({ platform: 'darwin' });
   await service.detect();
   await service.prepare({ command: 'x', workspaceRoot: `${HOME}/project`, runTmp: '/tmp/r', commandId: 'c', skipDetect: true });
-  assert.equal('allowRead' in configs.at(-1).filesystem, false);
+  assert.deepEqual(configs.at(-1).filesystem.allowRead, sshReadPaths(HOME));
 });
 
 test('Linux: a granted folder that does not exist is made before the run, a refused one is not', posixOnly, async () => {
