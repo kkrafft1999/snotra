@@ -1059,7 +1059,9 @@ module.exports = {
   'update.reason.layout': 'The app’s location looks unusual, so it would rather not replace itself. Download the new version from the release page.',
   'update.reason.noAsset': 'The release has no package for this installation.',
   'update.reason.readOnly': 'Snotra Agent is running from a place it cannot write to — the disk image, or a copy macOS has moved aside because it came from the internet. Move the app to Applications, start it from there, and the update can install itself.',
-  'update.error.githubHttp': 'GitHub answered with HTTP {status}.',
+  'update.error.githubHttp': 'GitHub could not answer the request (HTTP {status}).',
+  'update.error.rateLimited': 'GitHub is limiting requests from your network right now. Try again after {resetTime}.',
+  'update.error.rateLimitedNoTime': 'GitHub is limiting requests from your network right now. Try again in a few minutes.',
   'update.error.offline': 'The update server cannot be reached.',
   'update.error.checkFailed': 'Checking for updates failed.',
   'update.error.noRelease': 'No valid release was found.',
@@ -1110,8 +1112,7 @@ module.exports = {
   'update.error.body': 'Your running version is unchanged. You can try again or fetch the new version by hand.',
   'update.closeButton': 'Close',
   'update.none.title': 'No new version',
-  'update.check.failed': 'The check failed: {error}',
-  'update.check.failedPlain': 'The check failed.',
+  'update.check.failedTitle': 'Couldn’t check for updates',
   'update.check.upToDate': 'You already have the latest version ({version}).',
 
   // ── Tool catalogue (risk classes) ────────────────────────────────────────

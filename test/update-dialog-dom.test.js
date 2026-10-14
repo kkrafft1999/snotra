@@ -311,7 +311,46 @@ test('eine fehlgeschlagene Pruefung wird als solche benannt', async (t) => {
 
   await ui.dialog.checkNow();
   await flush();
-  assert.match(ui.summary(), /check failed: Server nicht erreichbar\./);
+  assert.equal(ui.title(), 'Couldn’t check for updates');
+  assert.equal(ui.summary(), 'Server nicht erreichbar.');
+  assert.deepEqual(ui.labels(), ['Close']);
+});
+
+test('a failed check is never titled "No new version" and offers the release page (#943)', async (t) => {
+  const releaseUrl = 'https://github.com/kkrafft1999/snotra/releases/latest';
+  const ui = await mount({
+    api: {
+      checkForUpdate: async () => ({
+        updateAvailable: false,
+        currentVersion: '1.7.1',
+        releaseUrl,
+        error: { key: 'update.error.rateLimitedNoTime' },
+      }),
+    },
+  });
+  t.after(ui.dom.cleanup);
+
+  await ui.dialog.checkNow();
+  await flush();
+  assert.notEqual(ui.title(), 'No new version');
+  assert.equal(ui.title(), 'Couldn’t check for updates');
+  assert.match(ui.summary(), /GitHub is limiting requests from your network/);
+  assert.deepEqual(ui.labels(), ['Open release page', 'Close']);
+  assert.ok(ui.buttons()[0].classList.contains('btn-primary'));
+
+  await ui.click('Open release page');
+  assert.ok(ui.calls.includes(`open:${releaseUrl}`));
+});
+
+test('a check that throws lands in the failed state too', async (t) => {
+  const ui = await mount({ api: { checkForUpdate: async () => { throw new Error('ipc gone'); } } });
+  t.after(ui.dom.cleanup);
+
+  await ui.dialog.checkNow();
+  await flush();
+  assert.equal(ui.title(), 'Couldn’t check for updates');
+  assert.equal(ui.summary(), 'Checking for updates failed.');
+  assert.deepEqual(ui.labels(), ['Close']);
 });
 
 test('ohne bekannte Gesamtgroesse laeuft ein unbestimmter Balken statt einer erfundenen Zahl', async (t) => {

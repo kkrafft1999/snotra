@@ -93,7 +93,8 @@ function translatePlural(locale, baseKey, count, params) {
  * classes belong in the sentence, but not what they are called in the language
  * the card is being read in. By convention it names them `…Key` (one) or
  * `…Keys` (several); both are looked up here and put in under the bare name,
- * so the entry itself only ever sees `{mode}` or `{effect}`.
+ * so the entry itself only ever sees `{mode}` or `{effect}`. A number named
+ * `…Time` is a point in time in epoch ms and comes out as a clock time.
  */
 function resolveKeyParams(locale, params) {
   if (!params) return params;
@@ -105,6 +106,11 @@ function resolveKeyParams(locale, params) {
     if (isMessage(value)) {
       if (out === params) out = { ...params };
       out[name] = translateMessage(locale, value);
+    } else if (name.endsWith('Time') && typeof value === 'number' && Number.isFinite(value)) {
+      // A point in time as epoch ms (#943): the sentence is built far from the
+      // screen, the clock format belongs to the language it is read in.
+      if (out === params) out = { ...params };
+      out[name] = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(value);
     } else if (name.endsWith('Keys') && Array.isArray(value)) {
       if (out === params) out = { ...params };
       out[name.slice(0, -4)] = value.map((key) => translate(locale, key)).join(', ');
