@@ -22,6 +22,7 @@ const {
   LOCAL_MODELS_TIMEOUT_MS,
 } = require('../services/request-timeout');
 const { isLocalEndpoint } = require('../../shared/contracts/provider-endpoint');
+const { isMaxOutputTokens } = require('../../shared/contracts/settings');
 const { listChatModels, streamChatCompletionsRound } = require('./openai-chat-transport');
 const { streamResponsesRound } = require('./openai-responses-transport');
 
@@ -124,6 +125,10 @@ function apiStyleOf(config) {
 
 function sendToolsOf(config) {
   return config?.sendTools !== false;
+}
+
+function maxOutputTokensOf(config) {
+  return isMaxOutputTokens(config?.maxOutputTokens) ? config.maxOutputTokens : undefined;
 }
 
 function supportsImagesOf(config) {
@@ -257,6 +262,9 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     abortSignal,
     supportsImages: supportsImagesOf(config),
     sendTools: sendToolsOf(config),
+    // Each transport puts it under its own field name, the fallback below
+    // included (#931).
+    maxOutputTokens: maxOutputTokensOf(config),
   };
 
   const wantsResponses = apiStyleOf(config) === API_STYLE_FULL && !_chatFallbackBases.has(base);
@@ -303,6 +311,7 @@ module.exports = {
     extraHeaders: true,
     supportsImages: true,
     sendTools: true,
+    maxOutputTokens: true,
   },
   // Der API-Key ist hier **optional**: ein lokaler Server ohne Key ist ein
   // gültiger, vollständig konfigurierter Zustand.

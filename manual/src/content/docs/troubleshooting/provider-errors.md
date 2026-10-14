@@ -38,7 +38,7 @@ A chat in which a message ended in an error.
 
 Some boxes are not about the provider:
 
-- ***The answer was cut off: the model reached its output limit.*** Ask Snotra to carry on, or to answer in smaller parts. If it happened in the middle of a tool call, ask for smaller steps — one file at a time.
+- ***The answer was cut off: the model reached its output limit.*** Ask Snotra to carry on, or to answer in smaller parts. If it happened in the middle of a tool call, ask for smaller steps — one file at a time. With an OpenAI-compatible server the message also names *Max output tokens*: the server's own limit is often small, and raising it under [*Settings › Models*](../../customising/models/) is the lasting fix.
 - ***Too many tool rounds (14 at the moment).*** The model called tools more often in a row than allowed. Ask a narrower question, or raise *Max. tool rounds* under [*Settings › General*](../../customising/settings/).
 - ***The connection ended before the answer was complete.*** The provider or the network broke off. Send the message again.
 - ***The answer did not come through.*** Ask again.

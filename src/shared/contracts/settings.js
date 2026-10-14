@@ -47,6 +47,32 @@ function sayText(say, value, fallback) {
  */
 const LLM_CONFIG_VERSION = 6;
 
+/**
+ * Output limit of an OpenAI-compatible entry (#931). Absent means nothing is
+ * sent and the server's default applies. The upper bound only catches typos —
+ * no model writes a million tokens in one answer.
+ */
+const MAX_OUTPUT_TOKENS_MIN = 1;
+const MAX_OUTPUT_TOKENS_MAX = 1000000;
+
+function isMaxOutputTokens(value) {
+  return Number.isInteger(value) && value >= MAX_OUTPUT_TOKENS_MIN && value <= MAX_OUTPUT_TOKENS_MAX;
+}
+
+/**
+ * What the user typed into the field: `{ value: null }` for empty, `{ value: n }`
+ * for a valid limit, `{ error: true }` for anything else. Thousands separators
+ * are accepted in groups of three (`8,192`, `8.192`, `8 192`), so `8.5` is an
+ * error rather than 85; signs and decimals are errors too.
+ */
+function parseMaxOutputTokensInput(raw) {
+  const text = typeof raw === 'string' ? raw.trim() : '';
+  if (!text) return { value: null };
+  if (!/^(?:\d+|\d{1,3}(?:[ ,.'\u00a0\u202f]\d{3})+)$/.test(text)) return { error: true };
+  const value = Number(text.replace(/\D/g, ''));
+  return isMaxOutputTokens(value) ? { value } : { error: true };
+}
+
 const MAX_TOOL_ROUNDS_MIN = 1;
 const MAX_TOOL_ROUNDS_MAX = 500;
 // The same minimum as `#sidebar { min-width }` in styles.css and SIDEBAR_MIN
@@ -225,6 +251,7 @@ const PRESET_CONNECTION_PLAIN_FIELDS = Object.freeze([
   'insecureTls',
   'supportsImages',
   'sendTools',
+  'maxOutputTokens',
 ]);
 const PRESET_CONNECTION_SECRET_FIELDS = Object.freeze(['apiKeyEnc', 'extraHeadersEnc']);
 
@@ -257,6 +284,9 @@ function connectionPlainValue(key, value, provider) {
   }
   if (key === 'insecureTls' || key === 'supportsImages') {
     return typeof value === 'boolean' ? value : undefined;
+  }
+  if (key === 'maxOutputTokens') {
+    return provider?.fields?.maxOutputTokens && isMaxOutputTokens(value) ? value : undefined;
   }
   return undefined;
 }
@@ -297,6 +327,8 @@ function normalizePresetConnectionPatch(raw, provider) {
   }
   // Der leere Anzeigename ist eine gültige Angabe: er löscht ihn.
   if (typeof raw.displayName === 'string' && !raw.displayName.trim()) out.displayName = '';
+  // So is an empty output limit: `null` removes it (#931).
+  if (raw.maxOutputTokens === null && provider?.fields?.maxOutputTokens) out.maxOutputTokens = null;
   if (typeof raw.apiKey === 'string' && raw.apiKey.trim()) out.apiKey = raw.apiKey.trim();
   if (raw.removeApiKey === true) out.removeApiKey = true;
   if (typeof raw.extraHeaders === 'string' && raw.extraHeaders.trim()) {
@@ -925,6 +957,7 @@ function buildProviderFormView(provider, say = plainText) {
     showExtraHeaders: !!provider?.fields?.extraHeaders,
     showSupportsImages: !!provider?.fields?.supportsImages,
     showSendTools: !!provider?.fields?.sendTools,
+    showMaxOutputTokens: !!provider?.fields?.maxOutputTokens,
     // Ohne erreichbare Modellliste bleibt der Anbieter per Hand nutzbar.
     allowManualModel: presentation.manualModel === true,
     // The models still offered, and what the dialog says about one that is
@@ -941,6 +974,10 @@ function buildProviderFormView(provider, say = plainText) {
 module.exports = {
   normalizeImageModel,
   LLM_CONFIG_VERSION,
+  MAX_OUTPUT_TOKENS_MIN,
+  MAX_OUTPUT_TOKENS_MAX,
+  isMaxOutputTokens,
+  parseMaxOutputTokensInput,
   API_STYLES,
   isApiStyle,
   MAX_DISPLAY_NAME_CHARS,

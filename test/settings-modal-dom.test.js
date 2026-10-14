@@ -204,6 +204,7 @@ test('getippte Verbindungswerte erreichen den Main-Prozess (#202)', async (t) =>
     insecureTls: false,
     supportsImages: false,
     sendTools: true,
+    maxOutputTokens: null,
     apiKey: 'sk-geheim',
     extraHeaders: 'X-Tenant: acme',
   });

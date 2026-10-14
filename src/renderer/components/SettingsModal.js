@@ -43,6 +43,8 @@ const CHEVRON_ICON_HTML =
 const {
   formatPresetSublabelFromView,
   presetIdentityKey,
+  parseMaxOutputTokensInput,
+  MAX_OUTPUT_TOKENS_MAX,
   isModelOffered,
   normalizeBaseUrl,
   PRESET_DETAIL_STYLES,
@@ -151,6 +153,9 @@ export function initSettingsModal(deps) {
   const selectApiStyle = document.getElementById('select-api-style');
   const providerSendToolsRow = document.getElementById('provider-send-tools-row');
   const inputSendTools = document.getElementById('input-send-tools');
+  const providerMaxOutputTokensRow = document.getElementById('provider-max-output-tokens-row');
+  const inputMaxOutputTokens = document.getElementById('input-max-output-tokens');
+  const maxOutputTokensError = document.getElementById('provider-max-output-tokens-error');
   const providerSupportsImagesRow = document.getElementById('provider-supports-images-row');
   const inputSupportsImages = document.getElementById('input-supports-images');
   const presetFieldsPopup = document.getElementById('preset-fields-popup');
@@ -270,6 +275,9 @@ export function initSettingsModal(deps) {
       removeExtraHeaders: false,
       supportsImages: false,
       sendTools: true,
+      // The field as typed (#931); parsed only when the entry is applied, so a
+      // wrong value stays visible instead of being reset.
+      maxOutputTokens: '',
     };
   }
 
@@ -284,6 +292,7 @@ export function initSettingsModal(deps) {
       apiStyle: conn.apiStyle || pv.form?.defaultApiStyle || 'chat',
       supportsImages: conn.supportsImages === true,
       sendTools: conn.sendTools !== false,
+      maxOutputTokens: Number.isInteger(conn.maxOutputTokens) ? String(conn.maxOutputTokens) : '',
     };
   }
 
@@ -405,7 +414,7 @@ export function initSettingsModal(deps) {
     // (`hasKey`, `hasExtraHeaders`) bleiben hier — der Main-Prozess weiss
     // selbst, was gespeichert ist.
     if (pr.connection && usesPresetConnection(pv)) {
-      const { displayName, baseUrl, apiStyle, insecureTls, supportsImages, sendTools, draft } = pr.connection;
+      const { displayName, baseUrl, apiStyle, insecureTls, supportsImages, sendTools, maxOutputTokens, draft } = pr.connection;
       row.connection = {
         displayName,
         baseUrl,
@@ -413,10 +422,37 @@ export function initSettingsModal(deps) {
         insecureTls,
         supportsImages,
         sendTools,
+        // null removes a stored limit (#931).
+        maxOutputTokens: Number.isInteger(maxOutputTokens) ? maxOutputTokens : null,
         ...(draft || {}),
       };
     }
     return row;
+  }
+
+  /**
+   * The output limit's error line (#931). While typing only a fix is reported
+   * at once; a new complaint waits for the field to be left or the entry to be
+   * applied, so a half-typed number is not called wrong. Returns whether the
+   * value is usable.
+   */
+  function showMaxOutputTokensError(force) {
+    const invalid = parseMaxOutputTokensInput(inputMaxOutputTokens.value).error === true;
+    const shown = !maxOutputTokensError.classList.contains('hidden');
+    if (!invalid) {
+      maxOutputTokensError.textContent = '';
+      maxOutputTokensError.classList.add('hidden');
+    } else if (force || shown) {
+      maxOutputTokensError.textContent = t('addModel.maxOutputTokens.invalid', {
+        max: MAX_OUTPUT_TOKENS_MAX.toLocaleString(getLocale()),
+      });
+      maxOutputTokensError.classList.remove('hidden');
+    }
+    inputMaxOutputTokens.setAttribute(
+      'aria-invalid',
+      invalid && !maxOutputTokensError.classList.contains('hidden') ? 'true' : 'false'
+    );
+    return !invalid;
   }
 
   function setModalError(text) {
@@ -487,6 +523,7 @@ export function initSettingsModal(deps) {
     }
     if (form.showSupportsImages) draft.supportsImages = !!inputSupportsImages.checked;
     if (form.showSendTools) draft.sendTools = !!inputSendTools.checked;
+    if (form.showMaxOutputTokens) draft.maxOutputTokens = inputMaxOutputTokens.value || '';
     stashPopupPresetFieldValues(id);
   }
 
@@ -957,6 +994,15 @@ export function initSettingsModal(deps) {
       providerSendToolsRow.classList.add('hidden');
       inputSendTools.checked = false;
     }
+
+    if (form.showMaxOutputTokens) {
+      providerMaxOutputTokensRow.classList.remove('hidden');
+      inputMaxOutputTokens.value = typeof draft.maxOutputTokens === 'string' ? draft.maxOutputTokens : '';
+    } else {
+      providerMaxOutputTokensRow.classList.add('hidden');
+      inputMaxOutputTokens.value = '';
+    }
+    showMaxOutputTokensError(false);
 
     if (form.showSupportsImages) {
       providerSupportsImagesRow.classList.remove('hidden');
@@ -2223,6 +2269,10 @@ export function initSettingsModal(deps) {
       inputModel.focus();
       return false;
     }
+    if (providerView.form?.showMaxOutputTokens && !showMaxOutputTokensError(true)) {
+      inputMaxOutputTokens.focus();
+      return false;
+    }
 
     // Die bearbeitete Zeile ist keine Dublette ihrer selbst.
     const dup = settingsDraftPresets.find((row) => {
@@ -2327,6 +2377,7 @@ export function initSettingsModal(deps) {
       insecureTls: draft?.insecureTls === true,
       supportsImages: draft?.supportsImages === true,
       sendTools: draft?.sendTools !== false,
+      maxOutputTokens: parseMaxOutputTokensInput(draft?.maxOutputTokens).value ?? null,
       hasKey: typedKey || (alt.hasKey === true && !draft?.removeApiKey),
       keyUnreadable: alt.keyUnreadable === true && !typedKey && !draft?.removeApiKey,
       hasExtraHeaders: typedHeaders || (alt.hasExtraHeaders === true && !draft?.removeExtraHeaders),
@@ -2606,6 +2657,16 @@ export function initSettingsModal(deps) {
     const draft = activeDraft(selectProvider.value);
     if (!draft) return;
     draft.sendTools = !!inputSendTools.checked;
+  });
+
+  inputMaxOutputTokens?.addEventListener('input', () => {
+    const draft = activeDraft(selectProvider.value);
+    if (draft) draft.maxOutputTokens = inputMaxOutputTokens.value || '';
+    showMaxOutputTokensError(false);
+  });
+
+  inputMaxOutputTokens?.addEventListener('blur', () => {
+    showMaxOutputTokensError(true);
   });
 
   inputSupportsImages?.addEventListener('change', () => {

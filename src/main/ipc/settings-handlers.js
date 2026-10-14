@@ -780,7 +780,8 @@ function mergePresetConnection({ safeStorage }, { previous, patch, provider }) {
 
   for (const key of PRESET_CONNECTION_PLAIN_FIELDS) {
     if (draft[key] === undefined) continue;
-    if (key === 'displayName' && !String(draft[key]).trim()) delete next.displayName;
+    if (draft[key] === null) delete next[key];
+    else if (key === 'displayName' && !String(draft[key]).trim()) delete next.displayName;
     else next[key] = draft[key];
   }
 

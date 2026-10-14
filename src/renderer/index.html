@@ -1556,6 +1556,15 @@
                   <p id="provider-supports-images-hint" class="modal-hint" data-i18n="addModel.images.hint">Only switch on if the model behind it understands images. Otherwise attachments are not offered in the chat at all.</p>
                 </div>
               </div>
+
+              <div id="provider-max-output-tokens-row" class="hidden popup-form__row">
+                <label class="popup-form__label" for="input-max-output-tokens" data-i18n="addModel.maxOutputTokens.subhead">Max output tokens</label>
+                <div class="popup-form__field">
+                  <input type="text" id="input-max-output-tokens" class="modal-input" inputmode="numeric" autocomplete="off" spellcheck="false" placeholder="Server default" data-i18n-attr="placeholder:addModel.maxOutputTokens.placeholder" aria-describedby="provider-max-output-tokens-hint provider-max-output-tokens-error" />
+                  <p id="provider-max-output-tokens-error" class="modal-hint error hidden" aria-live="polite"></p>
+                  <p id="provider-max-output-tokens-hint" class="modal-hint" data-i18n="addModel.maxOutputTokens.hint">Leave empty to let the server decide. Set a value if answers get cut off early, or to stop a model that runs on.</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -10815,3 +10815,15 @@ select.modal-input {
   outline-offset: var(--ds-focus-offset);
   border-radius: 50%;
 }
+
+/* A field whose value is refused (#931), said like the hint below it
+ * (`.modal-hint.error`). The edge says "wrong", so it no longer turns blue
+ * for the focus; the ring carries that. */
+.modal-input[aria-invalid='true'] {
+  border-color: var(--ds-error);
+}
+
+.modal-input[aria-invalid='true']:focus {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
