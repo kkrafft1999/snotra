@@ -6,7 +6,7 @@ name: Release
 #
 # Signing (#662): the macOS app and its DMG are signed with a Developer ID,
 # notarised and stapled; the secrets are listed at the build-macos job.
-# Windows stays unsigned (SmartScreen may warn, deferred in #19). Linux needs
+# Windows stays unsigned (SmartScreen may warn) until #911 lands. Linux needs
 # no signature.
 #
 # Test-Gate: Vor den Build-Jobs laeuft die Test-Suite aus ci.yml (macOS,
