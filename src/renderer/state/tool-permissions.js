@@ -100,6 +100,7 @@ export function initToolPermissionState({ api, whenChatSettled = async () => {} 
     setSensitivePathPatterns: (patterns) => call('setSensitivePathPatterns', patterns),
     clearSessionGrants: () => call('clearToolSessionGrants'),
     revokeSessionGrant: (grantId) => call('revokeToolSessionGrant', grantId),
+    removeWorkspaceHost: (host) => call('removeWorkspaceToolHost', host),
     resetWorkspaceRules: () => call('resetWorkspaceToolRules'),
     resetAll: () => call('resetAllToolPermissions'),
     setWorkspaceSandbox: (enabled) => call('setWorkspaceSandbox', enabled),

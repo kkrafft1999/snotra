@@ -59,10 +59,12 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 1. Sieh nach, um welchen Host es geht, wie lange die Verbindung schon wartet, welche Hosts schon frei sind und was der Befehl bisher gemeldet hat.
 2. Wähle unter *Verbindungen erlauben zu* genau diesen Host oder alle Hosts seiner Domain — `*.pytorch.org` statt `download.pytorch.org:443`. Eine Domain, die sich viele fremde Seiten teilen, etwa `amazonaws.com` oder `github.io`, wird nur Host für Host angeboten.
-3. Wähle unter *Wie lange* *Nur dieser Lauf* oder *Für diese Sitzung*.
+3. Wähle unter *Wie lange* *Nur dieser Lauf*, *Für diese Sitzung* oder — für einen Host, den dieser Ordner immer wieder braucht — *Für diesen Workspace*.
 4. Klick auf *Verbindung erlauben* oder auf *Ablehnen*. *Esc* lehnt ebenfalls ab.
 
 **Was dann passiert.** Erlaubt geht die Verbindung durch, und der Befehl läuft einfach weiter; nichts läuft zweimal. Für *diese Sitzung* erlaubt erreichen spätere Befehle im selben Chat den Host ohne Rückfrage; die Freigabe steht wie ein Pfad bei den Sitzungsfreigaben. Abgelehnt bleibt die Verbindung zu, und der Befehl scheitert von selbst; nach weiteren Hosts wird für ihn nicht mehr gefragt, und das Modell hat die Ansage, nicht auszuweichen. Gibt der Befehl auf, bevor du entscheidest — `pip` zum Beispiel nach 15 Sekunden —, sagt die Karte *Nicht mehr gewartet*, und eine zweite Karte nach dem Lauf bietet den Host mit *Freigeben und wiederholen* an.
+
+**Einen Host für den Ordner offen halten.** [seit 1.22] *Für diesen Workspace* ist die Antwort für einen Server, mit dem du jeden Tag arbeitest. Das Betriebssystem lässt dich das vorher bestätigen und nennt dabei Host und Ordner. Ab dann erreicht jeder Befehl und jeder Python-Lauf in diesem Ordner den Host — in jedem Chat und jedem Modus, auch nach einem Neustart —, und keine Karte fragt mehr nach ihm; für alles andere bleibt die Sandbox an. Der Host steht unter [*Einstellungen › Tools & Sicherheit*](../tools-and-security/#eine-freigabe-widerrufen-oder-zurücksetzen) in der Zeile *Ausführen*, wo du ihn wieder schließen kannst; *Workspace-Regeln zurücksetzen* schließt alle. Angeboten wird die Wahl nur für Verbindungen, nicht in *Immer fragen* und nur dort, wo Snotra sie verschlüsselt speichern kann. Brichst du den Systemdialog ab, bleibt die Karte offen.
 
 **Wenn du geantwortet hast.** [seit 1.21] Ist der Befehl durch, weicht die Karte dem Kasten unter den Tool-Schritten. Hast du alles beantwortet, was er gefragt hat, klappt der Kasten zu einer einzigen Zeile zusammen — zum Beispiel *Die Sandbox hat 1 Zugriff blockiert · abgelehnt · Befehl „cat ~/.aws/config“ ausgeführt* —, und ein Klick öffnet ihn: was blockiert wurde und warum, wie du entschieden hast und was das geöffnet hat, wie der zweite Lauf ausging und die Rohmeldung der Sandbox. Ein Kasten mit etwas, das niemand beantwortet hat, oder mit einer Sperre im zweiten Lauf bleibt offen. Eine Karte, auf die der Befehl nicht mehr gewartet hat (*Nicht mehr gewartet*), bleibt, wie sie ist. Die Ausgabe des ersten Laufs, die die Karte gezeigt hat, wird nicht aufbewahrt.
 
@@ -81,7 +83,7 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 1. Bitte wie gewohnt um den Git-Befehl und gib ihn auf der Karte frei.
 2. Steht der Host nicht unter den Netzwerk-Domains des Aufrufs, fragt die Karte *Sandbox · Verbindung wartet* nach ihm, etwa nach `gitlab.example.com:22`. Erlaube ihn für *Nur dieser Lauf* oder *Für diese Sitzung* — siehe [Eine Verbindung erlauben](#wenn-die-sandbox-etwas-blockiert).
-3. Für ein Remote, das du jeden Tag nutzt, gib `git` stattdessen eine [Freigabe pro Programm](#einem-programm-mehr-spielraum-geben) mit dem Host unter *Domains, die es erreichen darf*; dann muss niemand mehr fragen.
+3. Für ein Remote, das du jeden Tag nutzt, wähl auf dieser Karte *Für diesen Workspace*: Ab dann erreicht Git den Host aus diesem Ordner ohne Rückfrage. Brauchst du ihn aus jedem Ordner, gib `git` stattdessen eine [Freigabe pro Programm](#einem-programm-mehr-spielraum-geben) mit dem Host unter *Domains, die es erreichen darf*.
 
 ### Was passiert
 

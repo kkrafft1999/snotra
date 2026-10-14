@@ -161,6 +161,10 @@ function describeExecution(execution, tools) {
     unisolated: source.unisolated === true,
     pending: source.pending === true,
     programAllowances: Array.isArray(source.programAllowances) ? source.programAllowances : [],
+    // Hosts kept open for this workspace's runs (#946).
+    workspaceHosts: Array.isArray(source.workspaceHosts)
+      ? source.workspaceHosts.filter((host) => typeof host === 'string' && host)
+      : [],
   };
 }
 
@@ -173,7 +177,7 @@ function describeExecution(execution, tools) {
  * @param {Array} [input.tools]                 `listRiskCatalog()` plus `disabled`
  * @param {Array} [input.sessionGrants]         display DTOs of #447
  * @param {Array} [input.chats]                 `{ id, title, mode, current }` of this workspace
- * @param {object} [input.execution]            sandbox state, workspace switch, program allowances
+ * @param {object} [input.execution]            sandbox state, workspace switch, program allowances, kept hosts
  * @param {string[]} [input.sensitivePathPatterns]  the user's own patterns
  * @param {string} [input.integrity]
  * @param {boolean} [input.encryptionAvailable]

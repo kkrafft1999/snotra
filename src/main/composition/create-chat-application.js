@@ -70,6 +70,9 @@ function createChatApplication({
             rulesVersion: rulesVersionOf(state),
             integrity: state.integrity,
             encryptionAvailable: state.encryptionAvailable,
+            // Hosts kept open per workspace (#946); not part of the rules
+            // version, so keeping one costs no chat its approvals.
+            workspaceHosts: state.workspaceHosts,
           };
         },
       }

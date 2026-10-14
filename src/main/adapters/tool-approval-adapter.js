@@ -160,7 +160,7 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
      * Antwort aus dem Renderer. Akzeptiert nur eine Entscheidung auf eine
      * eigene, offene Anfrage; alles andere ist ein Fehler ohne Wirkung.
      */
-    respond(sessionId, { requestId, response, ruleId, sandboxPaths } = {}) {
+    respond(sessionId, { requestId, response, ruleId, sandboxPaths, workspaceStored } = {}) {
       const entry = pending.get(requestId);
       if (!entry) return { ok: false, error: createMessage('approval.error.noPending') };
       if (entry.sessionId !== sessionId) return { ok: false, error: createMessage('approval.error.otherWindow') };
@@ -175,7 +175,9 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
         : {};
       if (
         (response === APPROVAL_RESPONSES.ALLOW_SESSION && entry.request?.sessionAllowed !== true) ||
-        (response === APPROVAL_RESPONSES.ALLOW_ALWAYS && (entry.request?.alwaysAllowed !== true || !ruleId))
+        (response === APPROVAL_RESPONSES.ALLOW_ALWAYS && (entry.request?.alwaysAllowed !== true || !ruleId)) ||
+        // "For this workspace" only where the card offered it and main stored it (#946).
+        (response === APPROVAL_RESPONSES.ALLOW_WORKSPACE && (entry.request?.workspaceAllowed !== true || workspaceStored !== true))
       ) {
         // Die Karte bot die Option nicht an; als Einzelfreigabe behandeln.
         // "Always" without a stored rule is not "always" either (#121).

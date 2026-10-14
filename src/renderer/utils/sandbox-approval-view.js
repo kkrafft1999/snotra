@@ -209,11 +209,15 @@ export function buildSandboxCardView(dto, { homeDir = '' } = {}) {
     outputEmpty: t(live ? 'approval.sandbox.output.waiting' : 'approval.sandbox.output.empty'),
     output: sandbox.output,
     raw: Array.isArray(sandbox.raw) ? sandbox.raw.join('\n') : '',
-    // "For this session" only where the mode keeps approvals at all.
+    // "For this session" only where the mode keeps approvals at all; "For
+    // this workspace" only where main offers it, on a card about hosts (#946).
     durations: dto.sessionAllowed === true
       ? [
           { value: 'run', label: t('approval.sandbox.duration.run') },
           { value: 'session', label: t('approval.sandbox.duration.session') },
+          ...(dto.workspaceAllowed === true
+            ? [{ value: 'workspace', label: t('approval.sandbox.duration.workspace') }]
+            : []),
         ]
       : [],
     warning: t(live ? 'approval.sandbox.warning.live' : 'approval.sandbox.warning'),
@@ -267,6 +271,9 @@ export function describeSandboxOutcome({ response, invalidated, reason, aborted 
       detail: t(live ? 'approval.outcome.sandboxConnectionDenied.detail' : 'approval.outcome.sandboxDenied.detail'),
     };
   }
+  if (response === APPROVAL_RESPONSES.ALLOW_WORKSPACE) {
+    return { status: 'allowed', label: t('approval.outcome.sandboxWorkspace.label'), detail: allowed };
+  }
   if (response === APPROVAL_RESPONSES.ALLOW_SESSION) {
     return { status: 'allowed', label: t('approval.outcome.sandboxSession.label'), detail: allowed };
   }
@@ -290,7 +297,9 @@ export function sandboxAnswerRecorded(dto, outcome, trace) {
   if (!sandbox || !outcome || outcome.invalidated === true || !Array.isArray(trace)) return false;
   const expected = outcome.response === APPROVAL_RESPONSES.DENY
     ? 'denied'
-    : outcome.response === APPROVAL_RESPONSES.ALLOW_ONCE || outcome.response === APPROVAL_RESPONSES.ALLOW_SESSION
+    : outcome.response === APPROVAL_RESPONSES.ALLOW_ONCE
+      || outcome.response === APPROVAL_RESPONSES.ALLOW_SESSION
+      || outcome.response === APPROVAL_RESPONSES.ALLOW_WORKSPACE
       ? 'allowed'
       : null;
   if (!expected) return false;

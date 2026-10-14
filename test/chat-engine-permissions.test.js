@@ -1002,6 +1002,104 @@ test('live connection: "for this session" opens the host for the chat\'s next ru
   assert.deepEqual(listed[0].scope.params, { path: HOST });
 });
 
+// ── A host kept open for the workspace (#946) ───────────────────────────────
+
+test('workspace host: the connection card offers it in Smart and Auto, with the run\'s workspace kept in main', async () => {
+  for (const mode of ['smart', 'auto']) {
+    const approvals = makeApprovals('allow-once');
+    const tools = makeToolPort({ execute: connectingRun() });
+    const { engine } = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'git fetch' }), assistantText('ok')],
+      { tools, approvals, toolPolicy: policy({ mode, encryptionAvailable: true }) });
+    await send(engine);
+    const [request] = sandboxRequests(approvals);
+    assert.equal(request.workspaceAllowed, true, mode);
+    assert.equal(request.workspaceRoot, ROOT);
+  }
+});
+
+test('workspace host: not offered in "Always ask", without encrypted storage, or for anything but connections', async () => {
+  const cases = [
+    { toolPolicy: policy({ mode: 'ask-all' }), execute: connectingRun() },
+    { toolPolicy: policy({ encryptionAvailable: false }), execute: connectingRun() },
+    // A card after the run about a folder to write in.
+    { toolPolicy: policy(), execute: (name, args, ctx, n) => (n === 1 ? blockedRun() : okRun()) },
+  ];
+  for (const { toolPolicy, execute } of cases) {
+    const approvals = makeApprovals('allow-once');
+    const tools = makeToolPort({ execute });
+    const { engine } = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'x' }), assistantText('ok')],
+      { tools, approvals, toolPolicy });
+    await send(engine);
+    const [request] = sandboxRequests(approvals);
+    assert.equal(request.workspaceAllowed, false);
+    assert.equal(request.workspaceRoot === ROOT && request.workspaceAllowed, false);
+  }
+});
+
+test('workspace host: "for this workspace" lets the command carry on, keeps no session grant, and tells the model', async () => {
+  const approvals = makeApprovals({ response: 'allow-workspace', sandboxPaths: ['*.pytorch.org'] });
+  const answers = [];
+  const tools = makeToolPort({ execute: connectingRun({ answers }) });
+  const llm = makeLlmPort([assistantToolCall('c1', 'shell_execute', { command: 'pip install torch' }), assistantText('ok')]);
+  const { engine, grants } = makeEngine(null, { tools, approvals, llm, toolPolicy: policy() });
+
+  const result = await send(engine, { chatId: 'chat-1' });
+
+  assert.deepEqual(answers, [{ outcome: 'allowed', pattern: '*.pytorch.org' }]);
+  assert.deepEqual(result.toolTrace[0].sandboxLive, [{ target: HOST, outcome: 'allowed', duration: 'workspace', pattern: '*.pytorch.org' }]);
+  assert.equal(grants.count(), 0, 'the workspace keeps it, not the chat');
+  const output = JSON.parse(toolMessageOf(llm).content);
+  assert.match(output.sandbox_connections, /\(as \*\.pytorch\.org\) for every run in this workspace\./);
+});
+
+test('workspace host: an answer the card did not offer counts as this run only', async () => {
+  // "Always ask" asks for the command first; the connection card then offers no workspace.
+  const approvals = makeApprovals((request) => (request.checkpoint === 'sandbox'
+    ? { response: 'allow-workspace', sandboxPaths: [HOST] }
+    : 'allow-once'));
+  const tools = makeToolPort({ execute: connectingRun() });
+  const { engine } = makeEngine([assistantToolCall('c1', 'shell_execute', { command: 'x' }), assistantText('ok')],
+    { tools, approvals, toolPolicy: policy({ mode: 'ask-all' }) });
+  const result = await send(engine);
+  assert.equal(result.toolTrace[0].sandboxLive[0].duration, 'run');
+});
+
+test('workspace host: kept hosts reach every run of their workspace — and only of theirs', async () => {
+  const kept = { [ROOT]: ['gitlab.example.com:22'], '/somewhere/else': ['pypi.org:443'] };
+  const approvals = makeApprovals({ response: 'allow-session', sandboxPaths: [HOST] });
+  const tools = makeToolPort({ execute: (name, args, ctx, n) => (n === 1 ? connectingRun()(name, args, ctx) : okRun()) });
+  const { engine } = makeEngine([
+    assistantToolCall('c1', 'shell_execute', { command: 'git fetch' }),
+    assistantToolCall('c2', 'shell_execute', { command: 'git pull' }),
+    assistantText('ok'),
+  ], { tools, approvals, toolPolicy: policy({ workspaceHosts: kept }) });
+
+  await send(engine, { chatId: 'chat-1' });
+
+  assert.deepEqual(tools.calls[0].context.sandboxGrants, { writePaths: [], readPaths: [], hosts: ['gitlab.example.com:22'] });
+  // With a session grant on top, both are there, the workspace's first.
+  assert.deepEqual(tools.calls[1].context.sandboxGrants.hosts, ['gitlab.example.com:22', HOST]);
+});
+
+test('workspace host: a card after the run keeps the chosen host for the workspace and runs again', async () => {
+  const approvals = makeApprovals((request) => {
+    assert.equal(request.workspaceAllowed, true);
+    return { response: 'allow-workspace', sandboxPaths: ['gitlab.example.com:22'] };
+  });
+  const network = blockedRun({ kind: 'network', target: 'gitlab.example.com:22', allow: ['gitlab.example.com:22'] });
+  const tools = makeToolPort({ execute: (name, args, ctx, n) => (n === 1 ? network : okRun()) });
+  const llm = makeLlmPort([assistantToolCall('c1', 'shell_execute', { command: 'git fetch' }), assistantText('ok')]);
+  const { engine, grants } = makeEngine(null, { tools, approvals, llm, toolPolicy: policy() });
+
+  const result = await send(engine);
+
+  assert.equal(tools.calls.length, 2, 'ran again');
+  assert.deepEqual(tools.calls[1].context.sandboxGrants.hosts, ['gitlab.example.com:22']);
+  assert.equal(result.toolTrace[0].sandboxDecision.duration, 'workspace');
+  assert.equal(grants.count(), 0);
+  assert.match(JSON.parse(toolMessageOf(llm).content).sandbox_decision, /for every run in this workspace/);
+});
+
 test('live connection: denied — it stays closed, no card after the run, and the model is told not to work around it', async () => {
   const approvals = makeApprovals('deny');
   const answers = [];

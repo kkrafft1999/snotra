@@ -324,6 +324,44 @@ test('the box under the tool log keeps a connection let through while the comman
   assert.equal(denied.querySelector('.chat-sandbox-blocked-reason').textContent, 'You denied this connection while the command ran.');
 }));
 
+test('a connection card main offers it for: "For this workspace" answers with the workspace (#946)', withDom(async () => {
+  const page = await mount();
+  page.request(liveDto('w1', { workspaceAllowed: true }));
+  const el = card('w1');
+  const duration = el.querySelectorAll('.chat-approval-card__choice')[1];
+  assert.equal(duration.querySelector('legend').textContent, 'How long');
+  assert.deepEqual([...duration.querySelectorAll('.chat-approval-card__option')].map((o) => o.textContent),
+    ['Only this run', 'For this session', 'For this workspace']);
+  assert.equal(duration.querySelector('input:checked').value, 'run', 'the shortest stays the default');
+  el.querySelectorAll('.chat-approval-card__choice')[0].querySelectorAll('input')[1].click();
+  el.querySelector('input[value="workspace"]').click();
+  el.querySelector('.chat-approval-card__actions button[data-response="allow-once"]').click();
+  assert.deepEqual(page.calls.at(-1), { requestId: 'w1', response: 'allow-workspace', extra: { sandboxPaths: ['*.pytorch.org'] } });
+
+  page.resolve({ requestId: 'w1', response: 'allow-workspace' });
+  assert.equal(card('w1').querySelector('.chat-approval-card__result').textContent,
+    'Allowed for this workspace The connection goes through, and the command carries on.');
+}));
+
+test('without main\'s offer, or in "Always ask", there is no "For this workspace" (#946)', withDom(async () => {
+  const page = await mount();
+  page.request(liveDto('w1'));
+  assert.equal(card('w1').querySelector('input[value="workspace"]'), null);
+  page.request(liveDto('w2', { workspaceAllowed: true, sessionAllowed: false, mode: 'ask-all' }));
+  assert.equal(card('w2').querySelector('input[value="workspace"]'), null);
+}));
+
+test('the box under the tool log says a connection was kept for the workspace (#946)', withDom(async () => {
+  const { buildSandboxBlockedBox, blockedRunsOf } = await importRenderer('chat', 'sandboxBlocked.js');
+  const box = buildSandboxBlockedBox(blockedRunsOf([{
+    line: 'Shell: git fetch',
+    tool: 'shell_execute',
+    sandboxLive: [{ target: 'gitlab.example.com:22', outcome: 'allowed', duration: 'workspace', pattern: 'gitlab.example.com:22' }],
+  }]));
+  const entry = box.querySelector('.chat-sandbox-blocked-entry');
+  assert.equal([...entry.children].at(-1).textContent, 'Allowed while the command waited · this workspace');
+}));
+
 // ── A file tool outside the open folder (#792, step 4) ──────────────────────
 
 const TODO = `${HOME}/notes/todo.md`;

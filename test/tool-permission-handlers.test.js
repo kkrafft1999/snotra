@@ -844,3 +844,147 @@ test('an allow rule for a tool that can never be allowed permanently is refused 
   assert.equal((await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'allow', tool: 'edit_file' })).ok, true);
   assert.equal((await toolPolicyStore.read()).rules.length, 2);
 });
+
+// ── "For this workspace" on a connection card (#946) ────────────────────────
+
+/** A connection card as the engine sends it, offered for the workspace. */
+function connectionCard(overrides = {}) {
+  return {
+    tool: 'shell_execute',
+    riskClasses: ['external'],
+    targets: [],
+    mode: 'smart',
+    checkpoint: 'sandbox',
+    sessionAllowed: true,
+    workspaceAllowed: true,
+    workspaceRoot: '/work/run-root',
+    sandbox: {
+      live: true,
+      command: 'git fetch',
+      run: { exitCode: null, durationMs: null, timedOut: false },
+      output: '',
+      entries: [{ kind: 'network', target: 'gitlab.example.com:22', count: 1, allow: ['gitlab.example.com:22', '*.example.com'] }],
+      others: [],
+      raw: [],
+    },
+    ...overrides,
+  };
+}
+
+async function openCard(invoke, approvals, request) {
+  const sender = makeSender(7);
+  await invoke(REQ.TOOL_APPROVAL_SUBSCRIBE, sender);
+  const pending = approvals.requestApproval({ sessionId: 7, request });
+  const dto = sender.sent.find((s) => s.channel === PUSH.TOOL_APPROVAL_REQUEST).payload;
+  return { sender, pending, dto };
+}
+
+test('workspace host: the card learns only that it may offer it, never the folder', async (t) => {
+  const { invoke, approvals } = await setup(t);
+  const { dto, pending } = await openCard(invoke, approvals, connectionCard());
+  assert.equal(dto.workspaceAllowed, true);
+  assert.equal('workspaceRoot' in dto, false);
+  approvals.invalidateAll('request_invalidated');
+  await pending;
+});
+
+test('workspace host: confirmed natively, kept for the run\'s folder, and the card answered', async (t) => {
+  const { invoke, approvals, dialogCalls, toolPolicyStore } = await setup(t, { locale: 'en' });
+  const { sender, pending, dto } = await openCard(invoke, approvals, connectionCard());
+  const result = await invoke(REQ.TOOL_APPROVAL_RESPOND, sender,
+    { requestId: dto.requestId, response: 'allow-workspace', sandboxPaths: ['*.example.com'] });
+  assert.equal(result.ok, true);
+  const outcome = await pending;
+  assert.equal(outcome.response, 'allow-workspace');
+  assert.deepEqual(outcome.sandboxPaths, ['*.example.com']);
+  assert.equal(dialogCalls.length, 1);
+  assert.equal(dialogCalls[0].title, 'Allow these connections for this workspace?');
+  assert.match(dialogCalls[0].detail, /\*\.example\.com/);
+  assert.match(dialogCalls[0].detail, /\/work\/run-root/);
+  assert.match(dialogCalls[0].detail, /Settings › Tools & security/);
+  // The run's folder, not the one on screen.
+  assert.deepEqual((await toolPolicyStore.read()).workspaceHosts, { '/work/run-root': ['*.example.com'] });
+  assert.ok(sender.sent.some((s) => s.channel === PUSH.TOOL_PERMISSIONS_CHANGED));
+});
+
+test('workspace host: a pick the card did not offer keeps its first offer', async (t) => {
+  const { invoke, approvals, toolPolicyStore } = await setup(t);
+  const { sender, pending, dto } = await openCard(invoke, approvals, connectionCard());
+  await invoke(REQ.TOOL_APPROVAL_RESPOND, sender,
+    { requestId: dto.requestId, response: 'allow-workspace', sandboxPaths: ['evil.example.org:443'] });
+  await pending;
+  assert.deepEqual((await toolPolicyStore.read()).workspaceHosts['/work/run-root'], ['gitlab.example.com:22']);
+});
+
+test('workspace host: cancelling the dialog keeps nothing and leaves the card open', async (t) => {
+  const { invoke, approvals, toolPolicyStore } = await setup(t, { dialogResponse: 1 });
+  const { sender, pending, dto } = await openCard(invoke, approvals, connectionCard());
+  const result = await invoke(REQ.TOOL_APPROVAL_RESPOND, sender, { requestId: dto.requestId, response: 'allow-workspace' });
+  assert.equal(result.ok, false);
+  assert.equal(result.code, 'cancelled');
+  assert.deepEqual((await toolPolicyStore.read()).workspaceHosts, {});
+  assert.equal((await invoke(REQ.TOOL_APPROVAL_LIST_PENDING, sender)).requests.length, 1, 'still open');
+  await invoke(REQ.TOOL_APPROVAL_RESPOND, sender, { requestId: dto.requestId, response: 'allow-once' });
+  assert.equal((await pending).response, 'allow-once');
+});
+
+test('workspace host: a card that did not offer it asks nothing, keeps nothing and counts as once', async (t) => {
+  const { invoke, approvals, dialogCalls, toolPolicyStore } = await setup(t);
+  const { sender, pending, dto } = await openCard(invoke, approvals, connectionCard({ workspaceAllowed: false }));
+  const result = await invoke(REQ.TOOL_APPROVAL_RESPOND, sender, { requestId: dto.requestId, response: 'allow-workspace' });
+  assert.equal(result.ok, true);
+  assert.equal((await pending).response, 'allow-once');
+  assert.equal(dialogCalls.length, 0);
+  assert.deepEqual((await toolPolicyStore.read()).workspaceHosts, {});
+});
+
+test('workspace host: the command gave up while the dialog was open — nothing is kept', async (t) => {
+  let approvalsRef;
+  const { invoke, approvals, toolPolicyStore } = await setup(t, {
+    dialogResponse: () => {
+      approvalsRef.invalidateAll('sandbox_run_ended');
+      return 0;
+    },
+  });
+  approvalsRef = approvals;
+  const { sender, pending, dto } = await openCard(invoke, approvals, connectionCard());
+  const result = await invoke(REQ.TOOL_APPROVAL_RESPOND, sender, { requestId: dto.requestId, response: 'allow-workspace' });
+  assert.equal(result.ok, false);
+  assert.equal((await pending).invalidated, true);
+  assert.deepEqual((await toolPolicyStore.read()).workspaceHosts, {});
+});
+
+test('workspace host: listed for the open folder, closed one by one without a dialog', async (t) => {
+  const { invoke, toolPolicyStore, dialogCalls } = await setup(t, { workspaceRoot: '/work/projekt' });
+  await toolPolicyStore.addWorkspaceHosts('/work/projekt', ['gitlab.example.com:22', 'pypi.org:443']);
+  await toolPolicyStore.addWorkspaceHosts('/work/other', ['other.example.com:443']);
+  const sender = makeSender(3);
+  assert.deepEqual((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceHosts, ['gitlab.example.com:22', 'pypi.org:443']);
+  const overview = await invoke(REQ.TOOL_PERMISSIONS_GET_SECURITY_OVERVIEW, sender);
+  assert.deepEqual(overview.execution.workspaceHosts, ['gitlab.example.com:22', 'pypi.org:443']);
+
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_REMOVE_WORKSPACE_HOST, sender, 'pypi.org:443')).ok, true);
+  assert.equal(dialogCalls.length, 0);
+  const hosts = (await toolPolicyStore.read()).workspaceHosts;
+  assert.deepEqual(hosts, { '/work/projekt': ['gitlab.example.com:22'], '/work/other': ['other.example.com:443'] });
+  assert.ok(sender.sent.some((s) => s.channel === PUSH.TOOL_PERMISSIONS_CHANGED));
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_REMOVE_WORKSPACE_HOST, sender, '')).ok, false);
+});
+
+test('workspace host: without a folder nothing is listed or closed', async (t) => {
+  const { invoke } = await setup(t, { workspaceRoot: null });
+  const sender = makeSender(3);
+  assert.deepEqual((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceHosts, []);
+  const result = await invoke(REQ.TOOL_PERMISSIONS_REMOVE_WORKSPACE_HOST, sender, 'pypi.org:443');
+  assert.equal(result.ok, false);
+});
+
+test('workspace host: the German dialog speaks German and names the page', async (t) => {
+  const { invoke, approvals, dialogCalls } = await setup(t, { locale: 'de' });
+  const { sender, pending, dto } = await openCard(invoke, approvals, connectionCard());
+  await invoke(REQ.TOOL_APPROVAL_RESPOND, sender, { requestId: dto.requestId, response: 'allow-workspace' });
+  await pending;
+  assert.equal(dialogCalls[0].title, 'Diese Verbindungen für diesen Workspace erlauben?');
+  assert.equal(dialogCalls[0].buttons[0], 'Für diesen Workspace erlauben');
+  assert.match(dialogCalls[0].detail, /Einstellungen › Tools & Sicherheit/);
+});

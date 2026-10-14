@@ -46,7 +46,8 @@ The row *Read sensitive data* lists the built-in patterns — `.env*`, `*.pem`, 
 ## Revoke an allowance or reset
 
 - ***Session allowances*** lists every *Allow for this session* still in force, grouped by chat, with what it covers and when you gave it. Revoke them one by one or with *Revoke all*.
-- ***Reset workspace rules*** deletes the blocks and allowances of the open folder only, switches its sandbox back on and sets its default mode back to *Smart*.
+- ***Connections kept open*** [since 1.22] are listed in the row *Execute*, under *What can a command reach?*: every host a connection card kept open *For this workspace*. The closed row counts them. The trash button next to a host closes it again, without a dialog — the next connection to it asks.
+- ***Reset workspace rules*** deletes the blocks and allowances of the open folder only, closes the connections kept open for it, switches its sandbox back on and sets its default mode back to *Smart*.
 - ***Reset all permissions*** deletes every rule, your own sensitive patterns, every program allowance and session allowance, switches the sandbox back on everywhere and restores *Smart*, also as the default of every folder. It always asks in a system dialog that lists the protection that goes.
 
 ## If it doesn't work
