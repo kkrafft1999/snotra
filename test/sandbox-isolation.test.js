@@ -288,6 +288,34 @@ test('a connection still waiting when the command gives up is offered with a ret
   );
 });
 
+test('git\'s SSH reaches an allowed host through the proxy on macOS, and an unlisted one is refused (#932)', async (t) => {
+  const ctx = await ready(t);
+  if (!ctx) return;
+  if (process.platform !== 'darwin') {
+    t.skip('the tunnel helper is macOS only; on Linux the runtime\'s socat route carries the credentials');
+    return;
+  }
+  // GitHub's SSH endpoint on 443, so a network that closes port 22 still
+  // gets there. A throwaway known_hosts: the test is about the tunnel.
+  const ssh = 'sh -c "$GIT_SSH_COMMAND -o BatchMode=yes -o StrictHostKeyChecking=no '
+    + '-o UserKnownHostsFile=/dev/null -o ConnectTimeout=20 -p 443 -T git@ssh.github.com"';
+
+  const allowed = await runThroughProxy(t, ctx, 'ssh allowed', ssh, { networkDomains: ['ssh.github.com'], timeoutMs: 40_000 });
+  // The server answered: the handshake went through the tunnel. Whether the
+  // key on this machine is known to GitHub does not matter here.
+  assert.match(allowed.stderr, /Permission denied \(publickey\)|successfully authenticated/, allowed.stderr);
+  assert.doesNotMatch(allowed.stderr, /proxy requires authentication/);
+  assert.equal(allowed.sandboxBlocked, undefined);
+
+  const blocked = await runThroughProxy(t, ctx, 'ssh blocked', ssh, { timeoutMs: 40_000 });
+  assert.notEqual(blocked.exitCode, 0);
+  assert.match(blocked.stderr, /the sandbox refused the connection to ssh\.github\.com:443/);
+  assert.deepEqual(
+    blocked.sandboxBlocked?.entries.map((e) => [e.kind, e.target]),
+    [['network', 'ssh.github.com:443']],
+  );
+});
+
 test('a background process ends with its run and never reaches a later run\'s domains (CR-B03-01)', async (t) => {
   const ctx = await ready(t);
   if (!ctx) return;

@@ -42,7 +42,7 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 ## Wenn die Sandbox etwas blockiert
 
-[seit 1.18] Manchmal braucht ein Befehl mehr, als die Sandbox erlaubt: Ein Build-Tool schreibt seinen Cache unter `~/Library/Caches`, `git fetch` liest `~/.ssh/known_hosts`, `pip` will einen Host, den der Aufruf nicht genannt hat. Die Sandbox verweigert es, und Snotra zeigt dir, was verweigert wurde, statt das Modell raten zu lassen.
+[seit 1.18] Manchmal braucht ein Befehl mehr, als die Sandbox erlaubt: Ein Build-Tool schreibt seinen Cache unter `~/Library/Caches`, ein Werkzeug liest seine Anmeldung aus `~/.config/gcloud`, `pip` will einen Host, den der Aufruf nicht genannt hat. Die Sandbox verweigert es, und Snotra zeigt dir, was verweigert wurde, statt das Modell raten zu lassen.
 
 **Was du siehst.** Direkt unter den Tool-Schritten der Antwort steht ein Kasten mit dem, was blockiert wurde — Schreiben, Lesen an einem geschützten Ort oder eine Verbindung —, mit Pfad oder Host und dem Grund. Darunter liegt eingeklappt die Rohmeldung der Sandbox. Der Kasten bleibt beim Chat, auch wenn du ihn später wieder öffnest.
 
@@ -64,9 +64,30 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 **Was dann passiert.** Erlaubt geht die Verbindung durch, und der Befehl läuft einfach weiter; nichts läuft zweimal. Für *diese Sitzung* erlaubt erreichen spätere Befehle im selben Chat den Host ohne Rückfrage; die Freigabe steht wie ein Pfad bei den Sitzungsfreigaben. Abgelehnt bleibt die Verbindung zu, und der Befehl scheitert von selbst; nach weiteren Hosts wird für ihn nicht mehr gefragt, und das Modell hat die Ansage, nicht auszuweichen. Gibt der Befehl auf, bevor du entscheidest — `pip` zum Beispiel nach 15 Sekunden —, sagt die Karte *Nicht mehr gewartet*, und eine zweite Karte nach dem Lauf bietet den Host mit *Freigeben und wiederholen* an.
 
-**Wenn du geantwortet hast.** [seit 1.21] Ist der Befehl durch, weicht die Karte dem Kasten unter den Tool-Schritten. Hast du alles beantwortet, was er gefragt hat, klappt der Kasten zu einer einzigen Zeile zusammen — zum Beispiel *Die Sandbox hat 1 Zugriff blockiert · abgelehnt · Befehl „cat ~/.ssh/config“ ausgeführt* —, und ein Klick öffnet ihn: was blockiert wurde und warum, wie du entschieden hast und was das geöffnet hat, wie der zweite Lauf ausging und die Rohmeldung der Sandbox. Ein Kasten mit etwas, das niemand beantwortet hat, oder mit einer Sperre im zweiten Lauf bleibt offen. Eine Karte, auf die der Befehl nicht mehr gewartet hat (*Nicht mehr gewartet*), bleibt, wie sie ist. Die Ausgabe des ersten Laufs, die die Karte gezeigt hat, wird nicht aufbewahrt.
+**Wenn du geantwortet hast.** [seit 1.21] Ist der Befehl durch, weicht die Karte dem Kasten unter den Tool-Schritten. Hast du alles beantwortet, was er gefragt hat, klappt der Kasten zu einer einzigen Zeile zusammen — zum Beispiel *Die Sandbox hat 1 Zugriff blockiert · abgelehnt · Befehl „cat ~/.aws/config“ ausgeführt* —, und ein Klick öffnet ihn: was blockiert wurde und warum, wie du entschieden hast und was das geöffnet hat, wie der zweite Lauf ausging und die Rohmeldung der Sandbox. Ein Kasten mit etwas, das niemand beantwortet hat, oder mit einer Sperre im zweiten Lauf bleibt offen. Eine Karte, auf die der Befehl nicht mehr gewartet hat (*Nicht mehr gewartet*), bleibt, wie sie ist. Die Ausgabe des ersten Laufs, die die Karte gezeigt hat, wird nicht aufbewahrt.
 
-**Was sich nicht freigeben lässt.** Eine Verbindung, die ein Programm direkt statt über den Proxy der Sandbox aufbaut — `psql`, `ssh` —, lässt sich nur anzeigen: Die Sandbox kann dafür keinen einzelnen Host öffnen. Snotras eigener Speicher, dein Home-Ordner als Ganzes und die Dateien, die die Sandbox immer verschlossen hält, etwa `.bashrc` oder `.git/hooks`, werden nie angeboten.
+**Was sich nicht freigeben lässt.** Eine Verbindung, die ein Programm direkt statt über den Proxy der Sandbox aufbaut — `psql` oder `ssh` und `scp`, wenn du sie direkt aufrufst —, lässt sich nur anzeigen: Die Sandbox kann dafür keinen einzelnen Host öffnen. Snotras eigener Speicher, dein Home-Ordner als Ganzes und die Dateien, die die Sandbox immer verschlossen hält, etwa `.bashrc` oder `.git/hooks`, werden nie angeboten.
+
+## Git über SSH nutzen
+
+[seit 1.22] Unter macOS erreichen `git fetch`, `git pull`, `git push` und `git ls-remote` auch aus der Sandbox ein SSH-Remote wie `git@gitlab.example.com:team/app.git`. Snotra schickt die SSH-Verbindung von Git über den Proxy der Sandbox. Damit gelten für sie dieselben Regeln wie für jede andere Verbindung, und die Sandbox bleibt an.
+
+### Was du brauchst
+
+- **Den Host in `~/.ssh/known_hosts`.** In der Sandbox kann SSH nicht fragen, ob es einem neuen Host trauen soll. Verbinde dich einmal aus einem Terminal mit ihm — `ssh -T git@gitlab.example.com` — und bestätige seinen Schlüssel.
+- **Deinen Schlüssel im ssh-agent.** Die Sandbox hält deine privaten Schlüsseldateien verschlossen; SSH meldet sich stattdessen über den Agent an. Lade den Schlüssel einmal mit `ssh-add --apple-use-keychain ~/.ssh/<schlüssel>`, oder trag `AddKeysToAgent yes` und `UseKeychain yes` in `~/.ssh/config` ein, dann lädt SSH ihn, sobald du ihn das nächste Mal im Terminal benutzt.
+
+### Schritte
+
+1. Bitte wie gewohnt um den Git-Befehl und gib ihn auf der Karte frei.
+2. Steht der Host nicht unter den Netzwerk-Domains des Aufrufs, fragt die Karte *Sandbox · Verbindung wartet* nach ihm, etwa nach `gitlab.example.com:22`. Erlaube ihn für *Nur dieser Lauf* oder *Für diese Sitzung* — siehe [Eine Verbindung erlauben](#wenn-die-sandbox-etwas-blockiert).
+3. Für ein Remote, das du jeden Tag nutzt, gib `git` stattdessen eine [Freigabe pro Programm](#einem-programm-mehr-spielraum-geben) mit dem Host unter *Domains, die es erreichen darf*; dann muss niemand mehr fragen.
+
+### Was passiert
+
+Git erreicht den Host über den Proxy. SSH darf in `~/.ssh` die `known_hosts`, die `config` und die öffentlichen Schlüssel (`*.pub`) lesen und mit dem ssh-agent sprechen; die privaten Schlüssel bleiben zu, und die Versuche von SSH, sie zu lesen, erscheinen nicht als blockiert. Ein Befehl in der Sandbox kann sich über den Agent bei den Hosts anmelden, die der Lauf erreichen darf, einen Schlüssel lesen oder kopieren kann er aber nicht. `git push` schreibt ins Remote und ist ein Befehl, den du freigibst wie jeden anderen.
+
+Nur die SSH-Verbindung von Git nimmt diesen Weg. `ssh` oder `scp`, direkt aufgerufen, verbinden sich weiter direkt, und dafür kann die Sandbox keinen einzelnen Host öffnen. Unter Linux kann sich Git über SSH in der Sandbox noch nicht anmelden: Nimm die HTTPS-Adresse des Repositorys, oder schalte die Sandbox für den Ordner ab.
 
 ## Die Sandbox für einen Ordner abschalten
 
@@ -103,5 +124,7 @@ Die Freigabe gilt in jedem Ordner, aber nur, wenn ein Befehl das Programm für s
   ```
 
   Das hält bis zum nächsten Neustart; damit es bleibt, schreib dieselbe Einstellung in eine Datei unter `/etc/sysctl.d/`. Ein AppArmor-Profil, das `bwrap` User-Namespaces erlaubt, geht ebenso. Starte Snotra danach neu.
+- **Git über SSH: *Permission denied (publickey)*.** Der Schlüssel ist nicht im ssh-agent geladen, SSH hat also nichts, womit es sich anmelden kann. Lade ihn mit `ssh-add --apple-use-keychain ~/.ssh/<schlüssel>` und führ den Befehl noch einmal aus — siehe [Git über SSH nutzen](#git-über-ssh-nutzen).
+- **Git über SSH: *Host key verification failed*.** Der Host steht noch nicht in `~/.ssh/known_hosts`. Verbinde dich einmal aus einem Terminal mit ihm und bestätige seinen Schlüssel.
 - **macOS: `gh`, `terraform` oder ein anderes Go-Programm kommt nicht ins Netz.** Gib ihm eine Freigabe pro Programm mit *Zertifikate über macOS prüfen*.
 - ***Sandbox für diesen Workspace* lässt sich nicht abschalten.** Dafür braucht es den verschlüsselten Speicher des Systems; wo es den nicht gibt, bleibt die Einstellung an und sagt, warum.

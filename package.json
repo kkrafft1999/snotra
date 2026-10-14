@@ -29,7 +29,7 @@
         "appCategoryType": "public.app-category.productivity",
         "icon": "./icon",
         "asar": {
-          "unpack": "**/node_modules/@anthropic-ai/sandbox-runtime/vendor/**"
+          "unpack": "{**/node_modules/@anthropic-ai/sandbox-runtime/vendor/**,**/src/main/services/ssh-proxy.pl}"
         },
         "afterComplete": [
           "./scripts/sign-macos.js"
