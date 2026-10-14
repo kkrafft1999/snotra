@@ -1013,7 +1013,8 @@ test('workspace host: the connection card offers it in Smart and Auto, with the 
     await send(engine);
     const [request] = sandboxRequests(approvals);
     assert.equal(request.workspaceAllowed, true, mode);
-    assert.equal(request.workspaceRoot, ROOT);
+    // The root the engine resolved — a drive path on Windows.
+    assert.equal(request.workspaceRoot, path.resolve(ROOT));
   }
 });
 
@@ -1065,7 +1066,8 @@ test('workspace host: an answer the card did not offer counts as this run only',
 });
 
 test('workspace host: kept hosts reach every run of their workspace — and only of theirs', async () => {
-  const kept = { [ROOT]: ['gitlab.example.com:22'], '/somewhere/else': ['pypi.org:443'] };
+  // Keyed by the resolved root, as main stores it — a drive path on Windows.
+  const kept = { [path.resolve(ROOT)]: ['gitlab.example.com:22'], [path.resolve('/somewhere/else')]: ['pypi.org:443'] };
   const approvals = makeApprovals({ response: 'allow-session', sandboxPaths: [HOST] });
   const tools = makeToolPort({ execute: (name, args, ctx, n) => (n === 1 ? connectingRun()(name, args, ctx) : okRun()) });
   const { engine } = makeEngine([
