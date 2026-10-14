@@ -56,7 +56,7 @@ LM Studio, MLX-LM, llama.cpp, vLLM, ein Gateway deiner Organisation oder ein Rou
 | *TLS-Zertifikat ignorieren (insecure)* | Nur für ein selbst signiertes oder internes Zertifikat, dem du vertraust. |
 | *Tools mitschicken* | Standardmäßig an. Schalte es für einen Server aus, der an Tool-Beschreibungen scheitert — dann bleibt es ein reiner Chat, ohne Dateien und Befehle. |
 | *Bild-Anhänge erlauben* | Standardmäßig aus. Schalte es nur ein, wenn das Modell Bilder versteht. |
-| *Max. Ausgabe-Tokens* | [seit 1.22] Standardmäßig leer: Der Server entscheidet, wie lang eine Antwort werden darf. Trag eine Zahl ein, wenn Antworten zu früh abbrechen oder ein Modell gar nicht aufhört. Snotra schickt sie mit jeder Anfrage mit, als `max_tokens` (Chat Completions) oder `max_output_tokens` (Responses). |
+| *Max. Ausgabe-Tokens* | [seit 1.21.1] Standardmäßig leer: Der Server entscheidet, wie lang eine Antwort werden darf. Trag eine Zahl ein, wenn Antworten zu früh abbrechen oder ein Modell gar nicht aufhört. Snotra schickt sie mit jeder Anfrage mit, als `max_tokens` (Chat Completions) oder `max_output_tokens` (Responses). |
 
 Schlüssel und zusätzliche Header gehen nur an die Adresse, mit der sie gespeichert wurden. Änderst du die Adresse, gib den Schlüssel neu ein.
 
