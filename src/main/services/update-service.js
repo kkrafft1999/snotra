@@ -24,6 +24,35 @@ const DEFAULT_REPO = 'kkrafft1999/snotra';
 const REQUEST_TIMEOUT_MS = 8000;
 
 /**
+ * Is this response GitHub's rate limit rather than a real refusal (#943)?
+ * Unauthenticated callers get 60 requests per hour per IP; behind a VPN or a
+ * company NAT that budget is shared and runs out. GitHub answers 403 or 429
+ * and says so in the headers. Returns null when it is not the rate limit,
+ * otherwise `{ resetAt }` — the epoch millisecond the budget comes back, or
+ * null when the headers do not say.
+ */
+function readRateLimit(res, now) {
+  if (res.status !== 403 && res.status !== 429) return null;
+  const header = (name) => {
+    const value = res.headers?.get?.(name);
+    return typeof value === 'string' ? value.trim() : '';
+  };
+  const retryAfter = header('retry-after');
+  const remaining = header('x-ratelimit-remaining');
+  if (!retryAfter && remaining !== '0') return null;
+
+  let resetAt = null;
+  if (/^\d+$/.test(retryAfter)) {
+    resetAt = now + Number(retryAfter) * 1000;
+  } else if (/^\d+$/.test(header('x-ratelimit-reset'))) {
+    resetAt = Number(header('x-ratelimit-reset')) * 1000;
+  }
+  // A reset in the past or a day away is no time worth naming.
+  if (resetAt !== null && (resetAt <= now || resetAt - now > 24 * 60 * 60 * 1000)) resetAt = null;
+  return { resetAt };
+}
+
+/**
  * Zerlegt eine Versionsangabe in {major, minor, patch, prerelease}.
  * Toleriert ein fuehrendes "v" (z. B. Git-Tag "v1.2.3") und Prerelease-Suffixe
  * (z. B. "1.2.3-beta.1"). Liefert null, wenn nichts Brauchbares drinsteht.
@@ -98,6 +127,7 @@ function isNewerVersion(latest, current) {
  * @param {object} [deps.installer]     Test-Haken; default createUpdateInstaller.
  * @param {object} [deps.runtime]       Test-Haken fuer Plattform/Pfade der Installation.
  * @param {function} [deps.quitApp]     Wird nach erfolgreicher Installation gerufen.
+ * @param {function} [deps.now]         Clock in epoch ms, for tests.
  */
 function createUpdateService({
   app,
@@ -108,8 +138,12 @@ function createUpdateService({
   installer: installerOverride,
   runtime,
   quitApp,
+  now = Date.now,
 } = {}) {
   const doFetch = fetchImpl || globalThis.fetch;
+  // Where a user fetches the version by hand — also when the check failed
+  // and the API never told us the release's own page (#943).
+  const latestReleasePage = `https://github.com/${repo}/releases/latest`;
 
   function getTempDir() {
     try {
@@ -192,6 +226,14 @@ function createUpdateService({
         },
       });
       if (!res.ok) {
+        const limit = readRateLimit(res, now());
+        if (limit) {
+          return {
+            error: limit.resetAt
+              ? createMessage('update.error.rateLimited', { resetTime: limit.resetAt })
+              : createMessage('update.error.rateLimitedNoTime'),
+          };
+        }
         return { error: createMessage('update.error.githubHttp', { status: res.status }) };
       }
       const json = await res.json();
@@ -222,19 +264,20 @@ function createUpdateService({
       return {
         updateAvailable: false,
         currentVersion,
+        releaseUrl: latestReleasePage,
         error: offline
           ? createMessage('update.error.offline')
           : (err?.message || createMessage('update.error.checkFailed')),
       };
     }
     if (result.error) {
-      return { updateAvailable: false, currentVersion, error: result.error };
+      return { updateAvailable: false, currentVersion, releaseUrl: latestReleasePage, error: result.error };
     }
 
     const release = result.release || {};
     const latestVersion = typeof release.tag_name === 'string' ? release.tag_name.replace(/^v/, '') : '';
     if (!latestVersion || release.draft === true) {
-      return { updateAvailable: false, currentVersion, error: createMessage('update.error.noRelease') };
+      return { updateAvailable: false, currentVersion, releaseUrl: latestReleasePage, error: createMessage('update.error.noRelease') };
     }
 
     const newer = isNewerVersion(latestVersion, currentVersion);
@@ -262,7 +305,7 @@ function createUpdateService({
       currentVersion,
       latestVersion,
       isPrerelease: release.prerelease === true,
-      releaseUrl: typeof release.html_url === 'string' ? release.html_url : `https://github.com/${repo}/releases/latest`,
+      releaseUrl: typeof release.html_url === 'string' ? release.html_url : latestReleasePage,
       publishedAt: release.published_at || null,
       notes: typeof release.body === 'string' ? release.body : '',
       canSelfUpdate,

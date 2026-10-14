@@ -108,7 +108,7 @@ export function initUpdateDialog({ api }) {
   let notesText = '';
   /** Notes replaced since the box was last opened — see the toggle listener. */
   let notesFresh = false;
-  /** 'available' | 'downloading' | 'ready' | 'installing' | 'error' | 'info' */
+  /** 'available' | 'downloading' | 'ready' | 'installing' | 'error' | 'checkFailed' | 'info' */
   let state = 'available';
   let lastMessage = '';
   let lastProgress = null;
@@ -257,7 +257,7 @@ export function initUpdateDialog({ api }) {
     state = next;
     // Nur die Zustaende mit eigenem Text merken sich einen; ein Wechsel nach
     // 'available' soll die Fehlermeldung nicht mitschleppen.
-    if (next === 'error' || next === 'info') lastMessage = message;
+    if (next === 'error' || next === 'checkFailed' || next === 'info') lastMessage = message;
 
     const version = info?.latestVersion || '';
     const current = info?.currentVersion || '';
@@ -343,6 +343,16 @@ export function initUpdateDialog({ api }) {
         actionsEl.appendChild(makeButton(t('update.openReleasePage'), canSelfUpdate ? 'btn-secondary' : 'btn-primary', openReleasePage));
       }
       actionsEl.appendChild(makeButton(t('update.closeButton'), 'btn-secondary', close));
+    } else if (next === 'checkFailed') {
+      // The check never got an answer, so "no new version" would be a guess
+      // (#943). Say what failed, and offer the way round it.
+      titleEl.textContent = t('update.check.failedTitle');
+      summaryEl.textContent = tMessage(lastMessage);
+      notesEl.classList.add('hidden');
+      if (info?.releaseUrl) {
+        actionsEl.appendChild(makeButton(t('update.openReleasePage'), 'btn-primary', openReleasePage));
+      }
+      actionsEl.appendChild(makeButton(t('update.closeButton'), info?.releaseUrl ? 'btn-secondary' : 'btn-primary', close));
     } else if (next === 'info') {
       titleEl.textContent = t('update.none.title');
       summaryEl.textContent = tMessage(lastMessage);
@@ -396,9 +406,8 @@ export function initUpdateDialog({ api }) {
     if (!payload.manual) return;
     info = payload;
     open();
-    render('info', payload.error
-      ? createMessage('update.check.failed', { error: payload.error })
-      : createMessage('update.check.upToDate', { version: payload.currentVersion }));
+    if (payload.error) render('checkFailed', payload.error);
+    else render('info', createMessage('update.check.upToDate', { version: payload.currentVersion }));
   }
 
   api.onUpdateAvailable(handlePayload);
@@ -451,7 +460,7 @@ export function initUpdateDialog({ api }) {
       if (isMidFlow()) return;
       info = null;
       open();
-      render('info', createMessage('update.check.failedPlain'));
+      render('checkFailed', createMessage('update.error.checkFailed'));
     }
   }
 

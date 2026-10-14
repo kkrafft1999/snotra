@@ -1067,7 +1067,9 @@ module.exports = {
   'update.reason.layout': 'Der Ablageort der App sieht ungewöhnlich aus, deshalb tauscht sie sich lieber nicht selbst aus. Lade die neue Version von der Release-Seite.',
   'update.reason.noAsset': 'Für diese Installation gibt es im Release kein passendes Paket.',
   'update.reason.readOnly': 'Snotra Agent läuft von einem Ort, an dem es nicht schreiben darf — aus dem Disk-Image oder aus einer Kopie, die macOS beiseitegelegt hat, weil sie aus dem Internet kam. Zieh die App in den Ordner „Programme“, starte sie von dort, dann kann sich das Update selbst einspielen.',
-  'update.error.githubHttp': 'GitHub antwortete mit HTTP {status}.',
+  'update.error.githubHttp': 'GitHub konnte die Anfrage nicht beantworten (HTTP {status}).',
+  'update.error.rateLimited': 'GitHub begrenzt gerade die Anfragen aus deinem Netz. Versuch es ab {resetTime} Uhr wieder.',
+  'update.error.rateLimitedNoTime': 'GitHub begrenzt gerade die Anfragen aus deinem Netz. Versuch es in ein paar Minuten wieder.',
   'update.error.offline': 'Der Update-Server ist nicht erreichbar.',
   'update.error.checkFailed': 'Die Suche nach Updates ist fehlgeschlagen.',
   'update.error.noRelease': 'Es wurde kein gültiges Release gefunden.',
@@ -1118,8 +1120,7 @@ module.exports = {
   'update.error.body': 'Deine laufende Version ist unverändert. Du kannst es erneut versuchen oder die neue Version von Hand laden.',
   'update.closeButton': 'Schließen',
   'update.none.title': 'Keine neue Version',
-  'update.check.failed': 'Die Prüfung ist fehlgeschlagen: {error}',
-  'update.check.failedPlain': 'Die Prüfung ist fehlgeschlagen.',
+  'update.check.failedTitle': 'Suche nach Updates fehlgeschlagen',
   'update.check.upToDate': 'Du hast bereits die neueste Version ({version}).',
 
   // ── Tool catalogue (risk classes) ──────────────────────────────────────────

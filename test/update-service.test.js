@@ -123,6 +123,62 @@ test('checkForUpdate handles a non-OK HTTP response', async () => {
   assert.match(de(res.error), /404/);
 });
 
+// ── Rate limit (#943) ───────────────────────────────────────────────────────
+
+const en = (message) => translateMessage('en', message);
+const NOW = Date.UTC(2026, 9, 14, 7, 45, 0);
+
+function limitedResponse(status, headers) {
+  const map = new Map(Object.entries(headers).map(([k, v]) => [k.toLowerCase(), v]));
+  return { ok: false, status, headers: { get: (name) => map.get(name.toLowerCase()) ?? null }, async json() { return {}; } };
+}
+
+function limitedService(response) {
+  return createUpdateService({ app, storage: makeStorage(), now: () => NOW, fetchImpl: async () => response });
+}
+
+test('a 403 with an exhausted rate limit names the reset time, not the status', async () => {
+  const reset = Math.floor(NOW / 1000) + 9 * 60;
+  const res = await limitedService(limitedResponse(403, {
+    'x-ratelimit-remaining': '0',
+    'x-ratelimit-reset': String(reset),
+  })).checkForUpdate();
+  assert.equal(res.updateAvailable, false);
+  assert.equal(res.error.key, 'update.error.rateLimited');
+  assert.equal(res.error.params.resetTime, reset * 1000);
+  const clock = new Intl.DateTimeFormat('de', { hour: 'numeric', minute: '2-digit' }).format(reset * 1000);
+  assert.equal(de(res.error), `GitHub begrenzt gerade die Anfragen aus deinem Netz. Versuch es ab ${clock} Uhr wieder.`);
+  assert.doesNotMatch(en(res.error), /403/);
+  assert.equal(res.releaseUrl, 'https://github.com/kkrafft1999/snotra/releases/latest');
+});
+
+test('a 429 with retry-after counts from now', async () => {
+  const res = await limitedService(limitedResponse(429, { 'retry-after': '120' })).checkForUpdate();
+  assert.equal(res.error.key, 'update.error.rateLimited');
+  assert.equal(res.error.params.resetTime, NOW + 120 * 1000);
+});
+
+test('a rate limit without a usable reset time says "in a few minutes"', async () => {
+  const past = Math.floor(NOW / 1000) - 60;
+  for (const headers of [{ 'x-ratelimit-remaining': '0' }, { 'x-ratelimit-remaining': '0', 'x-ratelimit-reset': String(past) }]) {
+    const res = await limitedService(limitedResponse(403, headers)).checkForUpdate();
+    assert.equal(res.error.key, 'update.error.rateLimitedNoTime');
+    assert.match(en(res.error), /in a few minutes/);
+  }
+});
+
+test('a 403 with budget left is a plain refusal, not the rate limit', async () => {
+  const res = await limitedService(limitedResponse(403, { 'x-ratelimit-remaining': '42' })).checkForUpdate();
+  assert.equal(res.error.key, 'update.error.githubHttp');
+  assert.equal(en(res.error), 'GitHub could not answer the request (HTTP 403).');
+});
+
+test('a 500 stays the generic HTTP message, even without headers', async () => {
+  const res = await limitedService(jsonResponse({}, false, 500)).checkForUpdate();
+  assert.equal(res.error.key, 'update.error.githubHttp');
+  assert.equal(res.releaseUrl, 'https://github.com/kkrafft1999/snotra/releases/latest');
+});
+
 test('checkForUpdate ignores a draft release', async () => {
   const svc = createUpdateService({
     app,
