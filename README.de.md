@@ -1,8 +1,7 @@
 # Snotra Agent
 
 **Ein quelloffener Desktop-Agent, der um deinen Ordner gebaut ist: immer im
-Blick, und nichts passiert darin, ohne dass er fragt. Cloud- oder lokale
-Modelle, kein Konto, keine Telemetrie.**
+Blick. Cloud- oder lokale Modelle, kein Konto, keine Telemetrie.**
 
 [**Download**](https://github.com/kkrafft1999/snotra/releases/latest) ·
 [**Handbuch**](https://docs.snotra-ai.dev/de/) ·

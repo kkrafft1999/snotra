@@ -1,8 +1,7 @@
 # Snotra Agent
 
-**An open-source desktop agent built around your folder: always in view, and
-nothing happens in it without asking. Cloud or local models, no account, no
-telemetry.**
+**An open-source desktop agent built around your folder: always in view. Cloud or
+local models, no account, no telemetry.**
 
 [**Download**](https://github.com/kkrafft1999/snotra/releases/latest) ·
 [**User manual**](https://docs.snotra-ai.dev) ·
