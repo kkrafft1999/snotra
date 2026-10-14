@@ -70,7 +70,7 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 ## Git über SSH nutzen
 
-[seit 1.22] Unter macOS erreichen `git fetch`, `git pull`, `git push` und `git ls-remote` auch aus der Sandbox ein SSH-Remote wie `git@gitlab.example.com:team/app.git`. Snotra schickt die SSH-Verbindung von Git über den Proxy der Sandbox. Damit gelten für sie dieselben Regeln wie für jede andere Verbindung, und die Sandbox bleibt an.
+[seit 1.21.1] Unter macOS erreichen `git fetch`, `git pull`, `git push` und `git ls-remote` auch aus der Sandbox ein SSH-Remote wie `git@gitlab.example.com:team/app.git`. Snotra schickt die SSH-Verbindung von Git über den Proxy der Sandbox. Damit gelten für sie dieselben Regeln wie für jede andere Verbindung, und die Sandbox bleibt an.
 
 ### Was du brauchst
 

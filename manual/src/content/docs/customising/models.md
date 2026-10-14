@@ -56,7 +56,7 @@ LM Studio, MLX-LM, llama.cpp, vLLM, a gateway of your organisation, or a router 
 | *Ignore TLS certificate (insecure)* | Only for a self-signed or internal certificate you trust. |
 | *Send tools along* | On by default. Switch it off for a server that chokes on tool descriptions — then it stays a plain chat, without files or commands. |
 | *Allow image attachments* | Off by default. Switch it on only if the model understands images. |
-| *Max output tokens* | [since 1.22] Empty by default: the server decides how long an answer may get. Enter a number if answers stop early or a model does not stop at all. Snotra sends it with every request, as `max_tokens` (Chat Completions) or `max_output_tokens` (Responses). |
+| *Max output tokens* | [since 1.21.1] Empty by default: the server decides how long an answer may get. Enter a number if answers stop early or a model does not stop at all. Snotra sends it with every request, as `max_tokens` (Chat Completions) or `max_output_tokens` (Responses). |
 
 A key and extra headers go only to the address they were stored with. If you change the address, enter the key again.
 
