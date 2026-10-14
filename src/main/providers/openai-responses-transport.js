@@ -10,6 +10,7 @@
 const { imageAttachmentsOf, toDataUrl } = require('../../shared/contracts/attachments');
 const { createMessage } = require('../../shared/contracts/message');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
+const { isMaxOutputTokens } = require('../../shared/contracts/settings');
 const { fetchVia } = require('../services/dispatcher-fetch');
 const {
   iterSseEvents,
@@ -120,14 +121,20 @@ async function streamResponsesRound({
   supportsImages = true,
   sendTools = true,
   includeStatus = false,
+  maxOutputTokens,
   extraBody,
 }) {
+  const extra = extraBody && typeof extraBody === 'object' ? extraBody : {};
   const body = {
     model,
     input: translateMessagesToResponsesInput(messages, { supportsImages }),
     stream: true,
-    ...(extraBody && typeof extraBody === 'object' ? extraBody : {}),
+    ...extra,
   };
+  // The output limit (#931); one set in `extraBody` wins.
+  if (isMaxOutputTokens(maxOutputTokens) && !('max_output_tokens' in extra)) {
+    body.max_output_tokens = maxOutputTokens;
+  }
   const respTools = sendTools ? translateToolsToResponses(tools) : undefined;
   if (respTools) {
     body.tools = respTools;

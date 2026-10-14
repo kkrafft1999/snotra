@@ -10,6 +10,7 @@ const {
   normalizeStoredPresetConnection,
   LLM_CONFIG_VERSION,
   presetIdentityKey,
+  isMaxOutputTokens,
 } = require('../../shared/contracts/settings');
 const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
 const { APP_LOCALES } = require('../../shared/contracts/enums');
@@ -647,6 +648,9 @@ function createStorageService({
     out.sendTools = typeof conn.sendTools === 'boolean'
       ? conn.sendTools
       : provider.defaultSendTools !== false;
+    if (provider.fields?.maxOutputTokens && isMaxOutputTokens(conn.maxOutputTokens)) {
+      out.maxOutputTokens = conn.maxOutputTokens;
+    }
     const apiKey = decryptIfPossible(conn.apiKeyEnc);
     if (apiKey) out.apiKey = apiKey;
     const extraHeaders = decryptIfPossible(conn.extraHeadersEnc);

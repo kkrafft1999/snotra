@@ -38,7 +38,7 @@ Einen Chat, in dem eine Nachricht mit einem Fehler endete.
 
 Manche Kästen haben mit dem Anbieter nichts zu tun:
 
-- ***Die Antwort wurde abgeschnitten: Das Modell hat seine Ausgabegrenze erreicht.*** Bitte Snotra weiterzumachen oder in kleineren Teilen zu antworten. Geschah es mitten in einem Tool-Aufruf, bitte um kleinere Schritte — eine Datei nach der anderen.
+- ***Die Antwort wurde abgeschnitten: Das Modell hat seine Ausgabegrenze erreicht.*** Bitte Snotra weiterzumachen oder in kleineren Teilen zu antworten. Geschah es mitten in einem Tool-Aufruf, bitte um kleinere Schritte — eine Datei nach der anderen. Bei einem OpenAI-kompatiblen Server nennt die Meldung zusätzlich *Max. Ausgabe-Tokens*: Die eigene Grenze des Servers ist oft klein, und sie unter [*Einstellungen › Modelle*](../../customising/models/) zu erhöhen, behebt es dauerhaft.
 - ***Zu viele Tool-Runden (aktuell 14).*** Das Modell hat öfter hintereinander Tools aufgerufen als erlaubt. Stell eine engere Frage, oder erhöhe *Max. Tool-Runden* unter [*Einstellungen › Allgemein*](../../customising/settings/).
 - ***Die Verbindung endete, bevor die Antwort vollständig war.*** Anbieter oder Netz haben abgebrochen. Schick die Nachricht noch einmal.
 - ***Die Antwort ist nicht angekommen.*** Frag noch einmal.

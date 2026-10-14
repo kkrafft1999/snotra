@@ -5,6 +5,7 @@ const {
   buildPresetFieldViews,
   buildProviderFormView,
   hasPresetConnection,
+  isMaxOutputTokens,
 } = require('../../shared/contracts/settings');
 const { createTranslator } = require('../../shared/i18n');
 
@@ -142,6 +143,8 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       sendTools: typeof conn.sendTools === 'boolean'
         ? conn.sendTools
         : provider?.defaultSendTools !== false,
+      // null = not set, the server's default applies (#931).
+      maxOutputTokens: isMaxOutputTokens(conn.maxOutputTokens) ? conn.maxOutputTokens : null,
       hasKey,
       keyUnreadable: hasKey && apiKeyDecryptable?.[`preset:${preset.id}`] === false,
       hasExtraHeaders: typeof conn.extraHeadersEnc === 'string' && conn.extraHeadersEnc.length > 0,

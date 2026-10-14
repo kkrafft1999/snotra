@@ -1936,6 +1936,26 @@ test('a cut-off round runs no tool call and keeps its text (#538)', async () => 
   }
 });
 
+// #931: an OpenAI-compatible entry has its own output limit, and the
+// sentence points there.
+test('a cut-off round of an OpenAI-compatible entry names the output limit setting (#931)', async () => {
+  const resolveResult = { providerId: 'openai-compatible', model: 'qwen' };
+  for (const [result, sentence] of [
+    [assistantText('Half', { finishReason: 'length' }), /Max output tokens/],
+    [{ ...assistantToolCall('c1', 'list_directory', {}), finishReason: 'length' }, /tool call.*Max output tokens/],
+  ]) {
+    const { engine } = makeEngine([result], { llm: makeLlmPort([result], { resolveResult }) });
+    const res = await engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
+    assert.equal(res.code, 'INCOMPLETE');
+    assert.match(errorText(res, 'en'), sentence);
+    assert.match(errorText(res, 'de'), /Max\. Ausgabe-Tokens/);
+  }
+  // Other providers keep the sentence without the setting.
+  const { engine } = makeEngine([assistantText('Half', { finishReason: 'length' })]);
+  const res = await engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
+  assert.doesNotMatch(errorText(res, 'en'), /Max output tokens/);
+});
+
 test('a send resolves the target once, for its own chat (#725)', async () => {
   const llm = makeLlmPort([
     assistantToolCall('c1', 'read_file_text', { relative_path: 'a.js' }),

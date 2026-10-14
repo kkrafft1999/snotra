@@ -12,6 +12,7 @@
 const { imageAttachmentsOf, toDataUrl } = require('../../shared/contracts/attachments');
 const { createMessage } = require('../../shared/contracts/message');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
+const { isMaxOutputTokens } = require('../../shared/contracts/settings');
 const { fetchVia } = require('../services/dispatcher-fetch');
 const {
   iterSseEvents,
@@ -178,6 +179,11 @@ async function listChatModels({ baseUrl, headers = {}, signal, dispatcher, filte
  * `sendTools: false` laesst das Feld `tools` weg — fuer Server, die an
  * Tool-Schemata scheitern (Issue #193). `onHttpStatus` sieht den Status vor der
  * Fehlerauswertung; der generische Provider erkennt daran den Rückfall.
+ *
+ * `maxOutputTokens` goes out as `max_tokens` (#931): the field every
+ * OpenAI-compatible server knows. `max_completion_tokens` is only what OpenAI's
+ * own reasoning models insist on, and those are reached through the OpenAI
+ * provider, not this transport. A limit in `extraBody`, under either name, wins.
  */
 async function streamChatCompletionsRound({
   baseUrl,
@@ -191,8 +197,10 @@ async function streamChatCompletionsRound({
   supportsImages = false,
   sendTools = true,
   callIdPrefix = 'call_',
+  maxOutputTokens,
   extraBody,
 }) {
+  const extra = extraBody && typeof extraBody === 'object' ? extraBody : {};
   const body = {
     model,
     messages: translateMessagesToChatCompletions(messages, { supportsImages }),
@@ -200,8 +208,11 @@ async function streamChatCompletionsRound({
     // Ohne diese Bitte streamt die API gar keine Usage — die Anzeige bliebe
     // dann auch bei Servern leer, die sie liefern koennten (Issue #189).
     stream_options: { include_usage: true },
-    ...(extraBody && typeof extraBody === 'object' ? extraBody : {}),
+    ...extra,
   };
+  if (isMaxOutputTokens(maxOutputTokens) && !('max_tokens' in extra) && !('max_completion_tokens' in extra)) {
+    body.max_tokens = maxOutputTokens;
+  }
   const chatTools = sendTools ? translateToolsToChatCompletions(tools) : undefined;
   if (chatTools) {
     body.tools = chatTools;

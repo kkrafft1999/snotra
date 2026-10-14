@@ -56,6 +56,7 @@ LM Studio, MLX-LM, llama.cpp, vLLM, a gateway of your organisation, or a router 
 | *Ignore TLS certificate (insecure)* | Only for a self-signed or internal certificate you trust. |
 | *Send tools along* | On by default. Switch it off for a server that chokes on tool descriptions — then it stays a plain chat, without files or commands. |
 | *Allow image attachments* | Off by default. Switch it on only if the model understands images. |
+| *Max output tokens* | [since 1.22] Empty by default: the server decides how long an answer may get. Enter a number if answers stop early or a model does not stop at all. Snotra sends it with every request, as `max_tokens` (Chat Completions) or `max_output_tokens` (Responses). |
 
 A key and extra headers go only to the address they were stored with. If you change the address, enter the key again.
 
@@ -69,4 +70,6 @@ A server counts as local when its address is `localhost`, `127.0.0.x`, `::1` or 
 
 - **The model list stays empty.** Not an error for an OpenAI-compatible server: the line under the field says why, and a typed name works as well.
 - ***… is already in the list.*** The provider and model are listed already, under the name the message gives; edit that row instead. An entry that is only missing its key is the exception: adding it again with a key completes it.
+- ***The answer was cut off: the model reached its output limit.*** The server stopped the answer at its output limit, and many local servers set a small one. Raise *Max output tokens* for that entry; a few thousand is usually plenty.
+- ***Enter a whole number from 1 to 1,000,000*** under *Max output tokens*: the field takes digits only, or nothing at all, and the dialog stays open until the value fits.
 - **A model only ever answers in text.** Either *Send tools along* is off, or the model cannot use tools. Snotra needs tools to read and change files.
