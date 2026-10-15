@@ -9,6 +9,7 @@ const {
   filterDeclaredPresetOptions,
 } = require('../../shared/contracts/settings');
 const { reasoningLevelsFor, resolveReasoningLevel } = require('../../shared/contracts/reasoning');
+const { createCostEntry } = require('../../shared/contracts/cost');
 
 /**
  * `reasoningLevelFor(chatId)` answers with the chat's own reasoning level, or
@@ -19,6 +20,8 @@ function createProviderLlmAdapter({
   llmConfigStore,
   providerSecrets,
   reasoningLevelFor = async () => null,
+  // Prices for the estimated chat cost (#949); without it no round is priced.
+  modelPrices = null,
 }) {
   function resolveProviderOptions(raw, provider) {
     if (raw.providerOptions && typeof raw.providerOptions === 'object') {
@@ -182,7 +185,7 @@ function createProviderLlmAdapter({
       config = mergeProviderConfig(baseConfig, target, provider);
       model = resolveModel(target, provider, baseConfig);
     }
-    return provider.streamChatRound({
+    const result = await provider.streamChatRound({
       config,
       model,
       messages,
@@ -191,6 +194,27 @@ function createProviderLlmAdapter({
       abortSignal,
       cacheKey,
     });
+    if (result?.usage) {
+      const cost = await priceRound({ providerId: target.providerId, model, config, usage: result.usage });
+      if (cost) return { ...result, cost };
+    }
+    return result;
+  }
+
+  /**
+   * Prices one round with the model that served it (#949). A failure here
+   * must never cost the user the answer, so it only drops the estimate.
+   */
+  async function priceRound({ providerId, model, config, usage }) {
+    try {
+      const { price, priceSource } = modelPrices
+        ? await modelPrices.resolve({ providerId, model, baseUrl: config?.baseUrl })
+        : { price: null, priceSource: null };
+      const priceTable = modelPrices ? await modelPrices.tableInfo() : null;
+      return { entry: createCostEntry({ providerId, model, usage, price, priceSource }), priceTable };
+    } catch {
+      return null;
+    }
   }
 
   // Which provider it was is in the bubble already; the sentence names none.

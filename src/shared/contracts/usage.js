@@ -62,8 +62,40 @@ function readSeparateCacheTokens(raw) {
 }
 
 /**
+ * Tokens written to the prompt cache in this round (#949). Only Anthropic
+ * reports them, next to `input_tokens`; they are part of `prompt` already
+ * (readSeparateCacheTokens) and are priced differently from plain input.
+ */
+function readCacheWriteTokens(raw) {
+  return toUsageNumber(raw.cacheWrite ?? raw.cache_creation_input_tokens);
+}
+
+/**
+ * Reasoning tokens of this round (#949), always meant as a **part** of
+ * `completion`. OpenAI counts them into the output already
+ * (`output_tokens_details` / `completion_tokens_details`); Google reports
+ * `thoughtsTokenCount` **next to** `candidatesTokenCount` instead, so there
+ * they are added to `completion` — see readSeparateReasoningTokens.
+ */
+function readReasoningTokens(raw) {
+  return toUsageNumber(
+    raw.reasoning
+    ?? raw.output_tokens_details?.reasoning_tokens
+    ?? raw.completion_tokens_details?.reasoning_tokens
+    ?? raw.thoughtsTokenCount
+  );
+}
+
+/** Google's thinking, billed as output but not counted in it (#949). */
+function readSeparateReasoningTokens(raw) {
+  return toUsageNumber(raw.thoughtsTokenCount);
+}
+
+/**
  * Normalisiert eine provider-spezifische Usage-Struktur auf
- * { prompt, completion, total, cached }. Liefert null, wenn keine Zahlen
+ * { prompt, completion, total, cached }, plus `cacheWrite` and `reasoning`
+ * when the provider reported any (#949). The two extra fields are left out
+ * at 0, so the shape the token display knows stays the same. Liefert null, wenn keine Zahlen
  * vorhanden sind (so kann der Aufrufer "keine Usage" von "0 Tokens"
  * unterscheiden).
  */
@@ -85,7 +117,7 @@ function normalizeUsage(raw) {
     ?? raw.completion_tokens
     ?? raw.candidatesTokenCount
     ?? raw.eval_count
-  );
+  ) + readSeparateReasoningTokens(raw);
   // Nie mehr aus dem Cache als ueberhaupt im Prompt: Eine Zahl, die das
   // verletzt, ist falsch gelesen — dann lieber deckeln als eine Anzeige mit
   // „112 % aus dem Cache".
@@ -95,7 +127,13 @@ function normalizeUsage(raw) {
     total = prompt + completion;
   }
   if (prompt === 0 && completion === 0 && total === 0) return null;
-  return { prompt, completion, total, cached };
+  const usage = { prompt, completion, total, cached };
+  // Same guard as for `cached`: a part never outgrows the whole.
+  const cacheWrite = Math.min(readCacheWriteTokens(raw), prompt - cached);
+  const reasoning = Math.min(readReasoningTokens(raw), completion);
+  if (cacheWrite > 0) usage.cacheWrite = cacheWrite;
+  if (reasoning > 0) usage.reasoning = reasoning;
+  return usage;
 }
 
 /**
@@ -115,7 +153,12 @@ function mergeUsage(base, addition) {
   const completion = base.completion + next.completion;
   const total = base.total + (next.total > 0 ? next.total : next.prompt + next.completion);
   const cached = toUsageNumber(base.cached) + next.cached;
-  return { prompt, completion, total, cached };
+  const merged = { prompt, completion, total, cached };
+  const cacheWrite = toUsageNumber(base.cacheWrite) + toUsageNumber(next.cacheWrite);
+  const reasoning = toUsageNumber(base.reasoning) + toUsageNumber(next.reasoning);
+  if (cacheWrite > 0) merged.cacheWrite = cacheWrite;
+  if (reasoning > 0) merged.reasoning = reasoning;
+  return merged;
 }
 
 module.exports = {

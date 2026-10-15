@@ -43,6 +43,7 @@ import { toolLogDebug } from '../chat/toolLogDebug.js';
 import { compactToolLinePayload } from '../utils/tool-log-debug.js';
 // Aufschlüsselung hinter der Token-Anzeige (Issue #174).
 import { initTokenBreakdownPanel } from './TokenBreakdownPanel.js';
+import { initCostPanel } from './CostPanel.js';
 // Klick auf ein Thumbnail zeigt das Bild gross (Issue #94).
 import { initImageLightbox } from './ImageLightbox.js';
 // Bilder aus dem Arbeitsordner in der Antwort (Issue #244): Die Bytes kommen
@@ -53,7 +54,7 @@ import { generatedImagesOf, syncGeneratedImages } from '../chat/generatedImages.
 import { resolveNative } from '../utils/nativePath.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 
-const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, isDerivedChatTitle, PROPOSE_CONFIG_CHANGE_TOOL } = contracts;
+const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, isDerivedChatTitle, mergeSessionCost, normalizeSessionCost, PROPOSE_CONFIG_CHANGE_TOOL } = contracts;
 
 const CHAT_SEND_ICON_HTML =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
@@ -153,6 +154,7 @@ export function initChatStream({
   openWorkspaceFile = async () => ({ ok: false, reason: 'not-found' }),
   approvalCards,
   openSkillSettings,
+  openPriceSettings,
   // Modell und Freigabemodus des Chats herstellen (Issue #211).
   activateChatSession = async () => {},
   // Meldet, dass der laufende Chat in die Ablage geschrieben wurde — der
@@ -284,10 +286,23 @@ export function initChatStream({
     onOpenSkillSettings: (name) => openSkillSettings?.(name),
   });
 
-  function setChatTokenUsage(usage, { breakdown = null } = {}) {
+  // The chat's estimated cost (#949), next to the token counter.
+  const costPanel = initCostPanel({
+    trigger: document.getElementById('chat-cost'),
+    valueEl: document.getElementById('chat-cost-value'),
+    panel: document.getElementById('chat-cost-breakdown'),
+    getCost: () => appStore.chatCost,
+    onOpenPriceSettings: (model) => openPriceSettings?.(model),
+  });
+
+  function setChatTokenUsage(usage, { breakdown = null, cost = null } = {}) {
     appStore.chatTokenUsage = coerceUsage(usage);
     appStore.chatContextBreakdown = breakdown;
+    // The chat's cost travels with its tokens (#949): whoever puts a chat on
+    // screen hands over both, a new chat starts at none.
+    appStore.chatCost = normalizeSessionCost(cost);
     syncChatTokenUsageDisplay();
+    costPanel.refresh();
   }
 
   function resetChatTokenUsage() {
@@ -310,6 +325,11 @@ export function initChatStream({
   }
 
   function applyUsageFromResult(result) {
+    // The cost adds up over the chat, unlike the context size below (#949).
+    if (result?.cost) {
+      appStore.chatCost = mergeSessionCost(appStore.chatCost, result.cost);
+      costPanel.refresh();
+    }
     // contextUsage = letzte Runde (Kontext). Aeltere Engine-Ergebnisse ohne
     // das Feld liefern nur die Zugsumme; die ist dann das Beste, was wir haben.
     const usage = result?.contextUsage ?? result?.usage;
@@ -755,6 +775,9 @@ export function initChatStream({
       workspaceRoot: chat.workspaceRoot,
       messages: persistable,
       tokenUsage: chat.tokenUsage,
+      // Only ever grows (#949): a chat without a sum here sends none, and the
+      // one already stored stays.
+      ...(chat.cost ? { cost: chat.cost } : {}),
       // Nur einen bereits benannten Chat betiteln — sonst leitet die Ablage
       // den Titel selbst aus der ersten Frage ab.
       ...(chat.title ? { title: chat.title } : {}),
@@ -799,7 +822,7 @@ export function initChatStream({
         appStore.currentChatWorkspace = workspaceRoot || null;
         appStore.chatMessages = restore.messages;
         appStore.currentChatTitle = restore.title || '';
-        setChatTokenUsage(restore.tokenUsage);
+        setChatTokenUsage(restore.tokenUsage, { cost: restore.cost });
       }
       syncChatInFlight(); // before the round trips, see startNewChat (#411)
       // Drawn before the round trips as well: from here on this chat's run
@@ -982,6 +1005,7 @@ export function initChatStream({
       title: appStore.currentChatTitle,
       tokenUsage: appStore.chatTokenUsage,
       contextBreakdown: appStore.chatContextBreakdown,
+      cost: appStore.chatCost,
     };
   }
 
@@ -1008,7 +1032,7 @@ export function initChatStream({
     appStore.currentChatWorkspace = chat.workspaceRoot;
     appStore.chatMessages = chat.messages;
     appStore.currentChatTitle = chat.title;
-    setChatTokenUsage(chat.tokenUsage, { breakdown: chat.contextBreakdown });
+    setChatTokenUsage(chat.tokenUsage, { breakdown: chat.contextBreakdown, cost: chat.cost });
     return true;
   }
 
@@ -1593,6 +1617,7 @@ export function initChatStream({
         chat.tokenUsage = coerceUsage(usage);
         chat.contextBreakdown = result?.contextBreakdown ?? null;
       }
+      if (result?.cost) chat.cost = mergeSessionCost(chat.cost, result.cost);
     }
 
     try {

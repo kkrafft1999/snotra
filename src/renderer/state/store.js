@@ -34,6 +34,9 @@ export const appStore = {
   // dieser Sitzung: Ein wiederhergestellter Chat kennt die Aufteilung seiner
   // alten Anfragen nicht mehr, die Anzeige sagt das dann auch.
   chatContextBreakdown: null,
+  // Estimated cost of the chat on screen, summed over all its turns (#949);
+  // null until a round was spent. Saved with the chat history.
+  chatCost: null,
   currentChatId: '',
   currentChatWorkspace: null,
   // Titel der geladenen Konversation. Leer bei einem neuen Chat — dann leitet

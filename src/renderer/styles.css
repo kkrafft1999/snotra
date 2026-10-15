@@ -2196,6 +2196,21 @@ summary:focus-visible,
   color: var(--text-secondary);
 }
 
+/* The chat's estimated cost (#949), after the time and set apart by a dot. */
+.chat-history-row-cost {
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-history-row-time + .chat-history-row-cost::before {
+  content: '·';
+  margin: 0 5px;
+}
+
+/* While a run goes, the meta line says what it does; the sum follows after. */
+.chat-history-row[data-run-state] .chat-history-row-cost {
+  display: none;
+}
+
 /* A chat with a run going (#320): the meta line says what it is doing, in
  * place of the time — that would only say "now". Shape and words carry the
  * state; the colour only adds to it (WCAG 1.4.1). Variant A of
@@ -4322,6 +4337,154 @@ button.chat-msg-attachment:hover {
   border-top: none;
   border-bottom: 1px solid var(--ds-grey-divider);
   color: var(--accent-text);
+}
+
+/* The estimated cost of the chat (#949): a chip of its own next to the token
+   counter, with the same quiet label look, and a popover built like the
+   breakdown's. Hidden until a round was spent — "$0.00" on a new chat would
+   claim something nobody measured. */
+.chat-cost-wrap {
+  display: inline-flex;
+}
+
+.chat-cost-wrap[hidden] {
+  display: none;
+}
+
+.chat-composer-bar[data-dictating='true'] .chat-cost-wrap {
+  display: none;
+}
+
+.chat-cost__header {
+  padding: 0 14px 10px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.chat-cost__title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chat-cost__sum {
+  margin: 3px 0 0;
+  font-size: 11px;
+  color: var(--text-muted-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-cost__models {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chat-cost__model {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.chat-cost__model-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chat-cost__model-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.chat-cost__model-total {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-cost__rows {
+  width: 100%;
+  margin-top: 4px;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-cost__rows th,
+.chat-cost__rows td {
+  padding: 2px 0;
+  font-weight: 400;
+  color: var(--text-muted-strong);
+}
+
+.chat-cost__row-label {
+  text-align: left;
+}
+
+.chat-cost__rows .chat-cost__row-tokens {
+  width: 1%;
+  padding-right: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.chat-cost__rows .chat-cost__row-usd {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+.chat-cost__model-note {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted-strong);
+}
+
+/* A link in running text: the accent colour and an underline, so it is not
+   told apart by colour alone. */
+.chat-cost__link {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: var(--ds-blue-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.chat-cost__link:hover {
+  text-decoration-thickness: 2px;
+}
+
+.chat-cost__foot {
+  padding: 8px 14px 10px;
+}
+
+.chat-cost__note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-muted-strong);
+}
+
+.chat-cost__note + .chat-cost__note {
+  margin-top: 4px;
+}
+
+.chat-cost__header + .chat-cost__note {
+  padding: 10px 14px 12px;
 }
 
 .token-breakdown__empty {
@@ -8940,6 +9103,117 @@ select.modal-input {
 
 /* Websuche-Karte in den Tool-Einstellungen (Issue #63). */
 .settings-web-search-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* Prices for the cost estimate (#949), under the model list. */
+.model-prices {
+  margin-top: 18px;
+}
+
+.model-prices__table {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+
+.model-prices__table-line {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted-strong);
+}
+
+#model-prices-status:empty {
+  display: none;
+}
+
+.model-prices__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.model-prices__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--bg-primary);
+}
+
+.model-prices__main {
+  display: flex;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.model-prices__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-mono);
+  font-size: 13px;
+  color: var(--text-primary);
+}
+
+.model-prices__detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  font-size: 12px;
+  color: var(--text-muted-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.model-prices__summary::before {
+  content: '·';
+  margin-right: 8px;
+}
+
+/* Status by words, not colour: "No price known" is the one a user acts on,
+   so it is the one set in the primary text colour. */
+.model-prices__source--none {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.model-prices__form {
+  flex: 1 1 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.model-prices__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 0 12px;
+}
+
+.model-prices__input {
+  font-variant-numeric: tabular-nums;
+}
+
+.model-prices__error {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--ds-error);
+}
+
+.model-prices__actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

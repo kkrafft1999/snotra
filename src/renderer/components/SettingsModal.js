@@ -6,6 +6,7 @@ import { initWorkspaceSandboxSetting } from './WorkspaceSandboxSetting.js';
 import { initProgramAllowancesSetting } from './ProgramAllowancesSetting.js';
 import { initSecurityPanel } from './SecurityPanel.js';
 import { initSettingsHelp } from './SettingsHelp.js';
+import { initModelPricesSettings } from './ModelPricesSettings.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -123,6 +124,16 @@ export function initSettingsModal(deps) {
   const settingsPanelHeadingEl = document.getElementById('settings-panel-heading');
   // The `?` next to the headings and the one in the header (#848).
   const settingsHelp = initSettingsHelp({ root: modalSettings, api });
+  // Prices for the cost estimate (#949), per model of the list above.
+  const modelPricesSettings = initModelPricesSettings({
+    root: document.getElementById('settings-model-prices-card'),
+    api,
+    getModels: () => settingsDraftPresets.map((preset) => ({
+      providerId: preset.providerId,
+      model: preset.model,
+      baseUrl: preset.connection?.baseUrl || findProviderView(preset.providerId)?.defaultBaseUrl || '',
+    })),
+  });
   const panelHelpButton = document.getElementById('btn-settings-panel-help');
   const settingsNavTabs = [...document.querySelectorAll('.settings-nav-item[role="tab"]')];
   const prefModelList = document.getElementById('pref-model-list');
@@ -1151,6 +1162,7 @@ export function initSettingsModal(deps) {
 
   function renderDraftPresetList() {
     if (!prefModelList) return;
+    void modelPricesSettings.refresh();
     prefModelList.innerHTML = '';
     const empty = settingsDraftPresets.length === 0;
     prefListEmpty.classList.toggle('hidden', !empty);
@@ -2146,6 +2158,8 @@ export function initSettingsModal(deps) {
       // up what is missing, its heading focused.
       if (jump?.target) {
         navigateToSetting(jump.panel, jump.target);
+        // From the cost popover (#949): straight into that model's price.
+        if (jump.priceModel) void modelPricesSettings.refresh().then(() => modelPricesSettings.reveal(jump.priceModel));
         return;
       }
       // From the approval card's "Sandbox setting" and "Program allowances"

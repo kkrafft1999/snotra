@@ -82,7 +82,9 @@ test('streamChatRound zaehlt die Cache-Anteile zum Prompt (#179)', async (t) => 
 
   // Das abschliessende message_delta wiederholt die Cache-Zahlen nicht — sie
   // duerfen dabei nicht verloren gehen.
-  assert.deepEqual(res.usage, { prompt: 10000, completion: 20, total: 10020, cached: 9000 });
+  // The cache write stays a part of the prompt, and is named apart so that
+  // it can be priced apart (#949).
+  assert.deepEqual(res.usage, { prompt: 10000, completion: 20, total: 10020, cached: 9000, cacheWrite: 500 });
 });
 
 test('streamChatRound assembles streamed tool_use input and maps tool_use to tool_calls', async (t) => {

@@ -94,6 +94,7 @@ function makeAdapterDeps(overrides = {}) {
     llmConfigStore: makeLlmConfigStore(llmOverrides),
     providerSecrets: makeProviderSecrets(secretsOverrides),
     ...(overrides.reasoningLevelFor ? { reasoningLevelFor: overrides.reasoningLevelFor } : {}),
+    ...(overrides.modelPrices ? { modelPrices: overrides.modelPrices } : {}),
   };
 }
 
@@ -469,4 +470,88 @@ test('prepareSendBundle nimmt Anzeigenamen und Bild-Faehigkeit aus der Konfigura
     .prepareSendBundle({ providerId: 'openai-compatible', model: 'qwen2.5' });
   assert.equal(plain.providerName, 'OpenAI-kompatibel');
   assert.deepEqual(plain.capabilities, { images: false });
+});
+
+// ── Estimated cost per round (#949) ───────────────────────────────────────
+
+function usageProviders(usage) {
+  const providers = makeProviders();
+  return {
+    getProvider(id) {
+      const p = providers.getProvider(id);
+      return p && {
+        ...p,
+        async streamChatRound() {
+          return { message: { role: 'assistant', content: 'ok' }, finishReason: 'stop', usage };
+        },
+      };
+    },
+  };
+}
+
+async function oneRound(llm) {
+  const target = await llm.resolveChatTarget();
+  const bundle = await llm.prepareSendBundle(target);
+  return llm.streamRound({
+    target,
+    sendBundle: bundle,
+    messages: [{ role: 'user', content: 'a' }],
+    callbacks: {},
+    abortSignal: new AbortController().signal,
+  });
+}
+
+test('adapter prices a round with the model and base URL that served it (#949)', async () => {
+  const asked = [];
+  const llm = createProviderLlmAdapter(makeAdapterDeps({
+    providerRuntime: usageProviders({ prompt: 1000, completion: 100, total: 1100, cached: 0 }),
+    llmConfigStore: { resolveChatModelTarget: () => ({ providerId: 'openai', model: 'gpt-x' }) },
+    modelPrices: {
+      async resolve(query) {
+        asked.push(query);
+        return { price: { input: 1e-6, output: 2e-6 }, priceSource: 'table' };
+      },
+      async tableInfo() {
+        return { date: '2026-10-15', origin: 'bundled' };
+      },
+    },
+  }));
+  const round = await oneRound(llm);
+  assert.deepEqual(asked, [{ providerId: 'openai', model: 'gpt-x', baseUrl: 'http://stored' }]);
+  assert.equal(round.cost.entry.model, 'gpt-x');
+  assert.equal(round.cost.entry.priceSource, 'table');
+  assert.ok(Math.abs(round.cost.entry.usd.input - 0.001) < 1e-12);
+  assert.ok(Math.abs(round.cost.entry.usd.output - 0.0002) < 1e-12);
+  assert.deepEqual(round.cost.priceTable, { date: '2026-10-15', origin: 'bundled' });
+  // The round itself is passed on as the provider returned it.
+  assert.equal(round.message.content, 'ok');
+});
+
+test('adapter leaves a round without usage unpriced, and a failing price lookup costs no answer (#949)', async () => {
+  const noUsage = createProviderLlmAdapter(makeAdapterDeps({
+    providerRuntime: usageProviders(null),
+    modelPrices: { resolve: async () => ({ price: null, priceSource: null }), tableInfo: async () => null },
+  }));
+  assert.equal((await oneRound(noUsage)).cost, undefined);
+
+  const broken = createProviderLlmAdapter(makeAdapterDeps({
+    providerRuntime: usageProviders({ prompt: 10, completion: 1, total: 11, cached: 0 }),
+    modelPrices: { resolve: async () => { throw new Error('disk'); }, tableInfo: async () => null },
+  }));
+  const round = await broken.streamRound({
+    target: await broken.resolveChatTarget(),
+    messages: [],
+    callbacks: {},
+    abortSignal: new AbortController().signal,
+  });
+  assert.equal(round.message.content, 'ok');
+  assert.equal(round.cost, undefined);
+
+  // Without a price service a round is still counted, only without a price.
+  const unpriced = createProviderLlmAdapter(makeAdapterDeps({
+    providerRuntime: usageProviders({ prompt: 10, completion: 1, total: 11, cached: 0 }),
+  }));
+  const counted = await oneRound(unpriced);
+  assert.equal(counted.cost.entry.usd, null);
+  assert.equal(counted.cost.entry.tokens.input, 10);
 });
