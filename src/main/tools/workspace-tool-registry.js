@@ -13,6 +13,10 @@ const {
   TOOL_SETUPS,
 } = require('../../shared/contracts/chat-configuration');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
+const {
+  DEFAULT_SEARCH_RESULTS: DEFAULT_MANUAL_SEARCH_RESULTS,
+  MAX_SEARCH_RESULTS: MAX_MANUAL_SEARCH_RESULTS,
+} = require('../services/manual-lookup');
 const { createTranslator } = require('../../shared/i18n');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { createGenerateImageTool } = require('./generate-image-tool');
@@ -636,6 +640,8 @@ function createWorkspaceToolRegistry({
   imageGeneration = null,
   /** Reads the chat's skills and tools for `get_configuration` (#773). */
   configuration = null,
+  /** Searches and reads the bundled user manual (#947), see manual-lookup.js. */
+  manual = null,
 }) {
   return createToolRegistry([
     {
@@ -1667,6 +1673,93 @@ function createWorkspaceToolRegistry({
           });
         } catch (error) {
           return JSON.stringify({ error: error?.message || 'The entry could not be saved.' });
+        }
+      },
+    },
+    {
+      name: 'search_manual',
+      // Reads the manual that ships with the app — no file of the user, no
+      // network, nothing that changes: `read`, and so never a card (#947).
+      riskClass: TOOL_RISK_CLASSES.READ,
+      requiresWorkspace: false,
+      targets: () => [],
+      isAvailable: () => Boolean(manual?.isAvailable()),
+      descriptionKey: 'tools.desc.search_manual',
+      modelDescription:
+        'Searches Snotra\'s own user manual — the one that ships with this app version — and returns '
+        + 'the best pages with the section the words were found in, an excerpt and the page\'s address '
+        + 'on docs.snotra-ai.dev. Use it for questions about Snotra itself that need more than an '
+        + 'overview: the steps to do something, where a setting is and what it does, what a dialog '
+        + 'or card means, why something does not work. Search with the words the manual would use '
+        + '(the names of menus and settings); every word has to occur on a page. Then read the best '
+        + 'hit with read_manual_page instead of answering from the excerpt, and give the user the link — '
+        + 'in Snotra a click on it opens that page of the bundled manual.',
+      shortDescriptionKey: 'tools.short.search_manual',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'A few words, as the manual would say them.' },
+          locale: {
+            type: 'string',
+            enum: ['en', 'de'],
+            description: 'Language of the manual. Defaults to the language of the app.',
+          },
+          limit: {
+            type: 'integer',
+            minimum: 1,
+            maximum: MAX_MANUAL_SEARCH_RESULTS,
+            description: `How many pages, at most (default ${DEFAULT_MANUAL_SEARCH_RESULTS}).`,
+          },
+        },
+        required: ['query'],
+      },
+      handler: async (args, { locale } = {}) => {
+        if (!manual?.isAvailable()) {
+          return JSON.stringify({ error: 'The manual is not part of this installation.' });
+        }
+        try {
+          return JSON.stringify(manual.search({ query: args.query, locale: args.locale ?? locale, limit: args.limit }));
+        } catch (error) {
+          return JSON.stringify({ error: error?.message || 'The manual could not be searched.' });
+        }
+      },
+    },
+    {
+      name: 'read_manual_page',
+      riskClass: TOOL_RISK_CLASSES.READ,
+      requiresWorkspace: false,
+      targets: () => [],
+      isAvailable: () => Boolean(manual?.isAvailable()),
+      descriptionKey: 'tools.desc.read_manual_page',
+      modelDescription:
+        'Reads a page of Snotra\'s own user manual as Markdown — the whole page, or with `anchor` only '
+        + 'that section and what is below it. Take `slug` and `anchor` from search_manual; the page\'s '
+        + 'address on docs.snotra-ai.dev works as `slug` too. Links in the page are addresses on '
+        + 'docs.snotra-ai.dev, screenshots appear as their description. A long page comes back cut, '
+        + 'with `truncated` and the list of its sections — then read the section you need. Answer '
+        + 'from what the page says, use the menu paths as it writes them, and link the page.',
+      shortDescriptionKey: 'tools.short.read_manual_page',
+      parameters: {
+        type: 'object',
+        properties: {
+          slug: { type: 'string', description: 'The page, e.g. "safety/sandbox", as search_manual names it.' },
+          anchor: { type: 'string', description: 'A section of the page, as search_manual names it. Optional.' },
+          locale: {
+            type: 'string',
+            enum: ['en', 'de'],
+            description: 'Language of the manual. Defaults to the language of the app.',
+          },
+        },
+        required: ['slug'],
+      },
+      handler: async (args, { locale } = {}) => {
+        if (!manual?.isAvailable()) {
+          return JSON.stringify({ error: 'The manual is not part of this installation.' });
+        }
+        try {
+          return JSON.stringify(manual.read({ slug: args.slug, anchor: args.anchor, locale: args.locale ?? locale }));
+        } catch (error) {
+          return JSON.stringify({ error: error?.message || 'The manual page could not be read.' });
         }
       },
     },

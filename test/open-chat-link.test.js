@@ -104,3 +104,37 @@ test('openChatLink puts a key from the main process into words (#353)', async ()
     error: 'Only http, https and mailto links can be opened.',
   });
 });
+
+test('a link to the manual opens the help window, the browser only as a fallback (#947)', async () => {
+  const { openChatLink } = await modulePromise;
+  const calls = [];
+  const api = (manualResult) => ({
+    openManual(target) {
+      calls.push(['manual', target]);
+      return typeof manualResult === 'function' ? manualResult() : Promise.resolve(manualResult);
+    },
+    openExternal(url) {
+      calls.push(['external', url]);
+      return Promise.resolve({ ok: true });
+    },
+  });
+
+  const german = 'https://docs.snotra-ai.dev/de/safety/sandbox/#was-du-brauchst';
+  assert.deepEqual(await openChatLink(api({ ok: true }), german), { ok: true });
+  assert.deepEqual(calls.splice(0), [['manual', { slug: 'safety/sandbox', fragment: 'was-du-brauchst' }]]);
+
+  // A page main does not have, or a bridge that fails: the address goes out.
+  assert.deepEqual(await openChatLink(api({ ok: false }), 'https://docs.snotra-ai.dev/future/page/'), { ok: true });
+  assert.deepEqual(calls.splice(0), [
+    ['manual', { slug: 'future/page', fragment: '' }],
+    ['external', 'https://docs.snotra-ai.dev/future/page/'],
+  ]);
+  assert.deepEqual(await openChatLink(api(() => Promise.reject(new Error('IPC weg'))), 'https://docs.snotra-ai.dev/'), { ok: true });
+  assert.deepEqual(calls.splice(0), [['manual', { slug: 'index', fragment: '' }], ['external', 'https://docs.snotra-ai.dev/']]);
+
+  // Anything else never asks the help window.
+  for (const href of ['https://example.com/safety/sandbox/', 'http://docs.snotra-ai.dev/safety/sandbox/', 'https://docs.snotra-ai.dev.example.com/']) {
+    await openChatLink(api({ ok: true }), href);
+    assert.deepEqual(calls.splice(0), [['external', href]], href);
+  }
+});

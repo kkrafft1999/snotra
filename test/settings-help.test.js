@@ -30,7 +30,7 @@ test.before(async () => {
   help = await importRenderer('components', 'SettingsHelp.js');
   links = await importRenderer('manual', 'settings-help-links.js');
   i18n = await importRenderer('i18n.js');
-  const search = await importRenderer('manual', 'manual-search.js');
+  const search = require('../src/shared/manual/manual-search.js');
   const { headingSlug } = await importRenderer('file-views', 'markdown-document.js');
   targetDir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-settings-help-'));
   bundle = bundleManual({ manualDir: path.join(__dirname, '..', 'manual'), targetDir });
@@ -160,4 +160,19 @@ test('main opens only what has the shape of a page and a heading', () => {
   assert.deepEqual(handler({}, { slug: 'safety/sandbox', fragment: 'give-one-program-more-room', extra: 1 }), { ok: true });
   assert.deepEqual(handler({}, { slug: 'https://example.com' }), { ok: false });
   assert.deepEqual(opened, [{ slug: 'safety/sandbox', fragment: 'give-one-program-more-room' }]);
+});
+
+test('main turns down a page this version does not ship, so the link goes to the browser (#947)', () => {
+  const handlers = new Map();
+  const opened = [];
+  registerManualOpenHandler({
+    ipcMain: { handle: (channel, listener) => handlers.set(channel, listener) },
+    REQ,
+    open: (target) => opened.push(target),
+    hasPage: (slug) => slug === 'safety/sandbox',
+  });
+  const handler = handlers.get(REQ.MANUAL_OPEN);
+  assert.deepEqual(handler({}, { slug: 'safety/sandbox' }), { ok: true });
+  assert.deepEqual(handler({}, { slug: 'safety/not-yet-written' }), { ok: false });
+  assert.deepEqual(opened, [{ slug: 'safety/sandbox', fragment: '' }]);
 });

@@ -47,6 +47,7 @@ const GROUP_KEYS = {
   'skill-write': 'toolLog.group.skillWrite',
   read: 'toolLog.group.read',
   search: 'toolLog.group.search',
+  manual: 'toolLog.group.manual',
   list: 'toolLog.group.list',
   check: 'toolLog.group.check',
   write: 'toolLog.group.write',
@@ -72,6 +73,8 @@ const CATEGORY_RANK = {
   image: 3,
   write: 4,
   search: 5,
+  // Where an answer about Snotra came from (#947) — ahead of the file reads.
+  manual: 5,
   read: 6,
   list: 7,
   check: 8,

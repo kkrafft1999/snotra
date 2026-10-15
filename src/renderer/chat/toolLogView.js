@@ -44,6 +44,8 @@ const TOOL_CATEGORY_ICON_PATHS = {
   'skill-write': '<path d="M4.2 2.2h7.6v11.6L8 11.1l-3.8 2.7z"/>',
   read: '<path d="M4 1.8h4.6L12 5.2v9H4z"/><path d="M8.4 1.9v3.4h3.4"/><path d="M6 9h4M6 11.4h4"/>',
   search: '<circle cx="7.2" cy="7.2" r="4.2"/><path d="M10.4 10.4 13.6 13.6"/>',
+  // An open book: a look into Snotra's own manual (#947).
+  manual: '<path d="M8 4.4C6.6 3.2 4.6 2.8 2.4 3v9.4c2.2-.2 4.2.2 5.6 1.4 1.4-1.2 3.4-1.6 5.6-1.4V3C11.4 2.8 9.4 3.2 8 4.4z"/><path d="M8 4.4v9.4"/>',
   list: '<path d="M2.2 4h3.9l1.2 1.6h6.5v7.4H2.2z"/>',
   check: '<circle cx="8" cy="8" r="5.6"/><circle cx="8" cy="8" r="1.6"/>',
   write: '<path d="M11.3 2.3 13.7 4.7 6.2 12.2H3.8V9.8z"/>',

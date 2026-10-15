@@ -22,6 +22,7 @@ Ist die Antwort fertig, klappen die Schritte zu einer Zeile zusammen, die sie z�
 - Eine Änderung trägt die Zahl hinzugefügter und entfernter Zeilen, zum Beispiel `+2 −1`.
 - Ein Schritt, der nicht lief, sagt warum: *abgelehnt*, wenn du auf der Karte Nein gesagt hast, *blockiert*, wenn eine Regel ihn gestoppt hat, *verfallen*, wenn die Anfrage verfallen ist. Fahr mit der Maus darüber für die Einzelheiten.
 - Ein Schritt, der aus einem Skill kommt, nennt den Skill.
+- [seit 1.22] Ein Blick in dieses Handbuch heißt *Im Handbuch nach „…“ gesucht* oder *Handbuchseite … gelesen*; zugeklappt zählt er als *1 Blick ins Handbuch*. Die Antwort verlinkt dann die Seite, auf die sie sich stützt; ein Klick auf so einen Link öffnet die Seite im Hilfefenster, in der Fassung für deine installierte Version.
 
 ## Wenn die Sandbox etwas gestoppt hat
 

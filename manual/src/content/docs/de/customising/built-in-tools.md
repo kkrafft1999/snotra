@@ -11,12 +11,14 @@ Snotra bringt eigene Tools zum Lesen, Ändern, Ausführen und Suchen mit. Die me
 
 | Risikoklasse | Tools | Bereit? |
 | --- | --- | --- |
-| *Lesen* | `read_file_text`, `read_file_lines`, `list_directory_tree`, `find_files`, `search_in_files`, `stat_path`, `outline_file`, `extract_document_text` (PDF, Word, Excel, PowerPoint), `get_configuration` (welche Skills und Tools dieser Chat hat), `propose_config_change` (schlägt vor, eines für diesen Chat ein- oder auszuschalten – du entscheidest auf einer Karte) | ja |
+| *Lesen* | `read_file_text`, `read_file_lines`, `list_directory_tree`, `find_files`, `search_in_files`, `stat_path`, `outline_file`, `extract_document_text` (PDF, Word, Excel, PowerPoint), `get_configuration` (welche Skills und Tools dieser Chat hat), `search_manual` und `read_manual_page` (dieses Handbuch), `propose_config_change` (schlägt vor, eines für diesen Chat ein- oder auszuschalten – du entscheidest auf einer Karte) | ja |
 | *Ändern* | `write_file_text`, `edit_file`, `apply_patch`, `remember`, `generate_image` | ja — `generate_image` braucht einen OpenAI-Schlüssel |
 | *Ausführen* | `shell_execute`, `run_python` | aus, bis du sie einschaltest |
 | *Externe Dienste* | `fetch_url`, `web_search` | `web_search` braucht einen Tavily-Schlüssel |
 
 Jedes Tool lässt sich einzeln unter *Einstellungen › Tools & Sicherheit* ausschalten, in der Zeile seiner Risikoklasse. Was die Klassen bedeuten, steht unter [Warum Snotra fragt, bevor es handelt](../../safety/why-snotra-asks/).
+
+**Fragen zu Snotra selbst.** [seit 1.22] Fragst du, wie etwas in Snotra geht, wo eine Einstellung liegt oder warum etwas nicht klappt, schlägt das Modell in diesem Handbuch nach: Es sucht mit `search_manual`, liest die Seite mit `read_manual_page` – in der Sprache der App – und verlinkt die Seite, auf die es sich stützt; der Link öffnet sich im Hilfefenster. Beide lesen nur das Handbuch, das mit deiner Version ausgeliefert wird: keine deiner Dateien, nichts aus dem Internet, deshalb fragen sie nie vorher.
 
 ## Python
 

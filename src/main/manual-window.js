@@ -208,10 +208,12 @@ function cleanHelpTarget(target) {
  * The help links next to the settings (#848): the app window asks for a page
  * and section, and the help window opens there — or turns to it.
  */
-function registerManualOpenHandler({ ipcMain, REQ, open }) {
+function registerManualOpenHandler({ ipcMain, REQ, open, hasPage = () => true }) {
   ipcMain.handle(REQ.MANUAL_OPEN, (_event, target) => {
     const clean = cleanHelpTarget(target);
-    if (!clean) return { ok: false };
+    // A link from the chat may name a page this version does not ship (#947);
+    // then the caller opens the address in the browser instead.
+    if (!clean || !hasPage(clean.slug)) return { ok: false };
     open(clean);
     return { ok: true };
   });

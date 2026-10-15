@@ -24,6 +24,7 @@ const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/work
 const { createMessage } = require('../../shared/contracts/message');
 const { TOOL_SETUPS } = require('../../shared/contracts/chat-configuration');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
+const { createManualLookup, loadVendoredMarkedLexer } = require('../services/manual-lookup');
 const { createMcpService } = require('../services/mcp-service');
 const { createMcpAdapter } = require('../adapters/mcp-adapter');
 const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-adapter');
@@ -35,7 +36,7 @@ const { createSandboxService, sensitiveReadPaths } = require('../services/sandbo
 const { createOutsideAccess } = require('../services/outside-access');
 const { createApprovalNotifier } = require('../services/approval-notifier');
 const { createProgramAllowances } = require('../services/program-allowances-service');
-const { existsSync } = require('fs');
+const { existsSync, readFileSync } = require('fs');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const {
   createProviderRuntimeAdapter,
@@ -132,6 +133,11 @@ function createApplication({
    * 8.3-Kurznamen abstuerzen zu lassen (Issue #158).
    */
   realpathNative = null,
+  /**
+   * The bundled user manual (manual-service.js). With it the model gets
+   * search_manual and read_manual_page (#947); without it, neither.
+   */
+  manual = null,
   /**
    * Called when the user switches the language (epic #277). The caller rebuilds
    * the menu bar from it — the menu belongs to them, not here.
@@ -524,6 +530,11 @@ function createApplication({
     fsService,
     extractor: createDocumentTextExtractor({ pdfjsDir: PDFJS_VENDOR_DIR }),
   });
+  // The model's look into the manual (#947), with the marked the help window runs.
+  const MARKED_VENDOR_FILE = path.join(__dirname, '..', '..', 'renderer', 'vendor', 'marked.umd.js');
+  const manualLookup = manual
+    ? createManualLookup({ manual, loadLexer: () => loadVendoredMarkedLexer(MARKED_VENDOR_FILE, { readFileSync }) })
+    : null;
   // Which skills and tools a chat has (#773); assigned once the skills exist.
   let chatConfiguration = null;
   const toolRegistry = createWorkspaceToolRegistry({
@@ -537,6 +548,7 @@ function createApplication({
     imageGeneration: imageGenerationSettings.adapter,
     // Built further down: it needs the skills and the MCP servers (#773).
     configuration: { describeForModel: (input) => chatConfiguration.describeForModel(input) },
+    manual: manualLookup,
   });
 
   // MCP-Server (Issue #106/#107). Verbunden wird traege — `setServers` startet

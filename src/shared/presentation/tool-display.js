@@ -79,6 +79,8 @@ const TOOL_LINE_KEYS = Object.freeze({
   fetch_url: 'tools.line.fetchUrl',
   remember: 'tools.line.remember',
   generate_image: 'tools.line.generateImage',
+  search_manual: 'tools.line.searchManual',
+  read_manual_page: 'tools.line.readManualPage',
 });
 
 /** The four suffixes every entry of TOOL_LINE_KEYS carries. */
@@ -160,6 +162,18 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOC
   if (toolName === 'web_search') {
     const raw = typeof args?.query === 'string' ? args.query.trim() : '';
     return lineFor(t, 'web_search', isDone, { query: raw ? truncateToolLabel(raw, 40) : '' });
+  }
+  if (toolName === 'search_manual') {
+    const raw = typeof args?.query === 'string' ? args.query.trim() : '';
+    return lineFor(t, 'search_manual', isDone, { query: raw ? truncateToolLabel(raw, 40) : '' });
+  }
+  if (toolName === 'read_manual_page') {
+    // The slug names the page in both languages; the section, when there is
+    // one, is what the model was after (#947).
+    const slug = typeof args?.slug === 'string' ? args.slug.trim() : '';
+    const anchor = typeof args?.anchor === 'string' ? args.anchor.trim().replace(/^#/, '') : '';
+    const page = slug ? truncateToolLabel(anchor ? `${slug}#${anchor}` : slug, 48) : '';
+    return lineFor(t, 'read_manual_page', isDone, { page });
   }
   if (toolName === 'remember') {
     // Where the entry went, not that a tool ran (#555): it goes along with

@@ -7,6 +7,7 @@
 
 import contracts from '../generated/contracts.js';
 import frontmatterParser from '../generated/skill-frontmatter.js';
+import headingSlugModule from '../generated/heading-slug.js';
 import { inertHtmlFragment, isOpenableLink, markdownToSafeHtml } from '../utils/helpers.js';
 import { resolveNative } from '../utils/nativePath.js';
 
@@ -104,14 +105,8 @@ export function resolveDocumentPath(raw, { fileDir, workspaceRoot }) {
   return resolveNative(fileDir, posix);
 }
 
-/** Slug of a heading, the way GitHub builds it for `#anchor` links. */
-export function headingSlug(text) {
-  return String(text ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s_-]/gu, '')
-    .replace(/\s/g, '-');
-}
+/** Slug of a heading, the way GitHub builds it — shared with the main process since #947. */
+export const { headingSlug } = headingSlugModule;
 
 /**
  * What a link of the document does when clicked:

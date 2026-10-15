@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Full-text search over the bundled manual (#847).
  *
@@ -12,10 +14,14 @@
  * counts more than the start of one (`mode` in *model*), and that more than a
  * hit inside a word — which only counts from four letters on, so that `modus`
  * still finds *Standardmodus* but `ai` does not find every *email*.
+ *
+ * CommonJS in `src/shared/` since #947: the help window gets it as an ESM
+ * bundle (`scripts/sync-renderer-vendor.js`), the main process requires it for
+ * the model's `search_manual` — both rank the same way.
  */
 
 /** Below this the list would be the whole manual. */
-export const MIN_QUERY_LENGTH = 2;
+const MIN_QUERY_LENGTH = 2;
 const MAX_RESULTS = 30;
 const EXCERPT_BEFORE = 48;
 const EXCERPT_AFTER = 120;
@@ -33,7 +39,7 @@ const SINCE_MARKER = /\[(?:since|seit) \d+\.\d+(?:\.\d+)?\]\s*/gi;
  * character back to the original one — so that a match found in the folded
  * text can be marked in the text the reader sees.
  */
-export function fold(value) {
+function fold(value) {
   const source = String(value ?? '');
   let text = '';
   const map = [];
@@ -51,7 +57,7 @@ export function fold(value) {
 }
 
 /** The words of a query, folded; empty when the query is too short to search. */
-export function queryTerms(query) {
+function queryTerms(query) {
   const trimmed = String(query ?? '').trim();
   if (trimmed.length < MIN_QUERY_LENGTH) return [];
   return [...new Set(fold(trimmed).text.split(/\s+/).filter(Boolean))];
@@ -93,45 +99,53 @@ function clean(text) {
 }
 
 /**
+ * A page split at its headings: `{ heading, anchor, depth, tokens }` per
+ * section, the first one — the intro before any heading — with an empty
+ * heading, a null anchor and depth 0. The anchor is the one the help window
+ * gives that heading: `slugify` of its text, counted up for repeats.
+ */
+function pageSections(markdown, { lexer, slugify }) {
+  const sections = [];
+  let current = { heading: '', anchor: null, depth: 0, tokens: [] };
+  const seen = new Map();
+  for (const token of lexer(markdown ?? '')) {
+    if (token.type === 'heading') {
+      sections.push(current);
+      const heading = clean(inlineText(token.tokens));
+      const base = slugify(heading);
+      const count = seen.get(base) ?? 0;
+      seen.set(base, count + 1);
+      current = { heading, anchor: count === 0 ? base : `${base}-${count}`, depth: token.depth, tokens: [token] };
+    } else {
+      current.tokens.push(token);
+    }
+  }
+  sections.push(current);
+  return sections;
+}
+
+/**
  * Builds the index from `{ slug, title, description, chapter, markdown }` per
  * page. `lexer` is marked's, `slugify` the heading slug of the help window
  * (`headingSlug`), counted up for repeats the same way it does.
  */
-export function buildSearchIndex(pages, { lexer, slugify }) {
-  return pages.map((page) => {
-    const sections = [];
-    let current = { heading: '', anchor: null, parts: [] };
-    const seen = new Map();
-    for (const token of lexer(page.markdown ?? '')) {
-      if (token.type === 'heading') {
-        sections.push(current);
-        const heading = clean(inlineText(token.tokens));
-        const base = slugify(heading);
-        const count = seen.get(base) ?? 0;
-        seen.set(base, count + 1);
-        current = { heading, anchor: count === 0 ? base : `${base}-${count}`, parts: [] };
-      } else {
-        current.parts.push(blockText(token));
-      }
-    }
-    sections.push(current);
-
-    return {
-      slug: page.slug,
-      title: page.title ?? '',
-      chapter: page.chapter ?? null,
-      folded: {
-        title: fold(page.title).text,
-        description: fold(page.description).text,
-      },
-      sections: sections
-        .map(({ heading, anchor, parts }) => {
-          const text = clean(parts.filter(Boolean).join(' '));
-          return { heading, anchor, text, folded: { heading: fold(heading).text, text: fold(text) } };
-        })
-        .filter((section) => section.heading || section.text),
-    };
-  });
+function buildSearchIndex(pages, { lexer, slugify }) {
+  return pages.map((page) => ({
+    slug: page.slug,
+    title: page.title ?? '',
+    chapter: page.chapter ?? null,
+    folded: {
+      title: fold(page.title).text,
+      description: fold(page.description).text,
+    },
+    sections: pageSections(page.markdown, { lexer, slugify })
+      .map(({ heading, anchor, tokens }) => {
+        const body = tokens.filter((token) => token.type !== 'heading');
+        const text = clean(body.map(blockText).filter(Boolean).join(' '));
+        return { heading, anchor, text, folded: { heading: fold(heading).text, text: fold(text) } };
+      })
+      .filter((section) => section.heading || section.text),
+  }));
 }
 
 // ── Search ──────────────────────────────────────────────────────────────────
@@ -225,7 +239,7 @@ function excerptOf(section, terms) {
  * `{ slug, title, chapter, heading, anchor, excerpt }`. `heading` and `anchor`
  * name the section the words were found in, or are null for the page's intro.
  */
-export function searchManual(index, query, { limit = MAX_RESULTS } = {}) {
+function searchManual(index, query, { limit = MAX_RESULTS } = {}) {
   const terms = queryTerms(query);
   if (terms.length === 0) return [];
   const results = [];
@@ -267,3 +281,12 @@ export function searchManual(index, query, { limit = MAX_RESULTS } = {}) {
   results.sort((a, b) => b.score - a.score || a.title.localeCompare(b.title));
   return results.slice(0, limit);
 }
+
+module.exports = {
+  MIN_QUERY_LENGTH,
+  fold,
+  queryTerms,
+  pageSections,
+  buildSearchIndex,
+  searchManual,
+};
