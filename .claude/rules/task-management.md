@@ -40,16 +40,23 @@ issues. So:
 
 1. **Query the board first**, especially the **Ready** column — that is what
    comes next. The flat issue list shows everything as equal; the priorities
-   live on the board:
+   live on the board. Ask for **open issues only**:
    ```sh
-   gh project item-list 2 --owner kkrafft1999 --limit 100 --format json
+   gh project item-list 2 --owner kkrafft1999 --query "is:issue is:open" \
+     --limit 200 --format json
    ```
+   Never drop the `--query`. `item-list` returns the oldest items first, and
+   the board is mostly closed issues (466 items on 2026-10-15) — without the
+   filter a limit of 100 or 300 cuts off every recent issue, which then looks
+   as if it had no board entry (#962).
 2. **Then** the rest of the backlog — either from the same output (column
    `Backlog`) or flat:
    ```sh
    gh issue list --repo kkrafft1999/snotra --state open
    ```
-   Issues without a board entry only show up here, so compare both views.
+   Issues without a board entry only show up here, so compare both views:
+   an open issue that is missing from the filtered board output is the one to
+   file.
 3. Read individual issues where needed (`gh issue view <nr>`) to judge
    dependencies and priorities.
 4. Also **check the working tree** (`git status`) — work that has been started
