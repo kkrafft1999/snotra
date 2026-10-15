@@ -928,7 +928,7 @@ export function initChatStream({
     void syncGeneratedImages(messageEl, generatedImagesOf(message?.toolTrace), {
       api,
       workspaceRoot: appStore.rootPath,
-      onOpen: (relativePath) => openWorkspaceLink(relativePath),
+      onOpen: (relativePath) => openGeneratedImage(relativePath),
     });
   }
 
@@ -1821,6 +1821,25 @@ export function initChatStream({
     if (result?.ok || result?.reason === 'stale') return;
     const path = target?.path ?? raw;
     flashTokenUsageNote(t(result?.reason === 'outside' ? 'chat.link.fileOutside' : 'chat.link.fileNotFound', { path }));
+  }
+
+  /**
+   * A click on a generated image (#85) opens it in the preview column. Not
+   * through `openWorkspaceLink`: that one only takes HTML files and turned
+   * every image into "not in the open folder" (#968).
+   */
+  async function openGeneratedImage(relativePath) {
+    const root = appStore.rootPath;
+    let result = { ok: false, reason: 'not-found' };
+    if (root && relativePath) {
+      try {
+        result = await openWorkspaceFile(resolveNative(root, String(relativePath).replace(/\\/g, '/')));
+      } catch {
+        result = { ok: false, reason: 'not-found' };
+      }
+    }
+    if (result?.ok || result?.reason === 'stale') return;
+    flashTokenUsageNote(t(result?.reason === 'outside' ? 'chat.link.fileOutside' : 'chat.link.fileNotFound', { path: relativePath }));
   }
 
   chatMessagesEl.addEventListener('click', onChatLinkClick);

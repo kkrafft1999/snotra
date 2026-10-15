@@ -15,6 +15,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
 
+const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
 let harness = null;
 /** Pro Test austauschbar, damit auch ein Fehlschlag von openExternal pruefbar ist. */
 let openExternalImpl = async () => ({ ok: true });
@@ -41,6 +43,8 @@ async function getHarness() {
     writeClipboardText: async () => ({ ok: true }),
     abortChat: async () => ({ ok: true }),
     chat: async () => ({ ok: true }),
+    // A generated image is drawn from the workspace (#85).
+    readWorkspaceImage: async () => ({ ok: true, mime: 'image/png', base64: PNG_B64 }),
   };
 
   const chat = initChatStream({
@@ -63,6 +67,7 @@ async function getHarness() {
     opened,
     workspaceOpens,
     appStore,
+    renderChatMessages: () => chat.renderChatMessages(),
     /**
      * Zeigt eine Antwort mit Links an. Das Markup ist das, was DOMPurify in der
      * App nach markdownToSafeHtml() stehen laesst — inklusive target/rel und
@@ -235,4 +240,30 @@ test('one outside the folder, or not there, says so in the status line', async (
   clickOn(linkIn('Weg'));
   await flush();
   assert.equal(document.getElementById('chat-token-usage-value').textContent, 'gone.html does not exist in the open folder.');
+});
+
+test('a generated image opens in the preview, whatever its type (#968)', async () => {
+  const chat = await getHarness();
+  chat.appStore.chatMessages = [{
+    role: 'assistant',
+    content: 'The image is at assets/header.png.',
+    toolTrace: [{
+      line: 'generate_image assets/header.png',
+      tool: 'generate_image',
+      changes: [{ id: 'ab12-1', relativePath: 'assets/header.png', status: 'binary', created: true, added: 0, removed: 0 }],
+    }],
+  }];
+  chat.renderChatMessages();
+  let button = null;
+  for (let i = 0; i < 50 && !button; i += 1) {
+    await flush();
+    button = document.querySelector('#chat-messages .chat-images button.chat-image-open');
+  }
+  assert.ok(button, 'the card is a button');
+
+  button.click();
+  await flush();
+
+  assert.deepEqual(chat.workspaceOpens, [{ path: '/ws/assets/header.png', options: undefined }]);
+  assert.doesNotMatch(document.getElementById('chat-token-usage-value').textContent, /header\.png/, 'no not-found note');
 });
