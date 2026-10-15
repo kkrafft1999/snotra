@@ -32,7 +32,18 @@ The three system skills let Snotra answer questions about itself (`snotra-capabi
 
 A skill from a folder is never on by itself: it is someone else's content, so switching it on is your decision — and it applies to that folder only. Ticking a `review` skill in one project does not switch on a `review` skill in the next.
 
-## Call a skill for one chat
+## Make a skill of the folder global
+
+[since 1.22] A skill you wrote in one project, and now want in every folder, does not have to be moved by hand.
+
+1. Open [*Settings › Skills*](#switch-a-skill-on) and click the skill under *Folder · .agents/skills* to unfold it.
+2. Click *Make global…* below its path.
+3. Snotra asks first and names both folders: where the skill is now, in `.agents/skills/` of the open folder, and where it goes, `~/.snotra/skills/`. Click *Make global* — or *Cancel*, which is also what `Enter` and `Esc` do.
+
+The skill leaves the project and shows up under *User · ~/.snotra/skills* right away. If it was ticked in this folder, it is now ticked for every folder; the dialog says so beforehand. One that was off stays off.
+
+Only you can do this. The model writes skills into the open folder only and never moves one out of it.
+
 
 Type `/` in the input field: a list of every available skill opens, also those that are off. Type to narrow it down — it searches names and descriptions — and take one with `Enter` or `Tab`.
 
@@ -103,4 +114,5 @@ Snotra watches the skill folders, so a new or changed skill shows up in the sett
 - **The model does not use a skill you expected.** Click the skills pill in the chat bar: a skill that is off is listed there with where it comes from. A skill from the folder has to be ticked for this folder.
 - **A skill is greyed out with a reason.** Its `SKILL.md` is missing, has no front matter, or its `name` does not match its folder. The reason is shown next to it.
 - **A skill is marked *Shadowed by …*.** Another skill of the same name comes first — the folder's before your own ones. The path says which.
+- ***Make global* says there already is a global skill of that name.** Nothing was moved. Rename one of the two — the folder and the `name` in its `SKILL.md` — or remove the one in `~/.snotra/skills/` first. The dialog names its path.
 - **Your own skill is off in a project.** That project has a skill of the same name; it shadows yours there and needs its own tick.

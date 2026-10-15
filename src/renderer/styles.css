@@ -5501,6 +5501,11 @@ select.modal-input {
   margin-top: 4px;
 }
 
+/* "Make global" under a skill of the open folder (#764). */
+.settings-skill-item__actions {
+  margin: 10px 0 4px;
+}
+
 .modal-field-group {
   margin-bottom: 16px;
 }
