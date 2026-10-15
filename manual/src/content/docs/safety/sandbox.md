@@ -79,6 +79,8 @@ What it does not do: it does not stop a run from *reading* your other files, and
 - **The host in `~/.ssh/known_hosts`.** Inside the sandbox SSH cannot ask whether to trust a new host. Connect to it once from a terminal — `ssh -T git@gitlab.example.com` — and accept its key.
 - **Your key in the ssh-agent.** The sandbox keeps your private key files closed; SSH signs in through the agent instead. Load the key once with `ssh-add --apple-use-keychain ~/.ssh/<key>`, or add `AddKeysToAgent yes` and `UseKeychain yes` to `~/.ssh/config` so that SSH loads it the next time you use it in a terminal.
 
+To check both, run `ssh-keygen -F gitlab.example.com`: it prints the host's key if the host is in `known_hosts`. `ssh-add -l` lists the keys the agent holds; if it prints *The agent has no identities*, load the key first.
+
 ### Steps
 
 1. Ask for the Git command as usual and approve it on the card.
