@@ -168,6 +168,17 @@ test('generate_image draws through the Images API into the workspace', { timeout
   await page.reload();
   await poll(card, { what: 'generated image after a reload', explain: evidence });
 
+  // A click opens it in the preview and selects its row — it is a PNG, not an
+  // HTML link, and is in the folder all the same (#968).
+  await page.click('.chat-images button.chat-image-open');
+  const opened = () => page.evaluate(() => ({
+    selected: document.querySelector('#tree-container .tree-item.active')?.dataset.path ?? null,
+    note: document.getElementById('chat-token-usage-value')?.textContent ?? '',
+  }));
+  await poll(async () => (await opened()).selected?.endsWith('header.png'),
+    { what: 'generated image opened in the preview', explain: async () => JSON.stringify(await opened()) });
+  assert.doesNotMatch((await opened()).note, /header\.png/);
+
   // A refused prompt is an error for the model, and nothing is written.
   await images.update({ status: 400, error: { error: { message: 'Rejected by the safety system.', code: 'moderation_blocked' } } });
   model.queueAnswer({
