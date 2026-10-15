@@ -67,13 +67,15 @@ esbuild.buildSync({
   outfile: path.join(generatedDir, 'skill-frontmatter.js'),
 });
 
-// ── Heading slug and manual search for the renderer ─────────────────────────
-// Both live in `src/shared/` since #947: the help window ranks and anchors with
-// them, and the model's `search_manual` / `read_manual_page` in the main
-// process have to find the same pages and name the same anchors.
+// ── Heading slug, manual search and manual addresses for the renderer ───────
+// All three live in `src/shared/` since #947: the help window ranks and anchors
+// with them, the model's `search_manual` / `read_manual_page` in the main
+// process have to find the same pages and name the same anchors, and a manual
+// address the model hands on opens in the help window.
 for (const [entry, out] of [
   [path.join('runtime', 'heading-slug.js'), 'heading-slug.js'],
   [path.join('manual', 'manual-search.js'), 'manual-search.js'],
+  [path.join('manual', 'manual-address.js'), 'manual-address.js'],
 ]) {
   esbuild.buildSync({
     entryPoints: [path.join(root, 'src', 'shared', entry)],

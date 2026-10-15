@@ -1692,7 +1692,8 @@ function createWorkspaceToolRegistry({
         + 'overview: the steps to do something, where a setting is and what it does, what a dialog '
         + 'or card means, why something does not work. Search with the words the manual would use '
         + '(the names of menus and settings); every word has to occur on a page. Then read the best '
-        + 'hit with read_manual_page instead of answering from the excerpt, and give the user the link.',
+        + 'hit with read_manual_page instead of answering from the excerpt, and give the user the link — '
+        + 'in Snotra a click on it opens that page of the bundled manual.',
       shortDescriptionKey: 'tools.short.search_manual',
       parameters: {
         type: 'object',

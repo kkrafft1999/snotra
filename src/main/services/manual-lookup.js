@@ -17,7 +17,8 @@
 const vm = require('node:vm');
 const { buildSearchIndex, pageSections, searchManual, MIN_QUERY_LENGTH } = require('../../shared/manual/manual-search');
 const { headingSlug } = require('../../shared/runtime/heading-slug');
-const { MANUAL_WEB_BASE, manualWebUrl, normalizeManualLocale } = require('./manual-service');
+const { manualWebUrl, normalizeManualLocale } = require('./manual-service');
+const { parseManualAddress } = require('../../shared/manual/manual-address');
 
 const DEFAULT_SEARCH_RESULTS = 5;
 const MAX_SEARCH_RESULTS = 10;
@@ -38,9 +39,10 @@ const ABSOLUTE = /^[a-z][a-z0-9+.-]*:/i;
  */
 function parsePageReference(reference) {
   let text = String(reference ?? '').trim();
+  const address = parseManualAddress(text);
+  if (address) return { slug: address.slug, anchor: address.fragment || null, locale: address.locale };
   let anchor = null;
   let locale = null;
-  if (text.startsWith(MANUAL_WEB_BASE)) text = text.slice(MANUAL_WEB_BASE.length);
   const hash = text.indexOf('#');
   if (hash !== -1) {
     anchor = text.slice(hash + 1) || null;

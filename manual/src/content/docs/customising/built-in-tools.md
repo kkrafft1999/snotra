@@ -18,7 +18,7 @@ Snotra comes with its own tools for reading, changing, running and searching. Mo
 
 Each tool can be switched off on its own under *Settings › Tools & security*, in the row of its risk class. What the classes mean is on [Why Snotra asks before it acts](../../safety/why-snotra-asks/).
 
-**Questions about Snotra itself.** [since 1.22] Ask how to do something in Snotra, where a setting is or why something does not work, and the model looks it up in this manual with `search_manual` and reads the page with `read_manual_page` — in the language of the app — and links the page it used. Both read only the manual that ships with your version: none of your files, nothing on the internet, so they never ask first.
+**Questions about Snotra itself.** [since 1.22] Ask how to do something in Snotra, where a setting is or why something does not work, and the model looks it up in this manual with `search_manual` and reads the page with `read_manual_page` — in the language of the app — and links the page it used; the link opens in the help window. Both read only the manual that ships with your version: none of your files, nothing on the internet, so they never ask first.
 
 ## Python
 

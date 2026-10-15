@@ -165,10 +165,15 @@ function start() {
       getLocale: () => application?.getAppLocale?.(),
     });
     // The `?` next to a settings section opens it at its page (#848).
+    // Since #947 also a manual link in a chat answer; one that names no
+    // bundled page goes to the browser. Without a bundle the window opens
+    // the web anyway.
     registerManualOpenHandler({
       ipcMain: guardIpcMain(ipcMain),
       REQ,
       open: (target) => manualWindow.open(target),
+      hasPage: (slug) => !manual.isAvailable()
+        || Object.hasOwn(manual.getIndex(application?.getAppLocale?.()).pages, slug),
     });
 
     // The stored language is only known once the preferences have been read.

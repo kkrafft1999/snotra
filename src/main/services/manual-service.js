@@ -10,13 +10,12 @@
  * window hands over.
  */
 
+const { MANUAL_WEB_BASE, manualWebUrl: webUrl } = require('../../shared/manual/manual-address');
+
 const LOCALES = Object.freeze(['en', 'de']);
 const DEFAULT_LOCALE = 'en';
 const THEMES = Object.freeze(['light', 'dark']);
 const MOTIF = /^[a-z0-9-]+$/;
-
-/** The web manual, for *Open on the web* and as the fallback without a bundle. */
-const MANUAL_WEB_BASE = 'https://docs.snotra-ai.dev/';
 
 function normalizeManualLocale(locale) {
   return LOCALES.includes(locale) ? locale : DEFAULT_LOCALE;
@@ -24,10 +23,7 @@ function normalizeManualLocale(locale) {
 
 /** Address of a page on docs.snotra-ai.dev — the German pages live under `/de/`. */
 function manualWebUrl(locale, slug = 'index', fragment = '') {
-  const prefix = normalizeManualLocale(locale) === 'de' ? 'de/' : '';
-  const page = !slug || slug === 'index' ? '' : `${slug}/`;
-  const hash = fragment ? `#${encodeURIComponent(fragment)}` : '';
-  return `${MANUAL_WEB_BASE}${prefix}${page}${hash}`;
+  return webUrl(normalizeManualLocale(locale), slug, fragment);
 }
 
 function createManualService({ fs, path, bundleDir }) {

@@ -161,3 +161,18 @@ test('main opens only what has the shape of a page and a heading', () => {
   assert.deepEqual(handler({}, { slug: 'https://example.com' }), { ok: false });
   assert.deepEqual(opened, [{ slug: 'safety/sandbox', fragment: 'give-one-program-more-room' }]);
 });
+
+test('main turns down a page this version does not ship, so the link goes to the browser (#947)', () => {
+  const handlers = new Map();
+  const opened = [];
+  registerManualOpenHandler({
+    ipcMain: { handle: (channel, listener) => handlers.set(channel, listener) },
+    REQ,
+    open: (target) => opened.push(target),
+    hasPage: (slug) => slug === 'safety/sandbox',
+  });
+  const handler = handlers.get(REQ.MANUAL_OPEN);
+  assert.deepEqual(handler({}, { slug: 'safety/sandbox' }), { ok: true });
+  assert.deepEqual(handler({}, { slug: 'safety/not-yet-written' }), { ok: false });
+  assert.deepEqual(opened, [{ slug: 'safety/sandbox', fragment: '' }]);
+});

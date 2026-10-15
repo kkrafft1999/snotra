@@ -18,7 +18,7 @@ Snotra bringt eigene Tools zum Lesen, Ändern, Ausführen und Suchen mit. Die me
 
 Jedes Tool lässt sich einzeln unter *Einstellungen › Tools & Sicherheit* ausschalten, in der Zeile seiner Risikoklasse. Was die Klassen bedeuten, steht unter [Warum Snotra fragt, bevor es handelt](../../safety/why-snotra-asks/).
 
-**Fragen zu Snotra selbst.** [seit 1.22] Fragst du, wie etwas in Snotra geht, wo eine Einstellung liegt oder warum etwas nicht klappt, schlägt das Modell in diesem Handbuch nach: Es sucht mit `search_manual`, liest die Seite mit `read_manual_page` – in der Sprache der App – und verlinkt die Seite, auf die es sich stützt. Beide lesen nur das Handbuch, das mit deiner Version ausgeliefert wird: keine deiner Dateien, nichts aus dem Internet, deshalb fragen sie nie vorher.
+**Fragen zu Snotra selbst.** [seit 1.22] Fragst du, wie etwas in Snotra geht, wo eine Einstellung liegt oder warum etwas nicht klappt, schlägt das Modell in diesem Handbuch nach: Es sucht mit `search_manual`, liest die Seite mit `read_manual_page` – in der Sprache der App – und verlinkt die Seite, auf die es sich stützt; der Link öffnet sich im Hilfefenster. Beide lesen nur das Handbuch, das mit deiner Version ausgeliefert wird: keine deiner Dateien, nichts aus dem Internet, deshalb fragen sie nie vorher.
 
 ## Python
 

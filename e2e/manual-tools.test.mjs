@@ -1,7 +1,8 @@
 // The chat looks things up in Snotra's own manual (#947): in the real app the
 // model gets search_manual and read_manual_page, both answer from the manual
 // that ships with the app in the language of the interface, and the tool log
-// names the step a look into the manual rather than a file read.
+// names the step a look into the manual rather than a file read. A link to the
+// manual in the answer opens the bundled page in the help window.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -25,11 +26,11 @@ test('a question about Snotra is answered from the bundled manual', { timeout: 1
     await snotra.stop().catch(() => {});
     await model.close();
   });
-  const { page } = snotra;
+  const { page, app } = snotra;
 
   model.queueAnswer({ match: 'Netzwerkzugriff', toolCalls: [{ name: 'search_manual', arguments: { query: 'Sandbox Host' } }] });
   model.queueAnswer({ toolCalls: [{ name: 'read_manual_page', arguments: { slug: 'safety/sandbox' } }] });
-  model.queueAnswer({ text: 'Siehe https://docs.snotra-ai.dev/de/safety/sandbox/' });
+  model.queueAnswer({ text: 'Siehe [Befehle in der Sandbox ausführen](https://docs.snotra-ai.dev/de/safety/sandbox/#was-du-brauchst).' });
   await sendChat(page, 'Wie gebe ich einen Netzwerkzugriff frei?');
 
   const toolResults = () => {
@@ -74,4 +75,13 @@ test('a question about Snotra is answered from the bundled manual', { timeout: 1
   const { lines } = await toolLog();
   assert.ok(lines.includes('Im Handbuch nach „Sandbox Host“ gesucht'), JSON.stringify(lines));
   assert.ok(lines.includes('Handbuchseite safety/sandbox gelesen'), JSON.stringify(lines));
+
+  // The link in the answer opens the help window on that page, not the browser.
+  const opened = app.waitForEvent('window');
+  await page.evaluate(() => document.querySelector('#chat-messages a[href^="https://docs.snotra-ai.dev/"]').click());
+  const help = await opened;
+  await poll(() => help.evaluate(() => document.querySelector('.manual-nav [aria-current="page"]')?.dataset.page === 'safety/sandbox'), {
+    what: 'the help window on the sandbox page',
+    explain: async () => help.evaluate(() => document.querySelector('.manual-nav [aria-current="page"]')?.dataset.page ?? 'none'),
+  });
 });

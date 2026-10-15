@@ -1,5 +1,8 @@
 import { isOpenableLink } from '../utils/helpers.js';
 import { t, tMessage } from '../i18n.js';
+import manualAddress from '../generated/manual-address.js';
+
+const { parseManualAddress } = manualAddress;
 
 /**
  * Oeffnen von Links aus Modellantworten (Issues #82, #83).
@@ -24,6 +27,18 @@ export function isOpenableChatLink(href) {
 export async function openChatLink(api, href) {
   if (!isOpenableChatLink(href)) {
     return { ok: false, error: t('chat.link.error.notOpenable') };
+  }
+  // A page of the manual opens in the help window, in the version that is
+  // installed (#947). Main says no when the bundle lacks the page; then the
+  // browser gets the address as before.
+  const page = parseManualAddress(href);
+  if (page && typeof api?.openManual === 'function') {
+    try {
+      const result = await api.openManual({ slug: page.slug, fragment: page.fragment });
+      if (result?.ok) return { ok: true };
+    } catch {
+      // Falls through to the browser.
+    }
   }
   if (typeof api?.openExternal !== 'function') {
     return { ok: false, error: t('chat.link.error.noEnvironment') };
