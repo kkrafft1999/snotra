@@ -37,8 +37,11 @@ proven on the same day.
    see [`user-manual.md`](./user-manual.md).
 2. **Merge as soon as the pipeline is green** and the review below finds
    nothing. By **squash**: `main` carries one commit per pull request, with the
-   pull request number in the title. Delete the branch afterwards, the
-   repository does not tidy up by itself.
+   pull request number in the title. GitHub deletes the head branch on merge
+   (*Automatically delete head branches*, `delete_branch_on_merge`, on since
+   at least 2026-10-15, #965) — check that it is gone and tidy up the local
+   branch, but don't delete it by hand. Never delete it *before* the merge
+   either: a pull request whose head branch disappears is closed unmerged.
 
 The user is told afterwards, in one sentence, what happened: pull request
 number, merge, deleted branch. They don't have to approve it beforehand, but
@@ -92,5 +95,5 @@ process, and that is to be reported rather than worked around.
 ## Order
 
 Issue → branch → commits → local tests → push → pull request with `Closes #N` →
-pipeline → the review above → squash merge → delete branch → one sentence to
-the user.
+pipeline → the review above → squash merge → branch gone (GitHub) → one
+sentence to the user.
