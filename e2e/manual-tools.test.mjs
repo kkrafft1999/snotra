@@ -79,6 +79,26 @@ test('a question about Snotra is answered from the bundled manual', { timeout: 1
   assert.ok(lines.includes('Im Handbuch nach „Sandbox Host“ gesucht'), JSON.stringify(lines));
   assert.ok(lines.includes('Handbuchseite safety/sandbox gelesen'), JSON.stringify(lines));
 
+  // An overview question goes through the skill to the overview page (#952):
+  // the skill only says where to look, the facts come from the manual.
+  model.queueAnswer({ match: 'Was kannst du', toolCalls: [{ name: 'load_skill', arguments: { name: 'snotra-capabilities' } }] });
+  model.queueAnswer({ toolCalls: [{ name: 'read_manual_page', arguments: { slug: 'reference/capabilities' } }] });
+  model.queueAnswer({ text: 'Einiges.' });
+  await sendChat(page, 'Was kannst du eigentlich alles?');
+  const overview = await poll(() => {
+    const results = toolResults();
+    const skill = results.find((result) => result.skill === 'snotra-capabilities');
+    const read = results.find((result) => result.slug === 'reference/capabilities');
+    return skill && read ? { skill, read } : null;
+  }, {
+    what: 'the skill and the overview page sent back to the model',
+    timeoutMs: 30000,
+    explain: async () => `${JSON.stringify(model.describeRequests(), null, 1)}\nmain:\n${snotra.mainOutput()}`,
+  });
+  assert.match(JSON.stringify(overview.skill), /reference\/capabilities/);
+  assert.equal(overview.read.locale, 'de');
+  assert.match(overview.read.markdown, /Was es nicht kann/);
+
   // The link in the answer opens the help window on that page, not the browser.
   const opened = app.waitForEvent('window');
   await page.evaluate(() => document.querySelector('#chat-messages a[href^="https://docs.snotra-ai.dev/"]').click());

@@ -13,7 +13,7 @@ Nichts; jeder Chat, in dem du eine Nachricht abschickst, wird gespeichert.
 
 ## Den Verlauf einblenden
 
-Klick auf den Knopf ganz rechts in der Titelleiste, *Chat-Verlauf einblenden*. Der Verlauf erscheint als Spalte neben dem Chat, der neueste Chat zuerst. Ein weiterer Klick blendet ihn wieder aus.
+Klick auf den Knopf ganz rechts in der Titelleiste, *Chat-Verlauf einblenden*. Der Verlauf erscheint als Spalte neben dem Chat, der neueste Chat zuerst. Er enthält nur die Chats des geöffneten Ordners: Jeder Ordner hat seine eigenen. Ein weiterer Klick blendet ihn wieder aus.
 
 ![Die Chat-Spalte mit dem Chat „Überblick Gartenplaner“, daneben die Verlaufsspalte mit drei Chats — Überblick Gartenplaner, Abstand der Radieschen, Fruchtfolge fürs nächste Jahr — und oben dem Knopf „Neuer Chat“.](screenshots/history.webp)
 

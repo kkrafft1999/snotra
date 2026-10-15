@@ -44,6 +44,8 @@ Beide sind gewöhnliche Markdown-Dateien: Du kannst sie in jedem Editor lesen un
 
 Das Gedächtnis geht mit jeder Anfrage an den Anbieter, bis zu 8.000 Zeichen pro Ebene; *Einstellungen › Gedächtnis* zeigt, wie viel genutzt ist. Weil ein Repository ein Projektgedächtnis mitbringen kann, liest das Modell es als Notizen, die im Ordner geführt werden, nicht als etwas, das du gesagt hast.
 
+Löschen kannst nur du: Das Modell kann dem Gedächtnis etwas hinzufügen, aber nichts daraus entfernen — dafür ist der Papierkorb unter *Einstellungen › Gedächtnis* da.
+
 ## Wenn es nicht klappt
 
 - **Speichere nie Passwörter, Schlüssel oder Zugangsdaten.** Das Gedächtnis geht mit jeder Anfrage an den Anbieter. Rutscht doch eines hinein, maskiert Snotra es vor dem Senden.

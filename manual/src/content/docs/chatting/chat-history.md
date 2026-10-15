@@ -13,7 +13,7 @@ Nothing; every chat you send a message in is saved.
 
 ## Show the history
 
-Click the rightmost button in the title bar, *Show chat history*. The history appears as a column next to the chat, newest chat first. Click the button again to hide it.
+Click the rightmost button in the title bar, *Show chat history*. The history appears as a column next to the chat, newest chat first. It holds the chats of the open folder only: every folder keeps its own. Click the button again to hide it.
 
 ![The chat column with the chat "Garden Planner overview", and next to it the history column with three chats — Garden Planner overview, Spacing of the radishes, Crop rotation for next year — and the button "New chat" at the top.](screenshots/history.webp)
 

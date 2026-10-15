@@ -96,7 +96,7 @@ A tool switched on this way works like one switched on in the settings: in *Smar
 
 The model reads a switched-on skill's instructions when it needs them, together with the files next to its `SKILL.md`, such as `references/` or `assets/`. Those are read-only: what a skill wants to keep, it writes into `.agents/data/` in the open folder, like any other change you approve.
 
-Snotra watches the skill folders, so a new or changed skill shows up in the settings and in the `/` list by itself. *Reload skills* is there for the rare case it does not, on a network drive for example.
+Snotra watches the skill folders, so a new or changed skill shows up in the settings and in the `/` list by itself. *Reload skills* is there for the rare case it does not, on a network drive for example. There is no skill store or skill manager: a skill is a folder, and putting it in one of the places under *Where skills come from* is all it takes.
 
 ## If it doesn't work
 
