@@ -71,8 +71,25 @@ export function importDestDirFor(rowDataset, rootPath) {
  * sich der *Inhalt* eines Ordners geaendert hat — eine ueberschriebene Datei
  * aendert weder Name noch Art und soll den Baum nicht neu zeichnen (#158).
  */
-export function listingSignature(path, isDirectory) {
-  return `${isDirectory ? 'd' : 'f'}:${path}`;
+export function listingSignature(path, isDirectory, link = '') {
+  return `${isDirectory ? 'd' : 'f'}${link ? `@${link}` : ''}:${path}`;
+}
+
+/**
+ * How a tree row stands as a link (#945): '' for no link, 'inside' for a
+ * link into the open folder, 'outside' for one that leads out of it, and
+ * 'missing' for one whose target is gone. Part of the row's signature, so a
+ * link that breaks or is repaired redraws its row.
+ */
+export function treeLinkState(item) {
+  if (!item?.isSymlink) return '';
+  if (item.linkKind === 'missing') return 'missing';
+  return item.linkOutside ? 'outside' : 'inside';
+}
+
+/** Whether a tree row opens like a folder: not a link that leads outside (#945). */
+export function opensAsFolder(item) {
+  return Boolean(item?.isDirectory) && treeLinkState(item) !== 'outside';
 }
 
 /** Zwei Signaturlisten in Reihenfolge vergleichen. */

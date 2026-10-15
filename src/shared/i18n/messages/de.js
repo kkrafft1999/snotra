@@ -76,6 +76,12 @@ module.exports = {
   'tree.unreadable.missing': 'Diesen Ordner gibt es nicht mehr',
   'tree.unreadable.other': 'Dieser Ordner ließ sich nicht lesen',
   // In place of the tree while the project folder takes its time to list (#639).
+  'tree.link.title.inside': '{name} → {target}',
+  'tree.link.title.outside': '{name} → {target} (außerhalb des geöffneten Ordners)',
+  'tree.link.title.missing': '{name} → {target} (Ziel fehlt)',
+  'tree.link.label.inside': '{name}, Link auf {target}',
+  'tree.link.label.outside': '{name}, Link auf {target} außerhalb des geöffneten Ordners',
+  'tree.link.label.missing': '{name}, kaputter Link auf {target}',
   'tree.loading': 'Ordner wird geladen…',
   'tree.filter.open': 'Dateien filtern',
   'tree.filter.shortcut': 'Strg+P',

@@ -97,7 +97,14 @@ function createFilesystemIpcAdapter({
         return { entries: [], hidden: 0, unreadable: reason };
       }
       try {
-        return await fsService.readDirectory(absPath, { showHidden: options?.showHidden === true });
+        const listing = await fsService.readDirectory(absPath, { showHidden: options?.showHidden === true });
+        // A link whose target lies outside the open folder (#945) is shown,
+        // but marked: the same check would refuse to list or open it.
+        await Promise.all(listing.entries.map(async (entry) => {
+          if (!entry.isSymlink || entry.linkKind === 'missing') return;
+          if ((await boundPath(entry.path)).error) entry.linkOutside = true;
+        }));
+        return listing;
       } catch (err) {
         console.error('readDirectory error:', err.message);
         return { entries: [], hidden: 0, unreadable: unreadableReason(err) };

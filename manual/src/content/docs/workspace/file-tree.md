@@ -21,6 +21,16 @@ Files and folders whose name starts with a dot — `.github`, `.gitignore`, `.en
 
 ![The top left of the window with the ⋯ menu of the tree open: Filter files (⌘P), New file, New folder, and Show hidden files (⇧⌘.).](screenshots/tree-actions.webp)
 
+## Recognise links
+
+A symbolic link — `.claude/skills` pointing to `.agents/skills`, say — shows the icon of what it points to, with a small arrow in its lower left corner. Hover over it to see where it leads. [since 1.22]
+
+- A **link to a folder inside the open folder** opens and closes like any folder.
+- A **link to a folder outside the open folder** is shown, but does not open: Snotra only works inside the folder you opened. The tooltip says *outside the open folder*.
+- A **link whose target is gone** is drawn in amber with a dashed outline, and its tooltip says *target missing*. Clicking it opens nothing.
+
+Snotra itself never follows a link when it lists or searches the folder for a chat.
+
 ## The context menu
 
 Right-click a row — or `Cmd`-click / `Ctrl`-click it, or press `Shift+F10` on a focused row — for what you can do with it:

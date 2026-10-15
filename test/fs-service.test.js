@@ -2980,6 +2980,36 @@ test('readDirectory for the file tree lists everything below the cap (#76)', asy
   assert.equal(entries[1].path, path.join(tmpRoot, 'b.txt'));
 });
 
+test('readDirectory marks symlinks with target and kind and sorts folder links with folders (#945)', async (t) => {
+  const fsService = makeFsService();
+  const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
+  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  await fs.mkdir(path.join(tmpRoot, 'real-dir'));
+  await fs.writeFile(path.join(tmpRoot, 'real.md'), 'x', 'utf8');
+  const dirType = process.platform === 'win32' ? 'junction' : 'dir';
+  if (!await createSymlinkOrSkip(t, path.join(tmpRoot, 'real-dir'), path.join(tmpRoot, 'a-dir-link'), dirType)) return;
+  if (!await createSymlinkOrSkip(t, 'real.md', path.join(tmpRoot, 'b-file-link.md'), 'file')) return;
+  if (!await createSymlinkOrSkip(t, 'gone.md', path.join(tmpRoot, 'c-dangling.md'), 'file')) return;
+
+  const { entries } = await fsService.readDirectory(tmpRoot);
+  const byName = Object.fromEntries(entries.map((e) => [e.name, e]));
+
+  assert.deepEqual(entries.map((e) => [e.name, e.isDirectory]), [
+    ['a-dir-link', true],
+    ['real-dir', true],
+    ['b-file-link.md', false],
+    ['c-dangling.md', false],
+    ['real.md', false],
+  ]);
+  assert.equal(byName['a-dir-link'].isSymlink, true);
+  assert.equal(byName['a-dir-link'].linkKind, 'directory');
+  assert.equal(byName['b-file-link.md'].linkKind, 'file');
+  assert.equal(byName['b-file-link.md'].linkTarget, 'real.md');
+  assert.equal(byName['c-dangling.md'].linkKind, 'missing');
+  assert.equal(byName['c-dangling.md'].linkTarget, 'gone.md');
+  assert.equal(byName['real.md'].isSymlink, undefined, 'a plain entry carries no link fields');
+});
+
 test('readDirectory cuts after sorting, folders first, and counts the rest (#76)', async (t) => {
   const fsService = makeFsService();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));

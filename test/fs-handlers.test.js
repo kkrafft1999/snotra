@@ -258,6 +258,23 @@ test('readDirectory denies a symlink to a directory outside the workspace', asyn
   assert.deepEqual(denied, { entries: [], hidden: 0, unreadable: 'refused' });
 });
 
+test('readDirectory lists a link out of the workspace, marked as outside (#945)', async (t) => {
+  const { ipcMain, workspace, outside } = await setup(t);
+  await fs.mkdir(path.join(workspace, 'docs'));
+  const dirType = process.platform === 'win32' ? 'junction' : 'dir';
+  if (!await createSymlinkOrSkip(t, outside, path.join(workspace, 'outside-link'), dirType)) return;
+  if (!await createSymlinkOrSkip(t, path.join(workspace, 'docs'), path.join(workspace, 'inside-link'), dirType)) return;
+
+  const { entries } = await ipcMain.invoke(REQ.FS_READ_DIRECTORY, workspace);
+  const byName = Object.fromEntries(entries.map((e) => [e.name, e]));
+
+  assert.equal(byName['outside-link'].isSymlink, true);
+  assert.equal(byName['outside-link'].linkOutside, true);
+  assert.equal(byName['inside-link'].isSymlink, true);
+  assert.equal(byName['inside-link'].linkOutside, undefined);
+  assert.equal(byName.docs.linkOutside, undefined);
+});
+
 test('readFile denies files outside the workspace and reads files inside', async (t) => {
   const { ipcMain, workspace, outside } = await setup(t);
 
