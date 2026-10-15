@@ -13,7 +13,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const pill = (page) => page.evaluate(() => document.getElementById('chat-model-pill-label').textContent);
 
@@ -104,12 +104,7 @@ test('a chosen reasoning level stays with its chat, a new chat starts with mediu
     }
   });
   model.queueAnswer({ match: 'first chat', text: 'Done.' });
-  await page.evaluate(() => {
-    const input = document.getElementById('chat-input');
-    input.value = 'This is the first chat.';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  });
+  await sendChat(page, 'This is the first chat.');
   await poll(() => page.evaluate(() =>
     !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')
     && document.querySelectorAll('#chat-messages .chat-msg.assistant').length > 0), { what: 'answer' });

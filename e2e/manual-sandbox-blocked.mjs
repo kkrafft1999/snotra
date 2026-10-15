@@ -17,7 +17,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
@@ -73,12 +73,7 @@ try {
   await waitForTree(page);
 
   model.queueAnswer({ match: ASK, toolCalls: [{ name: 'shell_execute', arguments: { command: COMMAND } }] });
-  await page.evaluate((text) => {
-    const input = document.getElementById('chat-input');
-    input.value = text;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, ASK);
+  await sendChat(page, ASK);
   await poll(() => page.evaluate(() => {
     const once = document.querySelector('#chat-messages .chat-approval-card[data-state="pending"] button[data-response="allow-once"]');
     if (!once || once.disabled) return false;

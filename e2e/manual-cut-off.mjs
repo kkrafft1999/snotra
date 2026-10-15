@@ -10,7 +10,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 const QUESTION = 'Fasse bitte die Projektdokumentation zusammen.';
@@ -47,12 +47,7 @@ try {
     await page.waitForTimeout(300);
 
     model.queueAnswer({ match: QUESTION, text: ANSWER, finishReason: 'length' });
-    await page.evaluate((text) => {
-      const input = document.getElementById('chat-input');
-      input.value = text;
-      input.dispatchEvent(new Event('input', { bubbles: true }));
-      document.getElementById('btn-chat-send').click();
-    }, QUESTION);
+    await sendChat(page, QUESTION);
     await poll(() => page.evaluate(() => !!document.querySelector('#chat-messages .chat-msg.assistant.error')),
       { what: 'Hinweis zum Abschneiden' });
     await page.waitForTimeout(300);

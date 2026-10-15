@@ -15,7 +15,7 @@ import { mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const beforeRun = process.argv.includes('before');
@@ -56,12 +56,7 @@ try {
   await poll(async () =>
     (await page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length)) > 0,
   { what: 'drawn tree' });
-  if (!beforeRun) await page.evaluate(() => {
-    const input = document.getElementById('chat-input');
-    input.value = 'Hello';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  });
+  if (!beforeRun) await sendChat(page, 'Hello');
   if (!beforeRun) await poll(() => model.requests.some((r) => !r.isTitleRequest), { what: 'model asked', timeoutMs: 60_000 });
   if (!beforeRun) await poll(() => page.evaluate(() => !!document.querySelector('#chat-messages .chat-msg.assistant')
     && !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),

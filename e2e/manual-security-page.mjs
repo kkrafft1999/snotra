@@ -12,7 +12,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const withoutFolder = process.argv.includes('none');
@@ -40,12 +40,7 @@ const { app, page } = snotra;
 const prefix = `security-${locale}${withoutFolder ? '-none' : ''}${narrow ? '-narrow' : ''}`;
 
 function ask(text) {
-  return page.evaluate((value) => {
-    const input = document.getElementById('chat-input');
-    input.value = value;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, text);
+  return sendChat(page, text);
 }
 
 // The panel scrolls inside the dialog; a shot of the element would cut it

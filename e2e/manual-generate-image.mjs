@@ -12,7 +12,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 import { routeOpenAiImages } from './helpers/fake-images.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
@@ -108,12 +108,7 @@ try {
   model.queueAnswer({ text: locale === 'de'
     ? 'Das Headerbild liegt unter `assets/header.png` — eine ruhige Landschaft in der Abenddämmerung.'
     : 'The header image is at `assets/header.png` — a calm landscape at dusk.' });
-  await page.evaluate((text) => {
-    const input = document.getElementById('chat-input');
-    input.value = text;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, locale === 'de' ? 'Mach ein header image für die Landingpage.' : 'Make a header image for the landing page.');
+  await sendChat(page, locale === 'de' ? 'Mach ein header image für die Landingpage.' : 'Make a header image for the landing page.');
 
   // The approval card, as it asks.
   await poll(() => page.evaluate(() => !!document.querySelector('.chat-approval-card')), { what: 'approval card' });

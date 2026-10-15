@@ -21,7 +21,7 @@ import path from 'node:path';
 import electronBinary from 'electron';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const off = process.argv[3] === 'off';
@@ -53,12 +53,7 @@ const snotra = await launchApp({ userDataDir, wrapper });
 const { app, page } = snotra;
 
 function ask(question) {
-  return page.evaluate((text) => {
-    const input = document.getElementById('chat-input');
-    input.value = text;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, question);
+  return sendChat(page, question);
 }
 
 function pendingCard() {

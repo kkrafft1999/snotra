@@ -15,7 +15,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const SENTINEL = 'home-sentinel-702-only-in-the-test-home';
 
@@ -51,12 +51,7 @@ test('the app reads global memory from the test home, never from the real one', 
   await poll(() => page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length > 0),
     { what: 'drawn tree' });
   model.queueAnswer({ match: 'Who am I?', text: 'Nobody yet.' });
-  await page.evaluate(() => {
-    const input = document.getElementById('chat-input');
-    input.value = 'Who am I?';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  });
+  await sendChat(page, 'Who am I?');
   await poll(() => Boolean(model.requestFor('Who am I?')), { what: 'request at the model', timeoutMs: 30000 });
   // Only whether it is there — the prompt itself is not printed.
   const body = JSON.stringify(model.requestFor('Who am I?').body);
