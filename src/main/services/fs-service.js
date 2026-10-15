@@ -3013,12 +3013,24 @@ function createFsService({
   // batches instead of all at once. Hidden entries only with `showHidden`
   // (#436); system noise such as `.git` never.
   async function readDirectory(dirPath, { maxEntries = READ_DIRECTORY_MAX_ENTRIES, showHidden = false } = {}) {
-    const all = (await fs.readdir(dirPath, { withFileTypes: true }))
-      .filter((entry) => isListedEntryName(entry.name, { showHidden }))
-      .sort((a, b) => {
-        if (a.isDirectory() !== b.isDirectory()) return a.isDirectory() ? -1 : 1;
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-      });
+    const listed = (await fs.readdir(dirPath, { withFileTypes: true }))
+      .filter((entry) => isListedEntryName(entry.name, { showHidden }));
+    // A symlink is neither file nor folder to its dirent (#945). Its target
+    // decides where it sorts and which icon it gets, so links are resolved
+    // before the sort — only they, the plain entries cost nothing extra.
+    const links = new Map();
+    const linked = listed.filter((entry) => entry.isSymbolicLink());
+    for (let i = 0; i < linked.length; i += READ_DIRECTORY_LSTAT_BATCH) {
+      const batch = linked.slice(i, i + READ_DIRECTORY_LSTAT_BATCH);
+      await Promise.all(batch.map(async (entry) => {
+        links.set(entry.name, await describeLink(path.join(dirPath, entry.name)));
+      }));
+    }
+    const isFolder = (entry) => entry.isDirectory() || links.get(entry.name)?.kind === 'directory';
+    const all = listed.sort((a, b) => {
+      if (isFolder(a) !== isFolder(b)) return isFolder(a) ? -1 : 1;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
     const shown = all.slice(0, maxEntries);
 
     const entries = [];
@@ -3032,17 +3044,42 @@ function createFsService({
         } catch {
           // skip inaccessible files
         }
+        const link = links.get(entry.name);
         return {
           name: entry.name,
           path: fullPath,
-          isDirectory: entry.isDirectory(),
+          isDirectory: isFolder(entry),
           size: stats ? stats.size : 0,
           modified: stats ? stats.mtimeMs : 0,
+          ...(link ? { isSymlink: true, linkTarget: link.target, linkKind: link.kind } : {}),
         };
       })));
     }
 
     return { entries, hidden: all.length - shown.length };
+  }
+
+  /**
+   * What a symlink in the file tree points at (#945): the target as written
+   * in the link, and whether it is a folder, a file, something else (pipe,
+   * socket, device) or missing. A loop counts as missing — it leads nowhere.
+   */
+  async function describeLink(linkPath) {
+    let target = '';
+    try {
+      target = await fs.readlink(linkPath);
+    } catch {
+      // unreadable link: shown without a target
+    }
+    try {
+      const stats = await fs.stat(linkPath);
+      let kind = 'other';
+      if (stats.isDirectory()) kind = 'directory';
+      else if (stats.isFile()) kind = 'file';
+      return { target, kind };
+    } catch {
+      return { target, kind: 'missing' };
+    }
   }
 
   /**

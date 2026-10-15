@@ -65,6 +65,8 @@ const IDENTICAL_ON_PURPOSE = new Set([
   'manual.version',
   // A label and its shortcut in brackets: placeholders only (#859).
   'chat.mic.withShortcut',
+  // A link's name, an arrow and its target: placeholders only (#945).
+  'tree.link.title.inside',
 ]);
 
 test('no value is empty, and none was left identical in both languages by accident', () => {

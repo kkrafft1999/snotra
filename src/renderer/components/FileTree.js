@@ -5,6 +5,8 @@ import {
   svgChevron,
   svgFolder,
   svgFile,
+  svgFileMissing,
+  svgLinkBadge,
   dismissOnFocusLeave,
   dismissOnOutsideClick,
 } from '../utils/helpers.js';
@@ -25,9 +27,11 @@ import {
   isHiddenTreePath,
   listingSignature,
   listingsDiffer,
+  opensAsFolder,
   parentDirFromItemPath,
   sortFoldersTopDown,
   treeDepthFromIndentWidth,
+  treeLinkState,
 } from '../tree/treePaths.js';
 import { createFileViewHost } from '../file-views/host.js';
 import { createWorkspacePathSource } from '../tree/workspacePaths.js';
@@ -742,6 +746,21 @@ export function initFileTree(deps) {
     return depth * 16 + 4 + 16 + 16 + 4;
   }
 
+  /**
+   * Name and tooltip of a row. A link (#945) names its target in both, and
+   * says when the target is missing or lies outside the open folder.
+   */
+  function labelRow(row, name, linkState, linkTarget) {
+    if (!linkState) {
+      row.title = name;
+      row.setAttribute('aria-label', name);
+      return;
+    }
+    const values = { name, target: linkTarget || '?' };
+    row.title = t(`tree.link.title.${linkState}`, values);
+    row.setAttribute('aria-label', t(`tree.link.label.${linkState}`, values));
+  }
+
   async function loadTreeLevel(parentEl, dirPath, depth) {
     const generation = treeGeneration;
     const { entries: items = [], hidden = 0, unreadable } = (await listFolder(dirPath)) || {};
@@ -755,23 +774,35 @@ export function initFileTree(deps) {
       return;
     }
 
-    for (const item of items) {
+    for (const rawItem of items) {
+      // A link that leads out of the open folder is drawn, but not opened
+      // (#945): listing or reading it would be refused anyway.
+      const linkState = treeLinkState(rawItem);
+      const item = { ...rawItem, isDirectory: opensAsFolder(rawItem) };
+      const opens = linkState !== 'outside' && linkState !== 'missing';
       const row = document.createElement('div');
       row.classList.add('tree-item');
       // Dimmed (#436): a dot entry, or anything below a dot folder.
       if (isHiddenTreePath(item.path, appStore.rootPath)) row.classList.add('tree-item--hidden');
+      if (linkState) row.classList.add('tree-item--link');
+      if (linkState === 'missing') row.classList.add('tree-item--link-missing');
       row.dataset.path = item.path;
       row.dataset.isDirectory = item.isDirectory;
+      if (linkState) {
+        row.dataset.link = linkState;
+        row.dataset.linkTarget = rawItem.linkTarget || '';
+        row.dataset.itemName = item.name;
+      }
       row.setAttribute('draggable', 'true');
-      // Deep in the tree or in a narrow sidebar the name is cut off, down to
-      // nothing; the tooltip still reads it in full (#641).
-      row.title = item.name;
       // A WAI-ARIA tree (#74). One row at a time is the tab stop (roving
       // tabindex, `syncTabStop`); the name is set, not read from the content,
       // which would add the @ button's label and the mark to it.
       row.setAttribute('role', 'treeitem');
       row.setAttribute('aria-level', String(depth + 1));
-      row.setAttribute('aria-label', item.name);
+      // Deep in the tree or in a narrow sidebar the name is cut off, down to
+      // nothing; the tooltip still reads it in full (#641) — for a link with
+      // where it leads (#945).
+      labelRow(row, item.name, linkState, rawItem.linkTarget);
       row.setAttribute('aria-selected', 'false');
       if (item.isDirectory) row.setAttribute('aria-expanded', 'false');
       row.tabIndex = -1;
@@ -795,7 +826,17 @@ export function initFileTree(deps) {
 
       const icon = document.createElement('span');
       icon.classList.add('icon');
-      icon.innerHTML = item.isDirectory ? svgFolder() : svgFile(item.name);
+      // A link keeps the icon of what it points at and carries a small arrow
+      // in its corner (#945); a folder link that leads outside stays a folder.
+      if (linkState === 'missing') icon.innerHTML = svgFileMissing();
+      else icon.innerHTML = rawItem.isDirectory ? svgFolder() : svgFile(item.name);
+      if (linkState) {
+        const badge = document.createElement('span');
+        badge.classList.add('tree-link-badge');
+        badge.setAttribute('aria-hidden', 'true');
+        badge.innerHTML = svgLinkBadge();
+        icon.appendChild(badge);
+      }
       row.appendChild(icon);
 
       const label = document.createElement('span');
@@ -854,6 +895,12 @@ export function initFileTree(deps) {
           if (e.metaKey || e.ctrlKey) {
             e.preventDefault();
             void openFileContextMenu(item);
+            return;
+          }
+          // A link with nothing to show here only takes the focus (#945); the
+          // tooltip and the row's name say why.
+          if (!opens) {
+            focusRow(row);
             return;
           }
           selectFile(row, item);
@@ -2170,8 +2217,9 @@ export function initFileTree(deps) {
     const listing = await listFolder(dirPath);
     if (generation !== treeGeneration) return false;
     const { entries: items = [], hidden = 0, unreadable = null } = listing || {};
-    const jetzt = items.map((item) => listingSignature(item.path, item.isDirectory));
-    const vorher = rows.map((row) => listingSignature(row.dataset.path, row.dataset.isDirectory === 'true'));
+    const jetzt = items.map((item) => listingSignature(item.path, opensAsFolder(item), treeLinkState(item)));
+    const vorher = rows.map((row) =>
+      listingSignature(row.dataset.path, row.dataset.isDirectory === 'true', row.dataset.link || ''));
     // Past the cap the drawn rows can stay the same while the count behind them
     // moves; an unreadable folder has no rows either way, only its reason.
     return listingsDiffer(jetzt, vorher)
@@ -2515,6 +2563,9 @@ export function initFileTree(deps) {
    */
   onLocaleChange(() => {
     actionsMenu.renderShortcuts();
+    for (const row of treeContainer.querySelectorAll('.tree-item[data-link]')) {
+      labelRow(row, row.dataset.itemName || '', row.dataset.link, row.dataset.linkTarget);
+    }
     for (const btn of treeContainer.querySelectorAll('.tree-item-reference')) {
       const name = btn.dataset.itemName || '';
       btn.setAttribute('aria-label', t('tree.reference.label', { name }));

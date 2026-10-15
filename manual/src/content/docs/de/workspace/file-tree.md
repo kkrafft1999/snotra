@@ -21,6 +21,16 @@ Dateien und Ordner, deren Name mit einem Punkt beginnt — `.github`, `.gitignor
 
 ![Die linke obere Ecke des Fensters mit dem geöffneten ⋯-Menü des Baums: Dateien filtern (⌘P), Neue Datei, Neuer Ordner und Versteckte Dateien anzeigen (⇧⌘.).](screenshots/tree-actions.webp)
 
+## Links erkennen
+
+Ein symbolischer Link — etwa `.claude/skills`, das auf `.agents/skills` zeigt — trägt das Symbol dessen, worauf er zeigt, mit einem kleinen Pfeil in der linken unteren Ecke. Fährst du mit der Maus darüber, siehst du, wohin er führt. [seit 1.22]
+
+- Ein **Link auf einen Ordner im geöffneten Ordner** klappt auf und zu wie jeder Ordner.
+- Ein **Link auf einen Ordner außerhalb des geöffneten Ordners** wird angezeigt, klappt aber nicht auf: Snotra arbeitet nur in dem Ordner, den du geöffnet hast. Der Tooltip sagt *außerhalb des geöffneten Ordners*.
+- Ein **Link, dessen Ziel fehlt**, erscheint bernsteinfarben mit gestricheltem Umriss, und sein Tooltip sagt *Ziel fehlt*. Ein Klick darauf öffnet nichts.
+
+Snotra selbst folgt keinem Link, wenn es den Ordner für einen Chat auflistet oder durchsucht.
+
 ## Das Kontextmenü
 
 Klick mit der rechten Maustaste auf eine Zeile — oder mit `Cmd` / `Strg` gedrückt, oder drück `Shift+F10` auf einer fokussierten Zeile —, für das, was du damit tun kannst:

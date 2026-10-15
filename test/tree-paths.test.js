@@ -106,6 +106,25 @@ test('listingSignature unterscheidet Ordner und Dateien am selben Pfad', async (
   assert.notEqual(listingSignature('/ws/x', true), listingSignature('/ws/x', false));
 });
 
+test('listingSignature tells a link and its state apart (#945)', async () => {
+  const { listingSignature } = await treePathsPromise;
+  assert.equal(listingSignature('/ws/skills', true, 'inside'), 'd@inside:/ws/skills');
+  assert.notEqual(listingSignature('/ws/a.md', false, 'missing'), listingSignature('/ws/a.md', false, 'inside'));
+  assert.notEqual(listingSignature('/ws/a.md', false, 'inside'), listingSignature('/ws/a.md', false));
+});
+
+test('treeLinkState and opensAsFolder sort out links (#945)', async () => {
+  const { treeLinkState, opensAsFolder } = await treePathsPromise;
+  assert.equal(treeLinkState({ isDirectory: true }), '');
+  assert.equal(treeLinkState({ isSymlink: true, linkKind: 'directory' }), 'inside');
+  assert.equal(treeLinkState({ isSymlink: true, linkKind: 'directory', linkOutside: true }), 'outside');
+  assert.equal(treeLinkState({ isSymlink: true, linkKind: 'missing' }), 'missing');
+  assert.equal(opensAsFolder({ isDirectory: true }), true);
+  assert.equal(opensAsFolder({ isDirectory: true, isSymlink: true, linkKind: 'directory' }), true);
+  assert.equal(opensAsFolder({ isDirectory: true, isSymlink: true, linkKind: 'directory', linkOutside: true }), false);
+  assert.equal(opensAsFolder({ isDirectory: false }), false);
+});
+
 test('listingsDiffer meldet nur echte Unterschiede im Ordnerinhalt', async () => {
   const { listingsDiffer } = await treePathsPromise;
   assert.equal(listingsDiffer(['f:/ws/a', 'f:/ws/b'], ['f:/ws/a', 'f:/ws/b']), false);

@@ -1487,3 +1487,89 @@ test('every row carries its full name as a tooltip, for a name cut off deep in t
   assert.equal(rowFor(container, '/ws/README.md').title, 'README.md');
   assert.equal(rowFor(container, '/ws/docs').title, 'docs');
 });
+
+// #945: a symlink keeps the icon of its target, carries a small arrow and
+// names its target in the tooltip and the accessible name.
+function linkListing() {
+  return {
+    '/ws': [
+      { name: 'skills', path: '/ws/skills', isDirectory: true, isSymlink: true, linkKind: 'directory', linkTarget: '.agents/skills' },
+      { name: 'shared', path: '/ws/shared', isDirectory: true, isSymlink: true, linkKind: 'directory', linkTarget: '/elsewhere', linkOutside: true },
+      { name: 'CLAUDE.md', path: '/ws/CLAUDE.md', isDirectory: false, isSymlink: true, linkKind: 'file', linkTarget: 'AGENTS.md', size: 0, modified: 0 },
+      { name: 'old.md', path: '/ws/old.md', isDirectory: false, isSymlink: true, linkKind: 'missing', linkTarget: 'notes/old.md', size: 0, modified: 0 },
+      { name: 'README.md', path: '/ws/README.md', isDirectory: false, size: 12, modified: 0 },
+    ],
+    '/ws/skills': [
+      { name: 'one.md', path: '/ws/skills/one.md', isDirectory: false, size: 1, modified: 0 },
+    ],
+  };
+}
+
+async function mountLinkTree() {
+  const listing = linkListing();
+  const opened = [];
+  const mounted = await mountTree({
+    readDirectory: async (dir) => ({ entries: listing[dir] ?? [], hidden: 0 }),
+    readFile: async (filePath) => {
+      opened.push(filePath);
+      return { content: 'x', size: 1 };
+    },
+  });
+  return { ...mounted, opened };
+}
+
+test('a symlink row carries the link badge, its target in tooltip and name (#945)', async (t) => {
+  const { dom, container } = await mountLinkTree();
+  t.after(dom.cleanup);
+
+  const link = rowFor(container, '/ws/skills');
+  assert.ok(link.classList.contains('tree-item--link'));
+  assert.ok(link.querySelector('.icon .tree-link-badge'), 'the arrow sits on the icon');
+  assert.equal(link.title, 'skills → .agents/skills');
+  assert.equal(link.getAttribute('aria-label'), 'skills, link to .agents/skills');
+  assert.equal(link.dataset.isDirectory, 'true');
+
+  const plain = rowFor(container, '/ws/README.md');
+  assert.equal(plain.querySelector('.tree-link-badge'), null);
+  assert.equal(plain.title, 'README.md');
+  assert.equal(plain.getAttribute('aria-label'), 'README.md');
+
+  const missing = rowFor(container, '/ws/old.md');
+  assert.ok(missing.classList.contains('tree-item--link-missing'));
+  assert.equal(missing.title, 'old.md → notes/old.md (target missing)');
+  assert.equal(missing.getAttribute('aria-label'), 'old.md, broken link to notes/old.md');
+
+  const outside = rowFor(container, '/ws/shared');
+  assert.equal(outside.title, 'shared → /elsewhere (outside the open folder)');
+});
+
+test('a folder link inside the open folder expands like a folder (#945)', async (t) => {
+  const { dom, container } = await mountLinkTree();
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/skills').click();
+  await flush();
+
+  const children = container.querySelector('.tree-children[data-path="/ws/skills"]');
+  assert.ok(children.classList.contains('expanded'));
+  assert.equal(children.querySelector('.tree-item .label').textContent, 'one.md');
+});
+
+test('a link out of the folder does not expand, a dangling one opens nothing (#945)', async (t) => {
+  const { dom, container, opened } = await mountLinkTree();
+  t.after(dom.cleanup);
+
+  const outside = rowFor(container, '/ws/shared');
+  assert.equal(outside.dataset.isDirectory, 'false');
+  assert.ok(outside.querySelector('.arrow').classList.contains('arrow--placeholder'));
+  assert.equal(container.querySelector('.tree-children[data-path="/ws/shared"]'), null);
+  outside.click();
+  rowFor(container, '/ws/old.md').click();
+  await flush();
+  assert.deepEqual(opened, []);
+  assert.equal(document.getElementById('file-preview').classList.contains('hidden'), true);
+
+  rowFor(container, '/ws/CLAUDE.md').click();
+  await flush();
+  assert.deepEqual(opened, ['/ws/CLAUDE.md'], 'a file link opens like a file');
+});

@@ -280,6 +280,23 @@ export function svgFolder() {
   </svg>`;
 }
 
+/**
+ * The small arrow in the corner of a link's icon in the file tree (#945).
+ * Drawn on a plate of the row's ground, so it stays legible over the icon.
+ */
+export function svgLinkBadge() {
+  return `<svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M2 6.2 6 2.2M3 2h3.2v3.2"/>
+  </svg>`;
+}
+
+/** A file whose link leads nowhere (#945): the file's outline, dashed. */
+export function svgFileMissing() {
+  return `<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2" stroke-dasharray="2 1.6" aria-hidden="true">
+    <path d="M4 .6h5.3L13.4 4.7V14a1.4 1.4 0 0 1-1.4 1.4H4A1.4 1.4 0 0 1 2.6 14V2A1.4 1.4 0 0 1 4 .6z"/>
+  </svg>`;
+}
+
 /** „@“-Zeichen (Issue #56): Knopf „Im Chat referenzieren“ in der Baumzeile. */
 export function svgAt() {
   return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
