@@ -15,7 +15,9 @@
 
 import { t, tPlural } from '../i18n.js';
 import { headingSlug } from '../file-views/markdown-document.js';
-import { buildSearchIndex, queryTerms, searchManual } from './manual-search.js';
+import manualSearch from '../generated/manual-search.js';
+
+const { buildSearchIndex, queryTerms, searchManual } = manualSearch;
 
 const INPUT_DELAY_MS = 60;
 

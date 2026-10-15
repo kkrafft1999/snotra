@@ -22,6 +22,7 @@ Once the answer is complete, the steps fold into one line that counts them, such
 - A change carries its count of added and removed lines, for example `+2 −1`.
 - A step that did not run says why: *denied* when you said no on the card, *blocked* when a rule stopped it, *expired* when the request lapsed. Hover over it for the details.
 - A step that came from a skill names the skill.
+- [since 1.22] A look into this manual reads *Searched the manual for “…”* or *Manual page … read*; folded, it counts as *1 look into the manual*. The answer then links the page it used.
 
 ## When the sandbox stopped something
 

@@ -113,8 +113,17 @@ function start() {
       if (item) item.checked = showHiddenFiles === true;
     }
 
+    // The manual that ships with the app (#790): read by the help window and,
+    // since #947, by the model's search_manual / read_manual_page.
+    const manual = createManualService({
+      fs: require('fs'),
+      path,
+      bundleDir: path.join(__dirname, '..', 'manual'),
+    });
+
     application = createApplication({
       app,
+      manual,
       // Every handler checks who is calling (#509).
       ipcMain: guardIpcMain(ipcMain),
       dialog,
@@ -152,11 +161,7 @@ function start() {
       ipcMain,
       shell,
       app,
-      manual: createManualService({
-        fs: require('fs'),
-        path,
-        bundleDir: path.join(__dirname, '..', 'manual'),
-      }),
+      manual,
       getLocale: () => application?.getAppLocale?.(),
     });
     // The `?` next to a settings section opens it at its page (#848).

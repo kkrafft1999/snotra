@@ -415,9 +415,14 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   // A proposal changes nothing by itself; its card is the approval (#774).
   assert.equal(names.includes('propose_config_change'), false);
   assert.equal(classes.propose_config_change, 'read');
-  // 21 registrierte Tools minus die beiden essenziellen list_directory und
-  // load_skill, die niemand abwaehlt (#195).
-  assert.equal(Object.keys(classes).length, 19);
+  // Reads the manual that ships with the app (#947); without it, nothing to read.
+  for (const name of ['search_manual', 'read_manual_page']) {
+    assert.equal(names.includes(name), false, name);
+    assert.equal(classes[name], 'read', name);
+  }
+  // 23 registered tools minus the two essential ones, list_directory and
+  // load_skill, which nobody deselects (#195).
+  assert.equal(Object.keys(classes).length, 21);
   assert.equal(Object.hasOwn(classes, 'list_directory'), false);
   assert.equal(Object.hasOwn(classes, 'load_skill'), false);
 });

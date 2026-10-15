@@ -9,11 +9,9 @@ const os = require('node:os');
 const path = require('node:path');
 const { marked } = require('marked');
 const { bundleManual } = require('../scripts/bundle-manual.js');
-const { importRenderer, setupRendererDom } = require('./helpers/dom.js');
+const search = require('../src/shared/manual/manual-search.js');
+const { headingSlug } = require('../src/shared/runtime/heading-slug.js');
 
-let dom = null;
-let search = null;
-let headingSlug = null;
 let targetDir = null;
 let bundle = null;
 const indexes = {};
@@ -27,9 +25,6 @@ function pagesOf(locale) {
 }
 
 test.before(async () => {
-  dom = setupRendererDom();
-  search = await importRenderer('manual', 'manual-search.js');
-  ({ headingSlug } = await importRenderer('file-views', 'markdown-document.js'));
   targetDir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-manual-search-'));
   bundle = bundleManual({ manualDir: path.join(__dirname, '..', 'manual'), targetDir });
   for (const locale of ['en', 'de']) {
@@ -38,7 +33,6 @@ test.before(async () => {
 });
 
 test.after(() => {
-  dom?.cleanup();
   fs.rmSync(targetDir, { recursive: true, force: true });
 });
 

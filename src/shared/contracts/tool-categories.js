@@ -30,6 +30,11 @@ const TOOL_CATEGORIES = Object.freeze({
    * hide the one thing that cost money and is worth looking at.
    */
   IMAGE: 'image',
+  /**
+   * A look into Snotra's own manual (#947). Not "file read": no file of the
+   * user is touched, and the log should say where the answer came from.
+   */
+  MANUAL: 'manual',
   /** Ausgefuehrter Code und Shell-Befehle (#86/#102) — eigene Kategorie, weil beides die Workspace-Grenze umgeht. */
   EXEC: 'exec',
   /** Unbekannt — z. B. Einträge aus Sessions, die vor #60 gespeichert wurden. */
@@ -59,6 +64,8 @@ const TOOL_CATEGORY_BY_TOOL = Object.freeze({
   // entsteht oder waechst. Dass sie der App gehoert und nicht dem Projekt,
   // aendert daran nichts; im Log soll es bei den Schreibschritten stehen.
   remember: TOOL_CATEGORIES.WRITE,
+  search_manual: TOOL_CATEGORIES.MANUAL,
+  read_manual_page: TOOL_CATEGORIES.MANUAL,
 });
 
 /** Kategorie eines Tools; unbekannte und fehlende Namen ergeben OTHER. */
