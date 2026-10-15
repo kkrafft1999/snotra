@@ -762,6 +762,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   step(`stream running (server chunks: ${serverChunks()})`);
 
   const stopClickedAt = Date.now();
+  // A raw click on purpose: the button is the stop button now, not a send.
   await page.evaluate(() => document.getElementById('btn-chat-send').click());
 
   await poll(() => page.evaluate(() =>

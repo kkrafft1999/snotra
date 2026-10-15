@@ -9,7 +9,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const SKILL = [
   '---',
@@ -56,12 +56,7 @@ test('a skill written by the model lands in the open folder, is checked and show
     }],
   });
   model.queueAnswer({ text: 'Done — switch it on under Settings › Skills.' });
-  await page.evaluate(() => {
-    const input = document.getElementById('chat-input');
-    input.value = 'Make a skill for release notes.';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  });
+  await sendChat(page, 'Make a skill for release notes.');
   await poll(async () => {
     await page.evaluate(() => {
       document.querySelector('.chat-approval-card button[data-response="allow-once"]:not([disabled])')?.click();

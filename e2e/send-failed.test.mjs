@@ -51,6 +51,8 @@ test('a send that throws gives its draft back and says why, the next one goes th
       return original.apply(this, items);
     };
   });
+  // A raw click on purpose, not sendChat: this send is meant to fail and give
+  // the draft back, which is exactly what sendChat would report as an error.
   await page.evaluate(() => {
     const input = document.getElementById('chat-input');
     input.value = 'Read the page MARK-F';

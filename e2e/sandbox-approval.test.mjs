@@ -28,19 +28,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents, sendChat } from './helpers/app.mjs';
 
 const REQUIRED = process.env.SNOTRA_REQUIRE_SANDBOX === '1' || process.env.CI === 'true';
 const curl = (url) => `curl -sS -m 60 -o /dev/null -w "%{http_code}" ${url}`;
-
-function ask(page, question) {
-  return page.evaluate((text) => {
-    const input = document.getElementById('chat-input');
-    input.value = text;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, question);
-}
 
 /**
  * One look at the chat. An access card of "Smart" is answered with "Allow
@@ -153,7 +144,7 @@ test('the sandbox asks after the run and while the command waits, also in Auto',
       const prompt = attempt === 1 ? question : `${question} Once more.`;
       model.queueAnswer({ match: prompt, toolCalls: [{ name: 'shell_execute', arguments: { command } }] });
       commands += 1;
-      await ask(page, prompt);
+      await sendChat(page, prompt);
       await started();
       const card = await nextCard(what);
       if (!card.ended) return card;

@@ -11,7 +11,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
@@ -62,12 +62,7 @@ try {
       ? 'Der Skill `release-notes` liegt in `.agents/skills/`. Schalte ihn unter Einstellungen › Skills ein.'
       : 'The skill `release-notes` is in `.agents/skills/`. Switch it on under Settings › Skills.',
   });
-  await page.evaluate((text) => {
-    const input = document.getElementById('chat-input');
-    input.value = text;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, locale === 'de' ? 'Bau mir einen Skill für release notes.' : 'Make me a skill for release notes.');
+  await sendChat(page, locale === 'de' ? 'Bau mir einen Skill für release notes.' : 'Make me a skill for release notes.');
 
   const card = page.locator('.chat-approval-card').last();
   await poll(() => page.evaluate(() =>

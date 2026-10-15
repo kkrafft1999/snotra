@@ -10,7 +10,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 const QUESTIONS = [
@@ -31,12 +31,7 @@ const { page } = snotra;
 
 async function ask(text) {
   model.queueAnswer({ match: text, text: 'Erledigt.' });
-  await page.evaluate((question) => {
-    const input = document.getElementById('chat-input');
-    input.value = question;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, text);
+  await sendChat(page, text);
   await poll(() => page.evaluate(() =>
     !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')
     && document.querySelectorAll('#chat-messages .chat-msg.assistant').length > 0), { what: 'Antwort' });

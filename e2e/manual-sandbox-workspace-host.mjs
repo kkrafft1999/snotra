@@ -20,7 +20,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
@@ -47,12 +47,7 @@ const snotra = await launchApp({ userDataDir });
 const { page, app } = snotra;
 
 function ask(question) {
-  return page.evaluate((text) => {
-    const input = document.getElementById('chat-input');
-    input.value = text;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, question);
+  return sendChat(page, question);
 }
 
 const openLiveCard = () => poll(() => page.evaluate(() => {

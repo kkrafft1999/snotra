@@ -11,7 +11,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
@@ -133,12 +133,7 @@ try {
     ],
   });
   model.queueAnswer({ text: 'Durations under a minute now show one decimal, e.g. 12.4 s. I also tidied up the notes and the build script.' });
-  await page.evaluate(() => {
-    const input = document.getElementById('chat-input');
-    input.value = 'Tidy up the project: one decimal for short durations.';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  });
+  await sendChat(page, 'Tidy up the project: one decimal for short durations.');
 
   // Approve every write as it asks, until the run is through.
   await poll(async () => {

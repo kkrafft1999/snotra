@@ -9,19 +9,10 @@ import { writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const PENDING = '#chat-messages .chat-approval-card[data-state="pending"]';
 const state = (page) => page.evaluate(() => window.electronAPI.getToolPermissionState());
-
-function ask(page, question) {
-  return page.evaluate((text) => {
-    const input = document.getElementById('chat-input');
-    input.value = text;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  }, question);
-}
 
 async function idle(page) {
   await poll(() => page.evaluate(() =>
@@ -62,7 +53,7 @@ test('a session approval is listed, used, and revoked one by one', { timeout: 18
 
   // 1. The card is answered with "Allow for this session".
   model.queueAnswer({ match: 'First change', toolCalls: edit('one', 'two') });
-  await ask(page, 'First change please.');
+  await sendChat(page, 'First change please.');
   await answerCard(page, 'allow-session');
   await idle(page);
   const granted = (await state(page)).sessionGrants;
@@ -74,7 +65,7 @@ test('a session approval is listed, used, and revoked one by one', { timeout: 18
   // 2. The same file again: the approval covers it. Nobody answers a card
   // here, so the run can only finish — and the file only change — without one.
   model.queueAnswer({ match: 'Second change', toolCalls: edit('two', 'three') });
-  await ask(page, 'Second change please.');
+  await sendChat(page, 'Second change please.');
   await idle(page);
   assert.equal(await readFile(path.join(workspace, 'README.md'), 'utf8'), 'three\n', 'ran without a card');
 
@@ -104,7 +95,7 @@ test('a session approval is listed, used, and revoked one by one', { timeout: 18
 
   // 4. The next identical call asks again: a pending card, answered "deny".
   model.queueAnswer({ match: 'Third change', toolCalls: edit('three', 'four') });
-  await ask(page, 'Third change please.');
+  await sendChat(page, 'Third change please.');
   await answerCard(page, 'deny');
   await idle(page);
   assert.equal(await readFile(path.join(workspace, 'README.md'), 'utf8'), 'three\n', 'denied, unchanged');

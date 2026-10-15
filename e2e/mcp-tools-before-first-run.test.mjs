@@ -9,7 +9,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const FAKE_SERVER = path.resolve('test/helpers/fake-mcp-server.js');
 const GROUP = '.settings-security-row[data-risk-class="external"] .settings-security-server[data-mcp-server="github"]';
@@ -76,12 +76,7 @@ test('an MCP tool switched off before the first run is not offered in it', { tim
     { what: 'settings closed' });
 
   // The first run offers the tool that stayed on, not the one switched off.
-  await page.evaluate(() => {
-    const input = document.getElementById('chat-input');
-    input.value = 'Hello';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  });
+  await sendChat(page, 'Hello');
   await poll(() => model.requests.some((r) => !r.isTitleRequest && Array.isArray(r.body.tools)),
     { what: 'model asked', timeoutMs: 60_000 });
   const offered = model.requests.find((r) => !r.isTitleRequest && Array.isArray(r.body.tools))

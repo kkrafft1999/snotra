@@ -11,7 +11,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const column = (page) => page.evaluate(() => ({
   open: !document.getElementById('app').classList.contains('app--no-preview'),
@@ -62,12 +62,7 @@ test('the column opens with the folder README and follows every folder switch', 
   assert.equal(state.selected, null, 'shown, not selected');
 
   model.queueAnswer({ match: 'Hello', text: 'Hi.' });
-  await page.evaluate(() => {
-    const input = document.getElementById('chat-input');
-    input.value = 'Hello';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  });
+  await sendChat(page, 'Hello');
   await poll(() => page.evaluate(() =>
     !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')
     && document.querySelectorAll('#chat-messages .chat-msg.assistant').length > 0), { what: 'answer' });

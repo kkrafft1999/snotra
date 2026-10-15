@@ -18,7 +18,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -100,12 +100,7 @@ try {
 
   // One answer for the chat run that fills the context breakdown.
   model.queueAnswer({ text: 'Done.' });
-  await page.evaluate(() => {
-    const input = document.getElementById('chat-input');
-    input.value = 'Hello';
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    document.getElementById('btn-chat-send').click();
-  });
+  await sendChat(page, 'Hello');
   await poll(() => page.evaluate(() => document.getElementById('chat-messages').textContent.includes('Done.')
     && document.getElementById('chat-messages').getAttribute('aria-busy') !== 'true'),
     { what: 'finished chat run' });
