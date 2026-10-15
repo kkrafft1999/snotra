@@ -48,6 +48,7 @@ import { initImageLightbox } from './ImageLightbox.js';
 // Bilder aus dem Arbeitsordner in der Antwort (Issue #244): Die Bytes kommen
 // per IPC und werden nach dem Sanitizing auf den fertigen <img>-Knoten gesetzt.
 import { applyWorkspaceImages, clearWorkspaceImageCache } from '../chat/workspaceImages.js';
+import { prepareChatTables } from '../chat/chatTables.js';
 import { generatedImagesOf, syncGeneratedImages } from '../chat/generatedImages.js';
 import { resolveNative } from '../utils/nativePath.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
@@ -434,9 +435,10 @@ export function initChatStream({
   /**
    * A chat answer as nodes, never as `innerHTML` on a live node (#402): the
    * images in it have no `src` yet, `showWorkspaceImages()` decides on them.
+   * Its tables get their scrolling frame and number alignment here (#961).
    */
   function renderAnswer(markdown) {
-    return inertHtmlFragment(markdownToSafeHtml(markdown));
+    return prepareChatTables(inertHtmlFragment(markdownToSafeHtml(markdown)));
   }
 
   /**
