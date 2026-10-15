@@ -96,7 +96,7 @@ Ein so eingeschaltetes Tool verhält sich wie eines aus den Einstellungen: Im Mo
 
 Das Modell liest die Anweisungen eines eingeschalteten Skills, wenn es sie braucht, zusammen mit den Dateien neben seiner `SKILL.md`, etwa `references/` oder `assets/`. Die sind schreibgeschützt: Was ein Skill behalten will, schreibt er nach `.agents/data/` im geöffneten Ordner, wie jede andere Änderung, die du freigibst.
 
-Snotra beobachtet die Skill-Ordner, ein neuer oder geänderter Skill erscheint also von selbst in den Einstellungen und in der `/`-Liste. *Skills neu laden* gibt es für den seltenen Fall, dass das nicht klappt, etwa auf einem Netzlaufwerk.
+Snotra beobachtet die Skill-Ordner, ein neuer oder geänderter Skill erscheint also von selbst in den Einstellungen und in der `/`-Liste. *Skills neu laden* gibt es für den seltenen Fall, dass das nicht klappt, etwa auf einem Netzlaufwerk. Einen Skill-Store oder Skill-Manager gibt es nicht: Ein Skill ist ein Ordner, und ihn an einen der Orte unter *Woher Skills kommen* zu legen, genügt.
 
 ## Wenn es nicht klappt
 

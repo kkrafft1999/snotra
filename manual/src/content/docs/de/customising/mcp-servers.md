@@ -45,7 +45,7 @@ Importierte Server starten **ausgeschaltet**. Snotra liest nur, was du einfügst
 
 - Die Tools des Servers erscheinen unter *Einstellungen › Tools & Sicherheit* in der Zeile *Externe Dienste*, nach Server gruppiert. Jedes lässt sich einzeln ausschalten, und jede Gruppe sagt, wie es ihrem Server geht: verbunden mit seiner Zahl an Tools, noch nicht verbunden, ausgeschaltet oder mit Grund nicht gestartet.
 - Im Chat zeigt ein Tool, woher es kommt: `mcp__github__create_issue`.
-- Ein MCP-Tool zählt immer als Programmausführung **und** externer Dienst, in *Intelligent* fragt Snotra also vor jedem Aufruf. Ein Server, der ein Tool als zerstörerisch kennzeichnet, macht es noch strenger.
+- Ein MCP-Tool zählt immer als Programmausführung **und** externer Dienst, in *Intelligent* fragt Snotra also vor jedem Aufruf. Ein Server, der ein Tool als zerstörerisch kennzeichnet, macht es noch strenger: Das Tool zählt dann zusätzlich als *Überschreiben ohne Rückweg*.
 - Ein Server startet erst, wenn er gebraucht wird. Er merkt sich die Tools, die er zuletzt gemeldet hat, damit du eines ausschalten kannst, bevor es dem Modell überhaupt angeboten wird.
 
 Ein Server, der nicht startet oder abstürzt, legt den Chat nicht lahm; der Fehler wird gemeldet, und alles andere läuft weiter.

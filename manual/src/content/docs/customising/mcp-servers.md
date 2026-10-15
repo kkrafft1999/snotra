@@ -45,7 +45,7 @@ Imported servers start **switched off**. Snotra reads only what you paste, never
 
 - The server's tools appear under *Settings › Tools & security*, in the row *External services*, grouped by server. Each one can be switched off on its own, and each group says how its server is doing: connected with its number of tools, not connected yet, switched off, or failed to start, with the reason.
 - In the chat, a tool shows where it comes from: `mcp__github__create_issue`.
-- An MCP tool always counts as running a program **and** reaching an external service, so in *Smart* Snotra asks before every call. A server that marks a tool as destructive makes it stricter still.
+- An MCP tool always counts as running a program **and** reaching an external service, so in *Smart* Snotra asks before every call. A server that marks a tool as destructive makes it stricter still: the tool then also counts as *Overwrite with no way back*.
 - A server starts only when it is needed. It remembers the tools it reported last time, so you can switch one off before the model is ever offered it.
 
 A server that does not start or crashes does not break the chat; the error is reported and everything else carries on.
