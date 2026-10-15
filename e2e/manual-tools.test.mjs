@@ -10,7 +10,7 @@ import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat, waitForFolderChat } from './helpers/app.mjs';
 
 test('a question about Snotra is answered from the bundled manual', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
@@ -27,6 +27,9 @@ test('a question about Snotra is answered from the bundled manual', { timeout: 1
     await model.close();
   });
   const { page, app } = snotra;
+  // The folder's chat is drawn a round trip after the page and empties the
+  // composer then; a question typed before it is wiped and looks sent (#869).
+  await waitForFolderChat(page, { explain: async () => snotra.mainOutput() });
 
   model.queueAnswer({ match: 'Netzwerkzugriff', toolCalls: [{ name: 'search_manual', arguments: { query: 'Sandbox Host' } }] });
   model.queueAnswer({ toolCalls: [{ name: 'read_manual_page', arguments: { slug: 'safety/sandbox' } }] });
