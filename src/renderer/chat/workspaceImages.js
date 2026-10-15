@@ -163,6 +163,10 @@ async function resolveOne(img, { api, workspaceRoot }) {
     return;
   }
 
+  // A redraw of the chat builds each message before it appends it, so a node
+  // may start out off-document. Only one that was in the document and fell
+  // out while the read was on its way is left alone below (#959).
+  const wasConnected = img.isConnected;
   const key = cacheKey(workspaceRoot, src);
   let entry = cache.get(key);
   if (!entry) {
@@ -188,7 +192,7 @@ async function resolveOne(img, { api, workspaceRoot }) {
 
   // Zwischen Anfrage und Antwort kann der Verlauf neu gezeichnet worden sein —
   // dann hängt dieser Knoten an keinem Dokument mehr und wird nicht angefasst.
-  if (!img.isConnected) return;
+  if (wasConnected && !img.isConnected) return;
   if (entry.dataUrl) markLoaded(img, entry.dataUrl);
   else img.replaceWith(placeholderFor(altText, entry.message));
 }
