@@ -54,6 +54,8 @@ try {
   // A fresh profile has no folder to draw; the composer tells that the
   // renderer is up and listens to the menu.
   await poll(() => page.evaluate(() => !!document.getElementById('btn-open-add-model')), { what: 'renderer' });
+  // A fixed pace: the menu click reaches the dialog only a round trip later,
+  // and a faster poll would open it again while it is still loading (#909).
   await poll(async () => {
     if (await isHidden('modal-settings')) {
       await app.evaluate(({ Menu }) => {
@@ -64,7 +66,7 @@ try {
       });
     }
     return !(await isHidden('modal-settings'));
-  }, { what: 'open settings dialog' });
+  }, { what: 'open settings dialog', intervalMs: 150 });
   // Opening loads in steps and clears the popup's status on the way; Apply
   // comes on once it is done.
   await poll(() => page.evaluate(() => !document.getElementById('btn-settings-save').disabled),

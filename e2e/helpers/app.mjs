@@ -111,9 +111,15 @@ export async function makeTempDir(prefix) {
  * error. A check that only answers `false` or `null` cannot say which part of
  * its condition was missing — and a flake seen once in sixty CI runs leaves
  * nothing else to go on (#689, #703).
+ *
+ * The pause between looks grows: 20 ms, doubled up to 150 ms (#909). A
+ * condition that holds almost at once is seen almost at once, and a long wait
+ * costs no more looks than before. A check that acts — clicks, presses a key —
+ * must be safe to repeat quickly; one that is not passes a fixed `intervalMs`.
  */
-export async function poll(check, { timeoutMs = 15000, intervalMs = 150, what = 'Bedingung', explain = null } = {}) {
+export async function poll(check, { timeoutMs = 15000, intervalMs = null, what = 'Bedingung', explain = null } = {}) {
   const deadline = Date.now() + timeoutMs;
+  let pause = intervalMs ?? 20;
   let last;
   for (;;) {
     last = await check();
@@ -127,7 +133,8 @@ export async function poll(check, { timeoutMs = 15000, intervalMs = 150, what = 
       }
       throw new Error(message);
     }
-    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    await new Promise((resolve) => setTimeout(resolve, pause));
+    if (intervalMs == null) pause = Math.min(pause * 2, 150);
   }
 }
 
