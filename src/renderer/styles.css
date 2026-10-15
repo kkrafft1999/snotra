@@ -3232,21 +3232,72 @@ button.chat-image-open:hover {
 }
 
 
+/* Tables (#961): no grid, a divider between the rows and a stronger line
+ * under the head, so that a table reads like part of the answer rather than a
+ * spreadsheet pasted into it. The frame scrolls a table that is wider than the
+ * column; `chat/chatTables.js` puts it there and marks the columns. */
+.chat-table-frame {
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 0.75em 0;
+}
+
 .chat-md table {
+  width: 100%;
   border-collapse: collapse;
-  margin: 0.5em 0;
-  font-size: 13px;
+  /* `.chat-msg` breaks words anywhere, which lets a table squeeze its
+   * columns down to single letters. Inside a table a word keeps together,
+   * and the frame scrolls instead. */
+  word-break: normal;
+  overflow-wrap: break-word;
+  font-size: var(--ds-font-size-base);
+  font-variant-numeric: tabular-nums;
 }
 
 .chat-md th,
 .chat-md td {
-  border: 1px solid var(--ds-grey-divider);
-  padding: 4px 8px;
+  padding: 8px 14px 8px 0;
   text-align: left;
+  vertical-align: top;
+}
+
+.chat-md th:last-child,
+.chat-md td:last-child {
+  padding-right: 0;
 }
 
 .chat-md th {
-  background: var(--bg-primary);
+  font-weight: var(--ds-font-weight-bold);
+  vertical-align: bottom;
+  border-bottom: 1.5px solid var(--border);
+}
+
+.chat-md td {
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.chat-md tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.chat-md .chat-cell--short,
+.chat-md .chat-cell--num {
+  white-space: nowrap;
+}
+
+.chat-md .chat-cell--prose {
+  min-width: 16em;
+}
+
+.chat-md .chat-cell--num,
+.chat-md th[align='right'],
+.chat-md td[align='right'] {
+  text-align: right;
+}
+
+.chat-md th[align='center'],
+.chat-md td[align='center'] {
+  text-align: center;
 }
 
 .chat-md hr {
