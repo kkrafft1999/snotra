@@ -143,6 +143,29 @@ test('several images make a grid; a missing file is a placeholder, not a button'
   });
 });
 
+test('a redraw from the cache keeps the image and its button (#959)', async () => {
+  await withDom(async ({ generatedImagesOf, syncGeneratedImages }) => {
+    const api = makeApi();
+    const images = generatedImagesOf(trace(['generate_image', 'plot.png', 'ab12-1']));
+    await syncGeneratedImages(message(), images, { api, workspaceRoot: '/ws' });
+
+    // The next message redraws the list: every message is built first and
+    // appended afterwards, and this time the cache answers.
+    document.body.replaceChildren();
+    const li = message();
+    li.remove();
+    const done = syncGeneratedImages(li, images, { api, workspaceRoot: '/ws' });
+    document.body.append(li);
+    await done;
+
+    assert.deepEqual(api.reads, ['plot.png'], 'the redraw is served from the cache');
+    const button = li.querySelector('.chat-image button.chat-image-open');
+    assert.ok(button, 'still a button, not the missing-file placeholder');
+    assert.ok(button.querySelector('img.chat-md-image-img[src^="data:image/png"]'));
+    assert.equal(li.querySelector('.chat-image-missing'), null);
+  });
+});
+
 test('no image, or no tool log, means no card', async () => {
   await withDom(async ({ generatedImagesOf, syncGeneratedImages }) => {
     const li = message();

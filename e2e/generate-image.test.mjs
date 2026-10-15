@@ -181,4 +181,12 @@ test('generate_image draws through the Images API into the workspace', { timeout
   assert.match(JSON.stringify(model.requestFor('refused to draw')?.body ?? {}), /Rejected by the safety system/,
     'the refusal reached the model in its own words');
   await assert.rejects(access(path.join(workspace, 'assets/refused.png')));
+
+  // Sending that message redrew the list from the image cache, and the first
+  // card stays an image with its button (#959).
+  assert.deepEqual(await card(), {
+    src: 'data:image/png;base64,',
+    caption: 'assets/header.png·96 × 64 · PNG',
+    afterChanges: 'chat-changes',
+  });
 });

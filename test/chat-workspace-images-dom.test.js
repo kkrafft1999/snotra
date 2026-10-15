@@ -206,6 +206,21 @@ test('ein Knoten, der zwischenzeitlich aus dem Dokument fiel, wird nicht angefas
   assert.equal(img.hasAttribute('src'), false);
 });
 
+test('a node built off-document is resolved from the cache as well (#959)', async () => {
+  await images.applyWorkspaceImages(bubble('<p><img src="plot.png" alt="Diagramm"></p>'), { api, workspaceRoot: '/ws' });
+
+  // A redraw of the chat builds each message before it appends it — and the
+  // cache answers before the message is in the document.
+  const el = document.createElement('div');
+  el.replaceChildren(inertHtmlFragment('<p><img src="plot.png" alt="Diagramm"></p>'));
+  const done = images.applyWorkspaceImages(el, { api, workspaceRoot: '/ws' });
+  document.body.appendChild(el);
+  await done;
+
+  assert.deepEqual(asked, ['plot.png'], 'the second draw comes from the cache');
+  assert.equal(el.querySelector('img').getAttribute('src'), PNG_DATA_URL);
+});
+
 test('ohne den IPC-Kanal steht der Platzhalter statt eines kaputten Bildes', async () => {
   const el = bubble('<p><img src="plot.png" alt="Diagramm"></p>');
   await images.applyWorkspaceImages(el, { api: {}, workspaceRoot: '/ws' });
