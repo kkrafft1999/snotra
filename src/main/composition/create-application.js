@@ -82,6 +82,7 @@ const { createChatSessionSettings } = require('../services/chat-session-settings
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
 const { registerSkillSuggestionHandlers } = require('../ipc/skill-suggestion-handlers');
+const { registerSkillMoveHandlers } = require('../ipc/skill-move-handlers');
 const { registerChatConfigurationHandlers } = require('../ipc/chat-configuration-handlers');
 const { createChatConfigurationService } = require('../services/chat-configuration-service');
 const { registerShellHandlers } = require('../ipc/shell-handlers');
@@ -923,6 +924,16 @@ function createApplication({
     uiPrefsStore,
   });
   registerSkillSuggestionHandlers({ ipcMain, skillSuggestionService, uiPrefsStore, REQ });
+  registerSkillMoveHandlers({
+    ipcMain,
+    REQ,
+    skillsService,
+    uiPrefsStore,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    dialog,
+    getMainWindow,
+    getLocale: getAppLocale,
+  });
   registerChatConfigurationHandlers({
     ipcMain,
     chatConfiguration,

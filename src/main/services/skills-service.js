@@ -24,7 +24,10 @@ const {
   SKILL_SOURCES,
   SKILL_STATUS,
   MAX_SKILL_BODY_CHARS,
+  WORKSPACE_SKILLS_DIR,
+  isValidSkillName,
 } = require('../../shared/contracts/skills');
+const { renameWithRetry } = require('./rename-with-retry');
 
 const SKILL_FILE = 'SKILL.md';
 /** Schutz vor versehentlich riesigen Verzeichnissen. */
@@ -324,11 +327,98 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     return { activeSkills: [...new Set(global)], activeWorkspaceSkills: perFolder };
   }
 
+  /** Where a skill made global goes (#764): Snotra's own folder, never the old location. */
+  function globalSkillsDir() {
+    const home = homeDir();
+    return home ? path.join(home, '.snotra', 'skills') : null;
+  }
+
+  async function pathExists(target) {
+    try {
+      await fs.lstat(target);
+      return true;
+    } catch (error) {
+      if (error?.code === 'ENOENT') return false;
+      throw error;
+    }
+  }
+
+  /**
+   * What making a workspace skill global would do (#764): the folder it comes
+   * from, the folder it goes to, and whether that name is taken there. Only a
+   * usable skill of the open folder qualifies — the name comes from the
+   * renderer and is looked up in the catalogue, never joined into a path
+   * unchecked. `error` is a reason code; the caller words it.
+   */
+  async function planMakeGlobal({ workspaceRoot = null, name } = {}) {
+    if (!isValidSkillName(name)) return { error: 'not-found' };
+    const key = cacheKey(workspaceRoot);
+    if (!key) return { error: 'no-workspace' };
+    const { skills } = await scan(workspaceRoot);
+    const skill = skills.find((entry) => entry.source === SKILL_SOURCES.WORKSPACE_AGENTS && entry.name === name);
+    if (!skill || skill.status === SKILL_STATUS.INVALID) return { error: 'not-found' };
+    const target = globalSkillsDir();
+    if (!target) return { error: 'no-home' };
+    const from = path.join(key, ...WORKSPACE_SKILLS_DIR.split('/'), name);
+    const to = path.join(target, name);
+    return { name, from, to, conflict: await pathExists(to) };
+  }
+
+  /**
+   * Moves a workspace skill to `~/.snotra/skills/<name>/` (#764). A name that
+   * is taken there is refused, never overwritten. Across volumes `rename`
+   * fails with EXDEV; then the folder is copied and the original removed.
+   */
+  async function makeGlobal({ workspaceRoot = null, name } = {}) {
+    const plan = await planMakeGlobal({ workspaceRoot, name });
+    if (plan.error) return plan;
+    if (plan.conflict) return { error: 'conflict', from: plan.from, to: plan.to };
+    await fs.mkdir(path.dirname(plan.to), { recursive: true });
+    // Checked again right before the move: the dialog may have stood open a while.
+    if (await pathExists(plan.to)) return { error: 'conflict', from: plan.from, to: plan.to };
+    try {
+      await renameWithRetry(fs, plan.from, plan.to);
+    } catch (error) {
+      if (error?.code !== 'EXDEV') throw error;
+      await fs.cp(plan.from, plan.to, { recursive: true, errorOnExist: true, force: false, verbatimSymlinks: true });
+      await fs.rm(plan.from, { recursive: true, force: true });
+    }
+    reload();
+    return { ok: true, from: plan.from, to: plan.to };
+  }
+
+  /**
+   * The switch-on of a skill that left the open folder (#764). A workspace
+   * skill is switched on per folder (#576); once global, its switch is the
+   * global list. A skill that was on here stays on — now everywhere, which is
+   * what making it global asks for. One that was off stays off. `null` when
+   * nothing changes.
+   */
+  async function switchOnAfterMakeGlobal({
+    workspaceRoot = null,
+    name,
+    activeSkills = null,
+    activeWorkspaceSkills = null,
+  } = {}) {
+    const key = cacheKey(workspaceRoot);
+    if (!key || !workspaceActiveNames(workspaceRoot, activeWorkspaceSkills).includes(name)) return null;
+    const perFolder = { ...activeWorkspaceSkills };
+    const rest = perFolder[key].filter((entry) => entry !== name);
+    if (rest.length > 0) perFolder[key] = rest;
+    else delete perFolder[key];
+    const { skills } = await scan(workspaceRoot);
+    const global = [...new Set([...resolveActiveNames(skills, activeSkills), name])];
+    return { activeSkills: global, activeWorkspaceSkills: perFolder };
+  }
+
   return {
     listCatalog,
     getActiveSkills,
     bindSelection,
     reload,
+    planMakeGlobal,
+    makeGlobal,
+    switchOnAfterMakeGlobal,
   };
 }
 

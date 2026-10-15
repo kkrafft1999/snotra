@@ -32,7 +32,18 @@ Mit den drei System-Skills beantwortet Snotra Fragen zu sich selbst (`snotra-cap
 
 Ein Skill aus einem Ordner ist nie von selbst an: Er ist fremder Inhalt, ihn einzuschalten ist also deine Entscheidung — und es gilt nur für diesen Ordner. Hakst du in einem Projekt einen `review`-Skill an, ist damit im nächsten kein `review`-Skill eingeschaltet.
 
-## Einen Skill für einen Chat aufrufen
+## Einen Skill des Ordners global machen
+
+[seit 1.22] Einen Skill, den du in einem Projekt geschrieben hast und nun in jedem Ordner haben willst, musst du nicht von Hand verschieben.
+
+1. Öffne [*Einstellungen › Skills*](#einen-skill-einschalten) und klapp den Skill unter *Ordner · .agents/skills* mit einem Klick auf.
+2. Klick unter seinem Pfad auf *Global machen…*.
+3. Snotra fragt erst nach und nennt beide Ordner: wo der Skill jetzt liegt, in `.agents/skills/` des offenen Ordners, und wohin er kommt, `~/.snotra/skills/`. Klick auf *Global machen* — oder auf *Abbrechen*, das tun auch `Enter` und `Esc`.
+
+Der Skill verlässt das Projekt und steht sofort unter *Benutzer · ~/.snotra/skills*. War er in diesem Ordner angehakt, ist er danach für jeden Ordner angehakt; der Dialog sagt das vorher. Einer, der aus war, bleibt aus.
+
+Das kannst nur du. Das Modell schreibt Skills nur in den offenen Ordner und verschiebt keinen aus ihm heraus.
+
 
 Tipp `/` ins Eingabefeld: Eine Liste aller verfügbaren Skills öffnet sich, auch der ausgeschalteten. Tipp weiter, um sie einzugrenzen — sie durchsucht Namen und Beschreibungen —, und übernimm einen mit `Enter` oder `Tab`.
 
@@ -103,4 +114,5 @@ Snotra beobachtet die Skill-Ordner, ein neuer oder geänderter Skill erscheint a
 - **Das Modell nutzt einen Skill nicht, den du erwartet hast.** Klick auf die Skills-Pille in der Chat-Leiste: Ein ausgeschalteter Skill steht dort mit seiner Herkunft. Ein Skill aus dem Ordner braucht seinen Haken für genau diesen Ordner.
 - **Ein Skill ist ausgegraut, mit einem Grund.** Seine `SKILL.md` fehlt, hat kein Front Matter, oder ihr `name` passt nicht zum Ordner. Der Grund steht daneben.
 - **Ein Skill ist mit *Überdeckt von …* markiert.** Ein anderer Skill gleichen Namens kommt zuerst — der des Ordners vor deinen eigenen. Der Pfad sagt, welcher.
+- ***Global machen* meldet, dass es schon einen globalen Skill dieses Namens gibt.** Nichts wurde verschoben. Benenne einen der beiden um — den Ordner und den `name` in seiner `SKILL.md` — oder entferne zuerst den in `~/.snotra/skills/`. Der Dialog nennt seinen Pfad.
 - **Dein eigener Skill ist in einem Projekt aus.** Das Projekt hat einen Skill gleichen Namens; er überdeckt deinen dort und braucht seinen eigenen Haken.

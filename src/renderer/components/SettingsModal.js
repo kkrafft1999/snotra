@@ -49,6 +49,7 @@ const {
   normalizeBaseUrl,
   PRESET_DETAIL_STYLES,
   PRESET_FIELD_CONTROLS,
+  SKILL_SOURCES,
   SKILL_SOURCE_ORDER,
   SKILL_SOURCE_LABEL_KEYS,
   SKILL_STATUS,
@@ -1236,7 +1237,8 @@ export function initSettingsModal(deps) {
     // skill's name, and an open description stays open (CR-B14-07).
     const focused = settingsSkillList.contains(document.activeElement) ? document.activeElement : null;
     const focusName = focused?.closest('li[data-skill-item]')?.dataset.skillItem ?? null;
-    const focusOnSummary = !!focused?.closest('.settings-skill-item__summary');
+    const focusOn = focused?.closest('[data-skill-make-global]') ? 'action'
+      : focused?.closest('.settings-skill-item__summary') ? 'summary' : 'checkbox';
     const expanded = new Set(
       [...settingsSkillList.querySelectorAll('li.settings-tool-row--open[data-skill-item]')]
         .map((li) => li.dataset.skillItem)
@@ -1257,15 +1259,21 @@ export function initSettingsModal(deps) {
         settingsSkillList.appendChild(renderSkillItem(skill, expanded.has(skill.name)));
       }
     }
-    if (focusName !== null) restoreSkillFocus(focusName, focusOnSummary);
+    if (focusName !== null) restoreSkillFocus(focusName, focusOn);
   }
 
-  /** Focus back onto a redrawn skill row; a skill that is gone hands it to "Reload skills". */
-  function restoreSkillFocus(name, onSummary) {
+  /**
+   * Focus back onto a redrawn skill row, on the control it was on: the
+   * checkbox, the summary or "Make global" (#764). A control the row no longer
+   * has hands it to the summary; a skill that is gone, to "Reload skills".
+   */
+  function restoreSkillFocus(name, on = 'checkbox') {
     const li = settingsSkillList.querySelector(`li[data-skill-item="${CSS.escape(name)}"]`);
     const checkbox = li?.querySelector('input[type="checkbox"]:not(:disabled)');
     const summary = li?.querySelector('.settings-skill-item__summary');
-    const target = (onSummary ? summary : checkbox) || checkbox || summary || btnReloadSkills;
+    const action = li?.querySelector('button[data-skill-make-global]:not(:disabled)');
+    const preferred = on === 'action' ? action || summary : on === 'summary' ? summary : checkbox;
+    const target = preferred || checkbox || summary || btnReloadSkills;
     target?.focus();
   }
 
@@ -1346,6 +1354,9 @@ export function initSettingsModal(deps) {
       pathEl.textContent = skill.path;
       body.appendChild(pathEl);
     }
+    if (usable && skill.source === SKILL_SOURCES.WORKSPACE_AGENTS && typeof api.makeSkillGlobal === 'function') {
+      body.appendChild(renderMakeGlobalAction(skill));
+    }
     li.appendChild(body);
 
     toggle.addEventListener('click', () => {
@@ -1356,6 +1367,57 @@ export function initSettingsModal(deps) {
     });
 
     return li;
+  }
+
+  /**
+   * "Make global" under a skill of the open folder (#764). The button only
+   * names the skill; main confirms natively with both paths and moves it. Once
+   * moved, the skill is drawn under its new source with the focus on its row —
+   * the button it was on is gone, since a global skill has none.
+   */
+  /** Skills whose move is under way: a redraw meanwhile keeps their button off. */
+  const makingGlobal = new Set();
+
+  function renderMakeGlobalAction(skill) {
+    const actions = document.createElement('div');
+    actions.className = 'settings-skill-item__actions';
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'btn-secondary';
+    button.dataset.skillMakeGlobal = skill.name;
+    button.textContent = t('settings.skills.makeGlobal');
+    button.setAttribute('aria-label', t('settings.skills.makeGlobal.label', { name: skill.name }));
+    button.disabled = makingGlobal.has(skill.name);
+    button.addEventListener('click', async () => {
+      if (makingGlobal.has(skill.name)) return;
+      makingGlobal.add(skill.name);
+      button.disabled = true;
+      let result = null;
+      try {
+        result = await api.makeSkillGlobal(skill.name);
+      } catch {
+        result = null;
+      } finally {
+        makingGlobal.delete(skill.name);
+      }
+      if (result?.ok) {
+        await refreshSkillCatalogKeepingSelection({ reload: true });
+        restoreSkillFocus(skill.name, 'summary');
+        return;
+      }
+      // Cancelled or refused: main has said why in its own dialog. A skill
+      // that is gone in the meantime leaves the list with the next redraw.
+      if (!result?.cancelled) await refreshSkillCatalogKeepingSelection({ reload: true });
+      const again = settingsSkillList.querySelector(`button[data-skill-make-global="${CSS.escape(skill.name)}"]`);
+      if (again) {
+        again.disabled = false;
+        again.focus();
+      } else {
+        restoreSkillFocus(skill.name, 'summary');
+      }
+    });
+    actions.appendChild(button);
+    return actions;
   }
 
   function adoptSkillCatalog(result) {

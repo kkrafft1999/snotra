@@ -124,6 +124,8 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_RELOAD_SKILLS: 'settings:reloadSkills',
   /** Passenden Skill zur Eingabe vom Modell vorschlagen lassen (Issue #125). */
   SKILLS_SUGGEST: 'skills:suggest',
+  /** Move a skill of the open folder to ~/.snotra/skills, after a native confirmation (#764). */
+  SKILLS_MAKE_GLOBAL: 'skills:makeGlobal',
   /** Which skills and tools the open chat has, for the indicator at the composer (#773). */
   CHAT_GET_CONFIGURATION: 'chat:getConfiguration',
   /** Gedaechtnis beider Ebenen samt Eintraegen und Pfaden lesen (Issue #166). */

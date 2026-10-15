@@ -1794,6 +1794,120 @@ test('"Reload skills" gives the focus back to its button after the busy state (C
   assert.ok(document.activeElement === reload);
 });
 
+// --- "Make global" (#764) ---------------------------------------------------
+
+const FOLDER_SKILL = { name: 'notes', description: 'Notes', source: 'workspace-agents', status: 'available', path: '/w/.agents/skills/notes', detail: '' };
+const makeGlobalButton = () => document.querySelector('#settings-skill-list button[data-skill-make-global]');
+
+test('"Make global" sits only under a usable skill of the open folder, named for screen readers', async (t) => {
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: [
+      FOLDER_SKILL,
+      { ...FOLDER_SKILL, name: 'broken', status: 'invalid', detail: 'Kaputt' },
+      ...TWO_SKILLS,
+    ] }),
+    makeSkillGlobal: async () => ({ cancelled: true }),
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+
+  const buttons = [...document.querySelectorAll('#settings-skill-list button[data-skill-make-global]')];
+  assert.deepEqual(buttons.map((button) => button.dataset.skillMakeGlobal), ['notes']);
+  assert.equal(buttons[0].textContent, 'Global machen…');
+  assert.equal(buttons[0].getAttribute('aria-label'), '„notes“ global machen…');
+  assert.equal(buttons[0].type, 'button');
+});
+
+test('"Make global" moves the skill to its new group and puts the focus on its row', async (t) => {
+  let moved = false;
+  const asked = [];
+  const catalog = () => ({ skills: [moved ? { ...FOLDER_SKILL, source: 'user-snotra', path: '/h/.snotra/skills/notes' } : FOLDER_SKILL] });
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => catalog(),
+    reloadSkills: async () => catalog(),
+    makeSkillGlobal: async (name) => { asked.push(name); moved = true; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+  document.querySelector('#settings-skill-list .settings-skill-item__summary').click();
+
+  makeGlobalButton().click();
+  await flush();
+  replayFrame();
+
+  assert.deepEqual(asked, ['notes']);
+  assert.equal(makeGlobalButton(), null, 'a global skill has no button');
+  const heading = document.querySelector('#settings-skill-list .settings-skill-group');
+  assert.match(heading.textContent, /\.snotra\/skills/);
+  const summary = document.querySelector('#settings-skill-list li[data-skill-item="notes"] .settings-skill-item__summary');
+  assert.ok(document.activeElement === summary, 'the focus is on the moved skill');
+  assert.equal(summary.getAttribute('aria-expanded'), 'true', 'it stays open');
+});
+
+test('a skill list redraw keeps the focus on "Make global" (#764)', async (t) => {
+  let onChanged = null;
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: [FOLDER_SKILL] }),
+    onSkillsChanged: (callback) => { onChanged = callback; },
+    makeSkillGlobal: async () => ({ cancelled: true }),
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+  document.querySelector('#settings-skill-list .settings-skill-item__summary').click();
+
+  const before = makeGlobalButton();
+  before.focus();
+  onChanged();
+  await flush();
+  replayFrame();
+
+  assert.ok(makeGlobalButton() !== before, 'the list was redrawn');
+  assert.ok(document.activeElement === makeGlobalButton());
+});
+
+test('a redraw while the move is asked about keeps "Make global" off (#764)', async (t) => {
+  let onChanged = null;
+  let answer = null;
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: [FOLDER_SKILL] }),
+    onSkillsChanged: (callback) => { onChanged = callback; },
+    makeSkillGlobal: () => new Promise((resolve) => { answer = resolve; }),
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+  document.querySelector('#settings-skill-list .settings-skill-item__summary').click();
+
+  makeGlobalButton().click();
+  onChanged();
+  await flush();
+  assert.equal(makeGlobalButton().disabled, true, 'a fresh button does not ask a second time');
+  answer({ cancelled: true });
+  await flush();
+});
+
+test('a cancelled "Make global" leaves the list alone and the focus on the button', async (t) => {
+  let reloads = 0;
+  const { dom } = await mountSettings({
+    getSkillCatalog: async () => ({ skills: [FOLDER_SKILL] }),
+    reloadSkills: async () => { reloads += 1; return { skills: [FOLDER_SKILL] }; },
+    makeSkillGlobal: async () => ({ cancelled: true }),
+  });
+  t.after(dom.cleanup);
+  tabFor('skills').click();
+  document.querySelector('#settings-skill-list .settings-skill-item__summary').click();
+
+  const button = makeGlobalButton();
+  button.focus();
+  button.click();
+  await flush();
+  replayFrame();
+
+  assert.equal(reloads, 0);
+  assert.ok(makeGlobalButton() === button);
+  assert.equal(button.disabled, false);
+  assert.ok(document.activeElement === button);
+});
+
 // --- WCAG details of the model list (CR-B14-08) -----------------------------
 
 test('a model row title carries no lang, it holds translated and user-given names (CR-B14-08)', async (t) => {
