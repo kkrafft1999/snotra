@@ -138,6 +138,9 @@ function registerChatHistoryHandlers({
           messages,
           workspaceRoot: await resolveSessionWorkspaceRoot(sessionRow),
           ...sessionSettings,
+          // The renderer sums the chat's cost (#949); a save that does not
+          // carry it keeps the one already stored.
+          cost: sessionRow?.cost === undefined ? existing?.cost : sessionRow.cost,
           // Was der Renderer als Zeitpunkt mitschickt, gilt nicht (Issue #245):
           // er schreibt die Session auch, wenn gar nichts gesprochen wurde —
           // beim Verlassen, beim Modellwechsel, beim nachgezogenen Titel. Den

@@ -25,6 +25,9 @@
  *   How the round ended, from `shared/contracts/finish-reason.js` (#538). The last three
  *   mean "cut off": the text is partial and the tool calls must not run.
  * @property {{ prompt: number, completion: number, total: number }|null} [usage]
+ * @property {{ entry: object, priceTable: { date: string, origin: string }|null }} [cost]
+ *   The estimated cost of this round (#949), from `shared/contracts/cost.js`;
+ *   absent when the round reported no usage.
  * @property {boolean} [cancelled]
  * @property {string} [error]
  * @property {string} [code]

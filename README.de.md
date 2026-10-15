@@ -57,7 +57,9 @@ eingebauten Workspace-Werkzeugen · jedem CLI auf deinem Rechner
   oder ablehnst; deine Einstellungen bleiben, wie sie sind.
 - **Deine Modelle, deine Schlüssel.** Cloud- und lokale Modelle stehen in einer
   Liste nebeneinander; du wechselst je Unterhaltung. Schlüssel liegen in der
-  Verschlüsselung des Betriebssystems.
+  Verschlüsselung des Betriebssystems. Neben dem Token-Zähler zeigt jeder Chat,
+  was er bisher gekostet hat – geschätzt aus einer Preistabelle, die mit der App
+  kommt und nur aktualisiert wird, wenn du es willst.
 - **Nichts meldet sich nach Hause.** Kein Konto, kein eigener Server, keine
   Telemetrie — auch nicht als Opt-in.
 

@@ -988,6 +988,69 @@ test('engine reports usage as sum of rounds and contextUsage as the last round',
   assert.deepEqual(result.contextUsage, { prompt: 210, completion: 20, total: 230, cached: 0 });
 });
 
+test('engine sums the estimated cost of every round per model (#949)', async () => {
+  const { createCostEntry } = require('../src/shared/contracts/cost');
+  const priced = (model, usage) => ({
+    entry: createCostEntry({ providerId: 'openai', model, usage, price: { input: 1e-6, output: 2e-6 }, priceSource: 'table' }),
+    priceTable: { date: '2026-10-15', origin: 'bundled' },
+  });
+  const tools = makeToolPort(() => JSON.stringify({ ok: true }));
+  const { engine } = makeEngine([
+    { ...assistantToolCall('c1', 'read_file_text', { relative_path: 'a.js' }), usage: { prompt: 100, completion: 10, total: 110 }, cost: priced('gpt-x', { prompt: 100, completion: 10 }) },
+    { ...assistantToolCall('c2', 'read_file_text', { relative_path: 'b.js' }), usage: { prompt: 150, completion: 12, total: 162 } },
+    assistantText('Fertig.', { usage: { prompt: 210, completion: 20, total: 230 }, cost: priced('gpt-x', { prompt: 210, completion: 20 }) }),
+  ], { tools });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'x' }], workspaceRoot: '/tmp/snotra-project' },
+    onEvent: () => {},
+  });
+
+  assert.equal(result.cost.models.length, 1);
+  const [entry] = result.cost.models;
+  assert.equal(entry.model, 'gpt-x');
+  assert.equal(entry.rounds, 2);
+  assert.deepEqual(entry.tokens, { input: 310, cacheRead: 0, cacheWrite: 0, output: 30, reasoning: 0 });
+  assert.deepEqual(result.cost.priceTable, { date: '2026-10-15', origin: 'bundled' });
+  // The usage the token display relies on is unchanged.
+  assert.deepEqual(result.usage, { prompt: 460, completion: 42, total: 502, cached: 0 });
+});
+
+test('engine keeps the cost of paid rounds on an error result (#949)', async () => {
+  const { createCostEntry } = require('../src/shared/contracts/cost');
+  const tools = makeToolPort(() => JSON.stringify({ ok: true }));
+  const { engine } = makeEngine([
+    {
+      ...assistantToolCall('c1', 'read_file_text', { relative_path: 'a.js' }),
+      usage: { prompt: 100, completion: 10, total: 110 },
+      cost: { entry: createCostEntry({ providerId: 'openai', model: 'gpt-x', usage: { prompt: 100, completion: 10 } }), priceTable: null },
+    },
+    { error: 'boom', code: 'NETWORK' },
+  ], { tools });
+
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'x' }], workspaceRoot: '/tmp/snotra-project' },
+    onEvent: () => {},
+  });
+
+  assert.ok(result.error);
+  assert.equal(result.cost.models[0].tokens.input, 100);
+  // Unknown price: counted, never shown as free.
+  assert.equal(result.cost.models[0].usd, null);
+});
+
+test('engine adds no cost when no round reported one (#949)', async () => {
+  const { engine } = makeEngine([assistantText('Hallo!')]);
+  const result = await engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'x' }], workspaceRoot: '/tmp/snotra-project' },
+    onEvent: () => {},
+  });
+  assert.equal('cost' in result, false);
+});
+
 test('engine keeps the last complete round as contextUsage when the final round has no usage', async () => {
   const tools = makeToolPort(() => JSON.stringify({ ok: true }));
   const { engine } = makeEngine([

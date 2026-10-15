@@ -684,3 +684,33 @@ test('the reasoning level comes from main, the payload\'s is dropped (#725)', as
   stored = (await storage.readChatHistoryStore()).sessions.find((x) => x.id === 'b');
   assert.equal(stored.reasoningEffort, 'medium');
 });
+
+test('the chat cost is saved, comes back, and stays when a save omits it (#949)', async (t) => {
+  const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
+  setActiveRoot(tmpDir);
+  const cost = {
+    models: [{
+      providerId: 'openai',
+      model: 'gpt-x',
+      tokens: { input: 1000, cacheRead: 0, cacheWrite: 0, output: 100, reasoning: 0 },
+      usd: { input: 0.001, cacheRead: 0, cacheWrite: 0, output: 0.0002 },
+      priceSource: 'table',
+      rounds: 2,
+      unpricedRounds: 0,
+    }],
+    priceTable: { date: '2026-10-15', origin: 'bundled' },
+  };
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('priced'), cost });
+  let session = (await ipcMain.invoke(REQ.CHAT_HISTORY_GET)).sessions.find((s) => s.id === 'priced');
+  assert.deepEqual(session.cost, { version: 1, ...cost });
+
+  // A save without the field — the title written later, say — keeps it.
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('priced', { title: 'Renamed' }));
+  session = (await ipcMain.invoke(REQ.CHAT_HISTORY_GET)).sessions.find((s) => s.id === 'priced');
+  assert.equal(session.cost.models[0].rounds, 2);
+
+  // Garbage in the payload is dropped, not stored.
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('junk'), cost: { models: 'no' } });
+  session = (await ipcMain.invoke(REQ.CHAT_HISTORY_GET)).sessions.find((s) => s.id === 'junk');
+  assert.equal(session.cost, undefined);
+});

@@ -42,6 +42,10 @@ export const SETTINGS_HELP = Object.freeze({
     slug: 'customising/settings',
     section: { en: 'The section General', de: 'Der Bereich Allgemein' },
   },
+  modelPrices: {
+    slug: 'chatting/chat-cost',
+    section: { en: 'Prices of your own', de: 'Eigene Preise' },
+  },
   preferredModels: {
     slug: 'customising/models',
     section: { en: 'The list', de: 'Die Liste' },

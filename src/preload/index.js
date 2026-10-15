@@ -238,6 +238,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener(channel, listener);
   },
 
+  // Estimated chat cost (#949). The renderer never names the price source.
+  describeModelPrices: (models) => ipcRenderer.invoke(REQ.MODEL_PRICES_DESCRIBE, models),
+  setModelPriceOverride: (model, price) => ipcRenderer.invoke(REQ.MODEL_PRICES_SET_OVERRIDE, { model, price }),
+  updateModelPrices: () => ipcRenderer.invoke(REQ.MODEL_PRICES_UPDATE),
+
   // Selbst-Update (Issue #232). Der Renderer nennt nie eine Adresse — er
   // stoesst nur an; was geladen wird, entscheidet der Main-Prozess.
   getAppVersion: () => ipcRenderer.invoke(REQ.UPDATE_GET_VERSION),

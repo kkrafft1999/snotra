@@ -181,6 +181,15 @@ const REQUEST_CHANNELS = Object.freeze({
   APPROVAL_NOTIFICATION_SHOW: 'approvalNotification:show',
   APPROVAL_NOTIFICATION_CLOSE: 'approvalNotification:close',
 
+  /**
+   * Prices for the estimated chat cost (#949): what the settings show, a
+   * user's own price per model, and the update of the price table. Only the
+   * last one goes online, and only on the user's click.
+   */
+  MODEL_PRICES_DESCRIBE: 'modelPrices:describe',
+  MODEL_PRICES_SET_OVERRIDE: 'modelPrices:setOverride',
+  MODEL_PRICES_UPDATE: 'modelPrices:update',
+
   UPDATE_CHECK: 'update:check',
   UPDATE_GET_VERSION: 'update:getVersion',
   UPDATE_IGNORE_VERSION: 'update:ignoreVersion',

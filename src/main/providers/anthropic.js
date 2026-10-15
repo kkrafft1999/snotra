@@ -217,6 +217,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
           // Anthropic nennt die Cache-Anteile nur hier, im `message_start`;
           // das `message_delta` am Ende wiederholt sie nicht (Issue #179).
           usage.cached = startUsage.cached;
+          if (startUsage.cacheWrite) usage.cacheWrite = startUsage.cacheWrite;
           usage.total = usage.prompt + usage.completion;
         }
       } else if (type === 'content_block_start') {
@@ -261,6 +262,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
           if (deltaUsage.completion > 0) usage.completion = deltaUsage.completion;
           if (deltaUsage.prompt > 0) usage.prompt = deltaUsage.prompt;
           if (deltaUsage.cached > 0) usage.cached = deltaUsage.cached;
+          if (deltaUsage.cacheWrite > 0) usage.cacheWrite = deltaUsage.cacheWrite;
           usage.total = usage.prompt + usage.completion;
         }
         const sr = payload.delta?.stop_reason;

@@ -18,6 +18,7 @@ const {
   normalizeSandboxLive,
   normalizeSandboxOutside,
 } = require('../../shared/contracts/chat');
+const { normalizeSessionCost } = require('../../shared/contracts/cost');
 const { normalizeChatConfigOverrides } = require('../../shared/contracts/chat-configuration');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
@@ -387,6 +388,9 @@ function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existing
   // What this chat switched beyond the settings (#774).
   const configOverrides = normalizeChatConfigOverrides(sessionRow.configOverrides);
   if (configOverrides) out.configOverrides = configOverrides;
+  // The estimated cost, summed over the whole chat (#949).
+  const cost = normalizeSessionCost(sessionRow.cost);
+  if (cost) out.cost = cost;
   return out;
 }
 
@@ -409,6 +413,9 @@ function normalizeSessionForLoad(sessionRow) {
   // What this chat switched beyond the settings (#774).
   const configOverrides = normalizeChatConfigOverrides(sessionRow.configOverrides);
   if (configOverrides) out.configOverrides = configOverrides;
+  // The estimated cost, summed over the whole chat (#949).
+  const cost = normalizeSessionCost(sessionRow.cost);
+  if (cost) out.cost = cost;
   return out;
 }
 

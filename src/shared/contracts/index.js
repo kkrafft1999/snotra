@@ -74,6 +74,7 @@ const {
   SUGGESTION_THRESHOLD,
 } = require('./skill-suggestion');
 const { toUsageNumber, createEmptyUsage, normalizeUsage, coerceUsage, mergeUsage } = require('./usage');
+const cost = require('./cost');
 const {
   CONTEXT_BREAKDOWN_VERSION,
   CONTEXT_PART_GROUPS,
@@ -368,6 +369,14 @@ module.exports = {
   normalizeUsage,
   coerceUsage,
   mergeUsage,
+  SESSION_COST_VERSION: cost.SESSION_COST_VERSION,
+  PRICE_SOURCES: cost.PRICE_SOURCES,
+  COST_TOKEN_KINDS: cost.COST_TOKEN_KINDS,
+  normalizeSessionCost: cost.normalizeSessionCost,
+  mergeSessionCost: cost.mergeSessionCost,
+  summarizeSessionCost: cost.summarizeSessionCost,
+  costEntryUsd: cost.costEntryUsd,
+  formatUsd: cost.formatUsd,
   CONTEXT_BREAKDOWN_VERSION,
   CONTEXT_PART_GROUPS,
   CONTEXT_PART_GROUP_ORDER,

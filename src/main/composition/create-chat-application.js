@@ -44,12 +44,15 @@ function createChatApplication({
   onRunSettled = () => {},
   // What a chat switched for itself, and the model's proposals (#774).
   configProposals = null,
+  // Prices for the estimated chat cost (#949).
+  modelPrices = null,
 }) {
   const llm = createProviderLlmAdapter({
     providerRuntime,
     llmConfigStore,
     providerSecrets,
     reasoningLevelFor: resolveReasoningLevel,
+    modelPrices,
   });
   const tools = createWorkspaceToolAdapter(toolRegistry, toolAdapterDeps);
   const preferences = createChatPreferencesAdapter({ uiPrefsStore });

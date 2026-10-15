@@ -452,6 +452,23 @@
               </div>
             </div>
             <div class="chat-composer-bar-end">
+              <span class="chat-cost-wrap" hidden>
+                <button
+                  type="button"
+                  id="chat-cost"
+                  class="chat-token-usage chat-cost"
+                  aria-haspopup="dialog"
+                  aria-expanded="false"
+                  aria-controls="chat-cost-breakdown">
+                  <span id="chat-cost-value"></span>
+                </button>
+                <div
+                  id="chat-cost-breakdown"
+                  class="chat-token-breakdown chat-cost-breakdown hidden"
+                  role="dialog"
+                  aria-labelledby="chat-cost-breakdown-title"
+                  tabindex="-1"></div>
+              </span>
               <span class="chat-token-usage-wrap">
                 <button
                   type="button"
@@ -595,6 +612,30 @@
             <ul id="pref-model-list" class="settings-pref-list" aria-labelledby="heading-pref-models"></ul>
 
             <p id="pref-list-empty" class="settings-empty-hint hidden" data-i18n="settings.models.empty">No entries yet &ndash; open &ldquo;Add model&rdquo;.</p>
+
+            <div class="settings-tools-card model-prices" id="settings-model-prices-card">
+              <div class="settings-help-heading">
+                <h3 class="settings-subsection-title" id="heading-model-prices" data-i18n="settings.prices.heading">Prices for the cost estimate</h3>
+                <button type="button" class="settings-help" data-manual-help="modelPrices" aria-label="Help">?</button>
+              </div>
+              <details class="settings-note settings-note--tight">
+                <summary class="settings-note__summary"><span data-i18n="settings.prices.note.summary">Snotra estimates what a chat costs from a public price table.</span></summary>
+                <div class="settings-note__body" data-i18n-html="settings.prices.note.body">
+                  <p>
+                    The table comes from LiteLLM and ships with every release. Snotra only fetches a newer one when you
+                    press &ldquo;Update prices&rdquo;. A price of your own always wins over the table &mdash; for a
+                    discount, an Azure deployment or a model the table does not know.
+                  </p>
+                </div>
+              </details>
+              <div class="model-prices__table">
+                <p id="model-prices-table" class="model-prices__table-line"></p>
+                <button type="button" id="btn-model-prices-update" class="btn-secondary" data-i18n="settings.prices.update">Update prices</button>
+              </div>
+              <p id="model-prices-status" class="modal-hint" role="status"></p>
+              <ul id="model-prices-list" class="model-prices__list" aria-labelledby="heading-model-prices"></ul>
+              <p id="model-prices-empty" class="settings-empty-hint hidden" data-i18n="settings.prices.empty">Add a model above to see its price.</p>
+            </div>
           </section>
 
           <section class="settings-panel" id="panel-settings-security" role="tabpanel" aria-labelledby="tab-settings-security" hidden>

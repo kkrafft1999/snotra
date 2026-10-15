@@ -82,7 +82,8 @@ test('cached_tokens: OpenAI zaehlt im Prompt, Anthropic daneben (#179)', () => {
       cache_creation_input_tokens: 500,
       output_tokens: 200,
     }),
-    { prompt: 10000, completion: 200, total: 10200, cached: 9000 }
+    // cacheWrite is a part of the prompt like cached, kept apart for its price (#949).
+    { prompt: 10000, completion: 200, total: 10200, cached: 9000, cacheWrite: 500 }
   );
   // Google: wieder Teilmenge.
   assert.equal(

@@ -1,8 +1,9 @@
 import { formatHistoryTime } from '../chat/messageUtils.js';
 import { t, tMessage, onLocaleChange } from '../i18n.js';
 import contracts from '../generated/contracts.js';
+import { formatCostAmount } from './CostPanel.js';
 
-const { CHAT_ACTIVATION, resolveChatTitle } = contracts;
+const { CHAT_ACTIVATION, resolveChatTitle, normalizeSessionCost, summarizeSessionCost } = contracts;
 
 /**
  * Der Chat-Verlauf als Spalte neben dem Chat (Epic #223, Phase B).
@@ -155,6 +156,18 @@ export function initChatHistoryPanel({
     time.className = 'chat-history-row-time';
     time.textContent = formatHistoryTime(s.updatedAt);
     meta.appendChild(time);
+    // What the chat cost so far (#949) — only once it cost anything.
+    const cost = normalizeSessionCost(s.cost);
+    if (cost) {
+      const summary = summarizeSessionCost(cost);
+      const costEl = document.createElement('span');
+      costEl.className = 'chat-history-row-cost';
+      costEl.textContent = formatCostAmount(summary);
+      costEl.title = summary.usd === null
+        ? t('cost.chip.label.unknown')
+        : t(summary.complete ? 'cost.chip.label' : 'cost.chip.label.partial', { amount: costEl.textContent });
+      meta.appendChild(costEl);
+    }
     open.appendChild(titleEl);
     open.appendChild(meta);
     const del = document.createElement('button');
@@ -317,7 +330,7 @@ export function initChatHistoryPanel({
       appStore.currentChatWorkspace = s.workspaceRoot || null;
       appStore.chatMessages = s.messages;
       appStore.currentChatTitle = s.title || '';
-      setChatTokenUsage?.(s.tokenUsage);
+      setChatTokenUsage?.(s.tokenUsage, { cost: s.cost });
     }
     onInputChanged();
     // The composer follows the chat on screen at once, not after the round

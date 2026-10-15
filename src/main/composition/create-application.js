@@ -5,6 +5,8 @@ const nodeCrypto = require('crypto');
 const nodeChildProcess = require('child_process');
 
 const { createStorageService } = require('../services/storage-service');
+const { createModelPriceService } = require('../services/model-price-service');
+const { registerModelPriceHandlers } = require('../ipc/model-price-handlers');
 const { createChatAttachmentStore } = require('../services/chat-attachment-store');
 const { createFsService } = require('../services/fs-service');
 const { createFileChangeRecorder } = require('../services/file-change-recorder');
@@ -180,6 +182,9 @@ function createApplication({
     maxFolderHistory: LIMITS.MAX_FOLDER_HISTORY,
     defaultProviderId,
   });
+
+  // Prices for the estimated chat cost (#949).
+  const modelPrices = createModelPriceService({ fs, path, app });
 
   // Bilder eines Chats liegen als Dateien neben der Verlaufsdatei, nicht als
   // Base64 darin (Issue #94).
@@ -772,6 +777,7 @@ function createApplication({
     // A run in the background keeps the mode of its own chat (#320).
     resolveChatMode: (chatId) => chatSessionSettings.modeFor(chatId),
     resolveReasoningLevel: (chatId) => chatSessionSettings.reasoningEffortFor(chatId),
+    modelPrices,
     // A run that ended off screen takes its approvals with it.
     onRunSettled: () => pruneChatScopedPermissions(),
     // The chat's own skills and tools, and the card that changes them (#774).
@@ -902,6 +908,7 @@ function createApplication({
     shellSettings,
     chatSessionSettings,
   });
+  registerModelPriceHandlers({ ipcMain, modelPrices, REQ });
   registerChatHistoryHandlers({
     ipcMain,
     chatHistoryStore,

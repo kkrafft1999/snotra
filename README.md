@@ -57,7 +57,9 @@ workspace tools · any CLI on your machine
   settings stay as they are.
 - **Your models, your keys.** Cloud and local models sit side by side in one
   list; you switch per conversation. Keys are stored with the operating
-  system's encryption.
+  system's encryption. Next to the token counter, each chat shows what it has
+  cost so far — an estimate from a price table that ships with the app and is
+  only updated when you ask for it.
 - **Nothing phones home.** No account, no server of ours, no telemetry — not
   even opt-in.
 

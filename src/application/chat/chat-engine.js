@@ -3,6 +3,7 @@
 const { isAbortError, createChatAbortError } = require('../../shared/runtime/abort');
 const { extractStringFromPartialJson } = require('../../shared/runtime/partial-json');
 const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
+const { mergeSessionCost } = require('../../shared/contracts/cost');
 const { normalizeAttachments, attachmentsCharCost } = require('../../shared/contracts/attachments');
 const { extractInvokedSkillNames } = require('../../shared/contracts/skill-invocation');
 const { LOAD_SKILL_TOOL, SKILL_SOURCES } = require('../../shared/contracts/skills');
@@ -1002,7 +1003,19 @@ function createChatEngine({
     return new Set([...activeRuns.values()].map((run) => run.chatId));
   }
 
-  async function send({ sessionId, payload, onEvent }) {
+  /**
+   * The estimated cost of the turn (#949) rides on whatever the run returns —
+   * an answer, a cancel or an error after paid rounds alike. One entry per
+   * model, so the renderer can add it to the chat's sum as it is.
+   */
+  async function send(args) {
+    const turnCost = { value: null };
+    const result = await runSend(args, turnCost);
+    if (!turnCost.value || !result || typeof result !== 'object') return result;
+    return { ...result, cost: turnCost.value };
+  }
+
+  async function runSend({ sessionId, payload, onEvent }, turnCost) {
     const abortController = new AbortController();
     const abortSignal = abortController.signal;
     const chatId = sanitizeChatId(payload?.chatId);
@@ -2417,6 +2430,12 @@ function createChatEngine({
         });
         awaitingProvider = false;
         requestUsage = mergeUsage(requestUsage, streamed.usage);
+        if (streamed.cost) {
+          turnCost.value = mergeSessionCost(turnCost.value, {
+            models: [streamed.cost.entry],
+            priceTable: streamed.cost.priceTable,
+          });
+        }
         // Bei Abbruch ohne Usage bleibt die letzte vollstaendige Runde stehen.
         const roundUsage = normalizeUsage(streamed.usage);
         contextUsage = roundUsage || contextUsage;

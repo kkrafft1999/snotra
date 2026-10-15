@@ -437,6 +437,8 @@ const chatStream = initChatStream({
   // (Issue #174). settingsModal entsteht weiter unten — der Aufruf passiert
   // erst zur Laufzeit.
   openSkillSettings: (skillName) => settingsModal.openSettingsModal({ panel: 'skills', skillName }),
+  // From the cost popover to the price of a model (#949).
+  openPriceSettings: (model) => settingsModal.openSettingsModal({ panel: 'models', target: 'heading-model-prices', priceModel: model }),
   activateChatSession,
   // Steht die Verlaufsspalte offen, soll sie den neuen Titel und den neuen
   // Zeitpunkt gleich zeigen statt erst beim naechsten Einblenden.
@@ -459,7 +461,7 @@ const chatHistory = initChatHistoryPanel({
   renderChatMessages: chatStream.renderChatMessages,
   updateChatChrome: () => modelPicker.updateChatChrome(),
   onInputChanged: syncChatInputHeight,
-  setChatTokenUsage: (usage) => chatStream.setChatTokenUsage(usage),
+  setChatTokenUsage: (usage, options) => chatStream.setChatTokenUsage(usage, options),
   resetChatTokenUsage: () => chatStream.resetChatTokenUsage(),
   seedGreetingIfWorkspace: (workspaceRoot) => chatStream.seedGreetingIfWorkspace(workspaceRoot),
   activateChatSession,
