@@ -791,3 +791,14 @@ test('Test connection waits while the form differs from what is saved (CR-B14-09
   envRows()[1].querySelector('.settings-dialog__icon-close').click();
   assert.equal(btnTest.getAttribute('aria-disabled'), 'true');
 });
+
+test('servers that never reached the service are named, and a reload clears it (#1002)', async () => {
+  await mount({}, katalog({ loadFailed: true }));
+  const errorEl = document.getElementById('settings-mcp-error');
+  assert.match(errorEl.textContent, /could not be handed to the running app/);
+  // The list itself is still shown: it was read, only not taken over.
+  assert.equal(rows().length, 2);
+  document.getElementById('btn-reload-mcp').click();
+  await flush();
+  assert.equal(errorEl.textContent, '');
+});

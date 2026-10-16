@@ -682,6 +682,7 @@ module.exports = {
   'settings.python.interpreter.note.summary': 'Leer lassen, um automatisch nach Python 3 zu suchen.',
   'settings.python.interpreter.note.body': '<p>Ein eigener Pfad — etwa ein venv mit <code lang="en">pandas</code> — bestimmt, welche Pakete dem Modell zur Verfügung stehen. Snotra installiert selbst nichts nach.</p>',
   'settings.python.status.unavailable': 'Python-Ausführung ist in dieser Installation nicht verfügbar.',
+  'settings.python.status.loadFailed': 'Snotra konnte nicht nach Python suchen — ob run_python angeboten wird, ist unbekannt. Schließ die Einstellungen und öffne sie erneut, um es nochmal zu versuchen.',
   'settings.python.status.custom': 'Eigener Interpreter',
   'settings.python.status.found': 'Gefunden',
   'settings.python.status.pathFromProfile': ' (gesucht im PATH aus deinem Shell-Profil)',
@@ -694,6 +695,7 @@ module.exports = {
   'settings.shell.warning.body': '<p>Unter <strong>macOS und Linux</strong> läuft jeder Befehl in einer Sandbox: Er darf nur im Projektordner und in einem temporären Ordner schreiben, kann keine Schlüssel, Cloud-Zugangsdaten oder Browserdaten lesen und erreicht das Netzwerk nur für die Domains, die der Aufruf nennt — du gibst sie auf der Karte frei, außer in „Auto“; Installationen mit <code>pip</code> und <code>npm</code> bekommen ihre Registry automatisch. Deine übrigen Dateien kann er weiterhin <strong>lesen</strong>, und Werkzeuge, die Zertifikate über den macOS-Schlüsselbund prüfen (<code>gh</code>, <code>terraform</code>), kommen darin nicht ins Netz – es sei denn, du gibst ihnen unten eine Freigabe pro Programm. Unter Linux braucht die Sandbox die Pakete <code>bubblewrap</code>, <code>socat</code> und <code>ripgrep</code>.</p><p>Unter <strong>Windows</strong> gibt es noch keine Sandbox: Ein Befehl kann <strong>alles</strong>, was du selbst im Terminal kannst. Außerhalb von „Auto“ zeigt dir Snotra vor jedem Lauf den vollständigen Befehl, die Shell, den Arbeitsordner und ob der Lauf isoliert ist, zur Freigabe; in „Auto“ läuft ein Befehl ohne Rückfrage. Rekursives Zwangslöschen, Datenträgeroperationen und das Umschreiben der Git-Historie sind gesperrt. Schalte das nur ein, wenn dir das bewusst ist.</p>',
   'settings.shell.toggle': 'Shell-Befehle erlauben',
   'settings.shell.status.unavailable': 'Shell-Ausführung ist in dieser Installation nicht verfügbar.',
+  'settings.shell.status.loadFailed': 'Snotra konnte nicht nach einer Shell suchen — ob shell_execute angeboten wird, ist unbekannt. Schließ die Einstellungen und öffne sie erneut, um es nochmal zu versuchen.',
   'settings.shell.status.notFound': 'Keine Shell gefunden{reason}. shell_execute wird nicht angeboten.',
   // Detail in brackets after "No Python 3 found" / "No shell found" (#338).
   'runner.error.notChecked': 'noch nicht geprüft',
@@ -957,6 +959,7 @@ module.exports = {
   'settings.mcp.skippedTools.other': '{count} Tools wurden ausgelassen, weil der zusammengesetzte Name zu lang ist:',
   'settings.mcp.skippedTools.reason': 'Der Tool-Name ist zu lang.',
   'settings.mcp.readFailed': 'Die MCP-Konfiguration konnte nicht gelesen werden.',
+  'settings.mcp.loadFailed': 'Die gespeicherten Server konnten nicht an die laufende App übergeben werden — ihre Tools werden nicht angeboten. „Neu laden“ versucht es nochmal.',
   'settings.mcp.reloadFailed': 'Neu laden ist fehlgeschlagen.',
   'settings.mcp.updateFailed': 'Der Server konnte nicht geändert werden.',
   'settings.mcp.saveFailed': 'Der Server konnte nicht gespeichert werden.',

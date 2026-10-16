@@ -100,6 +100,14 @@ test('der Katalog liefert Server, Verbindungen und ausgelassene Tools', async ()
   assert.deepEqual(result.skippedTools, []);
 });
 
+test('the catalogue says when the saved servers never reached the service (#1002)', async () => {
+  let failed = true;
+  const ipcMain = makeHandlers(fakeMcpSettings({ hasLoadFailed: () => failed }));
+  assert.equal((await ipcMain.handlers.get(REQ.SETTINGS_GET_MCP_CATALOG)({})).loadFailed, true);
+  failed = false;
+  assert.equal((await ipcMain.handlers.get(REQ.SETTINGS_GET_MCP_CATALOG)({})).loadFailed, false);
+});
+
 test('Speichern übernimmt die Änderung sofort in den laufenden Dienst', async () => {
   const settings = fakeMcpSettings();
   const ipcMain = makeHandlers(settings);
@@ -148,7 +156,7 @@ test('der Verbindungstest ohne Kennung scheitert verständlich', async () => {
 test('ohne MCP-Einrichtung antworten die Kanäle statt zu werfen', async () => {
   const ipcMain = makeHandlers(null);
   assert.deepEqual(await ipcMain.handlers.get(REQ.SETTINGS_GET_MCP_CATALOG)({}), {
-    servers: [], connections: [], skippedTools: [],
+    servers: [], connections: [], skippedTools: [], loadFailed: false,
   });
   assert.equal((await ipcMain.handlers.get(REQ.SETTINGS_SAVE_MCP_SERVER)({}, {})).ok, false);
 });

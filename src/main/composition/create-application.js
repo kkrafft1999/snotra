@@ -90,6 +90,7 @@ const { createChatConfigurationService } = require('../services/chat-configurati
 const { registerShellHandlers } = require('../ipc/shell-handlers');
 const { registerPreviewHistoryMenuHandlers } = require('../ipc/preview-history-menu-handlers');
 const { createChatApplication } = require('./create-chat-application');
+const { startToolRuntimes } = require('./start-tool-runtimes');
 const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
 const { createProjectInstructionsAdapter } = require('../adapters/project-instructions-adapter');
 const { createMemoryAdapter } = require('../adapters/memory-adapter');
@@ -573,13 +574,22 @@ function createApplication({
   const mcpAdapter = createMcpAdapter({ mcpService });
   const mcpSecrets = createMcpSecretsPort(storage);
 
+  let mcpLoadFailed = false;
   /**
    * Uebernimmt die gespeicherte Serverliste in den laufenden Dienst (Issue
    * #108). Entschluesselt wird genau hier und nur hier — der Rueckgabewert
    * bleibt im Main-Prozess.
    */
   async function reloadMcpServers() {
-    mcpService.setServers(await mcpSecrets.getMcpServersForRuntime());
+    try {
+      mcpService.setServers(await mcpSecrets.getMcpServersForRuntime());
+      mcpLoadFailed = false;
+    } catch (error) {
+      // The service keeps the servers it had — at start-up none. The MCP
+      // section says so until a reload gets through (#1002).
+      mcpLoadFailed = true;
+      throw error;
+    }
   }
 
   // Provider keys, gateway headers, MCP secrets and the web search key, in
@@ -597,6 +607,8 @@ function createApplication({
       return maskMcpStatuses(mcpService.describeConnections(), await ownSecrets.readMcpSecrets());
     },
     describeSkippedTools: () => mcpAdapter.describeSkippedTools(),
+    /** Whether the last take-over of the saved servers failed (#1002). */
+    hasLoadFailed: () => mcpLoadFailed,
     save: (input) => mcpConfigStore.saveMcpServer(input),
     remove: (id) => mcpConfigStore.deleteMcpServer(id),
     reload: reloadMcpServers,
@@ -1027,22 +1039,26 @@ function createApplication({
     whenWritesSettled: () => storage.whenWritesSettled(),
     /** Beim Start einmal Interpreter suchen und die Einstellung uebernehmen (Issue #86). */
     initToolRuntimes: () =>
-      Promise.all([
-        pythonSettings.refresh(),
-        shellSettings.refresh(),
-        webSearchSettings.refresh(),
-        imageGenerationSettings.refresh(),
-        // Gespeicherte MCP-Server uebernehmen (Issue #108). Startet noch
-        // keinen Prozess — der Dienst verbindet traege. Before that, a tool
-        // deselected per server moves to the one switch it has since #449.
-        migrateMcpDisabledTools({ mcpConfigStore, uiPrefsStore, qualify: qualifiedMcpToolName, log: console })
-          .catch(() => {})
-          .then(() => reloadMcpServers()),
-      ]).then((result) => {
+      startToolRuntimes({
+        runtimes: [
+          { name: 'python', start: () => pythonSettings.refresh() },
+          { name: 'shell', start: () => shellSettings.refresh() },
+          { name: 'web search', start: () => webSearchSettings.refresh() },
+          { name: 'image generation', start: () => imageGenerationSettings.refresh() },
+          // Gespeicherte MCP-Server uebernehmen (Issue #108). Startet noch
+          // keinen Prozess — der Dienst verbindet traege. Before that, a tool
+          // deselected per server moves to the one switch it has since #449.
+          {
+            name: 'MCP',
+            start: () => migrateMcpDisabledTools({ mcpConfigStore, uiPrefsStore, qualify: qualifiedMcpToolName, log: console })
+              .catch(() => {})
+              .then(() => reloadMcpServers()),
+          },
+        ],
         // Only now is it known which execution tools are there and whether
         // they run isolated; the mode pill read its state before that (#357).
-        notifyToolPermissionsChanged();
-        return result;
+        // Also after a failure: the others did start (#1002).
+        onSettled: notifyToolPermissionsChanged,
       }),
     getValidatedLastFolder: () => workspaceFolderStore.getValidatedLastFolder(),
     getAppLocale,

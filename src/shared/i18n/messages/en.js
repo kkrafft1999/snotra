@@ -675,6 +675,7 @@ module.exports = {
   'settings.python.interpreter.note.summary': 'Leave empty to search for Python 3 automatically.',
   'settings.python.interpreter.note.body': '<p>Your own path — a venv with <code lang="en">pandas</code>, say — decides which packages the model has. Snotra never installs anything itself.</p>',
   'settings.python.status.unavailable': 'Python execution is not available in this installation.',
+  'settings.python.status.loadFailed': 'Snotra could not check for Python — whether run_python is offered is unknown. Close the settings and open them again to retry.',
   'settings.python.status.custom': 'Your own interpreter',
   'settings.python.status.found': 'Found',
   'settings.python.status.pathFromProfile': ' (searched in the PATH from your shell profile)',
@@ -687,6 +688,7 @@ module.exports = {
   'settings.shell.warning.body': '<p>On <strong>macOS and Linux</strong> every command runs in a sandbox: it can write only inside the project folder and a temporary folder, cannot read keys, cloud credentials or browser data, and reaches the network only for the domains the call names — you approve them on the card, except in “Auto”; <code>pip</code> and <code>npm</code> installs get their registry automatically. It can still <strong>read</strong> your other files, and tools that verify certificates through the macOS keychain (<code>gh</code>, <code>terraform</code>) cannot reach the network inside it — unless you give them a program allowance below. On Linux the sandbox needs the packages <code>bubblewrap</code>, <code>socat</code> and <code>ripgrep</code>.</p><p>On <strong>Windows</strong> there is no sandbox yet: a command can do <strong>everything</strong> you can do in a terminal yourself. Outside “Auto”, Snotra shows you the full command, the shell, the working directory and whether the run is isolated for approval before each run; in “Auto” a command runs without asking. Recursive force-delete, disk operations and rewriting Git history are blocked. Only switch this on if you are aware of that.</p>',
   'settings.shell.toggle': 'Allow shell commands',
   'settings.shell.status.unavailable': 'Shell execution is not available in this installation.',
+  'settings.shell.status.loadFailed': 'Snotra could not check for a shell — whether shell_execute is offered is unknown. Close the settings and open them again to retry.',
   'settings.shell.status.notFound': 'No shell found{reason}. shell_execute will not be offered.',
   // Detail in brackets after "No Python 3 found" / "No shell found" (#338).
   'runner.error.notChecked': 'not checked yet',
@@ -950,6 +952,7 @@ module.exports = {
   'settings.mcp.skippedTools.other': '{count} tools were left out because the combined name is too long:',
   'settings.mcp.skippedTools.reason': 'The tool name is too long.',
   'settings.mcp.readFailed': 'The MCP configuration could not be read.',
+  'settings.mcp.loadFailed': 'The saved servers could not be handed to the running app — their tools are not offered. “Reload” tries again.',
   'settings.mcp.reloadFailed': 'Reloading failed.',
   'settings.mcp.updateFailed': 'The server could not be changed.',
   'settings.mcp.saveFailed': 'The server could not be saved.',

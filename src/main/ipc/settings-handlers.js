@@ -593,11 +593,13 @@ function registerSettingsHandlers({
   // The catalogue also answers save, delete and reload. Its connections come
   // masked from the composition, never raw from the service (CR-B14-01).
   async function buildMcpCatalog() {
-    if (!mcpSettings) return { servers: [], connections: [], skippedTools: [] };
+    if (!mcpSettings) return { servers: [], connections: [], skippedTools: [], loadFailed: false };
     return {
       servers: await mcpSettings.listServers(),
       connections: await mcpSettings.describeConnections(),
       skippedTools: mcpSettings.describeSkippedTools(),
+      // The saved servers never reached the service — at start-up, say (#1002).
+      loadFailed: mcpSettings.hasLoadFailed?.() === true,
     };
   }
 

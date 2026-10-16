@@ -45,5 +45,6 @@ Die Suchanfrage verlässt deinen Rechner, deshalb fragt Snotra in *Intelligent* 
 ## Wenn es nicht klappt
 
 - ***Kein Python 3 gefunden.*** Installier Python 3 oder trag den Pfad deines Interpreters ein. Die Zeile unter dem Feld sagt, wo Snotra gesucht hat.
+- ***Snotra konnte nicht nach Python suchen.*** Die Suche selbst ist fehlgeschlagen — ob Python installiert ist, sagt das nicht. Schließ die Einstellungen und öffne sie erneut; Snotra sucht dann neu.
 - **Das Modell sucht nicht im Web.** Ohne Tavily-Schlüssel wird `web_search` dem Modell gar nicht angeboten.
 - **Ein Tool wird nie benutzt.** Klick auf die Skills-Pille in der Chat-Leiste: Ein fehlendes Tool steht dort oben, mit dem Grund und einem Knopf zur Einstellung. Unter *Einstellungen › Tools & Sicherheit* steht seine Zeile auf *Aus* oder nennt das Tool als ausgeschaltet.
