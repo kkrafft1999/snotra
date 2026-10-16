@@ -2314,9 +2314,10 @@ export function initFileTree(deps) {
    * watcher does not know.
    */
   async function syncSelection(reportedDirs, complete) {
-    // Whatever sits in a collapsed folder has no row to go by: left alone. So
-    // does a hidden file while hidden files are off (#436) — it is not gone,
-    // only not shown, and its preview stays.
+    // Whatever sits in a collapsed folder has no row to go by: the selection
+    // is left alone there, the open file is checked by path (#1018). A hidden
+    // file while hidden files are off (#436) is left alone either way — it is
+    // not gone, only not shown, and its preview stays.
     const inVisibleFolder = (p) =>
       visibleFolderPaths().includes(parentDirOf(p)) && !hiddenByFilter(p);
     const selected = appStore.selectedPath;
@@ -2332,7 +2333,11 @@ export function initFileTree(deps) {
       await contentPane.close('file-removed');
       return;
     }
-    if (!inVisibleFolder(openPath)) return;
+    if (hiddenByFilter(openPath)) return;
+    if (!inVisibleFolder(openPath)) {
+      await syncOpenFileInClosedFolder(openPath, reportedDirs, complete);
+      return;
+    }
     if (!rowForPath(openPath)) {
       await contentPane.close('file-removed');
       return;
@@ -2340,6 +2345,36 @@ export function initFileTree(deps) {
     if (complete && !reportedDirs.includes(parentDirOf(openPath))) {
       // The file is the same, but an image it shows may lie in one of the
       // reported folders (#640). The view checks by size and date first.
+      await contentPane.revalidate(reportedDirs);
+      return;
+    }
+    await contentPane.refresh(openPath);
+  }
+
+  /**
+   * The open file lies in a collapsed folder (#1018). There is no row to tell
+   * whether it is still there, so its folder is listed by path — only when a
+   * report concerns it: that folder or one above it, or a report that could
+   * not say where. Gone, the pane closes; still there, it reads the file again
+   * if its own folder reported. A folder cut off in main may not list the file
+   * at all; then it is not taken for gone.
+   */
+  async function syncOpenFileInClosedFolder(openPath, reportedDirs, complete) {
+    const dir = parentDirOf(openPath);
+    if (complete && !reportedDirs.some((reported) => isInsideDir(openPath, reported))) {
+      await contentPane.revalidate(reportedDirs);
+      return;
+    }
+    const listing = await listFolder(dir);
+    if (!listing || contentPane.openPath() !== openPath) return;
+    const { entries: items = [], hidden = 0, unreadable = null } = listing;
+    const gone = unreadable === 'missing'
+      || (!unreadable && hidden === 0 && !items.some((item) => item.path === openPath));
+    if (gone) {
+      await contentPane.close('file-removed');
+      return;
+    }
+    if (complete && !reportedDirs.includes(dir)) {
       await contentPane.revalidate(reportedDirs);
       return;
     }

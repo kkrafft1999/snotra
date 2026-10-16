@@ -651,6 +651,10 @@ again shows those rows at once and then compares them with the disk, in the
 same queue, redrawing only when the listing moved on
 ([#1017](https://github.com/kkrafft1999/snotra/issues/1017)). A file merged in
 from a worktree while its folder was closed is the case that showed the gap.
+The file on show in the preview does not wait for that: when a report concerns
+its collapsed folder, the tree lists that folder by path, closes the preview if
+the file is gone and reads it again otherwise
+([#1018](https://github.com/kkrafft1999/snotra/issues/1018)).
 
 Every other rebuild of rows takes the same road
 ([#636](https://github.com/kkrafft1999/snotra/issues/636)): an agent's write, a
