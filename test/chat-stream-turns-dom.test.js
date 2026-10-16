@@ -32,7 +32,12 @@ function deferred() {
   return { promise, resolve };
 }
 
-async function mount({ history = { sessions: [], activeChatId: null }, activateChatSession, readWorkspaceImage } = {}) {
+async function mount({
+  history = { sessions: [], activeChatId: null },
+  activateChatSession,
+  readWorkspaceImage,
+  imageLimit = null,
+} = {}) {
   const dom = setupRendererDom();
   // The image intake reads files as data URLs; the helper does not hand it out.
   globalThis.FileReader = dom.window.FileReader;
@@ -83,7 +88,8 @@ async function mount({ history = { sessions: [], activeChatId: null }, activateC
     onInputChanged() {},
     stopChatVoiceListening() {},
     activeProviderConfigured: () => true,
-    activeProviderSupportsImages: () => true,
+    activeProviderSupportsImages: () => imageLimit === null,
+    activeImageLimit: () => imageLimit,
     syncLiveDot() {},
     syncChatTitle() {},
     onWorkspaceFileWritten() {},
@@ -460,6 +466,37 @@ test('a folder name with Markdown in it is greeted as it is written (#595)', asy
   const greeting = list.querySelector('.chat-msg.assistant .chat-md');
   assert.equal(greeting.querySelector('em, a'), null);
   assert.match(greeting.textContent, /a\*b\*c \[x\]\(mailto:a@example\.com\)/);
+});
+
+// --- #995 ---------------------------------------------------------------------
+
+test('an image refused for the provider names Snotra and the provider, not the model (#995)', async (t) => {
+  const env = await mount({ imageLimit: { limitedBy: 'provider', provider: 'Anthropic (Claude)' } });
+  t.after(env.cleanup);
+  const { paste, chips } = env;
+
+  paste();
+  await flush();
+  assert.equal(chips(), 0);
+  assert.equal(
+    document.getElementById('chat-token-usage').textContent.trim(),
+    'Snotra does not pass images to Anthropic (Claude) yet.',
+  );
+});
+
+test('an image refused for a connection points at its switch (#995)', async (t) => {
+  const env = await mount({ imageLimit: { limitedBy: 'connection', provider: '' } });
+  t.after(env.cleanup);
+  const { paste, chips, setLocale } = env;
+  setLocale('de', { force: true });
+
+  paste();
+  await flush();
+  assert.equal(chips(), 0);
+  assert.equal(
+    document.getElementById('chat-token-usage').textContent.trim(),
+    'Für diese Verbindung sind Bild-Anhänge ausgeschaltet.',
+  );
 });
 
 // --- #721 ---------------------------------------------------------------------

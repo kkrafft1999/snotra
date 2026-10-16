@@ -147,6 +147,7 @@ export function initChatStream({
   stopChatVoiceListening,
   activeProviderConfigured,
   activeProviderSupportsImages,
+  activeImageLimit,
   syncLiveDot,
   syncChatTitle,
   onWorkspaceFileWritten,
@@ -1822,10 +1823,15 @@ export function initChatStream({
   async function takeImageFiles(files) {
     // Images still being prepared count: two quick pastes would otherwise
     // both see the same free slots, and main would drop the extra (#589).
+    const imagesSupported = activeProviderSupportsImages?.() === true;
+    const limit = imagesSupported ? null : activeImageLimit?.();
     const { accepted, rejections } = planAttachmentIntake(pendingAttachments.length + preparingImages, files, {
-      imagesSupported: activeProviderSupportsImages?.() === true,
+      imagesSupported,
+      imagesLimitedBy: limit?.limitedBy,
     });
-    for (const reason of rejections) flashTokenUsageNote(rejectionMessage(reason));
+    for (const reason of rejections) {
+      flashTokenUsageNote(rejectionMessage(reason, { provider: limit?.provider }));
+    }
     if (accepted.length === 0) return;
 
     const generation = composerGeneration;

@@ -27,7 +27,15 @@ Auf eine bestimmte Datei verweist du mit `@`: [Auf eine Datei verweisen](../refe
 
 Das Bild erscheint über der Eingabezeile, mit Vorschau, Größe und einem Knopf zum Entfernen. Du kannst es mit einer Frage oder für sich allein abschicken. PNG, JPEG, GIF und WebP gehen, bis zu vier Bilder pro Nachricht und je 5 MB; größere Bilder werden vor dem Senden verkleinert.
 
-Nicht jedes Modell versteht Bilder. Die Modelle von OpenAI tun es; ein OpenAI-kompatibler Server nur, wenn für ihn unter *Einstellungen › Modelle* *Bild-Anhänge erlauben* eingeschaltet ist. Bei jedem anderen Modell sagt Snotra das, statt das Bild einzufügen. Das Bild gehört zum Chat und ist wieder da, wenn du ihn aus dem Verlauf öffnest.
+Ob ein Bild mitgeht, hängt am Anbieter, nicht nur am Modell:
+
+- *OpenAI* — ja.
+- *OpenAI-kompatibel* — nur, wenn für den Eintrag unter *Einstellungen › Modelle* *Bild-Anhänge erlauben* eingeschaltet ist. Sonst sagt Snotra, dass für diese Verbindung Bild-Anhänge ausgeschaltet sind.
+- *Anthropic (Claude)*, *Google (Gemini)*, *Ollama (lokal)* — noch nicht. Claude und Gemini verstehen Bilder, manche Ollama-Modelle auch, aber Snotra kann sie an diese Anbieter noch nicht weiterreichen ([#90](https://github.com/kkrafft1999/snotra/issues/90), [#91](https://github.com/kkrafft1999/snotra/issues/91), [#92](https://github.com/kkrafft1999/snotra/issues/92)). Snotra sagt das, statt das Bild einzufügen.
+
+Die Übersicht je Anbieter steht unter [Modelle](../../customising/models/#die-anbieter).
+
+Das Bild gehört zum Chat und ist wieder da, wenn du ihn aus dem Verlauf öffnest.
 
 ## Diktieren
 

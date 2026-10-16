@@ -60,6 +60,20 @@ export function initChatModelPicker({
   }
 
   /**
+   * Why the active model gets no images, for the composer's refusal (#995):
+   * on a connection it is the user's switch, otherwise Snotra's missing
+   * adapter for the provider (#90–#92) — not the model.
+   */
+  function activeImageLimit() {
+    const preset = (appStore.llmState.presets || [])
+      .find((pr) => pr.id === appStore.llmState.activePresetId);
+    if (preset?.connection) return { limitedBy: 'connection', provider: '' };
+    const pid = appStore.llmState.chatTarget?.providerId;
+    const p = pid ? findProviderView(pid) : null;
+    return { limitedBy: 'provider', provider: p?.name ? tMessage(p.name) : '' };
+  }
+
+  /**
    * `focusPill`: back to the pill after Escape or a choice (#583), the way the
    * mode menu next to it does it. A click elsewhere leaves the focus alone.
    */
@@ -529,6 +543,7 @@ export function initChatModelPicker({
     findProviderView,
     activeProviderConfigured,
     activeProviderSupportsImages,
+    activeImageLimit,
     refreshLLMState,
     updateChatChrome,
     syncChatTitle,
