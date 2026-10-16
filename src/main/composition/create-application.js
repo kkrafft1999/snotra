@@ -83,6 +83,8 @@ const {
 const { createChatSessionSettings } = require('../services/chat-session-settings');
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
+const { registerNoticeHandlers } = require('../ipc/notice-handlers');
+const { createAppNotices, postStoreFileEvent } = require('../services/app-notices');
 const { registerSkillSuggestionHandlers } = require('../ipc/skill-suggestion-handlers');
 const { registerSkillMoveHandlers } = require('../ipc/skill-move-handlers');
 const { registerChatConfigurationHandlers } = require('../ipc/chat-configuration-handlers');
@@ -173,6 +175,10 @@ function createApplication({
   const providerRuntime = createProviderRuntimeAdapter(providersModule);
   const providerCatalog = createProviderCatalogAdapter(providerRuntime);
 
+  // Notices for the window (#1001). Created first: the stores report what
+  // they set aside while they are read, before the window exists.
+  const notices = createAppNotices();
+
   const storage = createStorageService({
     app,
     safeStorage,
@@ -182,6 +188,7 @@ function createApplication({
     maxChatSessions: LIMITS.MAX_CHAT_SESSIONS,
     maxFolderHistory: LIMITS.MAX_FOLDER_HISTORY,
     defaultProviderId,
+    onStoreFileEvent: (event) => postStoreFileEvent(notices, event),
   });
 
   // Prices for the estimated chat cost (#949).
@@ -931,6 +938,7 @@ function createApplication({
     chatSessionSettings,
   });
   registerUpdateHandlers({ ipcMain, updates, REQ, PUSH, getMainWindow });
+  registerNoticeHandlers({ ipcMain, notices, REQ, PUSH, getMainWindow, shell });
   // Ohne diese Handler bleiben der Verweis auf die Release-Seite im
   // Update-Dialog und Links in Chat-Antworten wirkungslos — das sandboxed
   // Preload kennt kein `shell`.
