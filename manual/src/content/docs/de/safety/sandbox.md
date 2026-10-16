@@ -79,6 +79,8 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 - **Den Host in `~/.ssh/known_hosts`.** In der Sandbox kann SSH nicht fragen, ob es einem neuen Host trauen soll. Verbinde dich einmal aus einem Terminal mit ihm — `ssh -T git@gitlab.example.com` — und bestätige seinen Schlüssel.
 - **Deinen Schlüssel im ssh-agent.** Die Sandbox hält deine privaten Schlüsseldateien verschlossen; SSH meldet sich stattdessen über den Agent an. Lade den Schlüssel einmal mit `ssh-add --apple-use-keychain ~/.ssh/<schlüssel>`, oder trag `AddKeysToAgent yes` und `UseKeychain yes` in `~/.ssh/config` ein, dann lädt SSH ihn, sobald du ihn das nächste Mal im Terminal benutzt.
 
+Zum Prüfen genügen zwei Befehle: `ssh-keygen -F gitlab.example.com` gibt den Schlüssel des Hosts aus, wenn er in `known_hosts` steht. `ssh-add -l` listet die Schlüssel, die der Agent hält; meldet er *The agent has no identities*, lade den Schlüssel zuerst.
+
 ### Schritte
 
 1. Bitte wie gewohnt um den Git-Befehl und gib ihn auf der Karte frei.
