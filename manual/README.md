@@ -73,8 +73,11 @@ before the app starts, for files the app reads only then — a skill, a
 `memory.md`, `mcp-servers.json` in the profile. An HTML file is shown in a view of its own over the
 window, which a screenshot of the window does not contain; `htmlView: true`
 takes its picture separately and lays it in.
-Running the script needs the app's dependencies (`npm ci` at the repository
-root). The demo project must stay free of anything personal.
+Running the script needs two installs: the app's dependencies (`npm ci` at the
+repository root, for Electron and Playwright) and the manual's own (`npm ci` in
+`manual/`, for `sharp`, which writes the WebP files). A fresh worktree has no
+`manual/node_modules`; the script then says which install is missing and
+stops. The demo project must stay free of anything personal.
 
 ## Look
 

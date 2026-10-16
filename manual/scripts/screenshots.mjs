@@ -10,24 +10,48 @@
 // pages reference a motif as plain Markdown, `![Alt](screenshots/<motif>.webp)`,
 // and src/plugins/remark-screenshots.mjs picks the variant.
 //
-// Needs the app's own dependencies: `npm ci` at the repository root.
+// Needs two installs: the app's (`npm ci` at the repository root, for Electron
+// and Playwright) and the manual's own (`npm ci` in manual/, for sharp).
 
 import { execFileSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { cp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import sharp from 'sharp';
-
-import { startFakeModel } from '../../e2e/helpers/fake-model.mjs';
-import { launchApp, makeTempDir, poll, prepareUserData } from '../../e2e/helpers/app.mjs';
-import { routeOpenAiImages } from '../../e2e/helpers/fake-images.mjs';
-import { startFakeRealtime, routeRealtime, feedMicrophone, speechLikeWav } from '../../e2e/helpers/fake-realtime.mjs';
-
 const MANUAL_DIR = fileURLToPath(new URL('..', import.meta.url));
 const REPO_DIR = path.resolve(MANUAL_DIR, '..');
 const OUT_DIR = path.join(MANUAL_DIR, 'public', 'screenshots');
+
+// The packages are loaded only after this check. A static import of a missing
+// one fails before the first line of the script runs, with a stack trace that
+// does not say which `npm ci` is missing (#1032). The check looks into each
+// folder's own node_modules rather than resolving: a worktree lies inside the
+// main checkout, so resolving would find the main checkout's packages, while
+// sync-renderer-vendor.js reads from this one's.
+const INSTALLS = [
+  { where: 'the repository root', dir: REPO_DIR, packages: ['electron', 'playwright-core'] },
+  { where: 'manual/', dir: MANUAL_DIR, packages: ['sharp'] },
+];
+const missing = INSTALLS
+  .map(({ where, dir, packages }) => ({
+    where,
+    packages: packages.filter((name) => !existsSync(path.join(dir, 'node_modules', name, 'package.json'))),
+  }))
+  .filter(({ packages }) => packages.length > 0);
+if (missing.length > 0) {
+  for (const { where, packages } of missing) {
+    console.error(`Missing ${packages.join(', ')}: run \`npm ci\` in ${where} first.`);
+  }
+  process.exit(1);
+}
+
+const { default: sharp } = await import('sharp');
+const { startFakeModel } = await import('../../e2e/helpers/fake-model.mjs');
+const { launchApp, makeTempDir, poll, prepareUserData } = await import('../../e2e/helpers/app.mjs');
+const { routeOpenAiImages } = await import('../../e2e/helpers/fake-images.mjs');
+const { startFakeRealtime, routeRealtime, feedMicrophone, speechLikeWav } = await import('../../e2e/helpers/fake-realtime.mjs');
 
 const LOCALES = ['en', 'de'];
 const THEMES = ['light', 'dark'];
