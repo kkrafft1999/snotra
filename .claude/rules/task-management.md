@@ -64,6 +64,12 @@ issues. So:
 5. Summarise and recommend an order — the Ready items first and individually,
    the backlog behind them and only grouped. If there are no open issues, say so
    instead of inventing something.
+6. **Never hand over bare issue numbers.** Every issue that is proposed as a
+   candidate — Ready or backlog — comes with its title and one sentence on what
+   it is about and what it would take, written out in the answer itself. The
+   user has to be able to pick from the list without opening a single issue; a
+   question like "Which one first?" over a row of numbers cannot be answered
+   (user request, 2026-10-16).
 
 ## What to do with new tasks and ideas from the conversation
 
