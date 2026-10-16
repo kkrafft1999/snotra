@@ -98,13 +98,15 @@ Each scenario is written as *stimulus → response → measure*, so that phase 2
 check it against the architecture and the code. Three measures were proposed
 while writing this document rather than given in the interview — the credential
 in SEC-5, the five minutes in USE-1 and the factor of two for the performance
-budgets; the owner agreed to them with the rest on 2026-10-16.
+budgets; the owner agreed to them with the rest on 2026-10-16. SEC-1 was restated by
+the architecture review on the same day: it said "refused", while #792 had
+already replaced the refusal by a card ([`architecture-review.md`](./architecture-review.md)).
 
 ### Agent security
 
 | ID | Stimulus | Response | Measure |
 | --- | --- | --- | --- |
-| SEC-1 | Text in a file steers the model into reading or writing a path outside the workspace, directly or through a symlink. | The tool call is refused before it touches the file system; the chat shows the refused call. | No file access outside the workspace boundary; every file tool is covered by a test for it. |
+| SEC-1 | Text in a file steers the model into reading or writing a path outside the workspace, directly or through a symlink. | The tool call does not touch the file system unless the user approves that path on a card, in every mode (#792); a path on the deny list is refused outright. The chat shows the refused or offered call. | No file access outside the workspace without an approval on a card; every file tool is covered by a symlink-escape test. |
 | SEC-2 | The agent wants to run a shell or Python command that no rule allows. | Nothing runs before the user approves it. On macOS and Linux the approved command runs in the sandbox, which refuses network and writes outside the workspace. | Approval for every execution not covered by a rule; sandbox on by default. |
 | SEC-3 | A safety mechanism cannot be established — no OS keyring, sandbox unavailable, policy file unreadable. | The app falls back to the stricter state and says so in the UI. | No path that fails open; every degraded state is visible. |
 | SEC-4 | A tool result contains text that looks like an injection. | The extra layer may flag it to the user; the call itself is still bound by isolation and approvals. | A flag never loosens a boundary, and a missing flag never opens one. |

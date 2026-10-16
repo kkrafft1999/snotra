@@ -7,6 +7,12 @@ the five roadmap stages were completed (as of 2026-07-12). Diagrams:
 [`architecture-hexagonal.svg`](./architecture-hexagonal.svg),
 [`architecture.svg`](./architecture.svg).
 
+What this architecture has to achieve is written down in
+[`quality-requirements.md`](./quality-requirements.md) — constraints, ranked
+quality goals, checkable scenarios and non-goals. How well it does is evaluated
+in [`architecture-review.md`](./architecture-review.md) (#752), with one issue
+per finding.
+
 ## Containers (C4 level 2)
 
 One level above the layers: which processes and data stores Snotra Agent is
