@@ -11563,3 +11563,20 @@ select.modal-input {
   outline: var(--ds-focus-ring);
   outline-offset: var(--ds-focus-offset);
 }
+
+/* A model that gets no tools (#1013): the reason and the way to the switch,
+   in place of the tool lists. */
+.chat-config-notools {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin: 2px 12px 6px;
+}
+
+.chat-config-notools-text {
+  margin: 0;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.45;
+  color: var(--text-muted);
+}

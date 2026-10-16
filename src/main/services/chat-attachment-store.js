@@ -18,9 +18,9 @@
  * darf nur Anhaenge enthalten, und nichts darf aus ihm herausfuehren.
  */
 
-const { createHash, randomUUID } = require('crypto');
+const { createHash } = require('crypto');
 const { LIMITS } = require('../../shared/limits');
-const { renameWithRetry } = require('./rename-with-retry');
+const { writeFileAtomic } = require('./atomic-write');
 const {
   ATTACHMENT_KINDS,
   attachmentFileExtension,
@@ -75,15 +75,9 @@ function createChatAttachmentStore({ app, fs, path, log = console, platform = pr
     }
     if (!exists) {
       await fs.mkdir(dir, { recursive: true });
-      const tmp = `${target}.tmp-${randomUUID()}`;
-      await fs.writeFile(tmp, buf);
-      try {
-        // The same transient Windows locks as for the store's files (#472).
-        await renameWithRetry(fs, tmp, target, { platform });
-      } catch (err) {
-        await fs.unlink(tmp).catch(() => {});
-        throw err;
-      }
+      // Flushed before the rename (#1013); the rename retries the same
+      // transient Windows locks as for the store's files (#472).
+      await writeFileAtomic(fs, target, buf, { platform });
     }
 
     const ref = { kind: ATTACHMENT_KINDS.IMAGE, mediaType: attachment.mediaType, file, bytes: buf.length };

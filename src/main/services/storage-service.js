@@ -14,6 +14,7 @@ const {
 } = require('../../shared/contracts/settings');
 const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
 const { APP_LOCALES } = require('../../shared/contracts/enums');
+const { localeFromSystem } = require('../../shared/i18n');
 const {
   maskStoredMcpEnv,
   normalizeKnownTools,
@@ -32,6 +33,7 @@ const {
   storedChatMessagesChanged,
 } = require('./chat-history-normalization');
 const { renameWithRetry, readFileWithRetry } = require('./rename-with-retry');
+const { writeFileAtomic } = require('./atomic-write');
 const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
 const { NOTICE_STORES } = require('../../shared/contracts/notices');
 
@@ -125,17 +127,11 @@ function createStorageService({
 
   async function writeJsonAtomicNow(targetPath, data) {
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
-    const tmp = `${targetPath}.tmp-${randomUUID()}`;
-    await fs.writeFile(tmp, JSON.stringify(data), 'utf8');
-    try {
-      // These files are read all the time (every preferences read, every
-      // chat run), and on Windows a reader, the indexer or a virus scanner
-      // can hold the target for a moment (#472, as for the policy in #419).
-      await renameWithRetry(fs, tmp, targetPath, { platform });
-    } catch (err) {
-      await fs.unlink(tmp).catch(() => {});
-      throw err;
-    }
+    // Flushed before the rename (#1013), and the rename retries: these files
+    // are read all the time (every preferences read, every chat run), and on
+    // Windows a reader, the indexer or a virus scanner can hold the target
+    // for a moment (#472, as for the policy in #419).
+    await writeFileAtomic(fs, targetPath, JSON.stringify(data), { platform });
     if (filesNotSaved.has(targetPath)) reportStoreFile('saved-again', targetPath);
   }
 
@@ -1107,7 +1103,8 @@ function createStorageService({
    * An already existing preferences file without `appLocale`, however, comes
    * from a time when there was only German — quietly turning it to English
    * would be a language change nobody asked for. A missing *file*, in contrast,
-   * means a new installation and therefore English.
+   * means a new installation, which starts in the system's language when the
+   * app speaks it and in English otherwise (#1013).
    *
    * Deliberately without writing: the addition happens on every read and holds
    * even if the migration never gets around to saving. The next
@@ -1118,14 +1115,25 @@ function createStorageService({
     try {
       raw = await fs.readFile(getUIPrefsPath(), 'utf8');
     } catch {
-      return normalizeUiPrefs({});
+      return firstRunUiPrefs();
     }
     return uiPrefsFromFile(raw);
   }
 
+  /** The preferences of an installation that has none yet. */
+  function firstRunUiPrefs() {
+    let systemLocale = '';
+    try {
+      systemLocale = app.getLocale?.() || '';
+    } catch {
+      // Before `ready` there is no locale to read; English it is.
+    }
+    return normalizeUiPrefs({ appLocale: localeFromSystem(systemLocale) });
+  }
+
   function uiPrefsFromFile(raw) {
     const data = parseJson(raw);
-    return isJsonObject(data) ? uiPrefsFromData(data) : normalizeUiPrefs({});
+    return isJsonObject(data) ? uiPrefsFromData(data) : firstRunUiPrefs();
   }
 
   function uiPrefsFromData(data) {
@@ -1143,7 +1151,7 @@ function createStorageService({
       // written back, and every other preference with them (#473). A file
       // that does not parse is moved aside first (#557).
       const data = await readJsonForUpdate(getUIPrefsPath(), isJsonObject);
-      const current = data === null ? normalizeUiPrefs({}) : uiPrefsFromData(data);
+      const current = data === null ? firstRunUiPrefs() : uiPrefsFromData(data);
       const updated = await updater({ ...current });
       const normalized = normalizeUiPrefs(updated);
       await writeJsonAtomic(getUIPrefsPath(), normalized);

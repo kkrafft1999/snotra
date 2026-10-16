@@ -9,11 +9,11 @@ Beim ersten Start hat Snotra Agent weder einen Ordner, in dem es arbeiten kann, 
 
 ## Die Sprache umstellen
 
-Snotra startet auf Englisch. So stellst du die Oberfläche auf Deutsch um:
+[seit 1.24] Snotra startet in der Sprache deines Systems, wenn es sie spricht – Deutsch oder Englisch –, sonst auf Englisch. So stellst du die Sprache der Oberfläche um:
 
 1. Öffne die Einstellungen: auf macOS *Snotra Agent › Settings…*, auf Windows und Linux *View › Settings…*, oder mit `Cmd+,` / `Strg+,`.
-2. Wähle links *General*.
-3. Wähle unter *Interface language* den Eintrag *Deutsch*.
+2. Wähle links *Allgemein* (in der englischen Oberfläche *General*).
+3. Wähle unter *Sprache der Oberfläche* (*Interface language*) den Eintrag *Deutsch* oder *English*.
 
 Fenster und Menüleiste wechseln sofort die Sprache, ohne Neustart. Im selben Bereich schaltest du unter *Erscheinungsbild* zwischen heller und dunkler Oberfläche um.
 

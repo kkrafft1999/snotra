@@ -49,6 +49,17 @@ function normalizeLocale(raw) {
 }
 
 /**
+ * The app language for the system's locale (#1013): `de-DE`, `de_AT` and `de`
+ * all mean German, and a language the app does not speak means the default.
+ * Unlike `normalizeLocale` this one reads the language off a full tag — it
+ * is given what the operating system reports, not what the app wrote itself.
+ */
+function localeFromSystem(raw) {
+  const language = typeof raw === 'string' ? raw.trim().toLowerCase().split(/[-_]/)[0] : '';
+  return LOCALES.includes(language) ? language : DEFAULT_LOCALE;
+}
+
+/**
  * Placeholders of the form `{name}`. A missing value leaves the placeholder
  * standing rather than printing `undefined` — the first is noticed at a glance,
  * the second reads like text.
@@ -161,6 +172,7 @@ module.exports = {
   MESSAGES,
   createTranslator,
   hasKey,
+  localeFromSystem,
   normalizeLocale,
   translate,
   translateMessage,

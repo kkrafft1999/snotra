@@ -215,6 +215,28 @@ test('normalizeSessionForStore defaults missing tokenUsage to zero', () => {
   assert.deepEqual(session.tokenUsage, { prompt: 0, completion: 0, total: 0 });
 });
 
+test('a first run starts in the system language when the app speaks it (#1013)', async (t) => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
+  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  const withLocale = (locale) => createStorageService({
+    app: { getPath: () => tmpDir, getLocale: () => locale },
+    safeStorage: { isEncryptionAvailable: () => false },
+    fs,
+    path,
+    providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),
+    defaultProviderId: 'openai',
+  });
+
+  assert.equal((await withLocale('de-DE').readUIPrefs()).appLocale, 'de');
+  assert.equal((await withLocale('fr-FR').readUIPrefs()).appLocale, 'en');
+
+  // The first write keeps it, and from then on the file decides, not the system.
+  await withLocale('de-DE').updateUIPrefs((prefs) => ({ ...prefs, sidebarWidth: 300 }));
+  const saved = JSON.parse(await fs.readFile(path.join(tmpDir, 'ui-preferences.json'), 'utf8'));
+  assert.equal(saved.appLocale, 'de');
+  assert.equal((await withLocale('en-US').readUIPrefs()).appLocale, 'de');
+});
+
 test('writeJsonAtomic keeps previous file on interrupted write simulation', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);
@@ -223,21 +245,24 @@ test('writeJsonAtomic keeps previous file on interrupted write simulation', asyn
   const target = path.join(tmpDir, 'ui-preferences.json');
   const original = await fs.readFile(target, 'utf8');
 
-  const realWriteFile = fs.writeFile.bind(fs);
+  // The data is written, the flush fails (#1013): the target stays as it was.
+  const realOpen = fs.open.bind(fs);
   let failNext = true;
-  fs.writeFile = async (filePath, data, encoding) => {
-    await realWriteFile(filePath, data, encoding);
+  fs.open = async (filePath, ...rest) => {
+    const handle = await realOpen(filePath, ...rest);
     if (failNext && String(filePath).includes('.tmp-')) {
       failNext = false;
-      throw new Error('simulated crash');
+      handle.sync = async () => { throw new Error('simulated crash'); };
     }
+    return handle;
   };
 
   await assert.rejects(() => storage.writeUIPrefs({ contentPaneVisible: false, appLocale: 'en' }));
-  fs.writeFile = realWriteFile;
+  fs.open = realOpen;
 
   const after = await fs.readFile(target, 'utf8');
   assert.equal(after, original);
+  assert.deepEqual((await fs.readdir(tmpDir)).filter((name) => name.includes('.tmp-')), []);
 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
@@ -598,12 +623,12 @@ test('parallel readChatHistoryStore migrates plaintext once under encryption', a
 
   const storage = makeStorageWithEncryption(tmpDir);
   let writeCount = 0;
-  const realWriteFile = fs.writeFile.bind(fs);
-  fs.writeFile = async (filePath, data, encoding) => {
+  const realOpen = fs.open.bind(fs);
+  fs.open = async (filePath, ...rest) => {
     if (String(filePath).includes('chat-history.json.tmp-')) {
       writeCount += 1;
     }
-    return realWriteFile(filePath, data, encoding);
+    return realOpen(filePath, ...rest);
   };
 
   const results = await Promise.all([
@@ -612,7 +637,7 @@ test('parallel readChatHistoryStore migrates plaintext once under encryption', a
     storage.readChatHistoryStore(),
   ]);
 
-  fs.writeFile = realWriteFile;
+  fs.open = realOpen;
 
   assert.equal(writeCount, 1);
   for (const store of results) {

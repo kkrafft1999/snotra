@@ -1,4 +1,5 @@
 import { onLocaleChange, t, tMessage } from '../i18n.js';
+import { invokeErrorMessage } from '../utils/invoke-error.js';
 import contracts from '../generated/contracts.js';
 import { createDictationField } from './DictationField.js';
 import { openMicrophone } from './microphone-capture.js';
@@ -169,7 +170,7 @@ export function initVoiceRecorder({
     try {
       started = await api.startVoice(id);
     } catch (err) {
-      started = { error: err?.message || t('chat.voice.failed') };
+      started = { error: invokeErrorMessage(err, 'chat.voice.failed') };
     }
     if (id !== generation) return;
     if (started?.error) {
@@ -240,7 +241,7 @@ export function initVoiceRecorder({
       try {
         result = await api.stopVoice(id);
       } catch (err) {
-        result = { turns: [], settledBytes, error: err?.message || t('chat.voice.failed') };
+        result = { turns: [], settledBytes, error: invokeErrorMessage(err, 'chat.voice.failed') };
       }
       if (id !== generation) return;
       // The answer carries every turn; it supersedes what was pushed.
@@ -272,7 +273,7 @@ export function initVoiceRecorder({
     try {
       result = await api.transcribeAudio(wav);
     } catch (err) {
-      result = { error: err?.message || t('chat.voice.failed') };
+      result = { error: invokeErrorMessage(err, 'chat.voice.failed') };
     }
     if (id !== generation) return null;
     if (result?.error) return result.error;

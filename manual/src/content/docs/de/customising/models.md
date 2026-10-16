@@ -54,7 +54,7 @@ LM Studio, MLX-LM, llama.cpp, vLLM, ein Gateway deiner Organisation oder ein Rou
 | *Zusätzliche Header* | Ein `Name: Wert` pro Zeile, für ein Gateway-Token oder einen Mandanten-Header. Verschlüsselt gespeichert wie ein Schlüssel und nicht mehr angezeigt. |
 | *API-Stil* | *Nur Chat Completions* passt zu fast jedem Server. Wähle den mit `/responses` nur, wenn der Dienst ihn anbietet; Snotra fällt sonst einmal zurück. |
 | *TLS-Zertifikat ignorieren (insecure)* | Nur für ein selbst signiertes oder internes Zertifikat, dem du vertraust. |
-| *Tools mitschicken* | Standardmäßig an. Schalte es für einen Server aus, der an Tool-Beschreibungen scheitert — dann bleibt es ein reiner Chat, ohne Dateien und Befehle. |
+| *Tools mitschicken* | Standardmäßig an. Schalte es für einen Server aus, der an Tool-Beschreibungen scheitert — dann bleibt es ein reiner Chat, ohne Dateien und Befehle. [seit 1.24] Solange so ein Modell gewählt ist, steht in der Pille neben dem Eingabefeld *Keine Tools*. |
 | *Bild-Anhänge erlauben* | Standardmäßig aus. Schalte es nur ein, wenn das Modell Bilder versteht. |
 | *Max. Ausgabe-Tokens* | [seit 1.21.1] Standardmäßig leer: Der Server entscheidet, wie lang eine Antwort werden darf. Trag eine Zahl ein, wenn Antworten zu früh abbrechen oder ein Modell gar nicht aufhört. Snotra schickt sie mit jeder Anfrage mit, als `max_tokens` (Chat Completions) oder `max_output_tokens` (Responses). |
 
@@ -72,4 +72,4 @@ Ein Server gilt als lokal, wenn seine Adresse `localhost`, `127.0.0.x` oder `::1
 - ***… steht schon in der Liste.*** Anbieter und Modell stehen schon in der Liste, unter dem Namen aus der Meldung; bearbeite stattdessen diese Zeile. Die Ausnahme ist ein Eintrag, dem nur der Schlüssel fehlt: Fügst du ihn mit Schlüssel noch einmal hinzu, wird er ergänzt.
 - ***Die Antwort wurde abgeschnitten: Das Modell hat seine Ausgabegrenze erreicht.*** Der Server hat die Antwort an seiner Ausgabegrenze gestoppt, und viele lokale Server setzen eine kleine. Erhöhe *Max. Ausgabe-Tokens* für diesen Eintrag; ein paar Tausend reichen meist.
 - ***Gib eine ganze Zahl von 1 bis 1.000.000 ein*** unter *Max. Ausgabe-Tokens*: Das Feld nimmt nur Ziffern oder gar nichts, und der Dialog bleibt offen, bis der Wert passt.
-- **Ein Modell antwortet immer nur mit Text.** Entweder ist *Tools mitschicken* aus, oder das Modell kann keine Tools benutzen. Snotra braucht Tools, um Dateien zu lesen und zu ändern.
+- **Ein Modell antwortet immer nur mit Text.** Entweder ist *Tools mitschicken* aus — die Pille neben dem Eingabefeld zeigt dann *Keine Tools* —, oder das Modell kann keine Tools benutzen. Snotra braucht Tools, um Dateien zu lesen und zu ändern.

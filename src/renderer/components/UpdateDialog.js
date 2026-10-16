@@ -20,6 +20,7 @@
 import contracts from '../generated/contracts.js';
 import { t, tMessage, onLocaleChange } from '../i18n.js';
 import { formatMegabytes, formatSize, inertHtmlFragment, markdownToSafeHtml } from '../utils/helpers.js';
+import { invokeErrorMessage } from '../utils/invoke-error.js';
 
 // Messages stay keys until the dialog draws them (#353), so an error on screen
 // follows a language change like the rest of the dialog. Main's own reasons
@@ -215,7 +216,7 @@ export function initUpdateDialog({ api }) {
     try {
       result = await api.downloadUpdate();
     } catch (err) {
-      result = { ok: false, error: err?.message || t('update.download.failed') };
+      result = { ok: false, error: invokeErrorMessage(err, 'update.download.failed') };
     }
     if (result?.canceled) {
       render('available');
@@ -246,7 +247,7 @@ export function initUpdateDialog({ api }) {
     try {
       result = await api.installUpdate();
     } catch (err) {
-      result = { ok: false, error: err?.message || t('update.install.failed') };
+      result = { ok: false, error: invokeErrorMessage(err, 'update.install.failed') };
     }
     // Im Erfolgsfall beendet sich die App — hierher kommt nur der Fehlerfall.
     if (!result?.ok) render('error', result?.error || createMessage('update.install.failed'));

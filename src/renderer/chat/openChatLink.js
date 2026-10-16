@@ -1,5 +1,6 @@
 import { isOpenableLink } from '../utils/helpers.js';
 import { t, tMessage } from '../i18n.js';
+import { invokeErrorMessage } from '../utils/invoke-error.js';
 import manualAddress from '../generated/manual-address.js';
 
 const { parseManualAddress } = manualAddress;
@@ -48,6 +49,6 @@ export async function openChatLink(api, href) {
     if (result?.ok) return { ok: true };
     return { ok: false, error: result?.error ? tMessage(result.error) : t('chat.link.error.failed') };
   } catch (e) {
-    return { ok: false, error: e?.message || t('chat.link.error.failed') };
+    return { ok: false, error: tMessage(invokeErrorMessage(e, 'chat.link.error.failed')) };
   }
 }

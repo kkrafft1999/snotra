@@ -22,7 +22,7 @@ This page is the overview. Every row links to the page that explains it.
 | Memory | Keeps facts for this folder or for you across chats | [Let Snotra remember](../../customising/memory/) |
 | Skills | Follows instructions you give it as skills — built in, for one folder or for all of them — and can write a new skill into the open folder | [Use skills](../../customising/skills/), [Let Snotra write a skill](../../customising/write-a-skill/) |
 | MCP servers | Uses the tools of MCP servers you connect: tickets, a database, a calendar, anything a server offers | [Connect an MCP server](../../customising/mcp-servers/) |
-| Models | Works with OpenAI, Anthropic and Google in the cloud, and with Ollama and MLX-LM on your machine | [Connect a model](../../getting-started/connect-a-model/) |
+| Models | Works with OpenAI, Anthropic and Google in the cloud; with Ollama, LM Studio and any server with an OpenAI-compatible interface on your machine or in your network; and through gateways such as OpenRouter | [Connect a model](../../getting-started/connect-a-model/) |
 | Questions about Snotra | Looks the answer up in this manual and links the page it used | [Set up the built-in tools](../../customising/built-in-tools/#the-built-in-tools) |
 
 What a chat may do on its own depends on its mode and on the risk class of each tool — see [Why Snotra asks before it acts](../../safety/why-snotra-asks/).

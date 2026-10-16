@@ -1,5 +1,6 @@
 import contracts from '../generated/contracts.js';
 import { t, tPlural, tMessage, setLocale, getLocale, applyTranslations, onLocaleChange } from '../i18n.js';
+import { invokeErrorDetail, invokeErrorMessage } from '../utils/invoke-error.js';
 import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
 import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
 import { initWorkspaceSandboxSetting } from './WorkspaceSandboxSetting.js';
@@ -1597,7 +1598,7 @@ export function initSettingsModal(deps) {
     const generation = openGeneration;
     imageModelListing = Promise.resolve()
       .then(() => api.listImageModels())
-      .catch((err) => ({ error: err?.message || '' }))
+      .catch((err) => ({ error: invokeErrorDetail(err) }))
       .then((result) => {
         if (generation !== openGeneration) return;
         imageModelListing = null;
@@ -1745,7 +1746,7 @@ export function initSettingsModal(deps) {
     try {
       result = await api.setWebSearchApiKey(value);
     } catch (e) {
-      setWebSearchStatus(e?.message || t('settings.webSearch.saveFailed'), true);
+      setWebSearchStatus(tMessage(invokeErrorMessage(e, 'settings.webSearch.saveFailed')), true);
       return;
     }
     if (!result?.ok) {
@@ -2050,7 +2051,7 @@ export function initSettingsModal(deps) {
   }
 
   function showLoadFailed(err) {
-    setModalError(t('settings.loadFailed', { error: err?.message || t('settings.loadFailed.unknown') }));
+    setModalError(t('settings.loadFailed', { error: invokeErrorDetail(err) || t('settings.loadFailed.unknown') }));
   }
 
   /**
@@ -2311,7 +2312,7 @@ export function initSettingsModal(deps) {
       setModelStatus(tPlural('addModel.models.found', models.length), false);
     } catch (err) {
       if (generation !== modelRequestGeneration) return;
-      setModelStatus(t('addModel.models.error', { error: err.message || t('addModel.models.loadFailed') }), true);
+      setModelStatus(t('addModel.models.error', { error: invokeErrorDetail(err) || t('addModel.models.loadFailed') }), true);
     } finally {
       if (generation === modelRequestGeneration) btnLoadModels.disabled = false;
     }
@@ -2573,7 +2574,7 @@ export function initSettingsModal(deps) {
         // stays open and says so rather than closing over a stale model menu.
         if (generation === openGeneration) {
           setModalError(t('settings.savedButNotReloaded', {
-            error: err?.message || t('settings.loadFailed.unknown'),
+            error: invokeErrorDetail(err) || t('settings.loadFailed.unknown'),
           }));
         }
         return;

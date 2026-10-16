@@ -58,12 +58,15 @@ test('an unreadable chat history shows the banner until a save goes through agai
   model.queueAnswer({ match: 'SAVE-2', text: 'About 2 cm deep.' });
   await sendChat(page, 'And how deep? SAVE-2', { explain });
   await poll(async () => (await banner(page)) === null, { what: 'the banner to go', explain });
-  await poll(async () => {
-    const saved = await readFile(historyFile, 'utf8').catch(() => '');
-    return saved.length > 0;
-  }, { what: 'a saved history', explain });
-  const history = await page.evaluate(() => window.electronAPI.getChatHistory());
-  const contents = history.sessions.flatMap((s) => s.messages.map((m) => m.content)).join('\n');
-  assert.match(contents, /SAVE-1/, 'the question asked while saves failed is saved too');
-  assert.match(contents, /SAVE-2/);
+  // Waits for the state with SAVE-2, not for any file: on Windows a write
+  // from the failed round may still be retrying its rename onto the folder
+  // (#472) and land first, with the older state. The writes to one file run
+  // one after the other, so the newer one follows it.
+  const savedContents = async () => {
+    const history = await page.evaluate(() => window.electronAPI.getChatHistory());
+    return (history?.sessions || []).flatMap((s) => s.messages.map((m) => m.content)).join('\n');
+  };
+  await poll(async () => /SAVE-2/.test(await savedContents()), { what: 'a saved history with SAVE-2', explain });
+  assert.ok((await readFile(historyFile, 'utf8')).length > 0, 'the history is on disk again');
+  assert.match(await savedContents(), /SAVE-1/, 'the question asked while saves failed is saved too');
 });

@@ -8,6 +8,7 @@ const {
   LOCALES,
   MESSAGES,
   createTranslator,
+  localeFromSystem,
   normalizeLocale,
   translate,
   translateMessage,
@@ -241,6 +242,16 @@ test('English is the default; anything unknown falls back to it', () => {
   assert.equal(normalizeLocale('de-DE'), 'en');
   assert.equal(normalizeLocale(undefined), 'en');
   assert.equal(normalizeLocale(42), 'en');
+});
+
+test('the system locale picks a language the app speaks, by its language subtag (#1013)', () => {
+  assert.equal(localeFromSystem('de'), 'de');
+  assert.equal(localeFromSystem('de-DE'), 'de');
+  assert.equal(localeFromSystem('de_AT'), 'de');
+  assert.equal(localeFromSystem('EN-gb'), 'en');
+  assert.equal(localeFromSystem('fr-FR'), 'en');
+  assert.equal(localeFromSystem(''), 'en');
+  assert.equal(localeFromSystem(undefined), 'en');
 });
 
 test('placeholders are filled in, missing ones stay visible', () => {

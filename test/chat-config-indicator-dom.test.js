@@ -29,13 +29,14 @@ function config(overrides = {}) {
   };
 }
 
-async function setup({ locale = 'en', answers = [config()], messages = [] } = {}) {
+async function setup({ locale = 'en', answers = [config()], messages = [], llmState = null } = {}) {
   const dom = setupRendererDom();
   const { initChatConfigIndicator } = await importRenderer('components', 'ChatConfigIndicator.js');
   const { appStore } = await importRenderer('state', 'store.js');
   const { setLocale } = await importRenderer('i18n.js');
   setLocale(locale);
   appStore.chatMessages = messages;
+  if (llmState) appStore.llmState = llmState;
   const requests = [];
   const opened = [];
   const queue = [...answers];
@@ -57,7 +58,7 @@ async function setup({ locale = 'en', answers = [config()], messages = [] } = {}
     byId('btn-chat-config').click();
     await flush();
   };
-  return { dom, document, byId, indicator, requests, opened, open };
+  return { dom, document, byId, indicator, requests, opened, open, appStore };
 }
 
 test('the pill counts the skills that are on and names itself by its label', async (t) => {
@@ -269,4 +270,42 @@ test('a tool or skill switched on a card is marked as this chat\'s', async (t) =
   const skill = [...document.querySelectorAll('#chat-config-popup .chat-config-row--skill')]
     .find((item) => item.textContent.includes('pdf-export'));
   assert.equal(skill.querySelector('.chat-config-tag').title, 'Switched on for this chat on a card; the setting stays as it is.');
+});
+
+/** An OpenAI-compatible entry with "Send tools along" on or off (#1013). */
+function llmStateWithTools(sendTools) {
+  return {
+    activePresetId: 'local',
+    presets: [{ id: 'local', providerId: 'openai-compatible', configured: true, connection: { sendTools } }],
+  };
+}
+
+test('an entry that sends no tools says so on the pill and in the popover (#1013)', async (t) => {
+  const { dom, byId, open, opened } = await setup({ llmState: llmStateWithTools(false) });
+  t.after(dom.cleanup);
+  assert.equal(byId('chat-config-label').textContent, 'No tools');
+  assert.equal(byId('chat-config-wrap').dataset.noTools, 'true');
+  assert.match(byId('btn-chat-config').getAttribute('aria-label'), /^This model gets no tools – /);
+  await open();
+  const popup = byId('chat-config-popup');
+  assert.match(popup.textContent, /This model gets no tools: “Send tools along” is switched off/);
+  // No list of switched-on tools that would never reach the model.
+  assert.equal(popup.querySelector('.chat-config-summary'), null);
+  assert.equal(popup.textContent.includes('web_search'), false);
+  const link = [...popup.querySelectorAll('.chat-config-link')].find((b) => b.dataset.panel === 'models');
+  assert.equal(link.textContent, 'Change it in Settings › Models');
+  link.click();
+  assert.deepEqual(opened.at(-1), { panel: 'models', target: null });
+});
+
+test('switching to an entry with tools brings the count back without a new read', async (t) => {
+  const { dom, byId, indicator, appStore, requests } = await setup({ locale: 'de', llmState: llmStateWithTools(false) });
+  t.after(dom.cleanup);
+  assert.equal(byId('chat-config-label').textContent, 'Keine Tools');
+  const reads = requests.length;
+  appStore.llmState = llmStateWithTools(true);
+  indicator.redraw();
+  assert.equal(byId('chat-config-label').textContent, '2 Skills');
+  assert.equal(byId('chat-config-wrap').dataset.noTools, undefined);
+  assert.equal(requests.length, reads);
 });
