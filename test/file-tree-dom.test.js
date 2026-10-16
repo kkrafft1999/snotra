@@ -572,6 +572,79 @@ test('die offene Vorschau laedt nach, wenn sich ihr Ordner meldet', async (t) =>
   assert.equal(paneText(), 'neu');
 });
 
+// #1018: the open file's folder is collapsed — no row, so the pane goes by path.
+async function mountWithNotesInCollapsedDocs(content) {
+  const mounted = await mountTree({
+    readFile: async () => ({ content: content.value, size: content.value.length }),
+  });
+  const { container } = mounted;
+  rowFor(container, '/ws/docs').click(); // expand
+  await flush();
+  rowFor(container, '/ws/docs/notes.md').click();
+  await flush();
+  rowFor(container, '/ws/docs').click(); // collapse, selection on the folder
+  await flush();
+  return mounted;
+}
+
+test('the open file reloads when its collapsed folder reports', async (t) => {
+  const content = { value: 'old' };
+  const { dom, appStore, emitTreeChanged } = await mountWithNotesInCollapsedDocs(content);
+  t.after(dom.cleanup);
+  assert.equal(paneText(), 'old');
+
+  content.value = 'new';
+  await emitTreeChanged({ directories: ['/ws/docs'], complete: true });
+
+  assert.equal(paneText(), 'new');
+  assert.equal(appStore.selectedPath, '/ws/docs', 'the selection stays where it was');
+});
+
+test('the open file closes when it is removed while its folder is collapsed', async (t) => {
+  const { dom, appStore, entries, emitTreeChanged } = await mountWithNotesInCollapsedDocs({ value: 'old' });
+  t.after(dom.cleanup);
+
+  entries['/ws/docs'] = [];
+  await emitTreeChanged({ directories: ['/ws/docs'], complete: true });
+
+  assert.equal(previewShown(), false);
+  assert.equal(appStore.selectedPath, '/ws/docs', 'no row, nothing to clear');
+});
+
+test('a report that cannot say where checks the open file in a collapsed folder too', async (t) => {
+  const { dom, entries, emitTreeChanged } = await mountWithNotesInCollapsedDocs({ value: 'old' });
+  t.after(dom.cleanup);
+
+  entries['/ws/docs'] = [];
+  await emitTreeChanged({ directories: [], complete: false });
+
+  assert.equal(previewShown(), false);
+});
+
+test('a collapsed folder cut off in main does not take the open file for gone', async (t) => {
+  const content = { value: 'old' };
+  const { dom, entries, hidden, emitTreeChanged } = await mountWithNotesInCollapsedDocs(content);
+  t.after(dom.cleanup);
+
+  entries['/ws/docs'] = [];
+  hidden['/ws/docs'] = 5000;
+  content.value = 'new';
+  await emitTreeChanged({ directories: ['/ws/docs'], complete: true });
+
+  assert.equal(paneText(), 'new');
+});
+
+test('a report about another folder does not list the collapsed one', async (t) => {
+  const { dom, calls, emitTreeChanged } = await mountWithNotesInCollapsedDocs({ value: 'old' });
+  t.after(dom.cleanup);
+
+  calls.readDirectory.length = 0;
+  await emitTreeChanged({ directories: ['/elsewhere'], complete: true });
+
+  assert.deepEqual(calls.readDirectory, []);
+  assert.equal(paneText(), 'old');
+});
+
 test('ohne geoeffneten Ordner passiert nichts', async (t) => {
   const { dom, appStore, calls, emitTreeChanged } = await mountTree();
   t.after(dom.cleanup);
