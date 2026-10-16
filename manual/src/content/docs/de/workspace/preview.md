@@ -34,9 +34,11 @@ Eine `.md`-Datei öffnet sich formatiert: Überschriften, Listen, Tabellen, Code
 
 Quellcode und Konfigurationsdateien öffnen sich in Farbe — JavaScript und TypeScript, JSON, YAML, Python, Shell-Skripte, HTML und CSS und viele mehr, gewählt nach dem Dateinamen. Die Farben folgen dem hellen und dunklen Erscheinungsbild. Was du markierst und kopierst, ist die Datei genau so, wie sie ist.
 
-![Die mittlere Spalte mit src/kalender.js: der Code mit Schlüsselwörtern, Zeichenketten, Kommentaren und Funktionsnamen in eigenen Farben, im Kopf die Dateigröße.](screenshots/code-preview.webp)
+![Die mittlere Spalte mit src/kalender.js: der Code mit Schlüsselwörtern, Zeichenketten, Kommentaren und Funktionsnamen in eigenen Farben, im Kopf die Schaltfläche Bearbeiten und die Dateigröße.](screenshots/code-preview.webp)
 
 Reiner Text und Logs bleiben schlicht. Eine Datei über 512 KB erscheint ohne Farben, damit sie sofort aufgeht.
+
+[seit 1.24] *Bearbeiten* im Kopf macht aus dem Text einen Editor, der von selbst speichert — siehe [Eine Textdatei bearbeiten](../edit-a-file/).
 
 ## Bilder
 

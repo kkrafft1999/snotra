@@ -316,6 +316,10 @@ initFolderSandboxShield({ toolPermissions, onOpenSandboxSettings: openSandboxSet
 // Runs per chat (#320): cards and runs report changes, the history column
 // marks its rows. It is built further down, hence the indirection.
 let syncRunMarkers = () => {};
+// The user and the agent never write the same file at once (#863): while a
+// chat run is active the preview does not edit. The tree is built further
+// down as well.
+let syncPreviewEditingLock = () => {};
 const approvalCards = initToolApprovalCards({
   api,
   appStore,
@@ -447,7 +451,10 @@ const chatStream = initChatStream({
     if (chatHistory.isHistoryOpen()) void chatHistory.renderHistoryList();
     void chatConfig.refresh();
   },
-  onRunsChanged: () => syncRunMarkers(),
+  onRunsChanged: () => {
+    syncRunMarkers();
+    syncPreviewEditingLock();
+  },
 });
 
 // Der Resizer entsteht erst in der Startsequenz, der Verlauf braucht ihn aber
@@ -573,6 +580,7 @@ const fileTree = initFileTree({
   revealChatPanel,
   workspacePaths,
 });
+syncPreviewEditingLock = () => fileTree.setPreviewEditingBlocked(chatStream.runs.anyRunning());
 
 // Menu "View > Preview or Source" or Cmd/Ctrl+Shift+M (#344). The file view
 // decides; for anything but a Markdown file or an SVG (#345) it is a no-op.

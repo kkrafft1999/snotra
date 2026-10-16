@@ -2670,5 +2670,7 @@ export function initFileTree(deps) {
     choosePreviewHistory: (token, index) => contentPane.chooseFromHistory(token, index),
     /** A menu command for the file on show, e.g. 'toggle-source' (#344). */
     runPreviewCommand: (name) => contentPane.runCommand(name),
+    /** No editing in the preview while a chat run is active (#863). */
+    setPreviewEditingBlocked: (blocked) => contentPane.setEditingBlocked(blocked),
   };
 }

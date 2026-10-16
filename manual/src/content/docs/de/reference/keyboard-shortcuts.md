@@ -68,6 +68,7 @@ Klick in den Baum oder geh mit `Tab` dorthin. Die ganze Tabelle mit dem, was jed
 | --- | --- |
 | Ein PDF, ein Bild oder eine Markdown-Datei vergrößern · verkleinern · zurück auf die angepasste Größe | `Cmd` und `+` · `Cmd` und `−` · `Cmd` und `0` (`Strg` unter Windows und Linux) |
 | In einem PDF: erste Seite · letzte Seite | `Pos1` · `Ende` |
+| Beim Bearbeiten einer Textdatei [seit 1.24]: sofort speichern · Bearbeiten beenden | `Cmd+S` / `Strg+S` · `Esc` |
 
 Die Zoom-Tasten wirken auf das Dokument nur, solange die Vorschau den Fokus hat — klick zuerst hinein. Sonst zoomen sie das ganze Fenster, wie *Ansicht › Vergrößern*. Eine Markdown-Datei kehrt mit `Cmd+0` auf 100 % zurück, ein PDF oder ein Bild auf seine angepasste Größe. Der Markdown-Zoom gilt [seit 1.19]. Einzelheiten in [Eine Datei ansehen](../../workspace/preview/).
 

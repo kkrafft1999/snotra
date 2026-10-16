@@ -15,7 +15,7 @@ const { formatBytes } = require('../../shared/runtime/format-bytes');
 const { isAlwaysHiddenEntryName, isListedEntryName } = require('../../shared/runtime/hidden-entries');
 const { createTranslator } = require('../../shared/i18n');
 const { constants: fsConstants } = require('fs');
-const { randomBytes } = require('crypto');
+const { createHash, randomBytes } = require('crypto');
 const { readRegularFile, NOT_A_REGULAR_FILE_ERROR } = require('./read-regular-file');
 const { renameWithRetry } = require('./rename-with-retry');
 const { OUTSIDE_WORKSPACE } = require('./outside-access');
@@ -3643,6 +3643,60 @@ function createFsService({
     return { content: buffer.toString('utf8'), size: stats.size, modified: stats.mtimeMs };
   }
 
+  /**
+   * A text file the user edited in the preview (#863). The checks are the
+   * agent's write tool's — inside the workspace, through links checked again
+   * at the write, the write size limit, atomic — but there is no recovery
+   * copy: an autosave every second would fill the trash, and the user sees
+   * what they are overwriting.
+   *
+   * `baseHash` is the SHA-256 (hex) of the text the editor started from. The
+   * file on disk is compared with it first; a file someone else changed
+   * meanwhile is not overwritten but answered with `conflict: 'changed'`,
+   * one that is gone with `conflict: 'deleted'`. `force` writes anyway — the
+   * user chose to keep their version. A file that is not valid UTF-8 is never
+   * written: the preview decoded it with replacement characters, and saving
+   * that text would destroy the bytes it could not show.
+   *
+   * @param {string} absPath  checked against the workspace by the caller
+   * @param {string} content
+   * @param {{ root: string, baseHash?: string, force?: boolean }} options
+   * @returns {Promise<{ok: true, size: number, modified: number}
+   *   | {conflict: 'changed'|'deleted'}
+   *   | {error: string, reason: 'too-large'|'encoding'|'not-file'|'invalid'}>}
+   *   An unexpected failure (permission, a full disk) is thrown.
+   */
+  async function writeFileFromUser(absPath, content, { root, baseHash = '', force = false } = {}) {
+    if (typeof content !== 'string') return { error: 'No text to write.', reason: 'invalid' };
+    if (Buffer.byteLength(content, 'utf8') > MAX_WRITE_FILE_BYTES) {
+      return { error: `Content too large (>${MAX_WRITE_FILE_BYTES} bytes).`, reason: 'too-large' };
+    }
+    let current = null;
+    try {
+      current = await readRegularFile(fs, absPath, { maxBytes: Math.max(MAX_READ_FILE_BYTES, MAX_WRITE_FILE_BYTES) });
+    } catch (e) {
+      if (e.code !== 'ENOENT') throw e;
+    }
+    if (current?.notFile) return { error: 'Not a regular file.', reason: 'not-file' };
+    if (!current && !force) return { conflict: 'deleted' };
+    if (current?.buffer && !Buffer.from(current.buffer.toString('utf8'), 'utf8').equals(current.buffer)) {
+      return { error: 'The file is not valid UTF-8.', reason: 'encoding' };
+    }
+    if (current && !force) {
+      // Too large to compare, or different: either way not what the editor
+      // started from.
+      const onDisk = current.buffer ? createHash('sha256').update(current.buffer).digest('hex') : '';
+      if (onDisk !== baseHash) return { conflict: 'changed' };
+    }
+    // Checked again right before the write: a run in the sandbox may have
+    // put a link in the way since the caller looked (#642).
+    const checked = await assertPathAccessibleInWorkspace(root, absPath);
+    if (checked.error) return { error: checked.error, reason: 'refused' };
+    await writeFileAtomic(absPath, content, root);
+    const stats = await fs.stat(absPath);
+    return { ok: true, size: stats.size, modified: stats.mtimeMs };
+  }
+
   return {
     containsPath,
     resolveWorkspacePath,
@@ -3675,6 +3729,7 @@ function createFsService({
     inspectImportSources,
     importExternalItems,
     readFilePreview,
+    writeFileFromUser,
     readWorkspaceImage,
     readWorkspacePdf,
     // The same checks for any file an HTML page loads (#479).

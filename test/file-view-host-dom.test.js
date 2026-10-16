@@ -437,10 +437,12 @@ test('save runs the editor save first, and a failed save keeps the editor', asyn
   });
 
   assert.equal(await host.open(item('b.txt')), false, 'save failed');
+  // Saved without asking first (#863), and once more for the answer 'save'.
+  assert.equal(saves.length, 2);
   assert.equal(log[0].unmounted, false);
   result = true;
   assert.equal(await host.open(item('b.txt')), true);
-  assert.equal(saves.length, 2);
+  assert.equal(saves.length, 3);
   assert.equal(log[0].unmounted, true);
 });
 

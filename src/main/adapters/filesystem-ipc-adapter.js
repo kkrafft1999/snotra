@@ -209,6 +209,30 @@ function createFilesystemIpcAdapter({
         return { error: err.message, reason: unreadableReason(err) };
       }
     },
+    // A file the user edited in the preview (#863). The path goes through the
+    // agent's write check — workspace, links, global skill folders — as a
+    // path relative to the open folder, never as an outside root: the
+    // preview only shows files of the workspace. What the service answers is
+    // passed on; a thrown error becomes a reason of unreadableReason().
+    async writeFile(filePath, content, options) {
+      const workspaceRoot = getActiveWorkspaceRoot();
+      if (!workspaceRoot) return { error: ui()('fs.error.noWorkspace'), reason: 'failed' };
+      const rel = typeof filePath === 'string' && path.isAbsolute(filePath) ? path.relative(workspaceRoot, filePath) : '';
+      if (!rel || rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
+        return { error: 'Outside the open folder.', reason: 'refused' };
+      }
+      const target = await fsService.resolveWorkspacePathForAccess(workspaceRoot, rel);
+      if (target.error) return { error: target.error, reason: 'refused' };
+      try {
+        return await fsService.writeFileFromUser(target.absPath, content, {
+          root: target.root,
+          baseHash: typeof options?.baseHash === 'string' ? options.baseHash : '',
+          force: options?.force === true,
+        });
+      } catch (err) {
+        return { error: err.message, reason: unreadableReason(err) };
+      }
+    },
   };
 }
 

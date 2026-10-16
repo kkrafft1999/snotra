@@ -34,9 +34,11 @@ A `.md` file opens formatted: headings, lists, tables, code. *Preview | Source* 
 
 Source code and configuration files open with colours — JavaScript and TypeScript, JSON, YAML, Python, shell scripts, HTML and CSS and many more, chosen by the file name. The colours follow the light and dark theme. What you select and copy is the file exactly as it is.
 
-![The middle column with src/calendar.js: the code with keywords, strings, comments and function names in their own colours, and the file size in the header.](screenshots/code-preview.webp)
+![The middle column with src/calendar.js: the code with keywords, strings, comments and function names in their own colours, and in the header the button Edit and the file size.](screenshots/code-preview.webp)
 
 Plain text and logs stay plain. A file larger than 512 KB is shown without colours, so that it opens at once.
+
+[since 1.24] *Edit* in the header turns the text into an editor that saves by itself — see [Edit a text file](../edit-a-file/).
 
 ## Images
 

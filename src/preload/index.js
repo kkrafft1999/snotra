@@ -42,6 +42,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   readDirectory: (dirPath, options) =>
     ipcRenderer.invoke(REQ.FS_READ_DIRECTORY, dirPath, { showHidden: options?.showHidden === true }),
   readFile: (filePath) => ipcRenderer.invoke(REQ.FS_READ_FILE, filePath),
+  // The user's own edit of a text file in the preview (#863); only the flags cross over.
+  writeFile: (filePath, content, options) => ipcRenderer.invoke(REQ.FS_WRITE_FILE, filePath, content, {
+    baseHash: typeof options?.baseHash === 'string' ? options.baseHash : '',
+    force: options?.force === true,
+  }),
   // Bild aus dem Arbeitsordner fuer eine Chat-Antwort (Issue #244).
   readWorkspaceImage: (imagePath) => ipcRenderer.invoke(REQ.FS_READ_WORKSPACE_IMAGE, imagePath),
   // PDF in the file preview (#346): the file's bytes, and the data pdf.js asks for.

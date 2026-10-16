@@ -5,19 +5,24 @@
 // the registry, the header with name and size, the file info card as the last
 // fallback, and the lifecycle of the active view — mount, update, unmount.
 //
-// **Unsaved changes.** An editor can hold changes that are not on disk. Every
-// path that would replace or close it — another file, another folder, the file
-// deleted — goes through `askToLeave()`, and only there. The answer comes from
+// **Unsaved changes.** An editor can hold changes that are not on disk — the
+// text editor of the plain-text view (#863) between two autosaves, or after a
+// save that failed. Every path that would replace or close it — another file,
+// another folder, the file deleted — goes through `askToLeave()`, and only
+// there. It saves first (`instance.save()`); only when that fails does it ask
 // `confirmLeave({ file, reason })`, which resolves to 'save', 'discard' or
-// 'cancel'. The dialog behind it belongs to the first editor — there is none:
-// editing in the preview was dropped on 2026-09-26 (#226), the paths stay so
-// that the question does not have to be reopened in the host. Until then the
-// default keeps the buffer, because a lost edit is worse than a pane that
-// stays where it is. Reasons: 'switch-file', 'switch-folder', 'file-removed'.
+// 'cancel'. The app has no such dialog: the default keeps the buffer, because
+// a lost edit is worse than a pane that stays where it is, and the editor's
+// own bar offers to retry or to discard. Reasons: 'switch-file',
+// 'switch-folder', 'file-removed'. A file removed under unsaved changes stays
+// on show; once the editor reports it holds nothing unsaved any more, the
+// pane closes after all.
 //
-// Writing would go through the host as well, so that the host knows what is on
-// disk after a save and does not hand it back to the editor as an external
-// change.
+// Writing goes through the host as well (`context.writeFile`), so that the
+// host knows what is on disk after a save and does not hand it back to the
+// editor as an external change. While a chat run is active, editing is off
+// (`setEditingBlocked`), so that the user and the agent never write the same
+// file at once.
 //
 // **Leaving the view from inside.** A view may point at another file — a link
 // in a Markdown document (#344). It asks through `context.openFile(path)`; the
@@ -105,6 +110,8 @@ export function createFileViewHost({
   // Every menu shown draws a number; an answer for an older one is dropped.
   let historyMenuToken = 0;
   const historyNav = buildHistoryNav();
+  // A chat run is active (#863): views that edit stay read-only.
+  let editingBlocked = false;
 
   function teardown() {
     const shown = current;
@@ -439,10 +446,40 @@ export function createFileViewHost({
       },
       changes,
       setDirty: (dirty) => {
-        if (current === shown && view.kind === 'editor') shown.dirty = Boolean(dirty);
+        if (current !== shown || view.kind !== 'editor') return;
+        shown.dirty = Boolean(dirty);
+        // The file went away under unsaved changes and the user gave them up.
+        if (!shown.dirty && shown.orphaned) showWelcome();
       },
+      // Editors only (#863): the user's text, written through main's checks.
+      // `options` is `{ baseHash, force }`; the answer is main's.
+      // Without a write channel there is nothing to edit with.
+      writeFile: typeof api.writeFile !== 'function' ? undefined : async (text, options) => {
+        if (current !== shown) return { error: 'stale', reason: 'failed' };
+        const written = await api.writeFile(shown.file.path, text, options);
+        if (current === shown && written?.ok) {
+          shown.content = text;
+          shown.orphaned = false;
+          shown.file = { ...shown.file, size: written.size, modified: written.modified ?? shown.file.modified };
+          renderHeader();
+        }
+        return written;
+      },
+      // The file as it is on disk now — for an editor that takes that version.
+      readFile: async () => {
+        if (current !== shown) return { error: 'stale', reason: 'failed' };
+        const read = await api.readFile(shown.file.path);
+        if (current === shown && read && !read.error) {
+          shown.content = read.content;
+          shown.file = { ...shown.file, size: read.size, modified: read.modified ?? shown.file.modified };
+          renderHeader();
+        }
+        return read;
+      },
+      isEditingBlocked: () => editingBlocked,
     };
 
+    const blockedAtMount = editingBlocked;
     let instance;
     try {
       instance = await view.mount(hostEl, context);
@@ -458,6 +495,8 @@ export function createFileViewHost({
       return;
     }
     shown.instance = instance;
+    // The lock may have moved while the view was mounting.
+    if (editingBlocked !== blockedAtMount) instance?.setEditingBlocked?.(editingBlocked);
     syncChangesSwitch(shown, { focus: focusSwitch });
   }
 
@@ -471,6 +510,13 @@ export function createFileViewHost({
     if (!shown?.instance || !shown.dirty) return 'clean';
     if (pendingAsk) return pendingAsk;
     pendingAsk = (async () => {
+      // Autosave (#863): what can be saved is saved, without a question.
+      if (await saveOf(shown)) {
+        if (current !== shown) return 'clean';
+        shown.dirty = false;
+        return 'saved';
+      }
+      if (current !== shown || !shown.dirty) return 'clean';
       let choice;
       try {
         choice = await confirmLeave({ file: { ...shown.file }, reason });
@@ -484,23 +530,32 @@ export function createFileViewHost({
         return 'discard';
       }
       if (choice === 'save') {
-        let saved = false;
-        try {
-          saved = (await shown.instance.save?.()) === true;
-        } catch (err) {
-          console.warn(`File view "${shown.view.id}" failed to save:`, err?.message ?? err);
-        }
-        if (!saved) return 'keep';
+        if (!(await saveOf(shown))) return keep(shown, reason);
         shown.dirty = false;
         return 'saved';
       }
-      return 'keep';
+      return keep(shown, reason);
     })();
     try {
       return await pendingAsk;
     } finally {
       pendingAsk = null;
     }
+  }
+
+  async function saveOf(shown) {
+    try {
+      return (await shown.instance.save?.()) === true;
+    } catch (err) {
+      console.warn(`File view "${shown.view.id}" failed to save:`, err?.message ?? err);
+      return false;
+    }
+  }
+
+  /** The pane stays; a file removed meanwhile is remembered as such. */
+  function keep(shown, reason) {
+    if (reason === 'file-removed' && current === shown) shown.orphaned = true;
+    return 'keep';
   }
 
   /**
@@ -716,6 +771,19 @@ export function createFileViewHost({
       renderHistoryNav();
     },
     hasUnsavedChanges: () => Boolean(current?.dirty),
+    /** A chat run started (true) or the last one ended (#863). */
+    setEditingBlocked(blocked) {
+      const next = Boolean(blocked);
+      if (next === editingBlocked) return;
+      editingBlocked = next;
+      const instance = current?.instance;
+      if (typeof instance?.setEditingBlocked !== 'function') return;
+      try {
+        instance.setEditingBlocked(next);
+      } catch (err) {
+        console.warn(`File view "${current.view.id}" failed to follow the editing lock:`, err?.message ?? err);
+      }
+    },
     /** Unmount the view and stop listening — for a pane that goes away. */
     dispose() {
       stopFollowingLocale();

@@ -478,7 +478,7 @@ export const imageView = {
       sourceMessageEl.hidden = true;
       sourceTextEl.hidden = false;
       if (sourceInstance) sourceInstance.update({ content: result.content });
-      else sourceInstance = plainTextView.mount(sourceTextEl, { ...context, content: result.content });
+      else sourceInstance = plainTextView.mount(sourceTextEl, { ...context, content: result.content, editable: false });
     }
 
     function renderSourceFailure() {
