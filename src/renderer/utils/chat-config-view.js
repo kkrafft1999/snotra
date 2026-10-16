@@ -56,15 +56,51 @@ function toolsOf(config) {
   return Array.isArray(config?.tools) ? config.tools : [];
 }
 
-/** The pill: it counts skills only — the tools are nearly always all on. */
-export function describeConfigPill(config) {
+/**
+ * Whether the chat's model is sent any tools (#1013). An OpenAI-compatible
+ * entry can switch them off for a server that chokes on the schemas; every
+ * other entry, and a state from before the switch, sends them.
+ */
+export function activeEntrySendsTools(llmState) {
+  const presets = Array.isArray(llmState?.presets) ? llmState.presets : [];
+  const preset = presets.find((entry) => entry.id === llmState?.activePresetId);
+  return preset?.connection?.sendTools !== false;
+}
+
+/**
+ * The pill: it counts skills only — the tools are nearly always all on. The
+ * exception is a model that gets no tools at all: then that is what it says,
+ * since neither a tool nor a skill reaches the model.
+ */
+export function describeConfigPill(config, { sendsTools = true } = {}) {
   const count = skillsOf(config).filter((skill) => skill.state === CONFIG_SKILL_STATES.ON).length;
+  if (!sendsTools) {
+    const label = t('chat.config.pill.noTools');
+    const pill = t('chat.config.pill.noTools.long');
+    return {
+      count,
+      label,
+      noTools: true,
+      title: t('chat.config.button.title', { pill }),
+      ariaLabel: t('chat.config.button.label', { pill }),
+    };
+  }
   const label = count === 0 ? t('chat.config.pill.none') : tPlural('chat.config.pill', count, { count });
   return {
     count,
     label,
+    noTools: false,
     title: t('chat.config.button.title', { pill: label }),
     ariaLabel: t('chat.config.button.label', { pill: label }),
+  };
+}
+
+/** What the tools section says instead of its lists when the model gets none. */
+export function describeNoTools() {
+  const place = settingsPath('models');
+  return {
+    text: t('chat.config.tools.notSent'),
+    link: { label: t('chat.config.tools.notSent.link', { place }), panel: 'models' },
   };
 }
 

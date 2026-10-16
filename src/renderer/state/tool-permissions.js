@@ -1,4 +1,5 @@
 import { t } from '../i18n.js';
+import { invokeErrorMessage } from '../utils/invoke-error.js';
 /**
  * Geteilter Stand der Tool-Berechtigungen im Renderer (Issue #67).
  *
@@ -74,7 +75,7 @@ export function initToolPermissionState({ api, whenChatSettled = async () => {} 
     try {
       result = await api[name](...args);
     } catch (error) {
-      return { ok: false, error: error?.message || t('approval.error.unknown') };
+      return { ok: false, error: invokeErrorMessage(error, 'approval.error.unknown') };
     }
     if (result?.ok) await refresh();
     return result || { ok: false, error: t('chat.toolMode.noAnswer') };

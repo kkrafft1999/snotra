@@ -66,9 +66,10 @@ test('openChatLink schluckt eine abgewiesene IPC-Promise, statt sie unbehandelt 
   const { openChatLink } = await modulePromise;
   const api = { openExternal: () => Promise.reject(new Error('IPC weg')) };
 
+  // The sentence, not the raw text of the rejection (#1013).
   assert.deepEqual(await openChatLink(api, 'https://example.com'), {
     ok: false,
-    error: 'IPC weg',
+    error: 'The link could not be opened.',
   });
 });
 

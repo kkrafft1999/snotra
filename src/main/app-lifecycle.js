@@ -1,6 +1,6 @@
 'use strict';
 
-const { createTranslator } = require('../shared/i18n');
+const { createTranslator, localeFromSystem } = require('../shared/i18n');
 
 /**
  * The parts of the start-up in `index.js` that decide something, kept apart
@@ -52,7 +52,7 @@ function createStartupFailureHandler({ app, dialog, log = console, appName = 'Sn
     log.error?.('Start-up failed:', error);
     try {
       // The stored language is not known yet; the system's is the best guess.
-      const t = createTranslator(String(app.getLocale?.() || '').slice(0, 2));
+      const t = createTranslator(localeFromSystem(app.getLocale?.()));
       dialog.showErrorBox(
         t('app.startupFailed.title', { appName }),
         // The stack is in the log; the box carries the sentence.

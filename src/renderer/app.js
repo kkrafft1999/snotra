@@ -273,7 +273,9 @@ onLocaleChange(() => {
   setSidebarVisible(!appRoot.classList.contains('app--no-sidebar'), { animate: false });
 });
 
-const modelPicker = initChatModelPicker({ api, appStore });
+// Parts further down that follow the active model (#1013); set once they exist.
+let afterLlmStateChange = () => {};
+const modelPicker = initChatModelPicker({ api, appStore, onLlmStateChanged: () => afterLlmStateChange() });
 
 /**
  * Chat switches still on their way (#564): the start-up, a folder's chat being
@@ -308,6 +310,8 @@ const chatConfig = initChatConfigIndicator({
   appStore,
   onOpenSettings: ({ panel, target }) => settingsModal.openSettingsModal({ panel, target }),
 });
+// An entry without tools says so at the composer (#1013).
+afterLlmStateChange = () => chatConfig.redraw();
 // A tool switched in the settings changes the list.
 toolPermissions.subscribe(() => void chatConfig.refresh());
 // A narrow chat puts the pills on a row of their own (#400).

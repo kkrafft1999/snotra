@@ -17,6 +17,7 @@
 // gegen echte Temp-Verzeichnisse getestet werden kann.
 
 const { constants: fsConstants } = require('fs');
+const { writeFileAtomic } = require('./atomic-write');
 
 const MIGRATION_MARKER_FILENAME = 'migrated-from-weyouze.json';
 
@@ -71,7 +72,9 @@ function createUserDataMigration({ fs, path, log = console } = {}) {
     };
     try {
       await fs.mkdir(targetDir, { recursive: true });
-      await fs.writeFile(path.join(targetDir, MIGRATION_MARKER_FILENAME), JSON.stringify(marker, null, 2), 'utf8');
+      // Temp + rename (#1013): a marker cut off halfway would read as no
+      // marker at all, and the next start would migrate a second time.
+      await writeFileAtomic(fs, path.join(targetDir, MIGRATION_MARKER_FILENAME), JSON.stringify(marker, null, 2));
     } catch (err) {
       warn(`[userdata-migration] Marker konnte nicht geschrieben werden: ${err?.message || err}`);
     }

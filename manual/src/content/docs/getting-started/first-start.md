@@ -24,10 +24,10 @@ The order does not matter. Snotra needs both to work for you.
 
 ## Switch the language
 
-Snotra starts in English. To switch the interface to German:
+[since 1.24] Snotra starts in the language of your system when it speaks it — German or English — and in English otherwise. To switch the interface language:
 
 1. Open the settings: *Snotra Agent › Settings…* on macOS, *View › Settings…* on Windows and Linux, or `Cmd+,` / `Ctrl+,`.
-2. Choose *General* on the left.
-3. Under *Interface language*, pick *Deutsch*.
+2. Choose *General* on the left (*Allgemein* in the German interface).
+3. Under *Interface language* (*Sprache der Oberfläche*), pick *English* or *Deutsch*.
 
 The window and the menu bar switch at once, without a restart. In the same section, *Appearance* switches between a light and a dark interface.

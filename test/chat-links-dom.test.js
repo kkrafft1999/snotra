@@ -193,7 +193,8 @@ test('wirft der Main-Prozess, bleibt der Klick trotzdem beantwortet', async () =
   clickOn(linkIn('Doku'));
   await flush();
 
-  assert.equal(document.getElementById('chat-token-usage-value').textContent, 'IPC weg');
+  // The sentence, not main's raw text (#1013).
+  assert.equal(document.getElementById('chat-token-usage-value').textContent, 'The link could not be opened.');
 });
 
 // ── Links to HTML files of the workspace (#479) ───────────────────────────

@@ -50,7 +50,8 @@ const {
   PROGRAM_ALLOWANCE_LIMITS,
 } = require('../../shared/contracts/program-allowances');
 
-const { renameWithRetry, readFileWithRetry } = require('./rename-with-retry');
+const { readFileWithRetry } = require('./rename-with-retry');
+const { writeFileAtomic } = require('./atomic-write');
 const { grantedHosts } = require('./sandbox-violations');
 
 const POLICY_FILENAME = 'tool-policy.json';
@@ -208,7 +209,9 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     try {
       const encrypted = safeStorage.encryptString(key.toString('hex')).toString('base64');
       await fs.mkdir(path.dirname(keyPath()), { recursive: true });
-      await fs.writeFile(keyPath(), encrypted, { encoding: 'utf8', mode: 0o600 });
+      // Temp + rename (#1013): a key cut off halfway would leave a policy
+      // that can never be verified again.
+      await writeFileAtomic(fs, keyPath(), encrypted, { mode: 0o600 });
     } catch (error) {
       log?.warn?.(`[tool-policy] Schlüssel konnte nicht gespeichert werden: ${error?.message || error}`);
       return null;
@@ -353,16 +356,9 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     const serialized = serializePayload(payload);
     const file = { version: POLICY_FILE_VERSION, payload, signature: key ? sign(key, serialized) : null };
     await fs.mkdir(path.dirname(target), { recursive: true });
-    const tmp = `${target}.tmp-${crypto.randomUUID()}`;
-    await fs.writeFile(tmp, JSON.stringify(file), { encoding: 'utf8', mode: 0o600 });
-    try {
-      // Reads of the same file run all the time (every state refresh), and on
-      // Windows one of them can hold the target for a moment.
-      await renameWithRetry(fs, tmp, target);
-    } catch (error) {
-      await fs.unlink(tmp).catch(() => {});
-      throw error;
-    }
+    // Reads of the same file run all the time (every state refresh), and on
+    // Windows one of them can hold the target for a moment — the rename retries.
+    await writeFileAtomic(fs, target, JSON.stringify(file), { mode: 0o600 });
   }
 
   function policyVersionOf(payload, integrity) {

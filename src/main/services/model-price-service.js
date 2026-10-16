@@ -22,6 +22,7 @@ const {
   normalizeModelPrice,
   trimLiteLlmPrices,
 } = require('../../shared/contracts/cost');
+const { writeFileAtomic } = require('./atomic-write');
 
 const PRICES_FILENAME = 'model-prices.json';
 const DOWNLOAD_TIMEOUT_MS = 30_000;
@@ -101,11 +102,7 @@ function createModelPriceService({
     const data = { overrides: state.overrides };
     if (state.downloaded) data.table = state.downloaded;
     const target = filePath();
-    const tmp = `${target}.tmp`;
-    writing = writing.catch(() => {}).then(async () => {
-      await fs.writeFile(tmp, `${JSON.stringify(data)}\n`, { mode: 0o600 });
-      await fs.rename(tmp, target);
-    });
+    writing = writing.catch(() => {}).then(() => writeFileAtomic(fs, target, `${JSON.stringify(data)}\n`, { mode: 0o600 }));
     return writing;
   }
 

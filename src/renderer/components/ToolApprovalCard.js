@@ -6,6 +6,7 @@ import { buildConfigProposalCardView, describeConfigProposalOutcome } from '../u
 import contracts from '../generated/contracts.js';
 import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-approval-queue.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
+import { invokeErrorDetail } from '../utils/invoke-error.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 
 const { APPROVAL_RESPONSES } = contracts;
@@ -822,7 +823,7 @@ export function initToolApprovalCards({
         ? await api.respondToolApproval(requestId, response, extra)
         : { ok: false, error: t('approval.error.unavailable') };
     } catch (error) {
-      result = { ok: false, error: error?.message || t('approval.error.unknown') };
+      result = { ok: false, error: invokeErrorDetail(error) || t('approval.error.unknown.short') };
     }
     if (result?.ok) return; // Auflösung kommt per Push vom Main.
     if (entry?.state === APPROVAL_ENTRY_STATES.RESOLVED) return; // inzwischen verfallen

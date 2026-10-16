@@ -1,7 +1,9 @@
 import { dismissOnFocusLeave, dismissOnOutsideClick, followColumn, keepPopupInColumn } from '../utils/helpers.js';
 import {
+  activeEntrySendsTools,
   describeConfigLinks,
   describeConfigPill,
+  describeNoTools,
   describeSkillRows,
   describeToolSections,
   invokedSkillNames,
@@ -87,8 +89,10 @@ export function initChatConfigIndicator({ api, appStore, onOpenSettings }) {
       }
       return;
     }
-    const pill = describeConfigPill(config);
+    const pill = describeConfigPill(config, { sendsTools: sendsTools() });
     wrap.classList.remove('hidden');
+    if (pill.noTools) wrap.dataset.noTools = 'true';
+    else delete wrap.dataset.noTools;
     label.textContent = pill.label;
     btn.title = pill.title;
     btn.setAttribute('aria-label', pill.ariaLabel);
@@ -138,7 +142,13 @@ export function initChatConfigIndicator({ api, appStore, onOpenSettings }) {
     return section;
   }
 
+  /** The active entry's switch, read off the model state on every render (#1013). */
+  function sendsTools() {
+    return activeEntrySendsTools(appStore.llmState);
+  }
+
   function buildTools() {
+    if (!sendsTools()) return buildNoTools();
     const view = describeToolSections(config);
     const section = el('section', 'chat-config-section');
     section.setAttribute('aria-labelledby', 'chat-config-tools-heading');
@@ -200,6 +210,25 @@ export function initChatConfigIndicator({ api, appStore, onOpenSettings }) {
       }
       section.append(toggle, groups);
     }
+    return section;
+  }
+
+  /**
+   * A model that gets no tools: no list of what is switched on — none of it
+   * reaches the model — but the reason and the way to the switch.
+   */
+  function buildNoTools() {
+    const view = describeNoTools();
+    const section = el('section', 'chat-config-section');
+    section.setAttribute('aria-labelledby', 'chat-config-tools-heading');
+    section.append(sectionHead('chat-config-tools-heading', t('chat.config.tools.heading'), ''));
+    const note = el('div', 'chat-config-notools');
+    note.append(el('p', 'chat-config-notools-text', view.text));
+    const link = el('button', 'chat-config-link', view.link.label);
+    link.type = 'button';
+    link.dataset.panel = view.link.panel;
+    note.append(link);
+    section.append(note);
     return section;
   }
 
@@ -336,5 +365,7 @@ export function initChatConfigIndicator({ api, appStore, onOpenSettings }) {
     void refresh();
   });
 
-  return { refresh, close, isOpen: () => open };
+  // `redraw`: the model changed (#1013) — what the pill says depends on it,
+  // and nothing has to be read from main for that.
+  return { refresh, redraw: render, close, isOpen: () => open };
 }

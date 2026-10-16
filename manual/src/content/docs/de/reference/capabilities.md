@@ -22,7 +22,7 @@ Diese Seite ist der Überblick. Jede Zeile verweist auf die Seite, die es erklä
 | Gedächtnis | Behält Fakten für diesen Ordner oder für dich über Chats hinweg | [Snotra etwas merken lassen](../../customising/memory/) |
 | Skills | Folgt Anleitungen, die du ihm als Skills gibst — eingebaut, für einen Ordner oder für alle —, und kann einen neuen Skill in den geöffneten Ordner schreiben | [Skills nutzen](../../customising/skills/), [Snotra einen Skill schreiben lassen](../../customising/write-a-skill/) |
 | MCP-Server | Nutzt die Tools von MCP-Servern, die du anbindest: Tickets, eine Datenbank, einen Kalender, was immer ein Server anbietet | [Einen MCP-Server anbinden](../../customising/mcp-servers/) |
-| Modelle | Arbeitet mit OpenAI, Anthropic und Google in der Cloud und mit Ollama und MLX-LM auf deinem Rechner | [Ein Modell anbinden](../../getting-started/connect-a-model/) |
+| Modelle | Arbeitet mit OpenAI, Anthropic und Google in der Cloud, mit Ollama, LM Studio und jedem Server mit OpenAI-kompatibler Schnittstelle auf deinem Rechner oder in deinem Netz und über Gateways wie OpenRouter | [Ein Modell anbinden](../../getting-started/connect-a-model/) |
 | Fragen zu Snotra | Schlägt die Antwort in diesem Handbuch nach und verlinkt die Seite, die es benutzt hat | [Die eingebauten Tools einrichten](../../customising/built-in-tools/#die-eingebauten-tools) |
 
 Was ein Chat von sich aus darf, hängt von seinem Modus und von der Risikoklasse jedes Tools ab — siehe [Warum Snotra fragt, bevor es handelt](../../safety/why-snotra-asks/).
