@@ -1808,6 +1808,71 @@ summary:focus-visible,
   flex-shrink: 0;
 }
 
+/* The chats of this session are not being saved (#977). Under the header and
+   outside the scrolling list, so it stays in view wherever the chat is
+   scrolled to. Red, because what is written now is lost on quit — an error
+   that has to warn, not a tip; the heading carries it in words as well. */
+.chat-save-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-shrink: 0;
+  padding: 10px var(--chat-gutter-x);
+  border-top: 1px solid var(--ds-error-border);
+  border-bottom: 1px solid var(--ds-error-border);
+  background: var(--ds-error-bg);
+  color: var(--text-primary);
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+}
+
+.chat-save-notice[hidden] {
+  display: none;
+}
+
+.chat-save-notice-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  fill: none;
+  stroke: var(--ds-error);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chat-save-notice-body {
+  min-width: 0;
+}
+
+.chat-save-notice-heading {
+  margin: 0;
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--ds-error);
+}
+
+.chat-save-notice-text {
+  margin: 2px 0 0;
+  color: var(--text-muted-strong);
+}
+
+.chat-save-notice-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ds-blue-strong);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.chat-save-notice-link:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
 /* ── Phase 3: Chat-Header-Meta-Zeile (Live-Dot + Mono-Titel + Pille) ─────── */
 .chat-header-meta {
   display: flex;

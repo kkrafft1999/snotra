@@ -94,6 +94,12 @@ export const SETTINGS_HELP = Object.freeze({
     slug: 'customising/skills',
     section: { en: 'Switch a skill on', de: 'Einen Skill einschalten' },
   },
+  // Not a settings section: the link in the chat's banner when its chats are
+  // not being saved (#977) — a help link all the same, held by the same test.
+  'chat.saveNotice': {
+    slug: 'troubleshooting/keychain-and-storage',
+    section: { en: 'When a chat is not being saved', de: 'Wenn ein Chat nicht gespeichert wird' },
+  },
 });
 
 function inLocale(texts, locale) {

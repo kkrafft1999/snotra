@@ -36,7 +36,7 @@ What still works and what does not:
 | --- | --- |
 | Cloud models that need a key (OpenAI, gateways) | Not usable: no key can be stored. The line above the chat input says *Encrypted storage is not available*. |
 | Local servers without a key (LM Studio, Ollama) | Work as usual. |
-| The chat history | Saved without encryption — unless an encrypted history is already there. That one stays untouched for a start with the key, and the chats of this start are not saved. |
+| The chat history | Saved without encryption — unless an encrypted history is already there. That one stays untouched for a start with the key, and the chats of this start are not saved — a red banner in the chat says so, see [below](#when-a-chat-is-not-being-saved). |
 | The modes *Smart* and *Always ask* | Work as usual. |
 | The mode *Auto*, *Always allow this command*, permanent allowances | Not available: they need a record that cannot be tampered with. See [Choose a mode](../../safety/choose-a-mode/). |
 | Keys of MCP servers, the Tavily key | Cannot be saved as secrets. |
@@ -46,6 +46,21 @@ What still works and what does not:
 - **macOS, after *Deny*.** Quit Snotra and start it again; macOS asks once more. Choose *Always Allow*. If it does not ask, open the app *Keychain Access*, find **Snotra AI Safe Storage**, and under *Access Control* add *Snotra Agent* to the apps that may use it.
 - **Linux.** Install and unlock a keyring — `gnome-keyring` or KWallet — and log in to the desktop session again. Then start Snotra.
 - **Windows.** The storage comes with your user account and is always there. Keys stored under one Windows account cannot be read under another one; enter them again there.
+
+## When a chat is not being saved
+
+A red banner under the chat's title says ***This chat is not being saved.*** Snotra could not put the chat into the history, so what you write now is gone once you quit. The banner stays until a save goes through again, and the line below the heading says why:
+
+- ***Snotra could not read the chat history …*** The file `chat-history.json` in the [profile folder](../logs-and-reports/#the-profile-folder) is there, but Snotra cannot read it: another program holds it, its permissions changed, or this start has no encrypted storage for an encrypted history (see [above](#when-encrypted-storage-is-not-available)). Snotra leaves the file as it is rather than write an empty history over your chats.
+- ***Snotra could not write this chat into the history.*** Reading worked, writing did not — the disk is full, for example, or the profile folder cannot be written to.
+
+Steps:
+
+1. Keep what you need from the chat: copy it, or ask Snotra to write a summary into a file of the open folder.
+2. Quit Snotra and start it again.
+3. If the banner comes back, make sure the profile folder can be written to and has room, and that no other program — a sync or backup tool — holds `chat-history.json`. With an encrypted history and no encrypted storage, [get the storage back](#steps-get-the-storage-back) first.
+
+What happens then: as soon as a save goes through, the banner disappears and the chat on screen is saved with everything in it. The chats from earlier starts are still in the file.
 
 ## If it doesn't work
 

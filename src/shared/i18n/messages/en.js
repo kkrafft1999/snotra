@@ -445,6 +445,11 @@ module.exports = {
   'chat.hint.noModel.shortcut': 'Ctrl+,',
   'chat.hint.noFolder': 'Active model – tip: open a folder so the assistant can read files with its tools.',
   'chat.hint.noFolder.model': 'Active: {model} – tip: open a folder so the assistant can read files with its tools.',
+  // The banner under the chat header while saves do not go through (#977).
+  'chat.saveNotice.heading': 'This chat is not being saved.',
+  'chat.saveNotice.unreadable': 'Snotra could not read the chat history, so it leaves the file as it is instead of writing over it. What you write now is gone once you quit.',
+  'chat.saveNotice.failed': 'Snotra could not write this chat into the history. What you write now is gone once you quit.',
+  'chat.saveNotice.link': 'What can I do?',
   'chat.toolMode.button.title': 'Tool permissions: {mode}. Click to switch.',
   'chat.toolMode.button.label': 'Permission mode {mode}. Switch mode',
   'chat.toolMode.button.titleUnisolated': 'Tool permissions: {mode}. {warning} Click to switch.',

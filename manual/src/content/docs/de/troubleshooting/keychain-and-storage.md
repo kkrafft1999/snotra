@@ -36,7 +36,7 @@ Was weiter geht und was nicht:
 | --- | --- |
 | Cloud-Modelle, die einen Key brauchen (OpenAI, Gateways) | Nicht nutzbar: Es lässt sich kein Key speichern. Die Zeile über der Chat-Eingabe sagt *Verschlüsselter Speicher ist nicht verfügbar*. |
 | Lokale Server ohne Key (LM Studio, Ollama) | Gehen wie gewohnt. |
-| Der Chat-Verlauf | Wird unverschlüsselt gespeichert — außer, es liegt schon ein verschlüsselter Verlauf vor. Der bleibt dann für einen Start mit Schlüssel unangetastet, und die Chats dieses Starts werden nicht gespeichert. |
+| Der Chat-Verlauf | Wird unverschlüsselt gespeichert — außer, es liegt schon ein verschlüsselter Verlauf vor. Der bleibt dann für einen Start mit Schlüssel unangetastet, und die Chats dieses Starts werden nicht gespeichert — ein rotes Banner im Chat sagt es, siehe [unten](#wenn-ein-chat-nicht-gespeichert-wird). |
 | Die Modi *Intelligent* und *Immer fragen* | Gehen wie gewohnt. |
 | Der Modus *Auto*, *Diesen Befehl immer erlauben*, dauerhafte Erlaubnisse | Nicht verfügbar: Sie brauchen einen Eintrag, den niemand unbemerkt ändern kann. Siehe [Einen Modus wählen](../../safety/choose-a-mode/). |
 | Keys von MCP-Servern, der Tavily-Key | Lassen sich nicht als Geheimnis speichern. |
@@ -46,6 +46,21 @@ Was weiter geht und was nicht:
 - **macOS, nach *Ablehnen*.** Beende Snotra und starte es neu; macOS fragt noch einmal. Wähle *Immer erlauben*. Fragt es nicht, öffne die App *Schlüsselbundverwaltung*, such **Snotra AI Safe Storage** und füge unter *Zugriff* *Snotra Agent* zu den Apps hinzu, die es verwenden dürfen.
 - **Linux.** Installier und entsperr einen Schlüsselring — `gnome-keyring` oder KWallet — und melde dich neu am Desktop an. Starte dann Snotra.
 - **Windows.** Der Speicher gehört zu deinem Benutzerkonto und ist immer da. Keys, die unter einem Windows-Konto gespeichert wurden, lassen sich unter einem anderen nicht lesen; gib sie dort neu ein.
+
+## Wenn ein Chat nicht gespeichert wird
+
+Ein rotes Banner unter dem Titel des Chats sagt ***Dieser Chat wird nicht gespeichert.*** Snotra konnte den Chat nicht in den Verlauf legen; was du jetzt schreibst, ist nach dem Beenden weg. Das Banner bleibt, bis wieder ein Speichern klappt, und die Zeile unter der Überschrift sagt, warum:
+
+- ***Snotra konnte den Chatverlauf nicht lesen …*** Die Datei `chat-history.json` im [Profilordner](../logs-and-reports/#der-profilordner) ist da, aber Snotra kann sie nicht lesen: Ein anderes Programm hält sie, ihre Rechte haben sich geändert, oder diesem Start fehlt der verschlüsselte Speicher für einen verschlüsselten Verlauf (siehe [oben](#wenn-kein-verschlüsselter-speicher-verfügbar-ist)). Snotra lässt die Datei, wie sie ist, statt einen leeren Verlauf über deine Chats zu schreiben.
+- ***Snotra konnte diesen Chat nicht in den Verlauf schreiben.*** Lesen ging, Schreiben nicht — die Platte ist voll, zum Beispiel, oder in den Profilordner lässt sich nicht schreiben.
+
+Schritte:
+
+1. Sichere, was du aus dem Chat brauchst: Kopier es, oder lass Snotra eine Zusammenfassung in eine Datei des geöffneten Ordners schreiben.
+2. Beende Snotra und starte es neu.
+3. Kommt das Banner wieder, prüf, ob sich in den Profilordner schreiben lässt und ob dort Platz ist, und ob kein anderes Programm — ein Sync- oder Backup-Tool — `chat-history.json` festhält. Bei einem verschlüsselten Verlauf ohne verschlüsselten Speicher hol zuerst [den Speicher zurück](#schritte-den-speicher-zurückholen).
+
+Was dann passiert: Sobald ein Speichern klappt, verschwindet das Banner, und der Chat auf dem Bildschirm wird mit allem gespeichert, was darin steht. Die Chats früherer Starts sind weiter in der Datei.
 
 ## Wenn es nicht klappt
 

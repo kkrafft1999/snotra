@@ -70,14 +70,15 @@ function registerChatHistoryHandlers({
    * The history file is there but could not be read (#473), so the store
    * refuses to write its empty stand-in over it. The chat goes on in memory
    * and this one save is skipped — the new chat or the folder switch that
-   * asked for it must not fail over it.
+   * asked for it must not fail over it. `unreadable` tells the renderer that
+   * nothing was saved, so it can say so in the chat (#977).
    */
   async function skipWhenUnreadable(run) {
     try {
       return await run();
     } catch (error) {
       if (error?.code !== CHAT_HISTORY_UNREADABLE) throw error;
-      return { ok: false };
+      return { ok: false, unreadable: true };
     }
   }
 
