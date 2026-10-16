@@ -46,10 +46,11 @@ async function setup({ base = 'base', results = [] } = {}) {
       const fn = timer;
       timer = null;
       fn?.();
-      // The hash is asynchronous: wait until the save has come back.
-      for (let i = 0; i < 100; i += 1) {
-        await new Promise((resolve) => setImmediate(resolve));
-        if (autosave.state.status !== SAVE_STATES.SAVING) break;
+      // The hash runs on the thread pool: wait until the save has come
+      // back, by the clock rather than by ticks — a slow runner needs more.
+      const until = Date.now() + 5000;
+      while (autosave.state.status === SAVE_STATES.SAVING && Date.now() < until) {
+        await new Promise((resolve) => setTimeout(resolve, 2));
       }
     },
     hasTimer: () => timer !== null,

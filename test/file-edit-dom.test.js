@@ -13,7 +13,15 @@ const sha256 = (text) => crypto.createHash('sha256').update(Buffer.from(text, 'u
 const item = (name) => ({ path: `/ws/${name}`, name, size: 10, modified: 1 });
 const text = (content) => ({ content, size: Buffer.byteLength(content), modified: 5 });
 
+/**
+ * Until a save under way has come back — the hash runs on the thread pool, so
+ * by the clock rather than by ticks — and then a few turns more.
+ */
 async function settle() {
+  const until = Date.now() + 5000;
+  while (document.querySelector('.file-edit-status')?.dataset.state === 'saving' && Date.now() < until) {
+    await new Promise((resolve) => setTimeout(resolve, 2));
+  }
   for (let i = 0; i < 20; i += 1) await new Promise((resolve) => setImmediate(resolve));
 }
 
