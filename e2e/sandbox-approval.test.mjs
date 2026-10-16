@@ -116,20 +116,26 @@ test('the sandbox asks after the run and while the command waits, also in Auto',
   });
 
   let accessAnswered = 0;
+  /**
+   * One look at the chat that counts an answered access card. Every poll goes
+   * through here: the card can turn up while any of them is waiting, also
+   * before the Stop button is seen (#972).
+   */
+  const look = async () => {
+    const seen = await lookAtChat(page);
+    if (seen.accessAnswered) accessAnswered += 1;
+    return seen;
+  };
   /** Waits until the run has started — the send button turns into "Stop". */
-  const started = () => poll(async () => (await lookAtChat(page)).running, { what: 'run started', explain });
+  const started = () => poll(async () => (await look()).running, { what: 'run started', explain });
   /** The next sandbox card, or `{ ended }` when the run finished without one. */
   const nextCard = (what) => poll(async () => {
-    const seen = await lookAtChat(page);
-    if (seen.accessAnswered) { accessAnswered += 1; return null; }
+    const seen = await look();
     if (seen.card) return seen.card;
     return seen.running === false ? { ended: true } : null;
   }, { what, timeoutMs: 90_000, explain });
-  const finished = () => poll(async () => {
-    const seen = await lookAtChat(page);
-    if (seen.accessAnswered) { accessAnswered += 1; return null; }
-    return seen.running === false;
-  }, { what: 'run finished', timeoutMs: 90_000, explain });
+  const finished = () => poll(async () => (await look()).running === false,
+    { what: 'run finished', timeoutMs: 90_000, explain });
 
   let commands = 0;
   /**
