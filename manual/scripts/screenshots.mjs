@@ -749,6 +749,9 @@ const MOTIFS = {
       },
     },
     async setUp({ app, page, config, text }) {
+      // The mic pulses while recording; caught at the low point of the pulse,
+      // its red tint is all but gone. Reduced motion holds it at full colour.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
       await storeOpenAiKey(page, config);
       await routeRealtime(app, realtime.port);
       await feedMicrophone(page, speechLikeWav({ sampleRate: 24000 }));
@@ -761,6 +764,12 @@ const MOTIFS = {
       }, { id: 1, turns: [{ text: text.settled, final: true }, { text: text.live, final: false }], settledBytes: 0 });
       await poll(() => page.evaluate((live) => document.getElementById('chat-input').value.endsWith(live), text.live),
         { what: 'dictation in the field' });
+      // The field grows to the dictated text one frame later; measured before
+      // that, the clip cuts off the top of the composer.
+      await poll(() => page.evaluate(() => {
+        const field = document.getElementById('chat-input');
+        return field.scrollHeight <= field.clientHeight;
+      }), { what: 'composer grown to the dictation' });
       return clipAround(page, ['#chat-input-row'], 24);
     },
   },
