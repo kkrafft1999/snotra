@@ -34,11 +34,12 @@ function makeUpdates({ updateAvailable = true, readInstallFailure, clearInstallF
   return { calls, updates };
 }
 
-function makeCheck({ updates, sent = [], env = {}, window } = {}) {
+function makeCheck({ updates, sent = [], env = {}, window, isAutomaticCheckEnabled } = {}) {
   return createUpdateCheck({
     updates,
     getMainWindow: () => (window === undefined ? makeWindow(sent) : window),
     PUSH,
+    ...(isAutomaticCheckEnabled ? { isAutomaticCheckEnabled } : {}),
     env,
   });
 }
@@ -92,6 +93,40 @@ test('SNOTRA_NO_UPDATE_CHECK=1 still answers a check the user asked for', async 
   const sent = [];
   const { calls, updates } = makeUpdates();
   await makeCheck({ updates, sent, env: { SNOTRA_NO_UPDATE_CHECK: '1' } })({ silent: false });
+  assert.equal(calls.length, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.manual, true);
+});
+
+// #987: the setting *Check for updates at start-up*.
+test('the start-up check asks GitHub while the setting is on', async () => {
+  const sent = [];
+  const { calls, updates } = makeUpdates();
+  await makeCheck({ updates, sent, isAutomaticCheckEnabled: async () => true })({ silent: true });
+  assert.equal(calls.length, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.manual, false);
+});
+
+test('the start-up check stays away from GitHub while the setting is off', async () => {
+  const sent = [];
+  let reads = 0;
+  const { calls, updates } = makeUpdates({
+    readInstallFailure: async () => { reads += 1; return null; },
+  });
+  await makeCheck({ updates, sent, isAutomaticCheckEnabled: async () => false })({ silent: true });
+  assert.equal(calls.length, 0, 'no request to the update service');
+  assert.equal(reads, 0, 'the record of a failed install waits for a start that checks');
+  assert.equal(sent.length, 0);
+});
+
+test('a check the user asked for ignores the setting', async () => {
+  const sent = [];
+  const { calls, updates } = makeUpdates({ updateAvailable: false });
+  let asked = 0;
+  const isAutomaticCheckEnabled = async () => { asked += 1; return false; };
+  await makeCheck({ updates, sent, isAutomaticCheckEnabled })({ silent: false });
+  assert.equal(asked, 0);
   assert.equal(calls.length, 1);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].payload.manual, true);

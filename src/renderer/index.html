@@ -1244,6 +1244,27 @@
               </details>
             </div>
             <div class="modal-field-group">
+              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.updates.label">Updates</div>
+              <div class="settings-switch-row">
+                <label for="input-auto-update-check" class="settings-switch-row__label" data-i18n="settings.general.updates.toggle">Check for updates at start-up</label>
+                <span id="status-auto-update-check" class="settings-instant-status" role="status"></span>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-auto-update-check" aria-describedby="hint-auto-update-check">
+              </div>
+              <details id="hint-auto-update-check" class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span data-i18n="settings.general.updates.note.summary">Asks GitHub for a newer version a few seconds after every start.</span>
+                </summary>
+                <div class="settings-note__body" data-i18n-html="settings.general.updates.note.body">
+                  <p>
+                    When there is one, the update dialog opens; when there is none, you see nothing. Nothing is
+                    downloaded without your click. Switched off, Snotra only asks when you choose
+                    <em>Help &rsaquo; Check for Updates&hellip;</em> or the link <em>Check for updates</em> at the
+                    bottom of this window &mdash; both keep working either way.
+                  </p>
+                </div>
+              </details>
+            </div>
+            <div class="modal-field-group">
               <div class="modal-field-label eyebrow-row" data-i18n="settings.general.maxToolRounds.label">Max. tool rounds</div>
               <label class="visually-hidden" for="input-max-tool-rounds" data-i18n="settings.general.maxToolRounds.select">Maximum tool rounds</label>
               <input

@@ -43,6 +43,7 @@ Die Zeile unten in jedem Bereich sagt es, weil es sich unterscheidet:
 - ***Erscheinungsbild*** — hell oder dunkel. Diese Wahl bleibt auf diesem Rechner.
 - ***Sprache der Oberfläche*** — Englisch oder Deutsch, sofort umgestellt. Sie gilt für Fenster und Menüleiste; was an das Modell geht, bleibt Englisch.
 - ***Benachrichtigen, wenn Snotra auf deine Freigabe wartet*** — [seit 1.18] eine Systembenachrichtigung, wenn eine Freigabekarte wartet, während Snotra im Hintergrund ist oder die Karte in einem anderen Chat steht. Sie nennt den Chat und was wartet; ein Klick holt Snotra mit diesem Chat nach vorn. Standardmäßig an.
+- ***Beim Start nach Updates suchen*** — [seit 1.24] fragt ein paar Sekunden nach jedem Start bei GitHub nach einer neueren Version und öffnet den Update-Dialog, wenn es eine gibt. Ausgeschaltet sucht Snotra nur, wenn du selbst nachfragst; siehe [Snotra Agent aktualisieren](../../updating/update-snotra/). Standardmäßig an.
 - ***Max. Tool-Runden*** — wie oft das Modell nacheinander Tools aufrufen darf, bevor der Chat anhält. Ein Schutz gegen Endlosschleifen; standardmäßig 14, höchstens 500.
 
 ## Wo die Einstellungen liegen

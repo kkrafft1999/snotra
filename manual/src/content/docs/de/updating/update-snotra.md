@@ -14,7 +14,7 @@ Snotra Agent aktualisiert sich selbst – aber nie eigenmächtig. Es sucht still
 
 ## Schritte
 
-**Auf den Hinweis warten oder selbst nachfragen.** Bei jedem Start sucht Snotra im Hintergrund nach einer neueren Version. Gibt es keine, sagt es nichts; gibt es eine, öffnet sich der Update-Dialog. Du kannst jederzeit selbst nachfragen:
+**Auf den Hinweis warten oder selbst nachfragen.** Bei jedem Start sucht Snotra im Hintergrund nach einer neueren Version. Gibt es keine, sagt es nichts; gibt es eine, öffnet sich der Update-Dialog. [seit 1.24] Wer das nicht will, schaltet *Beim Start nach Updates suchen* unter [*Einstellungen › Allgemein*](../../customising/settings/#der-bereich-allgemein) aus. Selbst nachfragen kannst du in jedem Fall, jederzeit:
 
 - *Hilfe › Nach Updates suchen…* oder
 - *Einstellungen › Allgemein*, der Link *Nach Updates suchen* neben der Versionsnummer unten.
@@ -52,4 +52,4 @@ Snotra lädt nur die Datei, die GitHub für deine Installation nennt, und prüft
 - ***GitHub begrenzt gerade die Anfragen aus deinem Netz.*** GitHub beantwortet von einer Netzwerkadresse nur eine begrenzte Zahl von Update-Prüfungen pro Stunde. Hinter einem VPN oder im Firmennetz teilst du dir dieses Kontingent mit allen anderen auf derselben Adresse, es kann also aufgebraucht sein, ohne dass du etwas getan hast. Der Dialog nennt die Uhrzeit, ab der es wieder geht – prüf dann noch einmal oder nutze die Release-Seite.
 - ***Der Update-Server ist nicht erreichbar.*** Du bist offline, oder etwas zwischen dir und GitHub – ein Proxy, eine Firewall – blockiert. Versuch es später noch einmal oder nutze die Release-Seite von einer Verbindung, die funktioniert.
 - **Windows: *Beim letzten Mal ließ sich Version … nicht einspielen*.** Das Austauschen ist gescheitert, nachdem Snotra sich beendet hatte, meist weil ein Fenster oder ein anderes Programm den Ordner von Snotra Agent noch offen hatte. Schließe sie und versuch es noch einmal; der Dialog nennt den Pfad eines Protokolls mit den Einzelheiten.
-- **Es wird nichts angeboten, obwohl es eine neue Version gibt.** Vielleicht hast du sie übersprungen: *Nach Updates suchen* zeigt sie trotzdem. Vorab-Versionen werden nie angeboten, nur das neueste reguläre Release.
+- **Es wird nichts angeboten, obwohl es eine neue Version gibt.** Vielleicht hast du sie übersprungen, oder *Beim Start nach Updates suchen* ist aus: *Nach Updates suchen* zeigt sie trotzdem. Vorab-Versionen werden nie angeboten, nur das neueste reguläre Release.

@@ -43,6 +43,7 @@ The line at the bottom of each section says it, because it differs:
 - ***Appearance*** — light or dark. This choice stays on this computer.
 - ***Interface language*** — English or German, switching at once. It covers the window and the menu bar; what goes to the model stays English.
 - ***Notify me when Snotra waits for my approval*** — [since 1.18] a system notification when an approval card waits while Snotra is in the background or the card is in another chat. It names the chat and what waits; a click brings Snotra up with that chat. On by default.
+- ***Check for updates at start-up*** — [since 1.24] asks GitHub for a newer version a few seconds after every start and opens the update dialog if there is one. Switched off, Snotra only looks when you ask; see [Update Snotra Agent](../../updating/update-snotra/). On by default.
 - ***Max. tool rounds*** — how often the model may call tools in a row before the chat stops. A guard against endless loops; 14 by default, at most 500.
 
 ## Where settings are kept
