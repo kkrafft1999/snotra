@@ -412,6 +412,103 @@ test('eine unvollstaendige Meldung prueft alles Sichtbare', async (t) => {
   assert.equal(rowFor(container, '/ws/docs/notes.md'), null);
 });
 
+// #1017: a folder opened before and closed since keeps its rows in the DOM,
+// and no report reaches it while it is closed. Reopened, it has to catch up.
+
+/** Opens and closes a folder, so it is loaded but out of view. */
+async function openAndClose(container, dirPath) {
+  rowFor(container, dirPath).click();
+  await flush();
+  rowFor(container, dirPath).click();
+  await flush();
+}
+
+test('a folder closed while a file came in shows it once it is reopened', async (t) => {
+  const { dom, container, entries, emitTreeChanged } = await mountTree();
+  t.after(dom.cleanup);
+
+  await openAndClose(container, '/ws/docs');
+  // What a merge looks like from the tree: a coarse report, the folder closed.
+  entries['/ws/docs'] = [...entries['/ws/docs'], fileEntry('/ws/docs', 'merged.svg')];
+  await emitTreeChanged({ directories: [], complete: false });
+  assert.equal(rowFor(container, '/ws/docs/merged.svg'), null, 'closed, it is not checked');
+
+  rowFor(container, '/ws/docs').click();
+  // The rows it had show at once; the check comes after them.
+  assert.equal(rowFor(container, '/ws/docs').getAttribute('aria-expanded'), 'true');
+  assert.ok(rowFor(container, '/ws/docs/notes.md'));
+  await flush();
+  await flush();
+
+  assert.ok(rowFor(container, '/ws/docs/merged.svg'), 'what came in while it was closed');
+  assert.ok(rowFor(container, '/ws/docs/notes.md'));
+  assert.equal(rowFor(container, '/ws/docs').getAttribute('aria-expanded'), 'true');
+});
+
+test('a reopened folder that did not change keeps its rows', async (t) => {
+  const { dom, container, calls } = await mountTree();
+  t.after(dom.cleanup);
+
+  await openAndClose(container, '/ws/docs');
+  const before = rowFor(container, '/ws/docs/notes.md');
+  calls.readDirectory.length = 0;
+
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  await flush();
+
+  assert.deepEqual(calls.readDirectory, ['/ws/docs'], 'one listing to compare with');
+  assert.equal(rowFor(container, '/ws/docs/notes.md'), before, 'the same node, no flicker');
+});
+
+test('a reopened folder that changed keeps its open subfolders', async (t) => {
+  const { dom, container, entries } = await mountTree();
+  t.after(dom.cleanup);
+  entries['/ws/docs'] = [
+    ...entries['/ws/docs'],
+    { name: 'build', path: '/ws/docs/build', isDirectory: true },
+  ];
+  entries['/ws/docs/build'] = [fileEntry('/ws/docs/build', 'gen.py')];
+
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  rowFor(container, '/ws/docs/build').click();
+  await flush();
+  rowFor(container, '/ws/docs').click();
+  await flush();
+
+  entries['/ws/docs'] = [...entries['/ws/docs'], fileEntry('/ws/docs', 'merged.svg')];
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  await flush();
+  await flush();
+
+  assert.ok(rowFor(container, '/ws/docs/merged.svg'));
+  assert.equal(rowFor(container, '/ws/docs/build').getAttribute('aria-expanded'), 'true');
+  assert.ok(rowFor(container, '/ws/docs/build/gen.py'), 'the subfolder is open as before');
+});
+
+test('the open file that went while its folder was closed closes its preview on reopening', async (t) => {
+  const { dom, container, entries } = await mountTree();
+  t.after(dom.cleanup);
+
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  rowFor(container, '/ws/docs/notes.md').click();
+  await flush();
+  assert.equal(document.getElementById('file-preview').classList.contains('hidden'), false);
+  rowFor(container, '/ws/docs').click();
+  await flush();
+
+  entries['/ws/docs'] = [];
+  rowFor(container, '/ws/docs').click();
+  await flush();
+  await flush();
+
+  assert.equal(rowFor(container, '/ws/docs/notes.md'), null);
+  assert.equal(document.getElementById('file-preview').classList.contains('hidden'), true);
+});
+
 test('Auswahl, Tastaturfokus und Scrollposition ueberleben die Aktualisierung', async (t) => {
   const { dom, container, appStore, entries, emitTreeChanged } = await mountTree(
     {},
