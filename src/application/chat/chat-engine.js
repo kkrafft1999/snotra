@@ -946,14 +946,17 @@ function createChatEngine({
     return { target };
   }
 
-  /** The own secrets; a failed read compares against nothing — as for a tool result (§5). */
+  /**
+   * The own secrets, or `null` when they could not be read. A failed read is
+   * not an empty list: text checked against nothing would go out unchecked (§5, #976).
+   */
   async function readOwnSecrets() {
     if (!ownSecrets || typeof ownSecrets.read !== 'function') return [];
     try {
       const list = await ownSecrets.read();
-      return Array.isArray(list) ? list : [];
+      return Array.isArray(list) ? list : null;
     } catch {
-      return [];
+      return null;
     }
   }
 
@@ -1038,10 +1041,16 @@ function createChatEngine({
     // Whether the await under way is the provider's: a throw there is a
     // network or provider error, anywhere else it is the app's own (#527).
     let awaitingProvider = false;
-    // Read once per run, and only when something is embedded (#528).
+    // Read once per run, and only when something is embedded (#528). A failed
+    // read leaves the embedded text out (the guard withholds it) and ends the
+    // run before the next request, with a message that says why (#976).
     let embeddedSecrets = null;
+    let ownSecretsUnreadable = false;
     const readOwnSecretList = async () => {
-      if (!embeddedSecrets) embeddedSecrets = await readOwnSecrets();
+      if (!embeddedSecrets && !ownSecretsUnreadable) {
+        embeddedSecrets = await readOwnSecrets();
+        ownSecretsUnreadable = embeddedSecrets === null;
+      }
       return embeddedSecrets;
     };
     // An error result after tools ran still carries them — without the trace
@@ -2392,6 +2401,11 @@ function createChatEngine({
       for (let round = 0; round < toolRoundLimit; round += 1) {
         if (abortSignal.aborted) {
           return returnCancelledChat(onEvent, toolTrace, '', requestUsage, contextUsage, contextBreakdown);
+        }
+        // Checked before every request, since a card can switch a skill on
+        // mid-run (#774): no request goes out after the check could not run (#976).
+        if (ownSecretsUnreadable) {
+          return failRun(createMessage('chat.error.ownSecretsUnreadable'), CHAT_ERROR_CODES.INTERNAL);
         }
 
         emitPhase(onEvent, CHAT_PHASES.WAITING);

@@ -41,7 +41,7 @@ Even in *Auto*, the mode without questions:
 - No tool reaches outside the open folder unasked. Reading also works in the folders of skills you switched on. [since 1.18] A file tool that wants a file or folder outside asks first on a card, in every mode, *Auto* included — see [Answer an approval request](../approve-a-request/#a-file-outside-the-open-folder). Your home folder as a whole, the root of a disk and Snotra's own storage are never offered.
 - Skill folders stay read-only.
 - Snotra's own settings, keys and permissions are out of reach for every tool.
-- A tool output that contains one of your provider keys is held back.
+- A tool output that contains one of your provider keys is held back — and so is one that could not be checked for them.
 - A block you set always wins.
 
 ## Why loosening goes through a system dialog

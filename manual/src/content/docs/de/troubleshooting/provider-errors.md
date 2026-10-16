@@ -43,6 +43,7 @@ Manche Kästen haben mit dem Anbieter nichts zu tun:
 - ***Die Verbindung endete, bevor die Antwort vollständig war.*** Anbieter oder Netz haben abgebrochen. Schick die Nachricht noch einmal.
 - ***Die Antwort ist nicht angekommen.*** Frag noch einmal.
 - ***Snotra Agent ist auf einen eigenen Fehler gestoßen und hat die Antwort abgebrochen.*** Frag noch einmal. Passiert es wieder, [melde es](../logs-and-reports/) mit dem Text in Klammern.
+- ***Snotra Agent konnte die eigenen Schlüssel nicht lesen …*** Bevor deine Anweisungen, Skills und dein Gedächtnis an den Anbieter gehen, prüft Snotra sie auf seine eigenen Schlüssel. Kann es diese Schlüssel nicht lesen, sendet es lieber nichts als etwas Ungeprüftes. Frag noch einmal. Passiert es wieder, starte Snotra neu; fragen die Modelle danach nach ihren Schlüsseln, sieh unter [Schlüsselbund-Fragen und verschlüsselter Speicher](../keychain-and-storage/) nach.
 
 ## Was passiert
 

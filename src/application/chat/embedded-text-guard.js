@@ -39,12 +39,13 @@ const WITHHELD_EMBEDDED_TEXT =
 
 /**
  * @param {string} text
- * @param {string[]} ownSecrets  the app's own secrets, compared verbatim
+ * @param {string[]|null} ownSecrets  the app's own secrets, compared verbatim;
+ *   anything but a list means they could not be read, and the text is left out (#976)
  * @returns {{ text: string, guard: string|null }}
  */
 function guardEmbeddedText(text, ownSecrets) {
   if (typeof text !== 'string' || !text) return { text: typeof text === 'string' ? text : '', guard: null };
-  if (containsOwnSecret(text, ownSecrets)) {
+  if (!Array.isArray(ownSecrets) || containsOwnSecret(text, ownSecrets)) {
     return { text: WITHHELD_EMBEDDED_TEXT, guard: EMBEDDED_TEXT_GUARDS.WITHHELD };
   }
   const scan = scanSensitiveContent(text);
