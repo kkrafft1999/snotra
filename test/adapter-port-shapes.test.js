@@ -61,6 +61,7 @@ const FILESYSTEM_PORT_KEYS = [
   'listWorkspacePaths',
   'resolveCheckedWorkspacePath',
   'readFilePreview',
+  'writeFile',
   'readWorkspaceImage',
   'readWorkspacePdf',
 ];

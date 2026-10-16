@@ -6418,6 +6418,155 @@ select.modal-input {
   user-select: text;
 }
 
+#preview-content[hidden] {
+  display: none;
+}
+
+/* ── Editing a text file in the preview (#863) ─────────────────────────────
+ * The editor takes the place of the read-only text with the same font, size,
+ * line height and padding, so that switching keeps every line where it was.
+ * One place for its look: a CodeMirror theme (#864) derives from the same
+ * tokens. The bar above it carries a failed save or a conflict. */
+.file-edit,
+.file-edit__area {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.text-editor {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 12px 16px;
+  border: 0;
+  border-radius: 0;
+  resize: none;
+  overflow: auto;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-base);
+  line-height: var(--ds-line-height-base);
+  color: var(--text-primary);
+  caret-color: var(--ds-blue);
+  tab-size: 4;
+  white-space: pre;
+}
+
+.text-editor:focus {
+  outline: none;
+}
+
+.text-editor:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: calc(-1 * var(--ds-focus-offset) - 2px);
+}
+
+.text-editor:read-only {
+  color: var(--text-secondary);
+  cursor: default;
+}
+
+/* The Edit toggle in the header: shaped like one option of the
+ * "Preview | Source" switch next to it, and pressed like its checked one. */
+.file-edit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ds-touch-min);
+  padding: 0 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-grey-bg);
+  color: var(--text-secondary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--ds-motion-fast), color var(--ds-motion-fast), border-color var(--ds-motion-fast);
+}
+
+.file-edit-toggle svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.file-edit-toggle:hover:not([aria-disabled='true']) {
+  background: var(--ds-blue-soft);
+  color: var(--text-primary);
+}
+
+.file-edit-toggle[aria-pressed='true'] {
+  border-color: var(--ds-blue);
+  background: var(--ds-surface);
+  color: var(--ds-blue);
+}
+
+.file-edit-toggle:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.file-edit-toggle[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.file-edit-status {
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+  white-space: nowrap;
+}
+
+.file-edit-status[hidden] {
+  display: none;
+}
+
+.file-edit-status[data-state='failed'],
+.file-edit-status[data-state='conflict'] {
+  color: var(--text-primary);
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.file-edit-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin: 12px 16px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+  color: var(--text-primary);
+  font-size: var(--ds-font-size-md);
+}
+
+.file-edit-notice[data-kind='failed'] {
+  border-color: var(--ds-error-border);
+}
+
+.file-edit-notice[hidden] {
+  display: none;
+}
+
+.file-edit-notice__message {
+  flex: 1 1 260px;
+  margin: 0;
+}
+
+.file-edit-notice__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* Syntax highlighting (#745): colour only — no padding, no background, no
  * font change but the weight of Markdown bold, so that the text keeps its
  * place and copies as it stands in the file. */

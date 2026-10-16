@@ -943,6 +943,33 @@ const MOTIFS = {
     },
   },
 
+  /** A text file edited in the preview, saved by itself (#863). */
+  'edit-file': {
+    text: {
+      en: { file: 'beds.json', after: '"length_cm": ' },
+      de: { file: 'beete.json', after: '"laenge_cm": ' },
+    },
+    async setUp({ page, text }) {
+      await clickTreeRow(page, text.file);
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('#preview-tools .file-edit-toggle'))),
+        { what: 'Edit toggle' });
+      await page.click('#preview-tools .file-edit-toggle');
+      await poll(() => page.evaluate(() => document.activeElement?.classList.contains('text-editor')), { what: 'editor' });
+      // The first bed grows: select its 300 and type 350. In the middle of
+      // the line, so that the editor does not scroll sideways to the caret.
+      await page.evaluate((after) => {
+        const editor = document.activeElement;
+        const at = editor.value.indexOf(after) + after.length;
+        editor.setSelectionRange(at, at + 3);
+      }, text.after);
+      await page.keyboard.type('350');
+      await poll(() => page.evaluate(() => document.querySelector('.file-edit-status')?.dataset.state === 'saved'),
+        { what: 'saved state' });
+      await page.mouse.move(0, 0);
+      return clipPreview(page, 240);
+    },
+  },
+
   /** An image in the preview, with the zoom in its header. */
   'image-preview': {
     text: { en: { file: 'garden-plan.png' }, de: { file: 'gartenplan.png' } },

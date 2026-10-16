@@ -16,6 +16,12 @@ const REQUEST_CHANNELS = Object.freeze({
   FS_READ_DIRECTORY: 'fs:readDirectory',
   FS_READ_FILE: 'fs:readFile',
   /**
+   * A text file the user edited in the preview (#863): `(path, content,
+   * { baseHash, force })`, answered with `{ ok, size, modified }`, a
+   * `conflict` or an `error` with its `reason`.
+   */
+  FS_WRITE_FILE: 'fs:writeFile',
+  /**
    * Bytes eines Bildes aus dem Arbeitsordner als `{ mime, base64 }` (Issue
    * #244). Braucht einen eigenen Kanal, weil `FS_READ_FILE` Text vorschaut und
    * hier Typ, Groesse und Symlink-Ausbruch anders geprueft werden.

@@ -99,6 +99,11 @@ function registerFsHandlers({
   ipcMain.handle(REQ.FS_READ_FILE, async (_event, filePath) =>
     filesystem.readFilePreview(filePath));
 
+  // #863: the user's edit from the preview. Path, size and the state on disk
+  // are checked in the adapter and the service.
+  ipcMain.handle(REQ.FS_WRITE_FILE, async (_event, filePath, content, options) =>
+    filesystem.writeFile(filePath, content, options));
+
   // Issue #244: Bytes eines Bildes aus dem Arbeitsordner als data:-URI-Bausteine.
   // Der Renderer reicht den Pfad durch, wie das Modell ihn geschrieben hat —
   // geprueft (Workspace, Symlink, Typ, Groesse) wird ausschliesslich hier.

@@ -16,6 +16,12 @@
 // group as the PDF and image previews, as a whole document — images and
 // tables grow with the text — and at one size for every Markdown file.
 //
+// Since #863 the source can be edited: the plain-text view brings the Edit
+// toggle and the save state, and this view puts them next to its own switch.
+// What it saves becomes the text of the preview, rendered the next time the
+// preview is on show; leaving the source saves first and stays when that
+// fails.
+//
 // The interface it implements is documented in the header of `registry.js`.
 
 import contracts from '../generated/contracts.js';
@@ -97,7 +103,7 @@ function buildFrontMatter(frontMatter) {
 
 export const markdownView = {
   id: 'markdown',
-  kind: 'viewer',
+  kind: 'editor',
 
   canHandle({ ext }) {
     return MARKDOWN_EXTENSIONS.has(ext);
@@ -139,6 +145,10 @@ export const markdownView = {
     sourceEl.className = 'md-source';
     sourceEl.hidden = true;
     let sourceInstance = null;
+    // The Edit toggle and save state of the source (#863).
+    let sourceTools = [];
+    // The source saved a text the preview has not rendered yet.
+    let previewStale = false;
 
     const noticeEl = document.createElement('div');
     noticeEl.className = 'md-notice';
@@ -174,7 +184,7 @@ export const markdownView = {
       }
     }
 
-    const modeSwitch = buildModeSwitch((next) => setMode(next));
+    const modeSwitch = buildModeSwitch((next) => void requestMode(next));
 
     // ── Header tools: zoom (#829) ─────────────────────────────────────────
 
@@ -226,7 +236,7 @@ export const markdownView = {
 
     /** The header: the zoom while the preview is on show, and the switch. */
     function showTools() {
-      context.setTools(mode === MODES.PREVIEW ? [modeSwitch.element, zoomEl] : [modeSwitch.element]);
+      context.setTools(mode === MODES.PREVIEW ? [modeSwitch.element, zoomEl] : [modeSwitch.element, ...sourceTools]);
     }
 
     zoomOutButton.addEventListener('click', () => setZoom(nextZoom(zoom, -1, MARKDOWN_ZOOM_STEPS)));
@@ -246,16 +256,68 @@ export const markdownView = {
       }, NOTICE_MS);
     }
 
+    /**
+     * What the source gets as its context: the host's, with the tools it
+     * claims kept here, and what it writes or reads taken as this file's text.
+     */
+    function sourceContext(sourceState) {
+      const adopt = (text) => {
+        if (text === content) return;
+        content = text;
+        previewStale = true;
+      };
+      return {
+        ...context,
+        content,
+        viewState: sourceState,
+        setTools: (nodes) => {
+          sourceTools = nodes ?? [];
+          showTools();
+        },
+        writeFile: async (text, options) => {
+          const written = await context.writeFile(text, options);
+          if (written?.ok) adopt(text);
+          return written;
+        },
+        readFile: async () => {
+          const read = await context.readFile();
+          if (read && !read.error && typeof read.content === 'string') adopt(read.content);
+          return read;
+        },
+      };
+    }
+
     function setMode(next, { sourceState = null } = {}) {
       if (next === mode || disposed) return;
       mode = next;
       modeSwitch.select(mode);
       if (mode === MODES.SOURCE && !sourceInstance) {
-        sourceInstance = plainTextView.mount(sourceEl, { ...context, content, viewState: sourceState });
+        sourceInstance = plainTextView.mount(sourceEl, sourceContext(sourceState));
+      }
+      if (mode === MODES.PREVIEW && previewStale) {
+        previewStale = false;
+        void render({ keepImages: true });
       }
       previewEl.hidden = mode !== MODES.PREVIEW;
       sourceEl.hidden = mode !== MODES.SOURCE;
       showTools();
+    }
+
+    /**
+     * A switch the user asked for. Leaving the source while editing saves
+     * first; if that fails, the source stays, and its bar says why.
+     */
+    async function requestMode(next) {
+      if (next === mode || disposed) return;
+      if (next === MODES.PREVIEW && sourceInstance?.editing) {
+        const left = await sourceInstance.leaveEditing();
+        if (disposed) return;
+        if (!left) {
+          modeSwitch.select(mode);
+          return;
+        }
+      }
+      setMode(next);
     }
 
     /**
@@ -667,8 +729,16 @@ export const markdownView = {
     return {
       update({ content: next }) {
         content = next;
+        previewStale = false;
         void render();
         sourceInstance?.update({ content: next });
+      },
+      /** The source's unsaved text, if it holds any (#863). */
+      save() {
+        return sourceInstance?.save?.() ?? Promise.resolve(true);
+      },
+      setEditingBlocked(blocked) {
+        sourceInstance?.setEditingBlocked?.(blocked);
       },
       /**
        * The text is unchanged, the images it shows may not be (#640): the
@@ -705,7 +775,7 @@ export const markdownView = {
       /** Commands from outside the view — the menu shortcut (#344). */
       command(name) {
         if (name !== 'toggle-source') return false;
-        setMode(mode === MODES.PREVIEW ? MODES.SOURCE : MODES.PREVIEW);
+        void requestMode(mode === MODES.PREVIEW ? MODES.SOURCE : MODES.PREVIEW);
         return true;
       },
       /** For tests: which of the two is on show. */

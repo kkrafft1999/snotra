@@ -32,6 +32,9 @@
  *   A failed read carries `reason` (#641), the same codes as `unreadable` above plus
  *   'too-large' (over the 1 MB preview limit, with the file's `size`). `error` is the
  *   system's message, for the log; the renderer words the reason itself.
+ * @property {(filePath: string, content: string, options?: {baseHash?: string, force?: boolean}) => Promise<{ok: true, size: number, modified: number}|{conflict: 'changed'|'deleted'}|{error: string, reason: string}>} writeFile
+ *   The user's edit from the preview (#863), through the write tool's path checks. Without
+ *   `force`, a file whose SHA-256 differs from `baseHash` is not written (`conflict`).
  * @property {(imagePath: string) => Promise<object>} readWorkspaceImage
  *   Relative or absolute, as the model wrote it (#244).
  * @property {(pdfPath: string) => Promise<object>} readWorkspacePdf

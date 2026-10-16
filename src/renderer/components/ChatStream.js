@@ -2036,6 +2036,8 @@ export function initChatStream({
       syncComposer: syncChatInFlight,
       discard: discardChatRun,
       stateOf: runStateOf,
+      // Is any chat's run still going? The preview does not edit then (#863).
+      anyRunning: () => [...appStore.chatRuns.values()].some(isRunning),
       // A switch under way: a send waits for the chat it belongs to (#721).
       holdSwitch: holdChatSwitch,
     },

@@ -49,6 +49,16 @@
 //                           // itself, and a detail after it, e.g. the pixel
 //                           // dimensions of an image; null clears the detail
 //     setDirty(dirty),      // editors only: "my buffer differs from the file"
+//     writeFile(text, { baseHash, force }) → Promise<result>,
+//                           // editors only (#863): the user's text, through
+//                           // main's write checks; `{ ok, size, modified }`,
+//                           // a `conflict` or an `error` with its `reason`
+//     readFile() → Promise<result>,
+//                           // the file as it is on disk now, as `api.readFile`
+//     isEditingBlocked() → boolean,
+//                           // a chat run is active: nothing may be edited
+//     editable,             // set by a view that mounts another one for a
+//                           // part of its own; false keeps it read-only
 //   }
 //
 // The header itself (file name, size) belongs to the pane, not to the view —
@@ -63,6 +73,8 @@
 //                                           // the host empties hostEl after it
 //     save() → Promise<boolean>,            // editors only; false = failed,
 //                                           // the editor stays open
+//     setEditingBlocked(blocked),           // editors, optional: a chat run
+//                                           // started or ended (#863)
 //     command(name) → boolean,              // optional: a command from the
 //                                           // menu, e.g. 'toggle-source';
 //                                           // true when the view handled it
