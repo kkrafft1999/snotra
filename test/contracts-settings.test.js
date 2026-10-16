@@ -326,6 +326,15 @@ test('normalizeUiPrefs schickt Umgebungsinformationen standardmäßig mit', () =
   assert.equal(normalizeUiPrefsPatch({ approvalNotificationsEnabled: false }).approvalNotificationsEnabled, false);
 });
 
+test('the start-up update check is on unless switched off (#987)', () => {
+  const { normalizeUiPrefs, normalizeUiPrefsPatch } = require('../src/shared/contracts/settings');
+  assert.equal(normalizeUiPrefs({}).autoUpdateCheckEnabled, true);
+  assert.equal(normalizeUiPrefs({ autoUpdateCheckEnabled: 'no' }).autoUpdateCheckEnabled, true);
+  assert.equal(normalizeUiPrefs({ autoUpdateCheckEnabled: false }).autoUpdateCheckEnabled, false);
+  assert.equal('autoUpdateCheckEnabled' in normalizeUiPrefsPatch({ autoUpdateCheckEnabled: 0 }), false);
+  assert.equal(normalizeUiPrefsPatch({ autoUpdateCheckEnabled: false }).autoUpdateCheckEnabled, false);
+});
+
 test('normalizeUiPrefsPatch räumt den Interpreter-Pfad auf', () => {
   const { normalizeUiPrefsPatch } = require('../src/shared/contracts/settings');
 

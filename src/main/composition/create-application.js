@@ -1012,7 +1012,14 @@ function createApplication({
     if (win && !win.isDestroyed()) win.webContents.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
   }
 
-  const runUpdateCheck = createUpdateCheck({ updates, getMainWindow, PUSH, env });
+  const runUpdateCheck = createUpdateCheck({
+    updates,
+    getMainWindow,
+    PUSH,
+    // Read when the check runs, so the switch needs no restart (#987).
+    isAutomaticCheckEnabled: async () => (await uiPrefsStore.readUIPrefs()).autoUpdateCheckEnabled !== false,
+    env,
+  });
 
   function dispose() {
     providerRuntime.disposeAll();

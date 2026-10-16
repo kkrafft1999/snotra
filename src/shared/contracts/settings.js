@@ -516,6 +516,10 @@ function normalizeUiPrefs(raw) {
   // step 5): on unless switched off, since a run that waits for the user
   // stands still until they notice it.
   const approvalNotificationsEnabled = data.approvalNotificationsEnabled !== false;
+  // The silent update check after the start (#987): on unless switched off —
+  // the quality model settled "automatic, but switchable". The check from the
+  // menu ignores it.
+  const autoUpdateCheckEnabled = data.autoUpdateCheckEnabled !== false;
   // Gedaechtnis (Issue #166), je Ebene ein Schalter. Beide standardmaessig an:
   // Wer nichts gemerkt hat, hat auch keine Datei, und dann kostet der Schalter
   // nichts. Die Ordner-Ebene ist zugleich die Notbremse fuer einen fremden
@@ -580,6 +584,7 @@ function normalizeUiPrefs(raw) {
     environmentInfoEnabled,
     projectInstructionsEnabled,
     approvalNotificationsEnabled,
+    autoUpdateCheckEnabled,
     memoryWorkspaceEnabled,
     memoryUserEnabled,
     memorySelfEnabled,
@@ -669,6 +674,9 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.approvalNotificationsEnabled === 'boolean') {
     out.approvalNotificationsEnabled = patch.approvalNotificationsEnabled;
+  }
+  if (typeof patch.autoUpdateCheckEnabled === 'boolean') {
+    out.autoUpdateCheckEnabled = patch.autoUpdateCheckEnabled;
   }
   if (typeof patch.memoryWorkspaceEnabled === 'boolean') {
     out.memoryWorkspaceEnabled = patch.memoryWorkspaceEnabled;

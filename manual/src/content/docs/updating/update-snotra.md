@@ -14,7 +14,7 @@ Snotra Agent updates itself — but never on its own account. It looks for a new
 
 ## Steps
 
-**Wait for the hint, or ask yourself.** At every start Snotra checks for a newer version in the background. It says nothing when there is none and opens the update dialog when there is. To ask at any time:
+**Wait for the hint, or ask yourself.** At every start Snotra checks for a newer version in the background. It says nothing when there is none and opens the update dialog when there is. [since 1.24] To turn this off, switch off *Check for updates at start-up* under [*Settings › General*](../../customising/settings/#the-section-general). Asking yourself works either way, at any time:
 
 - *Help › Check for Updates…*, or
 - *Settings › General*, the link *Check for updates* next to the version number at the bottom.
@@ -52,4 +52,4 @@ Snotra downloads only the file that GitHub names for your installation, and it c
 - ***GitHub is limiting requests from your network right now.*** GitHub answers only a limited number of update checks per hour from one network address. Behind a VPN or in a company network that budget is shared with everyone else on the same address, so it can run out without you doing anything. The dialog names the time from which it works again — check then, or use the release page.
 - ***The update server cannot be reached.*** You are offline, or something between you and GitHub — a proxy, a firewall — blocks it. Try again later, or use the release page from a connection that works.
 - **Windows: *Last time, version … could not be put in place*.** The replacement failed after Snotra had quit, usually because a window or another program still had the Snotra Agent folder open. Close those and try again; the dialog gives the path of a log with the details.
-- **Nothing is offered although a new version exists.** You may have skipped it: use *Check for updates*, which shows it anyway. Pre-releases are never offered; only the latest regular release is.
+- **Nothing is offered although a new version exists.** You may have skipped it, or *Check for updates at start-up* is off: use *Check for updates*, which shows it anyway. Pre-releases are never offered; only the latest regular release is.

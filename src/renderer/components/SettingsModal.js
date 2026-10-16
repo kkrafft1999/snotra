@@ -250,6 +250,7 @@ export function initSettingsModal(deps) {
   // Schalter ist da, weil der absolute Pfad den Benutzernamen enthaelt.
   const inputEnvironmentInfo = document.getElementById('input-environment-info');
   const inputApprovalNotifications = document.getElementById('input-approval-notifications');
+  const inputAutoUpdateCheck = document.getElementById('input-auto-update-check');
   const inputProjectInstructions = document.getElementById('input-project-instructions');
   const settingsSkillList = document.getElementById('settings-skill-list');
   const settingsSkillListEmpty = document.getElementById('settings-skill-list-empty');
@@ -2099,6 +2100,7 @@ export function initSettingsModal(deps) {
       environmentSwitch.set(up.environmentInfoEnabled !== false);
       projectInstructionsSwitch.set(up.projectInstructionsEnabled !== false);
       approvalNotificationsSwitch.set(up.approvalNotificationsEnabled !== false);
+      autoUpdateCheckSwitch.set(up.autoUpdateCheckEnabled !== false);
     } catch (err) {
       if (stale()) return;
       // The fields below show defaults, not what is stored; Apply would write
@@ -2896,6 +2898,10 @@ export function initSettingsModal(deps) {
   // A card waiting out of sight (#792, step 5).
   const approvalNotificationsSwitch = bindPrefSwitch(
     inputApprovalNotifications, 'status-approval-notifications', 'approvalNotificationsEnabled'
+  );
+  // The silent check after the start (#987); the menu check ignores it.
+  const autoUpdateCheckSwitch = bindPrefSwitch(
+    inputAutoUpdateCheck, 'status-auto-update-check', 'autoUpdateCheckEnabled'
   );
   // Both decide whether run_python / shell_execute are offered; the status
   // line and the tool list follow what main now reports.

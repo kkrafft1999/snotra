@@ -148,6 +148,37 @@ test('runUpdateCheck silent mode pushes when an update is available', async (t) 
   assert.equal(sent[0].payload.updateAvailable, true);
 });
 
+test('runUpdateCheck reads the start-up setting each time it runs (#987)', async (t) => {
+  const sent = [];
+  let checks = 0;
+  const { app, ipcMain } = await makeApplication(t, {
+    getMainWindow: () => ({
+      isDestroyed: () => false,
+      webContents: { send: (channel, payload) => sent.push({ channel, payload }) },
+    }),
+    updates: {
+      getCurrentVersion: () => '1.0.0',
+      checkForUpdate: async () => {
+        checks += 1;
+        return { updateAvailable: true, currentVersion: '1.0.0', latestVersion: '2.0.0' };
+      },
+      ignoreVersion: async () => ({ ok: true }),
+    },
+  })();
+
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { autoUpdateCheckEnabled: false });
+  await app.runUpdateCheck({ silent: true });
+  assert.equal(checks, 0, 'switched off: no request');
+  assert.equal(sent.length, 0);
+
+  await app.runUpdateCheck({ silent: false });
+  assert.equal(checks, 1, 'the menu check still asks');
+
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { autoUpdateCheckEnabled: true });
+  await app.runUpdateCheck({ silent: true });
+  assert.equal(checks, 2, 'switched on again: no restart needed');
+});
+
 test('createApplication wires the skill catalog channels', async (t) => {
   const { ipcMain } = await makeApplication(t)();
 
