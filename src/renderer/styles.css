@@ -606,9 +606,21 @@ summary:focus-visible,
 
 /* ── Main Layout ── */
 
+/* Title bar, notices (#1001) and app stacked; the app takes what is left, so
+   a notice pushes it down instead of covering it. */
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+#titlebar {
+  flex-shrink: 0;
+}
+
 #app {
   display: flex;
-  height: calc(100% - 44px);
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* Ausgeblendete Seitenleiste (Issue #167). Die Breite steht als Inline-Wert am
@@ -1871,6 +1883,149 @@ summary:focus-visible,
 .chat-save-notice-link:focus-visible {
   outline: var(--ds-focus-ring);
   outline-offset: var(--ds-focus-offset);
+}
+
+/* Notices from main (#1001): a store that put an unreadable file aside, or
+   one that cannot save. Under the title bar, in the flow, so nothing they say
+   is covered and nothing they cover is lost. A set-aside informs — nothing
+   was lost — and takes the accent; a file that is not saved warns like the
+   chat's banner (#977), in red. The icon's shape and the heading carry the
+   difference in words as well. */
+.app-notices {
+  flex-shrink: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.app-notices[hidden] {
+  display: none;
+}
+
+.app-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px 10px 16px;
+  background: var(--ds-surface);
+  color: var(--text-primary);
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+}
+
+.app-notice + .app-notice {
+  border-top: 1px solid var(--border);
+}
+
+.app-notice--error {
+  background: var(--ds-error-bg);
+}
+
+.app-notice--error + .app-notice,
+.app-notice + .app-notice--error {
+  border-top-color: var(--ds-error-border);
+}
+
+.app-notice-icon {
+  flex-shrink: 0;
+  margin-top: 2px;
+  fill: none;
+  stroke: var(--ds-blue);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.app-notice--error .app-notice-icon {
+  stroke: var(--ds-error);
+}
+
+.app-notice-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.app-notice-heading {
+  margin: 0;
+  font-weight: var(--ds-font-weight-bold);
+}
+
+.app-notice--error .app-notice-heading {
+  color: var(--ds-error);
+}
+
+.app-notice-text {
+  margin: 2px 0 0;
+  color: var(--text-muted-strong);
+}
+
+/* The path is there to be found and copied: selectable, and broken anywhere
+   rather than pushing the strip wider than the window. */
+.app-notice-path {
+  margin: 4px 0 0;
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.app-notice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 6px 0 0;
+}
+
+.app-notice-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ds-blue-strong);
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.app-notice-link:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.app-notice-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: -6px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.app-notice-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.app-notice-close:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.app-notice-close-icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
 }
 
 /* ── Phase 3: Chat-Header-Meta-Zeile (Live-Dot + Mono-Titel + Pille) ─────── */

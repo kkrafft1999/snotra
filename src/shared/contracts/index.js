@@ -307,6 +307,12 @@ const {
 } = require('./program-allowances');
 
 const { createMessage, isMessage } = require('./message');
+const {
+  NOTICE_KINDS,
+  NOTICE_STORES,
+  NOTICE_STORE_IDS,
+  normalizeNotice,
+} = require('./notices');
 
 module.exports = {
   createMessage,
@@ -575,4 +581,8 @@ module.exports = {
   grantsSomething,
   parseDomainInput,
   isNarrowing,
+  NOTICE_KINDS,
+  NOTICE_STORES,
+  NOTICE_STORE_IDS,
+  normalizeNotice,
 };

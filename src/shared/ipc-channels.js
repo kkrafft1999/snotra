@@ -196,6 +196,13 @@ const REQUEST_CHANNELS = Object.freeze({
   MODEL_PRICES_SET_OVERRIDE: 'modelPrices:setOverride',
   MODEL_PRICES_UPDATE: 'modelPrices:update',
 
+  /** The notices posted so far (#1001), oldest first; posted ones arrive over PUSH.NOTICE_POSTED. */
+  NOTICES_LIST: 'notices:list',
+  /** Hide a notice for the rest of this start: `(id)`. */
+  NOTICES_DISMISS: 'notices:dismiss',
+  /** Show a notice's kept copy in the file manager: `(id)` — the renderer never names the path. */
+  NOTICES_REVEAL: 'notices:reveal',
+
   UPDATE_CHECK: 'update:check',
   UPDATE_GET_VERSION: 'update:getVersion',
   UPDATE_IGNORE_VERSION: 'update:ignoreVersion',
@@ -258,6 +265,10 @@ const PUSH_CHANNELS = Object.freeze({
   CHAT_PROGRESS: 'chat:progress',
   /** The transcript of a recording so far (#859): `{ id, turns }` or `{ id, error }`. */
   VOICE_TRANSCRIPT: 'voice:transcript',
+  /** A notice for the window (#1001): a normalized notice, see contracts/notices.js. */
+  NOTICE_POSTED: 'notices:posted',
+  /** A notice whose cause is gone, e.g. a file saved again: `{ id }`. */
+  NOTICE_WITHDRAWN: 'notices:withdrawn',
   UPDATE_AVAILABLE: 'update:available',
   /** Fortschritt des laufenden Update-Downloads (Issue #232). */
   UPDATE_PROGRESS: 'update:progress',

@@ -96,6 +96,11 @@ export const SETTINGS_HELP = Object.freeze({
   },
   // Not a settings section: the link in the chat's banner when its chats are
   // not being saved (#977) — a help link all the same, held by the same test.
+  // The link in a notice about a store's file (#1001).
+  'notice.store': {
+    slug: 'troubleshooting/files-set-aside',
+    title: { en: 'When settings or the history start afresh', de: 'Wenn Einstellungen oder der Verlauf neu anfangen' },
+  },
   'chat.saveNotice': {
     slug: 'troubleshooting/keychain-and-storage',
     section: { en: 'When a chat is not being saved', de: 'Wenn ein Chat nicht gespeichert wird' },
