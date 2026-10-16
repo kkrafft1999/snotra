@@ -414,6 +414,7 @@ const chatStream = initChatStream({
   stopChatVoiceListening: voice.stopChatVoiceListening,
   activeProviderConfigured: () => modelPicker.activeProviderConfigured(),
   activeProviderSupportsImages: () => modelPicker.activeProviderSupportsImages(),
+  activeImageLimit: () => modelPicker.activeImageLimit(),
   syncLiveDot: () => modelPicker.syncLiveDot(),
   syncChatTitle: () => modelPicker.syncChatTitle(),
   onWorkspaceFileWritten: (relativePath, chatId, change) => {

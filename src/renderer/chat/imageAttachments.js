@@ -28,14 +28,29 @@ export const INTAKE_REJECTIONS = Object.freeze({
   UNSUPPORTED_TYPE: 'unsupported-type',
   TOO_MANY: 'too-many',
   TOO_LARGE: 'too-large',
-  NO_IMAGE_SUPPORT: 'no-image-support',
+  // Snotra has no image adapter for this provider yet (#90–#92) — the model
+  // behind it may well take images, so the message must not blame it (#995).
+  PROVIDER_PASSES_NO_IMAGES: 'provider-passes-no-images',
+  // An OpenAI-compatible connection with "Allow image attachments" off: the
+  // user's own setting, which they can change.
+  CONNECTION_WITHOUT_IMAGES: 'connection-without-images',
+});
+
+/** Where the image limit of the active model comes from (#995). */
+export const IMAGE_LIMITED_BY = Object.freeze({
+  PROVIDER: 'provider',
+  CONNECTION: 'connection',
 });
 
 function formatMiB(bytes) {
   return `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`;
 }
 
-export function rejectionMessage(reason) {
+/**
+ * `provider` is the display name of the active provider; it only matters for
+ * PROVIDER_PASSES_NO_IMAGES.
+ */
+export function rejectionMessage(reason, { provider = '' } = {}) {
   switch (reason) {
     case INTAKE_REJECTIONS.UNSUPPORTED_TYPE:
       return t('chat.image.error.unsupportedType');
@@ -43,8 +58,12 @@ export function rejectionMessage(reason) {
       return t('chat.image.error.tooMany', { max: MAX_IMAGES_PER_MESSAGE });
     case INTAKE_REJECTIONS.TOO_LARGE:
       return t('chat.image.error.tooLarge', { max: formatMiB(MAX_IMAGE_ATTACHMENT_BYTES) });
-    case INTAKE_REJECTIONS.NO_IMAGE_SUPPORT:
-      return t('chat.image.error.noImageSupport');
+    case INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES:
+      return provider
+        ? t('chat.image.error.providerPassesNoImages', { provider })
+        : t('chat.image.error.providerPassesNoImages.unnamed');
+    case INTAKE_REJECTIONS.CONNECTION_WITHOUT_IMAGES:
+      return t('chat.image.error.connectionWithoutImages');
     default:
       return t('chat.image.error.generic');
   }
@@ -54,15 +73,23 @@ export function rejectionMessage(reason) {
  * Entscheidet vor dem Einlesen, welche der eingefuegten Dateien ueberhaupt in
  * Frage kommen. `existingCount` sind die Chips, die schon am Composer haengen.
  * `imagesSupported` sagt, ob der aktive Anbieter Bilder weiterreicht (#93).
+ * `imagesLimitedBy` says why not — see IMAGE_LIMITED_BY (#995).
  *
  * @returns {{ accepted: any[], rejections: string[] }}
  */
-export function planAttachmentIntake(existingCount, files, { imagesSupported = true } = {}) {
+export function planAttachmentIntake(
+  existingCount,
+  files,
+  { imagesSupported = true, imagesLimitedBy = IMAGE_LIMITED_BY.PROVIDER } = {},
+) {
   const list = Array.isArray(files) ? files : [];
   const accepted = [];
   const rejections = [];
   if (!imagesSupported) {
-    return { accepted, rejections: list.length > 0 ? [INTAKE_REJECTIONS.NO_IMAGE_SUPPORT] : [] };
+    const reason = imagesLimitedBy === IMAGE_LIMITED_BY.CONNECTION
+      ? INTAKE_REJECTIONS.CONNECTION_WITHOUT_IMAGES
+      : INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES;
+    return { accepted, rejections: list.length > 0 ? [reason] : [] };
   }
   let free = Math.max(0, MAX_IMAGES_PER_MESSAGE - (Number(existingCount) || 0));
 

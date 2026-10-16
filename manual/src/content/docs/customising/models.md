@@ -27,13 +27,13 @@ Changes take effect when you click *Apply* at the bottom of the settings.
 
 ## The providers
 
-| Provider | Access | Good to know |
-| --- | --- | --- |
-| *OpenAI* | API key | GPT-5 and later, with images and reasoning levels. One key for all OpenAI entries. |
-| *Anthropic (Claude)* | API key | One key for all Anthropic entries. |
-| *Google (Gemini)* | API key | One key for all Google entries. |
-| *Ollama (local)* | Server URL | Ollama's own interface, `http://localhost:11434` by default. |
-| *OpenAI-compatible* | Server URL, key optional | Everything else with an OpenAI-shaped interface. Each entry has its own address, key and name. |
+| Provider | Access | Images | Good to know |
+| --- | --- | --- | --- |
+| *OpenAI* | API key | Yes | GPT-5 and later, with images and reasoning levels. One key for all OpenAI entries. |
+| *Anthropic (Claude)* | API key | Not yet — Snotra does not pass them on ([#90](https://github.com/kkrafft1999/snotra/issues/90)) | One key for all Anthropic entries. |
+| *Google (Gemini)* | API key | Not yet — Snotra does not pass them on ([#91](https://github.com/kkrafft1999/snotra/issues/91)) | One key for all Google entries. |
+| *Ollama (local)* | Server URL | Not yet — Snotra does not pass them on ([#92](https://github.com/kkrafft1999/snotra/issues/92)) | Ollama's own interface, `http://localhost:11434` by default. |
+| *OpenAI-compatible* | Server URL, key optional | When *Allow image attachments* is on for the entry | Everything else with an OpenAI-shaped interface. Each entry has its own address, key and name. |
 
 ## Connect a server with an OpenAI-compatible interface
 

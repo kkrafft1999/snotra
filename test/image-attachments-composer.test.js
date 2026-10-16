@@ -60,10 +60,45 @@ test('planAttachmentIntake lehnt alles ab, wenn der Anbieter keine Bilder kann',
     imagesSupported: false,
   });
   assert.deepEqual(accepted, []);
-  assert.deepEqual(rejections, [INTAKE_REJECTIONS.NO_IMAGE_SUPPORT]);
+  assert.deepEqual(rejections, [INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES]);
 
   // Ohne eingefuegte Datei gibt es auch nichts zu melden.
   assert.deepEqual(planAttachmentIntake(0, [], { imagesSupported: false }).rejections, []);
+});
+
+test('planAttachmentIntake tells a switched-off connection from a provider Snotra cannot feed (#995)', async () => {
+  const { planAttachmentIntake, INTAKE_REJECTIONS, IMAGE_LIMITED_BY } = await modulePromise;
+
+  const files = [fakeFile('image/png')];
+  assert.deepEqual(
+    planAttachmentIntake(0, files, { imagesSupported: false, imagesLimitedBy: IMAGE_LIMITED_BY.CONNECTION }).rejections,
+    [INTAKE_REJECTIONS.CONNECTION_WITHOUT_IMAGES],
+  );
+  assert.deepEqual(
+    planAttachmentIntake(0, files, { imagesSupported: false, imagesLimitedBy: IMAGE_LIMITED_BY.PROVIDER }).rejections,
+    [INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES],
+  );
+});
+
+test('the provider refusal names Snotra and the provider, not the model (#995)', async () => {
+  const { rejectionMessage, INTAKE_REJECTIONS } = await modulePromise;
+  const en = require('../src/shared/i18n/messages/en.js');
+  const de = require('../src/shared/i18n/messages/de.js');
+  const enMessages = en.default || en;
+  const deMessages = de.default || de;
+
+  // The keys are pinned: the old wording blamed the model (AR-20).
+  for (const messages of [enMessages, deMessages]) {
+    assert.equal(messages['chat.image.error.noImageSupport'], undefined);
+    assert.match(messages['chat.image.error.providerPassesNoImages'], /Snotra.*\{provider\}/);
+    assert.match(messages['chat.image.error.providerPassesNoImages.unnamed'], /Snotra/);
+    assert.ok(messages['chat.image.error.connectionWithoutImages'].length > 10);
+  }
+
+  const named = rejectionMessage(INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES, { provider: 'Anthropic (Claude)' });
+  assert.match(named, /Anthropic \(Claude\)/);
+  assert.doesNotMatch(named, /model/i);
+  assert.doesNotMatch(rejectionMessage(INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES), /\{provider\}/);
 });
 
 test('rejectionMessage liefert zu jedem Grund einen lesbaren Satz', async () => {
