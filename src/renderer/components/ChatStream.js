@@ -53,8 +53,16 @@ import { prepareChatTables } from '../chat/chatTables.js';
 import { generatedImagesOf, syncGeneratedImages } from '../chat/generatedImages.js';
 import { resolveNative } from '../utils/nativePath.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
+import { settingsHelpTarget } from '../manual/settings-help-links.js';
 
 const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, isDerivedChatTitle, mergeSessionCost, normalizeSessionCost, PROPOSE_CONFIG_CHANGE_TOOL } = contracts;
+
+/** Why a save did not go through (#977), and what the banner says about it. */
+const SAVE_PROBLEMS = Object.freeze({ UNREADABLE: 'unreadable', FAILED: 'failed' });
+const SAVE_PROBLEM_TEXT_KEYS = Object.freeze({
+  [SAVE_PROBLEMS.UNREADABLE]: 'chat.saveNotice.unreadable',
+  [SAVE_PROBLEMS.FAILED]: 'chat.saveNotice.failed',
+});
 
 const CHAT_SEND_ICON_HTML =
   '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
@@ -177,6 +185,13 @@ export function initChatStream({
   // each redraw would read the conversation out again (#592). What a turn
   // ended with is said here, once.
   const chatAnnouncerEl = document.getElementById('chat-announcer');
+  // The banner that says the chats of this session are not being saved (#977).
+  const chatSaveNoticeEl = document.getElementById('chat-save-notice');
+  const chatSaveNoticeTextEl = document.getElementById('chat-save-notice-text');
+  document.getElementById('chat-save-notice-link')?.addEventListener('click', (event) => {
+    const target = settingsHelpTarget(event.currentTarget.dataset.manualHelp, getLocale());
+    if (target) void Promise.resolve(api.openManual?.({ slug: target.slug, fragment: target.fragment })).catch(() => {});
+  });
 
   // Anhaenge des noch nicht abgeschickten Zuges (Issue #84). Sie leben nur im
   // Composer; mit dem Senden wandern sie an die Nachricht.
@@ -757,32 +772,78 @@ export function initChatStream({
   }
 
   /**
+   * Why the history does not take this session's chats (#977): `null` while
+   * saves go through. The banner under the chat header says so until a save
+   * succeeds again — the chats of this session are otherwise gone after quit,
+   * and nothing else would tell.
+   */
+  let saveProblem = null;
+
+  function setSaveProblem(problem) {
+    if (problem === saveProblem) return;
+    const wasSaving = saveProblem === null;
+    saveProblem = problem;
+    if (!chatSaveNoticeEl) return;
+    chatSaveNoticeEl.hidden = problem === null;
+    if (problem === null) return;
+    const key = SAVE_PROBLEM_TEXT_KEYS[problem];
+    // Kept on the element, so a language switch translates it along.
+    chatSaveNoticeTextEl.setAttribute('data-i18n', key);
+    chatSaveNoticeTextEl.textContent = t(key);
+    // Said once when saving stops, not again with every save that fails after it.
+    if (wasSaving) announce(`${t('chat.saveNotice.heading')} ${t(key)}`);
+  }
+
+  /**
    * Writes a chat into the history. Any chat, not only the one on screen: a
    * run that ends in the background writes its own (#320) — and does not make
    * it the folder's active chat, which stays the one the user looks at.
+   *
+   * Never rejects: several callers run it as `void`, and a new chat or a
+   * folder switch must not fail over a save. A save that does not go through
+   * shows the banner instead (#977).
    */
   async function persistChat(chat, { markActive = false } = {}) {
     if (!chat?.id || lastPersisted.get(chat.id) === DELETED) return;
-    const persistable = persistableMessages(chat.messages);
-    if (persistable.length === 0) return;
-    lastPersisted.set(chat.id, { messages: chat.messages, count: persistable.length });
-    // Ohne Zeitstempel: Wann ein Chat zuletzt gefuehrt wurde, entscheidet der
-    // Main am Nachrichtenstand (Issue #245). Diese Funktion laeuft auch beim
-    // blossen Verlassen eines Chats — ein Stempel von hier hiesse „heute
-    // gesprochen“, obwohl niemand etwas gesagt hat.
-    await api.upsertChatSession({
-      id: chat.id,
-      workspaceRoot: chat.workspaceRoot,
-      messages: persistable,
-      tokenUsage: chat.tokenUsage,
-      // Only ever grows (#949): a chat without a sum here sends none, and the
-      // one already stored stays.
-      ...(chat.cost ? { cost: chat.cost } : {}),
-      // Nur einen bereits benannten Chat betiteln — sonst leitet die Ablage
-      // den Titel selbst aus der ersten Frage ab.
-      ...(chat.title ? { title: chat.title } : {}),
-    });
-    if (markActive) await api.setActiveChatId(chat.id);
+    try {
+      const persistable = persistableMessages(chat.messages);
+      if (persistable.length === 0) return;
+      lastPersisted.set(chat.id, { messages: chat.messages, count: persistable.length });
+      // Ohne Zeitstempel: Wann ein Chat zuletzt gefuehrt wurde, entscheidet der
+      // Main am Nachrichtenstand (Issue #245). Diese Funktion laeuft auch beim
+      // blossen Verlassen eines Chats — ein Stempel von hier hiesse „heute
+      // gesprochen“, obwohl niemand etwas gesagt hat.
+      const result = await api.upsertChatSession({
+        id: chat.id,
+        workspaceRoot: chat.workspaceRoot,
+        messages: persistable,
+        tokenUsage: chat.tokenUsage,
+        // Only ever grows (#949): a chat without a sum here sends none, and the
+        // one already stored stays.
+        ...(chat.cost ? { cost: chat.cost } : {}),
+        // Nur einen bereits benannten Chat betiteln — sonst leitet die Ablage
+        // den Titel selbst aus der ersten Frage ab.
+        ...(chat.title ? { title: chat.title } : {}),
+      });
+      if (result?.unreadable) {
+        // Main skipped the save rather than write over a file it could not read (#473).
+        setSaveProblem(SAVE_PROBLEMS.UNREADABLE);
+        return;
+      }
+    } catch (error) {
+      toolLogDebug.record('save failed', { chatId: chat.id, message: String(error?.message || error) });
+      setSaveProblem(SAVE_PROBLEMS.FAILED);
+      return;
+    }
+    setSaveProblem(null);
+    if (markActive) {
+      // Only which chat the folder opens with next; the chat itself is saved.
+      try {
+        await api.setActiveChatId(chat.id);
+      } catch (error) {
+        toolLogDebug.record('save failed', { chatId: chat.id, step: 'active', message: String(error?.message || error) });
+      }
+    }
     // Die Verlaufsspalte steht seit Epic #223 (Phase B) dauerhaft daneben und
     // wuerde sonst den alten Titel und den alten Zeitpunkt zeigen.
     onChatPersisted();

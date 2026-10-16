@@ -653,10 +653,12 @@ test('#473: with an unreadable history file a save is skipped, not written over 
   const original = await fs.readFile(target, 'utf8');
 
   locked = true;
-  // The new chat, the folder switch and the delete that ask for these go on.
-  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('b')), { ok: false });
-  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'b'), { ok: false });
-  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a'), { ok: false });
+  // The new chat, the folder switch and the delete that ask for these go on,
+  // and the answer says why nothing was saved, so the chat can tell (#977).
+  const skipped = { ok: false, unreadable: true };
+  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('b')), skipped);
+  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'b'), skipped);
+  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a'), skipped);
   assert.equal(await fs.readFile(target, 'utf8'), original, 'the file stays as it was');
 
   locked = false;

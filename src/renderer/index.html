@@ -309,6 +309,18 @@
             <span id="chat-title" data-i18n="chat.title">Chat</span>
           </div>
         </div>
+        <!-- While the history does not take this session's chats (#977). Said once
+             through #chat-announcer when it appears; the text names the cause. -->
+        <div id="chat-save-notice" class="chat-save-notice" hidden>
+          <svg class="chat-save-notice-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="6.25"/><path d="M8 4.75v3.75"/><path d="M8 11.1v.15"/>
+          </svg>
+          <div class="chat-save-notice-body">
+            <p class="chat-save-notice-heading" data-i18n="chat.saveNotice.heading">This chat is not being saved.</p>
+            <p class="chat-save-notice-text"><span id="chat-save-notice-text"></span>
+              <button type="button" id="chat-save-notice-link" class="chat-save-notice-link" data-manual-help="chat.saveNotice" data-i18n="chat.saveNotice.link">What can I do?</button></p>
+          </div>
+        </div>
         <ol id="chat-messages" role="log" aria-label="Conversation" data-i18n-attr="aria-label:chat.log" aria-live="off" aria-busy="false"></ol>
         <!-- The list is redrawn as a whole; announcing it would read the conversation out again (#592). A turn's outcome is said here. -->
         <p id="chat-announcer" class="sr-only" role="status" aria-live="polite"></p>
