@@ -645,7 +645,12 @@ The path to the tree: `fs:tree-changed`
 (`shared/contracts/workspace-tree.js`) → `FileTree.js` reloads the reported
 folders, but only the currently visible ones, and only if their content has
 actually changed. Selection, keyboard focus and scroll position are saved before
-the redraw and restored afterwards.
+the redraw and restored afterwards. A folder that was open before and has been
+closed since keeps its rows and hears none of these reports, so opening it
+again shows those rows at once and then compares them with the disk, in the
+same queue, redrawing only when the listing moved on
+([#1017](https://github.com/kkrafft1999/snotra/issues/1017)). A file merged in
+from a worktree while its folder was closed is the case that showed the gap.
 
 Every other rebuild of rows takes the same road
 ([#636](https://github.com/kkrafft1999/snotra/issues/636)): an agent's write, a

@@ -1440,9 +1440,27 @@ export function initFileTree(deps) {
     if (childContainer.dataset.loaded !== 'true') {
       await loadTreeLevel(childContainer, dirPath, loadDepthFromTreeRow(row));
       childContainer.dataset.loaded = 'true';
+      showExpanded(row, childContainer, true);
+      return true;
     }
+    const reopened = !childContainer.classList.contains('expanded');
     showExpanded(row, childContainer, true);
+    if (reopened) await catchUpReopenedFolder(dirPath);
     return true;
+  }
+
+  /**
+   * A folder that was loaded and then collapsed hears of no change while it
+   * is closed: a watcher report only reaches open folders
+   * (`visibleFolderPaths`). Reopened, it shows the rows it had at once, and
+   * this compares them with the disk afterwards, redrawing only when its
+   * listing moved on (#1017). Runs in the queue.
+   */
+  async function catchUpReopenedFolder(dirPath) {
+    if (!(await folderListingChanged(dirPath))) return;
+    await redrawFolders([dirPath]);
+    // The selected or the open file may be among what went.
+    await syncSelection([dirPath], true);
   }
 
   /**
@@ -2170,8 +2188,12 @@ export function initFileTree(deps) {
     return treeContainer.querySelector(`.tree-item[data-path="${CSS.escape(itemPath)}"]`);
   }
 
-  /** Der Projektordner und alles, was gerade aufgeklappt ist — mehr ist nicht
-   *  zu sehen. Nicht sichtbare Ordner laden beim Aufklappen ohnehin frisch. */
+  /**
+   * The project folder and every open folder — nothing else can be seen. A
+   * folder never opened reads fresh when it is; one opened before and closed
+   * since still holds its old rows and catches up as it reopens
+   * (`catchUpReopenedFolder`, #1017).
+   */
   function visibleFolderPaths() {
     return [appStore.rootPath, ...collectExpandedFolderPaths()];
   }
@@ -2473,6 +2495,7 @@ export function initFileTree(deps) {
     }
     if (childContainer.dataset.loaded === 'true') {
       showExpanded(row, childContainer, true);
+      void enqueueTreeWork(() => catchUpReopenedFolder(dirPath), 'Folder could not be checked');
       return;
     }
     showExpanded(row, null, true);
