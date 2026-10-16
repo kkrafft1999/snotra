@@ -534,6 +534,15 @@ const MOTIFS = {
     profile: 'fresh',
     async setUp({ page }) {
       await poll(() => shown(page, 'chat-hint'), { what: 'hint without a model' });
+      // Nothing is clicked here, so the system pointer resting over the window
+      // can leave a hover ring on a quick-start chip, even after a move away.
+      // Move until the hover is gone; the step via (1, 1) makes each move real.
+      await poll(async () => {
+        await page.mouse.move(1, 1);
+        await page.mouse.move(0, 0);
+        await pause(100);
+        return page.evaluate(() => !document.querySelector('#welcome :hover'));
+      }, { what: 'no hover on the welcome page' });
       return null;
     },
   },
@@ -672,6 +681,8 @@ const MOTIFS = {
       if (!(await shown(page, 'chat-tool-mode-menu'))) await page.click('#btn-chat-tool-mode');
       await poll(() => page.evaluate(() => !document.getElementById('chat-tool-mode-footer').hidden),
         { what: 'default for new chats offered' });
+      // Off the pill that was clicked last, or its hover ring shows in some variants.
+      await page.mouse.move(0, 0);
       return clipAround(page, ['#chat-tool-mode-menu', '#btn-chat-tool-mode'], 16);
     },
   },
