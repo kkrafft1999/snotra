@@ -1,0 +1,237 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" role="img" aria-labelledby="title description">
+  <title id="title">Snotra Agent — containers (C4 level 2)</title>
+  <desc id="description">A C4 container diagram of Snotra Agent. Inside the system boundary: the renderer, the HTML preview and the manual window on top, the main process in the middle, the execution sandbox and the local store below. Outside: the user, and seven external systems reached only from the main process — LLM providers, OpenAI services, Tavily and the web, GitHub Releases, the LiteLLM price table, MCP servers and the operating system. As of 2026-10-16, issue #974.</desc>
+
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5C5C5C"/>
+    </marker>
+    <style>
+      text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .canvas { fill: #F9F9F9; }
+      .page-title { fill: #000000; font-size: 32px; font-weight: 600; }
+      .page-sub { fill: #5C5C5C; font-size: 15px; }
+      .boundary { fill: none; stroke: #5C5C5C; stroke-width: 1.5; stroke-dasharray: 8 6; }
+      .boundary-label { fill: #3D3D3D; font-size: 14px; font-weight: 600; }
+      .boundary-tag { fill: #5C5C5C; font-size: 12px; }
+      .container { fill: #FFFFFF; stroke: #00759E; stroke-width: 2; }
+      .container--main { fill: #F3F9FB; stroke: #00759E; stroke-width: 3; }
+      .store { fill: #FFFFFF; stroke: #00759E; stroke-width: 2; }
+      .external { fill: #EFEFEF; stroke: #A3A3A3; stroke-width: 1.5; }
+      .person { fill: #0B4F6C; }
+      .name { fill: #000000; font-size: 18px; font-weight: 600; }
+      .name--main { font-size: 20px; }
+      .tech { fill: #00759E; font-size: 12px; font-weight: 500; }
+      .desc { fill: #5C5C5C; font-size: 13px; }
+      .chip { fill: #FFFFFF; stroke: #B9D9E5; stroke-width: 1.2; }
+      .chip-text { fill: #00597A; font-size: 12px; font-weight: 500; text-anchor: middle; }
+      .caption { fill: #5C5C5C; font-size: 10.5px; font-weight: 600; letter-spacing: 1px; }
+      .ext-name { fill: #2B2B2B; font-size: 16px; font-weight: 600; }
+      .ext-tag { fill: #6E6E6E; font-size: 11px; text-anchor: end; }
+      .ext-desc { fill: #5C5C5C; font-size: 12px; }
+      .ext-proto { fill: #00759E; font-size: 11.5px; font-weight: 600; }
+      .person-name { fill: #FFFFFF; font-size: 16px; font-weight: 600; text-anchor: middle; }
+      .person-sub { fill: #D5E6EE; font-size: 11px; text-anchor: middle; }
+      .edge { fill: none; stroke: #5C5C5C; stroke-width: 1.6; }
+      .edge-label { fill: #3D3D3D; font-size: 11.5px; }
+      .label-bg { fill: #F9F9F9; }
+      .legend-title { fill: #3D3D3D; font-size: 13px; font-weight: 600; }
+      .legend-text { fill: #5C5C5C; font-size: 12px; }
+      .stamp { fill: #8A8A8A; font-size: 11px; text-anchor: end; }
+    </style>
+  </defs>
+
+  <rect class="canvas" width="1600" height="1180"/>
+
+  <!-- Title -->
+  <text class="page-title" x="60" y="64">Snotra Agent — containers (C4 level 2)</text>
+  <text class="page-sub" x="60" y="94">Processes and data stores of the desktop app, and the external systems they talk to. As of 2026-10-16 (#974).</text>
+
+  <!-- Person -->
+  <circle class="person" cx="565" cy="132" r="16"/>
+  <rect class="person" x="470" y="146" width="190" height="70" rx="14"/>
+  <text class="person-name" x="565" y="172">User</text>
+  <text class="person-sub" x="565" y="189">[Person]</text>
+  <text class="person-sub" x="565" y="205">works in a workspace folder</text>
+
+  <!-- System boundary -->
+  <rect class="boundary" x="60" y="240" width="1010" height="824" rx="10"/>
+  <text class="boundary-label" x="80" y="1050">Snotra Agent</text>
+  <text class="boundary-tag" x="178" y="1050">[Software system · Electron desktop app]</text>
+
+  <!-- Row 1: windows -->
+  <rect class="container" x="90" y="290" width="300" height="150" rx="8"/>
+  <text class="name" x="110" y="324">Renderer (app window)</text>
+  <text class="tech" x="110" y="344">[Container: Chromium]</text>
+  <text class="tech" x="110" y="360">marked · DOMPurify · pdf.js · Prism</text>
+  <text class="desc" x="110" y="388">Presentation only: chat, file tree,</text>
+  <text class="desc" x="110" y="406">file views, settings. Sees nothing but</text>
+  <text class="desc" x="110" y="424">window.electronAPI and the contracts.</text>
+
+  <rect class="container" x="415" y="290" width="300" height="150" rx="8"/>
+  <text class="name" x="435" y="324">HTML preview</text>
+  <text class="tech" x="435" y="344">[Container: WebContentsView]</text>
+  <text class="tech" x="435" y="360">own session · sandbox: true</text>
+  <text class="desc" x="435" y="388">HTML pages from the workspace,</text>
+  <text class="desc" x="435" y="406">kept apart from the app's own UI</text>
+  <text class="desc" x="435" y="424">(#479).</text>
+
+  <rect class="container" x="740" y="290" width="300" height="150" rx="8"/>
+  <text class="name" x="760" y="324">Manual window</text>
+  <text class="tech" x="760" y="344">[Container: BrowserWindow]</text>
+  <text class="tech" x="760" y="360">own preload · own IPC channels</text>
+  <text class="desc" x="760" y="388">The user manual that ships with</text>
+  <text class="desc" x="760" y="406">the app (src/manual/, #790).</text>
+
+  <!-- Row 2: main process -->
+  <rect class="container--main" x="90" y="560" width="950" height="200" rx="8"/>
+  <text class="name name--main" x="110" y="596">Main process</text>
+  <text class="tech" x="110" y="616">[Container: Electron main · Node.js]</text>
+  <text class="desc" x="110" y="644">Composition root, chat engine with tool loop, provider adapters, tool registry, approvals, persistence, updates.</text>
+  <text class="desc" x="110" y="662">Holds the secrets and decides every access to the outside — all external traffic leaves from here.</text>
+  <text class="caption" x="110" y="690">COMPONENTS — SEE THE LAYER AND HEXAGON DIAGRAMS</text>
+  <g>
+    <rect class="chip" x="110" y="700" width="140" height="32" rx="16"/>
+    <text class="chip-text" x="180" y="721">Composition root</text>
+    <rect class="chip" x="260" y="700" width="140" height="32" rx="16"/>
+    <text class="chip-text" x="330" y="721">Chat engine</text>
+    <rect class="chip" x="410" y="700" width="140" height="32" rx="16"/>
+    <text class="chip-text" x="480" y="721">Provider adapters</text>
+    <rect class="chip" x="560" y="700" width="140" height="32" rx="16"/>
+    <text class="chip-text" x="630" y="721">Tool registry</text>
+    <rect class="chip" x="710" y="700" width="140" height="32" rx="16"/>
+    <text class="chip-text" x="780" y="721">Domain proxy</text>
+    <rect class="chip" x="860" y="700" width="160" height="32" rx="16"/>
+    <text class="chip-text" x="940" y="721">Worker threads</text>
+  </g>
+
+  <!-- Row 3: sandbox and store -->
+  <rect class="container" x="90" y="860" width="430" height="170" rx="8"/>
+  <text class="name" x="110" y="894">Execution sandbox</text>
+  <text class="tech" x="110" y="914">[Container: child processes · sandbox-runtime]</text>
+  <text class="tech" x="110" y="930">Seatbelt on macOS · bubblewrap on Linux · none on Windows</text>
+  <text class="desc" x="110" y="958">shell_execute and run_python (#329): write only</text>
+  <text class="desc" x="110" y="976">inside the workspace, network only to approved</text>
+  <text class="desc" x="110" y="994">domains, through the proxy in main.</text>
+
+  <path class="store" d="M 610 876 A 215 16 0 0 1 1040 876 V 1014 A 215 16 0 0 1 610 1014 Z"/>
+  <path class="store" d="M 610 876 A 215 16 0 0 0 1040 876"/>
+  <text class="name" x="630" y="920">Local store</text>
+  <text class="tech" x="630" y="940">[Data store: JSON files in the userData folder]</text>
+  <text class="desc" x="630" y="966">llm-config · chat-history · ui-preferences · mcp-servers</text>
+  <text class="desc" x="630" y="984">tool-policy · web-search-config · chat attachments</text>
+  <text class="desc" x="630" y="1002">memory.md · secrets encrypted with safeStorage</text>
+
+  <!-- User to the windows -->
+  <path class="edge" d="M 515 216 L 242 288" marker-end="url(#arrow)"/>
+  <rect class="label-bg" x="318" y="242" width="118" height="16"/>
+  <text class="edge-label" x="322" y="254">chats, browses files</text>
+  <path class="edge" d="M 565 216 L 565 288" marker-end="url(#arrow)"/>
+  <rect class="label-bg" x="572" y="246" width="72" height="16"/>
+  <text class="edge-label" x="575" y="258">views pages</text>
+  <path class="edge" d="M 615 216 L 888 288" marker-end="url(#arrow)"/>
+  <rect class="label-bg" x="700" y="242" width="104" height="16"/>
+  <text class="edge-label" x="704" y="254">reads the manual</text>
+
+  <!-- Windows to main -->
+  <path class="edge" d="M 240 442 L 240 558" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="edge-label" x="252" y="494">IPC through the preload</text>
+  <text class="edge-label" x="252" y="510">invoke · pushed events</text>
+
+  <path class="edge" d="M 565 558 L 565 442" marker-end="url(#arrow)"/>
+  <text class="edge-label" x="577" y="494">snotra-html: scheme</text>
+  <text class="edge-label" x="577" y="510">on the preview's session</text>
+
+  <path class="edge" d="M 890 442 L 890 558" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="edge-label" x="902" y="494">IPC on the manual's</text>
+  <text class="edge-label" x="902" y="510">own channels</text>
+
+  <!-- Main to sandbox and store -->
+  <path class="edge" d="M 305 762 L 305 858" marker-end="url(#arrow)"/>
+  <text class="edge-label" x="317" y="802">spawn · stdio</text>
+  <text class="edge-label" x="317" y="818">network back through the domain proxy</text>
+
+  <path class="edge" d="M 825 762 L 825 860" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="edge-label" x="837" y="802">reads and writes files</text>
+  <text class="edge-label" x="837" y="818">secrets through safeStorage</text>
+
+  <!-- Main to the external systems -->
+  <path class="edge" d="M 1040 660 L 1110 660"/>
+  <path class="edge" d="M 1110 290 L 1110 1010"/>
+  <path class="edge" d="M 1110 290 L 1158 290" marker-end="url(#arrow)"/>
+  <path class="edge" d="M 1110 410 L 1158 410" marker-end="url(#arrow)"/>
+  <path class="edge" d="M 1110 530 L 1158 530" marker-end="url(#arrow)"/>
+  <path class="edge" d="M 1110 650 L 1158 650" marker-end="url(#arrow)"/>
+  <path class="edge" d="M 1110 770 L 1158 770" marker-end="url(#arrow)"/>
+  <path class="edge" d="M 1110 890 L 1158 890" marker-end="url(#arrow)"/>
+  <path class="edge" d="M 1110 1010 L 1158 1010" marker-end="url(#arrow)"/>
+
+  <!-- External systems -->
+  <rect class="external" x="1160" y="240" width="380" height="100" rx="8"/>
+  <text class="ext-name" x="1180" y="270">LLM providers</text>
+  <text class="ext-tag" x="1522" y="270">[External system]</text>
+  <text class="ext-desc" x="1180" y="294">OpenAI, Anthropic, Google, Ollama and</text>
+  <text class="ext-desc" x="1180" y="310">OpenAI-compatible endpoints — chat rounds</text>
+  <text class="ext-proto" x="1180" y="330">HTTPS + SSE · Ollama: NDJSON</text>
+
+  <rect class="external" x="1160" y="360" width="380" height="100" rx="8"/>
+  <text class="ext-name" x="1180" y="390">OpenAI services</text>
+  <text class="ext-tag" x="1522" y="390">[External system]</text>
+  <text class="ext-desc" x="1180" y="414">Image generation, transcription (Whisper)</text>
+  <text class="ext-desc" x="1180" y="430">and live voice input</text>
+  <text class="ext-proto" x="1180" y="450">HTTPS · WebSocket for realtime</text>
+
+  <rect class="external" x="1160" y="480" width="380" height="100" rx="8"/>
+  <text class="ext-name" x="1180" y="510">Tavily and the web</text>
+  <text class="ext-tag" x="1522" y="510">[External system]</text>
+  <text class="ext-desc" x="1180" y="534">Web search through Tavily,</text>
+  <text class="ext-desc" x="1180" y="550">URL fetch to any address</text>
+  <text class="ext-proto" x="1180" y="570">HTTPS</text>
+
+  <rect class="external" x="1160" y="600" width="380" height="100" rx="8"/>
+  <text class="ext-name" x="1180" y="630">GitHub Releases</text>
+  <text class="ext-tag" x="1522" y="630">[External system]</text>
+  <text class="ext-desc" x="1180" y="654">Update check after the start and</text>
+  <text class="ext-desc" x="1180" y="670">from the menu, update download</text>
+  <text class="ext-proto" x="1180" y="690">HTTPS</text>
+
+  <rect class="external" x="1160" y="720" width="380" height="100" rx="8"/>
+  <text class="ext-name" x="1180" y="750">LiteLLM price table</text>
+  <text class="ext-tag" x="1522" y="750">[External system]</text>
+  <text class="ext-desc" x="1180" y="774">Model prices for the cost estimate (#949),</text>
+  <text class="ext-desc" x="1180" y="790">fetched only on the user's click</text>
+  <text class="ext-proto" x="1180" y="810">HTTPS</text>
+
+  <rect class="external" x="1160" y="840" width="380" height="100" rx="8"/>
+  <text class="ext-name" x="1180" y="870">MCP servers</text>
+  <text class="ext-tag" x="1522" y="870">[External · local process]</text>
+  <text class="ext-desc" x="1180" y="894">Tools the user configured — started by</text>
+  <text class="ext-desc" x="1180" y="910">Snotra, but third-party software</text>
+  <text class="ext-proto" x="1180" y="930">JSON-RPC over stdio</text>
+
+  <rect class="external" x="1160" y="960" width="380" height="100" rx="8"/>
+  <text class="ext-name" x="1180" y="990">Operating system</text>
+  <text class="ext-tag" x="1522" y="990">[External system]</text>
+  <text class="ext-desc" x="1180" y="1014">Workspace folder, keychain behind</text>
+  <text class="ext-desc" x="1180" y="1030">safeStorage, sandbox-exec / bubblewrap</text>
+  <text class="ext-proto" x="1180" y="1050">File system · OS APIs</text>
+
+  <!-- Legend -->
+  <text class="legend-title" x="60" y="1120">Legend</text>
+  <circle class="person" cx="140" cy="1108" r="6"/>
+  <rect class="person" x="130" y="1114" width="20" height="10" rx="3"/>
+  <text class="legend-text" x="158" y="1122">Person</text>
+  <rect class="container" x="222" y="1106" width="26" height="18" rx="4"/>
+  <text class="legend-text" x="256" y="1122">Container</text>
+  <path class="store" d="M 336 1108 A 13 4 0 0 1 362 1108 V 1122 A 13 4 0 0 1 336 1122 Z"/>
+  <path class="store" d="M 336 1108 A 13 4 0 0 0 362 1108"/>
+  <text class="legend-text" x="370" y="1122">Data store</text>
+  <rect class="external" x="452" y="1106" width="26" height="18" rx="4"/>
+  <text class="legend-text" x="486" y="1122">External system</text>
+  <rect class="boundary" x="594" y="1106" width="26" height="18" rx="4"/>
+  <text class="legend-text" x="628" y="1122">Software system boundary</text>
+  <path class="edge" d="M 798 1116 L 836 1116" marker-end="url(#arrow)"/>
+  <text class="legend-text" x="846" y="1122">Call or data flow, labelled with its transport</text>
+
+  <text class="stamp" x="1540" y="1156">Created 2026-10-16 · Claude Opus 5.5 · Reasoning effort: high</text>
+</svg>
