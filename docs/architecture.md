@@ -2,9 +2,63 @@
 
 A short overview of the layered and port/adapter structure of Snotra Agent after
 the five roadmap stages were completed (as of 2026-07-12). Diagrams:
+[`architecture-containers.svg`](./architecture-containers.svg),
 [`architecture-layers.svg`](./architecture-layers.svg),
 [`architecture-hexagonal.svg`](./architecture-hexagonal.svg),
 [`architecture.svg`](./architecture.svg).
+
+## Containers (C4 level 2)
+
+One level above the layers: which processes and data stores Snotra Agent is
+made of, and what it talks to ([#974](https://github.com/kkrafft1999/snotra/issues/974),
+as of 2026-10-16). "Container" is meant in the sense of the C4 model — a unit
+that runs on its own or holds data — not a Docker container. Everything from
+[Direction of dependencies](#direction-of-dependencies) downwards is the
+component level *inside* the main process.
+
+![Containers of Snotra Agent: main process, renderer, HTML preview, manual window, execution sandbox and local store, with the external systems around them](architecture-containers.svg)
+
+| Container | Technology | Responsibility |
+| --------- | ---------- | -------------- |
+| **Main process** | Electron main, Node.js | Composition root, chat engine and tool loop (`src/application/`), provider adapters, tool registry, approvals, persistence, updates. The only container that holds secrets, and the one that decides every access to the outside. |
+| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism | Presentation only: chat, file tree, file views, settings. Sees nothing but `window.electronAPI` from the preload and the contracts. |
+| **HTML preview** | `WebContentsView` with its own session (`snotra-html-preview`), the `snotra-html:` scheme and `sandbox: true` | Shows HTML pages from the workspace apart from the app's own UI ([#479](https://github.com/kkrafft1999/snotra/issues/479), see [HTML pages](#html-pages-479)). |
+| **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (`src/manual/`, #790). The app window's channels refuse it as a sender. |
+| **Execution sandbox** | Child processes through `@anthropic-ai/sandbox-runtime`: Seatbelt on macOS, bubblewrap on Linux; unisolated on Windows | `shell_execute` and `run_python` (#329): write only inside the workspace, network only through the proxy in main and only to approved domains. See [`security-concept.md`](./security-concept.md), section 9. |
+| **Local store** | JSON files in the userData folder; secrets encrypted with `safeStorage` | `llm-config.json`, `chat-history.json`, `ui-preferences.json`, `mcp-servers.json`, `tool-policy.json`, `web-search-config.json`, chat attachments, `memory.md`. |
+
+Two things look like containers and are not:
+
+- **The preload** is the bridge inside the renderer process (`contextBridge`),
+  not a process of its own.
+- **The worker threads** (`document-text-worker`, `regex-search-worker`) are
+  threads inside main — components that keep heavy work off its event loop.
+
+**External systems** — outside the system boundary, reached only from main:
+
+| System | What for | Protocol |
+| ------ | -------- | -------- |
+| LLM providers — OpenAI, Anthropic, Google, Ollama, OpenAI-compatible endpoints | Chat rounds, model lists | HTTPS + SSE; Ollama native with NDJSON |
+| OpenAI services | Image generation; transcription (Whisper) and live voice input | HTTPS; WebSocket for the realtime transcription |
+| Tavily, any URL | Web search, URL fetch | HTTPS |
+| MCP servers | Tools configured by the user | JSON-RPC over stdio, as local child processes |
+| GitHub Releases | Update check and download | HTTPS |
+| LiteLLM price table | Model prices for the cost estimate (#949), only on the user's click | HTTPS |
+| Operating system | Workspace folder, keychain behind `safeStorage`, `sandbox-exec` / bubblewrap | File system, OS APIs |
+
+MCP servers are started by Snotra but are third-party software, so they count
+as an external system rather than a container.
+
+**Relationships between the containers:**
+
+- Renderer ↔ main: IPC through the preload — `invoke` for requests, events
+  pushed back for streaming and state changes.
+- Main → execution sandbox: `spawn` with stdio; the run's network traffic
+  comes back through the domain proxy in main.
+- Main → HTML preview: files served through the `snotra-html:` scheme handler
+  on the preview's own session.
+- Manual window ↔ main: IPC on the manual's own channels.
+- Main ↔ local store: file reads and writes, secrets through `safeStorage`.
 
 ## Direction of dependencies
 
