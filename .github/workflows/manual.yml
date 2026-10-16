@@ -2,7 +2,9 @@
 # at https://docs.snotra-ai.dev (#777, #778).
 #
 # - Pull requests that touch the manual: build plus translation check. This is
-#   deliberately not a required check in ruleset 23177645.
+#   deliberately not a required check in ruleset 23177645; the translation
+#   check alone (check:content) runs in ci.yml on every pull request and is
+#   part of the required gate there (#1013).
 # - Release tags vX.Y.Z: build and deploy. The web manual only ever shows the
 #   current release, so every tag replaces the site. Release candidates
 #   (vX.Y.Z-rc.N) do not match and are not published.

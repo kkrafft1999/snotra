@@ -14,6 +14,7 @@ import { createSkillCatalogSource } from './chat/skillCatalogSource.js';
 import { initChatHistoryPanel } from './components/ChatHistoryPanel.js';
 import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateDialog } from './components/UpdateDialog.js';
+import { initAppNotices } from './components/AppNotices.js';
 import { initFileInfoDialog } from './components/FileInfoDialog.js';
 import { initToolPermissionState } from './state/tool-permissions.js';
 import { initToolModePicker } from './components/ToolModePicker.js';
@@ -498,6 +499,8 @@ api.onApprovalNotificationOpen?.((payload) => {
 });
 
 const updateDialog = initUpdateDialog({ api });
+// Files a store could not read and put aside, or cannot save (#1001).
+initAppNotices({ api });
 // "Information" from the tree's context menu, in Snotra's own dialog (#849).
 initFileInfoDialog({ api });
 

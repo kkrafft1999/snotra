@@ -248,6 +248,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setModelPriceOverride: (model, price) => ipcRenderer.invoke(REQ.MODEL_PRICES_SET_OVERRIDE, { model, price }),
   updateModelPrices: () => ipcRenderer.invoke(REQ.MODEL_PRICES_UPDATE),
 
+  // Notices for the window (#1001): what is there already, and what comes.
+  // A notice is named by its id only; main knows which file it points to.
+  listNotices: () => ipcRenderer.invoke(REQ.NOTICES_LIST),
+  dismissNotice: (id) => ipcRenderer.invoke(REQ.NOTICES_DISMISS, id),
+  revealNotice: (id) => ipcRenderer.invoke(REQ.NOTICES_REVEAL, id),
+  onNoticePosted: (callback) => {
+    const channel = PUSH.NOTICE_POSTED;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  onNoticeWithdrawn: (callback) => {
+    const channel = PUSH.NOTICE_WITHDRAWN;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+
   // Selbst-Update (Issue #232). Der Renderer nennt nie eine Adresse — er
   // stoesst nur an; was geladen wird, entscheidet der Main-Prozess.
   getAppVersion: () => ipcRenderer.invoke(REQ.UPDATE_GET_VERSION),

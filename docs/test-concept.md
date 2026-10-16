@@ -51,6 +51,40 @@ and the flaky files were largely the same. The rules for them are in
 This stays as it is. In particular the local rule does not change: before a
 push, everything runs.
 
+## Time limits
+
+A test that hangs must fail, not hold the gate. On 2026-10-15 a failed E2E test
+on Linux left its process running and the required check waited six hours for
+GitHub to cancel it ([#997](https://github.com/kkrafft1999/snotra/issues/997)).
+Four settings stand in the way of that now:
+
+| Limit | Where | Value | What it catches |
+| --- | --- | --- | --- |
+| Per test, unit suite | `npm test`: `--test-timeout` | 120 s | A test or a `t.after` hook that never settles |
+| Per test, E2E suite | `npm run test:e2e`: `--test-timeout` | 300 s | The same for the app tests, above their own budgets of 60–240 s |
+| End of the file | both suites: `--test-force-exit` | — | A file whose tests are done but which a leaked handle — a server, a child process, a timer — keeps alive |
+| Per CI job | `ci.yml`: `timeout-minutes` | 20 min | Whatever hangs outside a test: setup, `npm ci`, code at the top level of a test file |
+
+How they work together:
+
+- **`--test-timeout` applies to each test, not to a file.** Node's test runner
+  has no per-file limit. A test with a `timeout` of its own keeps it — most
+  E2E tests set one — and the global value is only the default for those that
+  don't. Hooks registered with `t.after` get the global value too, so a
+  cleanup that hangs is cut off after 120 s or 300 s.
+- **A timed-out test alone does not end the process.** Whatever it was
+  waiting for is still pending, and the file runs forever. `--test-force-exit`
+  ends each file once its tests are through; without it the per-test limit
+  marks the test red and the job still hangs.
+- **The job limit is a backstop, not a budget.** A green job takes three to
+  five minutes (30 green runs up to 2026-10-16: at most 311 s on macOS, 287 s
+  on Windows, 180 s on Linux). Twenty minutes leaves room for a slow runner
+  and still frees the gate in a fraction of the old six hours.
+
+Raise a limit only with a measurement that shows a green run getting close to
+it. A test that needs longer than its suite's default sets its own `timeout`
+instead.
+
 ## What the measurements say
 
 State of 2026-10-11, 303 unit files and 24 E2E files:

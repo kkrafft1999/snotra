@@ -35,6 +35,7 @@ const {
 const { renameWithRetry, readFileWithRetry } = require('./rename-with-retry');
 const { writeFileAtomic } = require('./atomic-write');
 const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
+const { NOTICE_STORES } = require('../../shared/contracts/notices');
 
 function createStorageService({
   app,
@@ -47,6 +48,7 @@ function createStorageService({
   defaultProviderId,
   log = console,
   platform = process.platform,
+  onStoreFileEvent = null,
 }) {
   const LLM_CONFIG_FILENAME = 'llm-config.json';
   const LEGACY_OPENAI_CONFIG_FILENAME = 'openai-config.json';
@@ -83,6 +85,29 @@ function createStorageService({
   const pendingWrites = new Map();
 
   /**
+   * Tells the user what happened to a store's file (#1001), instead of only
+   * the console: `set-aside` with the copy's path in `keptAs`, `not-saved`
+   * while a file that is there cannot be read or moved, and `saved-again`
+   * once a write to such a file goes through. `path` is the store's file.
+   * Files that are not a store are not reported.
+   */
+  const filesNotSaved = new Set();
+
+  function reportStoreFile(type, filePath, keptAs = null) {
+    if (typeof onStoreFileEvent !== 'function') return;
+    const file = path.basename(filePath);
+    const store = NOTICE_STORES[file];
+    if (!store) return;
+    if (type === 'not-saved') filesNotSaved.add(filePath);
+    else filesNotSaved.delete(filePath);
+    try {
+      onStoreFileEvent({ type, store, file, path: filePath, keptAs });
+    } catch (error) {
+      log?.warn?.(`[storage] could not report ${file}: ${error?.message || error}`);
+    }
+  }
+
+  /**
    * Writes to the same file run one after the other (#672). On Windows two
    * renames onto one target at the same moment fail with EPERM — the target
    * is held by the other rename, so retrying only shortens the odds. This is
@@ -107,6 +132,7 @@ function createStorageService({
     // Windows a reader, the indexer or a virus scanner can hold the target
     // for a moment (#472, as for the policy in #419).
     await writeFileAtomic(fs, targetPath, JSON.stringify(data), { platform });
+    if (filesNotSaved.has(targetPath)) reportStoreFile('saved-again', targetPath);
   }
 
   /**
@@ -153,9 +179,11 @@ function createStorageService({
     } catch (error) {
       if (error?.code === 'ENOENT') return;
       log?.warn?.(`[storage] ${path.basename(filePath)} could not be understood and could not be moved aside, left it as it is: ${error?.message || error}`);
+      reportStoreFile('not-saved', filePath);
       throw error;
     }
     log?.warn?.(`[storage] ${path.basename(filePath)} could not be understood; kept it as ${target}`);
+    reportStoreFile('set-aside', filePath, target);
   }
 
   /**
@@ -164,7 +192,13 @@ function createStorageService({
    * missing, or it was not understood and has just been moved aside.
    */
   async function readJsonForUpdate(filePath, isUnderstood) {
-    const raw = await readForUpdate(filePath);
+    let raw;
+    try {
+      raw = await readForUpdate(filePath);
+    } catch (error) {
+      reportStoreFile('not-saved', filePath);
+      throw error;
+    }
     if (raw === null) return null;
     const data = parseJson(raw);
     if (isUnderstood(data)) return data;
@@ -1258,6 +1292,10 @@ function createStorageService({
       if (typeof log?.warn === 'function') {
         log.warn(`[chat-history] Verlauf nicht lesbar, gesichert als ${target}`);
       }
+      // Only the set-aside is reported here: a history that stays unreadable
+      // already has its own notice in the chat, at the moment a save is
+      // refused (#977).
+      reportStoreFile('set-aside', source, target);
       return true;
     } catch (err) {
       if (err && err.code === 'ENOENT') return true;
