@@ -6,8 +6,8 @@ interview with the owner on 2026-10-15 as phase 1 of the architecture review
 ([#752](https://github.com/kkrafft1999/snotra/issues/752)); arc42 chapters 1, 2
 and 10 served as orientation.
 
-**Status:** draft, awaiting the owner's agreement. Phase 2 of #752 — evaluating
-the architecture scenario by scenario — starts only after that.
+**Status:** agreed by the owner on 2026-10-16. Phase 2 of #752 evaluates the
+architecture against it, scenario by scenario.
 
 A change to a goal, its rank or a scenario is a change to this file, made in a
 pull request like any other. Issues and pull requests that touch a goal may cite
@@ -95,9 +95,10 @@ These came out of the interview and override the ranking where they apply.
 ## 4. Quality scenarios
 
 Each scenario is written as *stimulus → response → measure*, so that phase 2 can
-check it against the architecture and the code. Measures marked *(proposed)*
-were set while writing this document, not in the interview, and need the
-owner's confirmation.
+check it against the architecture and the code. Three measures were proposed
+while writing this document rather than given in the interview — the credential
+in SEC-5, the five minutes in USE-1 and the factor of two for the performance
+budgets; the owner agreed to them with the rest on 2026-10-16.
 
 ### Agent security
 
@@ -107,13 +108,13 @@ owner's confirmation.
 | SEC-2 | The agent wants to run a shell or Python command that no rule allows. | Nothing runs before the user approves it. On macOS and Linux the approved command runs in the sandbox, which refuses network and writes outside the workspace. | Approval for every execution not covered by a rule; sandbox on by default. |
 | SEC-3 | A safety mechanism cannot be established — no OS keyring, sandbox unavailable, policy file unreadable. | The app falls back to the stricter state and says so in the UI. | No path that fails open; every degraded state is visible. |
 | SEC-4 | A tool result contains text that looks like an injection. | The extra layer may flag it to the user; the call itself is still bound by isolation and approvals. | A flag never loosens a boundary, and a missing flag never opens one. |
-| SEC-5 | A process tries to reach the core's remote-control interface (headless, mobile). | Only connections over the loopback interface are accepted, and only with a credential the app issued *(proposed)*. | No listening socket on a non-loopback interface. |
+| SEC-5 | A process tries to reach the core's remote-control interface (headless, mobile). | Only connections over the loopback interface are accepted, and only with a credential the app issued. | No listening socket on a non-loopback interface. |
 
 ### Usability and accessibility
 
 | ID | Stimulus | Response | Measure |
 | --- | --- | --- | --- |
-| USE-1 | A first-time user installs the app and wants a first answer. | Setup guides them to a provider and a folder without the manual. | First answer within 5 minutes, leaving the app only to fetch an API key *(proposed)*. |
+| USE-1 | A first-time user installs the app and wants a first answer. | Setup guides them to a provider and a folder without the manual. | First answer within 5 minutes, leaving the app only to fetch an API key. |
 | USE-2 | An operation takes longer, or fails. | Anything over one second shows progress; a failure says what failed and what to do next, in the user's language. | No operation without feedback (see also ROB-1). |
 | USE-3 | A user works with the keyboard only, or with a screen reader. | Every function is reachable by keyboard, focus is visible, controls are labelled. | WCAG 2.1 AA in light and dark. |
 | USE-4 | A feature is not available on the user's platform or provider. | The UI says so where the user meets it, and the manual names it. | No undocumented gap (parity rule). |
@@ -159,7 +160,7 @@ owner's confirmation.
 | PERF-4 | The app sits idle with a chat open. | — | ≤ 1 GB of memory across all its processes. |
 
 The performance budgets apply to a current Apple Silicon Mac. On Windows, Linux
-and the CI runners twice the time is allowed *(proposed)*. None of them is
+and the CI runners twice the time is allowed. None of them is
 measured today; how to measure them is part of phase 2.
 
 ## 5. Non-goals
