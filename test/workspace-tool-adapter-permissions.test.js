@@ -123,6 +123,18 @@ test('eigene Provider-Schlüssel werden in jeder Ausgabe hart zurückgehalten', 
   assert.equal(result.output.includes('sk-own-provider-key-123456'), false);
 });
 
+test('own secrets that cannot be read withhold the output instead of passing it unchecked (#976)', async (t) => {
+  for (const readOwnSecrets of [async () => { throw new Error('store locked'); }, async () => null]) {
+    const { workspace, adapter } = await makeFixture(t, { readOwnSecrets });
+    const plan = await adapter.plan('read_file_text', { relative_path: 'own.txt' }, { workspaceRoot: workspace });
+    const result = await adapter.execute('read_file_text', { relative_path: 'own.txt' }, { workspaceRoot: workspace, approved: true, plan });
+    assert.deepEqual(result.hardLimit, { reason: 'own_secret_check_failed' });
+    const parsed = JSON.parse(result.output);
+    assert.equal(parsed.reason, 'own_secret_check_failed');
+    assert.equal(result.output.includes('sk-own-provider-key-123456'), false);
+  }
+});
+
 test('Überschreiben: Kopie in den Papierkorb → write mit Rückweg; Fehlschlag → Neubewertung als delete', async (t) => {
   const trashed = [];
   // Der Fake verhält sich wie shell.trashItem: die Kopie verschwindet aus dem Ordner.

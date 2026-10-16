@@ -275,12 +275,21 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
 
       // Harte Grenze: eigene Provider-Schlüssel dürfen die App nie verlassen,
       // auch nicht über eine vom Nutzer freigegebene Datei (Konzept §5).
+      // A list that cannot be read withholds the output as well: compared
+      // against nothing, it would pass unchecked (#976).
       if (typeof readOwnSecrets === 'function' && context.ownSecretsCheck !== false) {
-        let secrets = [];
+        let secrets = null;
         try {
           secrets = await readOwnSecrets();
         } catch {
-          secrets = [];
+          secrets = null;
+        }
+        if (!Array.isArray(secrets)) {
+          return {
+            output: createPermissionDeniedToolResult({ reason: PERMISSION_DENIAL_REASONS.OWN_SECRET_CHECK_FAILED }),
+            progressEvents: [],
+            hardLimit: { reason: PERMISSION_DENIAL_REASONS.OWN_SECRET_CHECK_FAILED },
+          };
         }
         if (containsOwnSecret(output, secrets)) {
           return {

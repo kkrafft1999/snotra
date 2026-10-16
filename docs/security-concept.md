@@ -240,7 +240,12 @@ stored with the history in the encrypted store.
   an `env` dump or a config file carries only that. The list is collected in
   `main/services/own-secrets.js`; the comparison is verbatim, and values under
   eight characters do not count. Errors must not contain auth headers or
-  decrypted values.
+  decrypted values. **The check fails closed (#976):** a list that cannot be
+  read is not an empty list, since everything compared against nothing would
+  pass. A tool result is then withheld with a reason of its own
+  (`own_secret_check_failed`), which the card in the chat names; embedded text
+  (below) is left out, and the run ends before its next request with a message
+  that says why. A check that could not run counts as a check that failed.
 - **Untrusted content:** files, search hits, MCP responses and skill content
   cannot change permissions, pick a mode or fake a confirmation. Active skills
   and their `allowed-tools` are not a source of rights either. The app adds the

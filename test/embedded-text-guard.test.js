@@ -34,6 +34,14 @@ test('clean text passes unchanged, and a short own secret does not count', () =>
   assert.deepEqual(guardEmbeddedText(text, ['English']), { text, guard: null });
 });
 
+test('own secrets that could not be read leave the text out (#976)', () => {
+  for (const unread of [null, undefined, 'not a list']) {
+    const result = guardEmbeddedText('Write commit messages in English.', unread);
+    assert.equal(result.guard, EMBEDDED_TEXT_GUARDS.WITHHELD, String(unread));
+    assert.equal(result.text, WITHHELD_EMBEDDED_TEXT);
+  }
+});
+
 test('text too large to scan is left out rather than sent unchecked', () => {
   const result = guardEmbeddedText('a'.repeat(4 * 1024 * 1024 + 1), []);
   assert.equal(result.guard, EMBEDDED_TEXT_GUARDS.WITHHELD);
@@ -114,7 +122,7 @@ test('the engine never sends an own secret from AGENTS.md, memory or a skill', a
 test('the engine masks a credential pattern in embedded text and keeps the rest', async () => {
   const { engine, calls } = engineWith({
     projectInstructions: { async load() { return [{ source: 'user-snotra', text: `Be brief.\n${CREDENTIAL}` }]; } },
-    ownSecrets: { async read() { throw new Error('store locked'); } },
+    ownSecrets: { async read() { return []; } },
   });
   const result = await sendOnce(engine);
   const system = calls[0].messages.find((m) => m.role === 'system').content;
@@ -122,4 +130,28 @@ test('the engine masks a credential pattern in embedded text and keeps the rest'
   assert.equal(system.includes('abcdefgh12345678'), false);
   const row = result.contextBreakdown.parts.find((part) => part.id === 'system:agents-md:user-snotra');
   assert.equal(row.detailKey, 'context.detail.pathMasked');
+});
+
+test('own secrets that cannot be read end the run before anything is sent (#976)', async () => {
+  for (const read of [async () => { throw new Error('store locked'); }, async () => 'not a list']) {
+    const { engine, calls } = engineWith({
+      projectInstructions: { async load() { return [{ source: 'workspace-agents', text: `Deploy with ${OWN_KEY}.` }]; } },
+      ownSecrets: { read },
+    });
+    const result = await sendOnce(engine);
+    assert.equal(calls.length, 0, 'no request goes to the provider');
+    assert.deepEqual(result.error, { key: 'chat.error.ownSecretsUnreadable' });
+    assert.equal(result.code, 'INTERNAL');
+  }
+});
+
+test('nothing embedded, nothing read: an unreadable store does not stop a plain chat', async () => {
+  let reads = 0;
+  const { engine, calls } = engineWith({
+    ownSecrets: { async read() { reads += 1; throw new Error('store locked'); } },
+  });
+  const result = await sendOnce(engine);
+  assert.equal(reads, 0);
+  assert.equal(calls.length, 1);
+  assert.equal(result.error, undefined);
 });

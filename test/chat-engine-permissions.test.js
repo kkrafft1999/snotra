@@ -10,6 +10,7 @@ const { createSessionGrants } = require('../src/application/permissions/session-
 const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
 
 const { translateMessage } = require('../src/shared/i18n');
+const { PERMISSION_DENIED_MESSAGE_KEYS } = require('../src/shared/contracts/tool-permissions');
 
 // Die Begruendung der Karte reist seit #290 als Schluesselliste; zum Pruefen
 // des Wortlauts wird sie hier ausgesprochen.
@@ -534,6 +535,18 @@ test('eigene Provider-Secrets in der Ausgabe: harte Grenze, Ausgabe ersetzt', as
   const result = await send(engine);
   assert.equal(JSON.parse(llm.calls[1].messages.find((m) => m.role === 'tool').content).reason, 'own_secret');
   assert.equal(result.toolTrace[0].permission.reason, 'own_secret');
+});
+
+test('own secrets that could not be read: the output stays withheld and the card names the failed check (#976)', async () => {
+  const tools = makeToolPort({ execute: () => ({ output: JSON.stringify({ error: 'permission_denied', reason: 'own_secret_check_failed' }), progressEvents: [], hardLimit: { reason: 'own_secret_check_failed' } }) });
+  const { engine, llm } = makeEngine([assistantToolCall('c1', 'read_file_text', { relative_path: 'own.txt' }), assistantText('ok')], { tools, toolPolicy: policy({ mode: 'auto' }) });
+  const result = await send(engine);
+  const toolMessage = JSON.parse(llm.calls[1].messages.find((m) => m.role === 'tool').content);
+  assert.equal(toolMessage.reason, 'own_secret_check_failed');
+  assert.match(toolMessage.message, /could not be checked/);
+  assert.equal(result.toolTrace[0].permission.reason, 'own_secret_check_failed');
+  // The card's text comes from the reason, in the language of the interface.
+  assert.equal(PERMISSION_DENIED_MESSAGE_KEYS[result.toolTrace[0].permission.reason], 'toolPermission.denied.ownSecretCheckFailed');
 });
 
 test('Permission-Progress-Events melden Warten und Entscheidung mit Aufruf-Index', async () => {

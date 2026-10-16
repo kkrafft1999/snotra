@@ -43,6 +43,7 @@ Some boxes are not about the provider:
 - ***The connection ended before the answer was complete.*** The provider or the network broke off. Send the message again.
 - ***The answer did not come through.*** Ask again.
 - ***Snotra Agent ran into an error of its own and stopped the answer.*** Ask again. If it happens again, [report it](../logs-and-reports/) with the text in brackets.
+- ***Snotra Agent could not read the keys it keeps for itself …*** Before your instructions, skills and memory go to the provider, Snotra checks them for its own keys. When it cannot read those keys, it sends nothing rather than something unchecked. Ask again. If it happens again, restart Snotra; if the models ask for their keys after that, see [Keychain questions and encrypted storage](../keychain-and-storage/).
 
 ## What happens
 

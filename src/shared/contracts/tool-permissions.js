@@ -96,6 +96,8 @@ const PERMISSION_DENIAL_REASONS = Object.freeze({
   POLICY_DENIED: 'policy_denied',
   HARD_LIMIT: 'hard_limit',
   OWN_SECRET: 'own_secret',
+  // The own secrets could not be read, so the output could not be checked (#976).
+  OWN_SECRET_CHECK_FAILED: 'own_secret_check_failed',
   TOOL_DISABLED: 'tool_disabled',
   UNKNOWN_TOOL: 'unknown_tool',
   INVALID_ARGUMENTS: 'invalid_arguments',
@@ -196,6 +198,7 @@ const PERMISSION_DENIED_MESSAGE_KEYS = Object.freeze({
   [PERMISSION_DENIAL_REASONS.POLICY_DENIED]: 'toolPermission.denied.policyDenied',
   [PERMISSION_DENIAL_REASONS.HARD_LIMIT]: 'toolPermission.denied.hardLimit',
   [PERMISSION_DENIAL_REASONS.OWN_SECRET]: 'toolPermission.denied.ownSecret',
+  [PERMISSION_DENIAL_REASONS.OWN_SECRET_CHECK_FAILED]: 'toolPermission.denied.ownSecretCheckFailed',
   [PERMISSION_DENIAL_REASONS.TOOL_DISABLED]: 'toolPermission.denied.toolDisabled',
   [PERMISSION_DENIAL_REASONS.UNKNOWN_TOOL]: 'toolPermission.denied.unknownTool',
   [PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS]: 'toolPermission.denied.invalidArguments',
@@ -220,6 +223,8 @@ const PERMISSION_DENIED_TOOL_RESULT_MESSAGES = Object.freeze({
   [PERMISSION_DENIAL_REASONS.HARD_LIMIT]: 'Tool call violates a hard limit and is blocked.',
   [PERMISSION_DENIAL_REASONS.OWN_SECRET]:
     "The output contained this app's own credentials and was withheld.",
+  [PERMISSION_DENIAL_REASONS.OWN_SECRET_CHECK_FAILED]:
+    "The output could not be checked for this app's own credentials and was withheld.",
   [PERMISSION_DENIAL_REASONS.TOOL_DISABLED]:
     'Tool is switched off. The user can enable it under "{menu:settings.security}".',
   [PERMISSION_DENIAL_REASONS.UNKNOWN_TOOL]: 'Unknown tool.',
