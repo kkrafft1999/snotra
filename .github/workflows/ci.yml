@@ -54,6 +54,12 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bubblewrap socat ripgrep
           sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      # Every manual page in English and German, every screenshot motif in its
+      # four variants (#1013). Without it, a missing page only fails the tag
+      # build in manual.yml; here it is part of the required gate. Node
+      # built-ins only, so it needs no npm ci in manual/.
+      - name: Manual completeness
+        run: node manual/scripts/check-content.mjs
       - run: npm test
         env:
           # A skipped isolation test must not pass for a green one.
