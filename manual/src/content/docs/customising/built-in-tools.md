@@ -45,5 +45,6 @@ The search query leaves your computer, so in *Smart* Snotra asks before every se
 ## If it doesn't work
 
 - ***No Python 3 found.*** Install Python 3, or enter the path of your interpreter. The line under the field says where Snotra looked.
+- ***Snotra could not check for Python.*** The search itself failed — it says nothing about whether Python is installed. Close the settings and open them again; Snotra then searches anew.
 - **The model does not search the web.** Without a Tavily key, `web_search` is not offered to the model at all.
 - **A tool is never used.** Click the skills pill in the chat bar: a missing tool is listed first, with the reason and a button to the setting. Under *Settings › Tools & security* its row says *Off* or names the tool as switched off.

@@ -287,8 +287,10 @@ export function initMcpPanel({ api }) {
 
   async function load() {
     try {
-      adopt(typeof api.getMcpCatalog === 'function' ? await api.getMcpCatalog() : null);
-      setError(errorEl, '');
+      const catalog = typeof api.getMcpCatalog === 'function' ? await api.getMcpCatalog() : null;
+      adopt(catalog);
+      // The list is there, but the running service never got it (#1002).
+      setError(errorEl, catalog?.loadFailed === true ? t('settings.mcp.loadFailed') : '');
     } catch {
       adopt(null, { failed: true });
       setError(errorEl, t('settings.mcp.readFailed'));

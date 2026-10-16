@@ -2083,3 +2083,18 @@ test('a language change does not fetch a tool catalogue nothing redraws (CR-B14-
   assert.deepEqual(Object.keys(modal).sort(), ['closeSettingsModal', 'openSettingsModal'],
     'nothing unused is handed out');
 });
+
+test('a failed Python or shell check says so instead of "not in this installation" (#1002)', async (t) => {
+  const { dom } = await mountSettings({
+    getPythonState: async () => { throw new Error('detect broke'); },
+    getShellState: async () => { throw new Error('detect broke'); },
+  });
+  t.after(dom.cleanup);
+  const python = dom.document.getElementById('settings-python-status');
+  const shell = dom.document.getElementById('settings-shell-status');
+  await until(() => python.textContent && shell.textContent, 'both status lines');
+  assert.match(python.textContent, /konnte nicht nach Python suchen/);
+  assert.match(shell.textContent, /konnte nicht nach einer Shell suchen/);
+  assert.ok(python.classList.contains('error'));
+  assert.ok(shell.classList.contains('error'));
+});

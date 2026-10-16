@@ -1612,6 +1612,9 @@ export function initSettingsModal(deps) {
   });
 
   function describePythonState(state) {
+    if (state?.loadFailed) {
+      return { text: t('settings.python.status.loadFailed'), isError: true };
+    }
     if (!state || state.available === false) {
       return { text: t('settings.python.status.unavailable'), isError: true };
     }
@@ -1646,7 +1649,8 @@ export function initSettingsModal(deps) {
     try {
       state = typeof api.getPythonState === 'function' ? await api.getPythonState() : null;
     } catch {
-      state = null;
+      // The check itself failed — not the same as "not in this installation" (#1002).
+      state = { loadFailed: true };
     }
     pythonReady = state?.found === true && state?.enabled === true;
     setPythonStatus(describePythonState(state));
@@ -1677,6 +1681,9 @@ export function initSettingsModal(deps) {
   }
 
   function describeShellState(state) {
+    if (state?.loadFailed) {
+      return { text: t('settings.shell.status.loadFailed'), isError: true };
+    }
     if (!state || state.available === false) {
       return { text: t('settings.shell.status.unavailable'), isError: true };
     }
@@ -1707,7 +1714,8 @@ export function initSettingsModal(deps) {
     try {
       state = typeof api.getShellState === 'function' ? await api.getShellState() : null;
     } catch {
-      state = null;
+      // The check itself failed — not the same as "not in this installation" (#1002).
+      state = { loadFailed: true };
     }
     shellReady = state?.found === true && state?.enabled === true;
     setShellStatus(describeShellState(state));
