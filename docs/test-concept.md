@@ -62,7 +62,7 @@ Four settings stand in the way of that now:
 | --- | --- | --- | --- |
 | Per test, unit suite | `npm test`: `--test-timeout` | 120 s | A test or a `t.after` hook that never settles |
 | Per test, E2E suite | `npm run test:e2e`: `--test-timeout` | 300 s | The same for the app tests, above their own budgets of 60–240 s |
-| End of the file | both suites: `--test-force-exit` | — | A file whose tests are done but which a leaked handle — a server, a child process, a timer — keeps alive |
+| End of the file | `npm run test:e2e`: `--test-force-exit` | — | A file whose tests are done but which a leaked handle — a server, a child process, a timer — keeps alive |
 | Per CI job | `ci.yml`: `timeout-minutes` | 20 min | Whatever hangs outside a test: setup, `npm ci`, code at the top level of a test file |
 
 How they work together:
@@ -76,6 +76,15 @@ How they work together:
   waiting for is still pending, and the file runs forever. `--test-force-exit`
   ends each file once its tests are through; without it the per-test limit
   marks the test red and the job still hangs.
+- **The unit suite runs without `--test-force-exit`.** On Windows the flag
+  made `test/sandbox-blocked.test.js` hang after its last test, in three of
+  six runs: the file's tests were through, its process never ended, and the
+  job limit cancelled it after 20 minutes (#1038). Without the flag the unit
+  suite ended in every one of the 37 Windows runs before #1029; a test that
+  hangs is still cut off by `--test-timeout`, and the job limit catches the
+  rest. The E2E suite, where
+  the hang of #997 happened, keeps the flag. Whether the unit suite gets it
+  back is #1038's question.
 - **The job limit is a backstop, not a budget.** A green job takes three to
   five minutes (30 green runs up to 2026-10-16: at most 311 s on macOS, 287 s
   on Windows, 180 s on Linux). Twenty minutes leaves room for a slow runner
