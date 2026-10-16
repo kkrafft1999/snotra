@@ -31,6 +31,10 @@ jobs:
       matrix:
         os: [macos-14, windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
+    # A green job takes three to five minutes; 20 is a backstop for a hang the
+    # per-test limits in package.json cannot reach, not a budget (#997). Without
+    # it a stuck e2e step held the required gate for six hours.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
