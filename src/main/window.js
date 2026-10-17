@@ -41,7 +41,9 @@ const SPELLCHECK_FETCHES_DICTIONARIES = process.platform === 'linux';
 // Per session, as the session is created: the download starts with the session,
 // and the first one is made by `session.defaultSession` early in start-up. An
 // empty language list makes the session drop the dictionary it is loading.
-if (SPELLCHECK_FETCHES_DICTIONARIES) {
+// Called once from index.js, before the app is ready.
+function keepSpellCheckerOffWhereItFetches() {
+  if (!SPELLCHECK_FETCHES_DICTIONARIES) return;
   app.on('session-created', (ses) => {
     ses.setSpellCheckerEnabled(false);
     ses.setSpellCheckerLanguages([]);
@@ -206,5 +208,6 @@ function getMainWindow() {
 
 module.exports = {
   createWindow,
+  keepSpellCheckerOffWhereItFetches,
   getMainWindow,
 };
