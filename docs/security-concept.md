@@ -505,6 +505,24 @@ allow rules is intended, because losing a key cannot be told apart from tamperin
 approvals are unaffected anyway; they only live in memory and end with a
 restart.
 
+Where the key behind `safeStorage` is kept differs by platform, and on Windows
+that decides whether the policy key survives a crash (#1060). macOS keeps it in
+the Keychain and Linux in libsecret or kwallet as soon as it exists. On Windows
+Chromium wraps it with DPAPI and stores it as `os_crypt.encrypted_key` in the
+`Local State` file of the userData folder — and on a fresh profile that file
+reaches the disk only about ten seconds after the start, or on an orderly
+quit. A crash in between used to leave a `tool-policy.key` that no later start
+could decrypt: the next start made a new key, the signature failed, and the
+fail-safe took back every loosening the user had granted. Main therefore
+writes no ciphertext before `Local State` holds the key — not the policy key
+and so no policy signed with it, nor the history, provider keys and headers,
+the web search key or MCP secrets. A missing policy is read as its defaults
+without writing a file until it can be signed; a stored policy whose key is
+gone fails its check at once, as it would with a new key. The wait has a cap
+of 20 s, after which writes go ahead with a logged warning; it never applies
+on macOS, Linux or a later start. The fail-safe above stays the answer to a key
+that is lost for any other reason.
+
 A rule holds an id, `allow | deny`, an exact tool name or an explicit risk
 class, the root, the target path or pattern, and the scope. Permissions have to
 cover every effect. For path rules, `*` (within a segment) and `**` (including

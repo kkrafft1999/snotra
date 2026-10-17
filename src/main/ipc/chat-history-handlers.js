@@ -204,11 +204,17 @@ function registerChatHistoryHandlers({
     skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
       const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
       const wsKey = bucketKeyForSession(store, id);
+      const before = store.activeByWorkspace[wsKey];
       if (id === null || id === undefined || id === '') {
         delete store.activeByWorkspace[wsKey];
       } else if (typeof id === 'string') {
         store.activeByWorkspace[wsKey] = id;
       }
+      // A pointer that stays as it was is not written again. On a fresh
+      // Windows profile every encrypted write waits for the key (#1060), and
+      // a new chat — which clears a pointer that is not there — would wait
+      // with it before its mode is applied (#564).
+      if (store.activeByWorkspace[wsKey] === before) return { ok: true };
       await chatHistoryStore.writeChatHistoryStore(store);
       return { ok: true };
     })));

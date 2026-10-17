@@ -19,6 +19,7 @@ const { createWorkspaceWatcher } = require('../services/workspace-watcher');
 const { createSkillSuggestionService } = require('../services/skill-suggestion-service');
 const { createWorkspaceActivation } = require('../services/workspace-activation');
 const { createToolPolicyStore } = require('../services/tool-policy-store');
+const { KEY_ALWAYS_DURABLE } = require('../services/safe-storage-key-durability');
 const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
 const { createSessionGrants } = require('../../application/permissions/session-grants');
 const { PERMISSION_DENIAL_REASONS, DEFAULT_TOOL_PERMISSION_MODE } = require('../../shared/contracts/tool-permissions');
@@ -107,6 +108,12 @@ function createApplication({
   ipcMain,
   dialog,
   safeStorage,
+  /**
+   * When ciphertext may reach the disk (#1060): on a fresh Windows profile,
+   * once the key behind `safeStorage` is in `Local State`. index.js hands in
+   * the real one; without it nothing waits.
+   */
+  safeStorageKey = KEY_ALWAYS_DURABLE,
   fs,
   path,
   os: baseOs = nodeOs,
@@ -188,6 +195,7 @@ function createApplication({
   const storage = createStorageService({
     app,
     safeStorage,
+    safeStorageKey,
     fs,
     path,
     providerCatalog,
@@ -276,6 +284,7 @@ function createApplication({
   const toolPolicyStore = createToolPolicyStore({
     app,
     safeStorage,
+    safeStorageKey,
     fs,
     path,
     crypto,
@@ -907,6 +916,7 @@ function createApplication({
   registerSettingsHandlers({
     ipcMain,
     safeStorage,
+    safeStorageKey,
     llmConfigStore,
     uiPrefsStore,
     workspaceFolderStore,
