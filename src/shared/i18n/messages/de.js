@@ -1106,8 +1106,6 @@ module.exports = {
   'settings.general.theme.note.summary': 'Helle oder dunkle Oberfläche — bis v1.7.3 ein Knopf in der Titelleiste.',
   'settings.general.theme.note.body': '<p>Anders als die übrigen Einstellungen bleibt die Wahl <strong>auf diesem Gerät</strong>: Sie muss schon beim Aufbau des Fensters feststehen, sonst blitzte bei jedem Start kurz die helle Oberfläche auf.</p>',
   'settings.general.locale.label': 'Sprache der Oberfläche',
-  'settings.general.locale.de': 'Deutsch',
-  'settings.general.locale.en': 'English',
   'settings.general.locale.note.summary': 'Gilt sofort — die Oberfläche wechselt die Sprache, ohne Neustart.',
   'settings.general.locale.note.body': '<p>Betroffen sind die Oberfläche der App und die Menüleiste. Was an das Sprachmodell geht — System-Prompt, Tool-Beschreibungen —, ist davon unabhängig und immer englisch. Eine neue Installation startet in der Sprache des Systems, wenn das Deutsch oder Englisch ist, sonst auf Englisch; wer Snotra schon vorher benutzt hat, bleibt auf Deutsch, bis er hier umstellt.</p>',
   'settings.instant.saved': 'Gespeichert',

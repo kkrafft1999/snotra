@@ -125,7 +125,7 @@ function clampHistoryCharLimit(raw) {
 }
 
 function isAppLocale(value) {
-  return value === APP_LOCALES.DE || value === APP_LOCALES.EN;
+  return Object.values(APP_LOCALES).includes(value);
 }
 
 /**

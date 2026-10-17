@@ -1099,8 +1099,6 @@ module.exports = {
   'settings.general.theme.note.summary': 'Light or dark interface — a button in the title bar up to v1.7.3.',
   'settings.general.theme.note.body': '<p>Unlike the other settings, this choice stays <strong>on this device</strong>: it has to be settled before the window is built, or the light interface would flash up briefly at every start.</p>',
   'settings.general.locale.label': 'Interface language',
-  'settings.general.locale.de': 'Deutsch',
-  'settings.general.locale.en': 'English',
   'settings.general.locale.note.summary': 'Takes effect at once — the interface switches language without a restart.',
   'settings.general.locale.note.body': '<p>This covers the app’s interface and the menu bar. What goes to the language model — system prompt, tool descriptions — is independent of it and always English. A new installation starts in the language of the system when it is German or English, and in English otherwise; anyone who used Snotra before stays on German until they switch here.</p>',
   'settings.instant.saved': 'Saved',

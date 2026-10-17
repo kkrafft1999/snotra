@@ -10,6 +10,8 @@
  * the same slug.
  */
 
+import { manualPathPrefix, splitManualLocale } from '../i18n.js';
+
 const BASE = 'https://manual.invalid';
 
 /** A page's address on the web manual, relative to the language root. */
@@ -36,9 +38,7 @@ export function resolveManualLink(target, fromSlug, pages) {
   } catch {
     return null;
   }
-  const slug = pathname
-    .replace(/^\/+|\/+$/g, '')
-    .replace(/^de(?:\/|$)/, '')
+  const slug = splitManualLocale(pathname.replace(/^\/+|\/+$/g, '')).rest
     .replace(/\.md$/, '')
     .replace(/(?:^|\/)index$/, '')
     || 'index';
@@ -58,7 +58,7 @@ export const SINCE_MARKER = /\[(?:since|seit) (\d+\.\d+(?:\.\d+)?)\]/gi;
 
 /** The page on docs.snotra-ai.dev, for *Open on the web*. */
 export function manualWebUrl(webBase, locale, slug, fragment = '') {
-  const prefix = locale === 'de' ? 'de/' : '';
+  const prefix = manualPathPrefix(locale);
   const page = !slug || slug === 'index' ? '' : `${slug}/`;
   const hash = fragment ? `#${encodeURIComponent(fragment)}` : '';
   return `${webBase}${prefix}${page}${hash}`;

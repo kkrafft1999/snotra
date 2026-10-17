@@ -19,6 +19,7 @@ const { buildSearchIndex, pageSections, searchManual, MIN_QUERY_LENGTH } = requi
 const { headingSlug } = require('../../shared/runtime/heading-slug');
 const { manualWebUrl, normalizeManualLocale } = require('./manual-service');
 const { parseManualAddress } = require('../../shared/manual/manual-address');
+const { splitManualLocale } = require('../../shared/i18n/locales');
 
 const DEFAULT_SEARCH_RESULTS = 5;
 const MAX_SEARCH_RESULTS = 10;
@@ -42,17 +43,14 @@ function parsePageReference(reference) {
   const address = parseManualAddress(text);
   if (address) return { slug: address.slug, anchor: address.fragment || null, locale: address.locale };
   let anchor = null;
-  let locale = null;
   const hash = text.indexOf('#');
   if (hash !== -1) {
     anchor = text.slice(hash + 1) || null;
     text = text.slice(0, hash);
   }
   text = text.replace(/^\/+|\/+$/g, '');
-  if (text === 'de' || text.startsWith('de/')) {
-    locale = 'de';
-    text = text.slice(2).replace(/^\/+/, '');
-  }
+  const { locale, rest } = splitManualLocale(text);
+  text = rest;
   const slug = text.replace(/\.md$/, '').replace(/(?:^|\/)index$/, '') || 'index';
   try {
     anchor = anchor ? decodeURIComponent(anchor) : null;

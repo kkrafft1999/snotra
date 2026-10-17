@@ -10,7 +10,7 @@ const { formatToolDisplayLine } = require('../../shared/presentation/tool-displa
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL, workspaceSkillOfPath } = require('../../shared/contracts/skills');
 const { checkSkillDocument } = require('../../shared/runtime/skill-frontmatter');
-const { translate } = require('../../shared/i18n');
+const { APP_LOCALES, translate } = require('../../shared/i18n');
 const { menuPath } = require('../../shared/i18n/ui-quotes');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { scanSensitiveContent, containsOwnSecret } = require('../../shared/runtime/sensitive-content');
@@ -399,7 +399,7 @@ function describeSkillCheck(name, checked, locale) {
   return {
     skill: name,
     valid: false,
-    problem: translate('en', checked.key, checked.params),
+    problem: translate(APP_LOCALES.EN, checked.key, checked.params),
     note: 'Not a usable skill yet: the catalog skips it until SKILL.md is fixed. Fix it now.',
   };
 }

@@ -1,6 +1,6 @@
 'use strict';
 
-const { createTranslator } = require('../../shared/i18n');
+const { DEFAULT_LOCALE, createTranslator } = require('../../shared/i18n');
 const { buildDiagnosticsReport } = require('./diagnostics-report');
 
 /**
@@ -18,7 +18,7 @@ function createDiagnostics({
   shell,
   dialog = null,
   getMainWindow = () => null,
-  getLocale = () => 'en',
+  getLocale = () => DEFAULT_LOCALE,
   appName = 'Snotra Agent',
   log = console,
 }) {
@@ -63,7 +63,7 @@ function createDiagnostics({
   async function copyFromMenu() {
     const ok = copy();
     if (!dialog) return ok;
-    const t = createTranslator(getLocale?.() || 'en');
+    const t = createTranslator(getLocale?.() || DEFAULT_LOCALE);
     const options = ok
       ? {
         type: 'info',

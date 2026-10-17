@@ -3,6 +3,7 @@
 const { createMessage } = require('../../shared/contracts/message');
 const { VOICE_SAMPLE_RATE, MAX_VOICE_RECORDING_MS } = require('../../shared/contracts/voice');
 const { createTurnDetector } = require('./turn-detector');
+const { LEGACY_LOCALE, speechLanguageFor } = require('../../shared/i18n');
 
 /**
  * Live transcription through OpenAI's realtime API (#859).
@@ -83,8 +84,7 @@ function createRealtimeTranscriptionService({
   finishTimeoutMs = FINISH_TIMEOUT_MS,
 }) {
   async function resolveLanguage() {
-    const locale = getAppLocale ? await getAppLocale() : 'de';
-    return locale === 'en' ? 'en' : 'de';
+    return speechLanguageFor(getAppLocale ? await getAppLocale() : LEGACY_LOCALE);
   }
 
   /**
