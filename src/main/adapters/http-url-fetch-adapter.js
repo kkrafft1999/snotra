@@ -25,6 +25,11 @@ const {
 
 const USER_AGENT = 'SnotraAgent/1.0 (+https://github.com/kkrafft1999/snotra)';
 
+/**
+ * @param {string} code
+ * @param {string} error
+ * @returns {import('../../application/ports/url-fetch-port').UrlFetchError}
+ */
 function fail(code, error) {
   return { ok: false, code, error };
 }
@@ -161,7 +166,7 @@ function createGuardedLookup(resolveHost) {
         },
         (error) => ({ error })
       )
-      .then(({ error, list }) => {
+      .then((/** @type {{ error?: Error, list?: Array<{ address: string, family: number }> }} */ { error, list }) => {
         if (error) done(error);
         else if (opts.all) done(null, list);
         else done(null, list[0].address, list[0].family);
@@ -176,6 +181,9 @@ function blockedAtConnect(error) {
   return null;
 }
 
+/**
+ * @returns {import('../../application/ports/url-fetch-port').UrlFetchPort}
+ */
 function createHttpUrlFetchAdapter({ fetchImpl = fetchVia, lookup = null, getLocale = () => DEFAULT_LOCALE } = {}) {
   const resolveHost = lookup || ((hostname) => dns.lookup(hostname, { all: true, verbatim: true }));
   // Built on first use: a connection only to addresses that pass the check.
@@ -209,6 +217,10 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetchVia, lookup = null, getLoc
     return null;
   }
 
+  /**
+   * Every field is checked here, so a request may come without any.
+   * @param {Partial<Parameters<import('../../application/ports/url-fetch-port').UrlFetchPort['fetchUrl']>[0]>} [request]
+   */
   async function fetchUrl({ url: rawUrl, maxCharacters, abortSignal } = {}) {
     const parsed = parseHttpUrl(rawUrl);
     if (parsed.error) return fail(URL_FETCH_ERROR_CODES.INVALID_URL, parsed.error);
@@ -295,6 +307,7 @@ function createHttpUrlFetchAdapter({ fetchImpl = fetchVia, lookup = null, getLoc
             const title = isHtml ? extractTitle(decoded) : '';
             const text = isHtml ? htmlToText(decoded) : decoded.trim();
             const truncated = text.length > maxChars;
+            /** @type {import('../../application/ports/url-fetch-port').UrlFetchOk} */
             const out = {
               ok: true,
               url: current.toString(),

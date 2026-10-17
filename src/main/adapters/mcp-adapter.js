@@ -94,8 +94,15 @@ function describeTool(tool, serverLabel) {
 }
 
 /**
- * @param {Object} deps
- * @param {Object} deps.mcpService — aus mcp-service.js (Issue #106)
+ * The port as mcp-service.js implements it, plus the binding to the tool
+ * registry: the definitions the model sees, and the tools left out of them.
+ *
+ * @param {Object} [deps]
+ * @param {import('../../application/ports/mcp-port').McpPort} [deps.mcpService]  aus mcp-service.js (Issue #106)
+ * @returns {import('../../application/ports/mcp-port').McpPort & {
+ *   describeSkippedTools: () => Array<{ serverId: string, name: string, reason: object }>,
+ *   buildToolDefinitions: () => Promise<Array<object>>,
+ * }}
  */
 function createMcpAdapter({ mcpService } = {}) {
   // Namen, die wegen der 64-Zeichen-Grenze ausgelassen wurden. Der

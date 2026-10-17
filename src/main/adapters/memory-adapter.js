@@ -33,6 +33,9 @@ const {
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { createEmbeddedTextFiles } = require('../services/embedded-text-file');
 
+/**
+ * @returns {import('../../application/ports/memory-port').MemoryPort}
+ */
 function createMemoryAdapter({
   fs,
   path,
@@ -129,6 +132,8 @@ function createMemoryAdapter({
      * Einen Eintrag anhängen. Liefert den gespeicherten Text und den Pfad —
      * beides geht ins Tool-Ergebnis, damit im Chat steht, **wohin** gemerkt
      * wurde und nicht nur, dass gemerkt wurde.
+     *
+     * @param {Partial<import('../../application/ports/memory-port').MemoryRememberRequest>} [request]
      */
     async remember({ scope, workspaceRoot = null, text, origin } = {}) {
       if (!isMemoryScope(scope)) throw new TypeError(`Unknown memory scope: ${scope}`);
@@ -188,6 +193,8 @@ function createMemoryAdapter({
      * Einen Eintrag entfernen (Einstellungen › Gedächtnis › Vergessen). Named
      * by its line *and* its text, so a line that moved meanwhile cannot take
      * another entry with it (#577).
+     *
+     * @param {Partial<import('../../application/ports/memory-port').MemoryForgetRequest>} [request]
      */
     async forget({ scope, workspaceRoot = null, line, text } = {}) {
       if (!isMemoryScope(scope)) throw new TypeError(`Unknown memory scope: ${scope}`);

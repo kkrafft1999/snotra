@@ -198,9 +198,9 @@ function stableStringify(value) {
 
 /**
  * @param {object} deps
- * @param {object} deps.fsService  liefert resolveToolPath und listApplyPatchTargets
- * @param {object} deps.fs  fs/promises
- * @param {object} deps.path
+ * @param {Object} deps.fsService  liefert resolveToolPath und listApplyPatchTargets (not typed yet)
+ * @param {typeof import('fs/promises')} deps.fs
+ * @param {typeof import('path')} deps.path
  * @param {string[]} [deps.protectedRoots]  absolute Ordner, die für Tools hart gesperrt sind (userData)
  * @param {boolean} [deps.canTrash]  ob eine Wiederherstellungskopie in den Papierkorb möglich ist
  * @param {() => {label?: string, login?: boolean}} [deps.describeShell]  erkannte Shell für die Vorschau (#102)
@@ -208,11 +208,12 @@ function stableStringify(value) {
  *   isolation state for the card of the execution tools (#329)
  * @param {(workspaceRoot: string) => Promise<boolean>} [deps.isSandboxDisabled]
  *   whether the user switched the sandbox off for this workspace (#357)
- * @param {(request: {command: string, cwd: string}) => Promise<object|null>} [deps.matchProgramAllowance]
+ * @param {(request: {command: string, cwd: string}) => Promise<{ allowance?: object, command?: string,
+ *   entry?: object, skipped?: string }|null>} [deps.matchProgramAllowance]
  *   the program allowance a shell command gets, or why it does not (#408)
  * @param {() => Promise<object[]>} [deps.readProgramAllowances]
  *   the stored allowances, to notice a change between plan and run (#408)
- * @param {object} [deps.outsideAccess]  what a card may open outside the open folder (#792), see outside-access.js
+ * @param {Object} [deps.outsideAccess]  what a card may open outside the open folder (#792), see outside-access.js
  */
 function createToolCallPlanner({
   fsService,
@@ -500,6 +501,7 @@ function createToolCallPlanner({
       }
       const realRuleRel = path.relative(realRoot, realAbs).split(path.sep).join('/');
       const rulePaths = [...new Set([lexicalRel, realRuleRel].map((rel) => `${resolved.prefix || ''}${rel}`))];
+      /** @type {import('../../application/ports/tool-port').ToolPlanTarget} */
       const target = {
         path: rawPath.trim() === '' ? '.' : rawPath.trim(),
         rulePaths,

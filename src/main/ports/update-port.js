@@ -4,7 +4,7 @@
  *
  * @typedef {Object} UpdatePort
  * @property {() => string} getCurrentVersion
- * @property {(options?: { respectIgnored?: boolean, signal?: AbortSignal }) => Promise<object>} checkForUpdate
+ * @property {(options?: { respectIgnored?: boolean, signal?: AbortSignal }) => Promise<{ updateAvailable?: boolean } & Object<string, unknown>>} checkForUpdate
  * @property {(version: string) => Promise<object>} ignoreVersion
  * @property {(options?: { onProgress?: (p: { receivedBytes: number, totalBytes: number }) => void })
  *            => Promise<{ ok: boolean, filePath?: string, canceled?: boolean, error?: string }>} downloadUpdate

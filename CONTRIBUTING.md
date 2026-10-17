@@ -77,9 +77,16 @@ npm start        # runs the app in development mode
 Two levels, both required to be green before a pull request is opened:
 
 ```bash
-npm test         # unit and DOM tests (node --test, happy-dom)
+npm test         # type check, then unit and DOM tests (node --test, happy-dom)
 npm run test:e2e # end-to-end tests against the running Electron app (playwright-core)
 ```
+
+Before its tests, `npm test` runs `npm run typecheck`: `tsc` checks the JSDoc
+of the core, the ports, the contracts and the adapters, without emitting
+anything — the app stays plain JavaScript. An adapter names the port it
+implements (`@returns {import('…-port').XPort}`), and the check fails when the
+two disagree; see *Plain JS, checked by JSDoc* in
+[`docs/architecture.md`](./docs/architecture.md#plain-js-checked-by-jsdoc).
 
 `npm test` covers the wiring: the application core, the main-process adapters
 and the renderer components against a `happy-dom` DOM. `npm run test:e2e`

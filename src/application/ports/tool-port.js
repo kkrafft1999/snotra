@@ -19,6 +19,8 @@
  * @property {string} [skillName]  the skill the path belongs to, also when given absolutely (#427)
  * @property {string} [skillPath]  the path inside that skill's folder
  * @property {string} [absPath]  the resolved absolute path
+ * @property {string} [root]  the folder the path resolved in: the open folder or a skill's
+ * @property {string[]} [rulePaths]  the spellings a permission rule is matched against, lexical and real
  * @property {'read'|'write'} [access]  what the call does with a path outside the open folder (#792)
  * @property {{ offers: OutsideGrant[] }} [outside]  a path outside the open folder no card has opened
  *   yet, and what a card may open for it (#792, step 4)
@@ -39,7 +41,8 @@
  * @property {string} tool
  * @property {string[]} riskClasses  effektive Klassen (Mindestklasse + dynamische Merkmale)
  * @property {ToolPlanTarget[]} targets
- * @property {string} planKey  stabiler Schlüssel aus Tool, Argumenten, Zielen und Versionen
+ * @property {string} [planKey]  stabiler Schlüssel aus Tool, Argumenten, Zielen und Versionen;
+ *   absent on a plan that failed (`error`)
  * @property {string} [recovery]
  * @property {{ kind: string, text: string, truncated: boolean, masked: boolean }} [preview]
  * @property {{ reason: string }} [hardLimit]  verletzte harte Grenze → deny in jedem Modus
@@ -52,6 +55,7 @@
  * @property {string} [error]  Plan nicht möglich (ungültige Argumente, Ausbruch, …)
  * @property {string} [reason]  PERMISSION_DENIAL_REASONS-Wert zu `error`
  * @property {boolean} [outside]  a target lies outside the open folder and no card has opened it (#792)
+ * @property {string[]} [sensitivePathPatterns]  the user's patterns the plan was made with
  */
 
 /**
@@ -88,6 +92,12 @@
  */
 
 /**
+ * A call's arguments as the model sent them: parsed JSON, checked by the
+ * planner, never trusted before that.
+ * @typedef {Object<string, any>} ToolArguments
+ */
+
+/**
  * Options for the tool list and the prompt built from it.
  * @typedef {Object} ToolListOptions
  * @property {string[]} [disabledNames]
@@ -99,13 +109,14 @@
 /**
  * @typedef {Object} ToolTraceEntry
  * @property {string} tool
- * @property {object} args
+ * @property {ToolArguments} args
  * @property {number} [waitMs]
  * @property {boolean} [noWorkspace]
  * @property {string} [line]  fertige Anzeige-Zeile (done-Phase), für Persistenz
  * @property {object} [permission]  bereinigter Audit-Eintrag (Entscheidung, Klassen, Status)
  * @property {number} [round]  1-based tool round of the turn the call came in (#187)
  * @property {SchemaViolations} [schema]  schema violations in the arguments (#187)
+ * @property {string} [skill]  the skill the call reads from or writes to (#61, #160, #173)
  * @property {Array<object>} [changes]  what the call changed, summaries only (#348)
  * @property {object} [sandboxBlocked]  what the sandbox refused during the run (#792)
  * @property {object} [sandboxDecision]  what the user decided on the sandbox card (#792)
@@ -148,12 +159,12 @@
  * @property {(name: string, disabledNames: string[]) => boolean} [isSwitchedOff]  whether the user's
  *   switch-off applies to this tool; never to the basic equipment (#552). Without it, the name list decides
  *   on its own
- * @property {(toolName: string, args: object, extra?: object) => ToolTraceEntry} buildTraceEntry
- * @property {(name: string, args: object) => (SchemaViolations|null)} [measureArguments]  optional:
+ * @property {(toolName: string, args: ToolArguments, extra?: object) => ToolTraceEntry} buildTraceEntry
+ * @property {(name: string, args: ToolArguments) => (SchemaViolations|null)} [measureArguments]  optional:
  *   schema violations the planner lets through (#187); a measurement, never a refusal
  * @property {(entry: ToolTraceEntry, phase: string, locale?: string) => string} formatDisplayLine
- * @property {(name: string, args: object, ctx: ToolPlanContext) => Promise<ToolPlan>} plan
- * @property {(name: string, args: object, ctx: ToolExecutionContext) => Promise<ToolExecutionResult>} execute
+ * @property {(name: string, args: ToolArguments, ctx: ToolPlanContext) => Promise<ToolPlan>} plan
+ * @property {(name: string, args: ToolArguments, ctx: ToolExecutionContext) => Promise<ToolExecutionResult>} execute
  */
 
 module.exports = {};

@@ -261,6 +261,12 @@ function proposalLine(entry, phase, t) {
   return t('tools.line.proposeConfig.refused');
 }
 
+/**
+ * @param {Object} entry  a tool trace entry
+ * @param {string} [phase]
+ * @param {string} [locale]
+ * @returns {string}
+ */
 function formatToolDisplayLine(entry, phase = 'start', locale = DEFAULT_LOCALE) {
   if (typeof entry === 'string') return entry;
   const t = createTranslator(locale);

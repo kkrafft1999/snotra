@@ -69,7 +69,7 @@ function sleep(ms, signal) {
     }
     const timer = setTimeout(() => {
       signal?.removeEventListener('abort', onAbort);
-      resolve();
+      resolve(undefined);
     }, ms);
     function onAbort() {
       clearTimeout(timer);
@@ -150,6 +150,9 @@ function errorFor(status, { message, code }) {
  * @param {string} [deps.baseUrl]
  * @param {(ms: number, signal?: AbortSignal) => Promise<void>} [deps.wait]  injectable for tests
  * @param {number} [deps.timeoutMs]
+ * @returns {import('../../application/ports/image-generation-port').ImageGenerationPort & {
+ *   listModels: (options?: { signal?: AbortSignal }) => Promise<{ models?: Array<object>, error?: object }>,
+ * }}  the port, plus the model list for the settings
  */
 function createOpenAiImageGenerationAdapter({
   readApiKey,
@@ -198,6 +201,8 @@ function createOpenAiImageGenerationAdapter({
      * The image models the key can reach, for the choice in the settings.
      * Errors travel as message keys for the settings dialog, like the model
      * listing of the providers (#308).
+     *
+     * @param {{ signal?: AbortSignal }} [options]
      */
     async listModels({ signal } = {}) {
       const apiKey = await readApiKey();
@@ -231,6 +236,7 @@ function createOpenAiImageGenerationAdapter({
       }
     },
 
+    /** @param {Partial<import('../../application/ports/image-generation-port').ImageGenerationRequest>} [request] */
     async generate({ prompt, size, quality, format, background, abortSignal } = {}) {
       const text = typeof prompt === 'string' ? prompt.trim() : '';
       if (!text) {
@@ -328,6 +334,7 @@ function createOpenAiImageGenerationAdapter({
           error: `OpenAI returned something that is not a ${outputFormat.toUpperCase()} image.`,
         };
       }
+      /** @type {import('../../application/ports/image-generation-port').ImageGenerationOk} */
       const out = { ok: true, bytes, mime, model };
       const revised = typeof item.revised_prompt === 'string' ? item.revised_prompt.trim() : '';
       if (revised && revised !== text) out.revisedPrompt = revised.slice(0, LIMITS.MAX_PROMPT_CHARS);

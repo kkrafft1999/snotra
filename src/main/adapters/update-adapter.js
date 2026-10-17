@@ -1,5 +1,8 @@
 'use strict';
 
+/**
+ * @returns {import('../ports/update-port').UpdatePort}
+ */
 function createUpdateAdapter(updateService) {
   return {
     getCurrentVersion() {
@@ -42,13 +45,13 @@ function createUpdateAdapter(updateService) {
  * something to show.
  *
  * @param {object} deps
- * @param {object} deps.updates        the adapter above, or a test double
- * @param {() => object|null} deps.getMainWindow
- * @param {object} deps.PUSH
+ * @param {import('../ports/update-port').UpdatePort} deps.updates  the adapter above, or a test double
+ * @param {() => { isDestroyed: () => boolean, webContents: { send: Function } }|null} deps.getMainWindow
+ * @param {{ UPDATE_AVAILABLE: string }} deps.PUSH
  * @param {() => Promise<boolean>|boolean} [deps.isAutomaticCheckEnabled]
  *   the setting *Check for updates at start-up* (#987). Off, the silent check
  *   does not ask GitHub; the check from the menu is not affected.
- * @param {object} [deps.env]  only `SNOTRA_NO_UPDATE_CHECK` is read: set to
+ * @param {NodeJS.ProcessEnv} [deps.env]  only `SNOTRA_NO_UPDATE_CHECK` is read: set to
  *   `1`, the silent check does not ask GitHub (#407). The smoke test sets it,
  *   so a release published in the meantime cannot put the update dialog over
  *   the window it takes screenshots of.
@@ -56,6 +59,7 @@ function createUpdateAdapter(updateService) {
 function createUpdateCheck({
   updates, getMainWindow, PUSH, isAutomaticCheckEnabled = () => true, env = process.env,
 }) {
+  /** @param {{ silent?: boolean }} options */
   return async function runUpdateCheck({ silent }) {
     // Only the automatic check steps aside. Choosing "Check for updates" in
     // the menu is an explicit request and still gets an answer.

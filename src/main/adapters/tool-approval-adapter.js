@@ -36,6 +36,20 @@ function abortReason(signal) {
   return isPermissionDenialReason(signal?.reason) ? signal.reason : PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED;
 }
 
+/**
+ * The port, plus the side the IPC layer talks to: windows subscribe, the
+ * renderer answers, and main lists what is still open.
+ *
+ * @returns {import('../../application/ports/tool-approval-port').ToolApprovalPort & {
+ *   subscribe: (sessionId: string|number, webContents: { once?: Function, isDestroyed?: () => boolean, send?: Function }) => boolean,
+ *   unsubscribe: (sessionId: string|number) => void,
+ *   respond: (sessionId: string|number, answer?: object) => { ok: boolean, error?: object, response?: string },
+ *   getPendingRequest: (sessionId: string|number, requestId: string) => object|null,
+ *   invalidateAll: (reason?: string) => void,
+ *   listPending: (sessionId?: string|number) => Array<object>,
+ *   pendingCount: () => number,
+ * }}
+ */
 function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
   /** sessionId → webContents (nur angemeldete Fenster). */
   const subscribers = new Map();
@@ -72,17 +86,22 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
     return true;
   }
 
+  /** @type {import('../../application/ports/tool-approval-port').ToolApprovalPort['invalidateSession']} */
   function invalidateSession(sessionId, reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
     for (const [requestId, entry] of [...pending.entries()]) {
       if (entry.sessionId === sessionId) settle(requestId, { invalidated: true, reason });
     }
   }
 
+  /** @param {string} [reason] */
   function invalidateAll(reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
     for (const requestId of [...pending.keys()]) settle(requestId, { invalidated: true, reason });
   }
 
-  /** Open requests of one chat only — its mode changed, or it was deleted (#320). */
+  /**
+   * Open requests of one chat only — its mode changed, or it was deleted (#320).
+   * @type {import('../../application/ports/tool-approval-port').ToolApprovalPort['invalidateChat']}
+   */
   function invalidateChat(chatId, reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
     const key = chatKey(chatId);
     for (const [requestId, entry] of [...pending.entries()]) {
@@ -94,6 +113,7 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
    * Open requests of every chat except the given ones (#320). Those are the
    * visible chat and the chats still running in the background — a run that
    * waits for a card keeps waiting while the user looks at something else.
+   * @type {import('../../application/ports/tool-approval-port').ToolApprovalPort['invalidateExceptChats']}
    */
   function invalidateExceptChats(chatIds, reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
     const keep = new Set([...chatIds].map(chatKey));
@@ -128,9 +148,6 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
       }
       return true;
     },
-    /**
-     * @returns {Promise<{ response?: string, invalidated?: boolean, reason?: string, requestId: string }>}
-     */
     requestApproval({ sessionId, request, abortSignal }) {
       const webContents = subscribers.get(sessionId);
       if (!this.isAvailable(sessionId)) {
@@ -159,6 +176,9 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
     /**
      * Antwort aus dem Renderer. Akzeptiert nur eine Entscheidung auf eine
      * eigene, offene Anfrage; alles andere ist ein Fehler ohne Wirkung.
+     *
+     * @param {string|number} sessionId
+     * @param {{ requestId?: string, response?: string, ruleId?: string, sandboxPaths?: string[], workspaceStored?: boolean }} [answer]
      */
     respond(sessionId, { requestId, response, ruleId, sandboxPaths, workspaceStored } = {}) {
       const entry = pending.get(requestId);

@@ -43,6 +43,7 @@ class EmbeddedFileOutsideRootError extends Error {
 }
 
 function notRegularFile(file) {
+  /** @type {Error & { code?: string }} */
   const error = new Error(`"${file}" is not a regular file; nothing was written.`);
   error.code = 'ENOTREGULAR';
   return error;
@@ -174,6 +175,7 @@ function createEmbeddedTextFiles({ fs, path, platform = process.platform }) {
       target = path.join(realDir, path.basename(file));
     }
     const tmp = path.join(path.dirname(target), `.${path.basename(target)}.tmp-${randomUUID()}`);
+    /** @type {import('fs').WriteFileOptions} */
     const options = existing ? { encoding: 'utf8', mode: existing.stat.mode & 0o777 } : 'utf8';
     await fs.writeFile(tmp, text, options);
     try {

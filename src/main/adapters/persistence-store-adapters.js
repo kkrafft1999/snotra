@@ -1,5 +1,8 @@
 'use strict';
 
+/**
+ * @returns {import('../ports/llm-config-store-port').LlmConfigStorePort}
+ */
 function createLlmConfigStorePort(storage) {
   return {
     readLLMConfig: (...args) => storage.readLLMConfig(...args),
@@ -10,6 +13,9 @@ function createLlmConfigStorePort(storage) {
   };
 }
 
+/**
+ * @returns {import('../ports/ui-prefs-store-port').UiPrefsStorePort}
+ */
 function createUiPrefsStorePort(storage) {
   return {
     readUIPrefs: (...args) => storage.readUIPrefs(...args),
@@ -17,6 +23,9 @@ function createUiPrefsStorePort(storage) {
   };
 }
 
+/**
+ * @returns {import('../ports/chat-history-store-port').ChatHistoryStorePort}
+ */
 function createChatHistoryStorePort(storage) {
   return {
     MAX_CHAT_SESSIONS: storage.MAX_CHAT_SESSIONS,
@@ -76,6 +85,9 @@ function createMcpSecretsPort(storage) {
   };
 }
 
+/**
+ * @returns {import('../ports/workspace-folder-store-port').WorkspaceFolderStorePort}
+ */
 function createWorkspaceFolderStorePort(storage) {
   return {
     getValidatedLastFolder: (...args) => storage.getValidatedLastFolder(...args),

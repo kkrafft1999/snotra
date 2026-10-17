@@ -41,8 +41,8 @@
 
 /**
  * @typedef {Object} ToolApprovalOutcome
- * @property {'allow-once'|'allow-session'|'allow-always'|'allow-workspace'|'deny'} response
- *   `allow-workspace` only on a connection card (#946)
+ * @property {'allow-once'|'allow-session'|'allow-always'|'allow-workspace'|'deny'} [response]
+ *   absent when the request was `invalidated`; `allow-workspace` only on a connection card (#946)
  * @property {boolean} [invalidated]  Anfrage verfallen (Abbruch, Fenster zu, Kontextwechsel, keine UI)
  * @property {string} [reason]  PERMISSION_DENIAL_REASONS-Wert bei invalidated
  * @property {string} [requestId]

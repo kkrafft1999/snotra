@@ -1,5 +1,8 @@
 'use strict';
 
+/**
+ * @returns {import('../ports/speech-port').SpeechPort}
+ */
 function createSpeechAdapter(realtimeTranscription, whisperService) {
   return {
     openLiveTranscription(options) {

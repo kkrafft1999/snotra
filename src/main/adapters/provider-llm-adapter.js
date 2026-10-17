@@ -14,6 +14,15 @@ const { createCostEntry } = require('../../shared/contracts/cost');
 /**
  * `reasoningLevelFor(chatId)` answers with the chat's own reasoning level, or
  * nothing (#725); without `chatId` it asks for the chat on screen.
+ *
+ * @param {Object} deps
+ * @param {import('../ports/provider-runtime-port').ProviderRuntimePort} deps.providerRuntime
+ * @param {import('../ports/llm-config-store-port').LlmConfigStorePort} deps.llmConfigStore
+ * @param {import('../ports/provider-secrets-port').ProviderSecretsPort} deps.providerSecrets
+ * @param {(chatId?: string) => Promise<string|null>} [deps.reasoningLevelFor]
+ * @param {{ resolve: (model: { providerId: string, model: string, baseUrl?: string }) => Promise<{ price: object|null, priceSource: string|null }>,
+ *   tableInfo: () => Promise<{ date: string, origin: string }|null> }|null} [deps.modelPrices]
+ * @returns {import('../../application/ports/llm-port').LlmPort}
  */
 function createProviderLlmAdapter({
   providerRuntime,
@@ -81,7 +90,10 @@ function createProviderLlmAdapter({
     return custom || provider.name;
   }
 
-  /** `chatId`: the chat the round is for; without it, the chat on screen. */
+  /**
+   * `chatId`: the chat the round is for; without it, the chat on screen.
+   * @param {{ chatId?: string }} [params]
+   */
   async function resolveChatTarget({ chatId } = {}) {
     const config = await llmConfigStore.readLLMConfig();
     const raw = llmConfigStore.resolveChatModelTarget(config);
@@ -161,6 +173,8 @@ function createProviderLlmAdapter({
    * verteilt OpenAI die Anfragen frei auf seine Maschinen, und ein Chat trifft
    * mal auf einen warmen und mal auf einen kalten Cache. Nur OpenAI wertet ihn
    * aus; die uebrigen Provider ignorieren das Feld.
+   *
+   * @type {import('../../application/ports/llm-port').LlmPort['streamRound']}
    */
   async function streamRound({
     target,
