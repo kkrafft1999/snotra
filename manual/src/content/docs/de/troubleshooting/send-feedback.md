@@ -1,6 +1,6 @@
 ---
 title: Feedback senden
-description: Erzähl uns aus Snotra heraus von einem Fehler, einer Idee oder etwas, das dir gefällt: was gesendet wird, wo es landet und was du tust, wenn das Senden scheitert.
+description: Erzähl uns aus Snotra heraus von einem Fehler, einer Idee oder etwas, das dir gefällt — was gesendet wird, wo es landet und was du tust, wenn das Senden scheitert.
 sidebar:
   order: 7
 ---
