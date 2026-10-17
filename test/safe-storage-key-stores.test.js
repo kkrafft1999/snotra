@@ -14,8 +14,10 @@ const crypto = require('crypto');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { createToolPolicyStore, POLICY_FILENAME, POLICY_KEY_FILENAME } = require('../src/main/services/tool-policy-store');
 const { registerSettingsHandlers } = require('../src/main/ipc/settings-handlers');
+const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
 const { KEY_ALWAYS_DURABLE } = require('../src/main/services/safe-storage-key-durability');
 const {
+  createChatHistoryStorePort,
   createLlmConfigStorePort,
   createUiPrefsStorePort,
   createWorkspaceFolderStorePort,
@@ -161,6 +163,32 @@ test('reading a plain history does not wait for the key; it is encrypted once th
   key.release();
   await storage.readChatHistoryStore();
   assert.equal((await readJson(file)).encrypted, true, 'the next read encrypts it');
+});
+
+test('a new chat on a fresh profile clears no pointer, so it writes nothing and does not wait', async (t) => {
+  const dir = await tempDir(t);
+  const key = createHeldSafeStorageKey();
+  const storage = makeStorage(dir, { safeStorageKey: key });
+  const ipcMain = createMockIpcMain();
+  registerChatHistoryHandlers({
+    ipcMain,
+    chatHistoryStore: createChatHistoryStorePort(storage),
+    REQ,
+    getActiveWorkspaceRoot: () => null,
+    isKnownWorkspaceRoot: async () => false,
+  });
+
+  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, null), { ok: true });
+  assert.equal(key.waits, 0, 'the mode of the new chat is not held up behind the key (#564)');
+  assert.equal(await exists(path.join(dir, 'chat-history.json')), false);
+
+  // A pointer that does change is history, encrypted, and waits like any save.
+  const pointing = ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'chat-1');
+  await key.asked();
+  assert.equal(await isSettled(pointing), false);
+  key.release();
+  assert.deepEqual(await pointing, { ok: true });
+  assert.equal((await readJson(path.join(dir, 'chat-history.json'))).encrypted, true);
 });
 
 test('files without ciphertext are not held', async (t) => {

@@ -1258,8 +1258,10 @@ MCP secrets in `storage-service`, provider keys and headers in
 `ipc/settings-handlers.js` (before the config lock, so nothing else waits with
 them), and a new `tool-policy.key` in `tool-policy-store`. What only reads does
 not wait: a plain history is encrypted by a later read, a missing policy is
-read as the defaults without writing a file yet, and a stored signature whose
-key is gone fails its check without a new key being made for it. On macOS,
+read as the defaults without writing a file yet, a stored signature whose key
+is gone fails its check without a new key being made for it, and the
+active-chat pointer is written only when it changes — otherwise every new chat
+would wait before its mode is applied (#564). On macOS,
 Linux and every later start nothing waits at all. The wait ends after 20 s
 with a warning, and on an orderly quit, which writes `Local State` after the
 writes it waits for (#679). `index.js` makes the watcher and hands it to
