@@ -1,7 +1,10 @@
 # Architecture
 
-A short overview of the layered and port/adapter structure of Snotra Agent after
-the five roadmap stages were completed (as of 2026-07-12). Diagrams:
+The layered and port/adapter structure of Snotra Agent as the code has it,
+checked against `main` on 2026-10-17 (v1.24.0,
+[#1009](https://github.com/kkrafft1999/snotra/issues/1009)). Where the code
+falls short of the structure this document is meant to describe, the text says
+so and names the issue that closes the gap. Diagrams:
 [`architecture-containers.svg`](./architecture-containers.svg),
 [`architecture-layers.svg`](./architecture-layers.svg),
 [`architecture-hexagonal.svg`](./architecture-hexagonal.svg),
@@ -12,6 +15,12 @@ What this architecture has to achieve is written down in
 quality goals, checkable scenarios and non-goals. How well it does is evaluated
 in [`architecture-review.md`](./architecture-review.md) (#752), with one issue
 per finding.
+
+What keeps this document honest: `test/architecture-doc.test.js` checks that
+every path it names exists, that the layer table names every directory under
+`src/`, and that the port lists match the two `ports/` folders. Everything else
+here is prose, and prose drifts — a claim about what a layer "does only" or
+"never" does is worth re-reading against the code whenever it is relied on.
 
 ## Containers (C4 level 2)
 
@@ -26,10 +35,10 @@ component level *inside* the main process.
 
 | Container | Technology | Responsibility |
 | --------- | ---------- | -------------- |
-| **Main process** | Electron main, Node.js | Composition root, chat engine and tool loop (`src/application/`), provider adapters, tool registry, approvals, persistence, updates. The only container that holds secrets, and the one that decides every access to the outside. |
-| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism | Presentation only: chat, file tree, file views, settings. Sees nothing but `window.electronAPI` from the preload and the contracts. |
+| **Main process** | Electron main, Node.js | Composition root, IPC handlers, the chat engine and its tool loop (`src/application/`), the tool registry and planner, provider adapters, the services behind them (storage, file system, sandbox, MCP, updates, skills …), approvals, persistence. The only container that holds secrets, and the one that decides every access to the outside. |
+| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism | Chat, file tree, file views, settings — and, still, the state of the conversation: the run registry, when and what to persist, the cost sum and the title trigger live here, not in the core ([#981](https://github.com/kkrafft1999/snotra/issues/981)). Sees nothing but `window.electronAPI` from the preload and the contracts. |
 | **HTML preview** | `WebContentsView` with its own session (`snotra-html-preview`), the `snotra-html:` scheme and `sandbox: true` | Shows HTML pages from the workspace apart from the app's own UI ([#479](https://github.com/kkrafft1999/snotra/issues/479), see [HTML pages](#html-pages-479)). |
-| **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (`src/manual/`, #790). The app window's channels refuse it as a sender. |
+| **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (#790): the page is `src/renderer/manual.html`, the content a bundle that `scripts/bundle-manual.js` builds into `src/manual/` from `manual/`. The app window's channels refuse it as a sender. |
 | **Execution sandbox** | Child processes through `@anthropic-ai/sandbox-runtime`: Seatbelt on macOS, bubblewrap on Linux; unisolated on Windows | `shell_execute` and `run_python` (#329): write only inside the workspace, network only through the proxy in main and only to approved domains. See [`security-concept.md`](./security-concept.md), section 9. |
 | **Local store** | JSON files in the userData folder; secrets encrypted with `safeStorage` | `llm-config.json`, `chat-history.json`, `ui-preferences.json`, `mcp-servers.json`, `tool-policy.json`, `web-search-config.json`, chat attachments, `memory.md`. |
 
@@ -68,35 +77,75 @@ as an external system rather than a container.
 
 ## Direction of dependencies
 
-Dependencies always point **inwards** — from the outer edge (UI, IPC,
-infrastructure) to the transport-agnostic core:
+Dependencies point **inwards** — from the outer edge (UI, IPC, infrastructure)
+towards the transport-agnostic core and the shared modules:
 
 ```
-Renderer / preload / IPC handlers
+Renderer ⇄ preload ⇄ IPC handlers (src/main/ipc/)
         ↓
-Main adapters & composition (src/main/adapters/, composition/)
+Main: composition (src/main/composition/) wires adapters, services, tools,
+      providers (src/main/adapters/, services/, tools/, providers/)
         ↓
-Application core (src/application/)
+Application core (src/application/: chat, permissions, ports)
         ↓
-Shared contracts & runtime (src/shared/contracts/, runtime/)
+Shared (src/shared/: contracts, runtime, i18n, manual, presentation)
 ```
 
-The application core (`src/application/`) imports only modules under
-`src/application/` and `src/shared/`. It knows neither Electron nor provider
-implementations nor the file system.
+**What is enforced.** `src/application/` imports only modules under
+`src/application/` and `src/shared/`, and no package or Node built-in
+(`test/application-layer-imports.test.js`). So the core knows neither Electron
+nor the file system nor any provider *implementation*. Nothing else in this
+picture is checked by a test: not the direction between the main layers, not
+the renderer's imports, not what the composition root may contain.
+
+**Where the picture is rounder than the code:**
+
+- The core knows two provider **IDs**: `ollama` in `application/chat/chat-history-trim.js`
+  and `openai-compatible` in `application/chat/chat-engine.js`, and shared
+  contracts such as `cost.js` and `context-breakdown.js` branch on IDs as well.
+  The capability of a provider is one flag plus special cases, not a register
+  ([#996](https://github.com/kkrafft1999/snotra/issues/996)).
+- The core is small. It runs one turn: engine, history trimming, prompt blocks
+  and the permission decision — about 5.3k lines, against some 22k in
+  `src/main/services/` alone. The tool registry, the planner, session settings,
+  skill selection, outside access and program allowances sit in `src/main/`.
+  Six of the 18 application ports — web search, URL fetch, code and shell
+  execution, MCP, image generation — are consumed only by main's registry, never
+  by the core ([#982](https://github.com/kkrafft1999/snotra/issues/982)).
+- The conversation itself — runs, persistence — is the renderer's, see
+  [Renderer](#renderer-what-was-moved-what-stays)
+  ([#981](https://github.com/kkrafft1999/snotra/issues/981)).
+- A second front end (a CLI, say) would therefore have to take most of
+  `src/main/` with it, not only add adapters and a composition root. That is
+  scenario CORE-1 of [`quality-requirements.md`](./quality-requirements.md), and
+  the review rates it *at risk*.
 
 ## Layers
 
+Sizes are lines of JavaScript on 2026-10-17 and only there to show where the
+code is.
+
 | Layer | Path | Role |
 | ------- | ---- | ----- |
-| **Contracts** | `src/shared/contracts/` | DTOs, events, enums, validators for the IPC boundary and persistence |
-| **Presentation (shared)** | `src/shared/presentation/` | Domain-adjacent display helpers for main adapters and tests (e.g. tool lines); not imported by the core |
-| **Application** | `src/application/chat/`, `src/application/ports/` | Chat orchestration, tool loop, history trimming — only through injected ports |
-| **Main adapters** | `src/main/adapters/` | Concrete port implementations (LLM, tools, storage, FS, speech, updates, …) |
-| **Main ports** | `src/main/ports/` | Interface types for infrastructure (narrow surfaces, no leaks) |
-| **Composition root** | `src/main/composition/` | Wiring: `createApplication()` builds services, adapters and engine, registers IPC |
-| **IPC** | `src/main/ipc/` | Thin driving adapters: IPC ↔ use-case calls, event push to the renderer |
-| **Renderer** | `src/renderer/` | Pure presentation: DOM, CSS, local formatting; only `window.electronAPI` + contracts |
+| **Contracts** | `src/shared/contracts/` | 32 modules (~8k lines): DTOs, events, enums and validators for the IPC boundary and persistence, plus the pure arithmetic of a feature (`cost.js`, `chat-configuration.js`). Used by core, main and — as a generated ESM bundle — the renderer |
+| **Shared runtime** | `src/shared/runtime/` | 18 small modules (~2k lines) without Electron: path and pattern checks, sensitive paths and content, URL safety, the shell command guard, partial JSON, hidden entries |
+| **Shared i18n** | `src/shared/i18n/` | The English and German catalogues and the translator, one copy for all three sides, see [Interface language](#interface-language) |
+| **Shared manual** | `src/shared/manual/` | Addressing and searching the pages of the user manual, for main and the manual window |
+| **Shared presentation** | `src/shared/presentation/` | `tool-display.js`: the lines of the tool log. For main adapters and tests; not imported by the core |
+| **Shared files** | `src/shared/ipc-channels.js`, `src/shared/manual-channels.js`, `src/shared/limits.js` | Channel names of both windows and the limits that several sides need |
+| **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming and the prompt blocks for environment, memory and project instructions. Only through injected ports |
+| **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content and the overview the Security page reads. No Electron, no file system; the heart of [`security-concept.md`](./security-concept.md) |
+| **Application ports** | `src/application/ports/` | 18 typedef files, the contracts between the core and main — see [Ports](#ports) |
+| **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
+| **Main ports** | `src/main/ports/` | 12 interface types for infrastructure (narrow surfaces, no leaks) |
+| **Providers** | `src/main/providers/` | Five provider modules and the two shared OpenAI transports behind `providers/index.js`, see [Provider adapters](#provider-adapters) |
+| **Tools** | `src/main/tools/` | The tool registry (definitions, handlers, risk classes; ~1.9k lines), the call planner (targets, plan key, sandbox plan) and argument conformance. Business rules, called through the tool adapter |
+| **Services** | `src/main/services/` | 76 modules (~22k lines) and by far the largest layer: storage, file system, sandbox, MCP, updates, skills, watchers, the signed policy store, outside access, program allowances, document text. Most of the backend's logic lives here |
+| **Composition root** | `src/main/composition/` | `createApplication()` builds services, adapters and engine and registers the IPC handlers — see [Composition root](#composition-root) |
+| **IPC** | `src/main/ipc/` | The handlers behind every channel, event push to the renderer, and `trusted-sender.js`, which refuses any sender that is not the app's own page. Mostly parse, validate and delegate; three of them hold logic ([#1006](https://github.com/kkrafft1999/snotra/issues/1006)) |
+| **Main shell** | `src/main/index.js`, `src/main/window.js`, `src/main/window-state.js`, `src/main/app-lifecycle.js`, `src/main/app-identity.js`, `src/main/permissions.js`, `src/main/workspace-state.js`, `src/main/manual-window.js`, `src/main/data/` | The Electron start-up and its windows, the single-instance lock, the media permissions, the active workspace root, the manual window; `data/` holds the bundled model price table |
+| **Preload** | `src/preload/` | `index.js` builds `window.electronAPI` for the app window, `manual.js` the manual window's. Both are bundled by esbuild into one file each, because a sandboxed preload cannot load siblings |
+| **Renderer** | `src/renderer/` | DOM, CSS and native ES modules: chat, file tree, file views, settings, the manual page. It also owns the conversation state ([#981](https://github.com/kkrafft1999/snotra/issues/981)); apart from that it sees only `window.electronAPI` and the contracts |
 
 Main imports the chat core from `src/application/chat/` directly; the former
 re-exports under `src/main/` are gone (#531).
@@ -104,14 +153,37 @@ re-exports under `src/main/` are gone (#531).
 ## Ports
 
 **Application ports** (`src/application/ports/`) — the contracts between the
-application layer and main. Most are consumed by the chat core; `web-search`,
-`url-fetch`, `code-execution`, `shell-execution` and `mcp` describe what main's
-tool registry calls, and `memory`'s `remember`/`forget`/`paths` serve the tools
-and the settings. The typedefs are prose — nothing checks them against the
-adapters, so a change to what the engine passes changes the port as well:
+application layer and main. There are 18. Twelve are consumed by the chat
+engine (`llm`, `tool`, `chat-preferences`, `workspace-path`, `skill`,
+`environment`, `project-instructions`, `memory`, `own-secrets`, `tool-policy`,
+`tool-approval`, `config-proposal`); the other six — `web-search`, `url-fetch`,
+`code-execution`, `shell-execution`, `mcp` and `image-generation` — describe
+what main's tool registry calls and the core never sees
+([#982](https://github.com/kkrafft1999/snotra/issues/982)). `memory`'s
+`remember`/`forget`/`paths` serve the tools and the settings as well. The
+typedefs are prose — nothing checks them against the adapters, so a change to
+what the engine passes changes the port as well:
 
 - `llm-port` — streaming rounds against a provider
 - `tool-port` — tool registry and execution
+- `tool-policy-port` — the permission state a run is decided against: mode, the
+  rules of all scopes, the sensitive path patterns, the versions that approvals
+  bind to, the integrity of the policy file and the hosts kept open for the
+  workspace (#946). It has no adapter module of its own: a small object in
+  `main/composition/create-chat-application.js` reads `services/tool-policy-store.js`
+  (the signed policy file) and works out the mode for that chat. A file that
+  cannot be read makes it throw, and the engine stops tools (concept section 3, #512)
+- `tool-approval-port` — a card and the user's answer, without the core knowing
+  how it is shown (#66). `main/adapters/tool-approval-adapter.js` binds every
+  request to a random id, the window, the run, the call, the plan and the
+  policy version; an answer can carry a decision and nothing else, and without
+  an interface the request is refused (`no_approval_ui`). The checkpoints
+  `access`, `output`, `sandbox` and `config` all travel through it
+- `config-proposal-port` — what a chat switched for itself, and how the model
+  asks for a change (#774). The core asks the user on a card through the
+  approval port and records the answer here; where the overrides are kept and
+  how a proposal is checked is main's business
+  (`services/chat-session-settings.js`, `services/chat-configuration-service.js`)
 - `chat-preferences-port` — UI prefs, system prompt, tool round limit
 - `workspace-path-port` — path helpers (e.g. `basename`)
 - `own-secrets-port` — the app's own secrets, compared against the text the
@@ -147,6 +219,10 @@ adapters, so a change to what the engine passes changes the port as well:
   without a watcher**: these are three files that are read afresh per request —
   unlike the skill catalogue, which scans entire directories and parses front
   matter, and therefore needs both
+- `image-generation-port` — an image from a prompt (#85); the service sits in
+  `main/adapters/openai-image-generation-adapter.js` and the port stays narrow
+  on purpose, because the services differ more than they look. Consumed by
+  `main/tools/generate-image-tool.js`, not by the core
 - `web-search-port` — searching the internet (issue #63); the provider sits in
   the adapter alone (`main/adapters/tavily-web-search-adapter.js`), and the tool
   handler does not know it
@@ -503,20 +579,29 @@ each:
   pass as a finished download on the next attempt. Cancellation covers the
   whole step from the click on, including the fresh check of the release that
   precedes the transfer (#568).
-- `update-installer.js` — the replacement. The same pattern everywhere: the new
-  version is fully unpacked and verified **next to** the old one — on macOS the
-  DMG's own checksum, the bundle identifier and the version in `Info.plist`; in a
-  Windows or Linux folder the product name and version in the `package.json`
-  inside `resources/app.asar` (#569) — and only then
-  does a detached helper script take over that waits for this process to end,
-  renames and restarts. It would not work inside the running process — on Windows
-  the `.exe` is locked, on Linux the AppImage is mounted as a file system inside
-  its own process. On Windows the helper starts in two stages (#654): a child
-  that Node spawns without `detached` is killed together with the app, so that
-  child only starts the swap script with `Start-Process` and waits until the
-  script reports that it runs. The app quits only then, and can still report a
-  helper that did not start. The scripts themselves are built as plain strings
-  and are therefore testable without an installation.
+- `update-installer.js` — the replacement. The new version is fully unpacked
+  **next to** the old one and, where it has an inside to look at, verified
+  there — on macOS the DMG's own checksum, the bundle identifier and the
+  version in `Info.plist`; in a Windows or Linux folder the product name and
+  version in the `package.json` inside `resources/app.asar` (#569). A single
+  AppImage has no inside: it is checked by the SHA-256 of the download alone
+  and swapped in without a look at its content. Then the swap, and here the
+  platforms differ:
+  * **macOS** — this process itself renames the old bundle aside and the new
+    one into place before it quits; the rename is undone if the second step
+    fails. The detached shell script only waits for this process
+    to end, deletes the backup and opens the new bundle.
+  * **Windows, a Linux folder and the AppImage** — a detached helper script
+    waits for this process to end, renames and restarts. It would not work
+    inside the running process: on Windows the `.exe` is locked, on Linux the
+    AppImage is mounted as a file system inside its own process. On Windows the
+    helper starts in two stages (#654): a child that Node spawns without
+    `detached` is killed together with the app, so that child only starts the
+    swap script with `Start-Process` and waits until the script reports that it
+    runs. The app quits only then, and can still report a helper that did not
+    start.
+  The scripts themselves are built as plain strings and are therefore testable
+  without an installation.
 
 The address of the package never leaves the main process: from `checkForUpdate`
 the renderer learns only name and size, and triggers the download without
@@ -1073,8 +1158,19 @@ Electron bootstrap:
    preferences adapters → `createChatEngine`)
 4. Registers IPC handlers with injected dependencies
 
-It holds wiring and nothing else (#508). Whatever makes a decision or shapes
-data lives next to its topic and is tested there:
+The rule of #508 is that it holds wiring and nothing else, and #510 cut it from
+983 to 831 lines. It has grown back to about 1,090 and holds decisions again:
+how a chat stored at "Auto" is put back to "Smart" when the encrypted storage
+has gone (#419), the flow of the MCP settings test (reload the saved servers,
+connect one, mask the status), and the rate limit of the watcher warning (one
+log line per watcher and minute). Moving the three into services with tests,
+and a guard that keeps the file at wiring, is
+[#1005](https://github.com/kkrafft1999/snotra/issues/1005). It also imports
+`applyActivePreset` and `isPresetUsable` from `ipc/settings-handlers.js`, a
+handler module — the logic belongs in a service
+([#1006](https://github.com/kkrafft1999/snotra/issues/1006)). The rule for new
+code stays that of #508: whatever makes a decision or shapes data lives next to
+its topic and is tested there. These are the topics that did move out:
 
 | Topic | Module |
 | ----- | ------ |
@@ -1087,23 +1183,30 @@ data lives next to its topic and is tested there:
 | The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |
 | The estimated chat cost (#949): prices per model — override, local, table — and the price-table update, the only request it makes, on the user's click | service: `services/model-price-service.js` (snapshot `data/model-prices.json`, renewed by `scripts/update-model-prices.js`); a round priced in `adapters/provider-llm-adapter.js`, the turn summed in `application/chat/chat-engine.js`; arithmetic: `contracts/cost.js`; display: `renderer/components/CostPanel.js`, `renderer/components/ModelPricesSettings.js` |
 
-What stays in the module are the small state holders the wiring needs — the
+What legitimately stays in the module are the small state holders the wiring needs — the
 remembered language, the hidden-files switch, whether a web search key is
 present, the two execution switches — and the callbacks that tie services to
 one another (pruning chat-scoped permissions, telling the renderer to read
 again). They exist because two services meet there, not because of a rule of
 their own.
 
-Before `createApplication()`, `src/main/index.js` does only two things. It
-claims the single-instance lock (`claimSingleInstance` in `app-lifecycle.js`,
-#507): a second launch on the same userData folder brings the existing window
-to the front and quits before it has started anything. And it runs the
-one-time userData migration (`services/userdata-migration.js`, taking over from
-the folder of the predecessor identity "Weyouze Anything"; skipped when the
-userData folder was given with `--user-data-dir`, #688) — no scattered wiring in
-the handlers. A start-up that throws ends in an error box and
-`app.exit(1)` (`createStartupFailureHandler`, #509) instead of leaving a
-process without a window behind.
+`src/main/index.js` is the Electron bootstrap, and it does more than call
+`createApplication()`. Before it, it registers the privileges of the preview
+scheme `snotra-html:`, claims the single-instance lock (`claimSingleInstance`
+in `app-lifecycle.js`, #507: a second launch on the same userData folder
+brings the existing window to the front and quits before it has started
+anything), registers the media-capture permissions (`permissions.js`) and runs
+the one-time userData migration (`services/userdata-migration.js`, taking over
+from the folder of the predecessor identity "Weyouze Anything"; skipped when
+the userData folder was given with `--user-data-dir`, #688). Around it, it
+builds the application menu (see below), creates the manual service and the
+manual window and registers the channel that opens it (`manual-window.js`),
+opens the app window, starts the tool runtimes, schedules the silent update
+check four seconds after the start and ties up the quit (`will-quit`, and
+`holdQuitForPendingWrites` so that a save in flight is not cut off). A
+start-up that throws ends in an error box and `app.exit(1)`
+(`createStartupFailureHandler`, #509) instead of leaving a process without a
+window behind.
 
 ### Files the store cannot use
 
@@ -1262,6 +1365,25 @@ The renderer **may** *display* provider IDs and preset fields from IPC DTOs, as
 long as it parses no provider wire formats and duplicates no tool or provider
 logic.
 
+**Not presentation, and still here.** The conversation lives in the renderer,
+and the core runs one turn of it
+([#981](https://github.com/kkrafft1999/snotra/issues/981)):
+
+- the run registry (`chatRuns` in `renderer/state/store.js`) and `settleRun` in
+  `renderer/components/ChatStream.js` — which run is on, what a finished or
+  aborted run leaves behind;
+- when and what to persist: the chat history is written from here, and a
+  running turn only reaches it when it ends ([#979](https://github.com/kkrafft1999/snotra/issues/979));
+- the cost sum of a chat (#949, `mergeSessionCost` in `ChatStream.js`), the
+  trigger for the title and the seed of the greeting;
+- the whole history, which the renderer sends with every turn
+  (`messages` in `chat:send`, `main/ipc/chat-handlers.js`).
+
+A front end that is not this renderer would have to do all of it again. The
+target is a conversation service in `src/application/` that appends turns and
+persists them through a port, with the renderer sending only the new message
+and the chat id.
+
 ### Splitting inside the renderer ([#81](https://github.com/kkrafft1999/snotra/issues/81))
 
 The components under `renderer/components/` are the wiring: they attach handlers
@@ -1279,9 +1401,13 @@ reachable through the whole component:
 
 `FileTree.js` and `ChatStream.js` stay large, because wiring simply takes space —
 but the path and tool-log logic is no longer inside them. The remaining chunks
-(`styles.css`, `fs-service.js`, `SettingsModal.js`) are split up together with
-the issues that touch them anyway; a reshuffle without cause only creates
-conflict surface.
+(`styles.css`, `fs-service.js`, `SettingsModal.js`) were to be split up
+together with the issues that touch them anyway. That did not happen: measured
+on 2026-10-17, `fs-service.js` has 3.7k lines (2.6k when this was written),
+`SettingsModal.js` 3.0k (2.4k) and `styles.css` 11.6k (8.2k), and `ChatStream.js`
+is at 2.0k. No test limits the size of a module, so nothing stops the next
+growth; [`architecture-review.md`](./architecture-review.md) lists it under
+"Modules that keep growing".
 
 **Module boundary:** `src/renderer/package.json` declares `{ "type": "module" }`.
 The main process is CommonJS, the renderer loads native ES modules without a
@@ -1915,13 +2041,34 @@ from #208 applies (1536 × 960).
 
 ## Automated boundary guards
 
+What a test holds, as of 2026-10-17:
+
 | Test | What it checks |
 | ---- | ------------ |
-| `test/application-layer-imports.test.js` | `src/application/` imports only `application/` + `shared/` |
-| `test/infrastructure-boundaries.test.js` | Storage/credentials without provider registry leaks |
+| `test/application-layer-imports.test.js` | `src/application/` imports only `application/` + `shared/`, no package, no Node built-in |
+| `test/infrastructure-boundaries.test.js` | Storage without a provider-registry leak; store ports without decrypted secrets; MCP settings handlers never reach the decrypting port |
 | `test/adapter-port-shapes.test.js` | Port adapters expose only permitted methods |
+| `test/filesystem-port-typedef.test.js` | The `filesystem-port` typedef lists exactly the members of its adapter (#650) |
+| `test/architecture-doc.test.js` | Every path this document names exists, the layer table names every directory under `src/`, the port lists match the two `ports/` folders ([#1009](https://github.com/kkrafft1999/snotra/issues/1009)) |
 | `test/contracts*.test.js` | Wire enums and settings DTOs at the IPC boundary |
 | `test/*-presentation.test.js`, `test/chat-history-normalization.test.js` | Normalised display data for settings and history |
+| `test/trusted-sender.test.js` | Who may call main over IPC: only the app's own page (#509) |
+| `test/html-preview-isolation.test.js` | The renderer's CSP and the window's `webPreferences` as before #479; a page of the preview is no sender main answers |
+| `test/i18n-keys.test.js` | Both catalogues carry the same keys and placeholders; every key used in the code exists |
+| `test/renderer-no-german-literals.test.js` | No German string literal in a renderer component that bypasses the catalogue (#374) |
+| `test/model-prompt-language.test.js` | What goes to the model is English (#276) |
+| `test/renderer-style-tokens.test.js` | Colours live in `tokens.css`; `styles.css` only refers to them |
+| `test/source-files-load.test.js` | Every source file under `src/` loads; also the denominator of the coverage report |
+| `test/generated-freshness.test.js` | The generated bundles are newer than their sources (#919) |
+| `test/package-allowlist.test.js` | The app package carries runtime files only (#72) |
+
+What no test holds, although the picture above suggests it: the direction
+between the main layers and the imports of the renderer, which are conventions
+only; and three things that drifted for want of a check — the content of the
+composition root ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)),
+the thinness of the IPC handlers
+([#1006](https://github.com/kkrafft1999/snotra/issues/1006)) and the size of a
+module.
 
 ## Renderer tests against the DOM
 
@@ -2308,6 +2455,16 @@ older exception: it words its errors in main, per call, from `getLocale`. What
 main draws itself — native dialogs, the menu — is worded there, in the language
 of the moment it opens.
 
+One path did not follow the line until #1013. When a handler in main throws,
+Electron rejects the `invoke` in the renderer with its own English wrapper
+around main's message (`Error invoking remote method '…': Error: …`). The
+callers that show such a failure — the update dialog, the approval card, the
+permission state, the settings modal, the voice recorder and the chat links —
+now turn the rejection into a keyed message with `invokeErrorMessage()`
+(`renderer/utils/invoke-error.js`); the raw text goes to the console, where
+whoever debugs it looks. A new caller has to use it: no test catches a bare
+`err.message` on screen.
+
 The messages the **model** reads (`http-url-fetch-adapter.js`, `mcp-adapter.js`,
 the fallback in `describeFetchError`) are deliberately not on this side of the
 line. They are a [#276](https://github.com/kkrafft1999/snotra/issues/276) matter
@@ -2543,8 +2700,8 @@ its item, so it works with the focus in the input.
 ## Further functional modules
 
 The skill system ([#18](https://github.com/kkrafft1999/snotra/issues/18)) is
-built on this structure: discovery and parsing in the main service, selection and
-system-prompt assembly in the core, catalogue and toggles over the existing
-settings channels. Extended tool sets and use-case profiles are **not** part of
-the completed architecture stages — they build on it as well and are tracked as
+built on this structure: discovery, parsing and the choice of which skills are
+on in `services/skills-service.js` in main, the assembly of the system prompt in
+the core, catalogue and toggles over the existing settings channels. Further
+tool sets and use-case profiles build on it as well and are tracked as
 [GitHub issues](https://github.com/kkrafft1999/snotra/issues).
