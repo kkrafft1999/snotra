@@ -340,7 +340,7 @@
           <p id="chat-skill-suggestion" class="chat-skill-suggestion hidden" aria-live="polite"></p>
           <div class="chat-composer-bar" role="toolbar" aria-label="Composer tools" data-i18n-attr="aria-label:chat.composer.toolbar">
             <div class="chat-composer-bar-start">
-              <button type="button" id="btn-chat-mic" title="Voice input" aria-pressed="false" aria-label="Start voice input" data-i18n-attr="title:chat.mic.title;aria-label:chat.mic.label">
+              <button type="button" id="btn-chat-mic" title="Voice input — the recording goes to OpenAI" aria-pressed="false" aria-label="Start voice input" data-i18n-attr="title:chat.mic.title;aria-label:chat.mic.label">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
@@ -636,14 +636,15 @@
                 <div class="settings-note__body" data-i18n-html="settings.prices.note.body">
                   <p>
                     The table comes from LiteLLM and ships with every release. Snotra only fetches a newer one when you
-                    press &ldquo;Update prices&rdquo;. A price of your own always wins over the table &mdash; for a
+                    press &ldquo;Update prices&rdquo; &mdash; from raw.githubusercontent.com, where LiteLLM keeps it on
+                    GitHub. A price of your own always wins over the table &mdash; for a
                     discount, an Azure deployment or a model the table does not know.
                   </p>
                 </div>
               </details>
               <div class="model-prices__table">
                 <p id="model-prices-table" class="model-prices__table-line"></p>
-                <button type="button" id="btn-model-prices-update" class="btn-secondary" data-i18n="settings.prices.update">Update prices</button>
+                <button type="button" id="btn-model-prices-update" class="btn-secondary" title="Fetches the current table from raw.githubusercontent.com" data-i18n="settings.prices.update" data-i18n-attr="title:settings.prices.update.title">Update prices</button>
               </div>
               <p id="model-prices-status" class="modal-hint" role="status"></p>
               <ul id="model-prices-list" class="model-prices__list" aria-labelledby="heading-model-prices"></ul>

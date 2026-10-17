@@ -227,7 +227,7 @@ test('Cmd/Ctrl+D starts and stops; a held key does not flicker', async (t) => {
   t.after(ctx.cleanup);
   const { $, api } = ctx;
   assert.equal($('btn-chat-mic').getAttribute('aria-keyshortcuts'), 'Meta+D');
-  assert.equal($('btn-chat-mic').title, 'Voice input (⌘D)');
+  assert.equal($('btn-chat-mic').title, 'Voice input — the recording goes to OpenAI (⌘D)');
   api.shortcut();
   await tick();
   await tick();

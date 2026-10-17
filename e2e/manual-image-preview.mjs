@@ -204,7 +204,7 @@ const { page } = snotra;
 const requests = [];
 page.on('request', (request) => {
   const url = request.url();
-  if (!url.startsWith('data:') && !url.startsWith('file:') && !url.startsWith('devtools:')) requests.push(url);
+  if (!url.startsWith('data:') && !url.startsWith('snotra-app:') && !url.startsWith('file:') && !url.startsWith('devtools:')) requests.push(url);
 });
 
 const pane = () => page.evaluate(() => {

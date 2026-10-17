@@ -42,7 +42,7 @@ Your price always wins — over the table, and over *Local — free* for a serve
 
 ## Update the price table
 
-The table comes from [LiteLLM](https://github.com/BerriAI/litellm), a community-maintained list of model prices. Every Snotra release ships a current copy. Snotra does not fetch prices by itself; to get a newer table, click *Update prices* under *Prices for the cost estimate*. The date of the table in use is shown there and at the foot of the cost panel.
+The table comes from [LiteLLM](https://github.com/BerriAI/litellm), a community-maintained list of model prices. Every Snotra release ships a current copy. Snotra does not fetch prices by itself; to get a newer table, click *Update prices* under *Prices for the cost estimate*. Snotra then fetches it from `raw.githubusercontent.com`, where LiteLLM keeps it on GitHub — that is the only address the button contacts. The date of the table in use is shown there and at the foot of the cost panel.
 
 If the download fails, the previous table stays in use and Snotra says so.
 

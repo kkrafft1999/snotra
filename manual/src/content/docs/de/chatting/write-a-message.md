@@ -48,7 +48,7 @@ Das Bild gehört zum Chat und ist wieder da, wenn du ihn aus dem Verlauf öffnes
 
 Während du diktierst, machen die Pillen neben dem Mikrofon und die Token-Anzeige der Aufnahme Platz; beim Stoppen kommen sie zurück. Schickst du die Nachricht ab, endet die Aufnahme, und was diktiert ist, geht mit. Das Kürzel steht auch im Menü, *Bearbeiten › Spracheingabe*.
 
-Das Diktat nutzt die Spracherkennung von OpenAI und braucht einen OpenAI-Schlüssel unter *Einstellungen › Modelle*, auch wenn der Chat bei einem anderen Anbieter läuft; OpenAI rechnet nach Minuten ab. Eine Aufnahme hört nach fünf Minuten von selbst auf; eine halbe Minute vorher sagt es die Zeile neben dem Mikrofon.
+Das Diktat nutzt die Spracherkennung von OpenAI: Die Aufnahme geht an OpenAI, und das sagt auch der Tooltip des Mikrofons. Es braucht einen OpenAI-Schlüssel unter *Einstellungen › Modelle*, auch wenn der Chat bei einem anderen Anbieter läuft; OpenAI rechnet nach Minuten ab. Eine Aufnahme hört nach fünf Minuten von selbst auf; eine halbe Minute vorher sagt es die Zeile neben dem Mikrofon.
 
 Ist der Live-Text nicht zu haben — weil ein Netzwerk die Verbindung sperrt, zum Beispiel —, läuft die Aufnahme ohne ihn weiter, und der Text kommt beim Stoppen. Woran du das erkennst und was du tun kannst: [Wenn das Diktat nicht klappt](../../troubleshooting/voice-input/).
 

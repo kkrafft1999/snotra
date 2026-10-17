@@ -12,7 +12,7 @@
 
 const path = require('path');
 const { MANUAL_REQUEST_CHANNELS: REQ, MANUAL_PUSH_CHANNELS: PUSH } = require('../shared/manual-channels');
-const { isManualRendererUrl } = require('./permissions');
+const { isManualRendererUrl, MANUAL_URL } = require('./permissions');
 const { guardIpcMain } = require('./ipc/trusted-sender');
 const { matchPreviewHistoryShortcut } = require('./services/preview-history-shortcut');
 const { manualWebUrl, normalizeManualLocale, MANUAL_WEB_BASE } = require('./services/manual-service');
@@ -152,9 +152,8 @@ function createManualWindowController({
     });
 
     const { slug, fragment } = cleanTarget(target);
-    created.loadFile(path.join(projectRoot, 'src', 'renderer', 'manual.html'), {
-      query: { page: slug, ...(fragment ? { section: fragment } : {}) },
-    });
+    const query = new URLSearchParams({ page: slug, ...(fragment ? { section: fragment } : {}) });
+    created.loadURL(`${MANUAL_URL}?${query}`);
     window = created;
     return created;
   }

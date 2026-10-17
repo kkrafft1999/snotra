@@ -20,7 +20,7 @@ import { makeTempDir } from './app.mjs';
 const PRELOAD = fileURLToPath(new URL('./network-probe-preload.cjs', import.meta.url));
 
 /** Schemes that never leave the machine. */
-const LOCAL_SCHEMES = new Set(['file:', 'data:', 'blob:', 'about:', 'chrome:', 'devtools:', 'chrome-extension:', 'chrome-untrusted:']);
+const LOCAL_SCHEMES = new Set(['snotra-app:', 'file:', 'data:', 'blob:', 'about:', 'chrome:', 'devtools:', 'chrome-extension:', 'chrome-untrusted:']);
 
 export function isLoopback(host) {
   const bare = String(host).replace(/^\[|\]$/g, '').toLowerCase();

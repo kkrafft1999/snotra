@@ -36,9 +36,9 @@ component level *inside* the main process.
 | Container | Technology | Responsibility |
 | --------- | ---------- | -------------- |
 | **Main process** | Electron main, Node.js | Composition root, IPC handlers, the chat engine and its tool loop (`src/application/`), the tool registry and planner, provider adapters, the services behind them (storage, file system, sandbox, MCP, updates, skills …), approvals, persistence. The only container that holds secrets, and the one that decides every access to the outside. |
-| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism | Chat, file tree, file views, settings — and, still, the state of the conversation: the run registry, when and what to persist, the cost sum and the title trigger live here, not in the core ([#981](https://github.com/kkrafft1999/snotra/issues/981)). Sees nothing but `window.electronAPI` from the preload and the contracts. |
+| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism; served from `snotra-app://app/` (`src/main/app-protocol.js`, [#1012](https://github.com/kkrafft1999/snotra/issues/1012)); `localStorage` from the old `file://` origin is carried over once (`src/main/renderer-storage-migration.js`) | Chat, file tree, file views, settings — and, still, the state of the conversation: the run registry, when and what to persist, the cost sum and the title trigger live here, not in the core ([#981](https://github.com/kkrafft1999/snotra/issues/981)). Sees nothing but `window.electronAPI` from the preload and the contracts. |
 | **HTML preview** | `WebContentsView` with its own session (`snotra-html-preview`), the `snotra-html:` scheme and `sandbox: true` | Shows HTML pages from the workspace apart from the app's own UI ([#479](https://github.com/kkrafft1999/snotra/issues/479), see [HTML pages](#html-pages-479)). |
-| **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (#790): the page is `src/renderer/manual.html`, the content a bundle that `scripts/bundle-manual.js` builds into `src/manual/` from `manual/`. The app window's channels refuse it as a sender. |
+| **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (#790): the page is `src/renderer/manual.html`, from the same `snotra-app:` origin, the content a bundle that `scripts/bundle-manual.js` builds into `src/manual/` from `manual/`. The app window's channels refuse it as a sender. |
 | **Execution sandbox** | Child processes through `@anthropic-ai/sandbox-runtime`: Seatbelt on macOS, bubblewrap on Linux; unisolated on Windows | `shell_execute` and `run_python` (#329): write only inside the workspace, network only through the proxy in main and only to approved domains. See [`security-concept.md`](./security-concept.md), section 9. |
 | **Local store** | JSON files in the userData folder; secrets encrypted with `safeStorage` | `llm-config.json`, `chat-history.json`, `ui-preferences.json`, `mcp-servers.json`, `tool-policy.json`, `web-search-config.json`, chat attachments, `memory.md`. |
 
@@ -143,7 +143,7 @@ code is.
 | **Services** | `src/main/services/` | 76 modules (~22k lines) and by far the largest layer: storage, file system, sandbox, MCP, updates, skills, watchers, the signed policy store, outside access, program allowances, document text. Most of the backend's logic lives here |
 | **Composition root** | `src/main/composition/` | `createApplication()` builds services, adapters and engine and registers the IPC handlers — see [Composition root](#composition-root) |
 | **IPC** | `src/main/ipc/` | The handlers behind every channel, event push to the renderer, and `trusted-sender.js`, which refuses any sender that is not the app's own page. Mostly parse, validate and delegate; three of them hold logic ([#1006](https://github.com/kkrafft1999/snotra/issues/1006)) |
-| **Main shell** | `src/main/index.js`, `src/main/window.js`, `src/main/window-state.js`, `src/main/app-lifecycle.js`, `src/main/app-identity.js`, `src/main/permissions.js`, `src/main/workspace-state.js`, `src/main/manual-window.js`, `src/main/data/` | The Electron start-up and its windows, the single-instance lock, the media permissions, the active workspace root, the manual window; `data/` holds the bundled model price table |
+| **Main shell** | `src/main/index.js`, `src/main/window.js`, `src/main/window-state.js`, `src/main/app-lifecycle.js`, `src/main/app-identity.js`, `src/main/permissions.js`, `src/main/app-protocol.js`, `src/main/renderer-storage-migration.js`, `src/main/workspace-state.js`, `src/main/manual-window.js`, `src/main/data/` | The Electron start-up and its windows, the single-instance lock, the `snotra-app:` scheme the windows load from and the one-time move of their `localStorage` to it, the media permissions, the active workspace root, the manual window; `data/` holds the bundled model price table |
 | **Preload** | `src/preload/` | `index.js` builds `window.electronAPI` for the app window, `manual.js` the manual window's. Both are bundled by esbuild into one file each, because a sandboxed preload cannot load siblings |
 | **Renderer** | `src/renderer/` | DOM, CSS and native ES modules: chat, file tree, file views, settings, the manual page. It also owns the conversation state ([#981](https://github.com/kkrafft1999/snotra/issues/981)); apart from that it sees only `window.electronAPI` and the contracts |
 
@@ -861,8 +861,11 @@ path on Windows.
 **`<img>` is the only element that keeps a URL** ([#423](https://github.com/kkrafft1999/snotra/issues/423)).
 The HTML profile allows more that loads on its own: `<video>`/`<audio>` with
 `<source>` and `<track>`, a `poster`, `<input type="image">`, a table's
-`background`. Each of them would read a local file past the main process —
-`'self'` covers `file:`. So the sanitizer forbids the media tags and `picture`,
+`background`. Each of them would read a local file past the main process
+while the page came from `file:`, where `'self'` covered the disk. Since
+[#1012](https://github.com/kkrafft1999/snotra/issues/1012) the page comes from
+`snotra-app://app/` and Chromium refuses it a `file:` URL anyway; the sanitizer
+stays the first barrier. So it forbids the media tags and `picture`,
 drops `poster` and `background`, and the same hook
 removes `src` from every element but `<img>`; `<input>` itself has to stay, the
 task lists render their checkboxes with it. The CSP says `media-src 'none'`:
@@ -1661,8 +1664,9 @@ text ─ splitDocument ─▶ front matter ─▶ key/value block (raw YAML if u
   ([#635](https://github.com/kkrafft1999/snotra/issues/635)).
 - **Nothing loads on its own.** The HTML is parsed into a `<template>` and every
   `src` moves to `data-md-src` before a node reaches the window. Under the CSP
-  `img-src 'self' data:` an `<img>` with an absolute path would otherwise load
-  straight from the disk (`'self'` covers `file:`), past the main process's
+  `img-src 'self' data:` an `<img>` with an absolute path would otherwise have
+  loaded straight from the disk while the page was on `file:` (until #1012,
+  `'self'` covered it), past the main process's
   check whether the path lies inside the workspace. An image from the web is
   never requested: it becomes a placeholder with its address; the smoke test
   proves the absence with a CSP violation listener.
@@ -1791,8 +1795,8 @@ no `nodeIntegration`, no `plugins`; `default-src 'none'`, `script-src 'self'`,
 itself — a worker falls back to `script-src`, and so does the decoders'
 JavaScript fallback, which the worker `import()`s when WebAssembly is
 refused. The data files are the part pdf.js would `fetch`; opening
-`connect-src` for them would, under `file:`, let the renderer read any file on
-the disk. They come through `pdf:readAsset` instead
+`connect-src` for them would have let the renderer read any file on the disk
+while it was on `file:`, and still gives it nothing it needs. They come through `pdf:readAsset` instead
 (`main/services/pdf-assets.js`): `cmaps/`, `standard_fonts/`, `wasm/`, a plain
 name, nothing else.
 
@@ -1806,8 +1810,8 @@ name, nothing else.
   option is not passed — an option pdf.js does not know protects nothing
   ([#641](https://github.com/kkrafft1999/snotra/issues/641)). In the page the
   CSP would refuse it: `script-src 'self'` without `'unsafe-eval'`. The
-  worker does not get that CSP — it is loaded from a `file:` URL, whose
-  response carries no policy, and a string timer runs there (checked on
+  worker does not get that CSP — it is loaded from a `snotra-app:` URL (a
+  `file:` one until #1012), whose response carries no policy, and a string timer runs there (checked on
   2026-10-02) — so in the worker what holds is the vendored code itself;
   `test/workspace-pdf.test.js` fails if a pdf.js update brings `eval` or
   `new Function` back.
