@@ -86,6 +86,8 @@ function makeStorage(dir, { safeStorageKey, encryption = true } = {}) {
 
 function makePolicyStore(dir, safeStorageKey) {
   return createToolPolicyStore({
+    // What is checked here is the key, not the confirmation (#980).
+    confirmationReceipts: { redeem: () => true },
     app: { getPath: () => dir },
     safeStorage: makeSafeStorage(true),
     safeStorageKey,

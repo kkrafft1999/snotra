@@ -29,6 +29,12 @@
  * `smart` is the absence of an entry. `auto` loosens and follows the rules
  * above; `ask-all` tightens, so like a deny rule it survives a failed
  * signature.
+ *
+ * Every loosening needs a receipt from the user-confirmation port (#980):
+ * the store refuses it otherwise, whoever calls. Taking something away needs
+ * none. Which chats were confirmed into "Auto" is kept here as well, signed,
+ * so that a chat coming back on screen gets "Auto" only when it had it
+ * confirmed — not because its history file says so.
  */
 
 const {
@@ -43,6 +49,12 @@ const {
   isCommandRule,
 } = require('../../shared/contracts/tool-permissions');
 const { createMessage } = require('../../shared/contracts/message');
+const {
+  CONFIRMATION_ACTIONS,
+  NO_RECEIPTS,
+  permissionRuleSubject,
+  removedPatternsSubject,
+} = require('../../application/permissions/user-confirmation');
 const {
   normalizeProgramAllowance,
   normalizeProgramAllowances,
@@ -61,6 +73,8 @@ const POLICY_FILE_VERSION = 1;
 const HMAC_KEY_BYTES = 32;
 /** Hosts one workspace may keep open for its runs (#946). */
 const MAX_WORKSPACE_HOSTS = 10;
+/** Chats remembered as confirmed into "Auto" (#980) — as many as chat settings keep. */
+const MAX_AUTO_CHATS = 500;
 
 const INTEGRITY = Object.freeze({
   OK: 'ok',
@@ -98,9 +112,29 @@ function defaultPayload() {
     programAllowances: [],
     workspaceModes: {},
     workspaceHosts: {},
+    autoChats: [],
     legacyWriteMigrated: false,
     updatedAt: 0,
   };
+}
+
+function chatKey(chatId) {
+  return typeof chatId === 'string' && chatId && chatId.length <= 200 ? chatId : null;
+}
+
+/** Chat ids, each once, the most recent last (#980). */
+function normalizeAutoChats(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const entry of value) {
+    const id = chatKey(entry);
+    if (id && !out.includes(id)) out.push(id);
+  }
+  return out.slice(-MAX_AUTO_CHATS);
+}
+
+function withAutoChat(list, chatId) {
+  return [...list.filter((id) => id !== chatId), chatId].slice(-MAX_AUTO_CHATS);
 }
 
 /**
@@ -165,6 +199,8 @@ function createToolPolicyStore({
   uiPrefsPath = null,
   log = console,
   now = () => Date.now(),
+  /** Redeems the receipts of the user-confirmation port (#980); without it, no loosening. */
+  confirmationReceipts = NO_RECEIPTS,
 }) {
   let keyPromise = null;
   let writeChain = Promise.resolve();
@@ -302,6 +338,7 @@ function createToolPolicyStore({
     out.programAllowances = normalizeProgramAllowances(data.programAllowances);
     out.workspaceModes = normalizeWorkspaceModes(data.workspaceModes);
     out.workspaceHosts = normalizeWorkspaceHosts(data.workspaceHosts);
+    out.autoChats = normalizeAutoChats(data.autoChats);
     out.legacyWriteMigrated = data.legacyWriteMigrated === true;
     out.updatedAt = Number.isFinite(data.updatedAt) ? data.updatedAt : 0;
     return out;
@@ -325,8 +362,10 @@ function createToolPolicyStore({
     // is a program allowance (#408).
     out.unsandboxedWorkspaces = [];
     out.programAllowances = [];
-    // So is a host kept open for a workspace (#946).
+    // So is a host kept open for a workspace (#946), and a chat's confirmed
+    // "Auto" (#980).
     out.workspaceHosts = {};
+    out.autoChats = [];
     // "Auto" as a workspace default goes with them; "Always ask" only tightens
     // and stays, like a deny rule (#413).
     for (const [root, mode] of Object.entries(out.workspaceModes)) {
@@ -482,11 +521,56 @@ function createToolPolicyStore({
     return task;
   }
 
-  async function setMode(rawMode) {
+  /**
+   * Whether a loosening was confirmed by a person at the machine (#980). The
+   * receipt is spent either way.
+   */
+  function confirmedBy(confirmation, action, subject) {
+    return confirmationReceipts.redeem(confirmation, action, subject) === true;
+  }
+
+  function notConfirmed() {
+    return { error: createMessage('permissions.error.notConfirmed') };
+  }
+
+  /**
+   * The mode the user picks for the chat on screen (#211). "Auto" needs a
+   * receipt bound to that chat (#980), and the chat is remembered as
+   * confirmed; any other mode forgets it again.
+   */
+  async function setMode(rawMode, { confirmation = null, chatId = null } = {}) {
     const mode = normalizeToolPermissionMode(rawMode);
+    const chat = chatKey(chatId);
     return update((draft, { encryptionAvailable: enc }) => {
-      if (mode === TOOL_PERMISSION_MODES.AUTO && !enc) {
-        return { error: createMessage('permissions.error.autoNeedsEncryption') };
+      if (mode === TOOL_PERMISSION_MODES.AUTO) {
+        if (!enc) return { error: createMessage('permissions.error.autoNeedsEncryption') };
+        if (!confirmedBy(confirmation, CONFIRMATION_ACTIONS.MODE_AUTO, chat || '')) return notConfirmed();
+        if (chat) draft.autoChats = withAutoChat(draft.autoChats, chat);
+      } else if (chat) {
+        draft.autoChats = draft.autoChats.filter((id) => id !== chat);
+      }
+      draft.mode = mode;
+      return null;
+    });
+  }
+
+  /**
+   * The mode of a chat coming on screen (#211), applied without a prompt.
+   * "Auto" only where it was confirmed before, both signed in this file: for
+   * this chat, or as the default of the workspace on screen (#413) — a chat
+   * that got "Auto" from that default is remembered as confirmed.
+   */
+  async function restoreMode(rawMode, { chatId = null, workspaceRoot = null } = {}) {
+    const mode = normalizeToolPermissionMode(rawMode);
+    const chat = chatKey(chatId);
+    return update((draft, { encryptionAvailable: enc }) => {
+      if (mode === TOOL_PERMISSION_MODES.AUTO) {
+        if (!enc) return { error: createMessage('permissions.error.autoNeedsEncryption') };
+        const byChat = !!chat && draft.autoChats.includes(chat);
+        const byWorkspace = typeof workspaceRoot === 'string' && !!workspaceRoot
+          && draft.workspaceModes[workspaceRoot] === TOOL_PERMISSION_MODES.AUTO;
+        if (!byChat && !byWorkspace) return notConfirmed();
+        if (chat && !byChat) draft.autoChats = withAutoChat(draft.autoChats, chat);
       }
       draft.mode = mode;
       return null;
@@ -494,7 +578,7 @@ function createToolPolicyStore({
   }
 
   /** Result carries `ruleId`: the new rule's, or that of the command rule it repeats (#121). */
-  async function addRule(rawRule) {
+  async function addRule(rawRule, { confirmation = null } = {}) {
     let ruleId = null;
     const result = await update((draft, { encryptionAvailable: enc }) => {
       const id = typeof rawRule?.id === 'string' && rawRule.id.trim() ? rawRule.id.trim() : crypto.randomUUID();
@@ -502,6 +586,10 @@ function createToolPolicyStore({
       if (!rule) return { error: createMessage('permissions.error.invalidRule') };
       if (rule.effect === PERMISSION_RULE_EFFECTS.ALLOW && !enc) {
         return { error: createMessage('permissions.error.allowNeedsEncryption') };
+      }
+      if (rule.effect === PERMISSION_RULE_EFFECTS.ALLOW
+        && !confirmedBy(confirmation, CONFIRMATION_ACTIONS.ALLOW_RULE, permissionRuleSubject(rule))) {
+        return notConfirmed();
       }
       if (allRules(draft).some((existing) => existing.id === rule.id)) {
         return { error: createMessage('permissions.error.ruleIdTaken') };
@@ -526,10 +614,16 @@ function createToolPolicyStore({
     return result.ok ? { ...result, ruleId } : result;
   }
 
-  async function removeRule(ruleId) {
+  /** Taking a block away needs a receipt for that rule (#980); an allow rule goes freely. */
+  async function removeRule(ruleId, { confirmation = null } = {}) {
     const id = typeof ruleId === 'string' ? ruleId.trim() : '';
     return update((draft) => {
       if (!id) return { error: createMessage('permissions.error.ruleIdMissing') };
+      const target = allRules(draft).find((rule) => rule.id === id);
+      if (target?.effect === PERMISSION_RULE_EFFECTS.DENY
+        && !confirmedBy(confirmation, CONFIRMATION_ACTIONS.REMOVE_BLOCK, id)) {
+        return notConfirmed();
+      }
       let removed = false;
       const before = draft.globalRules.length;
       draft.globalRules = draft.globalRules.filter((rule) => rule.id !== id);
@@ -551,18 +645,26 @@ function createToolPolicyStore({
     return state.rules.find((rule) => rule.id === ruleId) || null;
   }
 
-  async function setSensitivePathPatterns(rawPatterns) {
+  /** Adding patterns tightens; dropping one needs a receipt for exactly those dropped (#514, #980). */
+  async function setSensitivePathPatterns(rawPatterns, { confirmation = null } = {}) {
     return update((draft) => {
-      draft.sensitivePathPatterns = normalizeSensitivePathPatterns(rawPatterns);
+      const next = normalizeSensitivePathPatterns(rawPatterns);
+      const removed = draft.sensitivePathPatterns.filter((pattern) => !next.includes(pattern));
+      if (removed.length > 0
+        && !confirmedBy(confirmation, CONFIRMATION_ACTIONS.REMOVE_SENSITIVE_PATTERNS, removedPatternsSubject(removed))) {
+        return notConfirmed();
+      }
+      draft.sensitivePathPatterns = next;
       return null;
     });
   }
 
   /**
    * Switches the sandbox of the execution tools off or back on for one
-   * workspace (#357). Off needs `safeStorage`, like every other loosening.
+   * workspace (#357). Off needs `safeStorage`, like every other loosening,
+   * and a receipt for that root (#980).
    */
-  async function setWorkspaceSandbox(root, enabled) {
+  async function setWorkspaceSandbox(root, enabled, { confirmation = null } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
       if (typeof root !== 'string' || !root) return { error: createMessage('permissions.error.noWorkspace') };
       const others = draft.unsandboxedWorkspaces.filter((entry) => entry !== root);
@@ -571,6 +673,7 @@ function createToolPolicyStore({
         return null;
       }
       if (!enc) return { error: createMessage('permissions.error.sandboxOffNeedsEncryption') };
+      if (!confirmedBy(confirmation, CONFIRMATION_ACTIONS.SANDBOX_OFF, root)) return notConfirmed();
       draft.unsandboxedWorkspaces = [...others, root];
       return null;
     });
@@ -585,9 +688,10 @@ function createToolPolicyStore({
 
   /**
    * The mode new chats in one workspace start with (#413). `smart` removes the
-   * entry. `auto` needs `safeStorage`, like every other loosening.
+   * entry. `auto` needs `safeStorage`, like every other loosening, and a
+   * receipt for that root unless it is the default already (#980).
    */
-  async function setWorkspaceMode(root, rawMode) {
+  async function setWorkspaceMode(root, rawMode, { confirmation = null } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
       if (typeof root !== 'string' || !root) return { error: createMessage('permissions.error.noWorkspace') };
       const mode = normalizeToolPermissionMode(rawMode);
@@ -598,6 +702,10 @@ function createToolPolicyStore({
       }
       if (mode === TOOL_PERMISSION_MODES.AUTO && !enc) {
         return { error: createMessage('permissions.error.autoNeedsEncryption') };
+      }
+      if (mode === TOOL_PERMISSION_MODES.AUTO && draft.workspaceModes[root] !== TOOL_PERMISSION_MODES.AUTO
+        && !confirmedBy(confirmation, CONFIRMATION_ACTIONS.WORKSPACE_AUTO, root)) {
+        return notConfirmed();
       }
       draft.workspaceModes[root] = mode;
       return null;
@@ -614,9 +722,10 @@ function createToolPolicyStore({
   /**
    * Stores a program allowance (#408), replacing the entry of the same
    * program or — when the dialog changed the program — the one it was opened
-   * for. Widening needs `safeStorage`; only taking rights away works without.
+   * for. Widening needs `safeStorage` and a receipt for the program (#980);
+   * only taking rights away works without.
    */
-  async function setProgramAllowance(rawEntry, { replacePath = null } = {}) {
+  async function setProgramAllowance(rawEntry, { replacePath = null, confirmation = null } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
       const entry = normalizeProgramAllowance(rawEntry);
       if (!entry) return { error: createMessage('permissions.allowance.error.invalid') };
@@ -625,6 +734,9 @@ function createToolPolicyStore({
         || null;
       if (!enc && !isNarrowing(previous, entry)) {
         return { error: createMessage('permissions.allowance.error.needsEncryption') };
+      }
+      if (!isNarrowing(previous, entry) && !confirmedBy(confirmation, CONFIRMATION_ACTIONS.PROGRAM_ALLOWANCE, entry.path)) {
+        return notConfirmed();
       }
       if (!previous && draft.programAllowances.length >= PROGRAM_ALLOWANCE_LIMITS.MAX_ENTRIES) {
         return { error: createMessage('permissions.allowance.error.tooMany', { max: PROGRAM_ALLOWANCE_LIMITS.MAX_ENTRIES }) };
@@ -657,15 +769,16 @@ function createToolPolicyStore({
 
   /**
    * Keeps hosts open for every run in one workspace (#946) — what a
-   * connection card offered, confirmed natively by the caller. A loosening,
-   * so it needs `safeStorage`. Hosts already kept are no error.
+   * connection card offered, confirmed by the user for that root (#980). A
+   * loosening, so it needs `safeStorage`. Hosts already kept are no error.
    */
-  async function addWorkspaceHosts(root, rawHosts) {
+  async function addWorkspaceHosts(root, rawHosts, { confirmation = null } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
       if (typeof root !== 'string' || !root) return { error: createMessage('permissions.error.noWorkspace') };
       const hosts = grantedHosts(rawHosts);
       if (hosts.length === 0) return { error: createMessage('permissions.workspaceHosts.error.invalid') };
       if (!enc) return { error: createMessage('permissions.workspaceHosts.error.needsEncryption') };
+      if (!confirmedBy(confirmation, CONFIRMATION_ACTIONS.WORKSPACE_HOSTS, root)) return notConfirmed();
       const kept = draft.workspaceHosts[root] || [];
       const next = [...kept, ...hosts.filter((host) => !kept.includes(host))];
       if (next.length > MAX_WORKSPACE_HOSTS) {
@@ -689,10 +802,14 @@ function createToolPolicyStore({
 
   // "Reset workspace rules" is the workspace's whole policy: the sandbox
   // opt-out (#357), the default mode (#413) and the hosts kept open (#946)
-  // go with the rules.
-  async function resetWorkspaceRules(root) {
+  // go with the rules. When blocks or "Always ask" go too, that is a loosening
+  // and needs a receipt for the root (#514, #980).
+  async function resetWorkspaceRules(root, { confirmation = null } = {}) {
     return update((draft) => {
       if (typeof root === 'string' && root) {
+        const losesProtection = (draft.workspaceRules[root] || []).some((rule) => rule.effect === PERMISSION_RULE_EFFECTS.DENY)
+          || draft.workspaceModes[root] === TOOL_PERMISSION_MODES.ASK_ALL;
+        if (losesProtection && !confirmedBy(confirmation, CONFIRMATION_ACTIONS.RESET_WORKSPACE, root)) return notConfirmed();
         delete draft.workspaceRules[root];
         draft.unsandboxedWorkspaces = draft.unsandboxedWorkspaces.filter((entry) => entry !== root);
         delete draft.workspaceModes[root];
@@ -702,8 +819,10 @@ function createToolPolicyStore({
     });
   }
 
-  async function resetAll() {
+  /** The widest action: always asked, so always a receipt (#514, #980). */
+  async function resetAll({ confirmation = null } = {}) {
     return update((draft) => {
+      if (!confirmedBy(confirmation, CONFIRMATION_ACTIONS.RESET_ALL, '')) return notConfirmed();
       const fresh = defaultPayload();
       draft.mode = fresh.mode;
       draft.globalRules = [];
@@ -713,6 +832,7 @@ function createToolPolicyStore({
       draft.programAllowances = [];
       draft.workspaceModes = {};
       draft.workspaceHosts = {};
+      draft.autoChats = [];
       draft.legacyWriteMigrated = false;
       return null;
     });
@@ -731,6 +851,7 @@ function createToolPolicyStore({
     getKeyPath: keyPath,
     read,
     setMode,
+    restoreMode,
     addRule,
     removeRule,
     findRule,
@@ -757,4 +878,5 @@ module.exports = {
   POLICY_FILE_VERSION,
   INTEGRITY,
   MAX_WORKSPACE_HOSTS,
+  MAX_AUTO_CHATS,
 };

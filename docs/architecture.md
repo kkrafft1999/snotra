@@ -164,13 +164,15 @@ re-exports under `src/main/` are gone (#531).
 ## Ports
 
 **Application ports** (`src/application/ports/`) — the contracts between the
-application layer and main. There are 18. Twelve are consumed by the chat
+application layer and main. There are 19. Twelve are consumed by the chat
 engine (`llm`, `tool`, `chat-preferences`, `workspace-path`, `skill`,
 `environment`, `project-instructions`, `memory`, `own-secrets`, `tool-policy`,
 `tool-approval`, `config-proposal`); the other six — `web-search`, `url-fetch`,
 `code-execution`, `shell-execution`, `mcp` and `image-generation` — describe
 what main's tool registry calls and the core never sees
-([#982](https://github.com/kkrafft1999/snotra/issues/982)). `memory`'s
+([#982](https://github.com/kkrafft1999/snotra/issues/982)); and
+`user-confirmation` is what main's IPC handlers ask before anything loosens
+([#980](https://github.com/kkrafft1999/snotra/issues/980)). `memory`'s
 `remember`/`forget`/`paths` serve the tools and the settings as well. The
 typedefs are checked: the engine takes its ports typed
 (`ChatEngineDependencies` in `chat/chat-engine.js`), and every adapter names
@@ -195,6 +197,19 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   policy version; an answer can carry a decision and nothing else, and without
   an interface the request is refused (`no_approval_ui`). The checkpoints
   `access`, `output`, `sandbox` and `config` all travel through it
+- `user-confirmation-port` — a person at the machine confirms what loosens a
+  protection (#980): "Auto", an allow rule, a block or a sensitive pattern
+  taken away, the sandbox off, a program allowance, hosts kept for a
+  workspace, a reset — and an import or a skill made global. Its guarantee is
+  **presence**: only `main/adapters/native-confirmation-adapter.js`, the native
+  message box over the window, can confirm; every other front end gets
+  `createRefusingConfirmation` from `application/permissions/user-confirmation.js`
+  and confirms nothing. A confirmation hands out a **receipt** — an object the
+  registry knows by identity, good once, for its action and subject, for a
+  minute — and `services/tool-policy-store.js` refuses every loosening without
+  one (`permissions.error.notConfirmed`), so a path around the port loosens
+  nothing. The composition root gives the registry's `issue` to the adapter
+  and its `redeem` to the store. Taking a protection back needs no receipt
 - `config-proposal-port` — what a chat switched for itself, and how the model
   asks for a change (#774). The core asks the user on a card through the
   approval port and records the answer here; where the overrides are kept and
@@ -1191,7 +1206,10 @@ Two deliberately different rules for a new chat:
 - **Permission mode**: `smart` again every time. `auto` comes back only on an
   explicit switch in the history; on an automatic restore (app start, folder
   change) it falls back to `smart` — details in
-  [`security-concept.md`](./security-concept.md) §8.
+  [`security-concept.md`](./security-concept.md) §8. Even then the store's
+  `restoreMode` gives `auto` only to a chat it holds, signed, as confirmed for
+  `auto`, or whose workspace has `auto` as its confirmed default (#980); the
+  history file alone is not enough.
 
 An entry that no longer exists, or whose access is incomplete, falls back to the
 default (`isPresetUsable`) instead of opening the chat with a dead model.
@@ -2300,6 +2318,29 @@ outside the checked set — that list may only shrink
 ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)) — and the gate is
 still wired up.
 
+**What a port file holds.** Types only. A port file declares its typedefs and
+ends in `module.exports = {};`; the values that belong to a port — the error
+codes, limits and option lists of the web search, the URL fetch and the image
+generation — live in `src/shared/contracts/` (`web-search.js`, `url-fetch.js`,
+`image-generation.js`), the history store's `CHAT_HISTORY_UNREADABLE` in the
+store that throws it. The two execution ports still export their limits, until
+the runner services move
+([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
+
+**Services that are not ports.** Where an adapter or the tool planner depends
+on a service that is not a port, it declares the members it calls itself, from
+its own side: `ToolRegistry` in `workspace-tool-adapter.js`, `FsService` in
+`tool-call-planner.js`. `OutsideAccess` is derived from its factory with
+`ReturnType<typeof …>`, since that module is part of the checked program anyway.
+A call the typedef does not allow fails the check. The registry and
+`fs-service.js` themselves are outside the checked set, so the typedefs are not
+compared with them; deriving them would pull both in and put about 70 findings
+in front of this step. The provider modules' `presentation` is typed as
+`ProviderPresentation` in `provider-runtime-port.js`, the extras of
+`createMcpAdapter` as `Message` and `ToolDefinition`. A destructured service
+parameter takes no `= null` default — in a JS file that would make the local
+`any` again.
+
 **How strict.** `strict` is off, with `strictFunctionTypes`,
 `strictBindCallApply` and `noImplicitThis` on. That catches a port and its
 adapter disagreeing — a member, a shape, an argument count — and callbacks
@@ -2312,7 +2353,9 @@ the next step ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
 - A function that checks untrusted input takes `{*}`, not `{unknown}` or
   `{object}`: it accepts anything, and `{object}` would forbid reading the
   very properties it checks. `{Object}` means a dependency that has no type
-  yet; it reads as `any` and is a known gap, not a statement.
+  yet; it reads as `any` and is a known gap, not a statement. In the covered
+  set the services of the tool path no longer carry it (#1098); what remains
+  are the generic `deps` bags of the adapter factories.
 - A destructured parameter with a `= {}` default needs its optional fields
   marked optional — a sanitizer with `Partial<…>` of the port's request —
   since the compiler checks the default against the declared type.

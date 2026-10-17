@@ -1496,6 +1496,7 @@ module.exports = {
   'settings.permissions.actionFailed': 'The action failed.',
   'permissions.error.unknownMode': 'Unknown mode.',
   'permissions.error.autoNotEnabled': 'Auto was not switched on.',
+  'permissions.error.notConfirmed': 'This change needs your confirmation at this computer. Nothing was changed.',
   'permissions.error.policyUnreadable': 'The permissions file could not be read, so nothing was changed. Try again in a moment.',
   'permissions.error.patternsNotRemoved': 'The patterns were not changed.',
   'permissions.error.resetCancelled': 'Nothing was reset.',

@@ -12,7 +12,7 @@ const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-t
 const { createFileChangeRecorder } = require('../src/main/services/file-change-recorder');
 const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
 const { buildPreview } = require('../src/main/tools/tool-call-planner');
-const { IMAGE_GENERATION_ERROR_CODES: CODES } = require('../src/application/ports/image-generation-port');
+const { IMAGE_GENERATION_ERROR_CODES: CODES } = require('../src/shared/contracts/image-generation');
 
 // 1x1 PNG.
 const PNG = Buffer.from(

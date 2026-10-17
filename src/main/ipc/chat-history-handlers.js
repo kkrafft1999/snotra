@@ -11,7 +11,7 @@
 
 const { DEFAULT_REASONING_LEVEL } = require('../../shared/contracts/reasoning');
 const { CHAT_ACTIVATION, sanitizeChatId } = require('../../shared/contracts/chat');
-const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
+const { CHAT_HISTORY_UNREADABLE } = require('../services/chat-history-store');
 
 /**
  * Ohne Anhang-Ablage verhaelt sich der Verlauf wie vor Issue #94: Bilddaten

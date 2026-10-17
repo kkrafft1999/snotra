@@ -55,7 +55,6 @@
 
 const { createHash } = require('crypto');
 const { readFileWithRetry, renameWithRetry, unlinkWithRetry } = require('./rename-with-retry');
-const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
 const { CHAT_SESSION_NOTICE_STORE } = require('../../shared/contracts/notices');
 const {
   normalizeSessionForStore,
@@ -66,6 +65,14 @@ const {
 
 const LEGACY_FILENAME = 'chat-history.json';
 const LEGACY_VERSION = 2;
+
+/**
+ * Error code of every change to a history that could not be read (#473), and
+ * of a save of a chat whose file could not be read. The file is there and may
+ * be fine, so it is not overwritten.
+ */
+const CHAT_HISTORY_UNREADABLE = 'CHAT_HISTORY_UNREADABLE';
+
 const STORE_DIRNAME = 'chat-history';
 const INDEX_FILENAME = 'index.json';
 const STORE_VERSION = 3;
@@ -898,5 +905,6 @@ module.exports = {
   createChatHistoryStore,
   CHAT_HISTORY_DIRNAME: STORE_DIRNAME,
   CHAT_HISTORY_LEGACY_FILENAME: LEGACY_FILENAME,
+  CHAT_HISTORY_UNREADABLE,
   chatSessionFileName: sessionFileName,
 };
