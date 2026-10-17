@@ -11,11 +11,11 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-import { launchApp, makeTempDir, poll } from './helpers/app.mjs';
+import { launchApp, makeTempDir } from './helpers/app.mjs';
 
 test('the renderer comes from the app scheme, and the CSP refuses a script from the disk', { timeout: 120000 }, async (t) => {
   const userDataDir = await makeTempDir('snotra-origin-userdata-');
@@ -67,42 +67,4 @@ test('the renderer comes from the app scheme, and the CSP refuses a script from 
     `the CSP is in force: ${JSON.stringify(result.violations)}`,
   );
   assert.equal(result.violations.some((v) => v.blocked.startsWith('snotra-app:')), false, 'the app\'s own scripts pass');
-});
-
-// The move from file:// takes the user's appearance and the manual's zoom
-// along: localStorage belongs to the origin (#1012).
-test('a profile from before the app scheme keeps its dark appearance', { timeout: 180000 }, async (t) => {
-  const userDataDir = await makeTempDir('snotra-origin-move-userdata-');
-
-  // A first start, then the store as a version before #1012 left it: the
-  // values under file://, nothing under the app scheme, no marker.
-  const first = await launchApp({ userDataDir });
-  await first.app.evaluate(async ({ BrowserWindow }, url) => {
-    const carrier = new BrowserWindow({ show: false });
-    const contents = carrier.webContents;
-    await contents.loadURL(url);
-    await contents.executeJavaScript("localStorage.setItem('theme', 'dark'); localStorage.setItem('manual.zoom', '1.2');");
-    // The start above already wrote the default under the new origin, which
-    // a real update never finds: the move runs before the first page.
-    await contents.loadURL('snotra-app://app/storage-carrier.html');
-    await contents.executeJavaScript('localStorage.clear();');
-    carrier.destroy();
-  }, pathToFileURL(path.join(process.cwd(), 'src', 'renderer', 'storage-carrier.html')).href);
-  await first.stop();
-  await rm(path.join(userDataDir, 'renderer-storage-origin.json'), { force: true });
-
-  const second = await launchApp({ userDataDir });
-  t.after(() => second.stop().catch(() => {}));
-  // The page's module applies the stored appearance once it has run.
-  await poll(() => second.page.evaluate(() => document.documentElement.lang !== ''
-    && typeof window.electronAPI === 'object' && document.querySelector('#chat-messages') !== null), { what: 'the app started' });
-  await poll(() => second.page.evaluate(() => document.documentElement.dataset.theme === 'dark'), { what: 'the dark appearance' });
-  const after = await second.page.evaluate(() => ({
-    theme: document.documentElement.dataset.theme ?? null,
-    stored: localStorage.getItem('theme'),
-    zoom: localStorage.getItem('manual.zoom'),
-  }));
-  assert.deepEqual(after, { theme: 'dark', stored: 'dark', zoom: '1.2' });
-  const marker = JSON.parse(await readFile(path.join(userDataDir, 'renderer-storage-origin.json'), 'utf8'));
-  assert.deepEqual(marker.moved.sort(), ['manual.zoom', 'theme']);
 });

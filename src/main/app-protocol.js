@@ -8,9 +8,8 @@
  * that slipped past DOMPurify could have loaded any `.js` the user has. From a
  * scheme of its own, `'self'` is this origin, and the origin answers from
  * `src/renderer/` alone — inside app.asar in the packaged app. No page needs
- * `file:` any more; the GrantFileProtocolExtraPrivileges fuse stays at its
- * default for one release all the same, because the move of localStorage
- * from `file://` (renderer-storage-migration.js) needs it (#1086).
+ * `file:` any more, so the GrantFileProtocolExtraPrivileges fuse is off
+ * (#1086).
  *
  * The handler lives in the default session only. The HTML preview has its own
  * session (#479) and cannot reach the app's files through this scheme.

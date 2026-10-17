@@ -21,7 +21,6 @@ const { claimSingleInstance, createStartupFailureHandler, holdQuitForPendingWrit
 const { guardIpcMain } = require('./ipc/trusted-sender');
 const { HTML_PREVIEW_SCHEME_PRIVILEGES } = require('./services/html-preview-service');
 const { APP_SCHEME_PRIVILEGES, registerAppProtocol } = require('./app-protocol');
-const { migrateRendererStorage } = require('./renderer-storage-migration');
 const { createManualService } = require('./services/manual-service');
 const { createManualWindowController, registerManualOpenHandler } = require('./manual-window');
 const { createLogFile, teeConsole } = require('./services/log-file');
@@ -262,15 +261,7 @@ function start() {
     // wieder aktiviert (Issue #68). So zeigt die Oberflaeche immer genau den
     // Ordner, der auch die Vertrauensgrenze der Tools ist.
 
-    // The appearance and the manual's zoom, from the file:// origin the pages
-    // had until #1012 — once, before the window paints with the defaults.
-    const storageMove = await migrateRendererStorage({
-      createWindow: () => new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } }),
-      userDataDir: app.getPath('userData'),
-      fs,
-    });
     openMainWindow();
-    storageMove.release();
 
     // This version is up: an update helper waiting for it may now delete the
     // previous one (#1003).
