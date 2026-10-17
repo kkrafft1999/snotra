@@ -1,5 +1,5 @@
 // Look instead of trust (#676): starts the real app on a folder called
-// `snotra-promotion` and photographs where the workspace is named — title bar,
+// `snotra-workbench` and photographs where the workspace is named — title bar,
 // switcher with its path, the `⋯` menu, the eraser next to it, a narrow
 // sidebar and a hidden one — light and dark. Prints what was measured. Not a
 // test — a look.
@@ -20,11 +20,11 @@ const pause = (ms = 250) => new Promise((r) => setTimeout(r, ms));
 
 const model = await startFakeModel();
 const parent = await makeTempDir('snotra-workspace-header-');
-const workspace = path.join(parent, 'snotra-promotion');
+const workspace = path.join(parent, 'snotra-workbench');
 const userDataDir = await makeTempDir('snotra-workspace-header-userdata-');
 await mkdir(SHOTS, { recursive: true });
-for (const dir of ['public', 'scripts', '.github']) await mkdir(path.join(workspace, dir), { recursive: true });
-for (const file of ['index.html', 'firebase.json', 'README.md', '.firebaserc']) {
+for (const dir of ['src', 'scripts', '.github']) await mkdir(path.join(workspace, dir), { recursive: true });
+for (const file of ['package.json', 'README.md', '.gitignore']) {
   await writeFile(path.join(workspace, file), '\n', 'utf8');
 }
 

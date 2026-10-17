@@ -8,9 +8,8 @@
  *   assets/icon/icon-windows.svg -> icon.ico   (16, 32, 48, 64, 128, 256 px als PNG-Einträge)
  *   assets/icon/icon-windows.svg -> icon.png   (512 px, Linux: hicolor-Icon des .deb)
  *
- * Die Favicons der Website entstehen seit #299 nicht mehr hier, sondern im
- * eigenen Repository der Seite (kkrafft1999/snotra-promotion, dort
- * `scripts/build-favicons.js`) — aus einer Kopie derselben Quelle.
+ * Die Favicons der Website entstehen nicht hier, sondern dort, wo die Seite
+ * gepflegt wird — aus einer Kopie derselben Quelle.
  *
  * `icon.icns`/`icon.ico` findet electron-packager über `"icon": "./icon"` (ohne
  * Endung) selbst; `icon.png` wird vom deb-Maker explizit referenziert. Die
