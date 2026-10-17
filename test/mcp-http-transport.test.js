@@ -267,3 +267,14 @@ test('the configured headers never appear in an error', async (t) => {
     return true;
   });
 });
+
+test('an error quotes the address without its query, where some services put a key', async (t) => {
+  const server = await withServer(t, 'html');
+  const transport = makeTransport(`${server.url}?api_key=query-secret-123`);
+  await transport.start();
+  await assert.rejects(() => transport.request('initialize', INIT), (error) => {
+    assert.equal(error.userMessage.params.url, server.url);
+    assert.doesNotMatch(error.message, /query-secret-123/);
+    return true;
+  });
+});

@@ -378,6 +378,19 @@ function createHttpTransport({
     throw fail(`The MCP server “${config.label}” redirects too often.`, 'mcp.http.tooManyRedirects');
   }
 
+  /**
+   * The endpoint as an error quotes it: without its query, which some
+   * services use for a key — the model reads these sentences too.
+   */
+  function quotedEndpoint() {
+    try {
+      const url = new URL(endpoint);
+      return `${url.origin}${url.pathname}`;
+    } catch {
+      return host;
+    }
+  }
+
   /** A refused answer, in words a user can act on. */
   async function refusal(response) {
     const { status } = response;
@@ -411,13 +424,13 @@ function createHttpTransport({
       );
     }
     if (status === 404) {
-      return refuse(`There is no MCP endpoint at ${endpoint} (404).`, 'mcp.http.notFound', { url: endpoint });
+      return refuse(`There is no MCP endpoint at ${quotedEndpoint()} (404).`, 'mcp.http.notFound', { url: quotedEndpoint() });
     }
     if (status === 405) {
       return refuse(
-        `${endpoint} does not accept MCP requests (405). It may be an older HTTP+SSE server, which is not supported.`,
+        `${quotedEndpoint()} does not accept MCP requests (405). It may be an older HTTP+SSE server, which is not supported.`,
         'mcp.http.methodNotAllowed',
-        { url: endpoint },
+        { url: quotedEndpoint() },
       );
     }
     // A server that explains itself in JSON-RPC — a wrong protocol version,
@@ -439,9 +452,9 @@ function createHttpTransport({
 
   function notMcpError(type) {
     return fail(
-      `${endpoint} answered, but not as an MCP server (${type || 'no content type'}).`,
+      `${quotedEndpoint()} answered, but not as an MCP server (${type || 'no content type'}).`,
       'mcp.http.notMcp',
-      { url: endpoint, type: type || '—' },
+      { url: quotedEndpoint(), type: type || '—' },
     );
   }
 
