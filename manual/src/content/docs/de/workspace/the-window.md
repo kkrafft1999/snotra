@@ -22,10 +22,10 @@ Die Titelleiste nennt in jedem Layout zuerst den geöffneten Ordner, und auch de
 
 ## Eine Spalte ein- und ausblenden
 
-Jede Spalte hat ihren eigenen Schalter in der Titelleiste, alle vier mit demselben Bild eines Fensters, in dem der Teil ausgefüllt ist, den sie steuern:
+Jede Spalte hat ihren eigenen Schalter in der Titelleiste, und [seit 1.25] zeigt jeder, was seine Spalte enthält:
 
-- Links *Seitenleiste einblenden* / *ausblenden* und *Mittlere Vorschau einblenden* / *ausblenden*.
-- Rechts, gespiegelt, *Chat einblenden* / *ausblenden* und *Chat-Verlauf einblenden* / *ausblenden*.
+- Links der Ordnerbaum für *Seitenleiste einblenden* / *ausblenden* und das Auge für *Mittlere Vorschau einblenden* / *ausblenden*.
+- Rechts, gespiegelt, die Sprechblase für *Chat einblenden* / *ausblenden* und die Uhr mit Rückpfeil für *Chat-Verlauf einblenden* / *ausblenden*.
 
 `Cmd+B` / `Strg+B` oder *Ansicht › Seitenleiste ein-/ausblenden* blenden die Seitenleiste ebenfalls ein und aus. Eine Spalte kommt von selbst zurück, wenn du sie brauchst: Ein Klick auf eine Datei im Baum öffnet die mittlere Spalte, ein Klick auf einen Chat im Verlauf öffnet den Chat.
 
