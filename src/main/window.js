@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, shell } = require('electron');
+const { app, BrowserWindow, screen, session, shell } = require('electron');
 const path = require('path');
 const { createRendererNavigationHandler } = require('./permissions');
 const { isOpenableUrl } = require('./ipc/shell-handlers');
@@ -27,6 +27,15 @@ const SHOW_FALLBACK_MS = 3000;
 // The main process does not know the theme — it lives in the renderer's
 // localStorage — so the dark one shows its own colour only once painted.
 const WINDOW_BACKGROUND = '#FFFCF5';
+
+// PRI-1 (#988): an idle session contacts nothing. Chromium's spell checker
+// breaks that on Linux: it has no OS spell checker there, and fetches a Hunspell
+// dictionary from a Google CDN (redirector.gvt1.com) as soon as a window opens,
+// before anyone types. The idle network test (e2e/idle-network.test.mjs) saw it
+// on the Linux runner. macOS and Windows use the OS spell checker and fetch
+// nothing. So Linux runs without spell checking; a local dictionary or a
+// consent step would bring it back (docs/quality-requirements.md, PRI-1).
+const SPELLCHECK_FETCHES_DICTIONARIES = process.platform === 'linux';
 
 function windowStateStore() {
   return createWindowStateStore({
@@ -69,6 +78,9 @@ function captureWindowState(window) {
 function createWindow() {
   const store = windowStateStore();
   const { maximized, fullScreen, ...bounds } = startupWindowState(store);
+  // On the session, before the first renderer exists: the download is the
+  // session's, not the page's.
+  if (SPELLCHECK_FETCHES_DICTIONARIES) session.defaultSession.setSpellCheckerEnabled(false);
   const window = new BrowserWindow({
     title: `Snotra Agent ${app.getVersion()}`,
     ...bounds,
@@ -82,6 +94,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      spellcheck: !SPELLCHECK_FETCHES_DICTIONARIES,
     },
     titleBarStyle: 'hiddenInset',
     backgroundColor: WINDOW_BACKGROUND,

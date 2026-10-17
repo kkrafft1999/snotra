@@ -33,6 +33,8 @@ test('the window keeps its webPreferences: sandbox, isolation, no Node, no webvi
     'contextIsolation: true,',
     'nodeIntegration: false,',
     'sandbox: true,',
+    // Not a security setting: off where the spell checker would fetch a dictionary (#988).
+    'spellcheck: !SPELLCHECK_FETCHES_DICTIONARIES,',
   ]);
 });
 

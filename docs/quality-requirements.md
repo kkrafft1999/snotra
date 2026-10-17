@@ -125,7 +125,7 @@ already replaced the refusal by a card ([`architecture-review.md`](./architectur
 
 | ID | Stimulus | Response | Measure |
 | --- | --- | --- | --- |
-| PRI-1 | The app runs without the user sending anything. | It contacts nothing but the GitHub releases API for the update check; with the check switched off, nothing at all. | A network trace of an idle session shows at most that one request. |
+| PRI-1 | The app runs without the user sending anything. | It contacts nothing but the GitHub releases API for the update check; with the check switched off, nothing at all. | A network trace of an idle session shows at most that one request. `e2e/idle-network.test.mjs` takes the trace on macOS, Windows and Linux with the update check off — Chromium's net log, main's sockets and `fetch`, and the spell checker's dictionary events — and asserts that nothing leaves the machine (#988). It found the one leak: on Linux, Chromium fetched a Hunspell dictionary from a Google CDN at window creation, so the spell checker is off there; macOS and Windows use the OS spell checker and fetch nothing. A local dictionary or a consent step would bring it back. |
 | PRI-2 | A feature wants to send data to a service the user has not set up. | It asks first, naming the service; the consent can be revoked. | No request before consent. |
 | PRI-3 | Keys and tokens are stored and used. | They are encrypted with the OS keyring, never logged, and never handed to the model. | The own-secrets check finds none of them in a prompt or a tool result. |
 
