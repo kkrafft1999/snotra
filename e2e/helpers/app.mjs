@@ -281,15 +281,48 @@ export async function prepareUserData(userDataDir, { workspace, modelBaseUrl }) 
 }
 
 /**
+ * The column widths every Playwright start opens with, unless the profile
+ * already remembers its own. The app's defaults (chat 320 px, sidebar 280 px)
+ * are made for a first start on a small screen; in tests, smoke scripts and the
+ * screenshots for the manual and the blog they left a narrow chat beside a
+ * wide, mostly empty preview. At 1280 px the preview keeps enough room for its
+ * header to stay on one line.
+ */
+export const TEST_LAYOUT = Object.freeze({ chatPanelWidth: 440, sidebarWidth: 240 });
+
+/**
+ * Writes `layout` into the profile's ui-preferences.json, next to whatever the
+ * caller put there. A width the caller set itself wins.
+ */
+async function seedLayout(userDataDir, layout) {
+  const file = path.join(userDataDir, 'ui-preferences.json');
+  let prefs = {};
+  try {
+    prefs = JSON.parse(await readFile(file, 'utf8'));
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  const missing = Object.entries(layout).filter(([key]) => typeof prefs[key] !== 'number');
+  if (missing.length === 0) return;
+  await mkdir(userDataDir, { recursive: true });
+  await writeFile(file, JSON.stringify({ ...prefs, ...Object.fromEntries(missing) }), 'utf8');
+}
+
+/**
  * Startet die App und wartet, bis der Renderer steht. `wrapper` is an optional
  * executable to start instead of Electron — it must start Electron itself and
  * pass all arguments on (Playwright puts its own in front). Used to start the
  * app under a Seatbelt profile (#329). `env` adds variables for this launch,
  * `args` adds Chromium switches (the manual's screenshots fix the scale factor).
+ * `layout` holds the starting column widths (see TEST_LAYOUT); `null` leaves
+ * the app's own defaults, for a test that measures them.
  */
-export async function launchApp({ userDataDir, wrapper = null, env: extraEnv = {}, home, args: extraArgs = [] }) {
+export async function launchApp({
+  userDataDir, wrapper = null, env: extraEnv = {}, home, args: extraArgs = [], layout = TEST_LAYOUT,
+}) {
   // A single file run with `node --test` skips the pretest sync (#919).
   generatedFreshness.assertGeneratedFresh();
+  if (layout !== null) await seedLayout(userDataDir, layout);
   const env = { ...process.env, ...extraEnv };
   delete env.ELECTRON_RUN_AS_NODE;
   // --user-data-dir moves the profile, not the home folder, and main reads

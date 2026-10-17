@@ -90,7 +90,7 @@ test('both composer popups stay inside the chat column at every width', { timeou
   });
   await writeFile(configPath, JSON.stringify(config), 'utf8');
 
-  const snotra = await launchApp({ userDataDir });
+  const snotra = await launchApp({ userDataDir, layout: null });
   t.after(async () => {
     await snotra.stop().catch(() => {});
     await model.close();
