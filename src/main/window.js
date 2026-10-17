@@ -1,4 +1,4 @@
-const { app, BrowserWindow, screen, session, shell } = require('electron');
+const { app, BrowserWindow, screen, shell } = require('electron');
 const path = require('path');
 const { createRendererNavigationHandler } = require('./permissions');
 const { isOpenableUrl } = require('./ipc/shell-handlers');
@@ -30,12 +30,23 @@ const WINDOW_BACKGROUND = '#FFFCF5';
 
 // PRI-1 (#988): an idle session contacts nothing. Chromium's spell checker
 // breaks that on Linux: it has no OS spell checker there, and fetches a Hunspell
-// dictionary from a Google CDN (redirector.gvt1.com) as soon as a window opens,
-// before anyone types. The idle network test (e2e/idle-network.test.mjs) saw it
-// on the Linux runner. macOS and Windows use the OS spell checker and fetch
-// nothing. So Linux runs without spell checking; a local dictionary or a
-// consent step would bring it back (docs/quality-requirements.md, PRI-1).
+// dictionary from a Google CDN (redirector.gvt1.com) the moment a session
+// exists, before a window opens and before anyone types. The idle network test
+// (e2e/idle-network.test.mjs) saw it on the Linux runner. macOS and Windows use
+// the OS spell checker and fetch nothing. So Linux runs without spell checking;
+// a local dictionary or a consent step would bring it back
+// (docs/quality-requirements.md, PRI-1).
 const SPELLCHECK_FETCHES_DICTIONARIES = process.platform === 'linux';
+
+// Per session, as the session is created: the download starts with the session,
+// and the first one is made by `session.defaultSession` early in start-up. An
+// empty language list makes the session drop the dictionary it is loading.
+if (SPELLCHECK_FETCHES_DICTIONARIES) {
+  app.on('session-created', (ses) => {
+    ses.setSpellCheckerEnabled(false);
+    ses.setSpellCheckerLanguages([]);
+  });
+}
 
 function windowStateStore() {
   return createWindowStateStore({
@@ -78,9 +89,6 @@ function captureWindowState(window) {
 function createWindow() {
   const store = windowStateStore();
   const { maximized, fullScreen, ...bounds } = startupWindowState(store);
-  // On the session, before the first renderer exists: the download is the
-  // session's, not the page's.
-  if (SPELLCHECK_FETCHES_DICTIONARIES) session.defaultSession.setSpellCheckerEnabled(false);
   const window = new BrowserWindow({
     title: `Snotra Agent ${app.getVersion()}`,
     ...bounds,
