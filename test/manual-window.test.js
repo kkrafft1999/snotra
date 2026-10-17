@@ -122,7 +122,7 @@ function makeController({ available = true } = {}) {
       windows.push(this);
     }
 
-    loadFile(file, options) { this.loaded = { file, options }; }
+    loadURL(url) { this.loaded = url; }
     close() { this.closedByController = true; }
     isDestroyed() { return this.destroyed; }
     isMinimized() { return false; }
@@ -155,8 +155,7 @@ test('the controller opens one window, and a second call turns the page there', 
   const { controller, windows } = makeController();
   const first = controller.open();
   assert.equal(windows.length, 1);
-  assert.match(first.loaded.file, /src[\\/]renderer[\\/]manual\.html$/);
-  assert.deepEqual(first.loaded.options, { query: { page: 'index' } });
+  assert.equal(first.loaded, `${MANUAL_URL}?page=index`);
   assert.match(first.options.webPreferences.preload, /manual-bundle\.js$/);
   assert.equal(first.options.webPreferences.sandbox, true);
   assert.equal(first.options.webPreferences.contextIsolation, true);

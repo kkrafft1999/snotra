@@ -20,6 +20,8 @@ const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('./services/app
 const { claimSingleInstance, createStartupFailureHandler, holdQuitForPendingWrites } = require('./app-lifecycle');
 const { guardIpcMain } = require('./ipc/trusted-sender');
 const { HTML_PREVIEW_SCHEME_PRIVILEGES } = require('./services/html-preview-service');
+const { APP_SCHEME_PRIVILEGES, registerAppProtocol } = require('./app-protocol');
+const { migrateRendererStorage } = require('./renderer-storage-migration');
 const { createManualService } = require('./services/manual-service');
 const { createManualWindowController, registerManualOpenHandler } = require('./manual-window');
 const { createLogFile, teeConsole } = require('./services/log-file');
@@ -29,6 +31,7 @@ const { createDiagnostics } = require('./services/diagnostics');
 const { createRendererCrashHandler } = require('./services/renderer-crash');
 const { registerDiagnosticsHandlers } = require('./ipc/diagnostics-handlers');
 const { createSafeStorageKeyDurability, LOCAL_STATE_FILENAME } = require('./services/safe-storage-key-durability');
+const { requireRealEncryption } = require('./services/safe-storage-backend');
 
 // The storage identity first (#795): userData and the safeStorage key are
 // derived from the name the app has at this point, and stay with it. The app
@@ -50,7 +53,9 @@ keepSpellCheckerOffWhereItFetches();
 // The scheme of HTML pages in the preview (#479). Privileges can only be
 // given before the app is ready; the handler lives in the preview's own
 // session alone, so the app's window cannot load anything through it.
-protocol.registerSchemesAsPrivileged([HTML_PREVIEW_SCHEME_PRIVILEGES]);
+// Next to it the scheme the app's own pages come from (#1012), served in the
+// default session only.
+protocol.registerSchemesAsPrivileged([HTML_PREVIEW_SCHEME_PRIVILEGES, APP_SCHEME_PRIVILEGES]);
 
 const DEFAULT_PROVIDER = 'openai';
 
@@ -109,6 +114,8 @@ function start() {
 
   app.whenReady().then(async () => {
     app.setName(APP_NAME);
+    // Before any window: both of them load from this scheme (#1012).
+    registerAppProtocol(protocol);
     registerMediaCapturePermissions();
 
     // Einmalige Uebernahme der Daten aus dem userData-Ordner des alten
@@ -192,7 +199,8 @@ function start() {
       // Every handler checks who is calling (#509).
       ipcMain: guardIpcMain(ipcMain),
       dialog,
-      safeStorage,
+      // Linux's basic_text backend is no encryption and counts as none (#1012).
+      safeStorage: requireRealEncryption(safeStorage),
       safeStorageKey,
       fs,
       path,
@@ -254,7 +262,15 @@ function start() {
     // wieder aktiviert (Issue #68). So zeigt die Oberflaeche immer genau den
     // Ordner, der auch die Vertrauensgrenze der Tools ist.
 
+    // The appearance and the manual's zoom, from the file:// origin the pages
+    // had until #1012 — once, before the window paints with the defaults.
+    const storageMove = await migrateRendererStorage({
+      createWindow: () => new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true } }),
+      userDataDir: app.getPath('userData'),
+      fs,
+    });
     openMainWindow();
+    storageMove.release();
 
     // This version is up: an update helper waiting for it may now delete the
     // previous one (#1003).

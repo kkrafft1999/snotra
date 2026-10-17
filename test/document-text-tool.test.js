@@ -77,6 +77,51 @@ test('the path checks of every read tool apply', async (t) => {
   assert.match(JSON.parse((await run({ relative_path: 'notes.txt' })).output).error, /read_file_text/);
 });
 
+async function symlinkOrSkip(t, target, linkPath, type) {
+  try {
+    await fs.symlink(target, linkPath, type);
+    return true;
+  } catch (e) {
+    if (['EPERM', 'EACCES', 'ENOSYS'].includes(e.code)) {
+      t.skip(`symlinks are not supported here: ${e.code}`);
+      return false;
+    }
+    throw e;
+  }
+}
+
+// AR-37 (#1012): a link inside the folder that points out of it is refused
+// like `..`, whether it names the document or a folder above it.
+test('a symlink to a document outside the folder is refused', async (t) => {
+  const { run, base, workspace } = await makeFixture(t);
+  const linked = await symlinkOrSkip(
+    t,
+    path.join(base, 'outside.docx'),
+    path.join(workspace, 'docs', 'link.docx'),
+    process.platform === 'win32' ? 'file' : undefined,
+  );
+  if (!linked) return;
+  const out = JSON.parse((await run({ relative_path: 'docs/link.docx' })).output);
+  assert.match(out.error, /outside the workspace/);
+  assert.equal(out.content, undefined);
+  assert.doesNotMatch(JSON.stringify(out), /außerhalb/);
+});
+
+test('a document behind a symlinked folder outside the folder is refused', async (t) => {
+  const { run, base, workspace } = await makeFixture(t);
+  const linked = await symlinkOrSkip(
+    t,
+    base,
+    path.join(workspace, 'up'),
+    process.platform === 'win32' ? 'junction' : undefined,
+  );
+  if (!linked) return;
+  const out = JSON.parse((await run({ relative_path: 'up/outside.docx' })).output);
+  assert.match(out.error, /outside the workspace/);
+  assert.equal(out.content, undefined);
+  assert.doesNotMatch(JSON.stringify(out), /außerhalb/);
+});
+
 test('a file above the size limit is not read', async (t) => {
   const { run } = await makeFixture(t, { maxBytes: 100 });
   assert.match(JSON.parse((await run({ relative_path: 'docs/angebot.docx' })).output).error, /too large/);

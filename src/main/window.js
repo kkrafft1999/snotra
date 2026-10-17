@@ -1,6 +1,6 @@
 const { app, BrowserWindow, screen, shell } = require('electron');
 const path = require('path');
-const { createRendererNavigationHandler } = require('./permissions');
+const { createRendererNavigationHandler, RENDERER_URL } = require('./permissions');
 const { isOpenableUrl } = require('./ipc/shell-handlers');
 const { resolveWindowBounds, createWindowStateStore } = require('./window-state');
 const { createHiddenFilesShortcutHandler } = require('./services/hidden-files-shortcut');
@@ -198,7 +198,7 @@ function createWindow() {
     ),
   }));
 
-  window.loadFile(path.join(projectRoot, 'src', 'renderer', 'index.html'));
+  window.loadURL(RENDERER_URL);
   return window;
 }
 

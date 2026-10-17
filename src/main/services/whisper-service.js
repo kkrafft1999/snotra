@@ -99,4 +99,5 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
 
 module.exports = {
   createWhisperService,
+  TRANSCRIPTIONS_URL,
 };
