@@ -18,7 +18,7 @@
  */
 
 import contracts from '../generated/contracts.js';
-import { t, tMessage, getLocale, onLocaleChange } from '../i18n.js';
+import { t, tMessage, getLocale, onLocaleChange, DEFAULT_LOCALE } from '../i18n.js';
 import { formatMegabytes, formatSize, inertHtmlFragment, markdownToSafeHtml } from '../utils/helpers.js';
 import { invokeErrorMessage } from '../utils/invoke-error.js';
 
@@ -60,7 +60,7 @@ function userReleaseNotes(notes, locale) {
     current = name;
     from = match.index + match[0].length;
   }
-  return sections[locale] || sections.en || '';
+  return sections[locale] || sections[DEFAULT_LOCALE] || '';
 }
 
 export function initUpdateDialog({ api }) {
