@@ -5,10 +5,15 @@
 // broke in the field: the app was started from its own folder, so that folder
 // is a process's working directory, which Windows will not let anyone rename.
 //
-// A copy of hostname.exe stands in for the app's .exe — it starts, prints and
-// exits, so the relaunch at the end of the helper leaves nothing running.
+// A small console program, compiled once per run, stands in for the app's
+// .exe (#1067). A `stand-in.txt` next to it says what it does: confirm its
+// start through update-service.js the way the app does once its window is
+// open, end with exit code 3 without confirming, hang, or just end — the
+// previous version, started again after a rollback. Each copy notes its label
+// (the `version` file in its folder) and PID in `started.txt`.
 
 const test = require('node:test');
+const { before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
@@ -22,6 +27,7 @@ const {
   buildWindowsLaunchCommand,
   helperOutputFile,
 } = require('../src/main/services/update-installer');
+const { createUpdateService } = require('../src/main/services/update-service');
 const { writeMinimalAsar } = require('./helpers/asar.js');
 // The running app's own name: a rollback restarts it under that name (#794).
 const { APP_NAME } = require('../src/main/app-identity');
@@ -29,6 +35,89 @@ const { APP_NAME } = require('../src/main/app-identity');
 const onWindows = process.platform === 'win32';
 const EXE = `${APP_NAME}.exe`;
 const FOLDER = `${APP_NAME}-win32-x64`;
+const VERSION = '1.13.0';
+const SERVICE = path.join(__dirname, '..', 'src', 'main', 'services', 'update-service.js');
+
+const STAND_IN_SOURCE = `
+using System;
+using System.Diagnostics;
+using System.IO;
+using System.Threading;
+
+static class StandIn {
+  static int Main() {
+    string dir = AppDomain.CurrentDomain.BaseDirectory;
+    string[] config = File.ReadAllLines(Path.Combine(dir, "stand-in.txt"));
+    string label = File.ReadAllText(Path.Combine(dir, "version")).Trim();
+    File.AppendAllText(config[1], label + " " + Process.GetCurrentProcess().Id + "\\n");
+    switch (config[0]) {
+      case "confirm":
+        ProcessStartInfo info = new ProcessStartInfo(config[2], "\\"" + config[3] + "\\"");
+        info.UseShellExecute = false;
+        info.CreateNoWindow = true;
+        using (Process confirm = Process.Start(info)) {
+          confirm.WaitForExit();
+          if (confirm.ExitCode != 0) return 9;
+        }
+        Thread.Sleep(1000);
+        return 0;
+      case "crash":
+        return 3;
+      case "hang":
+        for (;;) Thread.Sleep(1000);
+      default:
+        return 0;
+    }
+  }
+}
+`;
+
+let standInExe = '';
+before(() => {
+  if (!onWindows) return;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-stand-in-'));
+  const source = path.join(dir, 'stand-in.cs');
+  standInExe = path.join(dir, 'stand-in.exe');
+  fs.writeFileSync(source, STAND_IN_SOURCE, 'utf8');
+  execFileSync('powershell.exe', [
+    '-NoProfile', '-NonInteractive', '-Command',
+    `Add-Type -TypeDefinition (Get-Content -Raw -LiteralPath '${source}') -OutputAssembly '${standInExe}'`
+      + ' -OutputType ConsoleApplication -IgnoreWarnings',
+  ]);
+});
+after(() => {
+  if (standInExe) fs.rmSync(path.dirname(standInExe), { recursive: true, force: true });
+});
+
+/** A copy of the stand-in as the app's .exe in `folder`, labelled `label`. */
+async function placeStandIn(fixture, folder, label, behaviour) {
+  await fsp.mkdir(folder, { recursive: true });
+  await fsp.copyFile(standInExe, path.join(folder, EXE));
+  await fsp.writeFile(path.join(folder, 'version'), label);
+  await fsp.writeFile(path.join(folder, 'stand-in.txt'),
+    [behaviour, fixture.started, process.execPath, fixture.confirmScript].join('\r\n'));
+}
+
+function readLines(file) {
+  return readIfThere(file).split(/\r?\n/).filter(Boolean);
+}
+
+/** `[label, pid]` for every stand-in that ran. */
+function startedStandIns(fixture) {
+  return readLines(fixture.started).map((line) => {
+    const [label, pid] = line.split(' ');
+    return [label, Number(pid)];
+  });
+}
+
+function isRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** A process that sits in `cwd` for `ms` milliseconds, like the app did. */
 function holdFolder(cwd, ms) {
@@ -67,54 +156,74 @@ function mark(fixture, step) {
   fixture.steps.push(`${step} after ${Date.now() - fixture.startedAt} ms`);
 }
 
-async function makeFixture(t, timeoutMs) {
+/**
+ * An installed old version and, beside it, the new one: packed as the release
+ * ZIP for `install()`, or unpacked as the installer leaves it for the swap
+ * script (`staged`). `newBehaviour` is what the new stand-in does.
+ */
+async function makeFixture(t, timeoutMs, { newBehaviour = 'confirm', staged = false } = {}) {
   const startedAt = Date.now();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-swap-'));
   const holders = [];
-  t.after(async () => {
-    for (const child of holders) child.kill();
-    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }).catch(() => {});
-  });
-
-  const hostname = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'HOSTNAME.EXE');
-  const parentDir = path.join(dir, 'my tools');
-  const installDir = path.join(parentDir, FOLDER);
-  await fsp.mkdir(installDir, { recursive: true });
-  await fsp.copyFile(hostname, path.join(installDir, EXE));
-  await fsp.writeFile(path.join(installDir, 'version'), 'old');
-  // The user kept the downloaded ZIP next to the program.
-  await fsp.writeFile(path.join(installDir, `${FOLDER}-1.12.0.zip`), 'the old download');
-
-  // The release ZIP has a top-level folder, as electron-forge packs it.
-  const packageDir = path.join(dir, 'package', FOLDER);
-  await fsp.mkdir(packageDir, { recursive: true });
-  await fsp.copyFile(hostname, path.join(packageDir, EXE));
-  await fsp.writeFile(path.join(packageDir, 'version'), 'new');
-  // The installer reads name and version from the package before the swap (#569).
-  await fsp.mkdir(path.join(packageDir, 'resources'));
-  writeMinimalAsar(path.join(packageDir, 'resources', 'app.asar'), {
-    'package.json': JSON.stringify({ productName: APP_NAME, version: '1.13.0' }),
-  });
-  const zip = path.join(dir, `${FOLDER}-1.13.0.zip`);
-  execFileSync('powershell.exe', [
-    '-NoProfile', '-NonInteractive', '-Command',
-    `Compress-Archive -LiteralPath '${packageDir}' -DestinationPath '${zip}'`,
-  ]);
-
   const userData = path.join(dir, 'userData');
   await fsp.mkdir(userData);
+  const parentDir = path.join(dir, 'my tools');
   const fixture = {
     startedAt,
     deadline: startedAt + timeoutMs - REPORT_MARGIN_MS,
     steps: [],
     dir,
     parentDir,
-    installDir,
-    zip,
+    installDir: path.join(parentDir, FOLDER),
     holders,
+    userData,
+    started: path.join(dir, 'started.txt'),
+    confirmScript: path.join(dir, 'confirm.js'),
+    // The names update-service.js gives them.
     logFile: path.join(userData, 'update-install.log'),
     statusFile: path.join(userData, 'update-install-failed.json'),
+    pendingFile: path.join(userData, 'update-install-pending.json'),
   };
+  t.after(async () => {
+    for (const child of holders) child.kill();
+    for (const [, pid] of startedStandIns(fixture)) {
+      try { process.kill(pid); } catch { /* gone already */ }
+    }
+    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }).catch(() => {});
+  });
+
+  // What the app does once its window is open.
+  await fsp.writeFile(fixture.confirmScript, [
+    `require(${JSON.stringify(SERVICE)}).createUpdateService({ app: {`,
+    `  getVersion: () => ${JSON.stringify(VERSION)},`,
+    `  getPath: () => ${JSON.stringify(userData)},`,
+    '} }).confirmInstallStarted().then((ok) => process.exit(ok ? 0 : 9));',
+  ].join('\n'));
+
+  await placeStandIn(fixture, fixture.installDir, 'old', 'exit');
+  // The user kept the downloaded ZIP next to the program.
+  await fsp.writeFile(path.join(fixture.installDir, `${FOLDER}-1.12.0.zip`), 'the old download');
+
+  if (staged) {
+    fixture.stageRoot = path.join(parentDir, '.snotra-new-1');
+    fixture.stagedDir = path.join(fixture.stageRoot, FOLDER);
+    fixture.backupDir = path.join(parentDir, '.snotra-old-1');
+    await placeStandIn(fixture, fixture.stagedDir, 'new', newBehaviour);
+  } else {
+    // The release ZIP has a top-level folder, as electron-forge packs it.
+    const packageDir = path.join(dir, 'package', FOLDER);
+    await placeStandIn(fixture, packageDir, 'new', newBehaviour);
+    // The installer reads name and version from the package before the swap (#569).
+    await fsp.mkdir(path.join(packageDir, 'resources'));
+    writeMinimalAsar(path.join(packageDir, 'resources', 'app.asar'), {
+      'package.json': JSON.stringify({ productName: APP_NAME, version: VERSION }),
+    });
+    fixture.zip = path.join(dir, `${FOLDER}-${VERSION}.zip`);
+    execFileSync('powershell.exe', [
+      '-NoProfile', '-NonInteractive', '-Command',
+      `Compress-Archive -LiteralPath '${packageDir}' -DestinationPath '${fixture.zip}'`,
+    ]);
+  }
   mark(fixture, 'fixture ready');
   return fixture;
 }
@@ -130,11 +239,12 @@ async function installFromInsideTheFolder(fixture, pid) {
   try {
     return await installer.install({
       filePath: fixture.zip,
-      version: '1.13.0',
+      version: VERSION,
       target: { kind: 'windows-dir', canSelfUpdate: true, installDir: fixture.installDir },
       workDir: path.join(fixture.dir, 'work'),
       logFile: fixture.logFile,
       statusFile: fixture.statusFile,
+      pendingFile: fixture.pendingFile,
     });
   } finally {
     process.chdir(before);
@@ -154,11 +264,12 @@ async function installFromAProcessThatQuits(fixture) {
   const resultFile = path.join(fixture.dir, 'install-result.json');
   const options = {
     filePath: fixture.zip,
-    version: '1.13.0',
+    version: VERSION,
     target: { kind: 'windows-dir', canSelfUpdate: true, installDir: fixture.installDir },
     workDir: path.join(fixture.dir, 'work'),
     logFile: fixture.logFile,
     statusFile: fixture.statusFile,
+    pendingFile: fixture.pendingFile,
   };
   const code = [
     `const { createUpdateInstaller } = require(${JSON.stringify(INSTALLER)});`,
@@ -183,6 +294,8 @@ function describe(fixture) {
     `output: ${readIfThere(helperOutputFile(fixture.logFile)) || '(none)'}`,
     `log: ${readIfThere(fixture.logFile) || '(none)'}`,
     `status: ${readIfThere(fixture.statusFile) || '(none)'}`,
+    `pending: ${readIfThere(fixture.pendingFile) || '(none)'}`,
+    `stand-ins: ${readLines(fixture.started).join(', ') || '(none)'}`,
     `launcher: ${readIfThere(path.join(fixture.dir, 'work', 'helper-launch.json')) || '(none)'}`,
     `next to the app: ${fs.readdirSync(fixture.parentDir).join(', ')}`,
     `steps: ${fixture.steps.join('; ')}; waited until ${Date.now() - fixture.startedAt} ms`,
@@ -215,6 +328,7 @@ test('Windows: the swap script parses', { skip: !onWindows }, () => {
     workDir: 'C:\\t\\w',
     logFile: 'C:\\t\\l.log',
     statusFile: 'C:\\t\\s.json',
+    pendingFile: 'C:\\t\\p.json',
     startedFile: 'C:\\t\\w\\helper-started',
     version: '1.13.0',
     carryOver: ["Kon's.zip"],
@@ -253,7 +367,11 @@ test('Windows: the swap goes through although the app ran from its own folder', 
   assert.equal(readIfThere(path.join(fixture.installDir, `${FOLDER}-1.12.0.zip`)), 'the old download');
   assert.deepEqual(fs.readdirSync(fixture.parentDir), [FOLDER], 'no staging or backup folder is left behind');
   assert.equal(fs.existsSync(fixture.statusFile), false);
+  assert.equal(fs.existsSync(fixture.pendingFile), false, 'the new version confirmed its start');
   assert.equal(fs.existsSync(path.join(fixture.dir, 'work')), false);
+  // #1067: the backup went only after the new version had confirmed.
+  assert.ok(log.indexOf('starting the new version') < log.indexOf('updated to 1.13.0'), log);
+  assert.deepEqual(startedStandIns(fixture).map(([label]) => label), ['new']);
 });
 
 // #654: what broke in the field from v1.12.2 on. The process that started the
@@ -301,6 +419,102 @@ test('Windows: a folder that stays locked rolls back, reports and keeps the old 
     fixture,
   });
   assert.match(log, /update failed: /);
+  assert.equal(record.stage, 'swap');
   assert.equal(readIfThere(path.join(fixture.installDir, 'version')), 'old');
   assert.deepEqual(fs.readdirSync(fixture.parentDir), [FOLDER], 'the unpacked new version is cleared away');
+});
+
+/**
+ * Runs the swap script on a staged folder, as the launcher would, and returns
+ * its exit code. `pid` is a process that quits right away, like the app.
+ */
+async function runSwapScript(fixture, { startSeconds }) {
+  const app = holdFolder(fixture.installDir, 500);
+  fixture.holders.push(app);
+  const workDir = path.join(fixture.dir, 'work');
+  await fsp.mkdir(workDir, { recursive: true });
+  const script = path.join(workDir, 'swap.ps1');
+  await fsp.writeFile(script, buildWindowsSwapScript({
+    pid: app.pid,
+    installDir: fixture.installDir,
+    stagedDir: fixture.stagedDir,
+    stageRoot: fixture.stageRoot,
+    backupDir: fixture.backupDir,
+    workDir,
+    logFile: fixture.logFile,
+    statusFile: fixture.statusFile,
+    pendingFile: fixture.pendingFile,
+    startedFile: path.join(workDir, 'helper-started'),
+    version: VERSION,
+    carryOver: [`${FOLDER}-1.12.0.zip`],
+    exeName: EXE,
+    startSeconds,
+  }), 'utf8');
+  const helper = spawn('powershell.exe', [
+    '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script,
+  ], { cwd: fixture.dir, stdio: 'ignore' });
+  fixture.holders.push(helper);
+  mark(fixture, 'helper started');
+  const code = await new Promise((resolve, reject) => {
+    helper.on('error', reject);
+    helper.on('exit', resolve);
+  });
+  mark(fixture, `helper ended with ${code}`);
+  return code;
+}
+
+/**
+ * What a rollback after the start has to leave (#1067): the old version back
+ * in place with what the user kept there, started again; nothing beside it;
+ * a status record with stage `start` that the next start reports.
+ */
+async function assertRolledBack(fixture, reason) {
+  const status = readIfThere(fixture.statusFile);
+  assert.ok(status, describe(fixture));
+  const record = JSON.parse(status.replace(/^\uFEFF/, ''));
+  assert.equal(record.version, VERSION);
+  assert.equal(record.stage, 'start');
+  assert.match(record.error, reason);
+  assert.equal(record.log, fixture.logFile);
+
+  assert.equal(readIfThere(path.join(fixture.installDir, 'version')), 'old', describe(fixture));
+  assert.equal(readIfThere(path.join(fixture.installDir, `${FOLDER}-1.12.0.zip`)), 'the old download');
+  assert.deepEqual(fs.readdirSync(fixture.parentDir), [FOLDER], describe(fixture));
+  assert.equal(fs.existsSync(fixture.pendingFile), false);
+
+  const log = readIfThere(fixture.logFile);
+  assert.match(log, /starting the new version/);
+  assert.match(log, /update failed: /);
+  assert.match(log, /starting the previous version again/);
+  assert.doesNotMatch(log, /updated to /);
+
+  await waitFor(() => startedStandIns(fixture).some(([label]) => label === 'old'), {
+    timeoutMs: 10_000,
+    what: () => describe(fixture),
+    fixture,
+  });
+  const [newOne] = startedStandIns(fixture);
+  assert.equal(newOne[0], 'new');
+  assert.equal(isRunning(newOne[1]), false, 'the new version is not left running');
+
+  // The next start of the old version shows the reason next to the update.
+  const failure = await createUpdateService({
+    app: { getVersion: () => '1.12.0', getPath: () => fixture.userData },
+  }).readInstallFailure();
+  assert.equal(failure?.stage, 'start');
+  assert.match(failure.error, reason);
+}
+
+test('Windows: a new version that ends before it confirms is rolled back, and the old one starts', { skip: !onWindows, timeout: 90_000 }, async (t) => {
+  const fixture = await makeFixture(t, 90_000, { staged: true, newBehaviour: 'crash' });
+  const code = await runSwapScript(fixture, { startSeconds: 30 });
+  assert.equal(code, 1, describe(fixture));
+  await assertRolledBack(fixture, /the new version ended before it had started \(exit code 3\)/);
+});
+
+test('Windows: a new version that never confirms is stopped and rolled back', { skip: !onWindows, timeout: 90_000 }, async (t) => {
+  const fixture = await makeFixture(t, 90_000, { staged: true, newBehaviour: 'hang' });
+  const code = await runSwapScript(fixture, { startSeconds: 5 });
+  assert.equal(code, 1, describe(fixture));
+  await assertRolledBack(fixture, /the new version did not start within 5 seconds/);
 });
