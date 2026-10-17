@@ -27,6 +27,7 @@
 
 const { SHELL_EXECUTION_LIMITS } = require('../../application/ports/shell-execution-port');
 const { createChildRunner } = require('./child-run');
+const { withPowerShellJob, noteUncontained } = require('./windows-job');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { planSpawn } = require('./sandboxed-spawn');
 const { createMessage } = require('../../shared/contracts/message');
@@ -344,7 +345,12 @@ function createShellRunnerService({
       target = await planSpawn({
         sandbox: runTmp ? sandbox : null,
         disabled: sandboxDisabled === true,
-        argv: [detected.command, ...buildShellArgs(detected.invocation, line)],
+        // PowerShell puts itself into a Job Object first, so that what the
+        // command leaves in the background ends with it (#991).
+        argv: [detected.command, ...buildShellArgs(
+          detected.invocation,
+          detected.invocation === INVOCATIONS.POWERSHELL ? withPowerShellJob(line) : line,
+        )],
         workspaceRoot,
         runTmp,
         domains: networkDomains,
@@ -390,9 +396,11 @@ function createShellRunnerService({
         failed: outcome.exitCode !== 0 && !outcome.aborted,
         output: outcome.stderr,
       });
+      const stderr = target.annotate(outcome.stderr);
       const result = {
         ...outcome,
-        stderr: target.annotate(outcome.stderr),
+        // cmd.exe cannot make a Job Object; the model hears so (#991).
+        stderr: platform === 'win32' && detected.invocation === INVOCATIONS.CMD ? noteUncontained(stderr) : stderr,
         durationMs: Date.now() - startedAt,
         shell: detected.label,
       };

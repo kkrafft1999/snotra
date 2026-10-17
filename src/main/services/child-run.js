@@ -9,7 +9,9 @@
  *
  * The child gets a process group of its own on POSIX (`detached`), so that one
  * signal reaches everything it started. Windows has no such group;
- * `taskkill /T` walks the tree from the parent instead.
+ * `taskkill /T` walks the tree from the parent instead, and the runners start
+ * PowerShell and Python so that they first put themselves into a Job Object
+ * that ends whatever they leave behind (`windows-job.js`, #991).
  */
 
 const { createOutputSink } = require('./child-output-sink');
@@ -45,8 +47,10 @@ function createChildRunner({ spawn, platform = process.platform }) {
    * the next run. Ended here, before the run counts as finished.
    *
    * POSIX only. On Windows the parent is gone by now and `taskkill /T` has no
-   * tree left to walk; a process that leaves the group on purpose (`setsid`)
-   * escapes on every platform — the security concept says so (§9).
+   * tree left to walk; there the Job Object the shell or interpreter put
+   * itself into closes with it and does the same (#991). A process that
+   * leaves the group on purpose (`setsid`) escapes on POSIX — the security
+   * concept says so (§9).
    */
   function killLeftovers(child) {
     if (platform === 'win32' || !Number.isInteger(child?.pid)) return;
