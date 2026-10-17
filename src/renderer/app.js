@@ -30,8 +30,13 @@ import { initWorkspaceHeader } from './components/WorkspaceHeader.js';
 import { contentPaneVisibleOnStart } from './utils/startupLayout.js';
 import { restoreMarkdownZoom } from './file-views/markdown-zoom.js';
 import { t, setLocale, onLocaleChange } from './i18n.js';
+import { reportUncaughtErrors } from './utils/uncaught-errors.js';
 
 const api = window.electronAPI;
+
+// First thing, so that whatever goes wrong while the rest starts up is
+// counted too (#978): main logs it and shows the background-error notice.
+reportUncaughtErrors(window, (report) => api?.reportUncaughtError?.(report));
 const DEFAULT_MAX_TOOL_ROUNDS = 14;
 
 // app.js hält nur noch die Elemente, die es selbst bedient (Input-Höhe,

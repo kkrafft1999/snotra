@@ -26,7 +26,15 @@ const NOT_SAVED = Object.freeze({
   canReveal: true,
 });
 
-async function mount({ locale = 'en', listed = [], platform = 'darwin' } = {}) {
+const BACKGROUND = Object.freeze({
+  id: 'background-error',
+  kind: 'background-error',
+  count: 1,
+  location: '/profile/logs/main.log',
+  canReveal: true,
+});
+
+async function mount({ locale = 'en', listed = [], platform = 'darwin', copyResult = { ok: true } } = {}) {
   const dom = setupRendererDom();
   const { setLocale } = await importRenderer('i18n.js');
   setLocale(locale, { force: true });
@@ -38,7 +46,8 @@ async function mount({ locale = 'en', listed = [], platform = 'darwin' } = {}) {
     listNotices: async () => ({ notices: listed, platform }),
     dismissNotice: async (id) => { calls.push(`dismiss:${id}`); return { ok: true }; },
     revealNotice: async (id) => { calls.push(`reveal:${id}`); return { ok: true }; },
-    openManual: async (target) => { calls.push(`manual:${target.slug}`); return { ok: true }; },
+    openManual: async (target) => { calls.push(`manual:${target.slug}#${target.fragment ?? ''}`); return { ok: true }; },
+    copyDiagnostics: async () => { calls.push('copy'); if (copyResult instanceof Error) throw copyResult; return copyResult; },
     onNoticePosted: (cb) => { push.posted = cb; },
     onNoticeWithdrawn: (cb) => { push.withdrawn = cb; },
   };
@@ -71,7 +80,7 @@ test('a set-aside from before the window names the store, the file and the copy'
   button(entry, 'reveal').click();
   button(entry, 'help').click();
   await flush();
-  assert.deepEqual(calls, ['reveal:store:llm-config.json', 'manual:troubleshooting/files-set-aside']);
+  assert.deepEqual(calls, ['reveal:store:llm-config.json', 'manual:troubleshooting/files-set-aside#']);
 });
 
 test('in German, with the Windows file manager', async () => {
@@ -135,4 +144,65 @@ test('switching the language words the notices again', async () => {
   await flush();
 
   assert.equal(entries()[0].querySelector('.app-notice-heading').textContent, 'Deine Modelleinstellungen wurden zurückgesetzt.');
+});
+
+// The errors nobody caught (#978): one notice, counted, with the diagnostics.
+
+test('an error in the background: heading, count, and copy, log and help buttons', async () => {
+  const { entries, button, calls } = await mount({ listed: [BACKGROUND] });
+
+  const [entry] = entries();
+  assert.ok(entry.classList.contains('app-notice--error'));
+  assert.equal(entry.querySelector('.app-notice-heading').textContent, 'Something went wrong in the background.');
+  assert.match(entry.querySelector('.app-notice-text').textContent, /^Snotra ran into an error it did not expect\./);
+  assert.equal(entry.querySelector('.app-notice-path'), null, 'the log path stays behind its button');
+  assert.deepEqual(
+    Array.from(entry.querySelectorAll('.app-notice-actions button')).map((b) => b.dataset.action),
+    ['copy-diagnostics', 'reveal', 'help'],
+  );
+  assert.equal(button(entry, 'reveal').textContent, 'Show log file');
+
+  button(entry, 'reveal').click();
+  button(entry, 'help').click();
+  await flush();
+  assert.deepEqual(calls, ['reveal:background-error', 'manual:troubleshooting/logs-and-reports#the-log-file']);
+});
+
+test('copying the diagnostics says so on the button, and says it when it failed', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const ok = await mount({ listed: [BACKGROUND] });
+  const copy = ok.button(ok.entries()[0], 'copy-diagnostics');
+  assert.equal(copy.textContent, 'Copy diagnostics');
+  copy.click();
+  await flush();
+  assert.equal(copy.textContent, 'Copied');
+  assert.deepEqual(ok.calls, ['copy']);
+  t.mock.timers.tick(2500);
+  assert.equal(copy.textContent, 'Copy diagnostics');
+
+  const failed = await mount({ listed: [BACKGROUND], copyResult: new Error('no clipboard') });
+  const button = failed.button(failed.entries()[0], 'copy-diagnostics');
+  button.click();
+  await flush();
+  assert.equal(button.textContent, 'Could not copy');
+});
+
+test('a higher count rewords the same entry and keeps the focus on its button', async () => {
+  const { dom, entries, button, push } = await mount({ listed: [BACKGROUND] });
+  button(entries()[0], 'copy-diagnostics').focus();
+
+  push.posted({ ...BACKGROUND, count: 3 });
+
+  assert.equal(entries().length, 1);
+  assert.match(entries()[0].querySelector('.app-notice-text').textContent, /^Snotra ran into 3 errors it did not expect\./);
+  assert.equal(dom.document.activeElement, button(entries()[0], 'copy-diagnostics'));
+});
+
+test('in German', async () => {
+  const { entries, button } = await mount({ locale: 'de', listed: [{ ...BACKGROUND, count: 2 }] });
+  const [entry] = entries();
+  assert.equal(entry.querySelector('.app-notice-heading').textContent, 'Im Hintergrund ist etwas schiefgegangen.');
+  assert.match(entry.querySelector('.app-notice-text').textContent, /^Snotra ist auf 2 unerwartete Fehler gestoßen\./);
+  assert.equal(button(entry, 'copy-diagnostics').textContent, 'Diagnose kopieren');
+  assert.equal(button(entry, 'reveal').textContent, 'Logdatei zeigen');
 });

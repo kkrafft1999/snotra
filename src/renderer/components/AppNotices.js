@@ -1,6 +1,10 @@
 /**
  * Notices in the window (#1001, the notice channel of #978).
  *
+ * Two families: a store's file that was set aside or is not saved (#1001),
+ * and the errors nobody caught (#978), counted in one notice that offers the
+ * diagnostics and the log file.
+ *
  * A strip under the title bar, one entry per notice. Main posts a notice as a
  * kind plus the facts it is about; it is worded here, in the interface
  * language, and worded again when that changes. Notices posted before the
@@ -18,11 +22,35 @@ const { NOTICE_KINDS, normalizeNotice } = contracts;
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
-/** Heading and text per kind; the heading names the store in words. */
+/**
+ * Heading, text, tone and help link per kind. A store's heading names the
+ * store in words; the background-error text says how many errors there were.
+ */
 const WORDING = Object.freeze({
-  [NOTICE_KINDS.STORE_SET_ASIDE]: { heading: 'notice.storeSetAside', text: 'notice.storeSetAside.text', tone: 'info' },
-  [NOTICE_KINDS.STORE_NOT_SAVED]: { heading: 'notice.storeNotSaved', text: 'notice.storeNotSaved.text', tone: 'error' },
+  [NOTICE_KINDS.STORE_SET_ASIDE]: {
+    heading: (notice) => t(`notice.storeSetAside.${notice.store}`),
+    text: (notice) => t('notice.storeSetAside.text', { file: notice.file }),
+    tone: 'info',
+    help: 'notice.store',
+  },
+  [NOTICE_KINDS.STORE_NOT_SAVED]: {
+    heading: (notice) => t(`notice.storeNotSaved.${notice.store}`),
+    text: (notice) => t('notice.storeNotSaved.text', { file: notice.file }),
+    tone: 'error',
+    help: 'notice.store',
+  },
+  [NOTICE_KINDS.BACKGROUND_ERROR]: {
+    heading: () => t('notice.backgroundError'),
+    text: (notice) => (notice.count === 1
+      ? t('notice.backgroundError.text.one')
+      : t('notice.backgroundError.text.other', { count: notice.count })),
+    tone: 'error',
+    help: 'notice.backgroundError',
+  },
 });
+
+/** How long *Copied* stays on the button before it reads *Copy diagnostics* again. */
+const COPIED_FEEDBACK_MS = 2500;
 
 const REVEAL_KEYS = Object.freeze({
   darwin: 'contextMenu.reveal.darwin',
@@ -59,8 +87,42 @@ export function initAppNotices({ api, root = document.getElementById('app-notice
   const shown = new Map();
   let platform = '';
 
-  function revealLabel() {
+  function revealLabel(notice) {
+    if (notice.kind === NOTICE_KINDS.BACKGROUND_ERROR) return t('notice.backgroundError.showLog');
     return t(REVEAL_KEYS[platform] || 'contextMenu.reveal.other');
+  }
+
+  function linkButton(action, label, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'app-notice-link';
+    button.dataset.action = action;
+    button.textContent = label;
+    button.addEventListener('click', onClick);
+    return button;
+  }
+
+  /** The button says what came of the click, then goes back to its label. */
+  function copyDiagnosticsButton() {
+    let reset = null;
+    const button = linkButton('copy-diagnostics', t('notice.backgroundError.copy'), async () => {
+      let ok = false;
+      try {
+        ok = (await api.copyDiagnostics?.())?.ok === true;
+      } catch {
+        ok = false;
+      }
+      // The shorter word must not pull the buttons beside it to the left.
+      if (!reset) button.style.minWidth = `${button.offsetWidth}px`;
+      button.textContent = t(ok ? 'notice.backgroundError.copied' : 'notice.backgroundError.copyFailed');
+      clearTimeout(reset);
+      reset = setTimeout(() => {
+        reset = null;
+        button.textContent = t('notice.backgroundError.copy');
+        button.style.minWidth = '';
+      }, COPIED_FEEDBACK_MS);
+    });
+    return button;
   }
 
   function build(notice) {
@@ -75,12 +137,13 @@ export function initAppNotices({ api, root = document.getElementById('app-notice
     body.className = 'app-notice-body';
     const heading = document.createElement('p');
     heading.className = 'app-notice-heading';
-    heading.textContent = t(`${wording.heading}.${notice.store}`);
+    heading.textContent = wording.heading(notice);
     const text = document.createElement('p');
     text.className = 'app-notice-text';
-    text.textContent = t(wording.text, { file: notice.file });
+    text.textContent = wording.text(notice);
     body.append(heading, text);
-    if (notice.location) {
+    // A store's notice shows where its file is; the log's path is one click away.
+    if (notice.location && notice.kind !== NOTICE_KINDS.BACKGROUND_ERROR) {
       const where = document.createElement('p');
       where.className = 'app-notice-path';
       where.textContent = notice.location;
@@ -89,27 +152,16 @@ export function initAppNotices({ api, root = document.getElementById('app-notice
 
     const actions = document.createElement('p');
     actions.className = 'app-notice-actions';
+    if (notice.kind === NOTICE_KINDS.BACKGROUND_ERROR) actions.appendChild(copyDiagnosticsButton());
     if (notice.canReveal) {
-      const reveal = document.createElement('button');
-      reveal.type = 'button';
-      reveal.className = 'app-notice-link';
-      reveal.dataset.action = 'reveal';
-      reveal.textContent = revealLabel();
-      reveal.addEventListener('click', () => {
+      actions.appendChild(linkButton('reveal', revealLabel(notice), () => {
         void Promise.resolve(api.revealNotice?.(notice.id)).catch(() => {});
-      });
-      actions.appendChild(reveal);
+      }));
     }
-    const help = document.createElement('button');
-    help.type = 'button';
-    help.className = 'app-notice-link';
-    help.dataset.action = 'help';
-    help.textContent = t('notice.help');
-    help.addEventListener('click', () => {
-      const target = settingsHelpTarget('notice.store', getLocale());
+    actions.appendChild(linkButton('help', t('notice.help'), () => {
+      const target = settingsHelpTarget(wording.help, getLocale());
       if (target) void Promise.resolve(api.openManual?.({ slug: target.slug, fragment: target.fragment })).catch(() => {});
-    });
-    actions.appendChild(help);
+    }));
     body.appendChild(actions);
     el.appendChild(body);
 
@@ -138,7 +190,12 @@ export function initAppNotices({ api, root = document.getElementById('app-notice
     const element = build(notice);
     const previous = shown.get(notice.id);
     if (previous) {
+      // A count that goes up redraws the entry; whoever was on one of its
+      // buttons stays on the same button.
+      const focused = previous.element.contains(document.activeElement) ? document.activeElement : null;
       previous.element.replaceWith(element);
+      const action = focused?.dataset?.action;
+      if (action) element.querySelector(`[data-action="${action}"]`)?.focus?.();
     } else {
       root.appendChild(element);
     }

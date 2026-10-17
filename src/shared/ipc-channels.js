@@ -202,6 +202,10 @@ const REQUEST_CHANNELS = Object.freeze({
   NOTICES_DISMISS: 'notices:dismiss',
   /** Show a notice's kept copy in the file manager: `(id)` — the renderer never names the path. */
   NOTICES_REVEAL: 'notices:reveal',
+  /** An error the window's global handlers caught (#978): `{ source, message, stack, at }`, logged and counted by main. */
+  DIAGNOSTICS_REPORT_ERROR: 'diagnostics:report-error',
+  /** Put the diagnostics report on the clipboard (#978) — the same as *Help › Copy diagnostics*. */
+  DIAGNOSTICS_COPY: 'diagnostics:copy',
 
   UPDATE_CHECK: 'update:check',
   UPDATE_GET_VERSION: 'update:getVersion',

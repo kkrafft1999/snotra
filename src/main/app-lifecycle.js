@@ -46,17 +46,22 @@ function claimSingleInstance({ app, getMainWindow, createWindow, canCreateWindow
  * A start-up that throws must not leave a process without a window behind
  * (#509): on macOS a dock icon that does nothing, on Windows and Linux an
  * invisible process. The error is logged, shown, and the app ends.
+ * `logFilePath` is where the log file is (#978), named in the box.
  */
-function createStartupFailureHandler({ app, dialog, log = console, appName = 'Snotra Agent' }) {
+function createStartupFailureHandler({ app, dialog, log = console, appName = 'Snotra Agent', logFilePath = null }) {
   return (error) => {
     log.error?.('Start-up failed:', error);
     try {
       // The stored language is not known yet; the system's is the best guess.
       const t = createTranslator(localeFromSystem(app.getLocale?.()));
+      const detail = String(error?.message || error);
       dialog.showErrorBox(
         t('app.startupFailed.title', { appName }),
-        // The stack is in the log; the box carries the sentence.
-        t('app.startupFailed.message', { detail: String(error?.message || error) }),
+        // The stack is in the log file (#978); the box carries the sentence
+        // and says where that file is.
+        logFilePath
+          ? t('app.startupFailed.messageWithLog', { detail, logFile: logFilePath })
+          : t('app.startupFailed.message', { detail }),
       );
     } catch {
       // Without a dialog the log is all there is.

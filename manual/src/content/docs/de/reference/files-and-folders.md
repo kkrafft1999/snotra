@@ -37,6 +37,7 @@ Er trägt noch den Namen der Plattform, Snotra AI, obwohl die App Snotra Agent h
 | `chat-attachments/` | Die Bilder, die zu deinen Chats gehören, ein Ordner je Chat. |
 | `folder-history.json` und `last-folder.json` | Die zuletzt benutzten Ordner und der, der beim nächsten Start öffnet. |
 | `window-state.json` | Größe und Platz des Fensters. |
+| `logs/` | [seit 1.25] Die Logdatei von Snotra, `main.log`, und die davor, `main.old.log`: Warnungen und Fehler, nie deine Chats — siehe [Logs finden und ein Problem melden](../../troubleshooting/logs-and-reports/#die-logdatei). |
 
 Alles andere im Ordner — `Cache`, `Local Storage` und Ähnliches — gehört dem Framework und lässt sich in Ruhe.
 

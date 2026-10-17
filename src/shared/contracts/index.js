@@ -309,6 +309,7 @@ const {
 const { createMessage, isMessage } = require('./message');
 const {
   NOTICE_KINDS,
+  BACKGROUND_ERROR_NOTICE_ID,
   NOTICE_STORES,
   NOTICE_STORE_IDS,
   normalizeNotice,
@@ -582,6 +583,7 @@ module.exports = {
   parseDomainInput,
   isNarrowing,
   NOTICE_KINDS,
+  BACKGROUND_ERROR_NOTICE_ID,
   NOTICE_STORES,
   NOTICE_STORE_IDS,
   normalizeNotice,
