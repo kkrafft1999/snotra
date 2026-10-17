@@ -25,6 +25,8 @@
  */
 'use strict';
 
+const { APP_LOCALES } = require('./enums');
+
 /** Dateiname beider Ebenen — derselbe Name, zwei Orte. */
 const MEMORY_FILE = 'memory.md';
 
@@ -108,21 +110,26 @@ const MEMORY_ORIGINS = Object.freeze({
  * whichever language the file was started in.
  */
 const SELF_ORIGIN_MARKERS = Object.freeze({
-  en: 'remembered on its own',
-  de: 'selbst gemerkt',
+  [APP_LOCALES.EN]: 'remembered on its own',
+  [APP_LOCALES.DE]: 'selbst gemerkt',
 });
 
 const KNOWN_SELF_ORIGIN_MARKERS = new Set(Object.values(SELF_ORIGIN_MARKERS));
 
 /** Heading of a freshly created file, in the interface language (#579). */
 const MEMORY_FILE_HEADINGS = Object.freeze({
-  en: Object.freeze({ user: '# Memory · global', workspace: '# Memory · project' }),
-  de: Object.freeze({ user: '# Gedächtnis · global', workspace: '# Gedächtnis · Projekt' }),
+  [APP_LOCALES.EN]: Object.freeze({ user: '# Memory · global', workspace: '# Memory · project' }),
+  [APP_LOCALES.DE]: Object.freeze({ user: '# Gedächtnis · global', workspace: '# Gedächtnis · Projekt' }),
 });
 
-/** German or English; anything else is English, as in the rest of the app. */
+/**
+ * The language of the file's wording: one of the languages the tables above
+ * have words for; anything else is English, as in the rest of the app.
+ * `test/locale-literals.test.js` keeps the tables complete for every
+ * registered language.
+ */
 function memoryLanguage(locale) {
-  return locale === 'de' ? 'de' : 'en';
+  return Object.hasOwn(MEMORY_FILE_HEADINGS, locale) ? locale : APP_LOCALES.EN;
 }
 
 /** Kopfzeile einer frisch angelegten Datei. */
@@ -262,6 +269,7 @@ module.exports = {
   MEMORY_SCOPE_PATHS,
   MEMORY_SCOPE_SHORT_PATHS,
   MEMORY_ORIGINS,
+  MEMORY_FILE_HEADINGS,
   SELF_ORIGIN_MARKERS,
   MAX_MEMORY_CHARS,
   MAX_MEMORY_ENTRY_CHARS,

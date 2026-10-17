@@ -1,7 +1,8 @@
 'use strict';
 
 /**
- * Interface strings in two languages (epic #277).
+ * Interface strings in every registered language (epic #277) — today English
+ * and German; the registry is `locales.js`.
  *
  * One place for everything a human reads — renderer, main process and contracts
  * all reach for the same catalogue. What goes to the *model* explicitly does
@@ -20,23 +21,19 @@
 
 const { APP_LOCALES } = require('../contracts/enums');
 const { isMessage } = require('../contracts/message');
-const de = require('./messages/de');
-const en = require('./messages/en');
-
-/**
- * The app's runtime default. Fresh installations start here (epic #277);
- * existing ones stay on German — but that is decided by the store when it reads
- * the preferences, not by this module.
- */
-const DEFAULT_LOCALE = APP_LOCALES.EN;
-
-const MESSAGES = Object.freeze({
-  [APP_LOCALES.DE]: de,
-  [APP_LOCALES.EN]: en,
-});
-
-/** Every supported language, in the order they are offered. */
-const LOCALES = Object.freeze([APP_LOCALES.DE, APP_LOCALES.EN]);
+const {
+  DEFAULT_LOCALE,
+  LEGACY_LOCALE,
+  LOCALES,
+  LOCALE_INFO,
+  MESSAGES,
+  isLocale,
+  isSpeechLanguage,
+  localeName,
+  manualPathPrefix,
+  speechLanguageFor,
+  splitManualLocale,
+} = require('./locales');
 
 /**
  * Anything not in the list is not a language — `de-DE` is not, while `EN` is
@@ -74,7 +71,7 @@ function interpolate(template, params) {
 /**
  * One string in the requested language.
  *
- * @param {string} locale  `de` or `en`; anything else counts as DEFAULT_LOCALE.
+ * @param {string} locale  A registered language; anything else counts as DEFAULT_LOCALE.
  * @param {string} key     Dotted key, e.g. `settings.nav.general`.
  * @param {object} [params] Values for `{placeholders}`.
  */
@@ -88,14 +85,27 @@ function translate(locale, key, params) {
   return key;
 }
 
+const pluralRules = new Map();
+
+/** The plural rule of a language, from the platform's CLDR data — one per language. */
+function pluralRulesFor(locale) {
+  if (!pluralRules.has(locale)) pluralRules.set(locale, new Intl.PluralRules(locale));
+  return pluralRules.get(locale);
+}
+
 /**
- * Two forms are enough for English and German: `key.one` and `key.other`. The
- * counter travels along as `{count}` automatically, so the common case costs
- * nothing at the call site.
+ * The form of `baseKey` for `count`: `key.one`, `key.other` — and, for a
+ * language that distinguishes more, `key.few`, `key.many`, `key.two`,
+ * `key.zero` (the CLDR categories of `Intl.PluralRules`). A catalogue that has
+ * no entry for the category its language asks for falls back to `key.other`.
+ * The counter travels along as `{count}` automatically, so the common case
+ * costs nothing at the call site.
  */
 function translatePlural(locale, baseKey, count, params) {
-  const suffix = Math.abs(Number(count)) === 1 ? 'one' : 'other';
-  return translate(locale, `${baseKey}.${suffix}`, { count, ...params });
+  const lc = normalizeLocale(locale);
+  let suffix = pluralRulesFor(lc).select(Math.abs(Number(count)));
+  if (suffix !== 'other' && typeof MESSAGES[lc][`${baseKey}.${suffix}`] !== 'string') suffix = 'other';
+  return translate(lc, `${baseKey}.${suffix}`, { count, ...params });
 }
 
 /**
@@ -168,12 +178,20 @@ function createTranslator(locale) {
 module.exports = {
   APP_LOCALES,
   DEFAULT_LOCALE,
+  LEGACY_LOCALE,
   LOCALES,
+  LOCALE_INFO,
   MESSAGES,
   createTranslator,
   hasKey,
+  isLocale,
+  isSpeechLanguage,
   localeFromSystem,
+  localeName,
+  manualPathPrefix,
   normalizeLocale,
+  speechLanguageFor,
+  splitManualLocale,
   translate,
   translateMessage,
   translatePlural,

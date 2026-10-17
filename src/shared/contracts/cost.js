@@ -15,6 +15,7 @@
  */
 'use strict';
 
+const { APP_LOCALES } = require('./enums');
 const { toUsageNumber, normalizeUsage } = require('./usage');
 
 const SESSION_COST_VERSION = 1;
@@ -333,7 +334,7 @@ function costEntryUsd(entry) {
  * nothing, and the dash — never 0 — for an unknown price. The currency sign
  * and its position follow the locale.
  */
-function formatUsd(value, locale = 'en') {
+function formatUsd(value, locale = APP_LOCALES.EN) {
   const n = Number(value);
   if (value === null || value === undefined || !Number.isFinite(n)) return '–';
   const format = new Intl.NumberFormat(locale, {

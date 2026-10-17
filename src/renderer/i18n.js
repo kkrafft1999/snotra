@@ -14,7 +14,16 @@
 
 import i18n from './generated/i18n.js';
 
-const { APP_LOCALES, DEFAULT_LOCALE, createTranslator, normalizeLocale } = i18n;
+const {
+  APP_LOCALES,
+  DEFAULT_LOCALE,
+  LOCALE_INFO,
+  LOCALES,
+  createTranslator,
+  manualPathPrefix,
+  normalizeLocale,
+  splitManualLocale,
+} = i18n;
 
 let currentLocale = DEFAULT_LOCALE;
 let translator = createTranslator(currentLocale);
@@ -39,7 +48,7 @@ export function tPlural(baseKey, count, params) {
   return translator.plural(baseKey, count, params);
 }
 
-/** The active language — `de` or `en`. */
+/** The active language — one of `LOCALES`. */
 export function getLocale() {
   return currentLocale;
 }
@@ -105,4 +114,4 @@ export function onLocaleChange(fn) {
   return () => listeners.delete(fn);
 }
 
-export { APP_LOCALES };
+export { APP_LOCALES, DEFAULT_LOCALE, LOCALE_INFO, LOCALES, manualPathPrefix, splitManualLocale };

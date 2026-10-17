@@ -28,7 +28,7 @@ const { checkShellCommand } = require('../../shared/runtime/shell-command-guard'
 const { resolveRunDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../services/sandbox-service');
 const { normalizeProgramAllowances } = require('../../shared/contracts/program-allowances');
-const { createTranslator } = require('../../shared/i18n');
+const { APP_LOCALES, createTranslator } = require('../../shared/i18n');
 const { isPathInside } = require('../../shared/runtime/path-inside');
 const { outsideRootsFrom, OUTSIDE_WORKSPACE } = require('../services/outside-access');
 
@@ -585,7 +585,7 @@ function createToolCallPlanner({
       return {
         tool: toolName,
         error: `The ${toolName === 'run_python' ? 'program' : 'command'} and its input are longer than the approval `
-          + `card can show (${PREVIEW_MAX_CHARS.toLocaleString('en')} characters each). Write it to a file `
+          + `card can show (${PREVIEW_MAX_CHARS.toLocaleString(APP_LOCALES.EN)} characters each). Write it to a file `
           + 'first, or split it.',
         reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS,
         riskClasses: [...riskClasses],

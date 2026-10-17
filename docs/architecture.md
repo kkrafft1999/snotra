@@ -2445,9 +2445,17 @@ just like the contracts next to it:
 
 - `messages/en.js` and `messages/de.js` — flat catalogues with dotted keys
   (`settings.general.locale.label`).
+- `locales.js` — the registry of the languages: per language its catalogue,
+  its name in its own words, the language speech recognition is asked for, and
+  the address prefix of its pages in the web manual. Lists, pickers and the
+  voice input read from here; no other code names a language. A new language is
+  one catalogue, one entry here and one value in `APP_LOCALES`;
+  `test/locale-literals.test.js` fails on a `'de'` / `'en'` anywhere else.
 - `index.js` — `translate(locale, key, params)`, `translatePlural(…)` and
   `createTranslator(locale)`. Placeholders look like `{name}`; plurals use the
-  suffixes `.one` / `.other`.
+  suffixes of the language's CLDR categories (`.one` / `.other` for English and
+  German), chosen by `Intl.PluralRules`; a category the catalogue has no key for
+  reads as `.other`.
 
 The renderer loads native ESM and cannot import CommonJS directly.
 `scripts/sync-renderer-vendor.js` therefore builds an ESM bundle into

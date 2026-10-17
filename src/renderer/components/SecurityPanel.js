@@ -1,5 +1,5 @@
 import contracts from '../generated/contracts.js';
-import { t, tMessage, onLocaleChange } from '../i18n.js';
+import { APP_LOCALES, t, tMessage, onLocaleChange } from '../i18n.js';
 import { riskClassLabel } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 import {
@@ -160,7 +160,7 @@ export function initSecurityPanel({
     let codeEl = null;
     if (code) {
       codeEl = el('code', 'settings-security-item__code', code);
-      codeEl.setAttribute('lang', 'en');
+      codeEl.setAttribute('lang', APP_LOCALES.EN);
     }
     // A tool is known by its name; its description is the quiet second
     // line, cut to one line with the whole sentence on hover.
@@ -340,7 +340,7 @@ export function initSecurityPanel({
     const chips = el('p', 'settings-security-chips');
     for (const pattern of sensitive.builtIn) {
       const code = el('code', 'settings-security-chip', pattern);
-      code.setAttribute('lang', 'en');
+      code.setAttribute('lang', APP_LOCALES.EN);
       chips.appendChild(code);
     }
     body.appendChild(chips);

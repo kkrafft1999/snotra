@@ -4,7 +4,7 @@
 // Decided with a mockup on 2026-09-26: the compact `ds-segmented` control, and
 // "Preview" stays English in German too.
 
-import { t } from '../i18n.js';
+import { APP_LOCALES, t } from '../i18n.js';
 
 export const MODES = Object.freeze({ PREVIEW: 'preview', SOURCE: 'source' });
 
@@ -19,7 +19,7 @@ export function buildModeSwitch(onChange) {
   const control = buildSegmentedSwitch({
     labelKey: 'fileView.mode.label',
     options: [
-      { value: MODES.PREVIEW, labelKey: 'fileView.mode.preview', lang: 'en' },
+      { value: MODES.PREVIEW, labelKey: 'fileView.mode.preview', lang: APP_LOCALES.EN },
       { value: MODES.SOURCE, labelKey: 'fileView.mode.source' },
     ],
     selected: MODES.PREVIEW,
