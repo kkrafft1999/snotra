@@ -2814,6 +2814,31 @@ there is no fallback: both need it.
 The shortcut `Cmd/Ctrl+D` hangs on *Edit › Voice Input*, like `Cmd/Ctrl+N` on
 its item, so it works with the focus in the input.
 
+## Hooks
+
+Not built yet — designed in [`hooks.md`](./hooks.md) (#926, epic
+[#925](https://github.com/kkrafft1999/snotra/issues/925)), which is the
+contract the parts #927–#930 are built against. In short: user-defined
+commands that Snotra runs at six events of a run (`ChatStart`, `PromptSubmit`,
+`PreToolUse`, `PostToolUse`, `RunEnd`, `Notification`), defined in
+`~/.snotra/hooks.json` and in the folder's .agents/hooks.json. The structure
+follows the existing ports:
+
+- A hook port in `src/application/ports/`; the engine calls it at the events
+  and gets one combined result back, without knowing where hooks live or how
+  they run.
+- The combination of the policy verdict with a hook's answer — a hook can
+  tighten, never loosen — is a pure function next to `decideToolPolicy` in
+  `src/application/permissions/`.
+- Event names, schema, validation and answer parsing live in
+  `src/shared/contracts/`.
+- An adapter in `src/main/adapters/`, analogous to
+  `project-instructions-adapter.js`, reads the two files through
+  `embedded-text-file.js`, checks trust for workspace hooks against the signed
+  policy store and runs the commands through `sandboxed-spawn.js`.
+
+The ports list above gains the port once #927 builds it.
+
 ## Further functional modules
 
 The skill system ([#18](https://github.com/kkrafft1999/snotra/issues/18)) is
