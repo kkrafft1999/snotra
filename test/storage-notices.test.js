@@ -184,7 +184,7 @@ test('a chat history moved aside is reported with its copy (#1001)', async (t) =
   const { storage, events } = makeStorage(dir);
   await fs.writeFile(path.join(dir, 'chat-history.json'), '{ not json', 'utf8');
 
-  await storage.readChatHistoryStore();
+  await storage.listChatSessions();
 
   const copies = (await fs.readdir(dir)).filter((name) => name.startsWith('chat-history.json.undecryptable-'));
   assert.equal(copies.length, 1);
@@ -202,7 +202,7 @@ test('a chat history written by a newer release is reported as kept aside (#1001
   const { storage, events } = makeStorage(dir);
   await fs.writeFile(path.join(dir, 'chat-history.json'), JSON.stringify({ version: 99, sessions: [] }), 'utf8');
 
-  await storage.readChatHistoryStore();
+  await storage.listChatSessions();
 
   assert.equal(events.length, 1);
   assert.match(events[0].keptAs, /chat-history\.json\.unreadable-/);
@@ -213,7 +213,7 @@ test('a chat history that cannot be moved aside leaves the notice to the chat (#
   await fs.writeFile(path.join(dir, 'chat-history.json'), '{ not json', 'utf8');
   const { storage, events } = makeStorage(dir, { fsImpl: fsFailingRenameTo('.undecryptable-').fs });
 
-  await storage.readChatHistoryStore();
+  await storage.listChatSessions();
 
   assert.deepEqual(events, []);
 });

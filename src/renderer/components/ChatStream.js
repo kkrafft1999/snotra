@@ -122,13 +122,13 @@ function buildGreetingMessage(workspaceRoot) {
  * Erste Wahl ist die gemerkte aktive Chat-ID, zweite die zuletzt gefuehrte
  * Session. Ohne diese zweite Stufe bliebe ein Ordner leer, sobald keine aktive
  * ID gemerkt ist — etwa nach „Neuer Chat“ ohne Eingabe oder nach dem Loeschen
- * des aktiven Chats.
+ * des aktiven Chats. The rows carry a message count, not the messages (#985).
  *
  * DOM-frei und exportiert, weil es keinen DOM-Test-Stack gibt (#78).
  */
 export function pickSessionToRestore(sessions, activeChatId) {
   const usable = Array.isArray(sessions)
-    ? sessions.filter((s) => s && Array.isArray(s.messages) && s.messages.length > 0)
+    ? sessions.filter((s) => s && Number(s.messageCount) > 0)
     : [];
   const active = activeChatId ? usable.find((s) => s.id === activeChatId) : null;
   if (active) return { session: active, wasActive: true };
@@ -971,7 +971,15 @@ export function initChatStream({
 
     const hist = await api.getChatHistory();
     const sessions = Array.isArray(hist?.sessions) ? hist.sessions : [];
-    const { session: restore, wasActive } = pickSessionToRestore(sessions, hist?.activeChatId);
+    let { session: restore, wasActive } = pickSessionToRestore(sessions, hist?.activeChatId);
+    // The list has no messages (#985): the chat brings its own — unless its
+    // run is still in memory, which is newer than its file. One that cannot
+    // be read leaves the folder on a new chat, as an empty history would.
+    if (restore && !canAttachChat(restore.id)) {
+      const full = (await api.getChatSession(restore.id))?.session;
+      restore = full && Array.isArray(full.messages) && full.messages.length > 0 ? full : null;
+      if (!restore) wasActive = false;
+    }
     // A run in the chat just shown goes on in the background (#320).
     detachCurrentChat();
     if (restore) {

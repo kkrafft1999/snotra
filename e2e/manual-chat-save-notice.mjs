@@ -24,7 +24,8 @@ const userDataDir = await makeTempDir('snotra-save-notice-look-userdata-');
 await writeFile(path.join(workspace, 'README.md'), '# Garden Planner\n', 'utf8');
 await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
 await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: locale }), 'utf8');
-await mkdir(path.join(userDataDir, 'chat-history.json'));
+// The history's index made a folder: there, and unreadable (#985).
+await mkdir(path.join(userDataDir, 'chat-history', 'index.json'), { recursive: true });
 
 const snotra = await launchApp({ userDataDir });
 const { page } = snotra;

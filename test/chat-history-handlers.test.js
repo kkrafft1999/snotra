@@ -16,14 +16,14 @@ const mockProviders = {
   },
 };
 
-async function setup(t, { maxChatSessions = 3, chatSessionSettings, fsImpl = fs } = {}) {
+async function setup(t, { maxChatSessions = 3, chatSessionSettings, fsImpl = fs, appDir } = {}) {
   // Der Zeitstempel kommt seit Issue #245 aus dem Main. Im Test laeuft dafuer
   // eine eigene Uhr: echte Millisekunden lagen bei aufeinanderfolgenden
   // Upserts gleichauf, und eine Reihenfolge waere nicht mehr pruefbar.
   let clock = 1_000_000;
   const now = () => (clock += 1000);
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-chathist-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  const tmpDir = appDir || await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-chathist-'));
+  if (!appDir) t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
   const storage = createStorageService({
     app: { getPath: () => tmpDir },
     safeStorage: { isEncryptionAvailable: () => false },
@@ -60,6 +60,28 @@ async function setup(t, { maxChatSessions = 3, chatSessionSettings, fsImpl = fs 
   return { ipcMain, storage, tmpDir, setActiveRoot, setKnownRoots, now: () => clock };
 }
 
+/**
+ * The folder's chats as the renderer gets them since #985: the list without
+ * messages, then every chat opened on its own.
+ */
+async function getHistory(ipcMain) {
+  const list = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  assert.equal(list.sessions.some((row) => 'messages' in row), false, 'the list carries no messages');
+  const sessions = [];
+  for (const row of list.sessions) {
+    const { session } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET_SESSION, row.id);
+    assert.ok(session, `chat ${row.id} opens`);
+    assert.equal(session.messages.length, row.messageCount);
+    sessions.push(session);
+  }
+  return { ...list, sessions };
+}
+
+/** A history file as releases before #985 wrote it, read on the first access. */
+async function writeLegacyHistory(tmpDir, sessions) {
+  await fs.writeFile(path.join(tmpDir, 'chat-history.json'), JSON.stringify({ version: 2, activeByWorkspace: {}, sessions }), 'utf8');
+}
+
 // `updatedAt` reicht der Renderer seit Issue #245 nicht mehr mit — der Main
 // stempelt selbst. Wo ein Test den Wert noch nennt, prueft er, dass er
 // wirkungslos bleibt.
@@ -84,12 +106,12 @@ test('upsert + get round-trips a session and respects workspace filtering', asyn
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('b'));
 
   setActiveRoot(ws);
-  const inWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const inWs = await getHistory(ipcMain);
   assert.deepEqual(inWs.sessions.map((s) => s.id), ['a']);
   assert.equal(inWs.activeChatId, 'a');
 
   setActiveRoot(null);
-  const noWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const noWs = await getHistory(ipcMain);
   assert.deepEqual(noWs.sessions.map((s) => s.id), ['b']);
   assert.equal(noWs.activeChatId, null);
 });
@@ -110,7 +132,7 @@ test('delete removes the session and its active pointer', async (t) => {
   const res = await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a');
   assert.equal(res.ok, true);
 
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const after = await getHistory(ipcMain);
   assert.deepEqual(after.sessions, []);
   assert.equal(after.activeChatId, null);
 
@@ -124,7 +146,7 @@ test('setActive clears the pointer for empty ids', async (t) => {
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, null);
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const after = await getHistory(ipcMain);
   assert.equal(after.activeChatId, null);
 });
 
@@ -139,7 +161,7 @@ test('pruning beyond MAX_CHAT_SESSIONS drops oldest sessions and their active po
     );
     if (i === 1) await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 's1');
   }
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const after = await getHistory(ipcMain);
   assert.deepEqual(after.sessions.map((s) => s.id), ['s4', 's3', 's2']);
   assert.equal(after.activeChatId, null, 'active pointer to pruned s1 must be cleared');
 });
@@ -154,7 +176,7 @@ test('parallel upserts of distinct sessions lose no updates', async (t) => {
       ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow(id, { updatedAt: i }))
     )
   );
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const after = await getHistory(ipcMain);
   assert.deepEqual(new Set(after.sessions.map((s) => s.id)), new Set(ids));
 });
 
@@ -171,7 +193,7 @@ test('parallel upsert/delete/setActive interleaving stays consistent', async (t)
     ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('keep', { title: 'Updated' })),
   ]);
 
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const after = await getHistory(ipcMain);
   const keep = after.sessions.find((s) => s.id === 'keep');
   assert.ok(keep, 'session "keep" must survive the interleaving');
   assert.equal(keep.title, 'Updated');
@@ -190,7 +212,7 @@ test('repeated upserts of the same id serialize through the lock (last write win
       )
     )
   );
-  const after = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const after = await getHistory(ipcMain);
   assert.equal(after.sessions.length, 1, 'concurrent upserts of one id must not duplicate it');
   assert.equal(after.sessions[0].title, 'v9');
 });
@@ -220,7 +242,7 @@ test('upsert accepts semantic live messages and GET returns normalized loaded sh
   });
   assert.equal(upsertRes.ok, true);
 
-  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const got = await getHistory(ipcMain);
   assert.equal(got.sessions.length, 1);
   const session = got.sessions[0];
   assert.equal(session.title, 'Was steht in der Datei?');
@@ -237,19 +259,15 @@ test('GET normalizes legacy on-disk session rows', async (t) => {
   const ws = tmpDir;
   setActiveRoot(ws);
 
-  await storage.withChatHistoryLock(async () => {
-    const store = await storage.readChatHistoryStore({ skipMigration: true });
-    store.sessions.push({
-      id: 'legacy',
-      workspaceRoot: ws,
-      title: 'Alter Titel',
-      updatedAt: 100,
-      messages: [{ role: 'assistant', content: 'gespeichert', toolTrace: ['ok'], isError: true }],
-    });
-    await storage.writeChatHistoryStore(store);
-  });
+  await writeLegacyHistory(tmpDir, [{
+    id: 'legacy',
+    workspaceRoot: ws,
+    title: 'Alter Titel',
+    updatedAt: 100,
+    messages: [{ role: 'assistant', content: 'gespeichert', toolTrace: ['ok'], isError: true }],
+  }]);
 
-  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const got = await getHistory(ipcMain);
   const legacy = got.sessions.find((s) => s.id === 'legacy');
   assert.ok(legacy);
   assert.equal(legacy.title, 'Alter Titel');
@@ -276,7 +294,7 @@ test('upsert preserves an existing stored title when the semantic payload omits 
   });
   assert.equal(upsertRes.ok, true);
 
-  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const got = await getHistory(ipcMain);
   const session = got.sessions.find((s) => s.id === 'keep-title');
   assert.equal(session.title, 'Mein gespeicherter Titel');
 });
@@ -297,7 +315,7 @@ test('upsert rejects a session whose sanitized messages become empty', async (t)
   });
   assert.deepEqual(res, { ok: false });
 
-  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const got = await getHistory(ipcMain);
   assert.equal(got.sessions.length, 0);
 });
 
@@ -312,13 +330,13 @@ test('Chat-Verlauf ignoriert einen nie geoeffneten Workspace aus dem Renderer (#
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: '/' });
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a', '/');
 
-  const inWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, '/');
+  const inWs = await getHistory(ipcMain);
   assert.equal(inWs.workspaceRoot, ws, 'gefiltert wird nach dem aktiven Root des Main-Prozesses');
   assert.deepEqual(inWs.sessions.map((s) => s.id), ['a']);
   assert.equal(inWs.activeChatId, 'a');
 
   setActiveRoot(null);
-  const elsewhere = await ipcMain.invoke(REQ.CHAT_HISTORY_GET, ws);
+  const elsewhere = await getHistory(ipcMain);
   assert.deepEqual(elsewhere.sessions, [], 'die Session haengt am aktiven Root, nicht am Payload');
 });
 
@@ -341,12 +359,12 @@ test('Ordnerwechsel laesst die Konversation beim alten Ordner (Issue #131)', asy
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: wsA });
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
 
-  const inB = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const inB = await getHistory(ipcMain);
   assert.deepEqual(inB.sessions.map((s) => s.id), [], 'Chat aus A darf nicht in B auftauchen');
   assert.equal(inB.activeChatId, null, 'und auch nicht als aktiver Chat von B');
 
   setActiveRoot(wsA);
-  const inA = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const inA = await getHistory(ipcMain);
   assert.deepEqual(inA.sessions.map((s) => s.id), ['a']);
   assert.equal(inA.activeChatId, 'a');
 });
@@ -362,7 +380,7 @@ test('ein unbekannter Workspace faellt auf den aktiven Ordner zurueck (Issue #68
     workspaceRoot: path.join(tmpDir, 'nie-geoeffnet'),
   });
 
-  const inWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const inWs = await getHistory(ipcMain);
   assert.deepEqual(inWs.sessions.map((s) => s.id), ['a']);
 });
 
@@ -376,12 +394,12 @@ test('ein ausdruecklich ordnerloser Chat behaelt seinen eigenen Bucket', async (
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: null });
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
 
-  const inWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const inWs = await getHistory(ipcMain);
   assert.deepEqual(inWs.sessions.map((s) => s.id), []);
   assert.equal(inWs.activeChatId, null);
 
   setActiveRoot(null);
-  const noWs = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const noWs = await getHistory(ipcMain);
   assert.deepEqual(noWs.sessions.map((s) => s.id), ['a']);
   assert.equal(noWs.activeChatId, 'a');
 });
@@ -416,8 +434,7 @@ test('Modell und Freigabemodus des Chats kommen aus dem Main, nicht aus der Nutz
     toolPermissionMode: 'auto',
   });
 
-  const store = await storage.readChatHistoryStore();
-  const stored = store.sessions.find((x) => x.id === 'a');
+  const stored = await storage.getChatSession('a');
   assert.equal(stored.modelPresetId, 'preset-echt');
   assert.equal(stored.toolPermissionMode, 'ask-all');
 });
@@ -433,8 +450,7 @@ test('ohne gemerkte Werte bleibt stehen, was schon gespeichert war', async (t) =
   chatSessionSettings.valuesFor = () => ({});
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), updatedAt: 2000 });
 
-  const store = await storage.readChatHistoryStore();
-  const stored = store.sessions.find((x) => x.id === 'a');
+  const stored = await storage.getChatSession('a');
   assert.equal(stored.modelPresetId, 'preset-echt');
   assert.equal(stored.toolPermissionMode, 'auto');
 });
@@ -479,8 +495,7 @@ test('ein geloeschter Chat wird auch im Main vergessen', async (t) => {
 // ---------------------------------------------------------------------------
 
 async function storedSession(storage, id) {
-  const store = await storage.readChatHistoryStore();
-  return store.sessions.find((s) => s.id === id);
+  return storage.getChatSession(id);
 }
 
 test('#245: Oeffnen und Verlassen ohne Eingabe laesst den Zeitpunkt stehen', async (t) => {
@@ -597,7 +612,7 @@ test('#245: ein nur angesehener Chat bleibt im Verlauf, wo er war', async (t) =>
   // „alt“ geoeffnet, das Modell gewechselt, wieder weggewechselt.
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('alt'));
 
-  const got = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const got = await getHistory(ipcMain);
   assert.deepEqual(got.sessions.map((s) => s.id), ['neu', 'alt']);
   assert.ok((await storedSession(storage, 'alt')).updatedAt < (await storedSession(storage, 'neu')).updatedAt);
 });
@@ -608,8 +623,7 @@ test('#245: eine Verlaufsdatei aus einer aelteren Version wird nicht neu gestemp
 
   // So sah eine Zeile vor der Vereinheitlichung aus: Felder in anderer
   // Reihenfolge, dazu Reste, die die Sanitisierung heute wegnimmt.
-  const store = await storage.readChatHistoryStore();
-  store.sessions.push({
+  await writeLegacyHistory(tmpDir, [{
     updatedAt: 1234,
     id: 'legacy',
     messages: [
@@ -618,11 +632,10 @@ test('#245: eine Verlaufsdatei aus einer aelteren Version wird nicht neu gestemp
     ],
     title: 'Alter Chat',
     workspaceRoot: tmpDir,
-  });
-  await storage.writeChatHistoryStore(store);
+  }]);
 
   // Der Renderer laedt sie und schreibt sie beim Verlassen unveraendert zurueck.
-  const geladen = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const geladen = await getHistory(ipcMain);
   const session = geladen.sessions.find((s) => s.id === 'legacy');
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
     id: 'legacy',
@@ -634,36 +647,41 @@ test('#245: eine Verlaufsdatei aus einer aelteren Version wird nicht neu gestemp
   assert.equal((await storedSession(storage, 'legacy')).updatedAt, 1234);
 });
 
-test('#473: with an unreadable history file a save is skipped, not written over it', async (t) => {
-  let locked = false;
+test('#473: with a history index that cannot be read a save is skipped, not written over it', async (t) => {
+  const first = await setup(t);
+  first.setActiveRoot(first.tmpDir);
+  await first.ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await first.ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
+  await first.storage.whenWritesSettled();
+  const target = path.join(first.tmpDir, 'chat-history', 'index.json');
+  const original = await fs.readFile(target, 'utf8');
+
+  // The next start finds the index there but cannot read it.
+  let locked = true;
   const lockable = {
     ...fs,
     async readFile(file, ...rest) {
-      if (locked && path.basename(String(file)) === 'chat-history.json') {
+      if (locked && String(file) === target) {
         throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
       }
       return fs.readFile(file, ...rest);
     },
   };
-  const { ipcMain, tmpDir, setActiveRoot } = await setup(t, { fsImpl: lockable });
-  setActiveRoot(tmpDir);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
-  await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
-  const target = path.join(tmpDir, 'chat-history.json');
-  const original = await fs.readFile(target, 'utf8');
-
-  locked = true;
+  const { ipcMain, setActiveRoot } = await setup(t, { fsImpl: lockable, appDir: first.tmpDir });
+  setActiveRoot(first.tmpDir);
   // The new chat, the folder switch and the delete that ask for these go on,
   // and the answer says why nothing was saved, so the chat can tell (#977).
   const skipped = { ok: false, unreadable: true };
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('b')), skipped);
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'b'), skipped);
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a'), skipped);
-  assert.equal(await fs.readFile(target, 'utf8'), original, 'the file stays as it was');
+  assert.equal(await fs.readFile(target, 'utf8'), original, 'the index stays as it was');
 
+  // Readable again: the next access loads it.
   locked = false;
-  const back = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const back = await getHistory(ipcMain);
   assert.deepEqual(back.sessions.map((s) => s.id), ['a'], 'chat a is still there');
+  assert.equal(back.activeChatId, 'a');
 });
 
 test('the reasoning level comes from main, the payload\'s is dropped (#725)', async (t) => {
@@ -671,19 +689,19 @@ test('the reasoning level comes from main, the payload\'s is dropped (#725)', as
   const { ipcMain, storage } = await setup(t, { chatSessionSettings });
 
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), reasoningEffort: 'max' });
-  let stored = (await storage.readChatHistoryStore()).sessions.find((x) => x.id === 'a');
+  let stored = await storage.getChatSession('a');
   assert.equal(stored.reasoningEffort, 'high');
 
   // Without a remembered value the stored one stays; the payload still counts for nothing.
   chatSessionSettings.valuesFor = () => ({});
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), reasoningEffort: 'max', updatedAt: 2000 });
-  stored = (await storage.readChatHistoryStore()).sessions.find((x) => x.id === 'a');
+  stored = await storage.getChatSession('a');
   assert.equal(stored.reasoningEffort, 'high');
 
   // A chat saved for the first time without a choice gets the default (#726):
   // only a row from before has none.
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('b'), reasoningEffort: 'max' });
-  stored = (await storage.readChatHistoryStore()).sessions.find((x) => x.id === 'b');
+  stored = await storage.getChatSession('b');
   assert.equal(stored.reasoningEffort, 'medium');
 });
 
@@ -703,16 +721,16 @@ test('the chat cost is saved, comes back, and stays when a save omits it (#949)'
     priceTable: { date: '2026-10-15', origin: 'bundled' },
   };
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('priced'), cost });
-  let session = (await ipcMain.invoke(REQ.CHAT_HISTORY_GET)).sessions.find((s) => s.id === 'priced');
+  let session = (await getHistory(ipcMain)).sessions.find((s) => s.id === 'priced');
   assert.deepEqual(session.cost, { version: 1, ...cost });
 
   // A save without the field — the title written later, say — keeps it.
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('priced', { title: 'Renamed' }));
-  session = (await ipcMain.invoke(REQ.CHAT_HISTORY_GET)).sessions.find((s) => s.id === 'priced');
+  session = (await getHistory(ipcMain)).sessions.find((s) => s.id === 'priced');
   assert.equal(session.cost.models[0].rounds, 2);
 
   // Garbage in the payload is dropped, not stored.
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('junk'), cost: { models: 'no' } });
-  session = (await ipcMain.invoke(REQ.CHAT_HISTORY_GET)).sessions.find((s) => s.id === 'junk');
+  session = (await getHistory(ipcMain)).sessions.find((s) => s.id === 'junk');
   assert.equal(session.cost, undefined);
 });

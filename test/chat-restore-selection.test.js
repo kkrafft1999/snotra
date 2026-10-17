@@ -12,8 +12,9 @@ const chatStreamPromise = import(
   pathToFileURL(path.join(__dirname, '..', 'src', 'renderer', 'components', 'ChatStream.js')).href
 );
 
+/** A row of the history list: since #985 it counts the messages instead of carrying them. */
 function session(id, updatedAt, extra = {}) {
-  return { id, updatedAt, title: `Chat ${id}`, messages: [{ role: 'user', content: id }], ...extra };
+  return { id, updatedAt, title: `Chat ${id}`, messageCount: 1, ...extra };
 }
 
 test('die gemerkte aktive Konversation hat Vorrang', async () => {
@@ -46,7 +47,7 @@ test('ein Ordner ohne brauchbare Konversation startet leer', async () => {
   assert.deepEqual(pickSessionToRestore([], null), { session: null, wasActive: false });
   assert.deepEqual(pickSessionToRestore(undefined, 'a'), { session: null, wasActive: false });
   // Sessions ohne Nachrichten waeren ein leerer Chat — die zaehlen nicht.
-  const leer = [{ id: 'a', updatedAt: 9000, messages: [] }, { id: 'b', updatedAt: 8000 }];
+  const leer = [{ id: 'a', updatedAt: 9000, messageCount: 0 }, { id: 'b', updatedAt: 8000 }];
   assert.deepEqual(pickSessionToRestore(leer, 'a'), { session: null, wasActive: false });
 });
 

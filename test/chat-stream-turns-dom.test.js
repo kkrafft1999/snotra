@@ -17,6 +17,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { RENDERER_DIR, importRenderer, setupRendererDom } = require('./helpers/dom.js');
+const { fakeChatHistoryApi } = require('./helpers/chat-history-api.js');
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 // happy-dom runs animation frames on a timer of its own.
@@ -66,7 +67,7 @@ async function mount({
     onChatDelta: (cb) => { listeners.delta = cb; return () => {}; },
     onChatProgress: (cb) => { listeners.progress = cb; return () => {}; },
     onChatToolLine: (cb) => { listeners.toolLine = cb; return () => {}; },
-    getChatHistory: async () => history,
+    ...fakeChatHistoryApi(() => history?.sessions, { activeChatId: () => history?.activeChatId ?? null }),
     setActiveChatId: async () => {},
     upsertChatSession: async (row) => {
       saves.push(JSON.parse(JSON.stringify(row)));

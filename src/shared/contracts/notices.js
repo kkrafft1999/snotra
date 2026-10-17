@@ -31,9 +31,17 @@ const NOTICE_STORES = Object.freeze({
   'ui-preferences.json': 'uiPreferences',
   'folder-history.json': 'folderHistory',
   'chat-history.json': 'chatHistory',
+  // The history's folder since #985, when it is set aside as a whole.
+  'chat-history': 'chatHistory',
 });
 
-const NOTICE_STORE_IDS = Object.freeze([...new Set(Object.values(NOTICE_STORES))]);
+/**
+ * One chat's file in the history folder (#985), set aside on its own. Its
+ * name is a hash of the chat's id, so it has no entry above.
+ */
+const CHAT_SESSION_NOTICE_STORE = 'chatSession';
+
+const NOTICE_STORE_IDS = Object.freeze([...new Set([...Object.values(NOTICE_STORES), CHAT_SESSION_NOTICE_STORE])]);
 
 /**
  * A notice as it travels to the renderer.
@@ -69,5 +77,6 @@ module.exports = {
   BACKGROUND_ERROR_NOTICE_ID,
   NOTICE_STORES,
   NOTICE_STORE_IDS,
+  CHAT_SESSION_NOTICE_STORE,
   normalizeNotice,
 };

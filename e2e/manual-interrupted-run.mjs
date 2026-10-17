@@ -13,7 +13,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, sendChat, storedChats } from './helpers/app.mjs';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
@@ -47,10 +47,8 @@ try {
   model.queueAnswer({ match: 'LOOK', text: 'The beds are laid out as follows', holdUntil: new Promise(() => {}) });
   await sendChat(page, locale === 'de' ? 'Was liegt in diesem Ordner? LOOK' : 'What is in this folder? LOOK');
   await poll(() => model.requests.some((r) => r.answer?.holdUntil), { what: 'second round', timeoutMs: 60000 });
-  await poll(async () => {
-    const history = await page.evaluate(() => window.electronAPI.getChatHistory());
-    return (history?.sessions || []).some((s) => s.messages.some((m) => m.interrupted && m.toolTrace?.length));
-  }, { what: 'step saved' });
+  await poll(async () => (await storedChats(page)).some((s) => s.messages.some((m) => m.interrupted && m.toolTrace?.length)),
+    { what: 'step saved' });
 
   await killHard(snotra.app.process());
 

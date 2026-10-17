@@ -85,8 +85,17 @@ async function attachmentFolders(dir) {
   return (await fs.readdir(path.join(dir, 'chat-attachments')).catch(() => [])).sort();
 }
 
+/** Copies moved aside: the single file of releases before #985, or the history folder since. */
 async function setAsideCopies(dir) {
-  return (await fs.readdir(dir)).filter((name) => name.startsWith('chat-history.json.'));
+  return (await fs.readdir(dir)).filter((name) => name.startsWith('chat-history.json.') || /^chat-history\.(?:undecryptable|unreadable)-/.test(name));
+}
+
+/** The chats as the renderer gets them since #985: the list, then each one opened. */
+async function getHistory(ipcMain) {
+  const list = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const sessions = [];
+  for (const row of list.sessions) sessions.push((await ipcMain.invoke(REQ.CHAT_HISTORY_GET_SESSION, row.id)).session);
+  return { ...list, sessions };
 }
 
 // ── #565 ─────────────────────────────────────────────────────────────────────
@@ -104,12 +113,12 @@ test('#565: a history that cannot be decrypted keeps its images while its copy i
 
   const copies = await setAsideCopies(dir);
   assert.equal(copies.length, 1);
-  assert.match(copies[0], /^chat-history\.json\.undecryptable-/);
+  assert.match(copies[0], /^chat-history\.undecryptable-/, 'the history folder, as a whole (#985)');
   assert.deepEqual(await attachmentFolders(dir), ['chat-a'], 'the image of the set-aside chat is still there');
 
   // Once the copy is gone, the next save sweeps as before.
   safeStorage.state.decrypts = true;
-  await fs.rm(path.join(dir, copies[0]));
+  await fs.rm(path.join(dir, copies[0]), { recursive: true });
   await second.ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, textChat('chat-c'));
   assert.deepEqual(await attachmentFolders(dir), []);
 });
@@ -124,7 +133,7 @@ test('#565: sessions dropped by MAX_CHAT_SESSIONS lose their images, a set-aside
   await new Promise((resolve) => setTimeout(resolve, 5));
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chatWithImage('chat-3'));
 
-  const { sessions } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const { sessions } = await getHistory(ipcMain);
   const kept = sessions.map((s) => s.id).sort();
   assert.equal(kept.length, 2);
   assert.deepEqual(await attachmentFolders(dir), kept);
@@ -166,15 +175,15 @@ test('#566: a history from a newer release is moved aside byte for byte, not rew
   await fs.writeFile(path.join(dir, 'chat-history.json'), raw);
   const { ipcMain } = start(dir);
 
-  assert.deepEqual((await ipcMain.invoke(REQ.CHAT_HISTORY_GET)).sessions, []);
+  assert.deepEqual((await getHistory(ipcMain)).sessions, []);
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, textChat('new'));
 
   const copies = await setAsideCopies(dir);
   assert.equal(copies.length, 1);
   assert.match(copies[0], /^chat-history\.json\.unreadable-/);
   assert.equal(await fs.readFile(path.join(dir, copies[0]), 'utf8'), raw);
-  const live = JSON.parse(await fs.readFile(path.join(dir, 'chat-history.json'), 'utf8'));
-  assert.equal(live.version, 2);
+  const live = JSON.parse(await fs.readFile(path.join(dir, 'chat-history', 'index.json'), 'utf8'));
+  assert.equal(live.version, 3);
   assert.deepEqual(live.sessions.map((s) => s.id), ['new']);
 });
 
@@ -202,7 +211,7 @@ test('#566: a legacy history without a version still loads', async (t) => {
   );
   const { ipcMain } = start(dir);
 
-  const { sessions, activeChatId } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const { sessions, activeChatId } = await getHistory(ipcMain);
 
   assert.deepEqual(sessions.map((s) => s.id), ['legacy']);
   assert.equal(activeChatId, 'legacy');
@@ -212,13 +221,13 @@ test('#566: a legacy history without a version still loads', async (t) => {
 // ── #567 ─────────────────────────────────────────────────────────────────────
 
 test('#567: an automatic restore does not bring "Auto" back, whatever the activation says', async () => {
-  const store = { version: 2, activeByWorkspace: {}, sessions: [{ id: 'chat-auto', toolPermissionMode: 'auto' }] };
+  const stored = { id: 'chat-auto', toolPermissionMode: 'auto' };
   const modes = [];
   const settings = createChatSessionSettings({
     chatHistoryStore: {
       withChatHistoryLock: (fn) => fn(),
-      readChatHistoryStore: async () => store,
-      writeChatHistoryStore: async () => {},
+      getSessionMeta: async (id) => (id === stored.id ? stored : null),
+      patchSession: async () => true,
     },
     applyPreset: async () => {},
     getDefaultPresetId: async () => 'preset-a',
@@ -255,7 +264,7 @@ test('#567: delete uses one trimmed id for the list and the attachment folder', 
 
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, '  chat-a '), { ok: true });
 
-  const { sessions } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const { sessions } = await getHistory(ipcMain);
   assert.deepEqual(sessions.map((s) => s.id), ['chat-b']);
   assert.deepEqual(await attachmentFolders(dir), ['chat-b']);
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'x'.repeat(129)), { ok: false });
@@ -279,7 +288,7 @@ test('#567: an image is moved into place with the Windows retry', async (t) => {
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chatWithImage('chat-a'));
 
   assert.equal(failures, 1);
-  const { sessions } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const { sessions } = await getHistory(ipcMain);
   assert.equal(sessions[0].messages[0].attachments.length, 1);
   assert.equal((await fs.readdir(path.join(dir, 'chat-attachments', 'chat-a'))).length, 1);
 });

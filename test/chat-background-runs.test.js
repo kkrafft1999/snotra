@@ -304,15 +304,24 @@ test('open cards can be discarded per chat and outside a set of chats', async ()
 // --- Mode per chat -----------------------------------------------------------
 
 function makeSettings({ sessions = [] } = {}) {
-  const store = { version: 2, activeByWorkspace: {}, sessions: [...sessions] };
+  const store = { version: 3, activeByWorkspace: {}, sessions: [...sessions] };
+  const find = (id) => store.sessions.find((s) => s && s.id === id) || null;
   let activeMode = 'smart';
   const changed = [];
   const activated = [];
   const settings = createChatSessionSettings({
     chatHistoryStore: {
       withChatHistoryLock: (fn) => fn(),
-      readChatHistoryStore: async () => store,
-      writeChatHistoryStore: async (next) => { store.sessions = next.sessions; },
+      getSessionMeta: async (id) => find(id),
+      patchSession: async (id, patch) => {
+        const session = find(id);
+        if (!session) return false;
+        for (const [key, value] of Object.entries(patch)) {
+          if (value === undefined) delete session[key];
+          else session[key] = value;
+        }
+        return true;
+      },
     },
     applyPreset: async () => {},
     getDefaultPresetId: async () => 'preset-a',

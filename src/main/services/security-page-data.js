@@ -24,8 +24,7 @@ function createSecurityPageData({
     const wanted = new Set(chatIds);
     const titles = new Map();
     if (wanted.size === 0) return titles;
-    const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-    for (const session of store.sessions || []) {
+    for (const session of await chatHistoryStore.listSessions()) {
       if (session && wanted.has(session.id) && typeof session.title === 'string' && session.title.trim()) {
         titles.set(session.id, session.title.trim());
       }
@@ -60,9 +59,8 @@ function createSecurityPageData({
    * where a chat has none and starts on the workspace default.
    */
   async function describeWorkspaceChats(root) {
-    const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
     const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(root);
-    return (store.sessions || [])
+    return (await chatHistoryStore.listSessions())
       .filter((session) => session && typeof session.id === 'string' && chatHistoryStore.sessionMatchesWorkspace(session, wsRoot))
       .map((session) => ({
         id: session.id,

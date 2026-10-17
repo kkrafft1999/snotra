@@ -8,6 +8,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
+const { fakeChatHistoryApi } = require('./helpers/chat-history-api.js');
 
 const IMAGE = { kind: 'image', mediaType: 'image/png', file: `${'d'.repeat(64)}.png`, bytes: 512 };
 
@@ -37,7 +38,7 @@ async function setup(locale) {
 
   const panel = initChatHistoryPanel({
     api: {
-      getChatHistory: async () => ({ sessions: SESSIONS, activeChatId: null }),
+      ...fakeChatHistoryApi(SESSIONS),
       setActiveChatId: async () => ({ ok: true }),
       setUIPrefs: async () => ({ ok: true }),
       deleteChatSession: async () => ({ ok: true }),
