@@ -315,10 +315,13 @@ async function seedLayout(userDataDir, layout) {
  * app under a Seatbelt profile (#329). `env` adds variables for this launch,
  * `args` adds Chromium switches (the manual's screenshots fix the scale factor).
  * `layout` holds the starting column widths (see TEST_LAYOUT); `null` leaves
- * the app's own defaults, for a test that measures them.
+ * the app's own defaults, for a test that measures them. `mainPreload` is a
+ * CommonJS file loaded into the main process before the app's own code
+ * (`electron -r`); NODE_OPTIONS cannot do that, Playwright removes it (#988).
  */
 export async function launchApp({
   userDataDir, wrapper = null, env: extraEnv = {}, home, args: extraArgs = [], layout = TEST_LAYOUT,
+  mainPreload = null,
 }) {
   // A single file run with `node --test` skips the pretest sync (#919).
   generatedFreshness.assertGeneratedFresh();
@@ -350,6 +353,7 @@ export async function launchApp({
     timeout: STARTUP_DEADLINE_MS,
     executablePath: wrapper || electronBinary,
     args: [
+      ...(mainPreload ? ['-r', mainPreload] : []),
       APP_DIR,
       `--user-data-dir=${userDataDir}`,
       // Ohne diese drei drosselt Chromium die Timer des Fensters, sobald es
