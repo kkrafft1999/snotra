@@ -354,10 +354,30 @@ function transportOf(raw) {
 }
 
 /**
+ * A server entry in normal form, as `validateMcpServerConfig` returns it.
+ * The process fields are there for a remote server too, empty; `url` and
+ * `headers` only exist on a remote one.
+ *
+ * @typedef {Object} McpServerConfig
+ * @property {string} id
+ * @property {string} label
+ * @property {string} transport            an MCP_TRANSPORTS value
+ * @property {string} command
+ * @property {string[]} args
+ * @property {Object<string, string>} env
+ * @property {string|null} cwd
+ * @property {string} [url]                remote servers only
+ * @property {Object<string, string>} [headers]  remote servers only
+ * @property {boolean} enabled
+ * @property {string[]} disabledTools
+ * @property {string[]} knownTools
+ */
+
+/**
  * Prüft eine Serverkonfiguration und liefert sie in Normalform.
  *
- * @param {unknown} raw
- * @returns {{ ok: boolean, value: McpServerConfig|null, errors: Array<{key: string, params?: object}> }}
+ * @param {*} raw  anything; only an object can pass
+ * @returns {{ ok: boolean, value: McpServerConfig|null, errors: import('./message').Message[] }}
  */
 function validateMcpServerConfig(raw) {
   const errors = [];
@@ -649,6 +669,7 @@ function fitsMcpToolNameLimit(qualified) {
  * `destructiveHint` ergaenzt `delete`, `readOnlyHint` wird bewusst ignoriert.
  * Sonst entschiede der fremde Server darueber, wie streng wir ihn behandeln.
  */
+/** @type {readonly string[]} */
 const MCP_BASE_RISK_CLASSES = Object.freeze([TOOL_RISK_CLASSES.EXECUTE, TOOL_RISK_CLASSES.EXTERNAL]);
 
 function mcpRiskClassesFor(annotations) {

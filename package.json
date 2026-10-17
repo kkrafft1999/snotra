@@ -135,7 +135,8 @@
     "marked": "^18.1.0",
     "pdfjs-dist": "^6.4.299",
     "playwright-core": "^1.64.0",
-    "prismjs": "^1.30.0"
+    "prismjs": "^1.30.0",
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "@reforged/maker-appimage": {

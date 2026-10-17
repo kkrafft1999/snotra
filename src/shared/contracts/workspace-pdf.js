@@ -54,6 +54,7 @@ function isPdfHeader(header) {
   return false;
 }
 
+/** @param {{ bytes?: Uint8Array, size?: number, mtimeMs?: number }} [input] */
 function createWorkspacePdfResult({ bytes, size = 0, mtimeMs = 0 } = {}) {
   return { ok: true, bytes, size, mtimeMs };
 }

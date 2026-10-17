@@ -51,8 +51,43 @@ function sessionGrantableClasses(riskClasses) {
   return classes;
 }
 
+/**
+ * One approval as it is kept in here. `list()` hands out only the fields a
+ * person needs to recognise it.
+ *
+ * @typedef {Object} SessionGrant
+ * @property {string} id
+ * @property {string} scopeKey
+ * @property {string|null} chatId
+ * @property {string} tool
+ * @property {string} targetKey
+ * @property {string[]} classes
+ * @property {string|null} versionKey   sensitive reads only
+ * @property {string|null} providerKey  sensitive reads only
+ * @property {object|null} scope        the card's sentence, a message object
+ * @property {{ kind: string, path: string, file?: boolean }} [sandbox]
+ * @property {number} grantedAt
+ */
+
+/**
+ * What identifies a call for `grant` and `find`.
+ *
+ * @typedef {Object} SessionGrantRequest
+ * @property {string} [scopeKey]
+ * @property {string} [tool]
+ * @property {Array<string|{ path: string, version?: string|null }>} [targets]
+ * @property {string[]} [riskClasses]
+ * @property {string|null} [providerKey]
+ * @property {string|null} [chatId]  `grant` only
+ * @property {object|null} [scope]   `grant` only
+ * @property {{ kind: string, path: string, file?: boolean }|null} [sandbox]  `grant` only
+ */
+
+/**
+ * @param {{ nextId?: () => string, now?: () => number }} [options]
+ */
 function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now() } = {}) {
-  /** @type {Array<object>} */
+  /** @type {SessionGrant[]} */
   let grants = [];
   const listeners = new Set();
 
@@ -76,6 +111,9 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
   /**
    * Legt eine Freigabe an. Liefert null, wenn die Klassen nicht sitzungsweise
    * freigebbar sind (delete/execute/external nur einmalig, Konzept §6).
+   *
+   * @param {SessionGrantRequest} [request]
+   * @returns {SessionGrant|null}
    */
   function grant({ scopeKey, tool, targets, riskClasses, providerKey = null, chatId = null, scope = null, sandbox = null } = {}) {
     // A folder, path or host a sandbox card opened for the session (#792). It
@@ -89,6 +127,7 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
     const classes = sandboxGrant ? normalizeRiskClasses(riskClasses) : sessionGrantableClasses(riskClasses);
     if (!classes || typeof tool !== 'string' || !tool || typeof scopeKey !== 'string') return null;
     const sensitive = classes.includes(TOOL_RISK_CLASSES.READ_SENSITIVE);
+    /** @type {SessionGrant} */
     const entry = {
       id: nextId(),
       scopeKey,
@@ -110,7 +149,12 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
     return entry;
   }
 
-  /** Sucht eine passende, gültige Freigabe für einen konkreten Aufruf. */
+  /**
+   * Sucht eine passende, gültige Freigabe für einen konkreten Aufruf.
+   *
+   * @param {SessionGrantRequest} [request]
+   * @returns {SessionGrant|null}
+   */
   function find({ scopeKey, tool, targets, riskClasses, providerKey = null } = {}) {
     const classes = normalizeRiskClasses(riskClasses);
     if (!classes || classes.length === 0) return null;

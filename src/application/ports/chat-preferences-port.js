@@ -5,7 +5,7 @@
 /**
  * @typedef {Object} ChatPreferences
  * @property {string} baseSystemPrompt
- * @property {string[]} [disabledTools] — in den Einstellungen abgewählte Tools
+ * @property {string[]} [disabledTools]  in den Einstellungen abgewählte Tools
  * @property {number} [maxToolRounds]
  * @property {number} [historyCharLimit]
  * @property {string} [appLocale]  the interface language; unset means the app default (#277)

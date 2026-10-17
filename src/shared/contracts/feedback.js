@@ -55,6 +55,8 @@ function clip(text, max) {
  * into a blank issue. The text is cut at FEEDBACK_PREFILL_MAX characters so
  * the address stays short enough for every browser; the form's *Copy text*
  * button has the whole of it.
+ *
+ * @param {{ kind?: string, message?: string, diagnostics?: { appVersion?: string }|null }} [input]
  */
 function buildFeedbackIssueUrl({ kind, message, diagnostics } = {}) {
   const text = clip(String(message ?? '').trim(), FEEDBACK_PREFILL_MAX);

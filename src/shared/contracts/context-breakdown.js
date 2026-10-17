@@ -140,6 +140,9 @@ const CHARS_PER_TOKEN = CHARS_PER_TOKEN_PROFILES[DEFAULT_CHARS_PER_TOKEN_PROFILE
  * eigenes Profil: Dahinter kann alles stecken, von einem OpenAI-Gateway bis zu
  * Llama bei einem Router. Ohne Messung bleibt es beim konservativeren
  * Standardprofil — dieselbe Regel, die auch Anthropic und Google draussen haelt.
+ *
+ * @param {string} providerId
+ * @param {{ baseUrl?: string }} [endpoint]
  */
 function charsPerTokenProfile(providerId, { baseUrl } = {}) {
   if (isLocalEndpoint(baseUrl)) return CHARS_PER_TOKEN_PROFILES.local;
@@ -184,6 +187,7 @@ function text(value) {
  *
  * @param {string} shortPath  `.agents/memory.md` for a file in the folder,
  *   `~/.snotra/memory.md` for one outside it.
+ * @param {{ inFolder?: boolean, truncated?: boolean, guard?: string|null }} [options]
  */
 function shortPathDetail(shortPath, { inFolder = false, truncated = false, guard = null } = {}) {
   let detailKey;
@@ -198,6 +202,21 @@ function shortPathDetail(shortPath, { inFolder = false, truncated = false, guard
 /**
  * Ein Baustein des Prompts. `chars` ist die einzige Pflichtangabe der Engine —
  * alles Weitere ist Beschriftung fuer die Anzeige.
+ *
+ * @typedef {Object} ContextPartInput
+ * @property {string} [id]
+ * @property {string} [group]        a CONTEXT_PART_GROUPS value
+ * @property {string} [label]
+ * @property {string} [labelKey]
+ * @property {string} [detail]
+ * @property {string} [detailKey]
+ * @property {Object<string, unknown>} [params]
+ * @property {number} [chars]
+ * @property {string} [contentKind]  a CONTEXT_CONTENT_KINDS value
+ * @property {string} [skillName]
+ * @property {number} [count]
+ *
+ * @param {ContextPartInput} [input]
  */
 function createContextPart({
   id,
