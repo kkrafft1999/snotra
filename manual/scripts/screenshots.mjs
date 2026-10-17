@@ -480,15 +480,18 @@ const DEMO_MEMORY = {
 };
 
 /**
- * What the update dialog is told when a newer version exists: the notes of a
- * release as GitHub delivers them, a hand-written highlight and the generated
- * list. They stay English in both languages — that is what GitHub holds.
+ * What the update dialog is told when a newer version exists: the body of a
+ * release as GitHub delivers it — the section for the user in both languages
+ * (#1072) above the generated list, which the dialog leaves out.
  */
 const UPDATE_NOTES = [
-  '## Highlights',
-  '',
+  '<!-- snotra:notes en -->',
   '- **Back and forward in the preview.** Two arrows in the preview header step through the files it showed.',
   '- **Snotra tells you when an approval waits out of sight.** A system notification names the chat and what waits.',
+  '<!-- snotra:notes de -->',
+  '- **Vor und zurück in der Vorschau.** Zwei Pfeile im Kopf der Vorschau blättern durch die Dateien, die sie gezeigt hat.',
+  '- **Snotra sagt dir, wenn eine Freigabe außer Sicht wartet.** Eine Systembenachrichtigung nennt den Chat und was wartet.',
+  '<!-- snotra:notes end -->',
   '',
   "## What's Changed",
   '* Go back and forward through the files the preview showed (#822) by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/824',

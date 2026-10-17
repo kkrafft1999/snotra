@@ -73,6 +73,34 @@ own before the tag, or consciously left for later; a UI change means
 the release. The rule behind it:
 [`user-manual.md`](../../rules/user-manual.md).
 
+## Step 2b — draft the notes for the user
+
+The update dialog shows only a section written for the user, not GitHub's
+generated list (#1072, background in
+[docs/release.md](../../../docs/release.md#notes-for-the-user)). Draft it now,
+so it is confirmed together with the version:
+
+1. Go through the pull requests since the last tag
+   (`git log --first-parent --format=%s vX.Y.Z..HEAD`); the report from step 2a
+   already tells the internal ones apart. Read the description of each one that
+   changed `src/` or `system-skills/` (`gh pr view <N> --json body`).
+2. Keep only what a user notices: a new feature, a changed label, default or
+   behaviour, a bug they could run into that is fixed now. Leave out tests, CI,
+   refactorings, documentation, rules and skills of this repository, the
+   manual's screenshots, and fixes for something no release ever shipped.
+3. Write one bullet per point, from the user's side and in their words —
+   **bold lead sentence**, then at most one or two sentences on what to do or
+   expect. No issue or pull request numbers, no file names, no internal terms.
+   A step the user has to take, or a version they cannot go back from, goes
+   into a quoted paragraph (`> **…**`) above the bullets.
+4. Write it in **English** first, then the **German** version with the same
+   content, addressing the reader as *du*. Save both in the scratchpad as
+   `notes.en.md` and `notes.de.md`.
+5. Nothing for the user? Then one sentence each, e.g. *This version improves
+   Snotra behind the scenes; nothing changes in how you use it.* / *Diese
+   Version verbessert Snotra im Hintergrund; an der Bedienung ändert sich
+   nichts.*
+
 ## Step 3 — compute the target version and confirm it
 
 Read the current version from `package.json`
@@ -82,6 +110,9 @@ results from the chosen bump. Then **have it confirmed**, for example:
 > "Currently 1.0.0 → new release **v1.0.1** (patch). The bump goes through a
 > pull request, after which it is tagged and a public release is published.
 > Proceed?"
+
+Show the drafted notes for the user from step 2b in the same message, both
+languages, and take corrections before going on.
 
 Only continue after agreement.
 
@@ -156,6 +187,19 @@ On a red run, name the failed jobs and point to
 `gh run view <RUN_ID> --log-failed`. The tag stays in place in that case; pushing
 the same tag again does not rebuild automatically — then settle with the user
 whether the tag and release are deleted and re-tagged after a fix.
+
+## Step 9 — put the notes for the user on top of the release
+
+Once the release exists, write the confirmed section from step 2b into it:
+
+```sh
+node scripts/release-user-notes.js vX.Y.Z --en <scratchpad>/notes.en.md --de <scratchpad>/notes.de.md
+```
+
+Until then the update dialog offers the new version without a notes box. Check
+the result on the release page: both languages above *What's Changed*, no
+markers visible. A correction later is the same command again — it replaces
+the section.
 
 ## Notes
 

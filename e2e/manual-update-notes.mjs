@@ -1,7 +1,8 @@
 // Look rather than trust (#736): starts the real app and shows the update
-// dialog with the release notes of 1.15.0 opened — hand-written highlights in
-// bold and inline code, a quoted warning, and GitHub's generated list — in
-// both languages, light and dark. Not a test — a look.
+// dialog with the release notes opened — the section for the user (#1072) with
+// bold, inline code and a quoted warning, in the interface language, while
+// GitHub's generated list below it stays out — in both languages, light and
+// dark. Not a test — a look.
 //
 //   node e2e/manual-update-notes.mjs
 //
@@ -16,15 +17,20 @@ import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs
 const SHOTS = path.resolve('out/mockup');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// The body of the v1.15.0 release, as GitHub delivers it.
+// A release body as GitHub delivers it: the section for the user in both
+// languages, written by scripts/release-user-notes.js, above the generated list.
 const NOTES = [
-  '## Highlights',
+  '<!-- snotra:notes en -->',
+  '> **Going back to 1.14.x is not supported.** This version moves the model settings to a new format. An older version cannot read it and starts with default settings.',
   '',
-  '- **Reasoning is chosen in the chat now.** Open the model menu below the input field: the **Reasoning** section sets how hard the model thinks, for this chat only. A model entry no longer carries a level, and the model pill shows model and level, e.g. `gpt-6-luna · medium` (#723).',
-  '- **New chats start with `medium`.** If your default entry used `high` until now, new chats start one step lower — pick `high` in the model menu when a question needs it. Chats from before keep the level they ran with.',
-  '- **Documents as text:** the agent reads PDF, DOCX, XLSX and PPTX with `extract_document_text` (#42).',
+  '- **Reasoning is chosen in the chat now.** Open the model menu below the input field: the **Reasoning** section sets how hard the model thinks, for this chat only. The model pill shows model and level, e.g. `gpt-6-luna · medium`.',
+  '- **New chats start with `medium`.** Pick `high` in the model menu when a question needs it. Chats from before keep their level.',
+  '<!-- snotra:notes de -->',
+  '> **Zurück zu 1.14.x geht nicht.** Diese Version speichert die Modell-Einstellungen in einem neuen Format. Eine ältere Version kann es nicht lesen und startet mit Standardeinstellungen.',
   '',
-  '> **Going back to 1.14.x is not supported.** This version moves the model settings to a new format (v6). An older version cannot read it and starts with default settings; your model entries would have to be set up again there.',
+  '- **Reasoning wählst du jetzt im Chat.** Öffne das Modellmenü unter dem Eingabefeld: Der Bereich **Reasoning** legt fest, wie gründlich das Modell nachdenkt, nur für diesen Chat. Die Modell-Pille zeigt Modell und Stufe, z. B. `gpt-6-luna · medium`.',
+  '- **Neue Chats starten mit `medium`.** Wähle `high` im Modellmenü, wenn eine Frage es braucht. Ältere Chats behalten ihre Stufe.',
+  '<!-- snotra:notes end -->',
   '',
   "## What's Changed",
   '* Offer all seven OpenAI reasoning levels by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/719',

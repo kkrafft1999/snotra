@@ -15,7 +15,16 @@ const AVAILABLE = Object.freeze({
   latestVersion: '1.8.0',
   isPrerelease: false,
   releaseUrl: 'https://example.test/releases/v1.8.0',
-  notes: '- Selbst-Update\n- Kleinkram',
+  notes: [
+    '<!-- snotra:notes en -->',
+    '- Snotra updates itself',
+    '<!-- snotra:notes de -->',
+    '- Snotra aktualisiert sich selbst',
+    '<!-- snotra:notes end -->',
+    '',
+    "## What's Changed",
+    '* Self-update (#232) by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/233',
+  ].join('\n'),
   canSelfUpdate: true,
   selfUpdateBlockedReason: '',
   installKind: 'macos-bundle',
@@ -86,7 +95,7 @@ test('ein gefundenes Update wird gezeigt, aber noch nichts geladen', async (t) =
   assert.match(ui.summary(), /the new version \(92\.0 MB\)/);
   assert.deepEqual(ui.labels(), ['Download', 'Remind me later', 'Skip this version']);
   assert.deepEqual(ui.calls, [], 'ohne Klick wird nichts geladen');
-  assert.match(ui.dom.document.getElementById('modal-update-notes-body').textContent, /Selbst-Update/);
+  assert.match(ui.dom.document.getElementById('modal-update-notes-body').textContent, /Snotra updates itself/);
 });
 
 test('eine Vorab-Version wird als solche benannt', async (t) => {
@@ -390,70 +399,69 @@ test('der Fokus landet auf der Hauptaktion und bleibt im Dialog', async (t) => {
   assert.equal(ui.dom.document.activeElement, ui.$('modal-update-close'));
 });
 
-test('die Aenderungsliste nennt nur, was sich geaendert hat', async (t) => {
+test('the box shows only the section written for the user (#1072)', async (t) => {
   const ui = await mount();
   t.after(ui.dom.cleanup);
-  const { formatReleaseNotes } = await importRenderer('components', 'UpdateDialog.js');
-  // So liefert GitHub seine automatisch gesetzten Notizen aus.
-  const notes = [
-    "## What's Changed",
-    '* Gedaechtnis: Snotra merkt sich Gesagtes by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/265',
-    '* Release v1.7.6 by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/270',
-    '',
-    '## New Contributors',
-    '* @someone made their first contribution in https://github.com/kkrafft1999/snotra/pull/1',
-    '',
-    '**Full Changelog**: https://github.com/kkrafft1999/snotra/compare/v1.7.5...v1.7.6',
-  ].join('\n');
-
-  assert.equal(formatReleaseNotes(notes), [
-    '* Gedaechtnis: Snotra merkt sich Gesagtes',
-    '* Release v1.7.6',
-  ].join('\n'));
-
-  await ui.push({ ...AVAILABLE, notes });
+  await ui.push({ ...AVAILABLE });
   const text = ui.$('modal-update-notes-body').textContent;
-  assert.match(text, /Gedaechtnis: Snotra merkt sich Gesagtes/);
-  assert.equal(/@|github\.com|pull\//.test(text), false, 'kein Autor, kein Link');
+  assert.match(text, /Snotra updates itself/);
+  assert.equal(/What's Changed|Self-update|@|github\.com|aktualisiert/.test(text), false,
+    'neither the generated list nor the other language');
   assert.equal(ui.$('modal-update-notes').classList.contains('hidden'), false);
 });
 
-test('bleibt von den Notizen nichts uebrig, wird die Liste nicht angeboten', async (t) => {
+test('the section follows the interface language, also while open (#1072)', async (t) => {
+  const { setLocale } = await importRenderer('i18n.js');
+  const ui = await mount();
+  t.after(() => { setLocale('en', { force: true }); ui.dom.cleanup(); });
+  await ui.push({ ...AVAILABLE });
+  ui.$('modal-update-notes').open = true;
+
+  setLocale('de');
+  await flush();
+  assert.match(ui.$('modal-update-notes-body').textContent, /Snotra aktualisiert sich selbst/);
+  assert.equal(ui.$('modal-update-notes').open, true, 'a language switch keeps the box open');
+});
+
+test('without a user section there is no box — the generated list is not shown (#1072)', async (t) => {
   const ui = await mount();
   t.after(ui.dom.cleanup);
   await ui.push({
     ...AVAILABLE,
-    notes: "## What's Changed\n\n**Full Changelog**: https://example.test/compare",
+    notes: [
+      "## What's Changed",
+      '* Measure the performance budgets (#984) by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/1052',
+      '',
+      '**Full Changelog**: https://github.com/kkrafft1999/snotra/compare/v1.24.0...v1.24.1',
+    ].join('\n'),
   });
   assert.equal(ui.$('modal-update-notes').classList.contains('hidden'), true);
+  assert.equal(ui.$('modal-update-notes-body').textContent.trim(), '');
 });
 
-test('handgeschriebene Notizen bleiben Markdown (#736)', async () => {
-  const { formatReleaseNotes } = await importRenderer('components', 'UpdateDialog.js');
-  // Headings, nesting, emphasis, code and a quoted warning are left for the
-  // Markdown renderer — only GitHub's generated parts are taken out. Whether
-  // they really render is a question for the running app (no DOMPurify under
-  // happy-dom, see test/helpers/dom.js): e2e/manual-update-notes.mjs.
-  assert.equal(formatReleaseNotes([
-    '## Highlights',
+test('userReleaseNotes picks the language and falls back to English (#1072)', async () => {
+  const { userReleaseNotes } = await importRenderer('components', 'UpdateDialog.js');
+  const body = [
+    '<!-- snotra:notes en -->',
+    '- **Bold** and `code`',
     '',
-    '- **Reasoning is chosen in the chat now.** Pill shows `gpt-6-luna · medium` (#723).',
-    '  - nested',
-    '',
-    '> **Going back to 1.14.x is not supported.**',
+    '> A warning.',
+    '<!-- snotra:notes de -->',
+    '- **Fett** und `Code`',
+    '<!-- snotra:notes end -->',
     '',
     "## What's Changed",
-    '* Keep the level per chat by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/729',
-  ].join('\r\n')), [
-    '## Highlights',
-    '',
-    '- **Reasoning is chosen in the chat now.** Pill shows `gpt-6-luna · medium` (#723).',
-    '  - nested',
-    '',
-    '> **Going back to 1.14.x is not supported.**',
-    '',
-    '* Keep the level per chat',
-  ].join('\n'));
+    '* Something internal by @kkrafft1999',
+  ].join('\r\n');
+
+  // Hand-written Markdown stays Markdown; showNotes() renders it (#736).
+  assert.equal(userReleaseNotes(body, 'en'), '- **Bold** and `code`\n\n> A warning.');
+  assert.equal(userReleaseNotes(body, 'de'), '- **Fett** und `Code`');
+  assert.equal(userReleaseNotes(body, 'fr'), '- **Bold** and `code`\n\n> A warning.');
+  assert.equal(userReleaseNotes(body.replace(/<!-- snotra:notes de -->[^]*?(?=<!-- snotra:notes end)/, ''), 'de'),
+    '- **Bold** and `code`\n\n> A warning.', 'English stands in for a missing German section');
+  assert.equal(userReleaseNotes("## What's Changed\n* x", 'en'), '');
+  assert.equal(userReleaseNotes('', 'en'), '');
 });
 
 test('reasons and errors from main are worded in the interface language and follow a switch (#353)', async (t) => {
