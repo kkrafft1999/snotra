@@ -193,6 +193,7 @@ const WINDOWS_SCRIPT_ARGS = Object.freeze({
   workDir: 'C:\\Temp\\snotra-update',
   logFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install.log',
   statusFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install-failed.json',
+  pendingFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install-pending.json',
   startedFile: 'C:\\Temp\\snotra-update\\helper-started',
   version: '1.13.0',
 });
@@ -204,7 +205,7 @@ test('das Windows-Skript wartet auf den Prozess und macht den Tausch rueckgaengi
   assert.match(script, /Move-WithRetry \$install \$backup/);
   assert.match(script, /} catch \{\n {4}Move-WithRetry \$backup \$install\n {4}throw/);
   assert.match(script, /\$exe {5}= Join-Path \$install 'Snotra Agent\.exe'/);
-  assert.match(script, /\nStart-Process -FilePath \$exe\n$/);
+  assert.match(script, /\$new = Start-Process -FilePath \$exe -PassThru/);
 });
 
 // #442: The app is usually started from its own folder, and a folder that is
@@ -275,13 +276,49 @@ test('ein gescheiterter Tausch wird protokolliert, gemeldet und startet die alte
   assert.match(script, /\$log {5}= 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install\.log'/);
   assert.match(script, /\$status {2}= 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install-failed\.json'/);
   assert.match(script, /\$version = '1\.13\.0'/);
-  const failure = script.slice(script.indexOf('} catch {\n  $reason'), script.indexOf('  exit 1'));
-  assert.match(failure, /Write-Log \('update failed: ' \+ \$reason\)/);
-  assert.match(failure, /ConvertTo-Json \| Set-Content -LiteralPath \$status -Encoding UTF8/);
+  const record = script.slice(script.indexOf('function Write-Failure'), script.indexOf('function Start-PreviousVersion'));
+  assert.match(record, /Write-Log \('update failed: ' \+ \$reason\)/);
+  assert.match(record, /stage = \$step; error = \$reason; log = \$log/);
+  assert.match(record, /ConvertTo-Json \| Set-Content -LiteralPath \$status -Encoding UTF8/);
+  assert.match(record, /Remove-Item -LiteralPath \$pending/);
+  const previous = script.slice(script.indexOf('function Start-PreviousVersion'), script.indexOf('function Stop-NewVersion'));
+  assert.match(previous, /if \(Test-Path -LiteralPath \$oldExe\) \{[\s\S]*Start-Process -FilePath \$oldExe/);
+  const failure = script.slice(script.indexOf('} catch {\n  Write-Failure'), script.indexOf('  exit 1'));
+  assert.match(failure, /Write-Failure 'swap' \$_\.Exception\.Message/);
   assert.match(failure, /Remove-Item -LiteralPath \$stage -Recurse/);
-  assert.match(failure, /if \(Test-Path -LiteralPath \$oldExe\) \{[\s\S]*Start-Process -FilePath \$oldExe/);
+  assert.match(failure, /Start-PreviousVersion/);
   // The rollback leaves the backup alone: it is the old version again.
   assert.doesNotMatch(failure, /Remove-Item -LiteralPath \$backup/);
+});
+
+// #1067: the backup goes only once the new version has removed the pending record.
+test('the Windows script keeps the backup until the new version confirms its start', () => {
+  const script = buildWindowsSwapScript({ ...WINDOWS_SCRIPT_ARGS, startSeconds: 7 });
+  assert.match(script, /\$pending = 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install-pending\.json'/);
+  const announce = script.indexOf('Set-Content -LiteralPath $pending -Encoding ASCII');
+  const launch = script.indexOf('$new = Start-Process -FilePath $exe -PassThru');
+  const cleanup = script.indexOf('Remove-Item -LiteralPath $backup -Recurse');
+  assert.ok(announce > 0 && announce < launch, 'the record is there before the new version starts');
+  assert.ok(launch < cleanup, 'the backup goes after the start');
+  const wait = script.slice(launch, script.indexOf("if ($reason -ne '')"));
+  assert.match(wait, /while \(Test-Path -LiteralPath \$pending\)/);
+  assert.match(wait, /'the new version ended before it had started \(exit code ' \+ \$new\.ExitCode/);
+  assert.match(wait, /'the new version did not start within 7 seconds'/);
+  // What the user kept in the folder moves only once the new version runs.
+  assert.ok(script.indexOf('foreach ($name in $carry)') > script.indexOf("if ($reason -ne '')"));
+});
+
+test('a Windows version that does not start is stopped, swapped back and reported as stage start', () => {
+  const script = buildWindowsSwapScript(WINDOWS_SCRIPT_ARGS);
+  const failed = script.slice(script.indexOf("if ($reason -ne '')"), script.indexOf('$keepBackup = $false'));
+  assert.match(failed, /if \(\$new\) \{ Stop-NewVersion \$new \}/);
+  assert.match(failed, /Write-Failure 'start' \$reason/);
+  assert.match(failed, /Move-WithRetry \$install \$staged\n {4}Move-WithRetry \$backup \$install/);
+  assert.match(failed, /Start-PreviousVersion\n {2}exit 1/);
+  assert.doesNotMatch(failed, /Remove-Item -LiteralPath \$backup/);
+  const stop = script.slice(script.indexOf('function Stop-NewVersion'), script.indexOf('Set-Location'));
+  assert.match(stop, /CloseMainWindow\(\)/);
+  assert.match(stop, /Stop-Process -Id \$proc\.Id -Force/);
 });
 
 test('ein gelungener Tausch raeumt auf und loescht eine alte Fehlermeldung', () => {
@@ -351,6 +388,7 @@ async function prepareWindowsInstall(t) {
     workDir: path.join(dir, 'work'),
     logFile: path.join(dir, 'userData', 'update-install.log'),
     statusFile: path.join(dir, 'userData', 'update-install-failed.json'),
+    pendingFile: path.join(dir, 'userData', 'update-install-pending.json'),
   };
   return { dir, installDir, onRun, options };
 }
@@ -358,7 +396,7 @@ async function prepareWindowsInstall(t) {
 test('Windows: der Helfer startet im uebergeordneten Ordner und bekommt Protokoll, Status und Mitbringsel', async (t) => {
   if (process.platform === 'win32') return t.skip('braucht POSIX-Pfade');
   const { dir, onRun, options } = await prepareWindowsInstall(t);
-  const { workDir, logFile, statusFile } = options;
+  const { workDir, logFile, statusFile, pendingFile } = options;
   const { installer, runs, launches, quiets } = makeInstaller({ onRun });
   const res = await installer.install(options);
 
@@ -376,6 +414,7 @@ test('Windows: der Helfer startet im uebergeordneten Ordner und bekommt Protokol
   const script = await fsp.readFile(path.join(workDir, 'swap.ps1'), 'utf8');
   assert.ok(script.includes(`$log     = ${psQuote(logFile)}`));
   assert.ok(script.includes(`$status  = ${psQuote(statusFile)}`));
+  assert.ok(script.includes(`$pending = ${psQuote(pendingFile)}`));
   assert.ok(script.includes(`$started = ${psQuote(path.join(workDir, 'helper-started'))}`));
   assert.ok(script.includes("$version = '1.13.0'"));
   assert.ok(script.includes("$carry   = @('Snotra Agent-win32-x64-1.12.0.zip')"));
@@ -906,7 +945,7 @@ test('Windows: a package under the other name is installed and started under tha
   assert.ok(script.includes(`$exe     = Join-Path $install '${OTHER_NAME}.exe'`));
   assert.ok(script.includes(`$oldExe  = Join-Path $install '${APP_NAME}.exe'`), 'a rollback starts the old name');
   assert.match(script, /if \(Test-Path -LiteralPath \$oldExe\) \{\n {4}Write-Log 'starting the previous version again'\n {4}Start-Process -FilePath \$oldExe/);
-  assert.match(script, /Write-Log \('updated to ' \+ \$version\)\nStart-Process -FilePath \$exe\n/);
+  assert.match(script, /\$new = Start-Process -FilePath \$exe -PassThru/);
 });
 
 test('Linux-Ordner: a package under the other name is swapped in and started under that name (#794)', async (t) => {

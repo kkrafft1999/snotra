@@ -604,22 +604,25 @@ each:
   Every helper reports to the user data folder, which no update replaces
   (#442, #1003): it logs each step to `update-install.log`, and when the
   update fails it leaves `update-install-failed.json` — version, reason, log
-  path, and on macOS and Linux the `stage` (`swap` or `start`) — puts the old
-  version back and starts it. The next start reads that file and shows the
+  path and the `stage` (`swap` or `start`) — puts the old version back and
+  starts it. The next start reads that file and shows the
   reason next to the same update, which is offered again.
 
-  On **macOS and Linux** the backup also outlives the start of the new version
-  (#1003). Before it launches the new version, the helper writes
-  `update-install-pending.json`; the new version removes it once its main
-  window is open (`confirmInstallStarted`). Only then does the helper delete
-  the backup. If the new process ends first, or nothing happens within two
-  minutes, the helper ends it, puts the old version back and starts that one.
-  Windows still deletes its backup as soon as the swap has worked.
+  On every platform the backup also outlives the start of the new version
+  (#1003, on Windows #1067). Before it launches the new version, the helper
+  writes `update-install-pending.json`; the new version removes it once its
+  main window is open (`confirmInstallStarted`). Only then does the helper
+  delete the backup. If the new process ends first, or nothing happens within
+  two minutes, the helper ends it, puts the old version back and starts that
+  one. On Windows the entries the user kept in the app folder (the downloaded
+  ZIP, say) move into the new folder only after that confirmation, so a
+  rollback finds them where they were.
 
   The scripts themselves are built as plain strings and tested as such; the
   POSIX helpers additionally run for real against stand-ins for the app
   (`test/update-installer-posix.test.js`), the Windows swap on the Windows
-  runner (`test/update-installer-windows.test.js`).
+  runner against a small compiled stand-in `.exe` that confirms, ends early or
+  hangs (`test/update-installer-windows.test.js`).
 
 The address of the package never leaves the main process: from `checkForUpdate`
 the renderer learns only name and size, and triggers the download without
