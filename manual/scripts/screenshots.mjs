@@ -1171,6 +1171,34 @@ const MOTIFS = {
     },
   },
 
+  /** The dialog of a remote MCP server (#341): address and headers instead of a command. */
+  'mcp-server-remote': {
+    async prepare({ userDataDir }) {
+      // Never connected. The header is stored as a secret; the dialog only
+      // shows that one is there, so it is drawn without decrypting anything.
+      await writeFile(path.join(userDataDir, 'mcp-servers.json'), JSON.stringify({
+        servers: [{
+          id: 'wiki',
+          label: 'Wiki',
+          transport: 'http',
+          url: 'https://mcp.example.com/mcp',
+          headers: { Authorization: { enc: 'c3RvcmVk' } },
+          enabled: false,
+        }],
+      }), 'utf8');
+    },
+    async setUp({ app, page }) {
+      await openSettingsPanel(app, page, 'tools');
+      await poll(() => page.evaluate(() => document.querySelectorAll('#settings-mcp-list .mcp-row').length > 0),
+        { what: 'MCP server row' });
+      await page.evaluate(() => document.querySelector('#settings-mcp-list .mcp-row .btn-compact').click());
+      await poll(() => shown(page, 'mcp-server-overlay'), { what: 'MCP server dialog' });
+      await pause(200);
+      await page.mouse.move(0, 0);
+      return clipAround(page, '#dialog-mcp-server', 24);
+    },
+  },
+
   /** The settings with the version at the foot of the list and the button that checks for updates. */
   'update-check': {
     async setUp({ app, page }) {

@@ -43,6 +43,8 @@ Ein MCP-Server ist fremder Code. Ein lokaler läuft auf deinem Rechner mit deine
 | *Server-URL* | Nur entfernt. Die Adresse des Servers. Sie muss mit `https://` beginnen; einfaches `http://` geht nur für einen Server auf deinem eigenen Rechner (`localhost`). |
 | *Header* | Nur entfernt. *Header hinzufügen* für jeden einzelnen, zum Beispiel `Authorization` mit dem Wert `Bearer` und deinem Token oder `X-API-Key` mit einem Schlüssel. |
 
+![Der Dialog eines entfernten MCP-Servers: Kennung wiki, Anzeigename Wiki, die Verbindung auf „Entfernt (HTTP)“, Server-URL https://mcp.example.com/mcp, ein Header Authorization, dessen gespeicherter Wert nur als Punkte erscheint, mit Haken bei „geheim“, der Knopf „Header hinzufügen“ und unten „Server entfernen“, „Verbindung testen“, „Abbrechen“ und „Speichern“.](screenshots/mcp-server-remote.webp)
+
 **Umgebungsvariablen und Header sind standardmäßig geheim:** verschlüsselt gespeichert und nach dem Speichern nicht mehr angezeigt — nur ersetzt oder gelöscht. Nimm den Haken bei *geheim* für einen Wert heraus, der lesbar bleiben darf, etwa `LANG=de_DE` oder ein Teamname.
 
 Header gehen nur an die Adresse, die du eingetragen hast. Schickt der Server Snotra an eine andere Adresse weiter, hält Snotra an und sagt es, statt dein Token mitzunehmen.
