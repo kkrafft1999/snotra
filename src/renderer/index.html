@@ -198,6 +198,26 @@
         <div id="tree-filter-results" role="listbox" aria-label="Matching files" data-i18n-attr="aria-label:tree.filter.results" hidden></div>
         <div id="tree-filter-status" role="status" hidden></div>
         <div id="tree-container" role="tree" aria-label="Files" data-i18n-attr="aria-label:tree.label"></div>
+        <!-- The sidebar's foot (#1045): feedback and settings, each one click
+             away. Both are also in the menu (Help, and Settings… / Cmd+,),
+             which is what stays when the sidebar is hidden. -->
+        <div id="sidebar-footer" role="toolbar" aria-label="Feedback and settings" data-i18n-attr="aria-label:sidebar.footer">
+          <div class="icon-btn-row">
+            <button type="button" id="btn-sidebar-feedback" title="Send feedback…" aria-label="Send feedback…" aria-haspopup="dialog" data-i18n-attr="title:sidebar.feedback;aria-label:sidebar.feedback">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.875" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                <path d="M8 9h8"/>
+                <path d="M8 13h5"/>
+              </svg>
+            </button>
+            <button type="button" id="btn-sidebar-settings" title="Settings" aria-label="Settings" aria-haspopup="dialog" data-i18n-attr="title:sidebar.settings;aria-label:sidebar.settings">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.875" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
       </aside>
 
       <div id="divider" class="pane-divider" role="separator" aria-orientation="vertical"
@@ -1812,6 +1832,93 @@
       </div>
       <footer class="modal-dialog__footer" id="modal-update-footer">
         <div class="modal-actions" id="modal-update-actions"></div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- The feedback form (#1045). FeedbackDialog runs it; main sends it. -->
+  <div id="modal-feedback" class="modal modal-feedback hidden" aria-hidden="true">
+    <div class="modal-backdrop" id="modal-feedback-backdrop"></div>
+    <div
+      class="modal-dialog feedback-dialog"
+      tabindex="-1"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-feedback-title"
+      aria-describedby="modal-feedback-intro">
+      <header class="modal-dialog__header">
+        <h2 id="modal-feedback-title" class="modal-dialog__title" data-i18n="feedback.title">Send feedback</h2>
+        <button type="button" id="modal-feedback-close" class="modal-dialog__close" aria-label="Close dialog" data-i18n-attr="aria-label:feedback.close">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
+          </svg>
+        </button>
+      </header>
+      <form id="feedback-form" class="modal-dialog__body feedback-dialog__body" novalidate>
+        <p id="modal-feedback-intro" class="feedback-dialog__intro" data-i18n="feedback.intro">Found a bug, have an idea, or like something? Tell us.</p>
+        <div class="feedback-dialog__field">
+          <div class="modal-field-label eyebrow-row" id="feedback-kind-label" data-i18n="feedback.kind.label">What is it about?</div>
+          <div class="ds-segmented feedback-dialog__kinds" id="feedback-kind" role="radiogroup" aria-labelledby="feedback-kind-label">
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="feedback-kind" value="bug">
+              <span data-i18n="feedback.kind.bug">Bug</span>
+            </label>
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="feedback-kind" value="idea" checked>
+              <span data-i18n="feedback.kind.idea">Idea</span>
+            </label>
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="feedback-kind" value="praise">
+              <span data-i18n="feedback.kind.praise">Praise</span>
+            </label>
+          </div>
+        </div>
+        <div class="feedback-dialog__field">
+          <label for="feedback-message" class="modal-field-label eyebrow-row" data-i18n="feedback.message.label">Message</label>
+          <textarea id="feedback-message" class="modal-input feedback-dialog__message" rows="6" spellcheck="true" aria-describedby="feedback-message-counter feedback-message-error"></textarea>
+          <div class="feedback-dialog__under">
+            <p id="feedback-message-error" class="modal-hint error feedback-dialog__field-error" hidden></p>
+            <p id="feedback-message-counter" class="modal-hint feedback-dialog__counter" hidden></p>
+          </div>
+        </div>
+        <div class="feedback-dialog__field">
+          <label for="feedback-email" class="modal-field-label eyebrow-row" data-i18n="feedback.email.label">E-mail (optional)</label>
+          <input type="email" id="feedback-email" class="modal-input" autocomplete="email" spellcheck="false" aria-describedby="feedback-email-hint feedback-email-error">
+          <p id="feedback-email-error" class="modal-hint error feedback-dialog__field-error" hidden></p>
+          <p id="feedback-email-hint" class="modal-hint" data-i18n="feedback.email.hint">Only so we can ask back. The address is never published.</p>
+        </div>
+        <div class="feedback-dialog__diagnostics">
+          <label class="modal-checkbox">
+            <input type="checkbox" id="feedback-diagnostics" checked aria-describedby="feedback-diagnostics-values feedback-diagnostics-privacy">
+            <span data-i18n="feedback.diagnostics.label">Include technical details</span>
+          </label>
+          <p id="feedback-diagnostics-values" class="feedback-dialog__diagnostics-values"></p>
+          <p id="feedback-diagnostics-privacy" class="feedback-dialog__diagnostics-privacy" data-i18n="feedback.diagnostics.privacy">Chat contents, file paths and keys are never sent.</p>
+        </div>
+        <p class="feedback-dialog__public">
+          <span data-i18n="feedback.public">Your message will be published as a public issue on GitHub.</span>
+          <a href="#" id="feedback-privacy-link" class="feedback-dialog__link" data-i18n="feedback.privacyLink">Privacy policy</a>
+        </p>
+        <div id="feedback-status" class="feedback-dialog__status" role="status" aria-live="polite"></div>
+        <div id="feedback-fallback" class="feedback-dialog__fallback" hidden>
+          <button type="button" id="feedback-copy" class="btn-secondary" data-i18n="feedback.fallback.copy">Copy text</button>
+          <button type="button" id="feedback-github" class="btn-secondary" data-i18n="feedback.fallback.github">Open on GitHub instead</button>
+        </div>
+      </form>
+      <div id="feedback-sent" class="modal-dialog__body feedback-dialog__sent" hidden>
+        <svg class="feedback-dialog__sent-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.875" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/><path d="m8 12.5 2.8 2.8L16.5 9.5"/>
+        </svg>
+        <h3 id="feedback-sent-title" class="feedback-dialog__sent-title" data-i18n="feedback.sent.title">Thank you!</h3>
+        <p id="feedback-sent-body" class="feedback-dialog__sent-body"></p>
+      </div>
+      <footer class="modal-dialog__footer">
+        <div class="modal-actions">
+          <button type="button" id="feedback-cancel" class="btn-secondary" data-i18n="feedback.cancel">Cancel</button>
+          <button type="button" id="feedback-open-issue" class="btn-secondary" data-i18n="feedback.sent.open" hidden>Open issue</button>
+          <button type="submit" form="feedback-form" id="feedback-send" class="btn-primary" data-i18n="feedback.send">Send</button>
+          <button type="button" id="feedback-done" class="btn-primary" data-i18n="feedback.done" hidden>Done</button>
+        </div>
       </footer>
     </div>
   </div>

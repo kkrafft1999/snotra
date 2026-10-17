@@ -11607,3 +11607,209 @@ select.modal-input {
   line-height: 1.45;
   color: var(--text-muted);
 }
+
+/* ── The sidebar's foot (#1045) ──
+ * Feedback and settings, two circle icon buttons at the right end of a thin
+ * bar under the tree — the same buttons as in the tree header above. */
+#sidebar-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border-top: 1px solid var(--border);
+}
+
+#sidebar-footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-touch-min);          /* 32x32 */
+  height: var(--ds-touch-min);
+  padding: 0;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    background var(--ds-motion-fast),
+    color var(--ds-motion-fast),
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
+}
+
+#sidebar-footer button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+#sidebar-footer button:active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  transform: scale(0.97);
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+/* ── The feedback form (#1045) ── */
+.feedback-dialog [hidden] {
+  display: none !important;
+}
+
+.feedback-dialog[tabindex='-1']:focus-visible {
+  outline: none;
+}
+
+.feedback-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 16px;
+}
+
+.feedback-dialog__intro {
+  margin: 0;
+  font-size: var(--ds-font-size-base);
+  color: var(--text-secondary);
+}
+
+.feedback-dialog__field .modal-hint {
+  margin: 4px 0 0;
+}
+
+.feedback-dialog__kinds {
+  display: grid;
+  width: 100%;
+}
+
+.feedback-dialog__kinds .ds-segmented__option {
+  min-width: 0;
+}
+
+.feedback-dialog__message {
+  display: block;
+  min-height: 132px;
+  resize: vertical;
+  line-height: var(--ds-line-height-base);
+}
+
+.feedback-dialog__message[aria-invalid='true'],
+.feedback-dialog__field .modal-input[aria-invalid='true'] {
+  border-color: var(--ds-error);
+}
+
+.feedback-dialog__under {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.feedback-dialog__counter {
+  margin-left: auto !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.feedback-dialog__counter--over {
+  color: var(--ds-error);
+}
+
+.feedback-dialog__diagnostics {
+  padding: 10px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: 6px;
+}
+
+.feedback-dialog__diagnostics-values,
+.feedback-dialog__diagnostics-privacy {
+  margin: 4px 0 0 24px;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.45;
+  color: var(--text-muted-strong);
+}
+
+.feedback-dialog__diagnostics-values {
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.feedback-dialog__diagnostics:has(#feedback-diagnostics:not(:checked)) .feedback-dialog__diagnostics-values {
+  text-decoration: line-through;
+}
+
+.feedback-dialog__public {
+  margin: 0;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.feedback-dialog__link {
+  white-space: nowrap;
+  color: var(--ds-blue);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  border-radius: var(--ds-radius-sm);
+}
+
+.feedback-dialog__link:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.feedback-dialog__status:empty {
+  display: none;
+}
+
+.feedback-dialog__status {
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.feedback-dialog__status--error {
+  padding: 10px 12px;
+  border: 1px solid var(--ds-error-border);
+  border-radius: 6px;
+  background: var(--ds-error-bg);
+  color: var(--ds-error);
+}
+
+.feedback-dialog__fallback {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: -8px;
+}
+
+.feedback-dialog__sent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 24px 28px;
+  text-align: center;
+}
+
+.feedback-dialog__sent-icon {
+  color: var(--ds-blue);
+}
+
+.feedback-dialog__sent-title {
+  margin: 0;
+  font-size: var(--ds-font-size-h3);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.feedback-dialog__sent-body {
+  margin: 0;
+  font-size: var(--ds-font-size-base);
+  color: var(--text-secondary);
+}
+
+.modal-feedback--busy .modal-dialog__close {
+  visibility: hidden;
+}

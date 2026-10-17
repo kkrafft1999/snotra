@@ -280,6 +280,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelUpdateDownload: () => ipcRenderer.invoke(REQ.UPDATE_CANCEL_DOWNLOAD),
   discardUpdateDownload: () => ipcRenderer.invoke(REQ.UPDATE_DISCARD_DOWNLOAD),
   installUpdate: () => ipcRenderer.invoke(REQ.UPDATE_INSTALL),
+  // Feedback (#1045). The window hands over what the user typed and the
+  // provider of the chat on screen; main picks the diagnostics and sends.
+  getFeedbackDiagnostics: (providerId) => ipcRenderer.invoke(REQ.FEEDBACK_GET_DIAGNOSTICS, providerId),
+  sendFeedback: (payload) => ipcRenderer.invoke(REQ.FEEDBACK_SEND, payload),
   onUpdateAvailable: (callback) => {
     const channel = PUSH.UPDATE_AVAILABLE;
     const listener = (_event, payload) => callback(payload);
@@ -373,6 +377,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Signal.
   onOpenSettings: (callback) => {
     const channel = PUSH.UI_OPEN_SETTINGS;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  // Menu "Help > Send Feedback…" (#1045): opens the feedback form.
+  onOpenFeedback: (callback) => {
+    const channel = PUSH.UI_OPEN_FEEDBACK;
     const listener = () => callback();
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

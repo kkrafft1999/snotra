@@ -84,6 +84,8 @@ const {
 const { createChatSessionSettings } = require('../services/chat-session-settings');
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
+const { registerFeedbackHandlers } = require('../ipc/feedback-handlers');
+const { createFeedbackService, resolveFeedbackEndpoint } = require('../services/feedback-service');
 const { registerNoticeHandlers } = require('../ipc/notice-handlers');
 const { createAppNotices, postStoreFileEvent } = require('../services/app-notices');
 const { registerSkillSuggestionHandlers } = require('../ipc/skill-suggestion-handlers');
@@ -954,6 +956,17 @@ function createApplication({
     chatSessionSettings,
   });
   registerUpdateHandlers({ ipcMain, updates, REQ, PUSH, getMainWindow });
+  // The feedback form (#1045): sent from here, never from the window.
+  const feedback = createFeedbackService({
+    fetchImpl: fetchImpl || globalThis.fetch,
+    getAppVersion: () => app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    getOsVersion: () => (typeof process.getSystemVersion === 'function' ? process.getSystemVersion() : os.release()),
+    isKnownProvider: (id) => providerCatalog.exists(id),
+    endpoint: resolveFeedbackEndpoint(env),
+  });
+  registerFeedbackHandlers({ ipcMain, feedback, REQ });
   registerNoticeHandlers({ ipcMain, notices, REQ, PUSH, getMainWindow, shell });
   // Ohne diese Handler bleiben der Verweis auf die Release-Seite im
   // Update-Dialog und Links in Chat-Antworten wirkungslos — das sandboxed

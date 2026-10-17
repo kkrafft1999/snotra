@@ -1108,6 +1108,21 @@ const MOTIFS = {
     },
   },
 
+  /** The feedback form (#1045), opened from the bar at the foot of the sidebar, a message typed. */
+  'feedback-form': {
+    async setUp({ page, locale }) {
+      await page.click('#btn-sidebar-feedback');
+      await poll(() => page.evaluate(() => document.getElementById('feedback-diagnostics-values').textContent.length > 0),
+        { what: 'feedback form with its diagnostics' });
+      await page.fill('#feedback-message', locale === 'de'
+        ? 'Ich hätte gern eine Möglichkeit, einen Chat als Markdown-Datei zu exportieren, um ihn im Team weiterzugeben.'
+        : 'I would like to export a chat as a Markdown file, so I can pass it on to my team.');
+      await page.mouse.move(0, 0);
+      await pause(200);
+      return clipAround(page, '#modal-feedback .feedback-dialog', 24);
+    },
+  },
+
   /** Settings › Skills: the system skills and a skill of the folder, not yet ticked. */
   'skills-settings': {
     async prepare({ workspace, locale }) {

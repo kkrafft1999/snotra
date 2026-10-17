@@ -9,7 +9,7 @@ Everything you can set up in Snotra is in one place: the settings. They open ove
 
 ## Open the settings
 
-*Snotra Agent › Settings…* on macOS, *View › Settings…* on Windows and Linux, or `Cmd+,` / `Ctrl+,`. There is deliberately no button in the window for it: a button in a column would be gone whenever you hide that column.
+*Snotra Agent › Settings…* on macOS, *View › Settings…* on Windows and Linux, or `Cmd+,` / `Ctrl+,`. [since 1.25] Or click the gear at the bottom of the sidebar, next to the [feedback](../../troubleshooting/send-feedback/) button. The menu and the shortcut stay when you hide the sidebar.
 
 ## The six sections
 
