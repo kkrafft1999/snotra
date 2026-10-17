@@ -2300,6 +2300,29 @@ outside the checked set — that list may only shrink
 ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)) — and the gate is
 still wired up.
 
+**What a port file holds.** Types only. A port file declares its typedefs and
+ends in `module.exports = {};`; the values that belong to a port — the error
+codes, limits and option lists of the web search, the URL fetch and the image
+generation — live in `src/shared/contracts/` (`web-search.js`, `url-fetch.js`,
+`image-generation.js`), the history store's `CHAT_HISTORY_UNREADABLE` in the
+store that throws it. The two execution ports still export their limits, until
+the runner services move
+([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
+
+**Services that are not ports.** Where an adapter or the tool planner depends
+on a service that is not a port, it declares the members it calls itself, from
+its own side: `ToolRegistry` in `workspace-tool-adapter.js`, `FsService` in
+`tool-call-planner.js`. `OutsideAccess` is derived from its factory with
+`ReturnType<typeof …>`, since that module is part of the checked program anyway.
+A call the typedef does not allow fails the check. The registry and
+`fs-service.js` themselves are outside the checked set, so the typedefs are not
+compared with them; deriving them would pull both in and put about 70 findings
+in front of this step. The provider modules' `presentation` is typed as
+`ProviderPresentation` in `provider-runtime-port.js`, the extras of
+`createMcpAdapter` as `Message` and `ToolDefinition`. A destructured service
+parameter takes no `= null` default — in a JS file that would make the local
+`any` again.
+
 **How strict.** `strict` is off, with `strictFunctionTypes`,
 `strictBindCallApply` and `noImplicitThis` on. That catches a port and its
 adapter disagreeing — a member, a shape, an argument count — and callbacks
@@ -2312,7 +2335,9 @@ the next step ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
 - A function that checks untrusted input takes `{*}`, not `{unknown}` or
   `{object}`: it accepts anything, and `{object}` would forbid reading the
   very properties it checks. `{Object}` means a dependency that has no type
-  yet; it reads as `any` and is a known gap, not a statement.
+  yet; it reads as `any` and is a known gap, not a statement. In the covered
+  set the services of the tool path no longer carry it (#1098); what remains
+  are the generic `deps` bags of the adapter factories.
 - A destructured parameter with a `= {}` default needs its optional fields
   marked optional — a sanitizer with `Partial<…>` of the port's request —
   since the compiler checks the default against the declared type.

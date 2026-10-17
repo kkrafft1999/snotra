@@ -7,7 +7,7 @@ const {
   DEFAULT_IMAGE_MODEL,
   isImageModel,
 } = require('../src/main/adapters/openai-image-generation-adapter');
-const { IMAGE_GENERATION_ERROR_CODES: CODES } = require('../src/application/ports/image-generation-port');
+const { IMAGE_GENERATION_ERROR_CODES: CODES } = require('../src/shared/contracts/image-generation');
 const { normalizeImageModel, normalizeUiPrefs, normalizeUiPrefsPatch } = require('../src/shared/contracts/settings');
 
 // 1x1 PNG.

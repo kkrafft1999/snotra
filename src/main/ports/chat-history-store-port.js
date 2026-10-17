@@ -28,11 +28,4 @@
  * @property {(sessionRow: object, workspaceRoot: string|null) => boolean} sessionMatchesWorkspace
  */
 
-/**
- * Error code of every change to a history that could not be read (#473), and
- * of a save of a chat whose file could not be read. The file is there and may
- * be fine, so it is not overwritten.
- */
-const CHAT_HISTORY_UNREADABLE = 'CHAT_HISTORY_UNREADABLE';
-
-module.exports = { CHAT_HISTORY_UNREADABLE };
+module.exports = {};
