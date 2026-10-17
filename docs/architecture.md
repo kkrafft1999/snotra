@@ -75,6 +75,15 @@ they count as an external system rather than a container.
 - Manual window ↔ main: IPC on the manual's own channels.
 - Main ↔ local store: file reads and writes, secrets through `safeStorage`.
 
+**Front ends other than the window** — a CLI, a headless mode, the phone of
+the mobile remote — do not exist yet. How they will reach the main process is
+decided in [`remote-interface.md`](./remote-interface.md)
+([#989](https://github.com/kkrafft1999/snotra/issues/989)): one protocol over
+two transports, a listener on loopback and the blind relay; a small catalogue
+of methods instead of the IPC channels; and a *connection* with a kind in
+place of the `webContents` id as the session that runs, events and approvals
+are keyed by.
+
 ## Direction of dependencies
 
 Dependencies point **inwards** — from the outer edge (UI, IPC, infrastructure)
