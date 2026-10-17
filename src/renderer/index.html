@@ -1204,12 +1204,20 @@
                     <input type="radio" class="ds-segmented__input" name="app-theme" value="dark">
                     <span data-i18n="settings.general.theme.dark">Dark</span>
                   </label>
+                  <label class="ds-segmented__option">
+                    <input type="radio" class="ds-segmented__input" name="app-theme" value="system">
+                    <span data-i18n="settings.general.theme.system">System</span>
+                  </label>
                 </div>
                 <span id="status-app-theme" class="settings-instant-status" role="status"></span>
               </div>
               <details class="settings-note settings-note--tight">
-                <summary class="settings-note__summary"><span data-i18n="settings.general.theme.note.summary">Light or dark interface &mdash; a button in the title bar up to v1.7.3.</span></summary>
+                <summary class="settings-note__summary"><span data-i18n="settings.general.theme.note.summary">Light, dark, or the same as your system.</span></summary>
                 <div class="settings-note__body" data-i18n-html="settings.general.theme.note.body">
+                  <p>
+                    <strong>System</strong> follows the light or dark setting of your operating system and changes with it,
+                    without a restart.
+                  </p>
                   <p>
                     Unlike the other settings, this choice stays <strong>on this device</strong>: it has to be settled
                     before the window is built, or the light interface would flash up briefly at every start.

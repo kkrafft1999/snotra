@@ -35,12 +35,12 @@ The line at the bottom of each section says it, because it differs:
 
 ## The section General
 
-![Settings › General: a text field for the system prompt, the switches "Send environment information" and "Send AGENTS.md", and the choice between light and dark.](screenshots/settings-general.webp)
+![Settings › General: a text field for the system prompt, the switches "Send environment information" and "Send AGENTS.md", and the choice between Light, Dark and System.](screenshots/settings-general.webp)
 
 - ***System prompt*** — your own instructions for every conversation: a role, a tone, fixed rules. Sent to the model unchanged. Empty by default; Snotra sets none of its own here.
 - ***Send environment information*** — tells the model the full path of the open folder (which contains your user name), whether it is a Git repository, your platform, the shell and today's date. Without it the model guesses the platform for commands and dates "last week" by when it was trained. On by default.
 - ***Send AGENTS.md*** — the project instructions; see [Give a project its instructions](../project-instructions/). On by default.
-- ***Appearance*** — light or dark. This choice stays on this computer.
+- ***Appearance*** — *Light*, *Dark*, or [since 1.26] *System*, which follows the light or dark setting of macOS, Windows or Linux and switches with it while Snotra is open. *Light* is the default. This choice stays on this computer.
 - ***Interface language*** — English or German, switching at once. It covers the window and the menu bar; what goes to the model stays English.
 - ***Notify me when Snotra waits for my approval*** — [since 1.18] a system notification when an approval card waits while Snotra is in the background or the card is in another chat. It names the chat and what waits; a click brings Snotra up with that chat. On by default.
 - ***Check for updates at start-up*** — [since 1.24] asks GitHub for a newer version a few seconds after every start and opens the update dialog if there is one. Switched off, Snotra only looks when you ask; see [Update Snotra Agent](../../updating/update-snotra/). On by default.
@@ -55,3 +55,4 @@ In your profile folder, outside the app and outside your projects: `~/Library/Ap
 - **A change has no effect.** In *Models*, *Skills* and the text fields of *General*, click *Apply*.
 - ***Settings could not be loaded.*** Close the settings and open them again. If it stays, the message names the file that could not be read.
 - **No notification appears.** Check the switch above, and the system's own notification settings for Snotra Agent (on macOS *System Settings › Notifications*). The chat's row in the history says *Needs your approval* either way.
+- ***System* stays light (or dark).** Snotra follows what the system reports as its preference: *System Settings › Appearance* on macOS, *Settings › Personalisation › Colours › Choose your mode* on Windows, the desktop's light or dark style on Linux (in GNOME *Settings › Appearance*). A Linux desktop that does not pass the style on to applications leaves Snotra light; pick *Light* or *Dark* there.

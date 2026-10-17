@@ -129,6 +129,7 @@
     "@electron/osx-sign": "^2.7.1",
     "@fontsource/inter": "^5.3.0",
     "@reforged/maker-appimage": "^5.3.1",
+    "axe-core": "^4.14.0",
     "dompurify": "^3.4.16",
     "electron": "^44.7.0",
     "esbuild": "^0.28.2",

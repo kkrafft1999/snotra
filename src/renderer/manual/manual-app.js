@@ -73,7 +73,10 @@ const state = {
   navOpener: null,
 };
 
-const theme = initTheme();
+// A picture of the app is shown in the theme the window shows; a change of it
+// — picked in the app, or the OS turning dark while "System" is chosen —
+// fetches the other one (#999).
+const theme = initTheme({ onChange: () => reloadScreenshots() });
 const search = createManualSearch({
   els,
   api,
@@ -288,7 +291,7 @@ function prepareImages(root, render) {
 
 async function loadScreenshot(img, render) {
   try {
-    const src = await api.screenshot(img.dataset.motif, getLocale(), theme.getTheme());
+    const src = await api.screenshot(img.dataset.motif, getLocale(), theme.getEffectiveTheme());
     if (render !== state.render || !img.isConnected) return;
     // Taken at twice the size (manual/scripts/screenshots.mjs); shown at half,
     // as on the web, so that a small motif is not blown up to the column.
@@ -649,7 +652,6 @@ els.web.addEventListener('click', () => {
 window.addEventListener('storage', (event) => {
   if (event.key !== 'theme') return;
   theme.setTheme(event.newValue);
-  reloadScreenshots();
 });
 
 void start().catch((error) => {

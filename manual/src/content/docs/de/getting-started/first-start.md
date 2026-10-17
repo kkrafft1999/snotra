@@ -15,7 +15,7 @@ Beim ersten Start hat Snotra Agent weder einen Ordner, in dem es arbeiten kann, 
 2. Wähle links *Allgemein* (in der englischen Oberfläche *General*).
 3. Wähle unter *Sprache der Oberfläche* (*Interface language*) den Eintrag *Deutsch* oder *English*.
 
-Fenster und Menüleiste wechseln sofort die Sprache, ohne Neustart. Im selben Bereich schaltest du unter *Erscheinungsbild* zwischen heller und dunkler Oberfläche um.
+Fenster und Menüleiste wechseln sofort die Sprache, ohne Neustart. Im selben Bereich schaltest du unter *Erscheinungsbild* zwischen heller und dunkler Oberfläche um, oder du lässt sie mit *System* deinem Betriebssystem folgen.
 
 ## Was du siehst
 

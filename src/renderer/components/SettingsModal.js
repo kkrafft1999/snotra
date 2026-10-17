@@ -5,6 +5,7 @@ import {
 } from '../i18n.js';
 import { invokeErrorDetail, invokeErrorMessage } from '../utils/invoke-error.js';
 import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
+import { normalizeAppearance } from './ThemeManager.js';
 import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
 import { initWorkspaceSandboxSetting } from './WorkspaceSandboxSetting.js';
 import { initProgramAllowancesSetting } from './ProgramAllowancesSetting.js';
@@ -2097,8 +2098,9 @@ export function initSettingsModal(deps) {
     modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.encryptionAvailable);
     for (const setting of instantSettings) setting.status.clear();
     // The appearance is not in the UI prefs but in the renderer's
-    // localStorage (see ThemeManager.js).
-    themeChoice.set(getTheme?.() === 'dark' ? 'dark' : 'light');
+    // localStorage (see ThemeManager.js). "System" is a choice of its own
+    // (#999), shown as such rather than as the theme it currently gives.
+    themeChoice.set(normalizeAppearance(getTheme?.()));
     try {
       const up = await api.getUIPrefs();
       if (stale()) return;
