@@ -258,7 +258,9 @@ for (const exe of POWERSHELLS) {
     const result = await runPowerShell(exe, START_PROCESS);
     const pid = Number(lines(result.stdout)[0]);
     assert.equal(result.exitCode, 0, result.stderr);
-    assert.equal(result.stderr, '', 'the job was made, so there is nothing to say');
+    // Not empty, though: Windows PowerShell may report "Preparing modules for
+    // first use" there as CLIXML when Start-Process loads its module.
+    assert.equal(result.stderr.includes(NOTICE), false, 'the job was made');
     assert.ok(Number.isInteger(pid) && pid > 0, result.stdout);
     await until(() => !isAlive(pid), 'the background process to be gone');
   });
@@ -377,36 +379,4 @@ test('Python: a crash exit code comes through the first interpreter unchanged', 
   const result = await service.run({ code: 'import os\nos._exit(-1073741819)', timeoutMs: 60_000 });
 
   assert.equal(result.exitCode, 0xC0000005);
-});
-
-// What the job costs at every start (#991), written to the log of the
-// Windows runner. Temporary: it measures, it does not test.
-test('cost of the job at the start of a run', windowsOnly, async (t) => {
-  const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
-  async function time(start, rounds = 7) {
-    const took = [];
-    for (let i = 0; i < rounds; i += 1) {
-      const startedAt = process.hrtime.bigint();
-      const result = await start();
-      took.push(Number(process.hrtime.bigint() - startedAt) / 1e6);
-      assert.equal(result.exitCode, 0, result.stderr);
-    }
-    return median(took);
-  }
-  for (const exe of POWERSHELLS) {
-    if (!hasPowerShell(exe)) continue;
-    const bare = await time(() => runPowerShell(exe, 'Write-Output ok', { job: false }));
-    const job = await time(() => runPowerShell(exe, 'Write-Output ok'));
-    t.diagnostic(`${exe}: ${bare.toFixed(0)} ms bare, ${job.toFixed(0)} ms with the job (+${(job - bare).toFixed(0)} ms)`);
-  }
-  const service = await readyPython();
-  if (service) {
-    const { command, args = [] } = service.describe();
-    const run = (extra) => createChildRunner({ spawn: childProcess.spawn }).run({
-      command, args: [...args, ...extra], cwd: os.tmpdir(), env: process.env, timeoutMs: 60_000, ...LIMITS,
-    });
-    const bare = await time(() => run(['-B', '-u', '-c', 'pass']));
-    const job = await time(() => run(pythonJobArgs(['-B', '-u', '-c', 'pass'])));
-    t.diagnostic(`${command} ${args.join(' ')}: ${bare.toFixed(0)} ms bare, ${job.toFixed(0)} ms with the job (+${(job - bare).toFixed(0)} ms)`);
-  }
 });

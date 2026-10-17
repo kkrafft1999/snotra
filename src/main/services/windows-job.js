@@ -59,7 +59,9 @@ const NATIVE = [
 /**
  * One line in front of the command — its own lines move down by one, nothing
  * else changes —, in a script block of its own, so that none of its variables
- * reach the command, and silent unless it fails.
+ * reach the command, and silent unless it fails. On the Windows CI runner it
+ * adds about 45 ms to a Windows PowerShell start and nothing measurable to
+ * PowerShell 7.
  */
 const POWERSHELL_JOB = [
   '& { try {',
@@ -101,9 +103,9 @@ function withPowerShellJob(script) {
  * into it and then runs the real one — the same executable with the same
  * arguments — as its child, with the same standard handles. The script then
  * runs exactly as it ran before (its `sys.argv`, `sys.path`, tracebacks); the
- * price is a second interpreter start. The empty entry `-c` puts in front of
- * `sys.path` goes first, so a `subprocess.py` in the workspace is not what
- * gets imported here.
+ * price is a second interpreter start, about 50 ms on the Windows CI runner.
+ * The empty entry `-c` puts in front of `sys.path` goes first, so a
+ * `subprocess.py` in the workspace is not what gets imported here.
  */
 const PYTHON_JOB = [
   'import sys',
