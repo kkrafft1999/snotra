@@ -35,7 +35,7 @@ providers the user configures. It has no server of its own.
 | Dependencies | Two runtime dependencies (`@anthropic-ai/sandbox-runtime`, `undici`); marked, DOMPurify, pdf.js and Prism are vendored. No CDN, CSP `default-src 'none'` — the app has to run offline. |
 | Platforms | macOS on Apple Silicon (signed, notarised), Windows x64 (unsigned for now, #19/#911), Linux x64 (deb, AppImage, tar.gz). **All three rank equally** — see the parity rule in §3. |
 | Providers | OpenAI (Responses and Chat Completions), Anthropic, Google, Ollama, OpenAI-compatible servers (LM Studio, MLX-LM, llama.cpp, vLLM, OpenRouter). **Every provider the app offers has to work** — again under the parity rule. |
-| Backend | No server of ours that can read anything, no account, no telemetry — not even opt-in. Data goes to the providers and services the user sets up; the one automatic outbound call is the update check against the GitHub releases API. **Amended 2026-10-17** for the mobile remote ([`mobile-remote-concept.md`](./mobile-remote-concept.md)): one exception, a *blind relay* in Firebase that carries end-to-end encrypted packets between the desktop and the user's paired phone. It is off until a phone is paired, holds no account and no key, and cannot read what it carries. |
+| Backend | No server of ours that can read anything, no account, no telemetry — not even opt-in. Data goes to the providers and services the user sets up; the one automatic outbound call is the update check against the GitHub releases API. **Amended 2026-10-17** for the mobile remote ([concept in `kkrafft1999/snotra-mobile`](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md)): one exception, a *blind relay* in Firebase that carries end-to-end encrypted packets between the desktop and the user's paired phone. It is off until a phone is paired, holds no account and no key, and cannot read what it carries. |
 | Delivery | Ruleset on `main`: pull request required, unit and e2e tests on macOS, Windows and Linux mandatory, no bypass for anyone (#240). Squash merge. Releases are cut from a tag that must match `package.json` (#570). |
 | Languages | English is the source language of the UI and the manual, German is derived and held to the same standard (`.claude/rules/language.md`). |
 
@@ -87,7 +87,7 @@ These came out of the interview and override the ranking where they apply.
   is a tunnel the user sets up themselves. **Amended 2026-10-17:** the mobile
   app reaches the desktop through the blind relay, end-to-end encrypted, paired
   in person at the desktop, and never able to loosen a protection
-  ([`mobile-remote-concept.md`](./mobile-remote-concept.md)).
+  ([concept in `kkrafft1999/snotra-mobile`](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md)).
 - **Prompt-injection detection is an extra layer, never the protection.** It
   may warn, it must not be relied on; isolation and approvals are what protect.
 - **Silent misbehaviour is the worst failure.** Of all the ways the app can
