@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { createSkillsService, MAX_SKILLS_PER_DIRECTORY } = require('../src/main/services/skills-service');
+const { createSkillsService, bundledSystemSkillsDir, MAX_SKILLS_PER_DIRECTORY } = require('../src/main/services/skills-service');
 const { translateMessage } = require('../src/shared/i18n');
 
 // The service hands over keys since #353; the German wording is checked through
@@ -403,4 +403,10 @@ test('the per-folder cap keeps the first skills by name, whatever the directory 
   const { skills } = await service.listCatalog({});
   assert.equal(skills.length, MAX_SKILLS_PER_DIRECTORY);
   assert.deepEqual(skills.map((skill) => skill.name), names.slice(0, MAX_SKILLS_PER_DIRECTORY));
+});
+
+test('the system skills sit next to the app, and there are none without an app path', () => {
+  assert.equal(bundledSystemSkillsDir({ app: { getAppPath: () => '/App' }, path: path.posix }), '/App/system-skills');
+  assert.equal(bundledSystemSkillsDir({ app: {}, path }), null);
+  assert.equal(bundledSystemSkillsDir({ app: undefined, path }), null);
 });

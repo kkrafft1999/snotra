@@ -87,3 +87,25 @@ test('a folder that is gone still does not open', async (t) => {
   assert.equal(root(), null);
   assert.deepEqual(warnings, []);
 });
+
+test('an activation that changes the root is reported with the new root, opening the same folder again is not', async (t) => {
+  const folder = await makeFolder(t);
+  let root = null;
+  const changes = [];
+  const activation = createWorkspaceActivation({
+    fs,
+    path,
+    workspaceFolderStore: { ...fullDiskStore(), persistLastFolder: async () => {} },
+    setActiveWorkspaceRoot: (next) => {
+      root = next;
+    },
+    getActiveWorkspaceRoot: () => root,
+    onWorkspaceChanged: (next) => changes.push(next),
+    log: { warn() {} },
+  });
+
+  await activation.activateChosenFolder(folder);
+  await activation.activateChosenFolder(folder);
+
+  assert.deepEqual(changes, [folder]);
+});

@@ -66,6 +66,8 @@ function createChatSessionSettings({
   applyPreset,
   getDefaultPresetId,
   isPresetUsable = () => true,
+  // Writes the mode into the policy store. A result with `ok: false` means the
+  // store refused it — "Auto" without encrypted storage (#419).
   applyMode,
   // Womit der Chat gerade liefe. Ohne die beiden wird stur angewandt — das ist
   // richtig, nur teurer.
@@ -203,6 +205,18 @@ function createChatSessionSettings({
   }
 
   /**
+   * A chat stored at "Auto" on a system that lost its encrypted storage
+   * (#419): the store refuses "Auto", and the chat runs at the default mode
+   * rather than at what the last chat left.
+   */
+  async function applyModeOrDefault(mode) {
+    const result = await applyMode(mode);
+    if (result?.ok === false && mode !== DEFAULT_TOOL_PERMISSION_MODE) {
+      await applyMode(DEFAULT_TOOL_PERMISSION_MODE);
+    }
+  }
+
+  /**
    * Chat wird zum aktiven: gespeichertes Modell und gespeicherten Modus
    * anwenden. Liefert, was danach gilt — die Oberfläche liest ihren Stand
    * anschließend ohnehin neu, der Rückgabewert macht es für Tests prüfbar.
@@ -237,7 +251,7 @@ function createChatSessionSettings({
     // chat on screen into the store; it discards nothing on its own (#320).
     // The mode goes first (#559): a model switch that fails must not leave
     // this chat running under the mode of the one before it.
-    if (mode !== activeMode) await applyMode(mode);
+    if (mode !== activeMode) await applyModeOrDefault(mode);
     if (presetId && presetId !== (await getActivePresetId())) await applyPreset(presetId);
     // Only the chat's *own* mode changing voids its cards and approvals — a
     // chat restored from "auto" to "smart", say (concept §7).

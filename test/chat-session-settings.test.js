@@ -570,3 +570,44 @@ test('a chat not saved yet takes its overrides along on the first save (#774)', 
   assert.equal(history.store.sessions.length, 0);
   assert.deepEqual(settings.valuesFor('chat-new').configOverrides, { tools: { on: ['fetch_url'] } });
 });
+
+test('a chat whose "Auto" the store refuses runs at "smart" rather than at the last chat\'s mode (#419)', async () => {
+  const history = createFakeChatHistoryStore([{ id: 'chat-auto', toolPermissionMode: 'auto' }]);
+  const modes = [];
+  const settings = createChatSessionSettings({
+    chatHistoryStore: history,
+    applyPreset: async () => {},
+    getDefaultPresetId: async () => 'preset-a',
+    // The store as it answers without encrypted storage: "Auto" is refused.
+    applyMode: async (mode) => {
+      modes.push(mode);
+      return mode === 'auto' ? { ok: false, error: { key: 'permissions.error.autoNeedsEncryption' } } : { ok: true };
+    },
+    getActiveMode: async () => 'ask-all',
+    log: { warn() {} },
+  });
+
+  await settings.activate('chat-auto');
+
+  assert.deepEqual(modes, ['auto', 'smart']);
+});
+
+test('a refused mode that already is "smart" is not tried twice (#419)', async () => {
+  const history = createFakeChatHistoryStore([{ id: 'chat-smart', toolPermissionMode: 'smart' }]);
+  const modes = [];
+  const settings = createChatSessionSettings({
+    chatHistoryStore: history,
+    applyPreset: async () => {},
+    getDefaultPresetId: async () => 'preset-a',
+    applyMode: async (mode) => {
+      modes.push(mode);
+      return { ok: false };
+    },
+    getActiveMode: async () => 'ask-all',
+    log: { warn() {} },
+  });
+
+  await settings.activate('chat-smart');
+
+  assert.deepEqual(modes, ['smart']);
+});

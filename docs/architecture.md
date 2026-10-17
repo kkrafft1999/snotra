@@ -94,9 +94,11 @@ Shared (src/shared/: contracts, runtime, i18n, manual, presentation)
 **What is enforced.** `src/application/` imports only modules under
 `src/application/` and `src/shared/`, and no package or Node built-in
 (`test/application-layer-imports.test.js`). So the core knows neither Electron
-nor the file system nor any provider *implementation*. Nothing else in this
-picture is checked by a test: not the direction between the main layers, not
-the renderer's imports, not what the composition root may contain.
+nor the file system nor any provider *implementation*. The composition root is
+held to wiring by `test/composition-root-wiring.test.js` (see
+[Composition root](#composition-root)). Nothing else in this picture is checked
+by a test: not the direction between the main layers, not the renderer's
+imports.
 
 **Where the picture is rounder than the code:**
 
@@ -353,8 +355,9 @@ what the engine passes changes the port as well:
   Two read paths, deliberately separate and nailed down in
   `test/infrastructure-boundaries.test.js`: `createMcpConfigStorePort` returns
   the display form without secrets and is what handlers and renderer reach;
-  `createMcpSecretsPort` decrypts and exists only for the service that starts
-  the processes. MCP secrets additionally feed into `readOwnSecrets`
+  `createMcpSecretsPort` decrypts and is read only by `reload` in
+  `main/services/mcp-settings.js`, which hands the result to the service that
+  starts the processes. MCP secrets additionally feed into `readOwnSecrets`
   (`main/services/own-secrets.js`) — an MCP server could otherwise return its
   own token via a tool result — and are masked out of error messages and stderr
   excerpts (`main/services/mcp-status-masking.js`) before a status leaves the
@@ -753,8 +756,9 @@ What it does on each platform
   under its own name, as if a child of that name had changed; unless such a
   child exists, they count as an event on the folder itself.
 
-`onError` always names the folder whose watch failed. The composition writes it
-to the log, at most one line per watcher and minute.
+`onError` always names the folder whose watch failed. `services/watcher-warning.js`
+writes it to the log, at most one line per watcher and minute, with a count of
+what it held back since.
 
 On top of it sit two thin shells that only say *what* is being watched:
 
@@ -1306,19 +1310,26 @@ Electron bootstrap:
    preferences adapters → `createChatEngine`)
 4. Registers IPC handlers with injected dependencies
 
-The rule of #508 is that it holds wiring and nothing else, and #510 cut it from
-983 to 831 lines. It has grown back to about 1,090 and holds decisions again:
-how a chat stored at "Auto" is put back to "Smart" when the encrypted storage
-has gone (#419), the flow of the MCP settings test (reload the saved servers,
-connect one, mask the status), and the rate limit of the watcher warning (one
-log line per watcher and minute). Moving the three into services with tests,
-and a guard that keeps the file at wiring, is
-[#1005](https://github.com/kkrafft1999/snotra/issues/1005). It also imports
-`applyActivePreset` and `isPresetUsable` from `ipc/settings-handlers.js`, a
-handler module — the logic belongs in a service
-([#1006](https://github.com/kkrafft1999/snotra/issues/1006)). The rule for new
-code stays that of #508: whatever makes a decision or shapes data lives next to
-its topic and is tested there. These are the topics that did move out:
+The rule of #508 is that it holds wiring and nothing else. #510 cut it from
+983 to 831 lines; it grew back to about 1,120 with decisions in it again, and
+#1005 cut it to about 940. Whatever makes a decision or shapes data lives next
+to its topic and is tested there; the composition root creates it and passes
+it on.
+
+`test/composition-root-wiring.test.js` keeps it that way. It reads the source
+without comments and strings and fails on a branch whose condition is anything
+but "was this optional dependency handed in" (`Menu`, `shell`, `watchFile`,
+`manual` …, an explicit list), on a loop, `switch`, `try`/`catch`, `.catch(`,
+`else`, comparison, clock or timer, and on more than 1,000 lines. Falling back
+with `||` or `??` and optional calls stay allowed — they wire a default, they
+do not decide. A test in the same file feeds it the pieces #1005 moved out, so
+the guard itself is checked to catch them.
+
+It still imports `applyActivePreset` and `isPresetUsable` from
+`ipc/settings-handlers.js`, a handler module — the logic belongs in a service
+([#1006](https://github.com/kkrafft1999/snotra/issues/1006)).
+
+These are the topics that did move out:
 
 | Topic | Module |
 | ----- | ------ |
@@ -1329,14 +1340,21 @@ its topic and is tested there. These are the topics that did move out:
 | Which skills and tools a chat has — the composer pill (`CHAT_GET_CONFIGURATION`) and the model's `get_configuration` (#773) | `services/chat-configuration-service.js`, `ipc/chat-configuration-handlers.js`; why a tool is not offered: `whyNotOffered` in `tools/workspace-tool-registry.js` |
 | The model's proposal to switch a skill or tool for one chat (`propose_config_change`, #774): checked in main, asked on a card (approval checkpoint `config`), kept in the chat's row | engine: `proposeConfigChange` / `refreshCapabilities` in `application/chat/chat-engine.js`, port `application/ports/config-proposal-port.js`; check: `prepareProposal` in `services/chat-configuration-service.js`; storage: `configOverridesFor` in `services/chat-session-settings.js`; arithmetic: `contracts/chat-configuration.js`; card: `renderer/utils/config-proposal-view.js` |
 | The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |
+| A chat whose "Auto" the policy store refuses runs at "Smart" (#419) | `applyModeOrDefault` in `services/chat-session-settings.js` |
+| Settings › MCP: the saved servers taken over into the service, the test of one server (reload, connect, mask), the start-up move of deselected tools (#449) | `services/mcp-settings.js` |
+| One log line per watcher and minute for a failing watch (#648) | `services/watcher-warning.js` |
+| The switch in front of `run_python` and `shell_execute`: offered only when found and switched on, the sandbox self-test only when on, and what is missing (#773) | `services/execution-tool-settings.js` |
+| The remembered interface language and hidden-files switch the menus read synchronously; preferences that are on until switched off | `services/remembered-ui-prefs.js`, `services/ui-pref-switches.js` |
+| A folder switch that changed the root: approvals pruned, watchers moved, skill scans dropped | `onWorkspaceChanged` of `services/workspace-activation.js`; the reactions stay wiring |
+| A push to the window only while it exists; the approval notification channels | `ipc/window-push.js`, `ipc/approval-notification-handlers.js` |
+| Where the bundled system skills are; the OS version for the feedback form | `bundledSystemSkillsDir` in `services/skills-service.js`, `osVersionReader` in `services/feedback-service.js` |
 | The estimated chat cost (#949): prices per model — override, local, table — and the price-table update, the only request it makes, on the user's click | service: `services/model-price-service.js` (snapshot `data/model-prices.json`, renewed by `scripts/update-model-prices.js`); a round priced in `adapters/provider-llm-adapter.js`, the turn summed in `application/chat/chat-engine.js`; arithmetic: `contracts/cost.js`; display: `renderer/components/CostPanel.js`, `renderer/components/ModelPricesSettings.js` |
 
-What legitimately stays in the module are the small state holders the wiring needs — the
-remembered language, the hidden-files switch, whether a web search key is
-present, the two execution switches — and the callbacks that tie services to
-one another (pruning chat-scoped permissions, telling the renderer to read
-again). They exist because two services meet there, not because of a rule of
-their own.
+What legitimately stays in the module is the one state holder that has no
+rule of its own — whether a web search key is present — and the callbacks that
+tie services to one another (pruning chat-scoped permissions, telling the
+renderer to read again, moving the watchers along on a folder switch). They
+exist because two services meet there, not because of a rule of their own.
 
 `src/main/index.js` is the Electron bootstrap, and it does more than call
 `createApplication()`. Before it, it registers the privileges of the preview
@@ -2229,6 +2247,7 @@ What a test holds, as of 2026-10-17:
 | `test/application-layer-imports.test.js` | `src/application/` imports only `application/` + `shared/`, no package, no Node built-in |
 | `test/infrastructure-boundaries.test.js` | Storage without a provider-registry leak; store ports without decrypted secrets; MCP settings handlers never reach the decrypting port |
 | `test/adapter-port-shapes.test.js` | Port adapters expose only permitted methods |
+| `test/composition-root-wiring.test.js` | `create-application.js` holds wiring only: no branch beyond "was this optional dependency handed in", no loop, comparison, `try`/`catch` or clock, at most 1,000 lines ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)) |
 | `test/filesystem-port-typedef.test.js` | The `filesystem-port` typedef lists exactly the members of its adapter (#650) |
 | `test/architecture-doc.test.js` | Every path this document names exists, the layer table names every directory under `src/`, the port lists match the two `ports/` folders ([#1009](https://github.com/kkrafft1999/snotra/issues/1009)) |
 | `test/contracts*.test.js` | Wire enums and settings DTOs at the IPC boundary |
@@ -2245,11 +2264,10 @@ What a test holds, as of 2026-10-17:
 
 What no test holds, although the picture above suggests it: the direction
 between the main layers and the imports of the renderer, which are conventions
-only; and three things that drifted for want of a check — the content of the
-composition root ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)),
-the thinness of the IPC handlers
-([#1006](https://github.com/kkrafft1999/snotra/issues/1006)) and the size of a
-module.
+only; and two things that drifted for want of a check — the thinness of the
+IPC handlers ([#1006](https://github.com/kkrafft1999/snotra/issues/1006)) and
+the size of a module other than the composition root, which has had its guard
+since [#1005](https://github.com/kkrafft1999/snotra/issues/1005).
 
 ## Renderer tests against the DOM
 
@@ -2825,15 +2843,15 @@ Anything coming from a file, a model answer or a text field still goes through
 ### Main process: a remembered locale and a rebuilt menu
 
 The menu bar and the context menu are built **synchronously**; an `await` on
-the preferences would mean a menu opening without labels. `create-application`
-therefore keeps the locale in memory (the same construction as the web search
+the preferences would mean a menu opening without labels.
+`services/remembered-ui-prefs.js` therefore keeps the locale in memory (the same construction as the web search
 key) and hands `getAppLocale()` around. The language saves the moment it is
 picked in *Settings › General*, not on Apply (#297). A change runs like this:
 
 ```
 Renderer: language picked -> setUIPrefs({ appLocale })
   -> settings-handlers writes appLocale
-  -> onAppLocaleChanged -> create-application remembers the locale
+  -> onAppLocaleChanged -> remembered-ui-prefs remembers the locale
                         -> main/index.js rebuilds the menu bar
   -> Renderer: once the stored value comes back, setLocale() redraws the interface
 ```
