@@ -6,6 +6,7 @@ const assert = require('node:assert/strict');
 const {
   FEEDBACK_ENDPOINT,
   createFeedbackService,
+  osVersionReader,
   resolveFeedbackEndpoint,
 } = require('../src/main/services/feedback-service');
 
@@ -150,4 +151,10 @@ test('only a loopback address may replace the endpoint (#1045)', () => {
   assert.equal(resolveFeedbackEndpoint({ SNOTRA_FEEDBACK_ENDPOINT: 'http://127.0.0.1:4711/api/feedback' }), 'http://127.0.0.1:4711/api/feedback');
   assert.equal(resolveFeedbackEndpoint({ SNOTRA_FEEDBACK_ENDPOINT: 'https://evil.example/api' }), FEEDBACK_ENDPOINT);
   assert.equal(resolveFeedbackEndpoint({ SNOTRA_FEEDBACK_ENDPOINT: 'not a url' }), FEEDBACK_ENDPOINT);
+});
+
+test('the OS version comes from Electron, and from the kernel release in plain Node', () => {
+  const os = { release: () => '24.1.0' };
+  assert.equal(osVersionReader({ getSystemVersion: () => '15.1' }, os)(), '15.1');
+  assert.equal(osVersionReader({}, os)(), '24.1.0');
 });

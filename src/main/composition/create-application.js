@@ -13,7 +13,7 @@ const { createFileChangeRecorder } = require('../services/file-change-recorder')
 const { createWhisperService } = require('../services/whisper-service');
 const { createRealtimeTranscriptionService } = require('../services/realtime-transcription-service');
 const { createUpdateService } = require('../services/update-service');
-const { createSkillsService } = require('../services/skills-service');
+const { createSkillsService, bundledSystemSkillsDir } = require('../services/skills-service');
 const { createSkillsWatcher } = require('../services/skills-watcher');
 const { createWorkspaceWatcher } = require('../services/workspace-watcher');
 const { createSkillSuggestionService } = require('../services/skill-suggestion-service');
@@ -22,9 +22,8 @@ const { createToolPolicyStore } = require('../services/tool-policy-store');
 const { KEY_ALWAYS_DURABLE } = require('../services/safe-storage-key-durability');
 const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
 const { createSessionGrants } = require('../../application/permissions/session-grants');
-const { PERMISSION_DENIAL_REASONS, DEFAULT_TOOL_PERMISSION_MODE } = require('../../shared/contracts/tool-permissions');
+const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/workspace-tree');
-const { createMessage } = require('../../shared/contracts/message');
 const { TOOL_SETUPS } = require('../../shared/contracts/chat-configuration');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createManualLookup, loadVendoredMarkedLexer } = require('../services/manual-lookup');
@@ -56,7 +55,7 @@ const {
   createWorkspaceFolderStorePort,
 } = require('../adapters/persistence-store-adapters');
 const { createOwnSecrets } = require('../services/own-secrets');
-const { maskMcpStatuses } = require('../services/mcp-status-masking');
+const { createMcpSettings } = require('../services/mcp-settings');
 const { createSecurityPageData } = require('../services/security-page-data');
 const { createProviderSecretsPort } = require('../adapters/provider-secrets-adapter');
 const { createCredentialAdapter } = require('../adapters/credential-adapter');
@@ -73,7 +72,10 @@ const { registerHtmlPreviewHandlers } = require('../ipc/html-preview-handlers');
 const { createFileContextMenu } = require('../services/file-context-menu');
 const { createMoveToTrash } = require('../services/move-to-trash');
 const { withHomeDir } = require('../services/home-dir');
-const { DEFAULT_LOCALE, normalizeLocale } = require('../../shared/i18n');
+const { createRememberedUiPrefs } = require('../services/remembered-ui-prefs');
+const { createWatcherWarning } = require('../services/watcher-warning');
+const { defaultOnSwitch } = require('../services/ui-pref-switches');
+const { createExecutionToolSettings, pythonCommandForSandbox } = require('../services/execution-tool-settings');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
 const { registerVoiceHandlers } = require('../ipc/voice-handlers');
 const {
@@ -85,12 +87,14 @@ const { createChatSessionSettings } = require('../services/chat-session-settings
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
 const { registerFeedbackHandlers } = require('../ipc/feedback-handlers');
-const { createFeedbackService, resolveFeedbackEndpoint } = require('../services/feedback-service');
+const { createFeedbackService, osVersionReader, resolveFeedbackEndpoint } = require('../services/feedback-service');
 const { registerNoticeHandlers } = require('../ipc/notice-handlers');
 const { createAppNotices, postStoreFileEvent } = require('../services/app-notices');
 const { registerSkillSuggestionHandlers } = require('../ipc/skill-suggestion-handlers');
 const { registerSkillMoveHandlers } = require('../ipc/skill-move-handlers');
 const { registerChatConfigurationHandlers } = require('../ipc/chat-configuration-handlers');
+const { registerApprovalNotificationHandlers } = require('../ipc/approval-notification-handlers');
+const { createWindowPush } = require('../ipc/window-push');
 const { createChatConfigurationService } = require('../services/chat-configuration-service');
 const { registerShellHandlers } = require('../ipc/shell-handlers');
 const { registerPreviewHistoryMenuHandlers } = require('../ipc/preview-history-menu-handlers');
@@ -102,8 +106,6 @@ const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
-const { migrateMcpDisabledTools } = require('../services/mcp-disabled-tools-migration');
-const { qualifiedMcpToolName } = require('../../shared/contracts/mcp');
 
 function createApplication({
   app,
@@ -136,7 +138,8 @@ function createApplication({
   defaultProviderId = 'openai',
   speechProviderId = 'openai',
   updates: updatesOverride,
-  systemSkillsDir,
+  /** Where the system skills are; by default next to the app (`system-skills`). */
+  systemSkillsDir = bundledSystemSkillsDir({ app, path }),
   /**
    * `fs.watch` aus dem synchronen fs-Modul — `fs` ist hier fs/promises und
    * hat es nicht. Fehlt es, laeuft alles ohne Skill-Watcher (Issue #126).
@@ -193,6 +196,8 @@ function createApplication({
   // Notices for the window (#1001). Created first: the stores report what
   // they set aside while they are read, before the window exists.
   const notices = givenNotices || createAppNotices();
+  // The pushes wired here: none before the window opens or after it closes.
+  const pushToWindow = createWindowPush(getMainWindow);
 
   const storage = createStorageService({
     app,
@@ -221,43 +226,10 @@ function createApplication({
   const workspaceFolderStore = createWorkspaceFolderStorePort(storage);
   const webSearchStore = createWebSearchStorePort(storage);
 
-  // ── Interface language in the main process (epic #277) ────────────────────
-  // The menu bar and the context menu are built synchronously; an `await` on
-  // the preferences would mean a menu opening without labels. Hence a
-  // remembered value, written forward by startup and by saving the settings —
-  // the same construction as the web search key above.
-  let appLocale = DEFAULT_LOCALE;
-  const getAppLocale = () => appLocale;
-  void uiPrefsStore.readUIPrefs()
-    .then((prefs) => {
-      const stored = normalizeLocale(prefs.appLocale);
-      if (stored === appLocale) return;
-      appLocale = stored;
-      // The first menu is already in place while the file is still being read.
-      // If the stored language differs, the caller rebuilds it now — long
-      // before anyone opens it.
-      onAppLocaleChanged?.(appLocale);
-    })
-    .catch(() => {});
-
-  // ── Hidden files in the tree (#436) ───────────────────────────────────────
-  // The renderer owns the switch; the main process remembers it only for the
-  // checkbox in the View menu, which is built synchronously like the labels.
-  // A toggle that beats the start-up read wins — it is the newer wish.
-  let showHiddenFiles = false;
-  let showHiddenFilesSet = false;
-  const getShowHiddenFiles = () => showHiddenFiles;
-  const setShowHiddenFiles = (next) => {
-    showHiddenFilesSet = true;
-    showHiddenFiles = next === true;
-    onShowHiddenFilesChanged?.(showHiddenFiles);
-  };
-  void uiPrefsStore.readUIPrefs()
-    .then((prefs) => {
-      if (showHiddenFilesSet || prefs.showHiddenFiles !== true) return;
-      setShowHiddenFiles(true);
-    })
-    .catch(() => {});
+  // The interface language (epic #277) and the hidden-files switch (#436),
+  // remembered for the menus the caller builds synchronously.
+  const rememberedUiPrefs = createRememberedUiPrefs({ uiPrefsStore, onAppLocaleChanged, onShowHiddenFilesChanged });
+  const { getAppLocale, getShowHiddenFiles } = rememberedUiPrefs;
 
   // Websuche (Issue #63). Ob ein Schluessel hinterlegt ist, muss beim Bauen der
   // Tool-Liste synchron feststehen — deshalb ein gemerkter Stand, den nur der
@@ -316,12 +288,8 @@ function createApplication({
     // an approval in the chat just left. Now each chat keeps its own: the new
     // chat inherits nothing because approvals are bound to their chat, and
     // what the left chat no longer needs goes in `onActivated`.
-    applyMode: async (mode) => {
-      const result = await toolPolicyStore.setMode(mode);
-      // A chat stored at "Auto" on a system that lost its encrypted storage
-      // (#419): it runs at "Smart" rather than at what the last chat left.
-      if (!result?.ok && mode !== DEFAULT_TOOL_PERMISSION_MODE) await toolPolicyStore.setMode(DEFAULT_TOOL_PERMISSION_MODE);
-    },
+    // A chat whose "Auto" the store refuses falls back to "Smart" there (#419).
+    applyMode: (mode) => toolPolicyStore.setMode(mode),
     onChatModeChanged: (chatId) => invalidateChatPermissions(chatId),
     onActivated: () => pruneChatScopedPermissions(),
   });
@@ -361,26 +329,24 @@ function createApplication({
     fs,
     path,
     workspaceFolderStore,
-    setActiveWorkspaceRoot: (folderPath) => {
-      const before = workspaceState.getActiveWorkspaceRoot();
-      workspaceState.setActiveWorkspaceRoot(folderPath);
-      if (workspaceState.getActiveWorkspaceRoot() !== before) {
-        // A run keeps working in its own folder when the user opens another
-        // one (#320), and keeps its cards and approvals with it. Everything
-        // else of the folder just left goes, as before (concept §7).
-        pruneChatScopedPermissions();
-        // The folder skills of the workspace just left are none of our
-        // business any more; the watcher moves along (#126). So does the
-        // tree's: it closes the old folder's watches, or a handle would stay
-        // behind (#158), and drops what it had not reported yet, or a report
-        // naming the old folder would still arrive (#650).
-        skillsWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
-        workspaceWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
-        // The watcher follows only the open folder, so a cached scan of the
-        // one just left would go stale unnoticed and be served again when it
-        // comes back (#578). Dropped here, it is read afresh then.
-        dropSkillScans();
-      }
+    setActiveWorkspaceRoot: workspaceState.setActiveWorkspaceRoot,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    onWorkspaceChanged: (root) => {
+      // A run keeps working in its own folder when the user opens another
+      // one (#320), and keeps its cards and approvals with it. Everything
+      // else of the folder just left goes, as before (concept §7).
+      pruneChatScopedPermissions();
+      // The folder skills of the workspace just left are none of our
+      // business any more; the watcher moves along (#126). So does the
+      // tree's: it closes the old folder's watches, or a handle would stay
+      // behind (#158), and drops what it had not reported yet, or a report
+      // naming the old folder would still arrive (#650).
+      skillsWatcher?.watchWorkspace(root);
+      workspaceWatcher?.watchWorkspace(root);
+      // The watcher follows only the open folder, so a cached scan of the
+      // one just left would go stale unnoticed and be served again when it
+      // comes back (#578). Dropped here, it is read afresh then.
+      dropSkillScans();
     },
   });
 
@@ -428,13 +394,6 @@ function createApplication({
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
     getLocale: getAppLocale,
   });
-  // Shell-Ausfuehrung (Issue #102). Dieselben zwei Bedingungen wie bei Python —
-  // gefundene Shell und ausdrueckliche Einstellung —, nur mit groesserer
-  // Tragweite: ein Befehl kann alles, was der angemeldete Nutzer kann.
-  let shellExecutionEnabled = false;
-  // Die Erkennung laeuft unabhaengig vom Schalter: sie liest den PATH des
-  // Nutzers, den auch der Python-Runner braucht (Issue #111). Der Schalter
-  // steuert das Tool, nicht das Wissen ueber die Shell.
   // Isolation for both execution tools (#329). Detection — dependency check,
   // proxy start, self-test — runs once per app start, on the first card or
   // run, or when the settings show a switched-on tool. Nothing of it runs for
@@ -450,10 +409,7 @@ function createApplication({
     readShellPath: async () => (await shellRunnerService.detect()).path || '',
     // The interpreter run_python would use decides whether pip needs its
     // certifi fallback inside the sandbox (decision 2b on #329).
-    readPythonCommand: async () => {
-      const python = pythonRunnerService.describe();
-      return python.found ? python.command : 'python3';
-    },
+    readPythonCommand: async () => pythonCommandForSandbox(pythonRunnerService),
   });
   // Program allowances (#408): a program found through the user's PATH, and
   // folders checked against Snotra's own storage and what the sandbox keeps
@@ -475,32 +431,18 @@ function createApplication({
     path,
     sandbox: sandboxService,
   });
-  const shellRunner = {
-    isAvailable: () => shellExecutionEnabled && shellRunnerService.isAvailable(),
-    // What is missing while it is not (#773): the switch, or a shell.
-    setupNeeded: () => (shellExecutionEnabled ? TOOL_SETUPS.SHELL : TOOL_SETUPS.SHELL_SWITCH),
-    run: (request) => shellRunnerService.run(request),
-  };
-  const shellSettings = {
-    describe: () => ({
-      ...shellRunnerService.describe(),
-      enabled: shellExecutionEnabled,
-      sandbox: sandboxService.describe(),
-    }),
-    async refresh() {
-      const prefs = await uiPrefsStore.readUIPrefs();
-      shellExecutionEnabled = prefs.shellExecutionEnabled === true;
-      await shellRunnerService.detect();
-      if (shellExecutionEnabled) await sandboxService.detect();
-      return shellSettings.describe();
-    },
-  };
+  // Shell execution (#102): the same two conditions as for Python, with a
+  // wider reach — a command can do whatever the signed-in user can.
+  const { runner: shellRunner, settings: shellSettings } = createExecutionToolSettings({
+    runnerService: shellRunnerService,
+    sandboxService,
+    readUIPrefs: () => uiPrefsStore.readUIPrefs(),
+    enabledPref: 'shellExecutionEnabled',
+    setup: TOOL_SETUPS.SHELL,
+    switchSetup: TOOL_SETUPS.SHELL_SWITCH,
+  });
 
-  // Python-Ausfuehrung (Issue #86). Zwei Bedingungen muessen erfuellt sein,
-  // damit das Tool ueberhaupt auftaucht: ein gefundener Interpreter und die
-  // ausdrueckliche Einstellung — sie ist standardmaessig aus, weil
-  // ausgefuehrter Code die Workspace-Grenze umgeht.
-  let pythonExecutionEnabled = false;
+  // Python execution (#86): a found interpreter and the switch, off by default.
   const pythonRunnerService = createPythonRunnerService({
     spawn: childProcess.spawn,
     fs,
@@ -513,25 +455,14 @@ function createApplication({
     readShellPath: async () => (await shellRunnerService.detect()).path || '',
     sandbox: sandboxService,
   });
-  const pythonRunner = {
-    isAvailable: () => pythonExecutionEnabled && pythonRunnerService.isAvailable(),
-    setupNeeded: () => (pythonExecutionEnabled ? TOOL_SETUPS.PYTHON : TOOL_SETUPS.PYTHON_SWITCH),
-    run: (request) => pythonRunnerService.run(request),
-  };
-  const pythonSettings = {
-    describe: () => ({
-      ...pythonRunnerService.describe(),
-      enabled: pythonExecutionEnabled,
-      sandbox: sandboxService.describe(),
-    }),
-    async refresh() {
-      const prefs = await uiPrefsStore.readUIPrefs();
-      pythonExecutionEnabled = prefs.pythonExecutionEnabled === true;
-      await pythonRunnerService.detect();
-      if (pythonExecutionEnabled) await sandboxService.detect();
-      return pythonSettings.describe();
-    },
-  };
+  const { runner: pythonRunner, settings: pythonSettings } = createExecutionToolSettings({
+    runnerService: pythonRunnerService,
+    sandboxService,
+    readUIPrefs: () => uiPrefsStore.readUIPrefs(),
+    enabledPref: 'pythonExecutionEnabled',
+    setup: TOOL_SETUPS.PYTHON,
+    switchSetup: TOOL_SETUPS.PYTHON_SWITCH,
+  });
 
   // Der Seitenabruf braucht keinen Schluessel und keine Einrichtung; die
   // Adressregeln stecken im Adapter (Issue #95).
@@ -546,7 +477,7 @@ function createApplication({
     fs,
     path,
     os,
-    isSelfMemoryAllowed: async () => (await uiPrefsStore.readUIPrefs()).memorySelfEnabled !== false,
+    isSelfMemoryAllowed: defaultOnSwitch(uiPrefsStore, 'memorySelfEnabled'),
     // Die Meldungen ans Modell zitieren eine Einstellungsseite; sie soll so
     // heissen, wie der Nutzer sie sieht (#294).
     getLocale: getAppLocale,
@@ -598,71 +529,16 @@ function createApplication({
   const mcpAdapter = createMcpAdapter({ mcpService });
   const mcpSecrets = createMcpSecretsPort(storage);
 
-  let mcpLoadFailed = false;
-  /**
-   * Uebernimmt die gespeicherte Serverliste in den laufenden Dienst (Issue
-   * #108). Entschluesselt wird genau hier und nur hier — der Rueckgabewert
-   * bleibt im Main-Prozess.
-   */
-  async function reloadMcpServers() {
-    try {
-      mcpService.setServers(await mcpSecrets.getMcpServersForRuntime());
-      mcpLoadFailed = false;
-    } catch (error) {
-      // The service keeps the servers it had — at start-up none. The MCP
-      // section says so until a reload gets through (#1002).
-      mcpLoadFailed = true;
-      throw error;
-    }
-  }
-
   // Provider keys, gateway headers, MCP secrets and the web search key, in
   // every form they can turn up in (concept §5, #505).
   const ownSecrets = createOwnSecrets({ llmConfigStore, providerSecrets, mcpSecrets, webSearchStore });
 
-  const mcpSettings = {
-    listServers: () => mcpConfigStore.readMcpServers(),
-    // A failed server's status carries its error and a stderr excerpt, and a
-    // server that stumbles at start-up likes to print its environment — so
-    // the catalogue gets the statuses masked, like the test result below
-    // (CR-B14-01). The snapshot itself stays synchronous so the display never
-    // waits for a hanging server; only reading the secrets is awaited.
-    async describeConnections() {
-      return maskMcpStatuses(mcpService.describeConnections(), await ownSecrets.readMcpSecrets());
-    },
-    describeSkippedTools: () => mcpAdapter.describeSkippedTools(),
-    /** Whether the last take-over of the saved servers failed (#1002). */
-    hasLoadFailed: () => mcpLoadFailed,
-    save: (input) => mcpConfigStore.saveMcpServer(input),
-    remove: (id) => mcpConfigStore.deleteMcpServer(id),
-    reload: reloadMcpServers,
-    async test(id) {
-      // Getestet wird der *gespeicherte* Server, nicht eine mitgeschickte
-      // Konfiguration: sonst muesste die Oberflaeche Geheimnisse senden.
-      await reloadMcpServers();
-      const status = await mcpService.connect(id);
-      if (!status) return { status: null, error: createMessage('settings.error.mcp.unknownServer', { id }) };
-      const [masked] = maskMcpStatuses([status], await ownSecrets.readMcpSecrets());
-      // The tested server's tools come with its status. `listTools()` would
-      // connect every enabled server and wait for the slowest (CR-B16-07).
-      return { status: masked, tools: status.toolNames };
-    },
-  };
+  // What Settings › MCP reads and does, and the take-over of the saved
+  // servers (#108); statuses go out masked (CR-B14-01).
+  const mcpSettings = createMcpSettings({ mcpService, mcpAdapter, mcpConfigStore, mcpSecrets, ownSecrets, uiPrefsStore });
 
-  // System-Skills liegen als Verzeichnis im App-Bundle (auch in app.asar
-  // lesbar); Ordner-Skills kommen aus Workspace und Home-Verzeichnis.
-  const resolvedSystemSkillsDir =
-    systemSkillsDir !== undefined
-      ? systemSkillsDir
-      : typeof app?.getAppPath === 'function'
-        ? path.join(app.getAppPath(), 'system-skills')
-        : null;
-  const skillsService = createSkillsService({
-    fs,
-    path,
-    os,
-    systemSkillsDir: resolvedSystemSkillsDir,
-  });
+  // Folder skills come from the workspace and the home folder.
+  const skillsService = createSkillsService({ fs, path, os, systemSkillsDir });
 
   // Aenderungen an den Skill-Verzeichnissen verwerfen den Scan-Cache und
   // melden sich beim Renderer (Issue #126) — „Skills neu laden“ bleibt als
@@ -677,28 +553,7 @@ function createApplication({
     mcpConfigStore,
   });
 
-  // A watch that fails — the kernel out of watches, the folder cap reached,
-  // a folder that cannot be watched — is said in the log, naming the folder
-  // (#648). A folder that keeps failing must not flood it, though: one line
-  // per watcher and minute, with a count of what was held back since.
-  const WATCHER_WARNING_INTERVAL_MS = 60_000;
-  const createWatcherWarning = (label) => {
-    let lastWarnedAt = -Infinity;
-    let heldBack = 0;
-    return (error, dir) => {
-      const now = Date.now();
-      if (now - lastWarnedAt < WATCHER_WARNING_INTERVAL_MS) {
-        heldBack += 1;
-        return;
-      }
-      lastWarnedAt = now;
-      const more = heldBack > 0 ? ` (${heldBack} more since the last warning)` : '';
-      heldBack = 0;
-      const reason = [error?.code, error?.message].filter(Boolean).join(' ');
-      console.warn(`[${label}] cannot watch ${dir}: ${reason}${more}`);
-    };
-  };
-
+  // A failing watch is logged, at most one line per watcher and minute (#648).
   skillsWatcher = watchFile
     ? createSkillsWatcher({
         watch: watchFile,
@@ -708,8 +563,7 @@ function createApplication({
         onError: createWatcherWarning('skills-watcher'),
         onChange: () => {
           skillsService.reload();
-          const win = getMainWindow();
-          if (win && !win.isDestroyed()) win.webContents.send(PUSH.SKILLS_CHANGED, {});
+          pushToWindow(PUSH.SKILLS_CHANGED);
         },
       })
     : null;
@@ -732,14 +586,8 @@ function createApplication({
         realpath: realpathNative,
         fs,
         onError: createWatcherWarning('workspace-watcher'),
-        onChange: ({ directories, complete }) => {
-          const win = getMainWindow();
-          if (!win || win.isDestroyed()) return;
-          win.webContents.send(
-            PUSH.FS_TREE_CHANGED,
-            createWorkspaceTreeChangedEvent({ directories, complete })
-          );
-        },
+        onChange: ({ directories, complete }) =>
+          pushToWindow(PUSH.FS_TREE_CHANGED, createWorkspaceTreeChangedEvent({ directories, complete })),
       })
     : null;
   workspaceWatcher?.watchWorkspace(workspaceState.getActiveWorkspaceRoot());
@@ -865,20 +713,10 @@ function createApplication({
   const approvalNotifier = createApprovalNotifier({
     Notification,
     getMainWindow,
-    isEnabled: async () => (await uiPrefsStore.readUIPrefs()).approvalNotificationsEnabled !== false,
-    openChat: (chatId) => {
-      const win = getMainWindow();
-      if (win && !win.isDestroyed()) win.webContents.send(PUSH.APPROVAL_NOTIFICATION_OPEN, { chatId });
-    },
+    isEnabled: defaultOnSwitch(uiPrefsStore, 'approvalNotificationsEnabled'),
+    openChat: (chatId) => pushToWindow(PUSH.APPROVAL_NOTIFICATION_OPEN, { chatId }),
   });
-  ipcMain.handle(REQ.APPROVAL_NOTIFICATION_SHOW, async (_event, payload) => ({
-    ok: true,
-    shown: await approvalNotifier.show(payload && typeof payload === 'object' ? payload : {}),
-  }));
-  ipcMain.handle(REQ.APPROVAL_NOTIFICATION_CLOSE, async (_event, payload) => ({
-    ok: true,
-    closed: approvalNotifier.close(payload?.requestId),
-  }));
+  registerApprovalNotificationHandlers({ ipcMain, approvalNotifier, REQ });
   // clipboard: „Informationen“ bietet den vollen Pfad zum Kopieren an (#123).
   const fileContextMenu = Menu && shell
     ? createFileContextMenu({ Menu, shell, dialog, clipboard, getLocale: getAppLocale, trashItem: moveToTrash })
@@ -906,10 +744,7 @@ function createApplication({
       readWorkspaceFile: fsService.readWorkspaceFile,
       resolveCheckedWorkspacePath: filesystem.resolveCheckedWorkspacePath,
       stat: (absPath) => fs.stat(absPath),
-      push: (payload) => {
-        const win = getMainWindow();
-        if (win && !win.isDestroyed()) win.webContents.send(PUSH.HTML_PREVIEW_EVENT, payload);
-      },
+      push: (payload) => pushToWindow(PUSH.HTML_PREVIEW_EVENT, payload),
     });
     registerHtmlPreviewHandlers({ ipcMain, htmlPreview, REQ });
   }
@@ -933,13 +768,8 @@ function createApplication({
     memory,
     webSearchSettings,
     imageGenerationSettings,
-    // A language change takes effect at once: the remembered value follows and
-    // the application menu is rebuilt — Electron cannot rename an item.
-    onAppLocaleChanged: (next) => {
-      appLocale = normalizeLocale(next);
-      onAppLocaleChanged?.(appLocale);
-    },
-    onShowHiddenFilesChanged: setShowHiddenFiles,
+    onAppLocaleChanged: rememberedUiPrefs.setAppLocale,
+    onShowHiddenFilesChanged: rememberedUiPrefs.setShowHiddenFiles,
     mcpSettings,
     pythonSettings,
     shellSettings,
@@ -962,7 +792,7 @@ function createApplication({
     getAppVersion: () => app.getVersion(),
     platform: process.platform,
     arch: process.arch,
-    getOsVersion: () => (typeof process.getSystemVersion === 'function' ? process.getSystemVersion() : os.release()),
+    getOsVersion: osVersionReader(process, os),
     isKnownProvider: (id) => providerCatalog.exists(id),
     endpoint: resolveFeedbackEndpoint(env),
   });
@@ -1045,8 +875,7 @@ function createApplication({
 
   /** Makes the renderer read the permission state again — the mode pill (#357). */
   function notifyToolPermissionsChanged() {
-    const win = getMainWindow();
-    if (win && !win.isDestroyed()) win.webContents.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+    pushToWindow(PUSH.TOOL_PERMISSIONS_CHANGED);
   }
 
   const runUpdateCheck = createUpdateCheck({
@@ -1054,7 +883,7 @@ function createApplication({
     getMainWindow,
     PUSH,
     // Read when the check runs, so the switch needs no restart (#987).
-    isAutomaticCheckEnabled: async () => (await uiPrefsStore.readUIPrefs()).autoUpdateCheckEnabled !== false,
+    isAutomaticCheckEnabled: defaultOnSwitch(uiPrefsStore, 'autoUpdateCheckEnabled'),
     env,
   });
 
@@ -1091,15 +920,8 @@ function createApplication({
           { name: 'shell', start: () => shellSettings.refresh() },
           { name: 'web search', start: () => webSearchSettings.refresh() },
           { name: 'image generation', start: () => imageGenerationSettings.refresh() },
-          // Gespeicherte MCP-Server uebernehmen (Issue #108). Startet noch
-          // keinen Prozess — der Dienst verbindet traege. Before that, a tool
-          // deselected per server moves to the one switch it has since #449.
-          {
-            name: 'MCP',
-            start: () => migrateMcpDisabledTools({ mcpConfigStore, uiPrefsStore, qualify: qualifiedMcpToolName, log: console })
-              .catch(() => {})
-              .then(() => reloadMcpServers()),
-          },
+          // The saved MCP servers (#108), lazily: no process starts yet.
+          { name: 'MCP', start: () => mcpSettings.start() },
         ],
         // Only now is it known which execution tools are there and whether
         // they run isolated; the mode pill read its state before that (#357).

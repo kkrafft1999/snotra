@@ -14,8 +14,20 @@
  *
  * Beide liefern den aufgeloesten Pfad oder `null`; `null` heisst „nicht
  * aktiviert“, der bisherige Root bleibt dann unveraendert.
+ *
+ * `onWorkspaceChanged` hears of an activation that changed the root, with the
+ * new one — opening the folder that is already open is no change, and the
+ * approvals, watchers and caches tied to it stay (concept §7).
  */
-function createWorkspaceActivation({ fs, path, workspaceFolderStore, setActiveWorkspaceRoot, log = console }) {
+function createWorkspaceActivation({
+  fs,
+  path,
+  workspaceFolderStore,
+  setActiveWorkspaceRoot,
+  getActiveWorkspaceRoot = () => null,
+  onWorkspaceChanged = null,
+  log = console,
+}) {
   function resolveCandidate(folderPath) {
     const raw = typeof folderPath === 'string' ? folderPath.trim() : '';
     if (!raw) return null;
@@ -56,7 +68,10 @@ function createWorkspaceActivation({ fs, path, workspaceFolderStore, setActiveWo
     } catch (error) {
       log.warn?.(`Could not remember the last opened folder: ${error?.message ?? error}`);
     }
+    const before = getActiveWorkspaceRoot();
     setActiveWorkspaceRoot(resolved);
+    const after = getActiveWorkspaceRoot();
+    if (after !== before) onWorkspaceChanged?.(after);
     return resolved;
   }
 

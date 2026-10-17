@@ -78,6 +78,19 @@ function retryAfterSeconds(response, body) {
 }
 
 /**
+ * The version of the operating system, as the form names it: Electron's
+ * `process.getSystemVersion()` (macOS 15.1, not the Darwin kernel), and the
+ * kernel release where there is no such call — plain Node, in tests.
+ *
+ * @param {{ getSystemVersion?: () => string }} proc  `process`
+ * @param {{ release: () => string }} os
+ * @returns {() => string}
+ */
+function osVersionReader(proc, os) {
+  return () => (typeof proc.getSystemVersion === 'function' ? proc.getSystemVersion() : os.release());
+}
+
+/**
  * @param {object} deps
  * @param {typeof fetch} deps.fetchImpl
  * @param {() => string} deps.getAppVersion
@@ -201,5 +214,6 @@ module.exports = {
   FEEDBACK_ENDPOINT,
   FEEDBACK_ENDPOINT_ENV,
   createFeedbackService,
+  osVersionReader,
   resolveFeedbackEndpoint,
 };
