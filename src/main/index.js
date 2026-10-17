@@ -242,6 +242,10 @@ function start() {
 
     openMainWindow();
 
+    // This version is up: an update helper waiting for it may now delete the
+    // previous one (#1003).
+    void application.confirmUpdateStarted().catch(() => {});
+
     // Interpreter suchen und den Stand der Tool-Einstellungen uebernehmen
     // (Issues #63, #86). Bewusst nicht abgewartet: das Fenster soll nicht auf
     // eine Versionsabfrage warten, und vor der ersten Modellantwort ist es

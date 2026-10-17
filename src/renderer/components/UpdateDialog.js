@@ -292,15 +292,18 @@ export function initUpdateDialog({ api }) {
       } else {
         actionsEl.appendChild(makeButton(t('update.download'), 'btn-primary', startDownload));
       }
-      // The last swap failed after the app had quit (#442). The running
-      // version is fine, so this is a warning and not an error — but it says
-      // why the same update is offered again, and where the log is.
+      // The last update failed after the app had quit (#442) — in the swap,
+      // or because the new version did not start and the helper went back
+      // (#1003). The running version is fine, so this is a warning and not an
+      // error — but it says why the same update is offered again, and where
+      // the log is.
       const failure = info?.lastInstallFailure;
       if (failure && canSelfUpdate) {
         const params = { version: failure.version, current, log: failure.logFile };
+        const key = failure.stage === 'start' ? 'update.available.lastFailedStart' : 'update.available.lastFailed';
         hintEl.textContent = failure.error
-          ? t('update.available.lastFailed', { ...params, error: failure.error })
-          : t('update.available.lastFailedPlain', params);
+          ? t(key, { ...params, error: failure.error })
+          : t(`${key}Plain`, params);
         hintEl.classList.add('warning');
         hintEl.classList.remove('hidden');
       }

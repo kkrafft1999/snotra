@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-[seit 1.25] Snotra schreibt seine eigenen Warnungen und Fehler in eine Logdatei auf deinem Rechner. Zusammen mit ein paar anderen Stellen — dem Tool-Protokoll im Chat, den Entwicklertools des Fensters und dem Update-Log unter Windows — enthält sie, was ein Fehlerbericht braucht. Diese Seite zeigt, wo was liegt und was du mitschickst, wenn du ein Problem meldest.
+[seit 1.25] Snotra schreibt seine eigenen Warnungen und Fehler in eine Logdatei auf deinem Rechner. Zusammen mit ein paar anderen Stellen — dem Tool-Protokoll im Chat, den Entwicklertools des Fensters und dem Update-Log — enthält sie, was ein Fehlerbericht braucht. Diese Seite zeigt, wo was liegt und was du mitschickst, wenn du ein Problem meldest.
 
 ## Was du brauchst
 
@@ -21,7 +21,7 @@ Den Chat oder den Dialog, in dem das Problem auftrat, und für eine Meldung ein 
 | Das Tool-Protokoll selbst zeigt etwas Seltsames — eine Zeile bleibt leer, ein Schritt fehlt | Drück `Cmd+Shift+D` / `Ctrl+Shift+D`. Snotra kopiert die Tool-Log-Diagnose als JSON in die Zwischenablage und sagt *Tool-Log-Diagnose kopiert*. |
 | Ein Fehler vom Anbieter | Der rote Kasten unter deiner Nachricht: [Wenn das Modell einen Fehler meldet](../provider-errors/). |
 | Das Fenster zeigt etwas Falsches oder reagiert nicht mehr | Zuerst die Logdatei. Für mehr *Ansicht › Entwicklertools*, der Reiter *Console*: Fehler stehen dort in Rot. |
-| Ein Update unter Windows ging nicht durch | `update-install.log` im Profilordner; der Update-Dialog nennt den Pfad. |
+| Ein Update ging nicht durch, oder die neue Version startete nicht | `update-install.log` im Profilordner; der Update-Dialog nennt den Pfad. |
 | Snotra startet gar nicht | Der Kasten, der das meldet, nennt die Logdatei. Erscheint kein Kasten, starte Snotra aus einem Terminal, siehe unten. |
 
 ## Die Logdatei

@@ -1229,6 +1229,8 @@ module.exports = {
   'update.available.manualHint': 'Diese Installation kann sich nicht selbst aktualisieren.',
   'update.available.lastFailed': 'Beim letzten Mal ließ sich Version {version} nicht einspielen ({error}), deshalb läuft noch Version {current}. Schließe jedes Fenster, das den Ordner von Snotra Agent zeigt, und versuch es dann noch einmal. Das Protokoll liegt unter {log}.',
   'update.available.lastFailedPlain': 'Beim letzten Mal ließ sich Version {version} nicht einspielen, deshalb läuft noch Version {current}. Schließe jedes Fenster, das den Ordner von Snotra Agent zeigt, und versuch es dann noch einmal. Das Protokoll liegt unter {log}.',
+  'update.available.lastFailedStart': 'Beim letzten Mal wurde Version {version} eingespielt, startete aber nicht ({error}), deshalb ist Snotra zu Version {current} zurückgekehrt. Das Protokoll liegt unter {log}.',
+  'update.available.lastFailedStartPlain': 'Beim letzten Mal wurde Version {version} eingespielt, startete aber nicht, deshalb ist Snotra zu Version {current} zurückgekehrt. Das Protokoll liegt unter {log}.',
   'update.download': 'Herunterladen',
   'update.retry': 'Erneut versuchen',
   'update.openReleasePage': 'Release-Seite öffnen',

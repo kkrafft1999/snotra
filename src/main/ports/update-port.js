@@ -11,10 +11,12 @@
  * @property {() => { ok: boolean }} cancelDownload
  * @property {() => Promise<{ ok: boolean }>} discardDownload
  * @property {() => Promise<{ ok: boolean, relaunching?: boolean, error?: string }>} installUpdate
- * @property {() => Promise<{ version: string, error: string, logFile: string } | null>} readInstallFailure
- *            A swap that failed after the app had quit (#442), until it is cleared.
+ * @property {() => Promise<{ version: string, stage: string, error: string, logFile: string } | null>} readInstallFailure
+ *            An update that failed after the app had quit (#442, #1003), until it is cleared.
  * @property {() => Promise<void>} clearInstallFailure
  *            Forgets that failure once it has been shown (#573).
+ * @property {() => Promise<boolean>} confirmInstallStarted
+ *            Tells a waiting update helper that this version runs (#1003).
  */
 
 module.exports = {};

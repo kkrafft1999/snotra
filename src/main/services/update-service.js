@@ -154,9 +154,11 @@ function createUpdateService({
   }
 
   /**
-   * Where the Windows helper reports after this process has quit (#442): a
-   * log of every step, and a status file that exists only when the swap
-   * failed. Both sit in the user data folder, which no update replaces.
+   * Where the helper reports after this process has quit (#442, #1003): a log
+   * of every step, and a status file that exists only when the update failed.
+   * On macOS and Linux the helper also writes `pendingFile` before it starts
+   * the new version, and waits for that version to remove it. All three sit
+   * in the user data folder, which no update replaces.
    */
   function getHelperFiles() {
     let dir;
@@ -168,6 +170,7 @@ function createUpdateService({
     return {
       logFile: path.join(dir, 'update-install.log'),
       statusFile: path.join(dir, 'update-install-failed.json'),
+      pendingFile: path.join(dir, 'update-install-pending.json'),
     };
   }
 
@@ -400,7 +403,10 @@ function createUpdateService({
    * A valid record stays until `clearInstallFailure()` (#573): the start check
    * that reads it may still fail to reach GitHub, and then nothing is shown.
    *
-   * @returns {Promise<{version: string, error: string, logFile: string} | null>}
+   * `stage` is `start` when the new version was put in place but did not
+   * start, and the helper went back to this one (#1003); `swap` otherwise.
+   *
+   * @returns {Promise<{version: string, stage: string, error: string, logFile: string} | null>}
    */
   async function readInstallFailure() {
     const { statusFile, logFile } = getHelperFiles();
@@ -425,9 +431,42 @@ function createUpdateService({
     }
     return {
       version,
+      stage: record.stage === 'start' ? 'start' : 'swap',
       error: typeof record.error === 'string' ? record.error.trim() : '',
       logFile: typeof record.log === 'string' && record.log ? record.log : logFile,
     };
+  }
+
+  /**
+   * Tells a waiting update helper that this version has started (#1003): it
+   * removes the record the helper wrote before it started the new version,
+   * and the helper then deletes the backup of the old one. Called once the
+   * main window is open.
+   *
+   * A record for this version or an older one is done with — it is this start
+   * that was waited for, or one left behind by a helper that never finished.
+   * A record for a newer version stays: that helper is still deciding, and
+   * this version is the one it is about to put back.
+   *
+   * @returns {Promise<boolean>} whether a record for this version was there
+   */
+  async function confirmInstallStarted() {
+    const { pendingFile } = getHelperFiles();
+    let raw;
+    try {
+      raw = await fsp.readFile(pendingFile, 'utf8');
+    } catch {
+      return false;
+    }
+    let version = '';
+    try {
+      const record = JSON.parse(raw);
+      if (typeof record?.version === 'string') version = record.version;
+    } catch { /* unreadable: done with, like a stale one */ }
+    const current = getCurrentVersion();
+    if (version && isNewerVersion(version, current)) return false;
+    await fsp.rm(pendingFile, { force: true }).catch(() => {});
+    return version === current;
   }
 
   /** Forgets a failed install once the user has been told. */
@@ -469,6 +508,7 @@ function createUpdateService({
     installUpdate,
     readInstallFailure,
     clearInstallFailure,
+    confirmInstallStarted,
   };
 }
 

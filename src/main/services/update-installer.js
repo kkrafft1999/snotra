@@ -1,17 +1,19 @@
 'use strict';
 
-// Tauscht die installierte App gegen die frisch geladene aus und startet neu.
+// Replaces the installed app with the downloaded one and starts it again.
 //
-// Der eigentliche Tausch kann nicht im laufenden Prozess passieren: Unter
-// Windows ist die laufende .exe gesperrt, unter Linux haengt das AppImage als
-// Dateisystem im eigenen Prozess. Deshalb ist das Muster ueberall gleich —
-// die neue Version wird **neben** der alten fertig ausgepackt und geprueft,
-// danach uebernimmt ein losgeloestes Helferskript: warten, bis diese App
-// beendet ist, umbenennen, alte Version loeschen, neu starten.
+// The swap itself cannot happen in the running process on Windows (the
+// running .exe is locked) or Linux (the AppImage is mounted inside its own
+// process); macOS renames the bundles in-process before it quits. The pattern
+// is the same everywhere: the new version is unpacked and verified **next to**
+// the old one, then a detached helper script takes over — wait until this app
+// has quit, rename, start, report a failure to the next start, put the old
+// version back and start it. On macOS and Linux the helper also waits until
+// the new version confirms that it runs before it deletes the backup (#1003).
 //
-// Alles, was vor dem Neustart schiefgehen kann, geht vorher schief: fehlende
-// Schreibrechte, ein kaputtes Archiv, eine falsche Version im Paket. Nach dem
-// `rename` gibt es nur noch den Rueckweg auf die gesicherte alte Version.
+// Everything that can go wrong before the restart goes wrong before it:
+// missing write access, a broken archive, the wrong version in the package.
+// After the `rename` the only way left is back to the saved old version.
 //
 // What is verified, per platform (#569): the download's SHA-256 against the
 // release everywhere (update-download.js); on macOS the DMG's own checksum,
@@ -83,56 +85,314 @@ function psQuote(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+/** How long a POSIX helper waits for this app to quit, and for the new version to start. */
+const POSIX_QUIT_SECONDS = 120;
+const POSIX_START_SECONDS = 120;
+
+/** `s` as a literal inside an extended regular expression, for `pkill -f`. */
+function ereEscape(value) {
+  return String(value).replace(/[.[\]()*+?{}|^$\\]/g, '\\$&');
+}
+
 /**
- * macOS/Linux: auf das Ende dieses Prozesses warten, dann aufraeumen und
- * starten. `kill -0` prueft nur die Existenz der PID, es wird nichts beendet.
+ * macOS/Linux: what every helper script shares (#1003).
+ *
+ * The contract is the one the Windows helper has had since #442: every step
+ * goes to `logFile`; a failure leaves `statusFile` for the next start, which
+ * reports it; the previous version is put back and started again. On top of
+ * that the backup only goes once the new version has *started*: before
+ * launching it, the helper writes `pendingFile`, and the new version removes
+ * that file once its window is open (`confirmInstallStarted` in
+ * update-service.js). If the file is still there when the new process has
+ * ended, or after `startSeconds`, the update counts as failed.
+ *
+ * - `wait_for_quit` waits for this process; `kill -0` only asks whether the
+ *   PID exists, it ends nothing.
+ * - `record STAGE REASON` writes the status file: `swap` when the new version
+ *   could not be put in place, `start` when it was but did not start.
+ * - `await_start PID` waits for the confirmation while PID runs, and leaves
+ *   the reason in `$reason` when it gives up. The shell reaps a background
+ *   child while it waits on `sleep`, so `kill -0` does not see a zombie.
+ * - `stop_new PID` ends a new version that did not confirm, gently first.
  */
-function buildPosixWaitPrefix(pid) {
+function buildPosixPrelude({
+  pid, version = '', logFile, statusFile, pendingFile,
+  quitSeconds = POSIX_QUIT_SECONDS, startSeconds = POSIX_START_SECONDS,
+}) {
+  const quitTicks = Math.max(1, Math.round(Number(quitSeconds) * 5));
+  const startTicks = Math.max(1, Math.round(Number(startSeconds) * 5));
   return [
     '#!/bin/sh',
     `pid=${Number(pid)}`,
-    'i=0',
-    'while kill -0 "$pid" 2>/dev/null && [ "$i" -lt 600 ]; do',
-    '  sleep 0.2',
-    '  i=$((i+1))',
-    'done',
-  ].join('\n');
-}
-
-function buildMacRelaunchScript({ pid, appBundlePath, backupPath, workDir }) {
-  return [
-    buildPosixWaitPrefix(pid),
-    `rm -rf ${shQuote(backupPath)}`,
-    `rm -rf ${shQuote(workDir)}`,
-    `open ${shQuote(appBundlePath)}`,
+    `version=${shQuote(version)}`,
+    `logfile=${shQuote(logFile)}`,
+    `status=${shQuote(statusFile)}`,
+    `pending=${shQuote(pendingFile)}`,
+    '',
+    'now() { date -u +%Y-%m-%dT%H:%M:%SZ; }',
+    String.raw`log() { printf '%s %s\n' "$(now)" "$*" >>"$logfile" 2>/dev/null || :; }`,
+    // The content of a JSON string: control characters out, \ and " escaped.
+    String.raw`json() { printf '%s' "$1" | tr '\n\r\t' '   ' | tr -d '\000-\037' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }`,
+    '',
+    'record() {',
+    '  log "update failed: $2"',
+    String.raw`  entry=$(printf '{"version":"%s","stage":"%s","error":"%s","log":"%s","at":"%s"}' "$(json "$version")" "$1" "$(json "$2")" "$(json "$logfile")" "$(now)")`,
+    String.raw`  printf '%s\n' "$entry" >"$status.tmp" 2>/dev/null && mv -f "$status.tmp" "$status" 2>/dev/null || :`,
+    '  rm -f "$pending"',
+    '}',
+    '',
+    'wait_for_quit() {',
+    '  log "update to $version: waiting for process $pid"',
+    '  i=0',
+    '  while kill -0 "$pid" 2>/dev/null; do',
+    `    [ "$i" -ge ${quitTicks} ] && return 1`,
+    '    sleep 0.2',
+    '    i=$((i+1))',
+    '  done',
+    '  return 0',
+    '}',
+    '',
+    'announce_start() {',
+    String.raw`  printf '{"version":"%s"}\n' "$(json "$version")" >"$pending" 2>/dev/null || log "could not write $pending"`,
+    '  log "starting the new version"',
+    '}',
+    '',
+    'await_start() {',
+    '  i=0',
+    '  while [ -e "$pending" ]; do',
+    '    if ! kill -0 "$1" 2>/dev/null; then',
+    '      [ -e "$pending" ] || return 0',
+    '      wait "$1"',
+    '      reason="the new version ended before it had started (exit code $?)"',
+    '      return 1',
+    '    fi',
+    `    if [ "$i" -ge ${startTicks} ]; then`,
+    `      reason='the new version did not start within ${Number(startSeconds)} seconds'`,
+    '      return 1',
+    '    fi',
+    '    sleep 0.2',
+    '    i=$((i+1))',
+    '  done',
+    '  return 0',
+    '}',
+    '',
+    'confirmed() {',
+    '  rm -f "$status"',
+    '  log "updated to $version"',
+    '}',
     '',
   ].join('\n');
 }
 
-function buildLinuxAppImageScript({ pid, appImagePath, stagedPath, workDir }) {
-  return [
-    buildPosixWaitPrefix(pid),
-    `mv -f ${shQuote(stagedPath)} ${shQuote(appImagePath)} || exit 1`,
-    `chmod 755 ${shQuote(appImagePath)}`,
-    `rm -rf ${shQuote(workDir)}`,
-    `exec ${shQuote(appImagePath)}`,
-    '',
-  ].join('\n');
+/** `reason` for an app that is still running when the helper stops waiting. */
+function quitTimeoutReason(quitSeconds = POSIX_QUIT_SECONDS) {
+  return `the app did not quit within ${Number(quitSeconds)} seconds`;
 }
 
-function buildLinuxDirScript({ pid, installDir, stagedDir, backupDir, workDir, binaryName = LINUX_BINARY_NAME }) {
+/**
+ * macOS. This process has already renamed the old bundle to `backupPath` and
+ * the new one to `targetBundlePath` before it quit (`installMacos`); the
+ * helper starts the new bundle and, if it does not confirm, puts the old one
+ * back at `appBundlePath` and opens that.
+ *
+ * `open -W -n` runs in the background as the stand-in for the new process: it
+ * ends when the app ends. The app itself is no child of the helper, so one that
+ * hangs is found by its path with `pkill -f`.
+ */
+function buildMacRelaunchScript({
+  pid, appBundlePath, targetBundlePath = appBundlePath, backupPath, workDir,
+  version, logFile, statusFile, pendingFile, quitSeconds, startSeconds,
+}) {
+  const processPattern = ereEscape(`${targetBundlePath}/Contents/`);
   return [
-    buildPosixWaitPrefix(pid),
-    `mv ${shQuote(installDir)} ${shQuote(backupDir)} || exit 1`,
-    // Scheitert der zweite Zug, steht die alte Version wieder da — besser eine
-    // nicht aktualisierte App als gar keine.
-    `if ! mv ${shQuote(stagedDir)} ${shQuote(installDir)}; then`,
-    `  mv ${shQuote(backupDir)} ${shQuote(installDir)}`,
+    buildPosixPrelude({ pid, version, logFile, statusFile, pendingFile, quitSeconds, startSeconds }),
+    `app=${shQuote(appBundlePath)}`,
+    `target=${shQuote(targetBundlePath)}`,
+    `backup=${shQuote(backupPath)}`,
+    `work=${shQuote(workDir)}`,
+    `pattern=${shQuote(processPattern)}`,
+    '',
+    'stop_new() {',
+    '  kill "$1" 2>/dev/null',
+    '  pkill -f "$pattern" 2>/dev/null || return 0',
+    '  i=0',
+    '  while pgrep -f "$pattern" >/dev/null 2>&1 && [ "$i" -lt 25 ]; do sleep 0.2; i=$((i+1)); done',
+    '  pkill -9 -f "$pattern" 2>/dev/null || :',
+    '}',
+    '',
+    'roll_back() {',
+    '  rm -rf "$target"',
+    '  if out=$(mv "$backup" "$app" 2>&1); then return 0; fi',
+    '  log "could not put the previous version back: $out"',
+    '  log "the previous version is in $backup"',
+    '  return 1',
+    '}',
+    '',
+    'if ! wait_for_quit; then',
+    '  roll_back',
+    `  record swap ${shQuote(quitTimeoutReason(quitSeconds))}`,
     '  exit 1',
     'fi',
-    `rm -rf ${shQuote(backupDir)}`,
-    `rm -rf ${shQuote(workDir)}`,
-    `exec ${shQuote(path.posix.join(installDir, binaryName))}`,
+    '',
+    'announce_start',
+    'open -W -n "$target" >/dev/null 2>&1 &',
+    'opener=$!',
+    'if await_start "$opener"; then',
+    // `open -W` would otherwise wait for as long as the app runs.
+    '  kill "$opener" 2>/dev/null',
+    '  rm -rf "$backup"',
+    '  rm -rf "$work"',
+    '  confirmed',
+    '  exit 0',
+    'fi',
+    '',
+    'stop_new "$opener"',
+    'record start "$reason"',
+    'if roll_back; then',
+    "  log 'starting the previous version again'",
+    '  open "$app"',
+    'fi',
+    'exit 1',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Linux: end a new version that did not confirm. It is a child of the helper,
+ * so its PID is known.
+ */
+const POSIX_STOP_CHILD = [
+  'stop_new() {',
+  '  kill "$1" 2>/dev/null || return 0',
+  '  i=0',
+  '  while kill -0 "$1" 2>/dev/null && [ "$i" -lt 25 ]; do sleep 0.2; i=$((i+1)); done',
+  '  kill -9 "$1" 2>/dev/null || :',
+  '}',
+  '',
+].join('\n');
+
+/**
+ * Linux, AppImage: the old file goes aside as `backupPath`, the new one takes
+ * its place. Nothing of this can happen in-process — the running AppImage is
+ * mounted inside its own process.
+ */
+function buildLinuxAppImageScript({
+  pid, appImagePath, stagedPath, backupPath = `${appImagePath}.old`, workDir,
+  version, logFile, statusFile, pendingFile, quitSeconds, startSeconds,
+}) {
+  return [
+    buildPosixPrelude({ pid, version, logFile, statusFile, pendingFile, quitSeconds, startSeconds }),
+    `image=${shQuote(appImagePath)}`,
+    `staged=${shQuote(stagedPath)}`,
+    `backup=${shQuote(backupPath)}`,
+    `work=${shQuote(workDir)}`,
+    '',
+    POSIX_STOP_CHILD,
+    'if ! wait_for_quit; then',
+    '  rm -f "$staged"',
+    `  record swap ${shQuote(quitTimeoutReason(quitSeconds))}`,
+    '  exit 1',
+    'fi',
+    '',
+    'if ! out=$(mv -f "$image" "$backup" 2>&1); then',
+    '  rm -f "$staged"',
+    '  record swap "$out"',
+    '  exec "$image"',
+    'fi',
+    'if ! out=$(mv -f "$staged" "$image" 2>&1); then',
+    '  mv -f "$backup" "$image"',
+    '  rm -f "$staged"',
+    '  record swap "$out"',
+    '  exec "$image"',
+    'fi',
+    'chmod 755 "$image"',
+    '',
+    'announce_start',
+    '"$image" >/dev/null 2>&1 &',
+    'child=$!',
+    'if await_start "$child"; then',
+    '  rm -f "$backup"',
+    '  rm -rf "$work"',
+    '  confirmed',
+    '  exit 0',
+    'fi',
+    '',
+    'stop_new "$child"',
+    'record start "$reason"',
+    'if out=$(mv -f "$backup" "$image" 2>&1); then',
+    "  log 'starting the previous version again'",
+    '  exec "$image"',
+    'fi',
+    'log "could not put the previous version back: $out"',
+    'log "the previous version is in $backup"',
+    'exit 1',
+    '',
+  ].join('\n');
+}
+
+/**
+ * Linux, extracted folder: the old folder goes aside as `backupDir`, the
+ * staged one takes its place. A rollback starts the old program under the
+ * name it had (`previousBinaryName`, #794).
+ */
+function buildLinuxDirScript({
+  pid, installDir, stagedDir, backupDir, workDir, binaryName = LINUX_BINARY_NAME,
+  previousBinaryName = binaryName, version, logFile, statusFile, pendingFile, quitSeconds, startSeconds,
+}) {
+  return [
+    buildPosixPrelude({ pid, version, logFile, statusFile, pendingFile, quitSeconds, startSeconds }),
+    `install=${shQuote(installDir)}`,
+    `staged=${shQuote(stagedDir)}`,
+    `backup=${shQuote(backupDir)}`,
+    `work=${shQuote(workDir)}`,
+    `bin=${shQuote(path.posix.join(installDir, binaryName))}`,
+    `oldbin=${shQuote(path.posix.join(installDir, previousBinaryName))}`,
+    '',
+    POSIX_STOP_CHILD,
+    'relaunch_old() {',
+    "  log 'starting the previous version again'",
+    '  exec "$oldbin"',
+    '}',
+    '',
+    'if ! wait_for_quit; then',
+    '  rm -rf "$staged"',
+    `  record swap ${shQuote(quitTimeoutReason(quitSeconds))}`,
+    '  exit 1',
+    'fi',
+    '',
+    'if ! out=$(mv "$install" "$backup" 2>&1); then',
+    '  rm -rf "$staged"',
+    '  record swap "$out"',
+    '  relaunch_old',
+    'fi',
+    // Scheitert der zweite Zug, steht die alte Version wieder da — besser eine
+    // nicht aktualisierte App als gar keine.
+    'if ! out=$(mv "$staged" "$install" 2>&1); then',
+    '  mv "$backup" "$install"',
+    '  rm -rf "$staged"',
+    '  record swap "$out"',
+    '  relaunch_old',
+    'fi',
+    '',
+    'announce_start',
+    '"$bin" >/dev/null 2>&1 &',
+    'child=$!',
+    'if await_start "$child"; then',
+    '  rm -rf "$backup"',
+    '  rm -rf "$work"',
+    '  confirmed',
+    '  exit 0',
+    'fi',
+    '',
+    'stop_new "$child"',
+    'record start "$reason"',
+    'rm -rf "$install"',
+    'if out=$(mv "$backup" "$install" 2>&1); then',
+    '  relaunch_old',
+    'fi',
+    'log "could not put the previous version back: $out"',
+    'log "the previous version is in $backup"',
+    'exit 1',
     '',
   ].join('\n');
 }
@@ -408,6 +668,20 @@ async function listForeignEntries(installDir, packageDir) {
 }
 
 /**
+ * Where a helper reports once this process is gone. They belong outside the
+ * app folder and the work folder, which both get replaced or removed; without
+ * a caller's choice they go next to the work folder.
+ */
+function helperFiles({ workDir, logFile, statusFile, pendingFile }) {
+  const dir = path.dirname(workDir);
+  return {
+    logFile: logFile || path.join(dir, 'snotra-update.log'),
+    statusFile: statusFile || path.join(dir, 'snotra-update-failed.json'),
+    pendingFile: pendingFile || path.join(dir, 'snotra-update-pending.json'),
+  };
+}
+
+/**
  * @param {object} [deps]
  * @param {() => number} [deps.getPid]     Test-Haken; default process.pid.
  * @param {function} [deps.run]            (cmd, args) => Promise<stdout>; default execFile.
@@ -516,7 +790,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     }
   }
 
-  async function installMacos({ filePath, version, target, workDir }) {
+  async function installMacos({ filePath, version, target, workDir, files }) {
     const appBundlePath = target.appBundlePath;
     const parentDir = path.dirname(appBundlePath);
     await assertWritable(parentDir, 'update.place.appFolder');
@@ -567,13 +841,13 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
 
     const script = path.join(workDir, 'relaunch.sh');
     await fsp.writeFile(script, buildMacRelaunchScript({
-      pid: pidOf(), appBundlePath: targetPath, backupPath, workDir,
+      pid: pidOf(), appBundlePath, targetBundlePath: targetPath, backupPath, workDir, version, ...files,
     }), { mode: 0o700 });
     launch('/bin/sh', [script]);
-    return { ok: true, relaunching: true };
+    return { ok: true, relaunching: true, logFile: files.logFile };
   }
 
-  async function installWindows({ filePath, version, target, workDir, logFile, statusFile }) {
+  async function installWindows({ filePath, version, target, workDir, files }) {
     const installDir = target.installDir;
     const parentDir = path.win32.dirname(installDir);
     await assertWritable(parentDir, 'update.place.installFolder');
@@ -612,7 +886,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     }
 
     const carryOver = await listForeignEntries(installDir, rootDir);
-    const helperLog = logFile || path.join(path.dirname(workDir), 'snotra-update.log');
+    const helperLog = files.logFile;
     const script = path.join(workDir, 'swap.ps1');
     const startedFile = path.join(workDir, 'helper-started');
     const resultFile = path.join(workDir, 'helper-launch.json');
@@ -626,7 +900,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
       backupDir,
       workDir,
       logFile: helperLog,
-      statusFile: statusFile || path.join(path.dirname(workDir), 'snotra-update-failed.json'),
+      statusFile: files.statusFile,
       startedFile,
       version,
       carryOver,
@@ -655,23 +929,24 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     return { ok: true, relaunching: true, logFile: helperLog };
   }
 
-  async function installLinuxAppImage({ filePath, target, workDir }) {
+  async function installLinuxAppImage({ filePath, version, target, workDir, files }) {
     const appImagePath = target.appImagePath;
     await assertWritable(path.dirname(appImagePath), 'update.place.appImageFolder');
 
-    const stagedPath = `${appImagePath}.new-${Date.now()}`;
+    const stamp = Date.now();
+    const stagedPath = `${appImagePath}.new-${stamp}`;
     await fsp.copyFile(filePath, stagedPath);
     await fsp.chmod(stagedPath, 0o755);
 
     const script = path.join(workDir, 'relaunch.sh');
     await fsp.writeFile(script, buildLinuxAppImageScript({
-      pid: pidOf(), appImagePath, stagedPath, workDir,
+      pid: pidOf(), appImagePath, stagedPath, backupPath: `${appImagePath}.old-${stamp}`, workDir, version, ...files,
     }), { mode: 0o700 });
     launch('/bin/sh', [script]);
-    return { ok: true, relaunching: true };
+    return { ok: true, relaunching: true, logFile: files.logFile };
   }
 
-  async function installLinuxDir({ filePath, version, target, workDir }) {
+  async function installLinuxDir({ filePath, version, target, workDir, files }) {
     const installDir = target.installDir;
     const parentDir = path.posix.dirname(installDir);
     await assertWritable(parentDir, 'update.place.installFolder');
@@ -702,6 +977,8 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     // und das darf nicht erst im Helferskript auffallen.
     const stagedDir = path.join(parentDir, `.snotra-new-${stamp}`);
     await fsp.rename(extracted, stagedDir);
+    // A rollback starts the program that is there now, under its name (#794).
+    const previousBinaryName = findExecutable(installDir, LINUX_BINARY_NAMES) || binaryName;
 
     const script = path.join(workDir, 'relaunch.sh');
     await fsp.writeFile(script, buildLinuxDirScript({
@@ -711,9 +988,12 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
       backupDir: path.join(parentDir, `.snotra-old-${stamp}`),
       workDir,
       binaryName,
+      previousBinaryName,
+      version,
+      ...files,
     }), { mode: 0o700 });
     launch('/bin/sh', [script]);
-    return { ok: true, relaunching: true };
+    return { ok: true, relaunching: true, logFile: files.logFile };
   }
 
   /**
@@ -721,11 +1001,11 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
    * `{ ok: false, error }` zurueck; die laufende Installation ist dann
    * unveraendert.
    *
-   * `logFile` and `statusFile` are where the Windows helper reports once this
-   * process is gone (#442); they belong outside the app folder and the work
-   * folder, which both get replaced or removed.
+   * `logFile` and `statusFile` are where the helper reports once this process
+   * is gone (#442, #1003); `pendingFile` is the one the new version removes
+   * to say it has started. See `helperFiles`.
    */
-  async function install({ filePath, version, target, workDir, logFile, statusFile }) {
+  async function install({ filePath, version, target, workDir, logFile, statusFile, pendingFile }) {
     try {
       if (!filePath || !fs.existsSync(filePath)) {
         return { ok: false, error: createMessage('update.error.fileGone') };
@@ -735,11 +1015,13 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
       }
       await fsp.mkdir(workDir, { recursive: true });
 
+      const files = helperFiles({ workDir, logFile, statusFile, pendingFile });
+      const job = { filePath, version, target, workDir, files };
       switch (target.kind) {
-        case 'macos-bundle': return await installMacos({ filePath, version, target, workDir });
-        case 'windows-dir': return await installWindows({ filePath, version, target, workDir, logFile, statusFile });
-        case 'linux-appimage': return await installLinuxAppImage({ filePath, version, target, workDir });
-        case 'linux-dir': return await installLinuxDir({ filePath, version, target, workDir });
+        case 'macos-bundle': return await installMacos(job);
+        case 'windows-dir': return await installWindows(job);
+        case 'linux-appimage': return await installLinuxAppImage(job);
+        case 'linux-dir': return await installLinuxDir(job);
         default: return { ok: false, error: createMessage('update.error.selfUpdateImpossible') };
       }
     } catch (err) {
@@ -757,6 +1039,7 @@ module.exports = {
   buildLinuxAppImageScript,
   buildLinuxDirScript,
   buildWindowsSwapScript,
+  ereEscape,
   buildWindowsLaunchCommand,
   encodePowerShell,
   listForeignEntries,

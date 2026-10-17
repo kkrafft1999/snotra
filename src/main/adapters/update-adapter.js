@@ -29,6 +29,9 @@ function createUpdateAdapter(updateService) {
     clearInstallFailure() {
       return updateService.clearInstallFailure();
     },
+    confirmInstallStarted() {
+      return updateService.confirmInstallStarted();
+    },
   };
 }
 

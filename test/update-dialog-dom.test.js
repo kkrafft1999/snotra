@@ -554,6 +554,34 @@ test('ein beim letzten Mal gescheiterter Tausch steht als Warnung im Dialog', as
   assert.equal(ui.hint().classList.contains('warning'), false);
 });
 
+// #1003: on macOS and Linux the helper goes back when the new version does not
+// start. The swap worked, so the advice about the folder would be wrong.
+test('a new version that did not start is reported as such, without the folder advice', async (t) => {
+  const { setLocale } = await importRenderer('i18n.js');
+  const ui = await mount();
+  t.after(() => { setLocale('en', { force: true }); ui.dom.cleanup(); });
+  const log = '/home/k/.config/Snotra AI/update-install.log';
+  const failure = {
+    version: '1.8.0', stage: 'start', error: 'the new version did not start within 120 seconds', logFile: log,
+  };
+
+  await ui.push({ ...AVAILABLE, installKind: 'linux-appimage', lastInstallFailure: failure });
+  assert.equal(ui.hint().classList.contains('warning'), true);
+  assert.equal(ui.hint().textContent, 'Last time, version 1.8.0 was put in place but did not start '
+    + '(the new version did not start within 120 seconds), so Snotra went back to version 1.7.1. '
+    + `The log is at ${log}.`);
+
+  setLocale('de');
+  await flush();
+  assert.equal(ui.hint().textContent, 'Beim letzten Mal wurde Version 1.8.0 eingespielt, startete aber nicht '
+    + '(the new version did not start within 120 seconds), deshalb ist Snotra zu Version 1.7.1 zurückgekehrt. '
+    + `Das Protokoll liegt unter ${log}.`);
+
+  setLocale('en');
+  await ui.push({ ...AVAILABLE, lastInstallFailure: { ...failure, error: '' } });
+  assert.match(ui.hint().textContent, /^Last time, version 1\.8\.0 was put in place but did not start, so Snotra went back/);
+});
+
 test('ohne Fehlschlag beim letzten Mal bleibt der Hinweis weg', async (t) => {
   const ui = await mount();
   t.after(ui.dom.cleanup);

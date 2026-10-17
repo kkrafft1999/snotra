@@ -589,8 +589,8 @@ each:
   platforms differ:
   * **macOS** — this process itself renames the old bundle aside and the new
     one into place before it quits; the rename is undone if the second step
-    fails. The detached shell script only waits for this process
-    to end, deletes the backup and opens the new bundle.
+    fails. The detached shell script then waits for this process to end and
+    opens the new bundle.
   * **Windows, a Linux folder and the AppImage** — a detached helper script
     waits for this process to end, renames and restarts. It would not work
     inside the running process: on Windows the `.exe` is locked, on Linux the
@@ -600,8 +600,26 @@ each:
     swap script with `Start-Process` and waits until the script reports that it
     runs. The app quits only then, and can still report a helper that did not
     start.
-  The scripts themselves are built as plain strings and are therefore testable
-  without an installation.
+
+  Every helper reports to the user data folder, which no update replaces
+  (#442, #1003): it logs each step to `update-install.log`, and when the
+  update fails it leaves `update-install-failed.json` — version, reason, log
+  path, and on macOS and Linux the `stage` (`swap` or `start`) — puts the old
+  version back and starts it. The next start reads that file and shows the
+  reason next to the same update, which is offered again.
+
+  On **macOS and Linux** the backup also outlives the start of the new version
+  (#1003). Before it launches the new version, the helper writes
+  `update-install-pending.json`; the new version removes it once its main
+  window is open (`confirmInstallStarted`). Only then does the helper delete
+  the backup. If the new process ends first, or nothing happens within two
+  minutes, the helper ends it, puts the old version back and starts that one.
+  Windows still deletes its backup as soon as the swap has worked.
+
+  The scripts themselves are built as plain strings and tested as such; the
+  POSIX helpers additionally run for real against stand-ins for the app
+  (`test/update-installer-posix.test.js`), the Windows swap on the Windows
+  runner (`test/update-installer-windows.test.js`).
 
 The address of the package never leaves the main process: from `checkForUpdate`
 the renderer learns only name and size, and triggers the download without
