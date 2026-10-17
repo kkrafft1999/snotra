@@ -1437,6 +1437,8 @@ module.exports = {
   'chat.error.provider.fallback': 'Dieser Anbieter',
   'chat.error.toolLimit': 'Zu viele Tool-Runden (aktuell {limit}). Erhöhe das Limit unter Einstellungen › Allgemein oder formuliere die Frage enger.',
   'chat.error.runLost': 'Die Antwort ist nicht angekommen. Frag bitte noch einmal.',
+  'chat.interrupted.label': 'Unterbrochen.',
+  'chat.interrupted.text': 'Snotra wurde geschlossen oder neu geladen, bevor diese Antwort fertig war – nur die abgeschlossenen Schritte sind erhalten.',
   'chat.error.prefix': 'Fehler:',
   'chat.error.cutOff.length': 'Die Antwort wurde abgeschnitten: Das Modell hat seine Ausgabegrenze erreicht. Bitte es weiterzumachen oder in kleineren Teilen zu antworten.',
   'chat.error.cutOff.lengthTool': 'Die Antwort wurde abgeschnitten, während das Modell einen Tool-Aufruf schrieb – der Aufruf lief deshalb nicht. Bitte um kleinere Schritte, zum Beispiel eine Datei nach der anderen.',

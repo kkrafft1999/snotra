@@ -212,6 +212,8 @@ function sanitizeToolTraceForStore(raw) {
 
 function isStoredAssistantMessageWorthKeeping(row) {
   if (row.isError === true) return true;
+  // A turn cut off before its first step still says so after a restart (#979).
+  if (row.interrupted === true) return true;
   if (row.toolTrace && row.toolTrace.length > 0) return true;
   if (row.reasoningText && row.reasoningText.length > 0) return true;
   return !!(row.content && row.content.trim());
@@ -225,6 +227,7 @@ function isLoadedMessageWorthKeeping(message) {
   }
   return (
     message.isError ||
+    message.interrupted === true ||
     message.toolTrace.length > 0 ||
     message.reasoningText.trim().length > 0 ||
     message.content.trim().length > 0
@@ -250,6 +253,10 @@ function sanitizeChatMessagesForStore(raw) {
     }
     const row = { role: 'assistant', content };
     if (m.isError === true) row.isError = true;
+    // A turn written while its run is still going (#979) is stored as cut off.
+    // The write after the run settles drops the mark again; when that write
+    // never comes — a crash, a quit, a reload — the mark is what is left.
+    if (m.streaming === true || m.interrupted === true) row.interrupted = true;
     const toolTrace = sanitizeToolTraceForStore(m.toolTrace);
     if (toolTrace) row.toolTrace = toolTrace;
     if (typeof m.reasoningText === 'string' && m.reasoningText.trim()) {
@@ -293,7 +300,7 @@ function normalizeLoadedMessages(raw) {
       const toolTrace = Array.isArray(m.toolTrace)
         ? m.toolTrace.map(toolTraceEntryForStore).filter((e) => e !== '')
         : [];
-      return {
+      const row = {
         role: 'assistant',
         content: messageContentForStore(m.content),
         toolTrace,
@@ -301,6 +308,8 @@ function normalizeLoadedMessages(raw) {
         streaming: false,
         isError: Boolean(m.isError),
       };
+      if (m.interrupted === true) row.interrupted = true;
+      return row;
     })
     .filter(isLoadedMessageWorthKeeping);
 }

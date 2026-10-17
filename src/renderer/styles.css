@@ -3626,6 +3626,22 @@ button.chat-image-open:hover {
 
 /* The prefix is a catalogue text in the DOM, not generated content: CSS
    cannot follow the interface language (#591). */
+/* A turn whose run never settled (#979). Not an error the user has to act on,
+ * so no red: a rule on the left and the word carry it, not a colour. */
+.chat-interrupted-note {
+  margin: 8px 0 0;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid var(--border);
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+  color: var(--text-muted-strong);
+}
+
+.chat-interrupted-label {
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--text-primary);
+}
+
 .chat-msg-error-prefix {
   margin-right: 6px;
   font-weight: var(--ds-font-weight-bold);

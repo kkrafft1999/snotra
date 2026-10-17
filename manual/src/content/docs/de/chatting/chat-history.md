@@ -27,6 +27,7 @@ Klick auf den Knopf ganz rechts in der Titelleiste, *Chat-Verlauf einblenden*. D
 
 - **Ein Chat arbeitet im Hintergrund weiter.** Wechselst du zu einem anderen Chat, während Snotra noch antwortet, läuft die Antwort weiter. Der Verlauf markiert diesen Chat mit *Arbeitet…*, oder mit *Wartet auf deine Freigabe*, wenn dort eine Karte auf dich wartet; [seit 1.18] eine Systembenachrichtigung sagt es dir zusätzlich.
 - **Snotra macht da weiter, wo du aufgehört hast.** Beim nächsten Start öffnet es den jüngsten Chat des Ordners.
+- [seit 1.25] **Eine abgebrochene Antwort behält ihre fertigen Schritte.** Schließt sich Snotra oder stürzt ab, während eine Antwort läuft, oder lädst du das Fenster mit *Ansicht › Neu laden* neu, behält der Chat jeden Schritt, der schon fertig war. Die Antwort kommt mit dem Hinweis *Unterbrochen.* darunter zurück; schick deine Frage noch einmal, um weiterzumachen. Ein Neuladen hält die laufende Antwort an.
 - [seit 1.23] **Jeder Chat zeigt, was er gekostet hat.** Neben der Uhrzeit stehen im Verlauf die geschätzten API-Kosten des Chats, zum Beispiel *~0,42 $*. Mehr unter [Sehen, was ein Chat kostet](../chat-cost/).
 - **Ein neuer Chat beginnt frisch:** ohne das frühere Gespräch, ohne Markierungen im Baum, im Standardmodus des Ordners.
 
