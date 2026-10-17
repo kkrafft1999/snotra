@@ -1,7 +1,7 @@
 import contracts from '../generated/contracts.js';
 import { t, tPlural, tMessage } from '../i18n.js';
 
-const { MCP_CONNECTION_STATES } = contracts;
+const { MCP_CONNECTION_STATES, MCP_TRANSPORTS } = contracts;
 
 /**
  * The connection state of one MCP server, in words and in a shape. Settings ›
@@ -18,16 +18,18 @@ export function describeConnection(server, connection) {
   if (state === MCP_CONNECTION_STATES.READY) {
     return { kind: 'on', text: tPlural('settings.mcp.state.connected', connection.toolCount ?? 0) };
   }
+  // A remote server is connected to, not started (#341).
+  const remote = server.transport === MCP_TRANSPORTS.HTTP;
   if (state === MCP_CONNECTION_STATES.FAILED) {
     return {
       kind: 'error',
-      text: t('settings.mcp.state.startFailed'),
+      text: t(remote ? 'settings.mcp.state.connectFailed' : 'settings.mcp.state.startFailed'),
       detail: tMessage(connection.error),
       stderr: connection.stderr,
     };
   }
   if (state === MCP_CONNECTION_STATES.STARTING) {
-    return { kind: 'off', text: t('settings.mcp.state.starting'), pending: true };
+    return { kind: 'off', text: t(remote ? 'settings.mcp.state.connecting' : 'settings.mcp.state.starting'), pending: true };
   }
   // IDLE means: switched on, but never needed yet. Connecting lazily is
   // intended (#106) — it must not look like an error.

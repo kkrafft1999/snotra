@@ -16,9 +16,12 @@ const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
 const { APP_LOCALES } = require('../../shared/contracts/enums');
 const { localeFromSystem } = require('../../shared/i18n');
 const {
+  MCP_TRANSPORTS,
   maskStoredMcpEnv,
+  maskStoredMcpHeaders,
   normalizeKnownTools,
   normalizeStoredMcpEnv,
+  normalizeStoredMcpHeaders,
   validateMcpServerConfig,
   validateMcpServerInput,
 } = require('../../shared/contracts/mcp');
@@ -827,7 +830,9 @@ function createStorageService({
   // Eigene Datei wie bei der Websuche: MCP-Server sind kein LLM-Anbieter. Die
   // env-Werte liegen je Schluessel entweder verschluesselt (`enc`) oder im
   // Klartext (`value`) — verschluesselt ist die Vorgabe, Klartext die bewusste
-  // Ausnahme (Entscheidung zu #108).
+  // Ausnahme (Entscheidung zu #108). The headers of a remote server (#341)
+  // are stored the same way: an `Authorization` header is a token like any
+  // `GITHUB_TOKEN`.
   //
   // Zwei Lesewege, absichtlich getrennt: `readMcpServers` liefert die
   // Anzeigeform ohne Geheimnisse und ist das, was an den Renderer geht;
@@ -859,16 +864,22 @@ function createStorageService({
       && !(typeof data.version === 'number' && data.version > MCP_CONFIG_VERSION);
   }
 
-  /** Gespeicherte Eintraege in geprueftem Zustand, env in gespeicherter Form. */
+  function isRemoteMcpServer(server) {
+    return server.transport === MCP_TRANSPORTS.HTTP;
+  }
+
+  /** Gespeicherte Eintraege in geprueftem Zustand, env und headers in gespeicherter Form. */
   async function readMcpStoredServers({ forUpdate = false } = {}) {
     const data = await readMcpConfigRaw({ forUpdate });
     const out = [];
     const seen = new Set();
     for (const entry of data.servers) {
-      const { ok, value } = validateMcpServerConfig({ ...entry, env: {} });
+      const { ok, value } = validateMcpServerConfig({ ...entry, env: {}, headers: {} });
       if (!ok || seen.has(value.id)) continue;
       seen.add(value.id);
-      out.push({ ...value, env: normalizeStoredMcpEnv(entry?.env) });
+      out.push(isRemoteMcpServer(value)
+        ? { ...value, headers: normalizeStoredMcpHeaders(entry?.headers) }
+        : { ...value, env: normalizeStoredMcpEnv(entry?.env) });
     }
     return out;
   }
@@ -878,7 +889,21 @@ function createStorageService({
     return (await readMcpStoredServers()).map((server) => ({
       ...server,
       env: maskStoredMcpEnv(server.env),
+      ...(isRemoteMcpServer(server) ? { headers: maskStoredMcpHeaders(server.headers) } : {}),
     }));
+  }
+
+  /** A stored map in flat runtime form; a value that cannot be decrypted is left out. */
+  function decryptStoredMap(stored) {
+    const out = {};
+    for (const [key, entry] of Object.entries(stored || {})) {
+      if (typeof entry.value === 'string') out[key] = entry.value;
+      else {
+        const plain = decryptIfPossible(entry.enc);
+        if (plain !== null) out[key] = plain;
+      }
+    }
+    return out;
   }
 
   /**
@@ -888,17 +913,11 @@ function createStorageService({
    * Server startet dann ohne ihn und scheitert sichtbar am eigenen Fehler.
    */
   async function getMcpServersForRuntime() {
-    return (await readMcpStoredServers()).map((server) => {
-      const env = {};
-      for (const [key, entry] of Object.entries(server.env)) {
-        if (typeof entry.value === 'string') env[key] = entry.value;
-        else {
-          const plain = decryptIfPossible(entry.enc);
-          if (plain !== null) env[key] = plain;
-        }
-      }
-      return { ...server, env };
-    });
+    return (await readMcpStoredServers()).map((server) => ({
+      ...server,
+      env: decryptStoredMap(server.env),
+      ...(isRemoteMcpServer(server) ? { headers: decryptStoredMap(server.headers) } : {}),
+    }));
   }
 
   /**
@@ -909,10 +928,78 @@ function createStorageService({
   async function getMcpSecretValues() {
     const out = [];
     for (const server of await readMcpStoredServers()) {
-      for (const entry of Object.values(server.env)) {
+      for (const entry of [...Object.values(server.env), ...Object.values(server.headers || {})]) {
         if (typeof entry.enc !== 'string') continue;
         const plain = decryptIfPossible(entry.enc);
         if (plain) out.push(plain);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Stores the entries of one secret map — `env` or `headers` — against what
+   * was stored before. Collects the refusals by kind instead of throwing, so
+   * one save names every problem at once.
+   */
+  async function storeSecretEntries(entries, before, problems) {
+    const stored = {};
+    for (const entry of entries) {
+      const previous = before?.[entry.key];
+      const storedSecret = typeof previous?.enc === 'string';
+      if (entry.keep) {
+        if (!previous) problems.keepMissing.push(entry.key);
+        else if (storedSecret !== entry.secret) problems.keepChanged.push(entry.key);
+        else stored[entry.key] = previous;
+        continue;
+      }
+      if (!entry.secret) {
+        stored[entry.key] = { value: entry.value };
+        continue;
+      }
+      if (!entry.value) {
+        if (storedSecret) problems.emptySecrets.push(entry.key);
+        else stored[entry.key] = { value: '' };
+        continue;
+      }
+      const enc = await encryptForDisk(entry.value);
+      if (!enc) {
+        problems.unencryptable.push(entry.key);
+        continue;
+      }
+      stored[entry.key] = { enc };
+    }
+    return stored;
+  }
+
+  function secretProblems() {
+    return { keepMissing: [], keepChanged: [], emptySecrets: [], unencryptable: [] };
+  }
+
+  /** Where a server's messages go: a process, or one address (#341). */
+  function mcpEndpointOf(server) {
+    return isRemoteMcpServer(server) ? `${server.transport} ${server.url}` : server.transport;
+  }
+
+  /**
+   * An input without a transport keeps the stored one (B16 review on #341):
+   * a form that only knew stdio would otherwise save a remote server back as
+   * a local one. Its address and headers stay with it when they are not sent
+   * either.
+   */
+  function withStoredTransport(input, previous) {
+    if (!previous || !input || typeof input !== 'object') return input;
+    if (input.transport !== undefined && input.transport !== null) return input;
+    const out = { ...input, transport: previous.transport };
+    if (isRemoteMcpServer(previous)) {
+      if (out.url === undefined) out.url = previous.url;
+      if (out.headers === undefined) {
+        out.headers = {};
+        for (const [key, entry] of Object.entries(previous.headers || {})) {
+          out.headers[key] = typeof entry.enc === 'string'
+            ? { secret: true, keep: true }
+            : { secret: false, value: entry.value };
+        }
       }
     }
     return out;
@@ -930,70 +1017,73 @@ function createStorageService({
    * so changing either takes a new one. An empty secret value has nothing to
    * encrypt and counts as "no value"; it is stored as an empty value, unless
    * it would replace a stored secret, which it never silently does.
+   *
+   * A changed endpoint — another address, or another transport — switches
+   * the server off and forgets its tool catalogue (#341, concept §11): what
+   * the user accepted from one endpoint never carries over to another. It
+   * comes back on only after the user switched it on again.
    */
   async function saveMcpServer(input) {
-    const { ok, value, env, create, errors } = validateMcpServerInput(input);
-    if (!ok) return { ok: false, errors };
+    const precheck = validateMcpServerInput(input);
+    // Only an input without a transport may still be completed from what is
+    // stored under its identifier; anything else is refused as it is.
+    const mayFallBack = (input?.transport === undefined || input?.transport === null)
+      && typeof input?.id === 'string' && input.id.trim() !== '';
+    if (!precheck.ok && !mayFallBack) return { ok: false, errors: precheck.errors };
 
     return withFileLock(getMcpConfigPath(), async () => {
       const servers = await readMcpStoredServers({ forUpdate: true });
+      const wantedId = String(input.id).trim().toLowerCase();
+      const stored = servers.find((server) => server.id === wantedId);
+      const { ok, value, env, headers, create, errors } = validateMcpServerInput(
+        input?.create === true ? input : withStoredTransport(input, stored),
+      );
+      if (!ok) return { ok: false, errors };
       const previous = servers.find((server) => server.id === value.id);
       // A new server must not take over an existing one — with its token and
       // its switch (CR-B14-03). Decided here, under the lock, not by the form.
       if (create && previous) {
         return { ok: false, errors: [createMessage('mcp.error.idExists', { id: value.id })] };
       }
-      const storedEnv = {};
-      const keepMissing = [];
-      const keepChanged = [];
-      const emptySecrets = [];
-      const unencryptable = [];
 
-      for (const entry of env) {
-        const before = previous?.env?.[entry.key];
-        const storedSecret = typeof before?.enc === 'string';
-        if (entry.keep) {
-          if (!before) keepMissing.push(entry.key);
-          else if (storedSecret !== entry.secret) keepChanged.push(entry.key);
-          else storedEnv[entry.key] = before;
-          continue;
-        }
-        if (!entry.secret) {
-          storedEnv[entry.key] = { value: entry.value };
-          continue;
-        }
-        if (!entry.value) {
-          if (storedSecret) emptySecrets.push(entry.key);
-          else storedEnv[entry.key] = { value: '' };
-          continue;
-        }
-        const enc = await encryptForDisk(entry.value);
-        if (!enc) {
-          unencryptable.push(entry.key);
-          continue;
-        }
-        storedEnv[entry.key] = { enc };
-      }
+      const envProblems = secretProblems();
+      const headerProblems = secretProblems();
+      const storedEnv = await storeSecretEntries(env, previous?.env, envProblems);
+      const storedHeaders = await storeSecretEntries(headers, previous?.headers, headerProblems);
 
       // Die Meldungen nennen die Schluessel, niemals die Werte.
       const names = (list) => ({ names: list.join(', ') });
       const refusals = [];
-      if (keepMissing.length > 0) refusals.push(createMessage('mcp.error.envKeepMissing', names(keepMissing)));
-      if (keepChanged.length > 0) refusals.push(createMessage('mcp.error.envKeepChanged', names(keepChanged)));
-      if (emptySecrets.length > 0) refusals.push(createMessage('mcp.error.envSecretEmpty', names(emptySecrets)));
+      const refuse = (list, key) => { if (list.length > 0) refusals.push(createMessage(key, names(list))); };
+      refuse(envProblems.keepMissing, 'mcp.error.envKeepMissing');
+      refuse(headerProblems.keepMissing, 'mcp.error.headerKeepMissing');
+      refuse(envProblems.keepChanged, 'mcp.error.envKeepChanged');
+      refuse(headerProblems.keepChanged, 'mcp.error.headerKeepChanged');
+      refuse(envProblems.emptySecrets, 'mcp.error.envSecretEmpty');
+      refuse(headerProblems.emptySecrets, 'mcp.error.headerSecretEmpty');
       // Lieber gar nicht speichern als ein Token im Klartext ablegen.
-      if (unencryptable.length > 0) refusals.push(createMessage('mcp.error.noSecureStorage', names(unencryptable)));
+      refuse([...envProblems.unencryptable, ...headerProblems.unencryptable], 'mcp.error.noSecureStorage');
       if (refusals.length > 0) return { ok: false, errors: refusals };
 
+      const endpointChanged = Boolean(previous) && mcpEndpointOf(previous) !== mcpEndpointOf(value);
       // Der Tool-Katalog gehoert dem Server, nicht dem Formular: schickt die
       // Oberflaeche keinen mit (sie kennt ihn nur bei laufender Verbindung),
-      // bleibt der gespeicherte stehen.
-      const knownTools = value.knownTools.length > 0 ? value.knownTools : previous?.knownTools || [];
+      // bleibt der gespeicherte stehen — unless it belongs to another endpoint.
+      const knownTools = endpointChanged
+        ? []
+        : value.knownTools.length > 0 ? value.knownTools : previous?.knownTools || [];
+      const entry = {
+        ...value,
+        enabled: endpointChanged ? false : value.enabled,
+        knownTools,
+        env: storedEnv,
+        ...(isRemoteMcpServer(value) ? { headers: storedHeaders } : {}),
+      };
       const next = servers.filter((server) => server.id !== value.id);
-      next.push({ ...value, knownTools, env: storedEnv });
+      next.push(entry);
       next.sort((a, b) => a.id.localeCompare(b.id));
       await writeJsonAtomic(getMcpConfigPath(), { version: MCP_CONFIG_VERSION, servers: next });
-      return { ok: true, errors: [] };
+      return { ok: true, errors: [], endpointChanged };
     });
   }
 

@@ -3,6 +3,10 @@
 /**
  * Verbindungsverwaltung für MCP-Server (Issue #106, Teil von #62).
  *
+ * A server is a local process (stdio, #106) or a remote endpoint (Streamable
+ * HTTP, #341). Which transport carries the messages is decided once, in
+ * `transportFor`; everything below it reads the same for both.
+ *
  * Hier steht, was die Protokollnachrichten bedeuten — `initialize`,
  * `tools/list`, `tools/call` — und wie aus mehreren Servern eine Liste von
  * Tools wird. Wie die Nachrichten über die Leitung gehen, weiß nur der
@@ -20,6 +24,7 @@
  */
 
 const {
+  MCP_TRANSPORTS,
   MCP_CONNECTION_STATES,
   MCP_PROTOCOL_VERSION,
   MCP_LIMITS,
@@ -30,6 +35,7 @@ const {
 } = require('../../shared/contracts/mcp');
 const { createMessage } = require('../../shared/contracts/message');
 const { createStdioTransport } = require('./mcp-stdio-transport');
+const { createHttpTransport } = require('./mcp-http-transport');
 
 /** Fehlertext eines geworfenen Fehlers, ohne „[object Object]"-Überraschungen. */
 function messageOf(error, fallback) {
@@ -38,14 +44,14 @@ function messageOf(error, fallback) {
 }
 
 /**
- * What reaches the process. Only a change here restarts a server
- * (CR-B16-03): the label only names it, and `knownTools` is what the service
- * itself writes back after every connection — comparing those restarted a
- * server on the next save of any other one.
+ * What reaches the process or the endpoint. Only a change here restarts a
+ * server (CR-B16-03): the label only names it, and `knownTools` is what the
+ * service itself writes back after every connection — comparing those
+ * restarted a server on the next save of any other one.
  */
 function processKey(config) {
-  const { transport, command, args, env, cwd, enabled } = config;
-  return JSON.stringify({ transport, command, args, env, cwd, enabled });
+  const { transport, command, args, env, cwd, url, headers, enabled } = config;
+  return JSON.stringify({ transport, command, args, env, cwd, url, headers, enabled });
 }
 
 /**
@@ -60,7 +66,10 @@ function answerServerRequest(method) {
 /**
  * @param {Object} deps
  * @param {typeof import('child_process').spawn} deps.spawn
- * @param {(deps: Object) => Object} [deps.createTransport]
+ * @param {(deps: Object) => Object} [deps.createTransport] one transport for
+ *   every server, for tests; otherwise `createStdio` or `createHttp` by the
+ *   server's `transport`
+ * @param {typeof fetch} [deps.fetch] for the HTTP transport
  * @param {() => Promise<string>} [deps.readShellPath] PATH aus dem Shell-Profil (Issue #111)
  * @param {{ name: string, version: string }} [deps.clientInfo]
  * @param {{ HANDSHAKE_MS: number, REQUEST_MS: number }} [deps.timeouts]
@@ -69,7 +78,10 @@ function answerServerRequest(method) {
  */
 function createMcpService({
   spawn,
-  createTransport = createStdioTransport,
+  createTransport = null,
+  createStdio = createStdioTransport,
+  createHttp = createHttpTransport,
+  fetch: fetchImpl,
   readShellPath = async () => '',
   clientInfo = { name: 'Snotra Agent', version: '0.0.0' },
   timeouts = MCP_TIMEOUTS,
@@ -211,12 +223,22 @@ function createMcpService({
     transport?.close?.().catch(() => {});
   }
 
+  function transportFor(config) {
+    if (createTransport) return createTransport;
+    return config.transport === MCP_TRANSPORTS.HTTP ? createHttp : createStdio;
+  }
+
   async function handshake(connection) {
-    const transport = createTransport({
+    const remote = connection.config.transport === MCP_TRANSPORTS.HTTP;
+    const transport = transportFor(connection.config)({
       config: connection.config,
       spawn,
-      baseEnv: await baseEnv(),
+      // A remote server starts no process, so it needs no PATH from the
+      // login shell — reading it would only cost time.
+      baseEnv: remote ? {} : await baseEnv(),
       platform,
+      ...(fetchImpl ? { fetch: fetchImpl } : {}),
+      timeouts: limits,
       onRequest: answerServerRequest,
       // A request we gave up on keeps running on the server unless it is told
       // (CR-B16-04). `initialize` must not be cancelled; a server that does not
@@ -229,11 +251,13 @@ function createMcpService({
 
     // Stirbt der Server später von selbst, darf sein Katalog nicht stehen
     // bleiben — sonst bietet das Modell Tools an, die niemand mehr ausführt.
-    transport.onExit(({ reason, reasonMessage, stderr, expected }) => {
+    transport.onExit(({ reason, reasonMessage, stderr, expected, sessionExpired }) => {
       if (connection.transport !== transport) return;
       connection.transport = null;
       connection.tools = [];
-      if (expected) {
+      // A remote server that forgot its session (#341) is not broken: the
+      // next need runs a fresh `initialize`, as after a deliberate stop.
+      if (expected || sessionExpired) {
         connection.state = MCP_CONNECTION_STATES.STOPPED;
         return;
       }
@@ -295,7 +319,7 @@ function createMcpService({
    * sich denselben Startvorgang; ein gescheiterter Start wird nicht von
    * allein wiederholt — sonst stürbe bei jedem Tool-Aufruf ein Prozess neu.
    */
-  function ensureConnected(id) {
+  function ensureConnected(id, { evenIfOff = false } = {}) {
     const connection = connections.get(id);
     if (!connection) return Promise.resolve(null);
     if (connection.state === MCP_CONNECTION_STATES.READY && connection.transport?.isAlive()) {
@@ -303,7 +327,7 @@ function createMcpService({
     }
     if (connection.starting) return connection.starting;
     if (connection.state === MCP_CONNECTION_STATES.FAILED) return Promise.resolve(connection);
-    if (!connection.config.enabled) return Promise.resolve(connection);
+    if (!connection.config.enabled && !evenIfOff) return Promise.resolve(connection);
 
     connection.state = MCP_CONNECTION_STATES.STARTING;
     connection.error = '';
@@ -324,7 +348,13 @@ function createMcpService({
     return connection.starting;
   }
 
-  /** Verbindet einen Server neu, auch nach einem Fehlschlag. */
+  /**
+   * Verbindet einen Server neu, auch nach einem Fehlschlag — what "Test
+   * connection" does. A switched-off server is tested too: an imported one,
+   * or one whose address changed (#341), is off until the user has seen it
+   * answer. It is closed again right after, so its tools never reach the
+   * model and no process or session lingers for it.
+   */
   async function connect(id) {
     const connection = connections.get(id);
     if (!connection) return null;
@@ -333,8 +363,10 @@ function createMcpService({
     connection.state = MCP_CONNECTION_STATES.IDLE;
     connection.error = '';
     connection.modelError = '';
-    await ensureConnected(id);
-    return describeOne(id);
+    await ensureConnected(id, { evenIfOff: true });
+    const status = describeOne(id);
+    if (!connection.config.enabled && connection.transport) await disconnect(id);
+    return status;
   }
 
   async function disconnect(id) {
@@ -355,7 +387,7 @@ function createMcpService({
     );
     const out = [];
     for (const connection of connections.values()) {
-      if (connection.state !== MCP_CONNECTION_STATES.READY) continue;
+      if (connection.state !== MCP_CONNECTION_STATES.READY || !connection.config.enabled) continue;
       const disabled = new Set(connection.config.disabledTools);
       for (const tool of connection.tools) {
         if (!disabled.has(tool.name)) out.push(tool);
@@ -378,16 +410,26 @@ function createMcpService({
       throw new Error(`The tool “${name}” is deselected for “${connection.config.label}”.`);
     }
 
-    await ensureConnected(serverId);
-    if (connection.state !== MCP_CONNECTION_STATES.READY || !connection.transport) {
-      throw new Error(connection.modelError || `The MCP server “${connection.config.label}” is not connected.`);
+    const call = async () => {
+      await ensureConnected(serverId);
+      if (connection.state !== MCP_CONNECTION_STATES.READY || !connection.transport) {
+        throw new Error(connection.modelError || `The MCP server “${connection.config.label}” is not connected.`);
+      }
+      return connection.transport.request(
+        'tools/call',
+        { name, arguments: args && typeof args === 'object' ? args : {} },
+        { timeoutMs, signal },
+      );
+    };
+    let result;
+    try {
+      result = await call();
+    } catch (error) {
+      // A remote server that forgot the session refused the call before it
+      // ran (#341), so one more try on a fresh session is safe.
+      if (!error?.sessionExpired) throw error;
+      result = await call();
     }
-
-    const result = await connection.transport.request(
-      'tools/call',
-      { name, arguments: args && typeof args === 'object' ? args : {} },
-      { timeoutMs, signal },
-    );
     return {
       content: Array.isArray(result?.content) ? result.content : [],
       isError: result?.isError === true,

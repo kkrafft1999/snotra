@@ -31,7 +31,7 @@ Er trägt noch den Namen der Plattform, Snotra AI, obwohl die App Snotra Agent h
 | `llm-config.json` | Die Modelle der Liste und wie sie erreichbar sind. Schlüssel liegen verschlüsselt. |
 | `ui-preferences.json` | Deine Einstellungen und das Layout: Sprache, der System-Prompt, die Schalter, die Breite der Spalten, der Zoom von Markdown-Dateien, der Python-Interpreter, das Bildmodell. |
 | `tool-policy.json` und `tool-policy.key` | Der Modus, deine Sperren und Erlaubnisse, der Standardmodus eines Ordners. Signiert, damit eine veränderte Datei auffällt. |
-| `mcp-servers.json` | Die MCP-Server. Geheime Umgebungsvariablen sind verschlüsselt. |
+| `mcp-servers.json` | Die MCP-Server. Geheime Umgebungsvariablen und Header sind verschlüsselt. |
 | `web-search-config.json` | Der Schlüssel für die Websuche, verschlüsselt. |
 | `chat-history.json` | Deine Chats, verschlüsselt. |
 | `chat-attachments/` | Die Bilder, die zu deinen Chats gehören, ein Ordner je Chat. |

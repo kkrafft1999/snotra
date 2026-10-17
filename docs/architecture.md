@@ -56,13 +56,13 @@ Two things look like containers and are not:
 | LLM providers — OpenAI, Anthropic, Google, Ollama, OpenAI-compatible endpoints | Chat rounds, model lists | HTTPS + SSE; Ollama native with NDJSON |
 | OpenAI services | Image generation; transcription (Whisper) and live voice input | HTTPS; WebSocket for the realtime transcription |
 | Tavily, any URL | Web search, URL fetch | HTTPS |
-| MCP servers | Tools configured by the user | JSON-RPC over stdio, as local child processes |
+| MCP servers | Tools configured by the user | JSON-RPC over stdio, as local child processes; or over Streamable HTTP (HTTPS, JSON or SSE answers) to a remote endpoint (#341) |
 | GitHub Releases | Update check and download | HTTPS |
 | LiteLLM price table | Model prices for the cost estimate (#949), only on the user's click | HTTPS |
 | Operating system | Workspace folder, keychain behind `safeStorage` (on Windows DPAPI, with the key in Chromium's `Local State`, #1060), `sandbox-exec` / bubblewrap | File system, OS APIs |
 
-MCP servers are started by Snotra but are third-party software, so they count
-as an external system rather than a container.
+MCP servers are started or reached by Snotra but are third-party software, so
+they count as an external system rather than a container.
 
 **Relationships between the containers:**
 
@@ -239,11 +239,33 @@ what the engine passes changes the port as well:
   part of #62). The core sees neither processes nor JSON-RPC: connection
   management (handshake, `tools/list`, `tools/call`, timeouts, cancellation,
   clean shutdown) lives in `main/services/mcp-service.js`, the line framing over
-  stdin/stdout in `main/services/mcp-stdio-transport.js`. The separation is
-  deliberate: consciously no `@modelcontextprotocol/sdk` as long as only stdio
-  and only `tools` are in play — the transport is the place where an SDK could
+  stdin/stdout in `main/services/mcp-stdio-transport.js`, and the exchange with
+  a remote server in `main/services/mcp-http-transport.js` (#341). Both
+  transports offer the same interface — `start`, `request`, `notify`, `close`,
+  `kill`, `stderrText`, `isAlive`, `onExit` — written down with the error
+  helpers they share in `main/services/mcp-transport-errors.js`; the service
+  picks one by the server's `transport` and reads the same above it. The
+  separation is deliberate: consciously no `@modelcontextprotocol/sdk` as long
+  as only `tools` are in play — the transport is the place where an SDK could
   dock later without port or core changing. Validation of the server
   configuration in `shared/contracts/mcp.js`.
+
+  The HTTP transport follows Streamable HTTP of the 2025-06-18 specification
+  with the built-in `fetch`: every message is a `POST` accepting JSON and SSE,
+  the answer to a request comes as a JSON body or inside an SSE stream (which
+  is cancelled as soon as the answer is in), a notification gets `202`. The
+  `Mcp-Session-Id` handed out with the answer to `initialize` and the
+  negotiated `MCP-Protocol-Version` ride along on every later message, and
+  closing sends `DELETE`. A `404` on a known session ends the connection with
+  `sessionExpired`: the service records it as stopped, not failed, runs a
+  fresh `initialize` on the next need and retries a `tools/call` once, since
+  the server refused it before running it. Redirects are followed by hand and
+  only on the same origin, so the configured headers never travel to another
+  host. Network and HTTP failures — TLS, DNS, refused, timeouts, `401`/`403`,
+  an OAuth challenge, a non-MCP answer, a `405` from an older HTTP+SSE server —
+  each get a catalogue message of their own, and the start of a refused JSON or
+  text body stands in for the stderr excerpt. Not implemented: the optional
+  `GET` stream, resuming with `Last-Event-ID`, the HTTP+SSE transport and OAuth.
 
   The transport stays free of MCP's meaning in both directions (CR-B16-02,
   -04): a request the server sends goes to an `onRequest` handler of the
@@ -289,14 +311,26 @@ what the engine passes changes the port as well:
   the tool list are built. After that the list is fixed for that run.
 
   The server list lives in `mcp-servers.json` in the userData directory (issue
-  #108), its own file as with the search service. Environment variables are
-  stored there per key either as `{ enc }` (encrypted via `safeStorage`) or as
-  `{ value }` (plain text) — **encrypted is the default**, plain text the
-  deliberate exception per key. Whoever does not touch the checkbox has their
+  #108), its own file as with the search service. Environment variables — and
+  the headers of a remote server (#341), which go through the same code with
+  their own names and limits — are stored there per key either as `{ enc }`
+  (encrypted via `safeStorage`) or as `{ value }` (plain text) — **encrypted is
+  the default**, plain text the deliberate exception per key. Whoever does not touch the checkbox has their
   token protected; forgetting must not be the expensive case. If encryption is
   not possible (Linux without a keyring), the server is **not** stored rather
   than putting a token down in plain text; the plain values alone could still be
   saved.
+
+  A remote server's address needs `https`, except on loopback; private
+  addresses are allowed because the user typed them, and credentials in the
+  URL are refused in favour of an encrypted header. A save without a
+  `transport` keeps the stored one with its address and headers (B16 review),
+  so an older form cannot turn a remote server into a local one. A save that
+  changes the endpoint — another address or another transport — switches the
+  server off and empties `knownTools`: nothing accepted for one endpoint
+  carries over to another (security concept §11). *Test connection* therefore
+  works on a switched-off server too; `connect` closes it again right after,
+  and `listTools` only lists enabled servers.
 
   This is operated in the settings dialog under "MCP" (issue #109). The section
   lives as its own renderer component in `renderer/components/McpPanel.js`: the

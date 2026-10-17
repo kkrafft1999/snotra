@@ -55,7 +55,7 @@ Was das Modell mit einer Anfrage bekommt: das Gespräch, die Anweisungen, die Be
 
 ### MCP-Server
 
-Ein kleines Programm, das Snotra über das Model Context Protocol Tools aus einem anderen System anbietet — einem Ticketsystem, einer Datenbank. Snotra startet es auf deinem Computer. Siehe [Einen MCP-Server anbinden](../../customising/mcp-servers/).
+Ein Programm, das Snotra über das Model Context Protocol Tools aus einem anderen System anbietet — einem Ticketsystem, einer Datenbank. Snotra startet es auf deinem Computer oder erreicht es übers Netz über seine Adresse. Siehe [Einen MCP-Server anbinden](../../customising/mcp-servers/).
 
 ### Modell
 

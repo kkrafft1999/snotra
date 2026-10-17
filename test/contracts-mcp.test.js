@@ -71,11 +71,70 @@ test('ungültige Kennungen werden abgelehnt, gültige kleingeschrieben', () => {
   assert.equal(validateMcpServerConfig({ id: 'Files', command: 'npx' }).value.id, 'files');
 });
 
-test('nur stdio wird angenommen', () => {
+test('stdio and http are the transports; anything else is refused (#341)', () => {
   assert.equal(validateMcpServerConfig({ ...MINIMAL, transport: 'stdio' }).ok, true);
-  const http = validateMcpServerConfig({ ...MINIMAL, transport: 'http' });
-  assert.equal(http.ok, false);
-  assert.deepEqual(http.errors.map((e) => e.key), ['mcp.error.transportUnsupported']);
+  assert.equal(validateMcpServerConfig({ id: 'r', transport: 'http', url: 'https://mcp.example.com/mcp' }).ok, true);
+  const sse = validateMcpServerConfig({ ...MINIMAL, transport: 'sse' });
+  assert.equal(sse.ok, false);
+  assert.deepEqual(sse.errors.map((e) => e.key), ['mcp.error.transportUnsupported']);
+});
+
+test('a remote server has an address and headers instead of a process (#341)', () => {
+  const { ok, value } = validateMcpServerConfig({
+    id: 'remote',
+    transport: 'http',
+    url: ' https://mcp.example.com/mcp#frag ',
+    headers: { Authorization: 'Bearer abc', 'X-Api-Key': 'k' },
+    command: 'ignored',
+    env: { IGNORED: '1' },
+  });
+  assert.equal(ok, true);
+  assert.equal(value.url, 'https://mcp.example.com/mcp');
+  assert.deepEqual(value.headers, { Authorization: 'Bearer abc', 'X-Api-Key': 'k' });
+  // The process fields stay, empty, so every reader finds the same shape.
+  assert.equal(value.command, '');
+  assert.deepEqual(value.args, []);
+  assert.deepEqual(value.env, {});
+  assert.equal(value.cwd, null);
+});
+
+test('a missing transport is stdio, unless there is only an address (#341)', () => {
+  assert.equal(validateMcpServerConfig(MINIMAL).value.transport, 'stdio');
+  assert.equal(validateMcpServerConfig({ id: 'r', url: 'https://x.example/mcp' }).value.transport, 'http');
+  assert.equal(validateMcpServerConfig({ id: 'r', url: 'https://x.example/mcp', command: 'npx' }).value.transport, 'stdio');
+  // A local server has no address or headers at all.
+  assert.equal('url' in validateMcpServerConfig(MINIMAL).value, false);
+});
+
+test('the address needs https, except on loopback, and carries no credentials (#341)', () => {
+  const keyOf = (url) => validateMcpServerConfig({ id: 'r', transport: 'http', url }).errors.map((e) => e.key);
+  assert.deepEqual(keyOf(''), ['mcp.error.urlMissing']);
+  assert.deepEqual(keyOf('not a url'), ['mcp.error.urlInvalid']);
+  assert.deepEqual(keyOf('ftp://x.example/mcp'), ['mcp.error.urlScheme']);
+  assert.deepEqual(keyOf('http://mcp.example.com/mcp'), ['mcp.error.urlNeedsHttps']);
+  assert.deepEqual(keyOf('http://192.168.1.10:8080/mcp'), ['mcp.error.urlNeedsHttps']);
+  assert.deepEqual(keyOf('https://user:pw@x.example/mcp'), ['mcp.error.urlCredentials']);
+  assert.deepEqual(keyOf(`https://x.example/${'a'.repeat(MCP_LIMITS.URL_MAX_CHARS)}`), ['mcp.error.urlTooLong']);
+  for (const url of ['http://localhost:3000/mcp', 'http://127.0.0.1/mcp', 'http://[::1]:8000/mcp', 'http://app.localhost/mcp']) {
+    assert.deepEqual(keyOf(url), [], url);
+  }
+  // Private addresses are fine over https: the user typed them, not the model.
+  assert.deepEqual(keyOf('https://10.0.0.5/mcp'), []);
+});
+
+test('headers the transport sets itself, duplicates and line breaks are refused (#341)', () => {
+  const keysOf = (headers) => validateMcpServerConfig({ id: 'r', transport: 'http', url: 'https://x.example/mcp', headers })
+    .errors.map((e) => e.key);
+  assert.deepEqual(keysOf({ 'Mcp-Session-Id': 'x' }), ['mcp.error.headerReserved']);
+  assert.deepEqual(keysOf({ accept: 'x' }), ['mcp.error.headerReserved']);
+  assert.deepEqual(keysOf({ 'X-Key': 'a', 'x-key': 'b' }), ['mcp.error.headerDuplicate']);
+  assert.deepEqual(keysOf({ 'X-Key': 'a\r\nInjected: 1' }), ['mcp.error.headerValueInvalid']);
+  assert.deepEqual(keysOf({ 'Bad Name': 'a' }), ['mcp.error.headerNameInvalid']);
+  assert.deepEqual(keysOf({ 'X-Key': 42 }), ['mcp.error.headerValueNotString']);
+  assert.deepEqual(keysOf([]), ['mcp.error.headersNotObject']);
+  // An error names the header, never its value.
+  const leak = validateMcpServerConfig({ id: 'r', transport: 'http', url: 'https://x.example/mcp', headers: { 'X-Key': 'geheim\n' } });
+  assert.doesNotMatch(JSON.stringify(leak.errors), /geheim/);
 });
 
 test('Argumente werden gekappt, Nicht-Strings fallen still weg', () => {
@@ -366,6 +425,7 @@ test('nur destructiveHint wird aus den Annotations übernommen', () => {
 
 const {
   maskStoredMcpEnv,
+  maskStoredMcpHeaders,
   normalizeMcpEnvInput,
   normalizeStoredMcpEnv,
   validateMcpServerInput,
@@ -436,4 +496,35 @@ test('validateMcpServerInput carries the create flag beside the stored value (CR
   assert.equal(validateMcpServerInput({ id: 'gh', command: 'npx' }).create, false);
   assert.equal('create' in validateMcpServerInput({ id: 'gh', command: 'npx', create: true }).value, false,
     'not part of the configuration');
+});
+
+test('validateMcpServerInput reads headers for a remote server and env for a local one (#341)', () => {
+  const remote = validateMcpServerInput({
+    id: 'r',
+    transport: 'http',
+    url: 'https://x.example/mcp',
+    headers: { Authorization: { value: 'Bearer abc' }, 'X-Team': { secret: false, value: 'core' }, 'X-Kept': { keep: true } },
+    env: { IGNORED: { value: 'x' } },
+  });
+  assert.equal(remote.ok, true);
+  assert.deepEqual(remote.env, []);
+  assert.deepEqual(remote.headers, [
+    { key: 'Authorization', secret: true, value: 'Bearer abc', keep: false },
+    { key: 'X-Team', secret: false, value: 'core', keep: false },
+    { key: 'X-Kept', secret: true, value: null, keep: true },
+  ]);
+  const local = validateMcpServerInput({ id: 'l', command: 'npx', headers: { Authorization: { value: 'x' } } });
+  assert.equal(local.ok, true);
+  assert.deepEqual(local.headers, []);
+  const reserved = validateMcpServerInput({
+    id: 'r', transport: 'http', url: 'https://x.example/mcp', headers: { Host: { value: 'x' } },
+  });
+  assert.deepEqual(reserved.errors.map((e) => e.key), ['mcp.error.headerReserved']);
+});
+
+test('stored headers are shown like env: plain text, never a secret (#341)', () => {
+  assert.deepEqual(maskStoredMcpHeaders({ Authorization: { enc: 'xyz' }, 'X-Team': { value: 'core' }, 'bad name': { value: 'x' } }), [
+    { key: 'Authorization', secret: true, hasValue: true },
+    { key: 'X-Team', secret: false, hasValue: true, value: 'core' },
+  ]);
 });

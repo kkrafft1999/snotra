@@ -25,7 +25,13 @@
  *   Klartext ist ein Leck.
  */
 
-const { MCP_LIMITS, MCP_TRANSPORTS, isValidMcpServerId } = require('./mcp');
+const {
+  MCP_LIMITS,
+  MCP_TRANSPORTS,
+  isReservedMcpHeaderName,
+  isValidMcpServerId,
+  normalizeMcpServerUrl,
+} = require('./mcp');
 const { createMessage } = require('./message');
 
 /** Wie viele Einträge ein einzelner Block liefern darf. */
@@ -57,8 +63,22 @@ const SECRET_VALUE_PREFIXES = Object.freeze([
 /** Platzhalter aus Dokumentationen, die niemand ausgefüllt hat. */
 const PLACEHOLDER_PATTERN = /^(<.*>|\{\{.*\}\}|your[_-].*|dein[_-].*|xxx+|\.\.\.|todo)$/i;
 
-/** Transport-Angaben, die es gibt, die wir aber (noch) nicht sprechen. */
-const REMOTE_TRANSPORT_HINTS = Object.freeze(['http', 'https', 'sse', 'streamable-http', 'streamablehttp', 'ws', 'websocket']);
+/**
+ * How the clients name Streamable HTTP (#341): Claude Code and VS Code write
+ * `"type": "http"`, others `"streamable-http"`; Cursor writes no type at all,
+ * only a `url`.
+ */
+const HTTP_TRANSPORT_NAMES = Object.freeze(['http', 'https', 'streamable-http', 'streamablehttp', 'streamable_http']);
+/** The older HTTP+SSE transport (spec 2024-11-05) — not supported. */
+const LEGACY_SSE_NAMES = Object.freeze(['sse']);
+/** Transport-Angaben, die es gibt, die wir aber nicht sprechen. */
+const UNSUPPORTED_TRANSPORT_HINTS = Object.freeze(['ws', 'websocket']);
+
+/**
+ * A `${VAR}` or `${env:VAR}` in a header — Claude Code and VS Code fill those
+ * in from the environment, Snotra does not (#341).
+ */
+const EXPANSION_PATTERN = /\$\{[^}]*\}/;
 
 /**
  * Entfernt Kommentare aus einem JSON-Text — zeichenweise und mit Rücksicht
@@ -172,9 +192,12 @@ function uniqueId(base, taken) {
   return '';
 }
 
-/** Sieht dieser Wert nach einem Geheimnis aus? */
+/**
+ * Sieht dieser Wert nach einem Geheimnis aus? A header name is read with its
+ * hyphens as underscores, so `X-API-Key` counts like `X_API_KEY`.
+ */
 function looksSecret(key, value) {
-  if (SECRET_KEY_PATTERN.test(key)) return true;
+  if (SECRET_KEY_PATTERN.test(key.replace(/-/g, '_'))) return true;
   return SECRET_VALUE_PREFIXES.some((prefix) => value.startsWith(prefix));
 }
 
@@ -184,16 +207,48 @@ function looksSecret(key, value) {
  * (`"PORT": 8080`) und sind für einen Kindprozess ohnehin nur Zeichen.
  */
 function readEnv(raw, notes) {
+  return readSecretMap(raw, notes, ENV_IMPORT);
+}
+
+/** `env` of a local server: what may be read, and what is said about it. */
+const ENV_IMPORT = Object.freeze({
+  maxEntries: MCP_LIMITS.MAX_ENV_ENTRIES,
+  valueMaxChars: MCP_LIMITS.ENV_VALUE_MAX_CHARS,
+  notObject: 'mcpImport.note.envNotObject',
+  truncated: 'mcpImport.note.envTruncated',
+  skip: () => null,
+});
+
+/**
+ * `headers` of a remote server (#341). They take the same preview rules as
+ * `env`: secret-looking values are flagged, placeholders named. A header the
+ * transport sets itself is left out with a note — the server would get it
+ * anyway.
+ */
+const HEADER_IMPORT = Object.freeze({
+  maxEntries: MCP_LIMITS.MAX_HEADERS,
+  valueMaxChars: MCP_LIMITS.HEADER_VALUE_MAX_CHARS,
+  notObject: 'mcpImport.note.headersNotObject',
+  truncated: 'mcpImport.note.headersTruncated',
+  skip: (key) => (isReservedMcpHeaderName(key) ? createMessage('mcpImport.note.headerReserved', { name: key }) : null),
+});
+
+function readSecretMap(raw, notes, kind) {
   const entries = [];
   if (raw === undefined || raw === null) return entries;
   if (typeof raw !== 'object' || Array.isArray(raw)) {
-    notes.push(createMessage('mcpImport.note.envNotObject'));
+    notes.push(createMessage(kind.notObject));
     return entries;
   }
   for (const [key, value] of Object.entries(raw)) {
-    if (entries.length >= MCP_LIMITS.MAX_ENV_ENTRIES) {
-      notes.push(createMessage('mcpImport.note.envTruncated', { max: MCP_LIMITS.MAX_ENV_ENTRIES }));
+    if (entries.length >= kind.maxEntries) {
+      notes.push(createMessage(kind.truncated, { max: kind.maxEntries }));
       break;
+    }
+    const skipped = kind.skip(key);
+    if (skipped) {
+      notes.push(skipped);
+      continue;
     }
     let text;
     if (typeof value === 'string') text = value;
@@ -202,12 +257,14 @@ function readEnv(raw, notes) {
       notes.push(createMessage('mcpImport.note.envValueNotString', { name: key }));
       continue;
     }
-    text = text.slice(0, MCP_LIMITS.ENV_VALUE_MAX_CHARS);
+    text = text.slice(0, kind.valueMaxChars);
     // An empty value has nothing to encrypt; marking it secret would only
     // promise "stored encrypted" for nothing (CR-B14-02).
     const secret = text !== '' && looksSecret(key, text);
     if (!text) notes.push(createMessage('mcpImport.note.envValueEmpty', { name: key }));
-    else if (PLACEHOLDER_PATTERN.test(text)) notes.push(createMessage('mcpImport.note.envPlaceholder', { name: key }));
+    else if (PLACEHOLDER_PATTERN.test(text) || (kind === HEADER_IMPORT && EXPANSION_PATTERN.test(text))) {
+      notes.push(createMessage('mcpImport.note.envPlaceholder', { name: key }));
+    }
     entries.push({ key, value: text, secret });
   }
   return entries;
@@ -233,16 +290,24 @@ function readArgs(raw, notes) {
   return out;
 }
 
-/** Erkennt Einträge, die einen Transport verlangen, den wir nicht sprechen. */
-function remoteTransportReason(entry) {
+/**
+ * Which transport an entry asks for: `stdio`, `http`, or a skip reason for
+ * one we do not speak. Without a type, a `url` and no `command` is remote —
+ * Cursor's way of writing it.
+ */
+function transportOfEntry(entry) {
   const declared = String(entry.type || entry.transport || '').trim().toLowerCase();
-  if (declared && REMOTE_TRANSPORT_HINTS.includes(declared)) {
-    return createMessage('mcpImport.skippedReason.remoteTransport', { transport: declared });
+  const hasUrl = typeof entry.url === 'string' && entry.url.trim() !== '';
+  if (LEGACY_SSE_NAMES.includes(declared)) {
+    return { skip: createMessage('mcpImport.skippedReason.legacySse') };
   }
-  if (typeof entry.url === 'string' && entry.url.trim()) {
-    return createMessage('mcpImport.skippedReason.url');
+  if (UNSUPPORTED_TRANSPORT_HINTS.includes(declared)) {
+    return { skip: createMessage('mcpImport.skippedReason.remoteTransport', { transport: declared }) };
   }
-  return null;
+  if (HTTP_TRANSPORT_NAMES.includes(declared)) return { transport: MCP_TRANSPORTS.HTTP };
+  if (declared === 'stdio') return { transport: MCP_TRANSPORTS.STDIO };
+  const hasCommand = typeof entry.command === 'string' && entry.command.trim() !== '';
+  return { transport: hasUrl && !hasCommand ? MCP_TRANSPORTS.HTTP : MCP_TRANSPORTS.STDIO };
 }
 
 /**
@@ -312,15 +377,23 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
       continue;
     }
 
-    const remote = remoteTransportReason(entry);
-    if (remote) {
-      skipped.push({ name, reason: remote });
+    const { transport, skip } = transportOfEntry(entry);
+    if (skip) {
+      skipped.push({ name, reason: skip });
       continue;
     }
+    const remote = transport === MCP_TRANSPORTS.HTTP;
 
     const command = typeof entry.command === 'string' ? entry.command.trim() : '';
-    if (!command) {
+    if (!remote && !command) {
       skipped.push({ name, reason: createMessage('mcpImport.skippedReason.commandMissing') });
+      continue;
+    }
+    // The address goes through the same check as one typed into the form; a
+    // plain `http` address to another machine is refused here already.
+    const address = remote ? normalizeMcpServerUrl(entry.url) : null;
+    if (address?.error) {
+      skipped.push({ name, reason: address.error });
       continue;
     }
 
@@ -348,6 +421,25 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
     if (id !== name.trim().toLowerCase()) notes.push(createMessage('mcpImport.note.idDerived', { id }));
     taken.add(id);
 
+    const label = String(name).trim().slice(0, MCP_LIMITS.LABEL_MAX_CHARS) || id;
+    if (remote) {
+      candidates.push({
+        sourceName: name,
+        id,
+        label,
+        transport: MCP_TRANSPORTS.HTTP,
+        url: address.url,
+        headers: readSecretMap(entry.headers, notes, HEADER_IMPORT),
+        command: '',
+        args: [],
+        env: [],
+        cwd: null,
+        conflict,
+        notes,
+      });
+      continue;
+    }
+
     const args = readArgs(entry.args, notes);
     const env = readEnv(entry.env, notes);
     const cwd = typeof entry.cwd === 'string' && entry.cwd.trim()
@@ -357,10 +449,12 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
     candidates.push({
       sourceName: name,
       id,
-      label: String(name).trim().slice(0, MCP_LIMITS.LABEL_MAX_CHARS) || id,
+      label,
+      transport: MCP_TRANSPORTS.STDIO,
       command: command.slice(0, MCP_LIMITS.COMMAND_MAX_CHARS),
       args,
       env,
+      headers: [],
       cwd,
       conflict,
       notes,
@@ -382,10 +476,20 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
  * einen Prozess und bringt Tools ins Modell.
  */
 function toMcpServerInput(candidate) {
-  const env = {};
-  for (const entry of candidate?.env || []) {
-    env[entry.key] = { value: entry.value, secret: entry.secret !== false };
+  const toSpecs = (entries) => Object.fromEntries((entries || [])
+    .map((entry) => [entry.key, { value: entry.value, secret: entry.secret !== false }]));
+  if (candidate?.transport === MCP_TRANSPORTS.HTTP) {
+    return {
+      id: candidate.id || '',
+      label: candidate.label || '',
+      transport: MCP_TRANSPORTS.HTTP,
+      url: candidate.url || '',
+      headers: toSpecs(candidate.headers),
+      enabled: false,
+      disabledTools: [],
+    };
   }
+  const env = toSpecs(candidate?.env);
   return {
     id: candidate?.id || '',
     label: candidate?.label || '',

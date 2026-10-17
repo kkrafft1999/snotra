@@ -1000,9 +1000,9 @@
               <div class="settings-mcp-warning">
                 <span class="settings-mcp-warning__mark" aria-hidden="true">!</span>
                 <p data-i18n-html="settings.mcp.warning">
-                  <strong>An MCP server is somebody else&rsquo;s code, started on your machine.</strong>
-                  It runs with your rights and can do anything you could. Out of the box none is entered
-                  &mdash; nothing runs by itself. Only enter servers whose origin you know.
+                  <strong>An MCP server is somebody else&rsquo;s code.</strong> A local one is started on your
+                  machine and runs with your rights; a remote one receives whatever the model sends it. Out of
+                  the box none is entered &mdash; nothing runs by itself. Only enter servers whose origin you know.
                 </p>
               </div>
               <p id="settings-mcp-error" class="modal-warning hidden" role="alert"></p>
@@ -1351,28 +1351,67 @@
               <input type="text" id="mcp-field-label" class="modal-input" placeholder="GitHub" autocomplete="off">
             </div>
             <div class="modal-field-group">
-              <label for="mcp-field-command" class="modal-field-label" data-i18n="mcpDialog.command.label">Command</label>
-              <input type="text" id="mcp-field-command" class="modal-input modal-input--mono" placeholder="npx" autocomplete="off" spellcheck="false">
+              <div class="modal-field-label" id="label-mcp-transport" data-i18n="mcpDialog.transport.label">Connection</div>
+              <div class="ds-segmented mcp-transport" id="mcp-field-transport" role="radiogroup" aria-labelledby="label-mcp-transport">
+                <label class="ds-segmented__option">
+                  <input type="radio" class="ds-segmented__input" name="mcp-transport" value="stdio" checked>
+                  <span data-i18n="mcpDialog.transport.stdio">Local process (stdio)</span>
+                </label>
+                <label class="ds-segmented__option">
+                  <input type="radio" class="ds-segmented__input" name="mcp-transport" value="http">
+                  <span data-i18n="mcpDialog.transport.http">Remote (HTTP)</span>
+                </label>
+              </div>
             </div>
-            <div class="modal-field-group">
-              <label for="mcp-field-args" class="modal-field-label" data-i18n="mcpDialog.args.label">Arguments</label>
-              <input type="text" id="mcp-field-args" class="modal-input modal-input--mono" placeholder="-y @modelcontextprotocol/server-github" autocomplete="off" spellcheck="false">
-              <p class="modal-hint" data-i18n="mcpDialog.args.hint">Separated by spaces as on the command line; quotes hold things together.</p>
+            <div id="mcp-fields-http" class="mcp-transport-fields hidden">
+              <div class="modal-field-group">
+                <label for="mcp-field-url" class="modal-field-label" data-i18n="mcpDialog.url.label">Server URL</label>
+                <input type="url" id="mcp-field-url" class="modal-input modal-input--mono" placeholder="https://mcp.example.com/mcp" autocomplete="off" spellcheck="false" aria-describedby="mcp-url-hint">
+                <p class="modal-hint" id="mcp-url-hint" data-i18n-html="mcpDialog.url.hint">
+                  The Streamable HTTP endpoint, usually ending in <code lang="en">/mcp</code>. It has to use
+                  <code lang="en">https</code>, except on this computer (<code lang="en">localhost</code>).
+                </p>
+              </div>
+              <div class="modal-field-group">
+                <span class="modal-field-label" id="heading-mcp-headers" data-i18n="mcpDialog.headers.label">Headers</span>
+                <div id="mcp-header-list" class="mcp-env-list" role="group" aria-labelledby="heading-mcp-headers"></div>
+                <button type="button" id="btn-mcp-header-add" class="btn-secondary btn-compact" data-i18n="mcpDialog.headers.add">Add header</button>
+                <p class="modal-hint" id="mcp-header-hint" data-i18n-html="mcpDialog.headers.hint">
+                  For an API key or token, for example <code lang="en">Authorization</code> with
+                  <code lang="en">Bearer &lt;token&gt;</code>. Values are <strong>secret</strong> by default and are stored
+                  encrypted in the system keychain; once saved, a secret value is only replaced or deleted.
+                  Headers are only ever sent to this address.
+                </p>
+              </div>
             </div>
-            <div class="modal-field-group">
-              <label for="mcp-field-cwd" class="modal-field-label" data-i18n="mcpDialog.cwd.label">Working directory</label>
-              <input type="text" id="mcp-field-cwd" class="modal-input modal-input--mono" placeholder="(your home folder)" data-i18n-attr="placeholder:mcpDialog.cwd.placeholder" autocomplete="off" spellcheck="false">
+            <div id="mcp-fields-stdio" class="mcp-transport-fields">
+              <div class="modal-field-group">
+                <label for="mcp-field-command" class="modal-field-label" data-i18n="mcpDialog.command.label">Command</label>
+                <input type="text" id="mcp-field-command" class="modal-input modal-input--mono" placeholder="npx" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="modal-field-group">
+                <label for="mcp-field-args" class="modal-field-label" data-i18n="mcpDialog.args.label">Arguments</label>
+                <input type="text" id="mcp-field-args" class="modal-input modal-input--mono" placeholder="-y @modelcontextprotocol/server-github" autocomplete="off" spellcheck="false">
+                <p class="modal-hint" data-i18n="mcpDialog.args.hint">Separated by spaces as on the command line; quotes hold things together.</p>
+              </div>
+              <div class="modal-field-group">
+                <label for="mcp-field-cwd" class="modal-field-label" data-i18n="mcpDialog.cwd.label">Working directory</label>
+                <input type="text" id="mcp-field-cwd" class="modal-input modal-input--mono" placeholder="(your home folder)" data-i18n-attr="placeholder:mcpDialog.cwd.placeholder" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="modal-field-group">
+                <span class="modal-field-label" id="heading-mcp-env" data-i18n="mcpDialog.env.label">Environment variables</span>
+                <div id="mcp-env-list" class="mcp-env-list" role="group" aria-labelledby="heading-mcp-env"></div>
+                <button type="button" id="btn-mcp-env-add" class="btn-secondary btn-compact" data-i18n="mcpDialog.env.add">Add variable</button>
+                <p class="modal-hint" id="mcp-env-hint" data-i18n-html="mcpDialog.env.hint">
+                  Values are <strong>secret</strong> by default and are stored encrypted in the system
+                  keychain. Once saved, a secret value is no longer shown &mdash; only replaced or deleted.
+                  To rename it or store it in plain text, enter the value again.
+                </p>
+              </div>
             </div>
-            <div class="modal-field-group">
-              <span class="modal-field-label" id="heading-mcp-env" data-i18n="mcpDialog.env.label">Environment variables</span>
-              <div id="mcp-env-list" class="mcp-env-list" role="group" aria-labelledby="heading-mcp-env"></div>
-              <button type="button" id="btn-mcp-env-add" class="btn-secondary btn-compact" data-i18n="mcpDialog.env.add">Add variable</button>
-              <p class="modal-hint" id="mcp-env-hint" data-i18n-html="mcpDialog.env.hint">
-                Values are <strong>secret</strong> by default and are stored encrypted in the system
-                keychain. Once saved, a secret value is no longer shown &mdash; only replaced or deleted.
-                To rename it or store it in plain text, enter the value again.
-              </p>
-            </div>
+            <!-- Filled only while a save would switch the server off (#341); a live
+                 region announces what is put into it, not what is unhidden. -->
+            <div id="mcp-endpoint-hint" class="mcp-endpoint-hint" role="status"></div>
             <p id="mcp-test-hint" class="modal-hint hidden" data-i18n="mcpDialog.test.unsaved">
               Test connection uses the saved configuration &mdash; save your changes first.
             </p>

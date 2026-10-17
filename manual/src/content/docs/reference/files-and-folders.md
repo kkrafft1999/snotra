@@ -31,7 +31,7 @@ It still carries the name of the platform, Snotra AI, although the app is called
 | `llm-config.json` | The models in the list and how to reach them. Keys are stored encrypted. |
 | `ui-preferences.json` | Your settings and the layout: language, the system prompt, the switches, the width of the columns, the zoom of Markdown files, the Python interpreter, the image model. |
 | `tool-policy.json` and `tool-policy.key` | The mode, your blocks and allowances, the default mode of a folder. Signed, so a changed file is noticed. |
-| `mcp-servers.json` | The MCP servers. Secret environment variables are encrypted. |
+| `mcp-servers.json` | The MCP servers. Secret environment variables and headers are encrypted. |
 | `web-search-config.json` | The key for the web search, encrypted. |
 | `chat-history.json` | Your chats, encrypted. |
 | `chat-attachments/` | The images that belong to your chats, one folder per chat. |

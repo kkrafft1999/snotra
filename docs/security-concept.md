@@ -251,7 +251,8 @@ history without encrypted storage" in section 9 records that.
   previews or logs. Detected copies of our own secrets are blocked as well and
   cannot be approved. **Own secrets** are the API key of every provider and of
   every model entry with a connection of its own, the values of a gateway's
-  extra headers, the secrets stored for the MCP servers and the web search key
+  extra headers, the secrets stored for the MCP servers — environment variables
+  of a local server, headers of a remote one (#341) — and the web search key
   (#505). Each counts in every form it can turn up in: a header value with an
   auth scheme (`Bearer …`, `Basic …`, `Token …`) also as its bare token, since
   an `env` dump or a config file carries only that. The list is collected in
@@ -1362,7 +1363,7 @@ not a claim that the product modes are identical.
 
 | Decision | Ownership / the conservative interim state |
 | --- | --- |
-| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio only, every MCP tool carries `execute` **and** `external`, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. Still open: isolation of local server processes, which run with the user's rights (see #329 for the built-in execution tools), and endpoint changes, which only arise with a network transport. |
+| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio or, since #341, over Streamable HTTP; every MCP tool carries `execute` **and** `external` whatever the transport, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. **Endpoint changes settled in #341:** saving a server with another address or another transport switches it off and forgets its remembered tool catalogue, so nothing accepted for one endpoint carries over to another; it connects again only after the user switched it on (a connection test works on a switched-off server and closes it right after). A remote address needs `https` except on loopback; private network addresses are allowed, because the user enters the address deliberately — unlike `fetch_url`, where the model picks the target. Credentials in the URL are refused; headers are stored like environment variables (secret by default, `{ enc }` via `safeStorage`, not stored at all without encryption), count as own secrets and are masked in every status. They go to the configured origin only: redirects are followed by hand and only on the same origin. OAuth is not supported. Still open: isolation of local server processes, which run with the user's rights (see #329 for the built-in execution tools). |
 | Web search providers, permitted targets and redirects, and the amount of data | To be decided in #63. The request including the search text is external; search responses are untrusted. Provider keys stay in the adapter. |
 | The exact content patterns, false positives and the limits with large files | To be versioned and tested in #66; the minimum groups from section 4 are mandatory. No broad detection of personal data or entropy in the first step. |
 | A separate persistent audit journal with retention and export | An extension of #66/#67 where needed; sanitised decisions in the existing chat history for now. No unlimited full-text logging. |
