@@ -5,6 +5,12 @@ itself is implemented later, in a repository of its own; this document settles
 what the desktop, the relay and the app have to agree on before any of them is
 written. Diagram: [`mobile-remote-architecture.svg`](./mobile-remote-architecture.svg).
 
+Revised on 2026-10-17, the same day: the app is a native iPhone app in Swift
+and SwiftUI, in [`kkrafft1999/snotra-mobile`](https://github.com/kkrafft1999/snotra-mobile),
+and the encryption is built from CryptoKit on the phone and Node's built-in
+`crypto` on the desktop — ChaCha20-Poly1305 instead of XChaCha20, no libsodium
+([§5.2](#52-the-channel), [§8](#8-the-mobile-app)).
+
 It changes two decisions of [`quality-requirements.md`](./quality-requirements.md)
 from 2026-10-15 — *no backend of our own* and *remote control over localhost
 only* — and the reasons are in [§3](#3-what-changes-in-the-quality-requirements).
@@ -72,7 +78,7 @@ SEC-6 covers the relay.
 | ----- | -------------- | ----- | ---- |
 | **Remote bridge** | This repository, `src/main/remote/` (driving adapter) and `src/application/` (the parts that decide) | The desktop's identity key (in `safeStorage`), the paired phone's public key, the per-workspace release | Pairing, encryption, translating protocol messages into calls on the conversation service and back; the presence indicator |
 | **Relay** | A Firebase project of its own (`snotra-relay`), **not** the website's project | Channel records and encrypted envelopes with a short time to live | Pairing endpoints, minting access tokens, carrying envelopes both ways, presence, clean-up |
-| **Mobile app** | Its own repository (`snotra-mobile`), implemented later | The phone's identity key (Secure Enclave / Android Keystore), the desktop's public key and the channel id — nothing else on disk | Shows and drives what the desktop sends |
+| **Mobile app** | Its own repository, [`snotra-mobile`](https://github.com/kkrafft1999/snotra-mobile) — Swift and SwiftUI, iPhone first, implemented later | The phone's identity keys (in the Secure Enclave), the desktop's public keys and the channel id (Keychain, this device only) — nothing else on disk | Shows and drives what the desktop sends |
 | **Protocol** | This repository: `docs/remote-protocol.md` and `src/shared/contracts/remote/`, with test vectors | — | The contract all three follow, versioned |
 
 Why the protocol lives here: the desktop is the authority on what a chat is and
@@ -154,8 +160,8 @@ What the relay stores:
 
 ```
 /channels/{channelId}
-    desktopKey      public key of the desktop (X25519)
-    phoneKey        public key of the phone, empty until paired
+    desktopKeys     public keys of the desktop (P-256: signing, key agreement)
+    phoneKeys       public keys of the phone, empty until paired
     createdAt, lastSeen
 /channels/{channelId}/presence/{desktop|phone}   online flag, via onDisconnect
 /channels/{channelId}/to-phone/{seq}             { nonce, ciphertext, expiresAt }
@@ -168,13 +174,13 @@ What the relay stores:
   proved it holds the private key of that role (a signed challenge). The
   security rules let a token read and write its own channel only, write only
   into its own outbox, and never read `/pairing` at all.
-- **Two keys, no third.** Once `phoneKey` is set, the Function refuses another
+- **Two keys, no third.** Once `phoneKeys` are set, the Function refuses another
   claim on the channel. A new pairing creates a new channel and deletes the
   old one (R1).
 - **Short life.** The receiver deletes an envelope once it has read it; a
   scheduled Function deletes whatever is older than ten minutes, and channels
   nobody has seen for 30 days.
-- **Abuse.** App Check (DeviceCheck / Play Integrity) on the pairing endpoint,
+- **Abuse.** App Check (App Attest) on the pairing endpoint,
   a rate limit per IP, size limits on envelopes, and a budget alert on the
   project. None of it protects a chat — encryption does — it protects the bill.
 
@@ -198,13 +204,14 @@ phone, not once per workspace.
 
    The pairing secret is 128 random bits, valid for **five minutes and one
    use**. It never reaches the relay.
-2. **Phone.** Scans the code or takes the typed key. It generates its own key
-   pair and sends its public key to the pairing endpoint, together with a MAC
-   over both public keys under the pairing secret. The relay stores both and
-   cannot forge either: it doesn't know the secret.
+2. **Phone.** Scans the code or takes the typed key. It generates its own
+   keys in the Secure Enclave and sends the public halves to the pairing
+   endpoint, together with a MAC (HMAC-SHA256) over its own and the desktop's
+   public keys under the pairing secret. The relay stores them and cannot
+   forge the MAC: it doesn't know the secret.
 3. **Desktop.** Checks the MAC. A wrong MAC — a relay or a stranger trying to
-   slip in its own key — ends the pairing with an error.
-4. **Both** derive the same six-word safety phrase from the two public keys
+   slip in its own keys — ends the pairing with an error.
+4. **Both** derive the same six-word safety phrase from both sides' public keys
    and show it.
 5. **Desktop, in person.** *"iPhone wants to access Snotra. The phone shows:
    amber · lantern · seven · orbit · velvet · quay. Allow?"* Only this click
@@ -223,17 +230,29 @@ phone to this workspace — while the phone only has to be scanned once.
 
 ### 5.2 The channel
 
-- **Keys.** X25519 key agreement between the two long-term keys, plus a fresh
-  ephemeral pair at the start of every connection, run through HKDF into one
-  key per direction. A stolen long-term key does not decrypt past connections.
-- **Packets.** XChaCha20-Poly1305 with a per-direction counter as part of the
-  nonce. A packet that is replayed, reordered beyond a small window, or altered
-  is dropped, and the connection is re-established.
-- **Library.** libsodium on both sides (`sodium-native` in main, the platform
-  binding on the phone) — no home-made primitives. Before building, check the
-  Noise framework (`Noise_IK`) as a ready-made handshake for the same
-  properties; it is the better choice if a maintained binding exists for both
-  platforms.
+- **Identity.** Each side holds two long-term P-256 keys: one to sign (it
+  proves the role to the relay's token Function) and one for key agreement.
+  On the phone both live in the **Secure Enclave** and cannot be exported; on
+  the desktop they are stored through `safeStorage`. P-256 rather than
+  Curve25519 for these, because the Secure Enclave knows only P-256.
+- **Session keys.** Every connection starts with a fresh X25519 pair on each
+  side. HKDF-SHA256 mixes the static P-256 agreement (who is talking) with the
+  ephemeral X25519 agreement (forward secrecy) and the handshake transcript,
+  and derives one key per direction. A stolen long-term key does not decrypt
+  past connections.
+- **Packets.** ChaCha20-Poly1305 in its IETF form with a 96-bit nonce: a
+  64-bit per-direction counter, padded. Since every connection and direction
+  has its own key, a nonce never repeats under a key — the reason XChaCha20's
+  random 192-bit nonces aren't needed. A packet that is replayed, reordered
+  beyond a small window, or altered is dropped, and the connection is
+  re-established.
+- **Libraries.** None from third parties: **CryptoKit** on the phone
+  (`P256.Signing`, `SecureEnclave.P256.KeyAgreement`, `Curve25519.KeyAgreement`,
+  `HKDF`, `ChaChaPoly`), Node's built-in **`crypto`** in main (`ecdh`/`sign`
+  on `prime256v1`, `x25519`, `hkdf`, `chacha20-poly1305`). Both are covered by
+  the shared test vectors of the protocol. Before building, the handshake is
+  checked against the Noise `KK` pattern, which it follows in spirit — if it
+  can be written as Noise with these primitives, it is.
 - **Version.** The first packet names the protocol version; a version the
   desktop doesn't speak ends the connection with a message the phone can show.
 
@@ -331,10 +350,17 @@ Built later, in `snotra-mobile`. What this concept asks of it:
   [`ux-ui-standards.md`](../.claude/rules/ux-ui-standards.md): every state —
   desktop offline, relay unreachable, workspace not released, run waiting for
   approval, approval answered on the desktop — has its own screen or note.
-- **Platform: open.** iOS first with Swift, or both platforms with React Native
-  (Expo) or Flutter. The protocol doesn't depend on it; the choice belongs to
-  the start of that repository. A cross-platform framework keeps one code base
-  for a solo project; libsodium and secure key storage exist for all three.
+- **Platform: iPhone, native** (decided 2026-10-17). Swift and SwiftUI, with
+  what the system brings: CryptoKit and the Secure Enclave for the keys,
+  VisionKit (`DataScannerViewController`) for the QR scan, LocalAuthentication
+  for Face ID, the Firebase iOS SDK for the Realtime Database. React Native
+  with Expo was the alternative — one language with the desktop and Android
+  almost for free — and lost on the two things the concept rests on: the
+  encryption comes from the platform instead of a third-party binding, and the
+  app looks and behaves like an iPhone app. Android is not planned; the
+  protocol does not depend on the platform, so it stays possible.
+- **Building it needs Xcode** on the Mac (not installed as of 2026-10-17) and
+  the Apple Developer Program for TestFlight and the user's own iPhone.
 
 **Push notifications** — *"Snotra needs your approval"* while the app is closed
 — are a sensible second step, not part of the first. They need FCM/APNs, which

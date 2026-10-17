@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title description">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1016" viewBox="0 0 1600 1016" role="img" aria-labelledby="title description">
   <title id="title">Snotra Agent — mobile remote: architecture</title>
-  <desc id="description">The desktop app with a new remote bridge on top of the application core and the local store, a blind relay in its own Firebase project made of Cloud Functions and a Realtime Database, and the mobile app with its secure key store. Pairing goes from the desktop screen to the phone camera by QR code or typed key. Messages travel through the relay as encrypted envelopes; the end-to-end encrypted channel runs between the remote bridge and the phone, and the relay cannot read it. One user, at the desk or away from it. Concept of 2026-10-17.</desc>
+  <desc id="description">The desktop app with a new remote bridge on top of the application core and the local store, a blind relay in its own Firebase project made of Cloud Functions and a Realtime Database, and the iPhone app in Swift and SwiftUI with its keys in the Secure Enclave. Pairing goes from the desktop screen to the phone camera by QR code or typed key. Messages travel through the relay as encrypted envelopes; the end-to-end encrypted channel runs between the remote bridge and the phone, and the relay cannot read it. One user, at the desk or away from it. Concept of 2026-10-17, revised the same day for SwiftUI and CryptoKit.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -38,7 +38,7 @@
     </style>
   </defs>
 
-  <rect class="canvas" width="1600" height="1000"/>
+  <rect class="canvas" width="1600" height="1016"/>
 
   <!-- Title -->
   <text class="page-title" x="60" y="64">Snotra Agent — mobile remote: architecture</text>
@@ -113,7 +113,7 @@
   <!-- Phone -->
   <rect class="container--new" x="1130" y="270" width="410" height="340" rx="8"/>
   <text class="name" x="1150" y="298">Snotra mobile</text>
-  <text class="tech--new" x="1150" y="317">[own repository snotra-mobile · built later]</text>
+  <text class="tech--new" x="1150" y="317">[Swift · SwiftUI · repository snotra-mobile · built later]</text>
   <text class="desc" x="1150" y="347">Workspaces of the desktop; switch the active one.</text>
   <text class="desc" x="1150" y="367">Chats of a workspace; switch between them.</text>
   <text class="desc" x="1150" y="387">Follow a chat live, write, start a chat, stop a run.</text>
@@ -124,8 +124,8 @@
 
   <rect class="container" x="1130" y="640" width="410" height="90" rx="8"/>
   <text class="name" x="1150" y="668">Secure key store</text>
-  <text class="tech" x="1150" y="687">[Secure Enclave · Android Keystore]</text>
-  <text class="desc" x="1150" y="710">The phone's key and the desktop's public key — nothing else.</text>
+  <text class="tech" x="1150" y="687">[Secure Enclave · Keychain, this device only]</text>
+  <text class="desc" x="1150" y="710">Own keys, the desktop's public keys — nothing else.</text>
   <path class="edge" d="M 1335 610 V 638" marker-end="url(#arrow)"/>
 
   <!-- Pairing -->
@@ -147,7 +147,7 @@
   <path class="edge--e2e" d="M 590 484 H 650 V 860 H 1080 V 590 H 1128" marker-start="url(#arrow-e2e)" marker-end="url(#arrow-e2e)"/>
   <rect class="label-bg" x="660" y="836" width="410" height="18"/>
   <text class="edge-label--e2e" x="865" y="850">End-to-end encrypted — the relay cannot read it</text>
-  <text class="edge-label" x="865" y="880">X25519 per connection · XChaCha20-Poly1305 · counters against replay</text>
+  <text class="edge-label" x="865" y="880">P-256 + X25519 · ChaCha20-Poly1305 · CryptoKit / Node crypto</text>
 
   <!-- Legend -->
   <text class="legend-title" x="60" y="938">Legend</text>
@@ -163,4 +163,5 @@
   <text class="legend-text" x="1040" y="966">pairing, from screen to camera</text>
 
   <text class="stamp" x="1540" y="984">Created 2026-10-17 · Claude Opus 5.5 · Reasoning effort: high</text>
+  <text class="stamp" x="1540" y="1000">Revised 2026-10-17 · Claude Opus 5.5 · Reasoning effort: high</text>
 </svg>
