@@ -59,7 +59,7 @@ Two things look like containers and are not:
 | MCP servers | Tools configured by the user | JSON-RPC over stdio, as local child processes |
 | GitHub Releases | Update check and download | HTTPS |
 | LiteLLM price table | Model prices for the cost estimate (#949), only on the user's click | HTTPS |
-| Operating system | Workspace folder, keychain behind `safeStorage`, `sandbox-exec` / bubblewrap | File system, OS APIs |
+| Operating system | Workspace folder, keychain behind `safeStorage` (on Windows DPAPI, with the key in Chromium's `Local State`, #1060), `sandbox-exec` / bubblewrap | File system, OS APIs |
 
 MCP servers are started by Snotra but are third-party software, so they count
 as an external system rather than a container.
@@ -1242,6 +1242,28 @@ newer release (`version` above this build's) as
 `chat-history.json.unreadable-<stamp>` (#566), and when that move fails, no save
 may write over it (#561). While such a copy lies there, the images of its chats
 are not swept (#565).
+
+**Ciphertext waits for its key**
+([#1060](https://github.com/kkrafft1999/snotra/issues/1060)). On macOS the key
+behind `safeStorage` is in the Keychain and on Linux in libsecret or kwallet as
+soon as it exists. On Windows no keystore of the operating system holds it:
+Chromium wraps it with DPAPI and keeps it as `os_crypt.encrypted_key` in the
+`Local State` file of the profile folder. A fresh profile — the first start, or
+the first after `Local State` was deleted — gets that file on disk only about
+ten seconds after the start, or on an orderly quit, while `encryptString`
+works at once. Ciphertext written in between could never be read again after a
+crash. `services/safe-storage-key-durability.js` watches for the key, and
+every encrypted write waits for it: the chat history, the web search key and
+MCP secrets in `storage-service`, provider keys and headers in
+`ipc/settings-handlers.js` (before the config lock, so nothing else waits with
+them), and a new `tool-policy.key` in `tool-policy-store`. What only reads does
+not wait: a plain history is encrypted by a later read, a missing policy is
+read as the defaults without writing a file yet, and a stored signature whose
+key is gone fails its check without a new key being made for it. On macOS,
+Linux and every later start nothing waits at all. The wait ends after 20 s
+with a warning, and on an orderly quit, which writes `Local State` after the
+writes it waits for (#679). `index.js` makes the watcher and hands it to
+`createApplication`; without one, as in the unit tests, nothing waits.
 
 The **menu bar** lives as a pure template in `services/application-menu.js`:
 `createApplicationMenuTemplate()` receives platform, app name, `getMainWindow`,

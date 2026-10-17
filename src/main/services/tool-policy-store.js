@@ -53,6 +53,7 @@ const {
 const { readFileWithRetry } = require('./rename-with-retry');
 const { writeFileAtomic } = require('./atomic-write');
 const { grantedHosts } = require('./sandbox-violations');
+const { KEY_ALWAYS_DURABLE } = require('./safe-storage-key-durability');
 
 const POLICY_FILENAME = 'tool-policy.json';
 const POLICY_KEY_FILENAME = 'tool-policy.key';
@@ -71,6 +72,12 @@ const INTEGRITY = Object.freeze({
   // written over it.
   UNREADABLE: 'unreadable',
 });
+
+/**
+ * What `keyToVerify` returns for a key that is not made yet (#1060): it matches
+ * no signature, as a key made at that moment would not.
+ */
+const KEY_NOT_MADE_YET = Symbol('key not made yet');
 
 /** Thrown by `loadKey` when the key file exists but cannot be read (#512). */
 class PolicyKeyUnreadableError extends Error {
@@ -147,7 +154,18 @@ function sameCommandRule(a, b) {
   );
 }
 
-function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath = null, log = console, now = () => Date.now() }) {
+function createToolPolicyStore({
+  app,
+  safeStorage,
+  /** When ciphertext may reach the disk (#1060); without it, at once. */
+  safeStorageKey = KEY_ALWAYS_DURABLE,
+  fs,
+  path,
+  crypto,
+  uiPrefsPath = null,
+  log = console,
+  now = () => Date.now(),
+}) {
   let keyPromise = null;
   let writeChain = Promise.resolve();
 
@@ -190,21 +208,13 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
   }
 
   async function readOrCreateKey() {
-    let raw = null;
-    try {
-      raw = await readFileWithRetry(fs, keyPath());
-    } catch (error) {
-      if (error?.code !== 'ENOENT') throw new PolicyKeyUnreadableError(error);
-    }
-    if (raw !== null) {
-      try {
-        const decrypted = safeStorage.decryptString(Buffer.from(raw.trim(), 'base64'));
-        const key = Buffer.from(decrypted, 'hex');
-        if (key.length === HMAC_KEY_BYTES) return key;
-      } catch {
-        /* unusable: a new one below */
-      }
-    }
+    const stored = await readStoredKey();
+    if (stored) return stored;
+    // The new key is stored encrypted. On a fresh Windows profile that waits
+    // until the key behind safeStorage is on disk itself (#1060): a crash in
+    // between would leave a key file nothing can decrypt, and every policy
+    // signed with it would fail its check on the next start.
+    await safeStorageKey.whenDurable();
     const key = crypto.randomBytes(HMAC_KEY_BYTES);
     try {
       const encrypted = safeStorage.encryptString(key.toString('hex')).toString('base64');
@@ -217,6 +227,39 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       return null;
     }
     return key;
+  }
+
+  /**
+   * The stored key; null when there is none or it does not decrypt. A key file
+   * that is there but cannot be read throws (#512).
+   */
+  async function readStoredKey() {
+    let raw;
+    try {
+      raw = await readFileWithRetry(fs, keyPath());
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw new PolicyKeyUnreadableError(error);
+      return null;
+    }
+    try {
+      const decrypted = safeStorage.decryptString(Buffer.from(raw.trim(), 'base64'));
+      const key = Buffer.from(decrypted, 'hex');
+      if (key.length === HMAC_KEY_BYTES) return key;
+    } catch {
+      /* unusable: the caller makes a new one */
+    }
+    return null;
+  }
+
+  /**
+   * The key a stored signature is checked with. Only a stored key can match
+   * it; a new one never would. So while making one would have to wait for the
+   * key behind safeStorage (#1060), the check does not: it fails as it would
+   * with the new key, and the next change makes the key.
+   */
+  async function keyToVerify() {
+    if (!encryptionAvailable() || !safeStorageKey.wouldWait()) return loadKey();
+    return (await readStoredKey()) || KEY_NOT_MADE_YET;
   }
 
   function serializePayload(payload) {
@@ -329,7 +372,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     }
     let key;
     try {
-      key = await loadKey();
+      key = await keyToVerify();
     } catch (error) {
       log?.warn?.(`[tool-policy] ${error?.message || error}`);
       return { payload: failSafe(parsed.payload), integrity: INTEGRITY.UNREADABLE };
@@ -342,7 +385,7 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
     if (typeof parsed.signature !== 'string' || !parsed.signature) {
       return { payload: failSafe(parsed.payload), integrity: INTEGRITY.UNSIGNED };
     }
-    const expected = sign(key, serializePayload(parsed.payload));
+    const expected = key === KEY_NOT_MADE_YET ? null : sign(key, serializePayload(parsed.payload));
     if (!signaturesEqual(expected, parsed.signature)) {
       log?.warn?.('[tool-policy] Signatur der Policy-Datei ungültig; Fail-safe aktiv.');
       return { payload: failSafe(parsed.payload), integrity: INTEGRITY.INVALID };
@@ -397,6 +440,10 @@ function createToolPolicyStore({ app, safeStorage, fs, path, crypto, uiPrefsPath
       const payload = defaultPayload();
       payload.legacyWriteMigrated = await detectLegacyWrite();
       payload.updatedAt = now();
+      // The defaults need no file yet. While the key that signs it would wait
+      // for the key behind safeStorage (#1060), a later read or the first
+      // change makes the file, rather than every read in the meantime waiting.
+      if (encryptionAvailable() && safeStorageKey.wouldWait()) return snapshot(payload, INTEGRITY.OK);
       try {
         await writeToDisk(payload);
       } catch (error) {

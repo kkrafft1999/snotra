@@ -36,10 +36,13 @@ const { renameWithRetry, readFileWithRetry } = require('./rename-with-retry');
 const { writeFileAtomic } = require('./atomic-write');
 const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
 const { NOTICE_STORES } = require('../../shared/contracts/notices');
+const { KEY_ALWAYS_DURABLE } = require('./safe-storage-key-durability');
 
 function createStorageService({
   app,
   safeStorage,
+  /** When ciphertext may reach the disk (#1060); without it, at once. */
+  safeStorageKey = KEY_ALWAYS_DURABLE,
   fs,
   path,
   providerCatalog,
@@ -648,8 +651,14 @@ function createStorageService({
     }
   }
 
-  function encryptIfPossible(plaintext) {
+  /**
+   * Encrypts for a file. On a fresh Windows profile that waits until the key
+   * behind safeStorage is on disk itself (#1060): ciphertext written before it
+   * would outlive its key if the app died in between.
+   */
+  async function encryptForDisk(plaintext) {
     if (!plaintext || !safeStorage.isEncryptionAvailable()) return null;
+    await safeStorageKey.whenDurable();
     try {
       return safeStorage.encryptString(plaintext).toString('base64');
     } catch {
@@ -799,7 +808,7 @@ function createStorageService({
         await writeJsonAtomic(getWebSearchConfigPath(), {});
         return { ok: true, hasApiKey: false };
       }
-      const enc = encryptIfPossible(value);
+      const enc = await encryptForDisk(value);
       if (!enc) {
         return {
           ok: false,
@@ -958,7 +967,7 @@ function createStorageService({
           else storedEnv[entry.key] = { value: '' };
           continue;
         }
-        const enc = encryptIfPossible(entry.value);
+        const enc = await encryptForDisk(entry.value);
         if (!enc) {
           unencryptable.push(entry.key);
           continue;
@@ -1356,7 +1365,10 @@ function createStorageService({
     if (readFailed) return storeFromFailedRead();
     if (unreadable) return storeAfterQuarantine(setAsideAs);
     if (skipMigration) return store;
-    if (safeStorage.isEncryptionAvailable() && !wasEncrypted) {
+    // Not while the key behind safeStorage is still on its way to the disk
+    // (#1060): the read would wait for it. The plain file stays as it is until
+    // a later read or the next save encrypts it.
+    if (safeStorage.isEncryptionAvailable() && !wasEncrypted && !safeStorageKey.wouldWait()) {
       return withChatHistoryLock(async () => {
         const fresh = await loadChatHistoryStoreFromDisk();
         if (fresh.readFailed) return storeFromFailedRead();
@@ -1377,7 +1389,7 @@ function createStorageService({
       );
     }
     if (safeStorage.isEncryptionAvailable()) {
-      const payload = encryptIfPossible(JSON.stringify(store));
+      const payload = await encryptForDisk(JSON.stringify(store));
       if (payload) {
         await writeJsonAtomic(getChatHistoryPath(), { encrypted: true, payload });
         return;

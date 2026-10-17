@@ -15,6 +15,7 @@ const {
   PRESET_CONNECTION_PLAIN_FIELDS,
 } = require('../../shared/contracts/settings');
 const { createMessage } = require('../../shared/contracts/message');
+const { KEY_ALWAYS_DURABLE } = require('../services/safe-storage-key-durability');
 const {
   DEFAULT_REASONING_LEVEL,
   normalizeReasoningLevel,
@@ -33,6 +34,8 @@ const {
 function registerSettingsHandlers({
   ipcMain,
   safeStorage,
+  /** When ciphertext may reach the disk (#1060); without it, at once. */
+  safeStorageKey = KEY_ALWAYS_DURABLE,
   llmConfigStore,
   uiPrefsStore,
   workspaceFolderStore,
@@ -294,6 +297,13 @@ function registerSettingsHandlers({
           return rejectModelPart(createMessage('settings.error.encryptionUnavailable'), uiPatch);
         }
       }
+    }
+
+    // A key or headers go to the disk encrypted. On a fresh Windows profile
+    // the save waits until the key behind safeStorage is on disk itself
+    // (#1060) — before the config lock, so nothing else waits with it.
+    if (safeStorage.isEncryptionAvailable() && carriesSecret(patches, connectionPatches)) {
+      await safeStorageKey.whenDurable();
     }
 
     let validationError = null;
@@ -750,6 +760,14 @@ function mergeProviderPatchIntoConfigImpl(deps, config, providerId, patch) {
   config.providers = config.providers || {};
   config.providers[providerId] = next;
   return createSettingsOk();
+}
+
+/** Does a save bring a key or headers to encrypt (#1060)? */
+function carriesSecret(providerPatches, connectionPatches) {
+  const brings = (draft) => ['apiKey', 'extraHeaders'].some(
+    (field) => typeof draft?.[field] === 'string' && draft[field].trim().length > 0
+  );
+  return Object.values(providerPatches).some(brings) || [...connectionPatches.values()].some(brings);
 }
 
 function cloneLlmConfig(config) {

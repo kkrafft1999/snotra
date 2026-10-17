@@ -86,21 +86,23 @@ for (const how of ['kill', 'quit', 'reload']) {
       return heldRound() !== null;
     }, { what: 'the second round under way', timeoutMs: 60000, explain });
 
-    // The step is saved while the run goes on, and the turn as cut off.
+    // The step is saved while the run goes on, and the turn as cut off. On a
+    // fresh Windows profile the first save waits for the encryption key to
+    // reach `Local State`, about ten seconds after the start (#1060).
     await poll(async () => {
       const turn = await savedTurn(page);
       return turn?.interrupted === true && turn.toolTrace.some((e) => e?.tool === 'list_directory');
-    }, { what: 'the finished step saved mid-run', explain });
+    }, { what: 'the finished step saved mid-run', timeoutMs: 30000, explain });
     assert.equal((await shownChat(page)).running, true, 'the run is still going when it is cut off');
 
     if (how === 'kill') {
       // On Windows the key that encrypts the history lives in Chromium's
-      // `Local State`, which is written a few seconds after the first start.
-      // A kill before that loses the key, and the restart has to set the
-      // history aside as undecryptable — a different story from this one.
+      // `Local State`, which a fresh profile gets on disk only seconds after
+      // the start. The app holds the history until then (#1060), so the
+      // kill below cannot leave a history behind that nothing can decrypt.
       if (process.platform === 'win32') {
-        await poll(async () => (await readFile(path.join(userDataDir, 'Local State'), 'utf8').catch(() => '')).includes('encrypted_key'),
-          { what: 'the encryption key written to Local State', timeoutMs: 60000, explain });
+        const localState = await readFile(path.join(userDataDir, 'Local State'), 'utf8').catch(() => '');
+        assert.match(localState, /"encrypted_key"/, 'the key is on disk before the history it encrypts');
       }
       // No quit, no unload: the process is gone at once, as in a crash.
       await killHard(snotra.app.process());
@@ -125,5 +127,8 @@ for (const how of ['kill', 'quit', 'reload']) {
     assert.match(shown.log ?? '', /Project folder searched/, 'the finished step is there');
     assert.doesNotMatch(shown.text, /This answer/, 'the round that was cut off left no text behind');
     assert.equal(shown.running, false, 'nothing runs after the restore');
+    // Nothing the first start encrypted was lost with its key (#1060): no
+    // history set aside, no policy that fails its signature.
+    assert.doesNotMatch(snotra.mainOutput(), /Verlauf nicht lesbar|Signatur der Policy-Datei ungültig/);
   });
 }

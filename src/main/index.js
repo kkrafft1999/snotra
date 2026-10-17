@@ -28,6 +28,7 @@ const { createAppNotices } = require('./services/app-notices');
 const { createDiagnostics } = require('./services/diagnostics');
 const { createRendererCrashHandler } = require('./services/renderer-crash');
 const { registerDiagnosticsHandlers } = require('./ipc/diagnostics-handlers');
+const { createSafeStorageKeyDurability, LOCAL_STATE_FILENAME } = require('./services/safe-storage-key-durability');
 
 // The storage identity first (#795): userData and the safeStorage key are
 // derived from the name the app has at this point, and stay with it. The app
@@ -52,6 +53,7 @@ const DEFAULT_PROVIDER = 'openai';
 
 let application = null;
 let manualWindow = null;
+let safeStorageKey = null;
 
 // One instance per userData folder (#507). A second launch brings the first
 // window to the front and ends before it has started anything.
@@ -119,6 +121,14 @@ function start() {
       meta: { appVersion: app.getVersion(), platform: process.platform },
     });
 
+    // On Windows the key behind safeStorage lives in Chromium's `Local State`,
+    // which a fresh profile gets on disk only seconds after the start (#1060).
+    // The stores hold their first ciphertext until it is there.
+    safeStorageKey = createSafeStorageKeyDurability({
+      localStatePath: () => path.join(app.getPath('sessionData'), LOCAL_STATE_FILENAME),
+      readFile: (filePath) => fs.readFile(filePath, 'utf8'),
+    });
+
     // *Help › Copy diagnostics* and *Show log file*, and the same from the
     // background-error notice (#978).
     const diagnostics = createDiagnostics({
@@ -180,6 +190,7 @@ function start() {
       ipcMain: guardIpcMain(ipcMain),
       dialog,
       safeStorage,
+      safeStorageKey,
       fs,
       path,
       fetchImpl: fetch,
@@ -266,6 +277,9 @@ function start() {
     }
   });
 
+  // An orderly quit writes `Local State` on its way out, after the writes
+  // held for the key (#1060): they go ahead now, and the quit waits for them.
+  app.on('before-quit', () => safeStorageKey?.releaseForQuit());
   // A chat written in the moment of the quit is not cut off (#679).
   holdQuitForPendingWrites({ app, whenWritesSettled: () => application?.whenWritesSettled() });
 
