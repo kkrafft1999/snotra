@@ -22,10 +22,10 @@ The title bar names the open folder first, in every layout, and the window's tit
 
 ## Show and hide a column
 
-Each column has its own switch in the title bar, all four with the same picture of a window in which the part they control is filled in:
+Each column has its own switch in the title bar, and [since 1.25] each one shows what its column holds:
 
-- On the left, *Show sidebar* / *Hide sidebar* and *Show preview pane* / *Hide preview pane*.
-- On the right, mirrored, *Show chat* / *Hide chat* and *Show chat history* / *Hide chat history*.
+- On the left, the folder tree for *Show sidebar* / *Hide sidebar* and the eye for *Show preview pane* / *Hide preview pane*.
+- On the right, mirrored, the speech bubble for *Show chat* / *Hide chat* and the clock with a back arrow for *Show chat history* / *Hide chat history*.
 
 `Cmd+B` / `Ctrl+B` or *View › Toggle Sidebar* show and hide the sidebar as well. A column comes back by itself when you need it: clicking a file in the tree opens the middle column, clicking a chat in the history opens the chat.
 
