@@ -48,7 +48,7 @@ The image is part of the chat and comes back when you open it again from the his
 
 While you dictate, the pills next to the microphone and the token counter make room for the recording; they come back when you stop. Sending the message ends the recording, and what was dictated goes with it. The shortcut is also in the menu, *Edit › Voice Input*.
 
-Dictation uses OpenAI's speech recognition and needs an OpenAI key under *Settings › Models*, even when the chat runs on another provider; OpenAI bills it by the minute. A recording stops by itself after five minutes; half a minute before, the line next to the microphone says so.
+Dictation uses OpenAI's speech recognition: the recording goes to OpenAI, which is also what the microphone's tooltip says. It needs an OpenAI key under *Settings › Models*, even when the chat runs on another provider; OpenAI bills it by the minute. A recording stops by itself after five minutes; half a minute before, the line next to the microphone says so.
 
 If the live text can't be had — a network that blocks the connection, say — the recording goes on without it, and the text comes when you stop. How to tell, and what to do: [When dictation doesn't work](../../troubleshooting/voice-input/).
 

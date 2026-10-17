@@ -9,7 +9,7 @@ Alles, was du in Snotra einrichten kannst, steht an einer Stelle: in den Einstel
 
 ## Die Einstellungen öffnen
 
-*Snotra Agent › Einstellungen…* auf macOS, *Ansicht › Einstellungen…* auf Windows und Linux, oder `Cmd+,` / `Strg+,`. Einen Knopf im Fenster gibt es dafür bewusst nicht: Ein Knopf in einer Spalte wäre weg, sobald du diese Spalte ausblendest.
+*Snotra Agent › Einstellungen…* auf macOS, *Ansicht › Einstellungen…* auf Windows und Linux, oder `Cmd+,` / `Strg+,`. [seit 1.25] Oder klick auf das Zahnrad unten in der Seitenleiste, neben dem Knopf für [Feedback](../../troubleshooting/send-feedback/). Menü und Tastenkürzel bleiben, wenn du die Seitenleiste ausblendest.
 
 ## Die sechs Bereiche
 

@@ -653,7 +653,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const pdfRequests = [];
   const onPdfRequest = (request) => {
     const url = request.url();
-    if (!url.startsWith('file:') && !url.startsWith('data:') && !url.startsWith('devtools:')) pdfRequests.push(url);
+    if (!url.startsWith('snotra-app:') && !url.startsWith('file:') && !url.startsWith('data:') && !url.startsWith('devtools:')) pdfRequests.push(url);
   };
   page.on('request', onPdfRequest);
   await openInTree('spezifikation.pdf');

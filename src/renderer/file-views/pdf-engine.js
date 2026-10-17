@@ -6,8 +6,8 @@
 // as ordinary scripts from the app itself — `script-src 'self'` covers both,
 // and a worker falls back to that directive. The data files (CMaps, standard
 // fonts, image decoders) would need `connect-src`, which the renderer does
-// not have and must not get: under `file:` it would open every file on the
-// disk. pdf.js therefore gets a BinaryDataFactory that asks the main process
+// not have and must not get: under `file:`, where the page came from until
+// #1012, it would have opened every file on the disk. pdf.js therefore gets a BinaryDataFactory that asks the main process
 // for them (`pdf:readAsset`), by kind and name.
 //
 // What is switched off, and why:
@@ -15,7 +15,7 @@
 //     `isEvalSupported` with it; an option it does not know protects
 //     nothing, so none is passed (#641). In the page
 //     the CSP would refuse it (`script-src 'self'`, no `'unsafe-eval'`). The
-//     worker, loaded from a `file:` URL, gets no CSP at all: there it is the
+//     worker, loaded from a `snotra-app:` URL, gets no CSP at all: there it is the
 //     vendored code that holds, and test/workspace-pdf.test.js checks it.
 //   * `enableXfa: false` — XFA forms are HTML that pdf.js would put into the
 //     page. The view shows the drawn page, nothing else.

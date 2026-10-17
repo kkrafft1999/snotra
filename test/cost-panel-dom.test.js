@@ -212,7 +212,7 @@ test('a failed price update says so and keeps the list', async () => {
   click(root.querySelector('#btn-model-prices-update'));
   await settle();
   const status = root.querySelector('#model-prices-status');
-  assert.match(status.textContent, /could not be fetched\. The previous prices stay in use/);
+  assert.match(status.textContent, /could not be fetched from raw\.githubusercontent\.com\. The previous prices stay in use/);
   assert.equal(status.classList.contains('error'), true);
   assert.equal(root.querySelectorAll('.model-prices__row').length, 2);
 });

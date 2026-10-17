@@ -233,10 +233,12 @@ function createApplicationMenuTemplate({
         click: () => { onCheckForUpdates(); },
       },
       { type: 'separator' },
+      // The feedback form (#1045); the sidebar has a button for it, too.
+      { label: t('menu.help.feedback'), click: () => send(PUSH.UI_OPEN_FEEDBACK) },
       // What a bug report needs (#978): the report on the clipboard, the log in the file manager.
       ...(onCopyDiagnostics ? [{ label: t('menu.help.copyDiagnostics'), click: () => { onCopyDiagnostics(); } }] : []),
       ...(onShowLog ? [{ label: t('menu.help.showLog'), click: () => { onShowLog(); } }] : []),
-      ...(onCopyDiagnostics || onShowLog ? [{ type: 'separator' }] : []),
+      { type: 'separator' },
       {
         label: t('menu.help.github'),
         click: () => shell.openExternal('https://github.com/kkrafft1999/snotra'),

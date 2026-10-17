@@ -75,7 +75,7 @@ Quit Snotra first if it is still running; a second start only brings the first w
 
 ## Steps: report a problem
 
-1. Open the [issue form for bugs](https://github.com/kkrafft1999/snotra/issues/new?template=bug_report.yml). *Help › Project on GitHub* leads to the project as well.
+1. Open the [issue form for bugs](https://github.com/kkrafft1999/snotra/issues/new?template=bug_report.yml). *Help › Project on GitHub* leads to the project as well. Without a GitHub account, [send feedback](../send-feedback/) from inside Snotra instead.
 2. Describe what happened, what you did before, and what you expected.
 3. Choose *Help › Copy Diagnostics* and paste the result under *Logs / screenshots*. It gives the version and your system as well.
 4. For a problem with a chat answer, press `Cmd+Shift+D` / `Ctrl+Shift+D` right after it happened and paste that result too.

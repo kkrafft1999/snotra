@@ -391,7 +391,13 @@ export async function launchApp({
   let page;
   try {
     page = await withDeadline((async () => {
-      const first = await app.firstWindow({ timeout: STARTUP_DEADLINE_MS });
+      // The app window, not the first page: a profile from before #1012 first
+      // gets a window-less page that carries its localStorage over.
+      let first = await app.firstWindow({ timeout: STARTUP_DEADLINE_MS });
+      while (!/\/index\.html(?:[?#]|$)/.test(first.url())) {
+        const next = app.windows().find((candidate) => /\/index\.html(?:[?#]|$)/.test(candidate.url()));
+        first = next ?? await app.waitForEvent('window', { timeout: STARTUP_DEADLINE_MS });
+      }
       await poll(() => first.evaluate(() => !!document.getElementById('tree-container')), {
         what: 'geladener Renderer',
       });

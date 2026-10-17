@@ -10,6 +10,7 @@ const PUSH = {
   UI_TOGGLE_HIDDEN_FILES: 'ui:toggle-hidden-files',
   UI_PREVIEW_BACK: 'ui:preview-back',
   UI_PREVIEW_FORWARD: 'ui:preview-forward',
+  UI_OPEN_FEEDBACK: 'ui:open-feedback',
 };
 
 function buildTemplate(platform, overrides = {}) {
@@ -274,7 +275,7 @@ test('Help › Copy diagnostics and Show log file call their callbacks, in both 
   const callbacks = { onCopyDiagnostics: () => calls.push('copy'), onShowLog: () => calls.push('log') };
   const { template } = buildTemplate('darwin', callbacks);
   const labels = menuNamed(template, 'Help').submenu.map((item) => item.label ?? item.type);
-  assert.deepEqual(labels.slice(2, 7), ['Check for Updates…', 'separator', 'Copy Diagnostics', 'Show Log File', 'separator']);
+  assert.deepEqual(labels.slice(2, 8), ['Check for Updates…', 'separator', 'Send Feedback…', 'Copy Diagnostics', 'Show Log File', 'separator']);
   menuNamed(template, 'Help').submenu.find((item) => item.label === 'Copy Diagnostics').click();
   menuNamed(template, 'Help').submenu.find((item) => item.label === 'Show Log File').click();
   assert.deepEqual(calls, ['copy', 'log']);
@@ -285,10 +286,18 @@ test('Help › Copy diagnostics and Show log file call their callbacks, in both 
   assert.ok(help.includes('Logdatei zeigen'));
 });
 
-test('without the diagnostics callbacks the Help menu has no such items and no extra separator', () => {
+test('without the diagnostics callbacks the Help menu has no such items, but keeps Send Feedback… in its group', () => {
   const { template } = buildTemplate('darwin');
   const items = menuNamed(template, 'Help').submenu;
   assert.equal(items.some((item) => item.label === 'Copy Diagnostics'), false);
-  const separators = items.filter((item) => item.type === 'separator').length;
-  assert.equal(separators, 2);
+  assert.deepEqual(items.map((item) => item.label ?? item.type).slice(2), ['Check for Updates…', 'separator', 'Send Feedback…', 'separator', 'Project on GitHub']);
+});
+
+test('Help › Send Feedback… sends UI_OPEN_FEEDBACK to the window, in both languages (#1045)', () => {
+  const { template, sent } = buildTemplate('darwin');
+  menuNamed(template, 'Help').submenu.find((item) => item.label === 'Send Feedback…').click();
+  assert.deepEqual(sent, [PUSH.UI_OPEN_FEEDBACK]);
+
+  const de = buildTemplate('win32', { locale: 'de' });
+  assert.ok(menuNamed(de.template, 'Hilfe').submenu.some((item) => item.label === 'Feedback senden…'));
 });

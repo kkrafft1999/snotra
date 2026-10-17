@@ -1,7 +1,7 @@
-const path = require('path');
-const { pathToFileURL } = require('url');
+const { appUrl } = require('./app-protocol');
 
-const RENDERER_URL = pathToFileURL(path.resolve(__dirname, '..', 'renderer', 'index.html')).href;
+// Served from the app's own scheme, not from `file:` (#1012).
+const RENDERER_URL = appUrl('index.html');
 
 /**
  * Single source of truth for the app renderer URL. Both navigation and permission
@@ -20,7 +20,7 @@ function isTrustedRendererUrl(rawUrl) {
 }
 
 /** The help window's page (#790). It gets the manual channels and nothing else. */
-const MANUAL_URL = pathToFileURL(path.resolve(__dirname, '..', 'renderer', 'manual.html')).href;
+const MANUAL_URL = appUrl('manual.html');
 
 function isManualRendererUrl(rawUrl) {
   if (typeof rawUrl !== 'string' || rawUrl === '') {

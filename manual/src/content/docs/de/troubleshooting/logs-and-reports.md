@@ -75,7 +75,7 @@ Beende Snotra vorher, falls es noch läuft; ein zweiter Start holt nur das erste
 
 ## Schritte: ein Problem melden
 
-1. Öffne das [Formular für Fehler](https://github.com/kkrafft1999/snotra/issues/new?template=bug_report.yml). *Hilfe › Projekt auf GitHub* führt ebenfalls zum Projekt.
+1. Öffne das [Formular für Fehler](https://github.com/kkrafft1999/snotra/issues/new?template=bug_report.yml). *Hilfe › Projekt auf GitHub* führt ebenfalls zum Projekt. Ohne GitHub-Konto [sendest du Feedback](../send-feedback/) direkt aus Snotra.
 2. Beschreib, was passiert ist, was du vorher getan hast und was du erwartet hattest.
 3. Wähl *Hilfe › Diagnose kopieren* und füg das Ergebnis unter *Logs / screenshots* ein. Es nennt auch die Version und dein System.
 4. Bei einem Problem mit einer Antwort im Chat drückst du gleich danach `Cmd+Shift+D` / `Ctrl+Shift+D` und fügst auch dieses Ergebnis ein.
