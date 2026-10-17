@@ -220,6 +220,9 @@ const REQUEST_CHANNELS = Object.freeze({
   UPDATE_CANCEL_DOWNLOAD: 'update:cancelDownload',
   UPDATE_DISCARD_DOWNLOAD: 'update:discardDownload',
   UPDATE_INSTALL: 'update:install',
+  /** The feedback form (#1045): the diagnostics it shows, and sending it. */
+  FEEDBACK_GET_DIAGNOSTICS: 'feedback:getDiagnostics',
+  FEEDBACK_SEND: 'feedback:send',
 
   CHAT_HISTORY_GET: 'chatHistory:get',
   CHAT_HISTORY_UPSERT: 'chatHistory:upsert',
@@ -324,6 +327,8 @@ const PUSH_CHANNELS = Object.freeze({
   UI_TOGGLE_SIDEBAR: 'ui:toggle-sidebar',
   /** Menueeintrag "Einstellungen…" bzw. Cmd/Ctrl+Komma. */
   UI_OPEN_SETTINGS: 'ui:open-settings',
+  /** Menu "Help > Send Feedback…" (#1045). */
+  UI_OPEN_FEEDBACK: 'ui:open-feedback',
   /** Menu "File > New Chat" or Cmd/Ctrl+N (issue #381). */
   UI_NEW_CHAT: 'ui:new-chat',
   /** Menu "Edit > Voice Input" or Cmd/Ctrl+D (#859): start or stop a recording. */

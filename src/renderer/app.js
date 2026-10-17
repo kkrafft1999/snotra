@@ -16,6 +16,7 @@ import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateDialog } from './components/UpdateDialog.js';
 import { initAppNotices } from './components/AppNotices.js';
 import { initFileInfoDialog } from './components/FileInfoDialog.js';
+import { initFeedbackDialog } from './components/FeedbackDialog.js';
 import { initToolPermissionState } from './state/tool-permissions.js';
 import { initToolModePicker } from './components/ToolModePicker.js';
 import { initChatConfigIndicator } from './components/ChatConfigIndicator.js';
@@ -528,6 +529,12 @@ const settingsModal = initSettingsModal({
   DEFAULT_MAX_TOOL_ROUNDS,
   onClosed: () => void chatConfig.refresh(),
 });
+
+// The feedback form (#1045), and the sidebar's foot that opens it and the
+// settings (the only button for them; the menu has both as well).
+const feedbackDialog = initFeedbackDialog({ api, appStore });
+document.getElementById('btn-sidebar-feedback')?.addEventListener('click', () => feedbackDialog.open());
+document.getElementById('btn-sidebar-settings')?.addEventListener('click', () => settingsModal.openSettingsModal());
 
 // Grundrauschen gegen den Chromium-Default (Issue #101): ein Drop *neben*
 // der Drop-Zone im Dateibaum darf die Datei nicht im Fenster oeffnen. Bewusst
