@@ -255,9 +255,24 @@ history without encrypted storage" in section 9 records that.
   (#505). Each counts in every form it can turn up in: a header value with an
   auth scheme (`Bearer …`, `Basic …`, `Token …`) also as its bare token, since
   an `env` dump or a config file carries only that. The list is collected in
-  `main/services/own-secrets.js`; the comparison is verbatim, and values under
-  eight characters do not count. Errors must not contain auth headers or
-  decrypted values. **The check fails closed (#976):** a list that cannot be
+  `main/services/own-secrets.js`; values under eight characters do not count.
+  **Encoded copies count as well (#993):** each form is listed next to its
+  base64 — at each of the three offsets within a 3-byte group, so a key
+  inside a longer encoded value (`user:key` of a `Basic` header) is found too,
+  without the boundary characters that also carry the neighbouring bytes —, its
+  base64url, its hex in lower and upper case, its percent-encoding in either
+  case and its JSON escaping. The comparison is a plain substring search over
+  the text as it is, over the text without its line breaks (real ones and the
+  `\n` escapes of a JSON result, since `base64`, `openssl` and `xxd -p` wrap
+  their output) and over the text percent-decoded (a URL that escapes only
+  some characters, or letters too). **Not matched:** other encodings (base32,
+  compression, encryption, a hex dump with offsets or spaces between the
+  bytes), mixed-case hex, a key split into pieces or shortened, a key encoded
+  twice, and what a value decodes to — the password inside a `Basic` token is
+  not a secret of its own. Masking the status of an MCP server works on the
+  text as it is: it covers every listed form, but not the two extra views, so
+  a wrapped or partially escaped copy there stays. Errors must not contain
+  auth headers or decrypted values. **The check fails closed (#976):** a list that cannot be
   read is not an empty list, since everything compared against nothing would
   pass. A tool result is then withheld with a reason of its own
   (`own_secret_check_failed`), which the card in the chat names; embedded text

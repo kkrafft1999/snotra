@@ -2,10 +2,10 @@
 
 /**
  * Snotra's own secrets (security concept §5): the values a tool result must
- * never carry back to the model. A result that contains one of them verbatim
- * is withheld and cannot be approved (`containsOwnSecret`), and the status of
- * an MCP server is masked with them before it leaves the main process
- * (`redactOwnSecrets`).
+ * never carry back to the model. A result that contains one of them, verbatim
+ * or encoded, is withheld and cannot be approved (`containsOwnSecret`), and
+ * the status of an MCP server is masked with them before it leaves the main
+ * process (`redactOwnSecrets`).
  *
  * What counts as own:
  * - the API key of every provider and of every model entry with a connection
@@ -17,7 +17,9 @@
  * Both checks compare plain substrings. A value therefore has to be in the
  * list in each form it can turn up in: `Bearer abcdefgh12345678` in a header
  * reaches an `env` dump or a `.npmrc` as the bare token, so the token is
- * listed next to the full value (#505).
+ * listed next to the full value (#505). Each of these forms is listed once
+ * more in each encoding a shell command or a request log prints it in —
+ * base64 and base64url, hex, URL and JSON escaping (#993, `encodedForms`).
  */
 
 /** Shorter values turn up in any text by chance — the same bound as the checks. */
@@ -42,6 +44,55 @@ function secretForms(value) {
 }
 
 /**
+ * The base64 characters that only the value decides, for each of the three
+ * places it can start at within a 3-byte group. `echo -n "$KEY" | base64`
+ * starts it at the first byte, `printf 'user:%s' "$KEY" | base64` at the
+ * third; the characters at both ends also carry bits of whatever stands next
+ * to the value and are left off. What remains of an 8-character value is 10
+ * characters long, so no form falls under the minimum length.
+ */
+function base64Slices(bytes) {
+  const out = [];
+  for (let offset = 0; offset < 3; offset += 1) {
+    const encoded = Buffer.concat([Buffer.alloc(offset), bytes]).toString('base64');
+    const start = Math.ceil((8 * offset) / 6);
+    const end = Math.floor((8 * (offset + bytes.length)) / 6);
+    out.push(encoded.slice(start, end));
+  }
+  return out;
+}
+
+/**
+ * The encoded forms of one verbatim form (#993): base64 at each of the three
+ * offsets, the same in the base64url alphabet, hex in lower and upper case,
+ * percent-encoded with upper- and lower-case escapes, and JSON-escaped — a
+ * tool result reaches the check as JSON, where a `"` or `\` in a value is
+ * escaped. Only the forms that differ from the value are listed.
+ *
+ * Not listed, and therefore not matched: other encodings (base32, gzip,
+ * encryption, a hex dump with offsets or spaces), mixed-case hex, a value
+ * split into pieces, and what a value decodes to — the user name and
+ * password inside a `Basic` token are not secrets of their own.
+ */
+function encodedForms(form) {
+  const bytes = Buffer.from(form, 'utf8');
+  const out = new Set();
+  for (const slice of base64Slices(bytes)) {
+    out.add(slice);
+    out.add(slice.replace(/\+/g, '-').replace(/\//g, '_'));
+  }
+  const hex = bytes.toString('hex');
+  out.add(hex);
+  out.add(hex.toUpperCase());
+  const uriEncoded = encodeURIComponent(form);
+  out.add(uriEncoded);
+  out.add(uriEncoded.replace(/%[0-9A-F]{2}/g, (escape) => escape.toLowerCase()));
+  out.add(JSON.stringify(form).slice(1, -1));
+  out.delete(form);
+  return [...out].filter((encoded) => encoded.length >= MIN_SECRET_LENGTH);
+}
+
+/**
  * Values of "Name: value" lines. The **value** is the secret, not the header
  * name: `X-Tenant` is no secret, what it carries can be one. Very short values
  * stay out, or an `X-Env: dev` would mask every "dev" in every tool output.
@@ -56,11 +107,14 @@ function extraHeaderSecretValues(raw) {
   return out;
 }
 
-/** Every form of every value, once each. */
+/** Every form of every value, verbatim and encoded, once each. */
 function expandSecrets(values) {
   const out = new Set();
   for (const value of values) {
-    for (const form of secretForms(value)) out.add(form);
+    for (const form of secretForms(value)) {
+      out.add(form);
+      for (const encoded of encodedForms(form)) out.add(encoded);
+    }
   }
   return [...out];
 }
@@ -108,6 +162,7 @@ function createOwnSecrets({ llmConfigStore, providerSecrets, mcpSecrets, webSear
 module.exports = {
   MIN_SECRET_LENGTH,
   secretForms,
+  encodedForms,
   extraHeaderSecretValues,
   expandSecrets,
   createOwnSecrets,
