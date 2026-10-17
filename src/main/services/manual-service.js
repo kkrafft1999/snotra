@@ -11,9 +11,8 @@
  */
 
 const { MANUAL_WEB_BASE, manualWebUrl: webUrl } = require('../../shared/manual/manual-address');
+const { DEFAULT_LOCALE, LOCALES } = require('../../shared/i18n/locales');
 
-const LOCALES = Object.freeze(['en', 'de']);
-const DEFAULT_LOCALE = 'en';
 const THEMES = Object.freeze(['light', 'dark']);
 const MOTIF = /^[a-z0-9-]+$/;
 
@@ -21,7 +20,7 @@ function normalizeManualLocale(locale) {
   return LOCALES.includes(locale) ? locale : DEFAULT_LOCALE;
 }
 
-/** Address of a page on docs.snotra-ai.dev — the German pages live under `/de/`. */
+/** Address of a page on docs.snotra-ai.dev — every language but the root one lives under `/<code>/`. */
 function manualWebUrl(locale, slug = 'index', fragment = '') {
   return webUrl(normalizeManualLocale(locale), slug, fragment);
 }

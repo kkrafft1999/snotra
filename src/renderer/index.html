@@ -1199,16 +1199,8 @@
             <div class="modal-field-group">
               <div class="modal-field-label eyebrow-row" id="label-app-locale" data-i18n="settings.general.locale.label">Interface language</div>
               <div class="settings-choice-row">
-                <div class="ds-segmented" id="choice-app-locale" role="radiogroup" aria-labelledby="label-app-locale">
-                  <label class="ds-segmented__option" lang="en">
-                    <input type="radio" class="ds-segmented__input" name="app-locale" value="en">
-                    <span data-i18n="settings.general.locale.en">English</span>
-                  </label>
-                  <label class="ds-segmented__option" lang="de">
-                    <input type="radio" class="ds-segmented__input" name="app-locale" value="de">
-                    <span data-i18n="settings.general.locale.de">Deutsch</span>
-                  </label>
-                </div>
+                <!-- One option per registered language, each in its own name — built by SettingsModal.js from the locale registry. -->
+                <div class="ds-segmented" id="choice-app-locale" role="radiogroup" aria-labelledby="label-app-locale"></div>
                 <span id="status-app-locale" class="settings-instant-status" role="status"></span>
               </div>
               <details class="settings-note settings-note--tight">

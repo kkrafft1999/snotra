@@ -16,6 +16,7 @@ const { withRequestTimeout } = require('../services/request-timeout');
 const { describeFetchError } = require('../../shared/runtime/fetch-errors');
 const { parseHttpUrl, isBlockedHostname, isBlockedAddress } = require('../../shared/runtime/url-safety');
 const { htmlToText, extractTitle } = require('../../shared/runtime/html-to-text');
+const { DEFAULT_LOCALE, normalizeLocale } = require('../../shared/i18n');
 const {
   URL_FETCH_ERROR_CODES,
   URL_FETCH_LIMITS,
@@ -110,7 +111,8 @@ async function readLimitedBody(response) {
  * German keeps English as its fallback, as it always had.
  */
 function acceptLanguageFor(locale) {
-  return locale === 'de' ? 'de,en;q=0.8' : 'en,*;q=0.5';
+  const language = normalizeLocale(locale);
+  return language === DEFAULT_LOCALE ? `${DEFAULT_LOCALE},*;q=0.5` : `${language},${DEFAULT_LOCALE};q=0.8`;
 }
 
 /** The cause a connection refused by the address check carries (#554). */
@@ -174,7 +176,7 @@ function blockedAtConnect(error) {
   return null;
 }
 
-function createHttpUrlFetchAdapter({ fetchImpl = fetchVia, lookup = null, getLocale = () => 'en' } = {}) {
+function createHttpUrlFetchAdapter({ fetchImpl = fetchVia, lookup = null, getLocale = () => DEFAULT_LOCALE } = {}) {
   const resolveHost = lookup || ((hostname) => dns.lookup(hostname, { all: true, verbatim: true }));
   // Built on first use: a connection only to addresses that pass the check.
   let dispatcher = null;

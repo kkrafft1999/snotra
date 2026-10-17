@@ -17,7 +17,7 @@ const {
   DEFAULT_SEARCH_RESULTS: DEFAULT_MANUAL_SEARCH_RESULTS,
   MAX_SEARCH_RESULTS: MAX_MANUAL_SEARCH_RESULTS,
 } = require('../services/manual-lookup');
-const { createTranslator } = require('../../shared/i18n');
+const { LOCALES, createTranslator } = require('../../shared/i18n');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { createGenerateImageTool } = require('./generate-image-tool');
 const {
@@ -1701,7 +1701,7 @@ function createWorkspaceToolRegistry({
           query: { type: 'string', description: 'A few words, as the manual would say them.' },
           locale: {
             type: 'string',
-            enum: ['en', 'de'],
+            enum: [...LOCALES],
             description: 'Language of the manual. Defaults to the language of the app.',
           },
           limit: {
@@ -1746,7 +1746,7 @@ function createWorkspaceToolRegistry({
           anchor: { type: 'string', description: 'A section of the page, as search_manual names it. Optional.' },
           locale: {
             type: 'string',
-            enum: ['en', 'de'],
+            enum: [...LOCALES],
             description: 'Language of the manual. Defaults to the language of the app.',
           },
         },

@@ -8,7 +8,7 @@ import {
   describeToolSections,
   invokedSkillNames,
 } from '../utils/chat-config-view.js';
-import { onLocaleChange, t } from '../i18n.js';
+import { APP_LOCALES, onLocaleChange, t } from '../i18n.js';
 
 const CHEVRON_HTML =
   '<svg class="chat-config-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path fill="currentColor" d="M0 0l5 6 5-6z"/></svg>';
@@ -120,7 +120,7 @@ export function initChatConfigIndicator({ api, appStore, onOpenSettings }) {
         item.append(mark(row.on));
         const main = el('span', 'chat-config-row-main');
         const name = el('span', 'chat-config-name', row.name);
-        name.lang = 'en';
+        name.lang = APP_LOCALES.EN;
         main.append(name);
         if (row.chatOnly) {
           const tag = el('span', 'chat-config-tag', t('chat.config.chatOnly'));
@@ -159,7 +159,7 @@ export function initChatConfigIndicator({ api, appStore, onOpenSettings }) {
       item.append(mark(tool.on));
       const main = el('span', 'chat-config-row-main');
       const name = el('span', 'chat-config-name', tool.name);
-      name.lang = 'en';
+      name.lang = APP_LOCALES.EN;
       const tag = el('span', 'chat-config-tag', tool.tag);
       tag.title = tool.tagTitle;
       main.append(name, tag, el('span', 'chat-config-sub', tool.reason));
@@ -171,7 +171,7 @@ export function initChatConfigIndicator({ api, appStore, onOpenSettings }) {
       item.append(mark(false));
       const main = el('span', 'chat-config-row-main');
       const name = el('span', 'chat-config-name', tool.name);
-      name.lang = 'en';
+      name.lang = APP_LOCALES.EN;
       main.append(name, el('span', 'chat-config-sub', tool.reason));
       item.append(main);
       if (tool.action) {
@@ -204,7 +204,7 @@ export function initChatConfigIndicator({ api, appStore, onOpenSettings }) {
       for (const group of view.groups) {
         const item = el('li', 'chat-config-group');
         const names = el('span', 'chat-config-group-tools', group.names.join(', '));
-        names.lang = 'en';
+        names.lang = APP_LOCALES.EN;
         item.append(el('span', 'chat-config-group-name', group.label), names);
         groups.append(item);
       }

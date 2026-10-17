@@ -1,5 +1,8 @@
 import contracts from '../generated/contracts.js';
-import { t, tPlural, tMessage, setLocale, getLocale, applyTranslations, onLocaleChange } from '../i18n.js';
+import {
+  t, tPlural, tMessage, setLocale, getLocale, applyTranslations, onLocaleChange,
+  APP_LOCALES, DEFAULT_LOCALE, LOCALE_INFO, LOCALES,
+} from '../i18n.js';
 import { invokeErrorDetail, invokeErrorMessage } from '../utils/invoke-error.js';
 import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
 import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
@@ -58,6 +61,29 @@ const {
   DEFAULT_SKILL_SUGGESTION_MODE,
   isSkillSuggestionMode,
 } = contracts;
+
+/**
+ * One radio per registered language, each labelled in its own name — a reader
+ * who cannot read the current interface language still finds theirs (AR-32).
+ * The `lang` attribute lets a screen reader pronounce the name in its language.
+ */
+function buildLocaleOptions(group) {
+  if (!group) return;
+  group.replaceChildren(...LOCALE_INFO.map(({ code, name }) => {
+    const label = document.createElement('label');
+    label.className = 'ds-segmented__option';
+    label.setAttribute('lang', code);
+    const input = document.createElement('input');
+    input.type = 'radio';
+    input.className = 'ds-segmented__input';
+    input.name = 'app-locale';
+    input.value = code;
+    const text = document.createElement('span');
+    text.textContent = name;
+    label.append(input, text);
+    return label;
+  }));
+}
 
 export function initSettingsModal(deps) {
   const {
@@ -814,7 +840,7 @@ export function initSettingsModal(deps) {
       added.add(id);
       const opt = document.createElement('option');
       opt.value = id;
-      opt.setAttribute('lang', 'en');
+      opt.setAttribute('lang', APP_LOCALES.EN);
       opt.textContent = label || id;
       selectModel.appendChild(opt);
     };
@@ -1316,7 +1342,7 @@ export function initSettingsModal(deps) {
     main.className = 'settings-tool-item__main';
     const name = document.createElement('code');
     name.className = 'settings-tool-item__name';
-    name.setAttribute('lang', 'en');
+    name.setAttribute('lang', APP_LOCALES.EN);
     name.textContent = skill.name;
     main.appendChild(name);
 
@@ -2077,7 +2103,7 @@ export function initSettingsModal(deps) {
       const up = await api.getUIPrefs();
       if (stale()) return;
       inputGlobalSystemPrompt.value = typeof up.baseSystemPrompt === 'string' ? up.baseSystemPrompt : '';
-      localeChoice.set(up.appLocale === 'de' ? 'de' : 'en');
+      localeChoice.set(LOCALES.includes(up.appLocale) ? up.appLocale : DEFAULT_LOCALE);
       if (selectSkillSuggestionMode) {
         selectSkillSuggestionMode.value = isSkillSuggestionMode(up.skillSuggestionMode)
           ? up.skillSuggestionMode
@@ -2873,6 +2899,7 @@ export function initSettingsModal(deps) {
     });
   }
 
+  buildLocaleOptions(choiceAppLocale);
   const localeChoice = bindInstantChoice(
     choiceAppLocale,
     document.getElementById('status-app-locale'),

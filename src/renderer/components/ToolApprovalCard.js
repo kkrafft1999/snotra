@@ -5,7 +5,7 @@ import {
 import { buildConfigProposalCardView, describeConfigProposalOutcome } from '../utils/config-proposal-view.js';
 import contracts from '../generated/contracts.js';
 import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-approval-queue.js';
-import { onLocaleChange, t, tMessage } from '../i18n.js';
+import { APP_LOCALES, onLocaleChange, t, tMessage } from '../i18n.js';
 import { invokeErrorDetail } from '../utils/invoke-error.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 
@@ -130,7 +130,7 @@ export function initToolApprovalCards({
   function buildDomainList(isolation) {
     if (isolation.domains.length === 0) return isolation.networkNone;
     const list = el('span', 'chat-approval-card__domains');
-    for (const domain of isolation.domains) list.appendChild(code(domain, 'en'));
+    for (const domain of isolation.domains) list.appendChild(code(domain, APP_LOCALES.EN));
     return list;
   }
 
@@ -255,7 +255,7 @@ export function initToolApprovalCards({
   function appendHeadline(node, headline) {
     const slots = {
       '{target}': () => code(headline.targetLabel),
-      '{tool}': () => code(headline.tool || t('tools.line.generic.fallbackName'), 'en'),
+      '{tool}': () => code(headline.tool || t('tools.line.generic.fallbackName'), APP_LOCALES.EN),
     };
     for (const part of headline.template.split(/(\{target\}|\{tool\})/)) {
       if (!part) continue;
@@ -374,8 +374,8 @@ export function initToolApprovalCards({
     headline.id = domId(requestId, 'headline');
     for (const part of view.headline.template.split(/(\{command\}|\{host\}|\{tool\})/)) {
       if (part === '{command}') headline.appendChild(code(view.headline.command));
-      else if (part === '{host}') headline.appendChild(code(view.headline.host, 'en'));
-      else if (part === '{tool}') headline.appendChild(code(view.headline.tool, 'en'));
+      else if (part === '{host}') headline.appendChild(code(view.headline.host, APP_LOCALES.EN));
+      else if (part === '{tool}') headline.appendChild(code(view.headline.tool, APP_LOCALES.EN));
       else if (part) headline.append(part);
     }
     card.appendChild(headline);
@@ -412,7 +412,7 @@ export function initToolApprovalCards({
     }
     if (view.domains.length) {
       const open = el('span', 'chat-approval-card__domains');
-      for (const domain of view.domains) open.appendChild(code(domain, 'en'));
+      for (const domain of view.domains) open.appendChild(code(domain, APP_LOCALES.EN));
       fact(facts, t('approval.sandbox.fact.open'), open);
     }
     fact(facts, t('approval.fact.reason'), view.reason);
@@ -518,7 +518,7 @@ export function initToolApprovalCards({
 
     const headline = el('p', 'chat-approval-card__headline');
     headline.id = domId(requestId, 'headline');
-    headline.appendChild(code(view.name, 'en'));
+    headline.appendChild(code(view.name, APP_LOCALES.EN));
     if (view.description) {
       const description = el('span', 'chat-approval-card__headline-desc');
       if (view.descriptionIsData) {

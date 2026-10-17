@@ -15,7 +15,7 @@
 import contracts from '../generated/contracts.js';
 import { toolLineText } from '../utils/tool-log-summary.js';
 import { sandboxPath } from '../utils/program-allowance-view.js';
-import { t, tPlural } from '../i18n.js';
+import { APP_LOCALES, t, tPlural } from '../i18n.js';
 
 const { normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive, normalizeSandboxOutside } = contracts;
 
@@ -105,7 +105,7 @@ function buildOutsideAsk(run) {
     if (part === '{tool}') {
       const tool = document.createElement('code');
       tool.className = 'chat-sandbox-blocked-tool';
-      tool.lang = 'en';
+      tool.lang = APP_LOCALES.EN;
       tool.textContent = run.tool || t('tools.line.generic.fallbackName');
       ask.append(tool);
     } else {

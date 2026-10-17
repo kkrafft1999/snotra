@@ -16,6 +16,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,7 +54,8 @@ const { launchApp, makeTempDir, poll, prepareUserData } = await import('../../e2
 const { routeOpenAiImages } = await import('../../e2e/helpers/fake-images.mjs');
 const { startFakeRealtime, routeRealtime, feedMicrophone, speechLikeWav } = await import('../../e2e/helpers/fake-realtime.mjs');
 
-const LOCALES = ['en', 'de'];
+// The registered languages — a new catalogue is shot as well without a change here.
+const { LOCALES } = createRequire(import.meta.url)('../../src/shared/i18n/locales.js');
 const THEMES = ['light', 'dark'];
 
 /**

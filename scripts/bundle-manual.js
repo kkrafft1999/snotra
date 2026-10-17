@@ -17,11 +17,11 @@
 
 const fs = require('fs');
 const path = require('path');
+const { DEFAULT_LOCALE, LOCALES } = require('../src/shared/i18n/locales');
 
-const LOCALES = ['en', 'de'];
 /** The locale whose pages sit at the root of `docs/`; the others in a folder of their name. */
-const ROOT_LOCALE = 'en';
-const SCREENSHOT_FILE = /^[a-z0-9-]+\.(?:en|de)\.(?:light|dark)\.webp$/;
+const ROOT_LOCALE = DEFAULT_LOCALE;
+const SCREENSHOT_FILE = new RegExp(`^[a-z0-9-]+\\.(?:${LOCALES.join('|')})\\.(?:light|dark)\\.webp$`);
 
 /**
  * The front matter of a manual page. The pages only use `title`,

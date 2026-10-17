@@ -1,6 +1,6 @@
 'use strict';
 
-const { createTranslator } = require('../../shared/i18n');
+const { DEFAULT_LOCALE, createTranslator } = require('../../shared/i18n');
 
 /**
  * When the app window's page dies (#978). Chromium ends a renderer that ran
@@ -18,7 +18,7 @@ function createRendererCrashHandler({
   window,
   app,
   appName = 'Snotra Agent',
-  getLocale = () => 'en',
+  getLocale = () => DEFAULT_LOCALE,
   log = console,
 }) {
   let asking = false;
@@ -34,7 +34,7 @@ function createRendererCrashHandler({
     if (asking || !window || window.isDestroyed?.()) return;
     asking = true;
     try {
-      const t = createTranslator(getLocale?.() || 'en');
+      const t = createTranslator(getLocale?.() || DEFAULT_LOCALE);
       const { response } = await dialog.showMessageBox(window, {
         type: 'error',
         title: t('app.rendererGone.title'),

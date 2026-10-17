@@ -25,7 +25,7 @@
 // The interface it implements is documented in the header of `registry.js`.
 
 import contracts from '../generated/contracts.js';
-import { t, onLocaleChange } from '../i18n.js';
+import { APP_LOCALES, t, onLocaleChange } from '../i18n.js';
 import { openChatLink } from '../chat/openChatLink.js';
 import { placeholderFor } from '../chat/workspaceImages.js';
 import { basenameOf, parentDirOf } from '../utils/nativePath.js';
@@ -69,7 +69,7 @@ function buildFrontMatter(frontMatter) {
   title.className = 'md-front-matter__title';
   title.textContent = t('fileView.markdown.frontMatter');
   // The term stays English in German too.
-  title.lang = 'en';
+  title.lang = APP_LOCALES.EN;
   section.setAttribute('aria-label', title.textContent);
   section.append(title);
 
