@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1740 1280" width="1740" height="1280" role="img" aria-labelledby="title desc" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="title">Snotra Agent — hexagonal architecture (ports &amp; adapters)</title>
-  <desc id="desc">A hexagonal architecture diagram: the application core (src/application/chat) in the middle, the driving adapter on the left, driven core and infrastructure adapters on the right, application ports on the edge of the hexagon, infrastructure ports behind them, external systems outside. As of: roadmap stages 1–5 completed.</desc>
+  <desc id="desc">A hexagonal architecture diagram: the application core (src/application: chat and permissions) in the middle, the driving adapter on the left, driven core and infrastructure adapters on the right, application ports on the edge of the hexagon, infrastructure ports behind them, external systems outside. Revised 2026-10-17 against main (#1009).</desc>
   <defs>
     <marker id="ah" viewBox="0 0 8 6" markerWidth="9" markerHeight="7" refX="7" refY="3" orient="auto-start-reverse">
       <path d="M0,0 L8,3 L0,6 Z" fill="#5a6a78"/>
@@ -42,7 +42,7 @@
   <rect x="0" y="0" width="1740" height="1280" fill="#f7f9fb"/>
 
   <text class="t-title" x="30" y="44">Snotra Agent — hexagonal architecture (ports &amp; adapters)</text>
-  <text class="t-sub" x="31" y="70">Core src/application/chat · application ports on the hexagon · core adapters + infrastructure ports/adapters on the right · contracts/presentation/runtime kept apart (no ports)</text>
+  <text class="t-sub" x="31" y="70">Core src/application · application ports on the hexagon (four of twelve drawn) · core adapters + infrastructure ports/adapters on the right · shared layers kept apart (no ports)</text>
 
   <!-- Legend -->
   <g>
@@ -77,10 +77,10 @@
 
   <!-- ============ HEXAGON CORE ============ -->
   <polygon class="hex" points="650,300 910,450 910,760 650,910 390,760 390,450"/>
-  <text x="650" y="462" text-anchor="middle" class="zlabel tt-core">APPLICATION CORE · src/application/chat</text>
+  <text x="650" y="462" text-anchor="middle" class="zlabel tt-core">APPLICATION CORE · src/application</text>
   <text x="650" y="490" text-anchor="middle" font-size="17" font-weight="700" class="tt-core">Chat orchestration &amp; tool loop</text>
   <text class="note" x="452" y="520" fill="#204b3d">• chat-engine.js — round and tool loop, system prompt</text>
-  <text class="note" x="452" y="540" fill="#204b3d">• chat-history-trim.js — context window (trim)</text>
+  <text class="note" x="452" y="540" fill="#204b3d">• chat-history-trim.js · permissions/ — policy, grants</text>
   <text class="note" x="452" y="560" fill="#204b3d">• usage aggregation, abort handling</text>
   <text class="note" x="452" y="580" fill="#204b3d">• free of provider, tool, Electron and Node</text>
   <rect x="446" y="598" width="408" height="132" rx="8" fill="#f4fbf8" stroke="#0e7a5b" stroke-width="1" stroke-dasharray="4 3"/>
@@ -88,7 +88,7 @@
   <text x="458" y="639" font-size="10.5" fill="#356b58">The core knows no adapters — it speaks to the outside</text>
   <text x="458" y="655" font-size="10.5" fill="#356b58">world exclusively through application ports</text>
   <text x="458" y="671" font-size="10.5" fill="#356b58">(src/application/ports) and otherwise depends only on</text>
-  <text x="458" y="687" font-size="10.5" fill="#356b58">src/shared/contracts and src/shared/runtime.</text>
+  <text x="458" y="687" font-size="10.5" fill="#356b58">src/shared.</text>
   <text x="458" y="710" font-size="10.5" font-style="italic" fill="#0b5b44">Enforced by test/application-layer-imports.test.js:</text>
   <text x="458" y="725" font-size="10.5" font-style="italic" fill="#0b5b44">no imports outside application/ and shared/.</text>
 
@@ -102,13 +102,16 @@
   <rect class="port" x="866" y="564" width="88" height="30" rx="6"/><text class="portlbl" x="910" y="583">PrefsPort</text>
   <rect class="port" x="866" y="636" width="88" height="30" rx="6"/><text class="portlbl" x="910" y="655">PathPort</text>
 
+  <text x="650" y="932" text-anchor="middle" font-size="10.5" fill="#356b58">Four of the core's twelve ports are drawn. Also: tool-policy · tool-approval · skill · memory ·</text>
+  <text x="650" y="948" text-anchor="middle" font-size="10.5" fill="#356b58">environment · project-instructions · own-secrets · config-proposal. Six more are used by main only (#982).</text>
+
   <!-- ============ PRIMARY (DRIVING) SIDE ============ -->
   <rect class="ui" x="40" y="252" width="280" height="62" rx="10"/>
   <text class="btitle tt-ui" x="180" y="280" text-anchor="middle">Renderer UI</text>
-  <text class="chipsub" x="180" y="298">Pure presentation · drives the use case</text>
+  <text class="chipsub" x="180" y="298">Presentation + conversation state (#981)</text>
 
   <rect x="40" y="322" width="280" height="72" rx="10" fill="#f8fbff" stroke="#2f6db3" stroke-width="1" stroke-dasharray="4 3"/>
-  <text class="bsub" x="52" y="342" font-weight="700" fill="#1c4b82">Normalised view data (stage 5)</text>
+  <text class="bsub" x="52" y="342" font-weight="700" fill="#1c4b82">Normalised view data</text>
   <text class="note" x="52" y="360">Settings · tool rows · history</text>
   <text class="note" x="52" y="376">DOM/Markdown/time/a11y stay in the renderer</text>
   <text class="note" x="52" y="390">no provider wire · no tool name logic</text>
@@ -127,7 +130,7 @@
   <text class="note" x="52" y="590">fs · dialog · settings · whisper ·</text>
   <text class="note" x="52" y="606">update · chat-history</text>
   <text class="note" x="52" y="628">delegate to injected infrastructure ports and services —</text>
-  <text class="note" x="52" y="642">presentation through settings-service.</text>
+  <text class="note" x="52" y="642">three of them hold logic (#1006).</text>
 
   <line class="flow" x1="180" y1="314" x2="180" y2="321" marker-end="url(#ah)"/>
   <line class="flow" x1="180" y1="394" x2="180" y2="401" marker-end="url(#ah)"/>
@@ -213,17 +216,17 @@
   <rect x="500" y="960" width="440" height="88" rx="10" fill="#fff7e6" stroke="#c68a2e" stroke-width="1.2"/>
   <text x="720" y="984" text-anchor="middle" font-size="12" font-weight="700" fill="#8a5a12">Chat core assembly · bootstrap</text>
   <text x="720" y="1003" text-anchor="middle" font-size="10.5" fill="#8a5a12">create-chat-application.js → createChatEngine()</text>
-  <text x="720" y="1019" text-anchor="middle" font-size="10.5" fill="#8a5a12">src/main/index.js — the Electron lifecycle, calls only</text>
-  <text x="720" y="1035" text-anchor="middle" font-size="10.5" fill="#8a5a12">createApplication() (no handler wiring).</text>
+  <text x="720" y="1019" text-anchor="middle" font-size="10.5" fill="#8a5a12">src/main/index.js — Electron bootstrap: scheme, lock,</text>
+  <text x="720" y="1035" text-anchor="middle" font-size="10.5" fill="#8a5a12">menu, windows; then createApplication().</text>
 
   <rect x="960" y="960" width="740" height="88" rx="10" fill="#fdf6e3" stroke="#c68a2e" stroke-width="1.2"/>
   <text x="1330" y="984" text-anchor="middle" font-size="12" font-weight="700" fill="#8a5a12">Shared layers (≠ ports)</text>
   <text x="1330" y="1003" text-anchor="middle" font-size="10.5" fill="#8a5a12">contracts/ — DTOs &amp; events · presentation/ — tool-display</text>
-  <text x="1330" y="1019" text-anchor="middle" font-size="10.5" fill="#8a5a12">runtime/ — abort · fetch-errors · alongside ipc-channels.js · limits.js</text>
+  <text x="1330" y="1019" text-anchor="middle" font-size="10.5" fill="#8a5a12">runtime/ · i18n/ · manual/ — alongside ipc-channels.js · limits.js</text>
   <text x="1330" y="1035" text-anchor="middle" font-size="10.5" fill="#8a5a12">Main presentation: settings-service, chat-history-normalization</text>
 
   <!-- ============ BOTTOM NOTE + STAMP ============ -->
-  <text x="870" y="1100" text-anchor="middle" font-size="11.5" font-weight="600" fill="#8a5a12">Application ports (src/application/ports) · infrastructure ports (src/main/ports) · contracts (src/shared/contracts) — three separate kinds of contract. The core knows only application ports plus shared/contracts and shared/runtime.</text>
+  <text x="870" y="1100" text-anchor="middle" font-size="11.5" font-weight="600" fill="#8a5a12">Application ports (src/application/ports) · infrastructure ports (src/main/ports) · contracts (src/shared/contracts) — three separate kinds of contract. The core knows only application ports plus src/shared.</text>
   <text x="30" y="1256" font-size="11" fill="#8a97a6">docs/architecture-hexagonal.svg</text>
-  <text x="1710" y="1256" text-anchor="end" font-size="11" fill="#8a97a6">Updated 2026-07-12 · roadmap stages 1–5 completed</text>
+  <text x="1710" y="1256" text-anchor="end" font-size="11" fill="#8a97a6">Revised 2026-10-17 against main (#1009) · Claude Sonnet 5.5 · Reasoning effort: low</text>
 </svg>

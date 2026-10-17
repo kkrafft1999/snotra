@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" role="img" aria-labelledby="title description">
   <title id="title">Snotra Agent — containers (C4 level 2)</title>
-  <desc id="description">A C4 container diagram of Snotra Agent. Inside the system boundary: the renderer, the HTML preview and the manual window on top, the main process in the middle, the execution sandbox and the local store below. Outside: the user, and seven external systems reached only from the main process — LLM providers, OpenAI services, Tavily and the web, GitHub Releases, the LiteLLM price table, MCP servers and the operating system. As of 2026-10-16, issue #974.</desc>
+  <desc id="description">A C4 container diagram of Snotra Agent. Inside the system boundary: the renderer, the HTML preview and the manual window on top, the main process in the middle, the execution sandbox and the local store below. Outside: the user, and seven external systems reached only from the main process — LLM providers, OpenAI services, Tavily and the web, GitHub Releases, the LiteLLM price table, MCP servers and the operating system. As of 2026-10-16, issue #974; revised 2026-10-17, issue #1009.</desc>
 
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -45,7 +45,7 @@
 
   <!-- Title -->
   <text class="page-title" x="60" y="64">Snotra Agent — containers (C4 level 2)</text>
-  <text class="page-sub" x="60" y="94">Processes and data stores of the desktop app, and the external systems they talk to. As of 2026-10-16 (#974).</text>
+  <text class="page-sub" x="60" y="94">Processes and data stores of the desktop app, and the external systems they talk to. As of 2026-10-16 (#974), revised 2026-10-17 (#1009).</text>
 
   <!-- Person -->
   <circle class="person" cx="565" cy="132" r="16"/>
@@ -64,9 +64,9 @@
   <text class="name" x="110" y="324">Renderer (app window)</text>
   <text class="tech" x="110" y="344">[Container: Chromium]</text>
   <text class="tech" x="110" y="360">marked · DOMPurify · pdf.js · Prism</text>
-  <text class="desc" x="110" y="388">Presentation only: chat, file tree,</text>
-  <text class="desc" x="110" y="406">file views, settings. Sees nothing but</text>
-  <text class="desc" x="110" y="424">window.electronAPI and the contracts.</text>
+  <text class="desc" x="110" y="388">Chat, file tree, file views, settings,</text>
+  <text class="desc" x="110" y="406">and the chat's run state (#981). Sees</text>
+  <text class="desc" x="110" y="424">only window.electronAPI + contracts.</text>
 
   <rect class="container" x="415" y="290" width="300" height="150" rx="8"/>
   <text class="name" x="435" y="324">HTML preview</text>
@@ -87,7 +87,7 @@
   <rect class="container--main" x="90" y="560" width="950" height="200" rx="8"/>
   <text class="name name--main" x="110" y="596">Main process</text>
   <text class="tech" x="110" y="616">[Container: Electron main · Node.js]</text>
-  <text class="desc" x="110" y="644">Composition root, chat engine with tool loop, provider adapters, tool registry, approvals, persistence, updates.</text>
+  <text class="desc" x="110" y="644">Composition root, IPC handlers, chat engine with tool loop, tool registry, provider adapters, services, approvals, updates.</text>
   <text class="desc" x="110" y="662">Holds the secrets and decides every access to the outside — all external traffic leaves from here.</text>
   <text class="caption" x="110" y="690">COMPONENTS — SEE THE LAYER AND HEXAGON DIAGRAMS</text>
   <g>
@@ -234,4 +234,5 @@
   <text class="legend-text" x="846" y="1122">Call or data flow, labelled with its transport</text>
 
   <text class="stamp" x="1540" y="1156">Created 2026-10-16 · Claude Opus 5.5 · Reasoning effort: high</text>
+  <text class="stamp" x="1540" y="1172">Revised 2026-10-17 · Claude Sonnet 5.5 · Reasoning effort: low</text>
 </svg>

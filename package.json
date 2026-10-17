@@ -9,7 +9,7 @@
     "pretest": "node scripts/sync-renderer-vendor.js",
     "test": "node --no-use-system-ca --test --test-timeout=120000 \"test/**/*.test.js\"",
     "pretest:e2e": "node scripts/sync-renderer-vendor.js",
-    "test:e2e": "node --no-use-system-ca --test --test-timeout=300000 --test-force-exit e2e/*.test.mjs",
+    "test:e2e": "node --no-use-system-ca --no-maglev --no-concurrent-sparkplug --test --test-timeout=300000 --test-force-exit e2e/*.test.mjs",
     "preperf": "node scripts/sync-renderer-vendor.js",
     "perf": "node --no-use-system-ca e2e/perf-report.mjs",
     "precoverage": "node scripts/sync-renderer-vendor.js",

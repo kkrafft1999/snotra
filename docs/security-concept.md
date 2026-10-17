@@ -1,7 +1,9 @@
 # A security concept for tool calls
 
-As of 2026-09-05 · the concept behind
-[#65](https://github.com/kkrafft1999/snotra/issues/65).
+Written 2026-09-05, last brought in line with the code on 2026-10-17 ([#1010](https://github.com/kkrafft1999/snotra/issues/1010)) ·
+the concept behind [#65](https://github.com/kkrafft1999/snotra/issues/65).
+Where the model grew after the first version, the sections below carry the
+current rule and point to the revision at the end of section 9 that dated it.
 This document defines the target behaviour for
 [#66 (the core)](https://github.com/kkrafft1999/snotra/issues/66) and
 [#67 (the UI)](https://github.com/kkrafft1999/snotra/issues/67). Both have been
@@ -176,13 +178,28 @@ replaced by the placeholder "[sensibler Inhalt zurückgehalten]", and the user
 sees in the chat that context is missing. Sending it to the new endpoint again
 requires a new `read-sensitive` approval. The same rule applies when old
 conversations are loaded; redaction is the default, not a question. The mark is
-stored with the history in the encrypted store.
+stored with the history — and the history is encrypted only where `safeStorage`
+is available. Without it (a Linux desktop without a keyring, a keychain that
+refuses) `chat-history.json` is written as plain JSON, the approved content of
+a sensitive read and its mark included, like the UI preferences. The history is
+then protected by the user's account and nothing more; the revision "the
+history without encrypted storage" in section 9 records that.
 
 ## 5. Hard boundaries and prompt injection
 
-- **The filesystem:** only the workspace, authoritatively managed by the main
-  process, and the active skill read roots (#68/#61). No root set freely by the
-  renderer or the model, no escape through `..`, symlinks or junctions; new
+- **The filesystem:** the workspace, authoritatively managed by the main
+  process, the active skill read roots (#68/#61) and — since #792 — exactly what
+  the user opened on a card for the file tools: one file or one folder outside
+  the workspace, for a call or for the session (revision "sandbox cards and
+  files outside the folder" in section 9). No root set freely by the renderer or
+  the model: `fs-service` only *reports* a path outside the open folder,
+  `main/services/outside-access.js` decides what a card may offer for it, and
+  the application core shows that card before the call, in every mode — a deny
+  rule still blocks first. Never offered, so still a hard limit: the root of a
+  disk, the home folder or anything above it, Snotra's own storage, a folder
+  around a location with credentials, and for writing no credential location,
+  global skill folder or shell start-up file either; all of it checked as given
+  and by real path. No escape through `..`, symlinks or junctions; new
   files are checked against the real existing parent path. Skill targets stay
   read-only in every mode (#429 opened them for a while; the revision for #548
   in section 9 closed them again), a global skill folder also when the open
@@ -308,7 +325,9 @@ stored with the history in the encrypted store.
   than on an IPC message alone: enabling auto, creating a permanent allow rule,
   deleting a deny rule — also several at once, by "Workspace-Regeln
   zurücksetzen" or "Alle Berechtigungen zurücksetzen", which name what goes —
-  and dropping a sensitive path pattern (#514). The renderer only triggers
+  and dropping a sensitive path pattern (#514); the loosenings that came later
+  — the sandbox opt-out (#357), program allowances (#408) and hosts kept open
+  for a workspace (#946) — follow the same pattern. The renderer only triggers
   these actions. The same
   pattern applies to the import from outside (#101): main counts, confirms
   natively (always for folders, above a threshold for files) and only then
@@ -378,8 +397,18 @@ description by the model.
 - **Allow for this session:** before it is confirmed, it shows the tool, the
   exact targets, the classes and, where applicable, the provider as its scope
   (section 7). Under `ask-all` the option is disabled with "Dieser Modus fragt
-  bei jedem Aufruf". For `delete`, `execute` and `external` it stays disabled in
-  the first stage as well: individual decisions only.
+  bei jedem Aufruf". For a *tool call* of class `delete`, `execute` or
+  `external` it stays disabled as well: individual decisions only. The sandbox
+  cards (#792, revision in section 9) are the one other place that offers it,
+  and what it opens there is no call: "for this session" on such a card keeps a
+  folder to write in, a path to read, a host to connect to or — for the file
+  tools — a path outside the open folder for the later runs of that chat. It
+  is a session grant with a `sandbox` entry, `find()` never matches it, so it
+  approves no tool call, and `ask-all` disables it here too.
+- **For this workspace (#946):** offered on a connection card of the sandbox
+  only — never on a call's card — and only when the mode keeps approvals, a
+  workspace is open and `safeStorage` can sign the store. It is the second
+  exception to "no permanent permission" in section 7.
 - **Always allow this command (#121):** on a `shell_execute` card this button
   takes the place of "for this session", which an execution never gets. It
   remembers exactly the command line on the card for the workspace (section 7)
@@ -392,9 +421,11 @@ description by the model.
   result, e.g. `permission_denied` with the reason `user_denied` and the text
   "Tool-Aufruf vom Nutzer abgelehnt". No invented tool results.
 
-The new approval port returns `allow-once | allow-session | deny`, and since
-#121 `allow-always` for a remembered command. The rule it stores is built in
-main from the plan of the open request; the renderer only says "always". Main binds
+The new approval port returns `allow-once | allow-session | deny`, since
+#121 `allow-always` for a remembered command and since #946 `allow-workspace`
+for a host kept open. What either stores is built in main from the open request
+— the rule from the plan of the request, the hosts from the card's own offers;
+the renderer only says "always" or "for this workspace". Main binds
 requests to a random `requestId`, the window, the session, the run, the tool
 call, the normalised arguments and plan, the file version, the workspace and the
 policy version. The answering IPC accepts only a decision on one of its own open
@@ -473,9 +504,11 @@ labelled "Alle Workspaces". Global blocks stay in force everywhere.
 
 Persistent allow rules are planned for `read` and ordinary `write` only;
 sensitive disclosure, `delete`, `execute` and `external` get no permanent
-permission.
+permission for a call. There are two exceptions, both stored in the policy
+file, both loosening, both bound to one workspace: a command rule (#121) and,
+for the sandbox, hosts kept open (#946).
 
-**The one exception is a command rule (#121).** It allows a single
+**The first exception is a command rule (#121).** It allows a single
 `shell_execute` command line in a single workspace — never the class `execute`,
 never the tool as a whole, never globally. It matches only when everything the
 card showed is the same: the command line (runs of spaces collapsed), the
@@ -496,6 +529,24 @@ session approval, because it can only turn a question into an allowance. Deny ru
 classification setting, not an allow rule. Rules can be created, reviewed and
 deleted individually in Settings › Tools & security, each in the row of its class; the
 chat card creates no permanent rule unnoticed.
+
+**The second exception is a kept host (#946).** It is no rule and allows no
+call. It adds hosts to the domains of every shell and Python run in one
+workspace, so that a connection card for one of them — a `git push` over SSH,
+say — is not asked again in every new chat. The same limits as the card keeps
+apply, because only what a connection card offered can be kept: `host:port` or
+`*.domain`, never a domain under which unrelated parties get host names
+(`amazonaws.com`, `github.io` …), host by host there. The hosts are stored in
+the policy file per canonical workspace root, at most ten per workspace, and
+only with `safeStorage`: a loosening like an allow rule, so a failed signature
+drops them and "Workspace-Regeln zurücksetzen" and "Alle Berechtigungen
+zurücksetzen" clear them. Main confirms in a native dialog that lists the
+hosts and the folder before anything is stored; cancelling leaves the card
+open. Closing a host again asks nothing. Unlike an allow rule, a kept host is
+no answer to a question the mode asks: it applies in every mode, `ask-all`
+included, since the connection card appears in every mode by design and this
+is what makes it stop appearing. Settings › Tools & security lists the kept
+hosts of the open workspace with the execution tools, each removable on its own.
 
 Session approvals live exclusively in memory and apply to the same chat,
 workspace, tool, exact set of targets and classes. Sensitive read approvals
@@ -701,7 +752,9 @@ replaced by an operating system boundary:
 - **The remaining risk.** A run can still **read** files outside the denied
   locations — source code, documents — and send what it read to a domain the
   card allowed; an allowed domain is a channel. `execute` still cannot be
-  approved for a session or permanently (§6/§7 unchanged). In "auto" a run
+  approved for a session or permanently (§6/§7 unchanged for the call; the
+  sandbox cards of #792 and #946 keep a place or a host, not a call — see the
+  revisions below). In "auto" a run
   executes without a card, but isolated. Local MCP servers are processes too and
   are not covered (#62).
 
@@ -748,7 +801,8 @@ predates the certifi fallback.
   says which tools and why, with the way to the setting (#396). Amber rather
   than red: the state is a risk the user accepted or cannot avoid, not an
   error, and red on a permission control reads as "blocked". `execute` still
-  cannot be approved for a session or permanently (§6/§7 unchanged).
+  cannot be approved for a session or permanently (§6/§7 unchanged for the
+  call, see the revisions for #792 and #946 below).
 - **Not built.** A global switch (it would silently apply to untrusted
   projects), an environment variable (invisible in the UI) and a per-run
   "run unisolated" button on the card (it teaches clicking past the sandbox;
@@ -1150,6 +1204,113 @@ and still switch nothing:
 - **Switching off asks too.** Taking a capability away is no injection path,
   but a card for both directions keeps one rule and leaves the user in charge
   of every change in the chat.
+
+### Revision: sandbox cards, and files outside the folder (#792)
+
+The sandbox of #329 refused a write outside the workspace, a read of a
+protected place or a connection to an unnamed host — and left the user with a
+failed run and two poor exits: switch the sandbox off for the whole workspace
+(#357) or write a program allowance (#408). Since #792 the refusal can become
+a question, and the file tools get the same kind of question for a path
+outside the open folder. The hard limits of section 5 do not move; what
+changes is that a place beyond the workspace can now be opened by the user on
+a card.
+
+- **Three cards, one mechanism.** All three go through the approval port at the
+  checkpoint `sandbox`, and all three *grant a resource, not a call*:
+  1. *After a run.* A write or a protected read the sandbox refused is shown as
+     a card, with the path or a folder one level up as the offer, and the
+     command runs again with exactly that opened.
+  2. *While a run waits.* A connection to a host outside the run's domains is
+     held by the proxy until the card is answered: one question at a time, the
+     same host asked once, nothing asked after a denial. If the command ends
+     while a card is open, the card expires, and the card after the run offers
+     the host with a retry.
+  3. *Before a file tool.* A path outside the open folder is offered on a card
+     before the call runs. That card is the call's approval, with the preview
+     of a write, so no second card follows. A deny rule still blocks first.
+- **In every mode.** The cards ignore the mode — in "auto" too, where the
+  sandbox's question is the one that remains. What `auto` allows are calls
+  inside the boundaries; a place beyond them is the user's to open. "For this
+  session" is offered unless the mode is `ask-all` (section 6).
+- **What a card may offer** is decided in main, never by the model or the
+  renderer: exactly the path and one folder up, except the root of a disk, the
+  home folder or above, Snotra's own storage, a folder around credentials, the
+  protected and global skill folders and what the runtime keeps unwritable
+  anyway; for the file tools additionally no write to a credential location or
+  a shell start-up file (`main/services/outside-access.js`, as given and by real
+  path). The folder one level up is never a folder many programs share —
+  `~/Documents`, `/tmp`, a cache root —; there only the exact path is offered. A host is offered as `host:port` or
+  `*.domain`, and a domain under which unrelated parties get names only host by
+  host. A credential location may be *read* exactly — and is marked sensitive
+  as in the open folder — but never as the folder that contains it.
+- **Bound to the answer.** The answer names a choice per resource; the engine
+  and the adapter accept only what the card offered, and the sandbox
+  configuration and the file tools check every grant again before they use it.
+  A call runs after a card only if its classes and the targets' versions are
+  what the card showed. A denial is remembered under the plan key, so the same
+  command again ends the run instead of asking twice.
+- **For a session, not forever.** A session grant of kind `write`, `read`,
+  `network`, `outsideRead` or `outsideWrite` lives in memory like every
+  session approval and ends with the chat, a restart, a changed rule set or a
+  revocation on the Security page. It carries a `sandbox` entry and `find()`
+  never matches it: it allows no call, which is why it can exist for a
+  connection although `external` is never approved for a session (section 6).
+  The one lasting form is the kept host of #946, below.
+- **Visible afterwards.** The decision goes on the trace of the call
+  (`sandboxDecision`, `sandboxLive`, `sandboxOutside`) and into a box under the
+  tool log that outlives the next turn and a restart; what was decided while
+  a command ran also goes to the model (`sandbox_connections`). A card that
+  arrives while Snotra is not in focus, or in a chat that is not on screen,
+  raises a system notification with the chat and the card's headline — off by
+  one setting, on by default.
+- **The remaining risk.** Every grant is a hole the user chose: a folder the
+  command may write in, a host that is a channel for whatever the run could
+  read. A click-through habit weakens the sandbox one place at a time rather
+  than all at once, which is the point of asking narrowly, not a protection
+  against it. A prompt injection can make the model *ask*, but it cannot
+  answer: the answer is a choice among the card's own offers.
+
+### Revision: connections kept for a workspace (#946)
+
+A workspace that talks to the same server every day — `git push` over SSH,
+which goes through the sandbox proxy as `server.example.com:22` since #932 —
+asked for that host again in every new chat, in every mode. The two lasting
+answers that existed were both too wide: "always allow this command" is one
+exact line (#121), and switching the sandbox off removes all isolation for one
+trusted host (#357).
+
+A connection card therefore offers a third duration, *For this workspace*. It
+is the second exception to "no permanent permission for `external`" in
+section 7, next to the command rule, and it follows the same discipline: stored
+in the signed policy file per canonical workspace root, only with
+`safeStorage`, confirmed in a native dialog that lists the hosts and the
+folder, dropped by a failed signature, cleared by both resets, closed again
+without a question. What it opens is narrower than either alternative —
+hosts, not commands and not the sandbox — and it adds to the run's allowed
+domains, so a card for a host that is already kept is not shown.
+
+- **The remaining risk.** A kept host is a channel in every later chat of that
+  workspace, including runs the user does not watch in "auto": whatever the
+  program can read may be sent there. The ten-host cap and the exact
+  `host:port` offer are what keep the list short enough to read.
+- **Not covered.** Direct `ssh`, `scp` or `psql` connections: only what goes
+  through the proxy — HTTP(S) and Git over SSH — can be named per host.
+
+### Revision: the history without encrypted storage
+
+Section 4 said the provider-bound mark of a sensitive read is stored "with the
+history in the encrypted store". That holds where `safeStorage` is available.
+Where it is not, `chat-history.json` is written as plain JSON: the tool
+messages whose sensitive content the user approved, and the marks that bind
+them to a provider endpoint, sit in the file in the clear, with the rest of
+the conversation. Unlike the policy file, which drops to the fail-safe of
+section 7 without a key, and unlike secrets, which are refused rather than
+stored, the history simply keeps working in plain text. The notices about missing encrypted
+storage name keys, "auto" and permanent allowances, not the history, so a user
+on such a system is not told. The protection of that file is the user's
+account and nothing more; a history that was encrypted and cannot be
+decrypted is set aside, never written over (#561, #566).
 
 ## 10. Comparison with the official references
 
