@@ -202,6 +202,7 @@ function closing(masked, open) {
 }
 
 const hasComment = (comments, from, to) => comments.some(([start, end]) => start < to && end > from);
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const LOGS = /\bconsole\.(log|warn|error|info|debug)\b|\b(logger|log)\.\w+\s*\(/;
 
 /**
@@ -211,7 +212,7 @@ const LOGS = /\bconsole\.(log|warn|error|info|debug)\b|\b(logger|log)\.\w+\s*\(/
 function classify({ names, body, from, to, comments }) {
   if (/\bthrow\b/.test(body)) return 'rethrow';
   if (LOGS.test(body)) return 'log';
-  if (names.some((name) => new RegExp(`(?<![.\\w$])${name.replace(/\$/g, '\\$')}(?![\\w$])`).test(body))) return 'report';
+  if (names.some((name) => new RegExp(`(?<![.\\w$])${escapeRegExp(name)}(?![\\w$])`).test(body))) return 'report';
   if (hasComment(comments, from, to)) return 'commented';
   return 'quiet';
 }
