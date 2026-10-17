@@ -1,6 +1,6 @@
 /**
  * Cuts a text in the middle so that it fits its box (#676). Folders of one
- * project family share their start (`snotra`, `snotra-promotion`,
+ * project family share their start (`snotra`, `snotra-workbench`,
  * `snotra-website`); an ellipsis at the end takes away exactly the part that
  * tells them apart, one in the middle keeps both ends.
  *

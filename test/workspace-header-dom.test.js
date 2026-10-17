@@ -16,7 +16,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
 
-const ROOT = '/Users/k/Projects/snotra-promotion';
+const ROOT = '/Users/k/Projects/snotra-workbench';
 
 async function setup(t, { homeDir = '/Users/k' } = {}) {
   const dom = setupRendererDom();
@@ -93,10 +93,10 @@ test('an open folder is named first in the title bar, with the brand after it, a
   const { document, byId, openFolder } = await setup(t);
   await openFolder();
   assert.equal(byId('titlebar-workspace').hidden, false);
-  assert.equal(byId('titlebar-workspace-name').textContent, 'snotra-promotion');
+  assert.equal(byId('titlebar-workspace-name').textContent, 'snotra-workbench');
   assert.equal(byId('titlebar-workspace').title, ROOT);
   assert.equal(byId('titlebar').classList.contains('titlebar--workspace'), true, 'the brand steps back');
-  assert.equal(document.title, 'snotra-promotion — Snotra Agent');
+  assert.equal(document.title, 'snotra-workbench — Snotra Agent');
 });
 
 // ── The switcher ─────────────────────────────────────────────────────────────
@@ -105,13 +105,13 @@ test('the switcher carries name and path, both in its label for the keyboard', a
   const { byId, openFolder } = await setup(t);
   await openFolder();
   const button = byId('btn-workspace');
-  assert.equal(byId('project-name').textContent, 'snotra-promotion');
+  assert.equal(byId('project-name').textContent, 'snotra-workbench');
   for (const id of ['project-path', 'project-path-narrow']) {
     assert.equal(byId(id).hidden, false);
-    assert.equal(byId(id).textContent, '~/Projects/snotra-promotion', `${id} abbreviates the home folder`);
+    assert.equal(byId(id).textContent, '~/Projects/snotra-workbench', `${id} abbreviates the home folder`);
     assert.equal(byId(id).getAttribute('aria-hidden'), 'true', `${id} is read from the label`);
   }
-  assert.equal(button.getAttribute('aria-label'), 'snotra-promotion, ~/Projects/snotra-promotion. Switch folder');
+  assert.equal(button.getAttribute('aria-label'), 'snotra-workbench, ~/Projects/snotra-workbench. Switch folder');
   assert.equal(button.title, `Switch folder · ${ROOT}`);
   assert.equal(button.getAttribute('aria-haspopup'), 'menu');
   assert.equal(button.getAttribute('aria-controls'), 'folder-history-menu');
@@ -122,7 +122,7 @@ test('a home folder that arrives after the folder still shortens the path', asyn
   await openFolder();
   assert.equal(byId('project-path').textContent, ROOT);
   setHome('/Users/k');
-  assert.equal(byId('project-path').textContent, '~/Projects/snotra-promotion');
+  assert.equal(byId('project-path').textContent, '~/Projects/snotra-workbench');
 });
 
 test('a language switch relabels the switcher and keeps the folder\'s name', async (t) => {
@@ -132,8 +132,8 @@ test('a language switch relabels the switcher and keeps the folder\'s name', asy
   setLocale('de', { force: true });
   try {
     await flush();
-    assert.equal(byId('project-name').textContent, 'snotra-promotion');
-    assert.equal(byId('btn-workspace').getAttribute('aria-label'), 'snotra-promotion, ~/Projects/snotra-promotion. Ordner wechseln');
+    assert.equal(byId('project-name').textContent, 'snotra-workbench');
+    assert.equal(byId('btn-workspace').getAttribute('aria-label'), 'snotra-workbench, ~/Projects/snotra-workbench. Ordner wechseln');
   } finally {
     setLocale('en', { force: true });
     await flush();
@@ -200,10 +200,10 @@ test('the eraser stays outside the menu, next to it, while there are marks', asy
 
 test('middleCut keeps both ends around one ellipsis', async () => {
   const { middleCut } = await importRenderer('utils', 'middleEllipsis.js');
-  assert.equal(middleCut('snotra-promotion', 16), 'snotra-promotion');
-  assert.equal(middleCut('snotra-promotion', 10), 'snotr…otion');
-  assert.equal(middleCut('snotra-promotion', 1), 's…');
-  assert.equal(middleCut('snotra-promotion', 0), '…');
+  assert.equal(middleCut('snotra-workbench', 16), 'snotra-workbench');
+  assert.equal(middleCut('snotra-workbench', 10), 'snotr…bench');
+  assert.equal(middleCut('snotra-workbench', 1), 's…');
+  assert.equal(middleCut('snotra-workbench', 0), '…');
 });
 
 test('fitMiddle cuts as little as the box needs, and nothing without a layout', async () => {
@@ -216,12 +216,12 @@ test('fitMiddle cuts as little as the box needs, and nothing without a layout', 
   });
 
   const wide = box(200);
-  assert.equal(fitMiddle(wide, 'snotra-promotion'), false);
-  assert.equal(wide.textContent, 'snotra-promotion');
+  assert.equal(fitMiddle(wide, 'snotra-workbench'), false);
+  assert.equal(wide.textContent, 'snotra-workbench');
 
   const narrow = box(70);
-  assert.equal(fitMiddle(narrow, 'snotra-promotion'), true);
-  assert.equal(narrow.textContent, 'snotr…tion');
+  assert.equal(fitMiddle(narrow, 'snotra-workbench'), true);
+  assert.equal(narrow.textContent, 'snotr…ench');
   assert.ok(narrow.scrollWidth <= 70);
   assert.notEqual(
     narrow.textContent,
@@ -230,6 +230,6 @@ test('fitMiddle cuts as little as the box needs, and nothing without a layout', 
   );
 
   const unlaid = box(0);
-  assert.equal(fitMiddle(unlaid, 'snotra-promotion'), false);
-  assert.equal(unlaid.textContent, 'snotra-promotion');
+  assert.equal(fitMiddle(unlaid, 'snotra-workbench'), false);
+  assert.equal(unlaid.textContent, 'snotra-workbench');
 });
