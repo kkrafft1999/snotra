@@ -1,8 +1,6 @@
 # Task management
 
-In this project **everything runs through GitHub issues**. There is no
-`docs/roadmap.md` and no `docs/task.md` any more (decision from 2026-09-07; the
-original convention dates from 2026-07-01, see PR #16).
+In this project **everything runs through GitHub issues**.
 
 - **Every task** — a bug, a single feature, a larger topic — is captured as a
   **GitHub issue**: https://github.com/kkrafft1999/snotra/issues. Templates:
@@ -18,23 +16,14 @@ original convention dates from 2026-07-01, see PR #16).
   `gh project item-edit`. New issues do not land on the board by themselves,
   though — after `gh issue create`, either file them yourself with
   `gh project item-add 2 --owner kkrafft1999 --url <issue-url>` or tell the user.
-- Deliberately **no** external tool (Linear/Trello/Notion/Jira) and **no** task
-  lists in the repository — everything stays in GitHub, since this is a solo
-  hobby project that is already fully GitHub-based.
-
-## No task files in the repository
-
-The former scratchpad `docs/task.md` and the roadmap `docs/roadmap.md` were
-removed without replacement on 2026-09-07, because they went stale next to the
-issues. So:
-
-- **No** new `task.md`, `roadmap.md`, `TODO.md`, `backlog.md` or the like — not
-  even as a "temporary" place to put things.
 - If `gh` cannot write for once (another machine, a missing scope, no network):
   print the finished issue text **in the conversation** and ask the user to
   create it. Don't write it into the repository.
-- The **current state** of the app is described in `README.md` (the user's view)
-  and in `docs/architecture.md` (the structure), not in a status list.
+- Deliberately **no** external tool (Linear/Trello/Notion/Jira) and **no** task
+  lists in the repository — everything stays in GitHub, since this is a solo
+  hobby project that is already fully GitHub-based. The **current state** of the
+  app is described in `README.md` (the user's view) and in
+  `docs/architecture.md` (the structure), not in a status list.
 
 ## What to do when asked "What's next?", "Where do we stand?", "Backlog?"
 
