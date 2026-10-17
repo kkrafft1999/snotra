@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
@@ -94,6 +94,14 @@ for (const how of ['kill', 'quit', 'reload']) {
     assert.equal((await shownChat(page)).running, true, 'the run is still going when it is cut off');
 
     if (how === 'kill') {
+      // On Windows the key that encrypts the history lives in Chromium's
+      // `Local State`, which is written a few seconds after the first start.
+      // A kill before that loses the key, and the restart has to set the
+      // history aside as undecryptable — a different story from this one.
+      if (process.platform === 'win32') {
+        await poll(async () => (await readFile(path.join(userDataDir, 'Local State'), 'utf8').catch(() => '')).includes('encrypted_key'),
+          { what: 'the encryption key written to Local State', timeoutMs: 60000, explain });
+      }
       // No quit, no unload: the process is gone at once, as in a crash.
       await killHard(snotra.app.process());
     } else if (how === 'quit') {
