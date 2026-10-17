@@ -6,7 +6,8 @@
   "scripts": {
     "sync-vendor": "node scripts/sync-renderer-vendor.js",
     "postinstall": "node scripts/sync-renderer-vendor.js && node scripts/patch-sandbox-runtime.js",
-    "pretest": "node scripts/sync-renderer-vendor.js",
+    "pretest": "node scripts/sync-renderer-vendor.js && npm run typecheck",
+    "typecheck": "tsc -p tsconfig.json",
     "test": "node --no-use-system-ca --test --test-timeout=120000 \"test/**/*.test.js\"",
     "pretest:e2e": "node scripts/sync-renderer-vendor.js",
     "test:e2e": "node --no-use-system-ca --no-maglev --no-concurrent-sparkplug --test --test-timeout=300000 --test-force-exit e2e/*.test.mjs",
@@ -135,7 +136,8 @@
     "marked": "^18.1.0",
     "pdfjs-dist": "^6.4.299",
     "playwright-core": "^1.64.0",
-    "prismjs": "^1.30.0"
+    "prismjs": "^1.30.0",
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "@reforged/maker-appimage": {

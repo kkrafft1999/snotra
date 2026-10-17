@@ -18,11 +18,19 @@
  */
 
 /**
+ * The descriptor itself, as it travels between the layers.
+ *
+ * @typedef {Object} Message
+ * @property {string} key      Dotted catalogue key, e.g. `mcp.error.idMissing`.
+ * @property {Object<string, unknown>} [params]  Values for the `{placeholders}` in that entry.
+ */
+
+/**
  * One message, ready to travel.
  *
  * @param {string} key      Dotted catalogue key, e.g. `mcp.error.idMissing`.
  * @param {object} [params] Values for the `{placeholders}` in that entry.
- * @returns {{ key: string, params?: object }}
+ * @returns {Message}
  */
 function createMessage(key, params) {
   const out = { key: typeof key === 'string' ? key : '' };
@@ -38,6 +46,10 @@ function createMessage(key, params) {
  * Is this a descriptor rather than a finished sentence? The distinction
  * matters on the display side: layers that have not been converted yet still
  * hand over plain text, and that text is shown as it stands.
+ */
+/**
+ * @param {*} value
+ * @returns {value is Message}
  */
 function isMessage(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value)

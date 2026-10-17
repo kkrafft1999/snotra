@@ -11,7 +11,11 @@
 
 const { SENSITIVE_CONTENT_REDACTED_TEXT } = require('../../shared/contracts/tool-permissions');
 
-/** Markierung einer Tool-Nachricht: gebundener Endpunkt, Ziel, Dateiversion. */
+/**
+ * Markierung einer Tool-Nachricht: gebundener Endpunkt, Ziel, Dateiversion.
+ *
+ * @param {{ providerKey?: string|null, targets?: Array<{ path: string, version?: string|null }> }} [input]
+ */
 function createSensitiveMarker({ providerKey, targets } = {}) {
   return {
     sensitive: true,

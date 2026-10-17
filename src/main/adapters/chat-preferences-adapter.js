@@ -1,5 +1,8 @@
 'use strict';
 
+/**
+ * @returns {import('../../application/ports/chat-preferences-port').ChatPreferencesPort}
+ */
 function createChatPreferencesAdapter({ uiPrefsStore }) {
   return {
     async read() {

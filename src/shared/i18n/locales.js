@@ -38,6 +38,10 @@ const CATALOGUES = Object.freeze([
  * back to. Fresh installations start here (epic #277); existing ones stay on
  * German — but that is decided by the store when it reads the preferences, not
  * by this module.
+ *
+ * Typed as a plain string: it is the default of every `locale` parameter,
+ * and those take whatever language the preferences hold.
+ * @type {string}
  */
 const DEFAULT_LOCALE = APP_LOCALES.EN;
 

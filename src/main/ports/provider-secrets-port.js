@@ -8,7 +8,8 @@
  * @property {string} [model]
  *
  * @typedef {Object} ProviderSecretsPort
- * @property {(providerId: string) => Promise<EffectiveProviderConfig|null>} getEffectiveProviderConfig
+ * @property {(providerId: string, scope?: { presetId?: string }) => Promise<EffectiveProviderConfig|null>} getEffectiveProviderConfig
+ *   `presetId`: the entry whose own connection applies (#202)
  */
 
 module.exports = {};

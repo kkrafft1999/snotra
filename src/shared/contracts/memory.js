@@ -114,6 +114,7 @@ const SELF_ORIGIN_MARKERS = Object.freeze({
   [APP_LOCALES.DE]: 'selbst gemerkt',
 });
 
+/** @type {Set<string>} */
 const KNOWN_SELF_ORIGIN_MARKERS = new Set(Object.values(SELF_ORIGIN_MARKERS));
 
 /** Heading of a freshly created file, in the interface language (#579). */

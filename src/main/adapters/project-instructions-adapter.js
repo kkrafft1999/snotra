@@ -26,7 +26,8 @@ const { createEmbeddedTextFiles } = require('../services/embedded-text-file');
  * @param {typeof import('fs/promises')} deps.fs
  * @param {typeof import('path')} deps.path
  * @param {typeof import('os')} deps.os
- * @param {number} [deps.maxChars] — Grenze je Datei
+ * @param {number} [deps.maxChars]  Grenze je Datei
+ * @returns {import('../../application/ports/project-instructions-port').ProjectInstructionsPort}
  */
 function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT_INSTRUCTION_CHARS }) {
   if (!fs || !path) throw new TypeError('createProjectInstructionsAdapter benötigt fs und path.');

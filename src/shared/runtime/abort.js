@@ -39,7 +39,7 @@ async function sleepAbortable(ms, abortSignal) {
   await new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       cleanup();
-      resolve();
+      resolve(undefined);
     }, ms);
     const onAbort = () => {
       cleanup();

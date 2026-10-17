@@ -17,6 +17,7 @@ before a merge — and about the rule that keeps any speed-up honest:
 
 | Level | Where | What it is responsible for | What it leaves to another level |
 | --- | --- | --- | --- |
+| **Type check** | `npm run typecheck` (`tsc --checkJs --noEmit`), run by `npm test` before the suite | Core, ports, contracts and adapters against their JSDoc — see [`architecture.md`](./architecture.md#plain-js-checked-by-jsdoc) | Behaviour: it reads the code, it runs nothing |
 | **Unit and wiring** | `test/*.test.js`, `node --test` | Application core, adapters, IPC contracts, the boundary guards in [`architecture.md`](./architecture.md#automated-boundary-guards), renderer components against a `happy-dom` DOM | Real Chromium — layout, focus, sanitizing — and the process model of the running app |
 | **Real-system tests** (inside the unit suite) | e.g. `sandbox-isolation`, `sandbox-runners`, `shell-runner-service`, `workspace-watcher-real-fs`, `mcp-settings-handlers` | What only means something against the real thing: the Seatbelt/bubblewrap sandbox, file-system events, child processes, a real MCP server | Nothing — they guard security and data, so they stay in the gate |
 | **Electron E2E** | `e2e/*.test.mjs`, `node --test` + `playwright-core` | The running app against a fake model server: sanitizing with the real DOMPurify, layout and focus, restarts, approval flows | Look and feel |

@@ -807,6 +807,31 @@ function mergeSandboxGrants(session, chosen) {
   };
 }
 
+/**
+ * What the engine is built from: its ports, nothing concrete (#1004 checks
+ * the adapters against these types).
+ *
+ * @typedef {Object} ChatEngineDependencies
+ * @property {import('../ports/llm-port').LlmPort} llm
+ * @property {import('../ports/tool-port').ToolPort} tools
+ * @property {import('../ports/chat-preferences-port').ChatPreferencesPort} preferences
+ * @property {import('../ports/workspace-path-port').WorkspacePathPort} workspacePaths
+ * @property {import('../ports/skill-port').SkillPort|null} [skills]
+ * @property {import('../ports/environment-port').EnvironmentPort|null} [environment]
+ * @property {import('../ports/project-instructions-port').ProjectInstructionsPort|null} [projectInstructions]
+ * @property {import('../ports/memory-port').MemoryPort|null} [memory]
+ * @property {import('../ports/tool-policy-port').ToolPolicyPort|null} [toolPolicy]
+ * @property {import('../ports/tool-approval-port').ToolApprovalPort|null} [approvals]
+ * @property {import('../ports/own-secrets-port').OwnSecretsPort|null} [ownSecrets]
+ * @property {ReturnType<typeof createSessionGrants>} [sessionGrants]
+ * @property {number} [maxToolRounds]
+ * @property {(run: { sessionId: string|number, chatId: string|null }) => void} [onRunSettled]
+ * @property {import('../ports/config-proposal-port').ConfigProposalPort|null} [configProposals]
+ */
+
+/**
+ * @param {ChatEngineDependencies} dependencies
+ */
 function createChatEngine({
   llm,
   tools,
@@ -868,6 +893,10 @@ function createChatEngine({
    * Stream-Callbacks für den LLM-Port. Neben Text/Reasoning melden die Provider
    * hier auch Tool-Aufrufe, die das Modell gerade streamt; daraus entsteht die
    * vorläufige Tool-Zeile (Phase 'pending'), noch bevor das Tool ausgeführt wird.
+   *
+   * @param {Function} onEvent
+   * @param {{ onToolCallPending?: Function }} [options]
+   * @returns {import('../ports/llm-port').LlmStreamCallbacks}
    */
   function makeStreamCallbacks(onEvent, { onToolCallPending } = {}) {
     let started = false;
@@ -897,6 +926,7 @@ function createChatEngine({
         markGenerating();
         emit(onEvent, CHAT_ENGINE_EVENTS.PROGRESS, createReasoningEvent(text));
       },
+      /** @param {{ index?: number|string, name?: string, args?: object }} [call] */
       onToolCallStart({ index, name, args } = {}) {
         markGenerating();
         const key = index ?? pendingCalls.size;
@@ -912,6 +942,7 @@ function createChatEngine({
         pendingCalls.set(key, pending);
         notifyPending(pending);
       },
+      /** @param {{ index?: number|string, delta?: string }} [chunk] */
       onToolCallArgumentsDelta({ index, delta } = {}) {
         if (typeof delta !== 'string' || !delta) return;
         markGenerating();
@@ -940,7 +971,7 @@ function createChatEngine({
    */
   async function resolveTarget(forSend, chatId) {
     const target = await llm.resolveChatTarget(chatId ? { chatId } : undefined);
-    if (target.error) return { error: target };
+    if ('error' in target) return { error: target };
     const validation = await llm.validateTarget(target, { forSend });
     if (validation) return { error: validation };
     return { target };
@@ -1470,6 +1501,11 @@ function createChatEngine({
         return fillUiQuotes(appLocale, content);
       }
 
+      /**
+       * @param {import('../ports/tool-port').ToolTraceEntry} entry
+       * @param {{ reason?: string, ruleId?: string, riskClasses?: string[], mode?: string,
+       *   targets?: Array<string|{ path: string }>, message?: string }} denial
+       */
       function permissionDenied(entry, { reason, ruleId, riskClasses, mode, targets, message }) {
         entry.permission = createPermissionAuditEntry({
           decision: POLICY_DECISIONS.DENY,
@@ -1584,6 +1620,7 @@ function createChatEngine({
           }
           // Main has stored the hosts for the workspace by now (#946); the
           // runs read them from the policy, this one gets them from the card.
+          /** @type {string} */
           let response = APPROVAL_RESPONSES.ALLOW_ONCE;
           if (outcome.response === APPROVAL_RESPONSES.ALLOW_WORKSPACE && request.workspaceAllowed) {
             response = APPROVAL_RESPONSES.ALLOW_WORKSPACE;
@@ -1939,6 +1976,7 @@ function createChatEngine({
           },
         });
         const what = offered.map((t) => `${t.access === 'write' ? 'writing to' : 'reading'} ${t.absPath}`).join(', ');
+        /** @type {(outcome: string, extra?: (target: object, index: number) => object) => void} */
         const record = (outcome, extra = () => ({})) => {
           entry.sandboxOutside = normalizeSandboxOutside(offered.map((t, i) => ({
             kind: t.access === 'write' ? 'write' : 'read',
@@ -2262,6 +2300,7 @@ function createChatEngine({
           // Connections the sandbox held while the command ran, and what the
           // user said about them (#792) — for the first run and a retry alike.
           const live = { decisions: [], repeated: false };
+          /** @type {import('../ports/tool-port').ToolExecutionContext['onSandboxNetworkAsk']} */
           const onSandboxNetworkAsk = (request, { signal } = {}) => askLiveConnection({
             entry, callIndex, toolName, plan, policy, scopeKey, live, request, signal,
           });
@@ -2640,6 +2679,8 @@ function createChatEngine({
    * Erwartet die ersten Nachrichten des Gespraechs; nutzt daraus die erste
    * Nutzerfrage und die erste Antwort. Liefert { title } oder { error } —
    * der Aufrufer faellt bei einem Fehler auf den abgeleiteten Titel zurueck.
+   *
+   * @param {{ messages?: Array<{ role: string, content?: unknown, greeting?: boolean }> }} [input]
    */
   async function generateTitle({ messages } = {}) {
     const list = Array.isArray(messages) ? messages : [];

@@ -29,6 +29,9 @@ function toCatalogEntry(provider) {
   };
 }
 
+/**
+ * @returns {import('../ports/provider-runtime-port').ProviderRuntimePort}
+ */
 function createProviderRuntimeAdapter(providersModule) {
   return {
     getProvider(id) {
@@ -43,6 +46,9 @@ function createProviderRuntimeAdapter(providersModule) {
   };
 }
 
+/**
+ * @returns {import('../ports/provider-catalog-port').ProviderCatalogPort}
+ */
 function createProviderCatalogAdapter(providerRuntime) {
   return {
     exists(id) {

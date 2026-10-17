@@ -4,6 +4,7 @@
  * Port-Adapter für den Skill-Service: schmale Oberfläche für den Chat-Core,
  * damit dieser nichts über Dateisystem, System-Skill-Verzeichnis oder Cache
  * weiß.
+ * @returns {import('../../application/ports/skill-port').SkillPort}
  */
 function createSkillsAdapter(skillsService) {
   return {

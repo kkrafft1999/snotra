@@ -3,6 +3,9 @@
 const { createListModelsResult, normalizeBaseUrl } = require('../../shared/contracts/settings');
 const { createMessage } = require('../../shared/contracts/message');
 
+/**
+ * @returns {import('../ports/provider-model-listing-port').ProviderModelListingPort}
+ */
 function createProviderModelListingAdapter({ providerRuntime, providerSecrets }) {
   return {
     async listModels(providerId, request) {

@@ -158,7 +158,13 @@ function cleanOverrideNames(raw) {
  * lists are left out, and an empty result is `null` — a chat without
  * changes carries nothing.
  *
- * @returns {{ tools?: {on?: string[], off?: string[]}, skills?: {on?: string[], off?: string[]}, declined?: string[] } | null}
+ * @typedef {Object} ChatConfigOverrides
+ * @property {{ on?: string[], off?: string[] }} [tools]
+ * @property {{ on?: string[], off?: string[] }} [skills]
+ * @property {string[]} [declined]  `proposalKey`s of the proposals the user declined
+ *
+ * @param {*} raw  anything; only an object can pass
+ * @returns {ChatConfigOverrides|null}
  */
 function normalizeChatConfigOverrides(raw) {
   if (!raw || typeof raw !== 'object') return null;

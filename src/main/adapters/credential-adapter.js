@@ -1,5 +1,8 @@
 'use strict';
 
+/**
+ * @returns {import('../ports/credential-port').CredentialPort}
+ */
 function createCredentialAdapter({ providerSecrets }) {
   return {
     async getApiKey(providerId) {

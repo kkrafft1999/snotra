@@ -31,7 +31,7 @@ const MAX_TRANSCRIPTION_UPLOAD_BYTES = 25 * 1024 * 1024;
  * error. Accepts an ArrayBuffer or any typed-array view; everything else is
  * refused.
  *
- * @param {unknown} payload
+ * @param {*} payload  anything; only a buffer or a view on one passes
  * @returns {{ bytes: number } | { error: object }}
  */
 function checkTranscriptionPayload(payload) {
@@ -57,7 +57,7 @@ function checkTranscriptionPayload(payload) {
  * an ArrayBuffer or a view on one, not empty, whole 16-bit samples, under the
  * ceiling. Main cannot trust what crosses IPC.
  *
- * @param {unknown} payload
+ * @param {*} payload  anything; only a buffer or a view on one passes
  * @returns {boolean}
  */
 function isVoiceChunk(payload) {

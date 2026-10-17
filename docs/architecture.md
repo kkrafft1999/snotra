@@ -172,8 +172,13 @@ engine (`llm`, `tool`, `chat-preferences`, `workspace-path`, `skill`,
 what main's tool registry calls and the core never sees
 ([#982](https://github.com/kkrafft1999/snotra/issues/982)). `memory`'s
 `remember`/`forget`/`paths` serve the tools and the settings as well. The
-typedefs are prose — nothing checks them against the adapters, so a change to
-what the engine passes changes the port as well:
+typedefs are checked: the engine takes its ports typed
+(`ChatEngineDependencies` in `chat/chat-engine.js`), and every adapter names
+the port it returns, so `npm run typecheck` fails when the two disagree — see
+[Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc). Five of them —
+`tool-policy`, `own-secrets`, `config-proposal`, `shell-execution` and
+`code-execution` — are still implemented outside the checked files
+([#1098](https://github.com/kkrafft1999/snotra/issues/1098)). The ports:
 
 - `llm-port` — streaming rounds against a provider
 - `tool-port` — tool registry and execution
@@ -595,8 +600,10 @@ injected via composition:
 The web search key and the MCP stores are narrowed in
 `adapters/persistence-store-adapters.js` (`createWebSearchStorePort`,
 `createMcpConfigStorePort`, `createMcpSecretsPort`) without a typedef of their
-own in `ports/`. A typedef lists every member its adapter provides;
-`test/filesystem-port-typedef.test.js` holds `filesystem-port` to that.
+own in `ports/`. A typedef lists every member its adapter provides; the type
+check holds every adapter in `src/main/adapters/` to that, and
+`test/filesystem-port-typedef.test.js` holds `filesystem-port` to it in both
+directions.
 
 ### Self-update: three steps, three modules
 
@@ -1447,8 +1454,11 @@ what is in which menu without starting Electron (`test/application-menu.test.js`
 ## Provider adapters
 
 `src/main/providers/` holds one module per provider that fulfils the contract
-from `providers/index.js` (`listModels`, `streamChatRound`, plus `fields`,
-`presentation`, `capabilities`). Five are registered: `openai`, `anthropic`,
+`ProviderAdapter` (`listModels`, `streamChatRound`, plus `fields`,
+`presentation`, `capabilities`, `reasoning`). Its typedef lives in
+`ports/provider-runtime-port.js`, the port the provider modules are reached
+through; until [#1004](https://github.com/kkrafft1999/snotra/issues/1004) it
+sat in `providers/index.js`, unchecked. Five are registered: `openai`, `anthropic`,
 `google`, `ollama` and `openai-compatible`. MLX-LM had a module of its own
 until issue #194; it is now a template of `openai-compatible`, and the
 `llm-config.json` migration to version 5 moves existing entries over.
@@ -2247,6 +2257,72 @@ into it, and if less than 100 px of the stored rectangle would be visible, drop
 the position — Electron then centres it. Without a stored state, the startup size
 from #208 applies (1536 × 960).
 
+## Plain JS, checked by JSDoc
+
+**Decision** ([#1004](https://github.com/kkrafft1999/snotra/issues/1004),
+2026-10-17). The app stays plain JavaScript without a build step — a founding
+decision that is not reopened here. The JSDoc it already carries is checked by
+the TypeScript compiler in read-only mode: `npm run typecheck` runs
+`tsc -p tsconfig.json` with `checkJs` and `noEmit`, and `npm test` runs it
+first (`pretest`), so the three required CI checks include it. `typescript` is
+a dev dependency; nothing of it reaches the package.
+
+**Why.** The ports were typedefs that nothing compared with the code. The
+architecture review counted 72 of them, found one typedef-parity test and four
+shape tests, and the code reviews kept finding drift by hand (#511, #525, #531,
+#538, #650). A second front end would be built against exactly those
+contracts. TypeScript sources with a build step would check more, but would
+undo the founding decision; a hand-written conformance test per port would
+check the member names and miss every parameter and return shape.
+
+**What is checked.** The include list in `tsconfig.json` is deliberate:
+`src/application/` (the core and its ports), `src/main/ports/`,
+`src/main/adapters/` and `src/shared/contracts/`. Every file these import is
+checked as well — `checkJs` checks the whole program — which pulls in parts of
+`src/main/services/`, `src/main/tools/` and `src/shared/`. The rest of `src/`
+is outside, and so are the tests.
+
+**How a port is held to its adapter.** Three things make the compiler compare
+them, and each is a line of JSDoc:
+
+- the core declares what it takes — `ChatEngineDependencies` types every port
+  the chat engine is built from;
+- every adapter factory names its port: `@returns {import('…-port').XPort}`.
+  A member that is missing, extra or of the wrong shape fails the check. An
+  adapter that offers main more than the port (the approval adapter's IPC
+  side, say) says so with an intersection, `XPort & { … }`;
+- a method defined on its own takes its type from the port,
+  `@type {XPort['method']}`, so its parameters cannot drift either.
+
+`test/port-conformance.test.js` holds the other half: every port typedef has
+an adapter that names it, or an entry on a list of ports still implemented
+outside the checked set — that list may only shrink
+([#1098](https://github.com/kkrafft1999/snotra/issues/1098)) — and the gate is
+still wired up.
+
+**How strict.** `strict` is off, with `strictFunctionTypes`,
+`strictBindCallApply` and `noImplicitThis` on. That catches a port and its
+adapter disagreeing — a member, a shape, an argument count — and callbacks
+with the wrong parameters, without `noImplicitAny` turning every unannotated
+parameter into a finding or `strictNullChecks` every `null` default. Both are
+the next step ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
+
+**Conventions** that came out of the first run:
+
+- A function that checks untrusted input takes `{*}`, not `{unknown}` or
+  `{object}`: it accepts anything, and `{object}` would forbid reading the
+  very properties it checks. `{Object}` means a dependency that has no type
+  yet; it reads as `any` and is a known gap, not a statement.
+- A destructured parameter with a `= {}` default needs its optional fields
+  marked optional — a sanitizer with `Partial<…>` of the port's request —
+  since the compiler checks the default against the declared type.
+- An enum check, `Object.values(ENUM).includes(value)`, compiles because
+  `types/array-includes.d.ts` lets `includes` take any value; the frozen enums
+  keep their literal types.
+- `tsc` 7 rejects a `#` or a dash right after a bracketed name in
+  `@param {…} [name]` / `@property {…} [name]`; write the description after
+  two spaces, as elsewhere.
+
 ## Automated boundary guards
 
 What a test holds, as of 2026-10-17:
@@ -2256,6 +2332,8 @@ What a test holds, as of 2026-10-17:
 | `test/application-layer-imports.test.js` | `src/application/` imports only `application/` + `shared/`, no package, no Node built-in |
 | `test/infrastructure-boundaries.test.js` | Storage without a provider-registry leak; store ports without decrypted secrets; MCP settings handlers never reach the decrypting port |
 | `test/adapter-port-shapes.test.js` | Port adapters expose only permitted methods |
+| `npm run typecheck` (`tsc`, run by `npm test`) | The core, the ports, the contracts and the adapters type-check against their JSDoc; every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
+| `test/port-conformance.test.js` | Every port has an adapter that names it, or a listed reason why not yet; the type check is still in the gate (#1004) |
 | `test/composition-root-wiring.test.js` | `create-application.js` holds wiring only: no branch beyond "was this optional dependency handed in", no loop, comparison, `try`/`catch` or clock, at most 1,000 lines ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)) |
 | `test/filesystem-port-typedef.test.js` | The `filesystem-port` typedef lists exactly the members of its adapter (#650) |
 | `test/architecture-doc.test.js` | Every path this document names exists, the layer table names every directory under `src/`, the port lists match the two `ports/` folders ([#1009](https://github.com/kkrafft1999/snotra/issues/1009)) |

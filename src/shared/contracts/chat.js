@@ -168,7 +168,32 @@ function sanitizeChatTitle(raw) {
  * bestehenden Wire-Formen unveraendert bleiben.
  */
 
-/** Erfolgreiches Chat-Ergebnis (Modell hat geantwortet, keine Tools mehr offen). */
+/**
+ * @typedef {import('./message').Message} Message
+ */
+
+/**
+ * The fields every result of a turn may carry.
+ *
+ * @typedef {Object} ChatResultParts
+ * @property {Array<object>} [toolTrace]  the tool steps of the turn
+ * @property {object|null} [usage]        summed over every round of the turn
+ * @property {object|null} [contextUsage] the last round's usage
+ * @property {object} [contextBreakdown]  what the last context window was made of (#174)
+ */
+
+/**
+ * @typedef {ChatResultParts & { content: string, toolTrace: Array<object>, usage: object|null }} ChatResult
+ * @typedef {ChatResult & { cancelled: true }} ChatCancelledResult
+ * @typedef {ChatResultParts & { error: Message|string, code: string, partial?: true }} ChatErrorResult
+ */
+
+/**
+ * Erfolgreiches Chat-Ergebnis (Modell hat geantwortet, keine Tools mehr offen).
+ *
+ * @param {ChatResultParts & { content?: string }} [parts]
+ * @returns {ChatResult}
+ */
 function createChatResult({
   content = '',
   toolTrace = [],
@@ -176,13 +201,19 @@ function createChatResult({
   contextUsage,
   contextBreakdown,
 } = {}) {
+  /** @type {ChatResult} */
   const result = { content, toolTrace, usage };
   if (contextUsage !== undefined) result.contextUsage = contextUsage;
   if (contextBreakdown !== undefined) result.contextBreakdown = contextBreakdown;
   return result;
 }
 
-/** Vom Nutzer bzw. per AbortSignal abgebrochenes Chat-Ergebnis. */
+/**
+ * Vom Nutzer bzw. per AbortSignal abgebrochenes Chat-Ergebnis.
+ *
+ * @param {ChatResultParts & { content?: string }} [parts]
+ * @returns {ChatCancelledResult}
+ */
 function createCancelledChatResult({
   content = '',
   toolTrace = [],
@@ -190,6 +221,7 @@ function createCancelledChatResult({
   contextUsage,
   contextBreakdown,
 } = {}) {
+  /** @type {ChatCancelledResult} */
   const result = { cancelled: true, content, toolTrace, usage };
   if (contextUsage !== undefined) result.contextUsage = contextUsage;
   if (contextBreakdown !== undefined) result.contextBreakdown = contextBreakdown;
@@ -200,6 +232,9 @@ function createCancelledChatResult({
  * Fehler-Ergebnis. usage/contextUsage werden nur aufgenommen, wenn sie
  * übergeben wurden — Frühabbrüche (z. B. leere Nachricht) bleiben so bei der
  * schlanken Form { error, code }, wie sie der Renderer erwartet.
+ *
+ * @param {ChatResultParts & { error?: Message|string, code?: string, partial?: boolean }} [parts]
+ * @returns {ChatErrorResult}
  */
 function createChatErrorResult({
   error,
@@ -210,6 +245,7 @@ function createChatErrorResult({
   toolTrace,
   partial = false,
 } = {}) {
+  /** @type {ChatErrorResult} */
   const result = { error, code };
   // The answer streamed so far stays: the round was cut off, not refused (#538).
   if (partial) result.partial = true;
@@ -432,6 +468,9 @@ function createWorkspaceFileReadEvent(relativePath) {
 /**
  * chat:progress mit type='permission' (Issue #66). Trägt nur bereinigte
  * Daten: Tool, Aufruf-Index, Ereignis und ggf. die Entscheidung.
+ *
+ * @param {string} event
+ * @param {{ callIndex?: number, tool?: string, response?: string, reason?: string, redactedCount?: number }} [details]
  */
 function createPermissionProgressEvent(event, { callIndex, tool, response, reason, redactedCount } = {}) {
   const out = { type: CHAT_PROGRESS_TYPES.PERMISSION, event: String(event ?? '') };

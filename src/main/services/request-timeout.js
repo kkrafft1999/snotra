@@ -21,6 +21,12 @@ function userMessageOf(err) {
 
 // Covers the complete operation, including response bodies. The race also
 // releases callers when a transport fails to honor its AbortSignal.
+/**
+ * @template T
+ * @param {(signal: AbortSignal) => Promise<T>} operation
+ * @param {{ timeoutMs?: number, signal?: AbortSignal }} [options]
+ * @returns {Promise<T>}
+ */
 async function withRequestTimeout(operation, { timeoutMs, signal } = {}) {
   const controller = new AbortController();
   const abort = () => controller.abort(
