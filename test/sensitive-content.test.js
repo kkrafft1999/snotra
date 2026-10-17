@@ -147,6 +147,21 @@ test('containsOwnSecret vergleicht nur ausreichend lange, wörtliche Treffer', (
   assert.equal(containsOwnSecret(null, ['sk-own-provider-key-123456']), false);
 });
 
+test('containsOwnSecret also reads the text without its line breaks and percent-decoded (#993)', () => {
+  const secret = 'c2stb3duLXByb3ZpZGVyLWtleQ';
+  // Wrapped, with real line breaks and with the JSON escapes of a tool result.
+  assert.equal(containsOwnSecret('c2stb3duLXBy\nb3ZpZGVyLWtleQ==', [secret]), true);
+  assert.equal(containsOwnSecret('c2stb3duLXBy\r\nb3ZpZGVyLWtleQ==', [secret]), true);
+  assert.equal(containsOwnSecret('{"stdout":"c2stb3duLXBy\\nb3ZpZGVyLWtleQ=="}', [secret]), true);
+  assert.equal(containsOwnSecret('{"stdout":"c2stb3duLXBy\\r\\nb3ZpZGVyLWtleQ=="}', [secret]), true);
+  // Escapes the list cannot hold: some characters only, or letters as well.
+  assert.equal(containsOwnSecret('key=p%40ss/w0rd-123456', ['p@ss/w0rd-123456']), true);
+  assert.equal(containsOwnSecret('key=%70%40ss%2fw0rd-123456', ['p@ss/w0rd-123456']), true);
+  // Neither view finds what is not there, and a broken escape is left alone.
+  assert.equal(containsOwnSecret('c2stb3duLXBy\nsomething else', [secret]), false);
+  assert.equal(containsOwnSecret('100% done, %zz, %4', ['p@ss/w0rd-123456']), false);
+});
+
 test('redactOwnSecrets entfernt eigene Geheimnisse und lässt den Rest lesbar', () => {
   const { redactOwnSecrets, MASK_TEXT } = require('../src/shared/runtime/sensitive-content');
 

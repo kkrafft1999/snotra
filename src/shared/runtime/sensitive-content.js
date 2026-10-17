@@ -201,19 +201,49 @@ function maskSensitiveContent(rawText) {
   return text;
 }
 
+// Line breaks inside an encoded value: GNU `base64` wraps at 76 characters,
+// `openssl base64` and `certutil` at 64, `xxd -p` at 60. A tool result is
+// JSON, so there they are the escapes `\n` and `\r\n` rather than the
+// characters themselves.
+const LINE_BREAKS = /\r?\n|\r|\\r\\n|\\n|\\r/g;
+const PERCENT_ESCAPE = /%([0-9A-Fa-f]{2})/g;
+
 /**
- * Prüft, ob der Text eines der eigenen Geheimnisse (z. B. konfigurierte
- * Provider-Schlüssel) wörtlich enthält (Konzept §5). Vergleicht nur, gibt
- * nichts aus.
+ * The text as the comparison sees it (#993): as it is, without its line
+ * breaks, and percent-decoded. The list of own secrets carries the encoded
+ * forms of each value (`main/services/own-secrets.js`); these views add what a
+ * list of fixed strings cannot hold — a base64 or hex value wrapped over
+ * several lines, and a URL that escapes only some characters, or escapes
+ * letters and digits too.
+ */
+function ownSecretViews(text) {
+  const views = [text];
+  const unwrapped = text.replace(LINE_BREAKS, '');
+  if (unwrapped !== text) views.push(unwrapped);
+  const decoded = text.replace(PERCENT_ESCAPE, (_escape, hex) => String.fromCharCode(parseInt(hex, 16)));
+  if (decoded !== text) views.push(decoded);
+  return views;
+}
+
+/**
+ * Whether the text contains one of the app's own secrets (configured provider
+ * keys and the like, concept §5) — in any form on the list, in any of the
+ * views above. Only compares, prints nothing.
  */
 function containsOwnSecret(rawText, secrets) {
   if (typeof rawText !== 'string' || !rawText) return false;
   if (!Array.isArray(secrets)) return false;
+  const needles = [];
   for (const secret of secrets) {
     if (typeof secret !== 'string') continue;
     const needle = secret.trim();
-    if (needle.length < 8) continue;
-    if (rawText.includes(needle)) return true;
+    if (needle.length >= 8) needles.push(needle);
+  }
+  if (needles.length === 0) return false;
+  for (const view of ownSecretViews(rawText)) {
+    for (const needle of needles) {
+      if (view.includes(needle)) return true;
+    }
   }
   return false;
 }
@@ -229,6 +259,10 @@ function containsOwnSecret(rawText, secrets) {
  * Dieselbe Untergrenze von acht Zeichen wie beim Vergleich: kuerzere Werte
  * kommen in beliebigem Text zufaellig vor, und eine Maske ueber jedem „de_DE"
  * machte die Meldung unlesbar, ohne etwas zu schuetzen.
+ *
+ * Masking works on the text as it is, so it covers every form on the list —
+ * the encoded ones included (#993) — but not the views of containsOwnSecret:
+ * a value wrapped over several lines, or escaped in a way of its own, stays.
  */
 function redactOwnSecrets(rawText, secrets) {
   if (typeof rawText !== 'string' || !rawText) return typeof rawText === 'string' ? rawText : '';
