@@ -13,7 +13,12 @@ const NOTICE_KINDS = Object.freeze({
   STORE_SET_ASIDE: 'store-set-aside',
   /** A file Snotra could not read stays as it is, so changes to it are not saved. */
   STORE_NOT_SAVED: 'store-not-saved',
+  /** Errors nobody caught, in main or in the window (#978); one notice counts them all. */
+  BACKGROUND_ERROR: 'background-error',
 });
+
+/** The one id of the background-error notice: a second error counts up instead of stacking. */
+const BACKGROUND_ERROR_NOTICE_ID = 'background-error';
 
 /**
  * The stores that keep an unreadable file aside (#473, #557, #561, #566), by
@@ -31,25 +36,37 @@ const NOTICE_STORES = Object.freeze({
 const NOTICE_STORE_IDS = Object.freeze([...new Set(Object.values(NOTICE_STORES))]);
 
 /**
- * A notice as it travels to the renderer: `{ id, kind, store, file, location,
- * canReveal }`. `id` is one per file, so a second set-aside of the same file
- * replaces the first notice rather than stacking up. `location` is the full
- * path the user may want to find: the kept copy after a set-aside, the file
- * itself while it is not saved. `canReveal` says whether there is one.
+ * A notice as it travels to the renderer.
+ *
+ * A store's notice is `{ id, kind, store, file, location, canReveal }`. `id`
+ * is one per file, so a second set-aside of the same file replaces the first
+ * notice rather than stacking up. `location` is the full path the user may
+ * want to find: the kept copy after a set-aside, the file itself while it is
+ * not saved. `canReveal` says whether there is one.
+ *
+ * The background-error notice is `{ id, kind, count, location, canReveal }`:
+ * how many errors this start has caught so far, and the log file they went to.
  */
 function normalizeNotice(input) {
   if (!input || typeof input !== 'object') return null;
-  const { id, kind, store, file, location } = input;
+  const { id, kind, location } = input;
   if (typeof id !== 'string' || !id) return null;
   if (!Object.values(NOTICE_KINDS).includes(kind)) return null;
+  const at = typeof location === 'string' && location ? location : null;
+  if (kind === NOTICE_KINDS.BACKGROUND_ERROR) {
+    const { count } = input;
+    if (!Number.isSafeInteger(count) || count < 1) return null;
+    return { id, kind, count, location: at, canReveal: !!at };
+  }
+  const { store, file } = input;
   if (!NOTICE_STORE_IDS.includes(store)) return null;
   if (typeof file !== 'string' || !file) return null;
-  const at = typeof location === 'string' && location ? location : null;
   return { id, kind, store, file, location: at, canReveal: !!at };
 }
 
 module.exports = {
   NOTICE_KINDS,
+  BACKGROUND_ERROR_NOTICE_ID,
   NOTICE_STORES,
   NOTICE_STORE_IDS,
   normalizeNotice,

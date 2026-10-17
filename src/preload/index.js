@@ -266,6 +266,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener(channel, listener);
   },
 
+  // The error path (#978): what the window's global handlers caught goes to
+  // main's log; the diagnostics report is built and copied by main.
+  reportUncaughtError: (report) => ipcRenderer.invoke(REQ.DIAGNOSTICS_REPORT_ERROR, report),
+  copyDiagnostics: () => ipcRenderer.invoke(REQ.DIAGNOSTICS_COPY),
+
   // Selbst-Update (Issue #232). Der Renderer nennt nie eine Adresse — er
   // stoesst nur an; was geladen wird, entscheidet der Main-Prozess.
   getAppVersion: () => ipcRenderer.invoke(REQ.UPDATE_GET_VERSION),

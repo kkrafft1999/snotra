@@ -101,6 +101,11 @@ export const SETTINGS_HELP = Object.freeze({
     slug: 'troubleshooting/files-set-aside',
     title: { en: 'When settings or the history start afresh', de: 'Wenn Einstellungen oder der Verlauf neu anfangen' },
   },
+  // The link in the notice about errors nobody caught (#978).
+  'notice.backgroundError': {
+    slug: 'troubleshooting/logs-and-reports',
+    section: { en: 'The log file', de: 'Die Logdatei' },
+  },
   'chat.saveNotice': {
     slug: 'troubleshooting/keychain-and-storage',
     section: { en: 'When a chat is not being saved', de: 'Wenn ein Chat nicht gespeichert wird' },

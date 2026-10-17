@@ -116,3 +116,33 @@ test('reveal shows the path main holds for the id, never one the renderer names'
   assert.deepEqual(await ipcMain.invoke(REQ.NOTICES_DISMISS, 'store:llm-config.json'), { ok: true });
   assert.deepEqual(await ipcMain.invoke(REQ.NOTICES_REVEAL, 'store:llm-config.json'), { ok: false });
 });
+
+test('the background-error notice carries a count and the log file, and nothing of a store (#978)', () => {
+  assert.deepEqual(
+    normalizeNotice({ id: 'background-error', kind: NOTICE_KINDS.BACKGROUND_ERROR, count: 3, location: '/l/main.log', store: 'models' }),
+    { id: 'background-error', kind: NOTICE_KINDS.BACKGROUND_ERROR, count: 3, location: '/l/main.log', canReveal: true },
+  );
+  assert.equal(normalizeNotice({ id: 'background-error', kind: NOTICE_KINDS.BACKGROUND_ERROR, count: 0 }), null);
+  assert.equal(normalizeNotice({ id: 'background-error', kind: NOTICE_KINDS.BACKGROUND_ERROR, count: 1.5 }), null);
+  assert.equal(
+    normalizeNotice({ id: 'background-error', kind: NOTICE_KINDS.BACKGROUND_ERROR, count: 1 }).canReveal,
+    false,
+  );
+});
+
+test('the reveal handler shows the log file of the background-error notice (#978)', async () => {
+  const handlers = new Map();
+  const shown = [];
+  const notices = createAppNotices({ log: quiet });
+  registerNoticeHandlers({
+    ipcMain: { handle: (channel, fn) => handlers.set(channel, fn) },
+    notices,
+    REQ,
+    PUSH,
+    getMainWindow: () => null,
+    shell: { showItemInFolder: (file) => shown.push(file) },
+  });
+  notices.post({ id: 'background-error', kind: NOTICE_KINDS.BACKGROUND_ERROR, count: 1, location: '/l/main.log' });
+  assert.deepEqual(await handlers.get(REQ.NOTICES_REVEAL)({}, 'background-error'), { ok: true });
+  assert.deepEqual(shown, ['/l/main.log']);
+});

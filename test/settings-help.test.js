@@ -79,8 +79,8 @@ test('the markup and the mapping name the same help links', () => {
   const keys = Object.keys(links.SETTINGS_HELP);
   // The header's button starts on Models and takes the key of whichever
   // section is open; every other entry has a button of its own.
-  // A notice's link is built with the notice (#1001), so it has no markup.
-  const builtByScript = new Set(['notice.store']);
+  // A notice's link is built with the notice (#1001, #978), so it has no markup.
+  const builtByScript = new Set(['notice.store', 'notice.backgroundError']);
   const sectionKeys = keys.filter((key) => !key.startsWith('panel.') && !builtByScript.has(key));
   for (const key of sectionKeys) assert.ok(inMarkup.has(key), `no button for "${key}" in index.html`);
   for (const key of inMarkup) assert.ok(keys.includes(key), `index.html names "${key}", the mapping does not`);

@@ -45,6 +45,8 @@ const MENU_ITEM_IDS = Object.freeze({
  * `locale` decides the labels (epic #277). The menu belongs to the main process
  * and is rebuilt on a language change — Electron cannot rename an item after
  * the fact. `showHiddenFiles` ticks the checkbox of the same name (#436).
+ * `onCopyDiagnostics` and `onShowLog` add the two diagnostics items to the
+ * Help menu (#978); without them the menu has none.
  */
 function createApplicationMenuTemplate({
   appName,
@@ -57,6 +59,8 @@ function createApplicationMenuTemplate({
   showHiddenFiles = false,
   onOpenManual = null,
   routeHistoryStep = null,
+  onCopyDiagnostics = null,
+  onShowLog = null,
 }) {
   const t = createTranslator(locale);
   // Auf macOS muss das ERSTE Submenu den App-Namen als label tragen — das ist
@@ -231,6 +235,10 @@ function createApplicationMenuTemplate({
         click: () => { onCheckForUpdates(); },
       },
       { type: 'separator' },
+      // What a bug report needs (#978): the report on the clipboard, the log in the file manager.
+      ...(onCopyDiagnostics ? [{ label: t('menu.help.copyDiagnostics'), click: () => { onCopyDiagnostics(); } }] : []),
+      ...(onShowLog ? [{ label: t('menu.help.showLog'), click: () => { onShowLog(); } }] : []),
+      ...(onCopyDiagnostics || onShowLog ? [{ type: 'separator' }] : []),
       {
         label: t('menu.help.github'),
         click: () => shell.openExternal('https://github.com/kkrafft1999/snotra'),

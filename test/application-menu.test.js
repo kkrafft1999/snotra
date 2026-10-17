@@ -268,3 +268,27 @@ test('Show Hidden Files follows the stored state and the language (#436)', () =>
   assert.equal(item.checked, true);
   assert.equal(item.label, 'Versteckte Dateien anzeigen');
 });
+
+test('Help › Copy diagnostics and Show log file call their callbacks, in both languages (#978)', () => {
+  const calls = [];
+  const callbacks = { onCopyDiagnostics: () => calls.push('copy'), onShowLog: () => calls.push('log') };
+  const { template } = buildTemplate('darwin', callbacks);
+  const labels = menuNamed(template, 'Help').submenu.map((item) => item.label ?? item.type);
+  assert.deepEqual(labels.slice(2, 7), ['Check for Updates…', 'separator', 'Copy Diagnostics', 'Show Log File', 'separator']);
+  menuNamed(template, 'Help').submenu.find((item) => item.label === 'Copy Diagnostics').click();
+  menuNamed(template, 'Help').submenu.find((item) => item.label === 'Show Log File').click();
+  assert.deepEqual(calls, ['copy', 'log']);
+
+  const de = buildTemplate('win32', { locale: 'de', ...callbacks });
+  const help = menuNamed(de.template, 'Hilfe').submenu.map((item) => item.label);
+  assert.ok(help.includes('Diagnose kopieren'));
+  assert.ok(help.includes('Logdatei zeigen'));
+});
+
+test('without the diagnostics callbacks the Help menu has no such items and no extra separator', () => {
+  const { template } = buildTemplate('darwin');
+  const items = menuNamed(template, 'Help').submenu;
+  assert.equal(items.some((item) => item.label === 'Copy Diagnostics'), false);
+  const separators = items.filter((item) => item.type === 'separator').length;
+  assert.equal(separators, 2);
+});

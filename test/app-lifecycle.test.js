@@ -111,6 +111,19 @@ test('a failed start-up is logged, shown in the system language and ends the app
   assert.deepEqual(app.calls, [['exit', 1]]);
 });
 
+test('with a log file, the start-up box says where it is (#978)', () => {
+  const app = makeApp({ locale: 'en-US' });
+  const boxes = [];
+  createStartupFailureHandler({
+    app,
+    dialog: { showErrorBox: (title, body) => boxes.push(body) },
+    log: { error: () => {} },
+    logFilePath: '/profile/logs/main.log',
+  })(new Error('store unreadable'));
+  assert.match(boxes[0], /store unreadable/);
+  assert.match(boxes[0], /The details are in the log file:\n\/profile\/logs\/main\.log$/);
+});
+
 test('the app ends even when the error box cannot be shown', () => {
   const app = makeApp();
   const fail = createStartupFailureHandler({

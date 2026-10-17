@@ -169,6 +169,12 @@ function createApplication({
    */
   session = null,
   WebContentsView = null,
+  /**
+   * The notices for the window (#1001). The caller may hand in its own, so
+   * that the error path it set up before the app was ready (#978) posts to
+   * the same list the window reads; without one a fresh list is made here.
+   */
+  notices: givenNotices = null,
 }) {
   // Every adapter below asks this `os` for the home folder (#707).
   const os = withHomeDir(baseOs);
@@ -177,7 +183,7 @@ function createApplication({
 
   // Notices for the window (#1001). Created first: the stores report what
   // they set aside while they are read, before the window exists.
-  const notices = createAppNotices();
+  const notices = givenNotices || createAppNotices();
 
   const storage = createStorageService({
     app,
