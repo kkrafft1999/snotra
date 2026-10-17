@@ -835,10 +835,28 @@ task lists render their checkboxes with it. The CSP says `media-src 'none'`:
 the voice recording records a stream and never plays one back.
 
 Two quirks hang on streaming: while the answer is running, `scheduleStreamRender`
-sets the complete `innerHTML` anew on every animation frame — which is why images
-get only a calm placeholder until the end. And completion cancels the still
-pending frame (`cancelStreamRender`), because it would otherwise write the
-intermediate state back over the image that was just loaded.
+draws it anew on every animation frame — which is why images get only a calm
+placeholder until the end. And completion cancels the still pending frame
+(`cancelStreamRender`), because it would otherwise write the intermediate state
+back over the image that was just loaded.
+
+**What a frame and a switch render**
+([#998](https://github.com/kkrafft1999/snotra/issues/998)). A frame of a
+streaming answer renders only its open block: `closedMarkdownLength` in
+`renderer/utils/helpers.js` says how much of the answer no further text can
+change, those blocks go on screen once and stay, and the rest goes through
+`marked` and DOMPurify again. Before, every frame rendered the whole answer so
+far, so the cost per frame grew with its length. A cut counts only after a blank
+line and once the next block's first line is complete; raw HTML and link
+definitions render the answer whole on every frame, as before, because cut
+apart they would come out differently. Each piece is sanitized on its own and
+appended as nodes, never as a string glued to the next one. When the run
+settles, the whole answer is rendered once more. Finished answers are rendered
+once and kept in a cache keyed by their Markdown (`renderFinishedAnswer` in
+`ChatStream.js`, up to 2 MB of Markdown, oldest out first): a chat switch, which
+draws every message again, copies their nodes with `importNode` instead of
+parsing and sanitizing them again. The images are resolved on the copy, against
+the folder open at the time.
 
 ## Workspace management in the main process
 

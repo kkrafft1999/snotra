@@ -10,6 +10,8 @@
 //   * Smaller ones from the bundle (#595): sizes by locale, the folder name.
 //   * A running turn is saved after every finished step; one cut off comes
 //     back marked as interrupted (#979).
+//   * A streaming answer renders only its open block on each frame, and a
+//     finished answer is rendered once and copied on the next redraw (#998).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -660,4 +662,140 @@ test('a run stopped by a reload is not saved as one the user stopped (#979)', as
   await flush();
   assert.equal(saves.length, 2, 'the save mid-run is the last one');
   assert.equal(lastTurn(saves[1]).streaming, true);
+});
+
+// --- #998 -----------------------------------------------------------------------
+
+/**
+ * Records what marked was asked to parse, until the test ends. Its exports are
+ * getters that ignore an assignment, so the spy is a copy of them.
+ */
+function spyOnMarkdown(t) {
+  const original = globalThis.marked;
+  const parsed = [];
+  const spy = {};
+  for (const key of Object.keys(original)) spy[key] = original[key];
+  spy.parse = (text, options) => {
+    parsed.push(text);
+    return original.parse(text, options);
+  };
+  globalThis.marked = spy;
+  t.after(() => { globalThis.marked = original; });
+  return parsed;
+}
+
+/** What rendering `markdown` as a whole puts into the answer, for comparison. */
+function wholeRender(markdown) {
+  const template = document.createElement('template');
+  template.innerHTML = globalThis.marked.parse(markdown, { breaks: true, gfm: true });
+  return template.innerHTML;
+}
+
+test('a streaming answer renders only its open block on each frame (#998)', async (t) => {
+  const env = await mount();
+  t.after(env.cleanup);
+  const { list, sends, ask, emit } = env;
+  ask('Plan it.');
+  await flush();
+  const stream = () => list.querySelector('.chat-msg.assistant:last-of-type .chat-md-streaming');
+
+  // Node identity is compared with `===`: a failing assert.equal on a
+  // happy-dom node spends minutes printing it.
+  emit('delta', sends[0], { text: '## The plan\n\nFirst we read the notes.\n\n' });
+  await nextFrame();
+  const heading = stream().querySelector('h2');
+  assert.ok(heading);
+
+  const text = '## The plan\n\nFirst we read the notes.\n\n- one\n- two\n\nThen we write the summary.\n';
+  const whole = wholeRender(text);
+  const parsed = spyOnMarkdown(t);
+  emit('delta', sends[0], { text: '- one\n- two\n' });
+  await nextFrame();
+  // The paragraph is closed now, the list is the open block.
+  const paragraph = stream().querySelector('p');
+  assert.ok(paragraph);
+  emit('delta', sends[0], { text: '\nThen we write' });
+  await nextFrame();
+  emit('delta', sends[0], { text: ' the summary.\n' });
+  await nextFrame();
+
+  assert.equal(stream().innerHTML, whole, 'the pieces add up to the whole answer');
+  assert.ok(stream().querySelector('h2') === heading, 'a finished block stays the node it was');
+  assert.ok(stream().querySelector('p') === paragraph, 'so does the paragraph closed on the way');
+  assert.ok(parsed.every((markdown) => !markdown.includes('The plan')), 'the heading is not parsed again');
+  assert.equal(parsed.filter((markdown) => markdown.includes('First we read')).length, 1, 'the paragraph is parsed once more, as it closes');
+  assert.equal(parsed.at(-1), 'Then we write the summary.\n', 'the last frame parses the open block alone');
+});
+
+test('a streaming answer with raw HTML is rendered whole on each frame (#998)', async (t) => {
+  const env = await mount();
+  t.after(env.cleanup);
+  const { list, sends, ask, emit } = env;
+  ask('Fold it.');
+  await flush();
+  const parsed = spyOnMarkdown(t);
+
+  emit('delta', sends[0], { text: '<details>\n\nInside the fold.\n\n' });
+  await nextFrame();
+  emit('delta', sends[0], { text: '</details>\n\nAfter' });
+  await nextFrame();
+
+  const text = '<details>\n\nInside the fold.\n\n</details>\n\nAfter';
+  assert.equal(parsed.at(-1), text);
+  const stream = list.querySelector('.chat-msg.assistant:last-of-type .chat-md-streaming');
+  assert.equal(stream.innerHTML, wholeRender(text));
+  assert.match(stream.querySelector('details').textContent, /Inside the fold/, 'the fold holds what was written into it');
+});
+
+test('a finished answer renders as the whole text once its run settles (#998)', async (t) => {
+  const env = await mount();
+  t.after(env.cleanup);
+  const { list, sends, ask, emit } = env;
+  ask('Plan it.');
+  await flush();
+  const text = 'First.\n\n- one\n- two\n\nLast.';
+  emit('delta', sends[0], { text });
+  await nextFrame();
+  sends[0].resolve({ content: text, toolTrace: [] });
+  await until(() => !list.querySelector('.chat-md-streaming'), 'the settled answer');
+  const answer = list.querySelector('.chat-msg.assistant:last-of-type .chat-md');
+  assert.equal(answer.innerHTML, wholeRender(text));
+});
+
+test('a finished answer is rendered once and copied on the next redraw (#998)', async (t) => {
+  const env = await mount();
+  t.after(env.cleanup);
+  const { chat, appStore, list, imageReads } = env;
+  const answers = ['## One\n\nFirst answer.', '## Two\n\n![chart](chart.png)\n\nSecond answer.'];
+  appStore.chatMessages = [
+    { role: 'user', content: 'First?' },
+    { role: 'assistant', content: answers[0] },
+    { role: 'user', content: 'Second?' },
+    { role: 'assistant', content: answers[1] },
+  ];
+  const parsed = spyOnMarkdown(t);
+  chat.renderChatMessages();
+  const before = [...list.querySelectorAll('.chat-msg.assistant .chat-md')];
+  await until(() => imageReads.length === 1, 'the image read');
+  await until(() => list.querySelector('.chat-md img')?.getAttribute('src'), 'the image shown');
+  assert.deepEqual(parsed, answers);
+
+  // Away and back: a chat switch draws the same answers again.
+  appStore.chatMessages = [{ role: 'user', content: 'Elsewhere' }];
+  chat.renderChatMessages();
+  appStore.chatMessages = [
+    { role: 'user', content: 'First?' },
+    { role: 'assistant', content: answers[0] },
+    { role: 'user', content: 'Second?' },
+    { role: 'assistant', content: answers[1] },
+  ];
+  chat.renderChatMessages();
+  const after = [...list.querySelectorAll('.chat-msg.assistant .chat-md')];
+  assert.deepEqual(parsed, answers, 'nothing was parsed again');
+  assert.equal(after.length, 2);
+  assert.ok(after[0].firstChild !== before[0].firstChild, 'each redraw gets nodes of its own');
+  assert.equal(after[0].innerHTML, before[0].innerHTML);
+  // The image is filled in on the copy, from the image cache this time.
+  await until(() => after[1].querySelector('img')?.getAttribute('src'), 'the image in the copy');
+  assert.equal(after[1].innerHTML, before[1].innerHTML);
 });
