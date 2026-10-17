@@ -72,6 +72,13 @@ static class StandIn {
 }
 `;
 
+const CONFIRM_SCRIPT = [
+  "const { service, version, userData } = require(require('node:path').join(__dirname, 'confirm.json'));",
+  'require(service).createUpdateService({ app: { getVersion: () => version, getPath: () => userData } })',
+  '  .confirmInstallStarted().then((ok) => process.exit(ok ? 0 : 9));',
+  '',
+].join('\n');
+
 let standInExe = '';
 before(() => {
   if (!onWindows) return;
@@ -192,13 +199,10 @@ async function makeFixture(t, timeoutMs, { newBehaviour = 'confirm', staged = fa
     await fsp.rm(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }).catch(() => {});
   });
 
-  // What the app does once its window is open.
-  await fsp.writeFile(fixture.confirmScript, [
-    `require(${JSON.stringify(SERVICE)}).createUpdateService({ app: {`,
-    `  getVersion: () => ${JSON.stringify(VERSION)},`,
-    `  getPath: () => ${JSON.stringify(userData)},`,
-    '} }).confirmInstallStarted().then((ok) => process.exit(ok ? 0 : 9));',
-  ].join('\n'));
+  // What the app does once its window is open. The script itself is fixed;
+  // what it needs comes from the JSON file next to it.
+  await fsp.writeFile(path.join(dir, 'confirm.json'), JSON.stringify({ service: SERVICE, version: VERSION, userData }));
+  await fsp.writeFile(fixture.confirmScript, CONFIRM_SCRIPT);
 
   await placeStandIn(fixture, fixture.installDir, 'old', 'exit');
   // The user kept the downloaded ZIP next to the program.
