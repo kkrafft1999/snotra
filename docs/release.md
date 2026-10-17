@@ -365,8 +365,39 @@ gh release create vX.Y.Z \
   "out/make/Snotra-Agent-X.Y.Z-mac-arm64.dmg#Snotra Agent (macOS, Apple Silicon)"
 ```
 
-The text from `--notes` becomes the release body and is shown as "what has
-changed" in the update dialog.
+The text from `--notes` becomes the release body. The update dialog does not
+show it as it stands — see the next section.
+
+### Notes for the user
+
+GitHub generates the release body from the pull request titles: one line per
+change, written for developers, most of them about tests, CI and documentation.
+The update dialog shows none of that (#1072). It shows only a section on top of
+the body, written for the user, in English and German, between markers that
+GitHub does not render:
+
+```markdown
+<!-- snotra:notes en -->
+- **Edit text files in the preview.** Changes are saved as you type.
+<!-- snotra:notes de -->
+- **Textdateien in der Vorschau bearbeiten.** Änderungen werden beim Tippen gespeichert.
+<!-- snotra:notes end -->
+
+## What's Changed
+…
+```
+
+The dialog picks the interface language and falls back to English; a body
+without the markers shows no notes box at all. The section is written once the
+pipeline has published the release, and can be rewritten at any time:
+
+```sh
+node scripts/release-user-notes.js vX.Y.Z --en notes.en.md --de notes.de.md
+```
+
+`--dry-run` prints the new body instead. A release that changes nothing a user
+notices still gets a section — one sentence saying so — otherwise the dialog
+offers the version without a word about it.
 
 ### Pre-releases
 
