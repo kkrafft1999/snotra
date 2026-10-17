@@ -431,7 +431,10 @@ test('the status file stays valid JSON whatever the reason says', { skip: SKIP }
 
   await runHelper(fixture, script);
 
+  // readStatus parsed it. How mv words the name differs — GNU quotes it the
+  // shell's way — so only the characters JSON has to escape are looked for.
   const status = readStatus(fixture);
   assert.equal(status.stage, 'swap');
-  assert.ok(status.error.includes('a "quoted" \\ back slash'), status.error);
+  assert.match(status.error, /a "quoted" \\ back/);
+  assert.doesNotMatch(status.error, /\t/, 'a tab becomes a space');
 });
