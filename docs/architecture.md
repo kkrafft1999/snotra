@@ -164,13 +164,15 @@ re-exports under `src/main/` are gone (#531).
 ## Ports
 
 **Application ports** (`src/application/ports/`) — the contracts between the
-application layer and main. There are 18. Twelve are consumed by the chat
+application layer and main. There are 19. Twelve are consumed by the chat
 engine (`llm`, `tool`, `chat-preferences`, `workspace-path`, `skill`,
 `environment`, `project-instructions`, `memory`, `own-secrets`, `tool-policy`,
 `tool-approval`, `config-proposal`); the other six — `web-search`, `url-fetch`,
 `code-execution`, `shell-execution`, `mcp` and `image-generation` — describe
 what main's tool registry calls and the core never sees
-([#982](https://github.com/kkrafft1999/snotra/issues/982)). `memory`'s
+([#982](https://github.com/kkrafft1999/snotra/issues/982)); and
+`user-confirmation` is what main's IPC handlers ask before anything loosens
+([#980](https://github.com/kkrafft1999/snotra/issues/980)). `memory`'s
 `remember`/`forget`/`paths` serve the tools and the settings as well. The
 typedefs are checked: the engine takes its ports typed
 (`ChatEngineDependencies` in `chat/chat-engine.js`), and every adapter names
@@ -195,6 +197,19 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   policy version; an answer can carry a decision and nothing else, and without
   an interface the request is refused (`no_approval_ui`). The checkpoints
   `access`, `output`, `sandbox` and `config` all travel through it
+- `user-confirmation-port` — a person at the machine confirms what loosens a
+  protection (#980): "Auto", an allow rule, a block or a sensitive pattern
+  taken away, the sandbox off, a program allowance, hosts kept for a
+  workspace, a reset — and an import or a skill made global. Its guarantee is
+  **presence**: only `main/adapters/native-confirmation-adapter.js`, the native
+  message box over the window, can confirm; every other front end gets
+  `createRefusingConfirmation` from `application/permissions/user-confirmation.js`
+  and confirms nothing. A confirmation hands out a **receipt** — an object the
+  registry knows by identity, good once, for its action and subject, for a
+  minute — and `services/tool-policy-store.js` refuses every loosening without
+  one (`permissions.error.notConfirmed`), so a path around the port loosens
+  nothing. The composition root gives the registry's `issue` to the adapter
+  and its `redeem` to the store. Taking a protection back needs no receipt
 - `config-proposal-port` — what a chat switched for itself, and how the model
   asks for a change (#774). The core asks the user on a card through the
   approval port and records the answer here; where the overrides are kept and
@@ -1191,7 +1206,10 @@ Two deliberately different rules for a new chat:
 - **Permission mode**: `smart` again every time. `auto` comes back only on an
   explicit switch in the history; on an automatic restore (app start, folder
   change) it falls back to `smart` — details in
-  [`security-concept.md`](./security-concept.md) §8.
+  [`security-concept.md`](./security-concept.md) §8. Even then the store's
+  `restoreMode` gives `auto` only to a chat it holds, signed, as confirmed for
+  `auto`, or whose workspace has `auto` as its confirmed default (#980); the
+  history file alone is not enough.
 
 An entry that no longer exists, or whose access is incomplete, falls back to the
 default (`isPresetUsable`) instead of opening the chat with a dead model.

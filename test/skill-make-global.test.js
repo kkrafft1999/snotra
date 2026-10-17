@@ -15,6 +15,12 @@ const { registerSkillMoveHandlers } = require('../src/main/ipc/skill-move-handle
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { SKILL_SOURCES } = require('../src/shared/contracts/skills');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+
+/** The dialog for notices, and the confirmation port over the same dialog (#980). */
+function withDialog(dialog) {
+  return { dialog, confirmations: createNativeConfirmationAdapter({ dialog }) };
+}
 
 async function makeTree(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-make-global-'));
@@ -142,7 +148,7 @@ function setupHandler({ workspace, home, answer = 0, prefs = {} }) {
       updateUIPrefs: async (fn) => { stored = await fn(structuredClone(stored)); },
     },
     getActiveWorkspaceRoot: () => workspace,
-    dialog: { showMessageBox: async (options) => { boxes.push(options); return { response: answer }; } },
+    ...withDialog({ showMessageBox: async (options) => { boxes.push(options); return { response: answer }; } }),
     getLocale: () => 'en',
   });
   return { invoke: (name) => ipcMain.invoke(REQ.SKILLS_MAKE_GLOBAL, name), boxes, prefs: () => stored };

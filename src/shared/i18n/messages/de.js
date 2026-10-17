@@ -1502,6 +1502,7 @@ module.exports = {
   'settings.permissions.actionFailed': 'Die Aktion ist fehlgeschlagen.',
   'permissions.error.unknownMode': 'Unbekannter Modus.',
   'permissions.error.autoNotEnabled': 'Auto wurde nicht eingeschaltet.',
+  'permissions.error.notConfirmed': 'Diese Änderung musst du an diesem Computer bestätigen. Es wurde nichts geändert.',
   'permissions.error.policyUnreadable': 'Die Berechtigungsdatei ließ sich nicht lesen, deshalb wurde nichts geändert. Versuch es gleich noch einmal.',
   'permissions.error.patternsNotRemoved': 'Die Muster wurden nicht geändert.',
   'permissions.error.resetCancelled': 'Es wurde nichts zurückgesetzt.',
