@@ -8,7 +8,7 @@ const fs = require('fs/promises');
 // watch() noch realpathSync.native.
 const { watch: watchFile, realpathSync } = require('fs');
 const providers = require('./providers');
-const { createWindow, getMainWindow } = require('./window');
+const { createWindow, getMainWindow, keepSpellCheckerOffWhereItFetches } = require('./window');
 const { registerMediaCapturePermissions } = require('./permissions');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../shared/ipc-channels');
 const workspaceState = require('./workspace-state');
@@ -42,6 +42,9 @@ const { registerDiagnosticsHandlers } = require('./ipc/diagnostics-handlers');
 // app.setName() weiterhin "Electron" stehen. Das ist ein bekanntes macOS-
 // Limit, kein Bug der App.
 app.setName(STORAGE_NAME);
+
+// PRI-1 (#988): Linux's spell checker would fetch a dictionary at start-up.
+keepSpellCheckerOffWhereItFetches();
 
 // The scheme of HTML pages in the preview (#479). Privileges can only be
 // given before the app is ready; the handler lives in the preview's own

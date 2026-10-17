@@ -28,6 +28,28 @@ const SHOW_FALLBACK_MS = 3000;
 // localStorage — so the dark one shows its own colour only once painted.
 const WINDOW_BACKGROUND = '#FFFCF5';
 
+// PRI-1 (#988): an idle session contacts nothing. Chromium's spell checker
+// breaks that on Linux: it has no OS spell checker there, and fetches a Hunspell
+// dictionary from a Google CDN (redirector.gvt1.com) the moment a session
+// exists, before a window opens and before anyone types. The idle network test
+// (e2e/idle-network.test.mjs) saw it on the Linux runner. macOS and Windows use
+// the OS spell checker and fetch nothing. So Linux runs without spell checking;
+// a local dictionary or a consent step would bring it back
+// (docs/quality-requirements.md, PRI-1).
+const SPELLCHECK_FETCHES_DICTIONARIES = process.platform === 'linux';
+
+// Per session, as the session is created: the download starts with the session,
+// and the first one is made by `session.defaultSession` early in start-up. An
+// empty language list makes the session drop the dictionary it is loading.
+// Called once from index.js, before the app is ready.
+function keepSpellCheckerOffWhereItFetches() {
+  if (!SPELLCHECK_FETCHES_DICTIONARIES) return;
+  app.on('session-created', (ses) => {
+    ses.setSpellCheckerEnabled(false);
+    ses.setSpellCheckerLanguages([]);
+  });
+}
+
 function windowStateStore() {
   return createWindowStateStore({
     filePath: path.join(app.getPath('userData'), 'window-state.json'),
@@ -82,6 +104,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      spellcheck: !SPELLCHECK_FETCHES_DICTIONARIES,
     },
     titleBarStyle: 'hiddenInset',
     backgroundColor: WINDOW_BACKGROUND,
@@ -185,5 +208,6 @@ function getMainWindow() {
 
 module.exports = {
   createWindow,
+  keepSpellCheckerOffWhereItFetches,
   getMainWindow,
 };
