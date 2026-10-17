@@ -25,8 +25,32 @@ const isOpen = (page, dirPath) => page.evaluate((p) =>
   document.querySelector(`#tree-container .tree-item[data-path="${CSS.escape(p)}"]`)
     ?.getAttribute('aria-expanded') === 'true', dirPath);
 
-const clickRow = (page, rowPath) => page.evaluate((p) =>
-  document.querySelector(`#tree-container .tree-item[data-path="${CSS.escape(p)}"]`)?.click(), rowPath);
+const clickRow = async (page, rowPath) => {
+  const clicked = await page.evaluate((p) => {
+    const row = document.querySelector(`#tree-container .tree-item[data-path="${CSS.escape(p)}"]`);
+    row?.click();
+    return Boolean(row);
+  }, rowPath);
+  assert.ok(clicked, `no row to click for ${rowPath}`);
+};
+
+// Opens a folder the first time and waits until its rows are drawn (#1033).
+// The arrow and aria-expanded turn as the click lands, ahead of the listing
+// (aria-busy says it is still loading), so 'expanded' alone does not mean
+// the child rows exist yet: on a slow runner the next click went to a row
+// that was not there. Clicks only a row that is drawn and collapsed, so a
+// redraw that puts a fresh, collapsed row in its place is clicked again.
+const openFolder = (page, dirPath, label) => poll(() => page.evaluate((p) => {
+  const row = document.querySelector(`#tree-container .tree-item[data-path="${CSS.escape(p)}"]`);
+  if (!row) return false;
+  if (row.getAttribute('aria-expanded') !== 'true' && !row.hasAttribute('aria-busy')) {
+    row.click();
+    return false;
+  }
+  const children = document.querySelector(`#tree-container .tree-children[data-path="${CSS.escape(p)}"]`);
+  return !row.hasAttribute('aria-busy')
+    && children?.dataset.loaded === 'true' && children.classList.contains('expanded');
+}, dirPath), { what: `${label} open with its rows drawn` });
 
 test('a folder closed during a merge from a worktree shows the merged files when reopened', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
@@ -54,9 +78,15 @@ test('a folder closed during a merge from a worktree shows the merged files when
 
   const at = (...parts) => path.join(workspace, ...parts);
   await poll(async () => (await treePaths(page)).includes(at('open')), { what: 'the tree' });
+  // When the watcher last reported, so the test can wait until it is done.
+  await page.evaluate(() => {
+    window.__lastTreeReport = 0;
+    window.electronAPI.onFsTreeChanged(() => { window.__lastTreeReport = Date.now(); });
+  });
+  const watcherQuiet = (what) => poll(
+    () => page.evaluate(() => Date.now() - window.__lastTreeReport >= 3000), { what });
   for (const dir of [['open'], ['open', 'graphics'], ['closed'], ['closed', 'graphics']]) {
-    await clickRow(page, at(...dir));
-    await poll(() => isOpen(page, at(...dir)), { what: `${dir.join('/')} open` });
+    await openFolder(page, at(...dir), dir.join('/'));
   }
   await poll(async () => (await treePaths(page)).includes(at('closed', 'graphics', 'old.svg')),
     { what: 'closed/graphics listed' });
@@ -64,11 +94,13 @@ test('a folder closed during a merge from a worktree shows the merged files when
   await clickRow(page, at('closed', 'graphics'));
   await poll(async () => !(await isOpen(page, at('closed', 'graphics'))), { what: 'closed/graphics closed' });
 
-  // When the watcher last reported, so the test can wait until it is done.
-  await page.evaluate(() => {
-    window.__lastTreeReport = 0;
-    window.electronAPI.onFsTreeChanged(() => { window.__lastTreeReport = Date.now(); });
-  });
+  // A report from before the merge must be through first (#1033). The app
+  // reports about the fresh workspace a moment after it starts; a check of
+  // every open folder that is still listing when the merge lands sees the new
+  // files and redraws closed/graphics — open when the check began — while it
+  // is closed, so the gap this test is about never opens. Seen with listings
+  // slowed to 400 ms, the speed of a busy runner.
+  await watcherQuiet('the watcher quiet before the merge');
 
   for (const dir of ['open', 'closed']) {
     await mkdir(path.join(worktree, dir, 'graphics', 'build'), { recursive: true });
@@ -91,8 +123,7 @@ test('a folder closed during a merge from a worktree shows the merged files when
   // in the case from #1017 the reports were long over when the folder was
   // opened again. A report later still makes this test prove less, never
   // fail; test/file-tree-dom.test.js covers the same without a watcher.
-  await poll(() => page.evaluate(() => Date.now() - window.__lastTreeReport >= 3000),
-    { what: 'the watcher quiet after the merge' });
+  await watcherQuiet('the watcher quiet after the merge');
   assert.equal(
     (await treePaths(page)).includes(at('closed', 'graphics', 'new.svg')), false,
     'closed, the folder still holds the rows it had'
