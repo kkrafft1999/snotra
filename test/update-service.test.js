@@ -415,6 +415,7 @@ function makeUserDataApp(t, version = '1.12.0') {
     dir,
     statusFile: path.join(dir, 'update-install-failed.json'),
     logFile: path.join(dir, 'update-install.log'),
+    pendingFile: path.join(dir, 'update-install-pending.json'),
     app: {
       getVersion: () => version,
       getPath: (name) => (name === 'userData' ? dir : os.tmpdir()),
@@ -423,7 +424,7 @@ function makeUserDataApp(t, version = '1.12.0') {
 }
 
 test('installUpdate gibt dem Installer Protokoll und Status im Benutzerordner mit', async (t) => {
-  const { app: userApp, logFile, statusFile } = makeUserDataApp(t, '1.0.0');
+  const { app: userApp, logFile, statusFile, pendingFile } = makeUserDataApp(t, '1.0.0');
   const seen = [];
   const svc = createUpdateService({
     app: userApp,
@@ -438,6 +439,7 @@ test('installUpdate gibt dem Installer Protokoll und Status im Benutzerordner mi
   await svc.installUpdate();
   assert.equal(seen[0].logFile, logFile);
   assert.equal(seen[0].statusFile, statusFile);
+  assert.equal(seen[0].pendingFile, pendingFile, 'the POSIX helper waits on it (#1003)');
 });
 
 test('readInstallFailure reports a failed swap until it is cleared (#573)', async (t) => {
@@ -453,6 +455,7 @@ test('readInstallFailure reports a failed swap until it is cleared (#573)', asyn
 
   const expected = {
     version: '1.13.0',
+    stage: 'swap',
     error: 'The process cannot access the file because it is being used by another process.',
     logFile: 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install.log',
   };
@@ -482,7 +485,59 @@ test('readInstallFailure uebersteht eine kaputte Datei und faellt auf das eigene
   assert.equal(fs.existsSync(statusFile), false, 'a file that cannot be read is dropped');
 
   fs.writeFileSync(statusFile, JSON.stringify({ version: '1.13.0' }));
-  assert.deepEqual(await svc.readInstallFailure(), { version: '1.13.0', error: '', logFile });
+  assert.deepEqual(await svc.readInstallFailure(), { version: '1.13.0', stage: 'swap', error: '', logFile });
+});
+
+test('readInstallFailure tells a version that did not start from a failed swap (#1003)', async (t) => {
+  const fs = require('node:fs');
+  const { app: userApp, statusFile } = makeUserDataApp(t);
+  // As the POSIX helper writes it.
+  fs.writeFileSync(statusFile, `${JSON.stringify({
+    version: '1.13.0',
+    stage: 'start',
+    error: 'the new version ended before it had started (exit code 1)',
+    log: '/home/k/.config/Snotra AI/update-install.log',
+    at: '2026-10-17T10:00:00Z',
+  })}\n`);
+  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+  assert.deepEqual(await svc.readInstallFailure(), {
+    version: '1.13.0',
+    stage: 'start',
+    error: 'the new version ended before it had started (exit code 1)',
+    logFile: '/home/k/.config/Snotra AI/update-install.log',
+  });
+
+  fs.writeFileSync(statusFile, JSON.stringify({ version: '1.13.0', stage: 'something else' }));
+  assert.equal((await svc.readInstallFailure()).stage, 'swap', 'an unknown stage reads as the old message');
+});
+
+test('confirmInstallStarted removes the record of this version, so the helper deletes the backup (#1003)', async (t) => {
+  const fs = require('node:fs');
+  const { app: userApp, pendingFile } = makeUserDataApp(t, '1.13.0');
+  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+
+  assert.equal(await svc.confirmInstallStarted(), false, 'nothing waits: nothing to do');
+
+  fs.writeFileSync(pendingFile, '{"version":"1.13.0"}\n');
+  assert.equal(await svc.confirmInstallStarted(), true);
+  assert.equal(fs.existsSync(pendingFile), false);
+});
+
+test('confirmInstallStarted leaves a record for a newer version, and drops a stale one (#1003)', async (t) => {
+  const fs = require('node:fs');
+  const { app: userApp, pendingFile } = makeUserDataApp(t, '1.13.0');
+  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+
+  // The helper is still deciding about 1.14.0 and is about to put this one back.
+  fs.writeFileSync(pendingFile, '{"version":"1.14.0"}');
+  assert.equal(await svc.confirmInstallStarted(), false);
+  assert.equal(fs.existsSync(pendingFile), true);
+
+  for (const leftOver of ['{"version":"1.12.0"}', '{ not json', '{}']) {
+    fs.writeFileSync(pendingFile, leftOver);
+    assert.equal(await svc.confirmInstallStarted(), false, leftOver);
+    assert.equal(fs.existsSync(pendingFile), false, `${leftOver} is a leftover`);
+  }
 });
 
 // #568: Cancel used to reach only the transfer. Pressed while the fresh check

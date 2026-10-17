@@ -1222,6 +1222,8 @@ module.exports = {
   'update.available.manualHint': 'This installation cannot update itself.',
   'update.available.lastFailed': 'Last time, version {version} could not be put in place ({error}), so version {current} is still running. Close any window that shows the Snotra Agent folder, then try again. The log is at {log}.',
   'update.available.lastFailedPlain': 'Last time, version {version} could not be put in place, so version {current} is still running. Close any window that shows the Snotra Agent folder, then try again. The log is at {log}.',
+  'update.available.lastFailedStart': 'Last time, version {version} was put in place but did not start ({error}), so Snotra went back to version {current}. The log is at {log}.',
+  'update.available.lastFailedStartPlain': 'Last time, version {version} was put in place but did not start, so Snotra went back to version {current}. The log is at {log}.',
   'update.download': 'Download',
   'update.retry': 'Try again',
   'update.openReleasePage': 'Open release page',

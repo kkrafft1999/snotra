@@ -85,9 +85,12 @@ test('createApplication exposes lifecycle API only', async (t) => {
 
   assert.deepEqual(
     Object.keys(app).sort(),
-    ['dispose', 'getAppLocale', 'getShowHiddenFiles', 'getValidatedLastFolder', 'initToolRuntimes', 'runUpdateCheck', 'whenWritesSettled'].sort(),
+    ['confirmUpdateStarted', 'dispose', 'getAppLocale', 'getShowHiddenFiles', 'getValidatedLastFolder', 'initToolRuntimes',
+      'runUpdateCheck', 'whenWritesSettled'].sort(),
   );
   assert.equal(typeof app.runUpdateCheck, 'function');
+  // Called once the window is open, so a waiting update helper keeps the new version (#1003).
+  assert.equal(typeof await app.confirmUpdateStarted(), 'boolean');
   assert.equal(typeof app.dispose, 'function');
   await app.whenWritesSettled(); // the quit waits for it (#679)
   assert.equal(typeof app.getValidatedLastFolder, 'function');

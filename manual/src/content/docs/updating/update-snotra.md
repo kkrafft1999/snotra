@@ -45,11 +45,14 @@ Your chats, settings and keys stay where they are: they live in the [profile fol
 
 Snotra downloads only the file that GitHub names for your installation, and it checks it before replacing anything: the download must match the checksum GitHub lists for it, and on macOS the app inside must be Snotra Agent in the version announced. If a check fails, the file is thrown away and the running version stays untouched.
 
+[since 1.25] On macOS and Linux the previous version is kept until the new one has opened its window. If the new version closes right away or has not opened within two minutes, Snotra puts the previous version back, starts it, and tells you at the next start.
+
 ## If it doesn't work
 
 - ***The update did not work.*** The dialog names the reason and the running version is unchanged. *Try again* repeats the download; *Open release page* lets you fetch the version yourself.
 - ***Couldn’t check for updates.*** The check got no usable answer from GitHub, so Snotra cannot tell whether a new version exists. The dialog names the reason; *Open release page* shows the latest version in your browser.
 - ***GitHub is limiting requests from your network right now.*** GitHub answers only a limited number of update checks per hour from one network address. Behind a VPN or in a company network that budget is shared with everyone else on the same address, so it can run out without you doing anything. The dialog names the time from which it works again — check then, or use the release page.
 - ***The update server cannot be reached.*** You are offline, or something between you and GitHub — a proxy, a firewall — blocks it. Try again later, or use the release page from a connection that works.
-- **Windows: *Last time, version … could not be put in place*.** The replacement failed after Snotra had quit, usually because a window or another program still had the Snotra Agent folder open. Close those and try again; the dialog gives the path of a log with the details.
+- ***Last time, version … could not be put in place*.** The replacement failed after Snotra had quit. On Windows this usually means a window or another program still had the Snotra Agent folder open: close those and try again. The dialog gives the path of a log with the details. [since 1.25] macOS and Linux report this too.
+- [since 1.25] ***Last time, version … was put in place but did not start*.** macOS and Linux only. The new version closed right away or did not open its window within two minutes, so Snotra went back to the previous one. Your chats and settings are not affected. Try again; if it happens again, [report it](../../troubleshooting/logs-and-reports/) and attach the log the dialog names.
 - **Nothing is offered although a new version exists.** You may have skipped it, or *Check for updates at start-up* is off: use *Check for updates*, which shows it anyway. Pre-releases are never offered; only the latest regular release is.

@@ -5,7 +5,7 @@ sidebar:
   order: 4
 ---
 
-[since 1.25] Snotra writes its own warnings and errors to a log file on your computer. Together with a few other places — the tool log in the chat, the developer tools of the window, and the update log on Windows — it holds what a bug report needs. This page shows where each one is and what to send along when you report a problem.
+[since 1.25] Snotra writes its own warnings and errors to a log file on your computer. Together with a few other places — the tool log in the chat, the developer tools of the window, and the update log — it holds what a bug report needs. This page shows where each one is and what to send along when you report a problem.
 
 ## What you need
 
@@ -21,7 +21,7 @@ The chat or the dialog where the problem showed, and for a report a GitHub accou
 | The tool log itself shows something odd — a line stays empty, a step is missing | Press `Cmd+Shift+D` / `Ctrl+Shift+D`. Snotra copies the tool log diagnostics as JSON to the clipboard and says *Tool log diagnostics copied*. |
 | An error from the provider | The red box under your message: [When the model reports an error](../provider-errors/). |
 | The window shows something wrong or stops reacting | The log file first. For more, *View › Developer Tools*, the tab *Console*: errors are listed in red. |
-| An update on Windows did not go through | `update-install.log` in the profile folder; the update dialog names its path. |
+| An update did not go through, or the new version did not start | `update-install.log` in the profile folder; the update dialog names its path. |
 | Snotra does not start at all | The box that says so names the log file. If no box appears, start Snotra from a terminal, see below. |
 
 ## The log file

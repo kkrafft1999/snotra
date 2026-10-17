@@ -25,6 +25,7 @@ const {
   buildWindowsSwapScript,
   buildWindowsLaunchCommand,
   encodePowerShell,
+  ereEscape,
   listForeignEntries,
   macTargetBundlePath,
   readAsarPackageJson,
@@ -95,48 +96,92 @@ test('Pfade werden fuer beide Skriptsprachen sicher eingebettet', () => {
   assert.equal(psQuote("C:\\Kon's App"), "'C:\\Kon''s App'");
 });
 
-test('das macOS-Helferskript wartet, raeumt auf und startet neu', () => {
-  const script = buildMacRelaunchScript({
-    pid: 99,
-    appBundlePath: '/Applications/Snotra Agent.app',
-    backupPath: '/Applications/.snotra-old-1.app',
-    workDir: '/tmp/snotra-update',
-  });
-  assert.match(script, /^#!\/bin\/sh/);
-  assert.match(script, /pid=99/);
-  assert.match(script, /while kill -0 "\$pid"/);
-  assert.match(script, /rm -rf '\/Applications\/\.snotra-old-1\.app'/);
-  assert.match(script, /open '\/Applications\/Snotra Agent\.app'/);
-  // Die Reihenfolge ist der Punkt: erst warten, dann anfassen.
-  assert.ok(script.indexOf('kill -0') < script.indexOf('rm -rf'));
-  assert.ok(script.indexOf('rm -rf') < script.indexOf('open '));
+const POSIX_FILES = Object.freeze({
+  version: '1.8.0',
+  logFile: '/home/k/.config/Snotra AI/update-install.log',
+  statusFile: '/home/k/.config/Snotra AI/update-install-failed.json',
+  pendingFile: '/home/k/.config/Snotra AI/update-install-pending.json',
 });
 
-test('das AppImage-Skript ersetzt die Datei und macht sie ausfuehrbar', () => {
+/** `a` comes before `b` in `text`, and both are there. */
+function assertOrder(text, ...parts) {
+  let at = -1;
+  for (const part of parts) {
+    const next = text.indexOf(part, at + 1);
+    assert.ok(next > at, `"${part}" should follow the previous step`);
+    at = next;
+  }
+}
+
+// What the scripts do is run for real in update-installer-posix.test.js
+// (#1003); here only what they are built from.
+test('the macOS helper waits, starts the new bundle, and deletes the backup only once it has started', () => {
+  const script = buildMacRelaunchScript({
+    pid: 99,
+    appBundlePath: '/Applications/Snotra AI.app',
+    targetBundlePath: '/Applications/Snotra Agent.app',
+    backupPath: '/Applications/.snotra-old-1.app',
+    workDir: '/tmp/snotra-update',
+    ...POSIX_FILES,
+  });
+  assert.match(script, /^#!\/bin\/sh\npid=99\n/);
+  assert.ok(script.includes(`logfile=${shQuote(POSIX_FILES.logFile)}`));
+  assert.ok(script.includes(`pending=${shQuote(POSIX_FILES.pendingFile)}`));
+  assert.ok(script.includes("app='/Applications/Snotra AI.app'"), 'a rollback puts the old bundle at its old path');
+  assert.ok(script.includes("target='/Applications/Snotra Agent.app'"));
+  assert.ok(script.includes("pattern='/Applications/Snotra Agent\\.app/Contents/'"), 'pkill matches the path literally');
+  assertOrder(script, 'if ! wait_for_quit', 'announce_start', 'open -W -n "$target"', 'if await_start',
+    'rm -rf "$backup"', 'confirmed', 'stop_new', 'record start', 'if roll_back', 'open "$app"');
+});
+
+test('the AppImage helper keeps the old file until the new one has started', () => {
   const script = buildLinuxAppImageScript({
     pid: 7,
     appImagePath: '/home/k/Apps/Snotra.AppImage',
     stagedPath: '/home/k/Apps/Snotra.AppImage.new-1',
+    backupPath: '/home/k/Apps/Snotra.AppImage.old-1',
     workDir: '/tmp/snotra-update',
+    ...POSIX_FILES,
   });
-  assert.match(script, /mv -f '\/home\/k\/Apps\/Snotra\.AppImage\.new-1' '\/home\/k\/Apps\/Snotra\.AppImage'/);
-  assert.match(script, /chmod 755 '\/home\/k\/Apps\/Snotra\.AppImage'/);
-  assert.match(script, /exec '\/home\/k\/Apps\/Snotra\.AppImage'/);
+  assert.ok(script.includes("image='/home/k/Apps/Snotra.AppImage'"));
+  assert.ok(script.includes("backup='/home/k/Apps/Snotra.AppImage.old-1'"));
+  assertOrder(script, 'if ! wait_for_quit', 'mv -f "$image" "$backup"', 'mv -f "$staged" "$image"',
+    'chmod 755 "$image"', 'announce_start', '"$image" >/dev/null 2>&1 &', 'if await_start "$child"',
+    'rm -f "$backup"', 'confirmed', 'stop_new "$child"', 'record start', 'mv -f "$backup" "$image"', 'exec "$image"');
 });
 
-test('das Linux-Ordner-Skript stellt bei einem Fehlschlag die alte Version zurueck', () => {
+test('the Linux folder helper puts the old version back when either move or the start fails', () => {
   const script = buildLinuxDirScript({
     pid: 7,
     installDir: '/home/k/apps/snotra-ai',
     stagedDir: '/home/k/apps/.snotra-new-1',
     backupDir: '/home/k/apps/.snotra-old-1',
     workDir: '/tmp/snotra-update',
+    binaryName: 'Snotra Agent',
+    previousBinaryName: 'Snotra AI',
+    ...POSIX_FILES,
   });
-  assert.match(script, /mv '\/home\/k\/apps\/snotra-ai' '\/home\/k\/apps\/\.snotra-old-1'/);
-  assert.match(script, /if ! mv '\/home\/k\/apps\/\.snotra-new-1' '\/home\/k\/apps\/snotra-ai'; then/);
+  assert.ok(script.includes("bin='/home/k/apps/snotra-ai/Snotra Agent'"));
+  assert.ok(script.includes("oldbin='/home/k/apps/snotra-ai/Snotra AI'"), 'a rollback starts the old name (#794)');
   // Der Rueckweg muss im Fehlerzweig stehen, sonst steht der Nutzer ohne App da.
-  assert.match(script, /\n {2}mv '\/home\/k\/apps\/\.snotra-old-1' '\/home\/k\/apps\/snotra-ai'\n {2}exit 1/);
-  assert.match(script, /exec '\/home\/k\/apps\/snotra-ai\/Snotra Agent'/);
+  assert.match(script, /if ! out=\$\(mv "\$staged" "\$install" 2>&1\); then\n {2}mv "\$backup" "\$install"\n/);
+  assertOrder(script, 'if ! wait_for_quit', 'mv "$install" "$backup"', 'mv "$staged" "$install"',
+    'announce_start', '"$bin" >/dev/null 2>&1 &', 'if await_start "$child"', 'rm -rf "$backup"', 'confirmed',
+    'stop_new "$child"', 'record start', 'rm -rf "$install"', 'mv "$backup" "$install"', 'relaunch_old');
+});
+
+test('a time-out of the helper is given in seconds and checked in steps of 0.2 seconds', () => {
+  const script = buildLinuxDirScript({
+    pid: 7, installDir: '/a/app', stagedDir: '/a/.new', backupDir: '/a/.old', workDir: '/w',
+    ...POSIX_FILES, quitSeconds: 3, startSeconds: 2,
+  });
+  assert.match(script, /\[ "\$i" -ge 15 \] && return 1/);
+  assert.match(script, /if \[ "\$i" -ge 10 \]; then\n {6}reason='the new version did not start within 2 seconds'/);
+  assert.ok(script.includes("record swap 'the app did not quit within 3 seconds'"));
+});
+
+test('ereEscape makes a path a literal pattern for pkill', () => {
+  assert.equal(ereEscape('/A (1)/x.app/C+[d]{e}|f^$*?\\'), '/A \\(1\\)/x\\.app/C\\+\\[d\\]\\{e\\}\\|f\\^\\$\\*\\?\\\\');
 });
 
 const WINDOWS_SCRIPT_ARGS = Object.freeze({
@@ -482,7 +527,7 @@ test('macOS: mounten, herauskopieren, pruefen, tauschen, neu starten', async (t)
     workDir,
   });
 
-  assert.deepEqual(result, { ok: true, relaunching: true });
+  assert.deepEqual(result, { ok: true, relaunching: true, logFile: path.join(root, 'snotra-update.log') });
   const commands = runs.map((r) => path.basename(r.cmd));
   assert.deepEqual(commands, ['hdiutil', 'ditto', 'hdiutil', 'plutil', 'xattr']);
   assert.ok(!runs[0].args.includes('-noverify'), 'the DMG checks its own checksums (#569)');
@@ -723,7 +768,7 @@ test('Linux-AppImage: die neue Datei wird danebengelegt, nicht sofort getauscht'
     workDir,
   });
 
-  assert.deepEqual(result, { ok: true, relaunching: true });
+  assert.deepEqual(result, { ok: true, relaunching: true, logFile: path.join(root, 'snotra-update.log') });
   assert.equal(await fsp.readFile(appImagePath, 'utf8'), 'alt', 'erst das Helferskript tauscht');
   const staged = (await fsp.readdir(root)).find((n) => n.startsWith('Snotra.AppImage.new-'));
   assert.ok(staged, 'die neue Datei liegt bereit');
@@ -817,15 +862,16 @@ test('macOS: a bundle under the other name replaces ours and takes that name (#7
     workDir: path.join(root, 'work'),
   });
 
-  assert.deepEqual(result, { ok: true, relaunching: true });
+  assert.deepEqual(result, { ok: true, relaunching: true, logFile: path.join(root, 'snotra-update.log') });
   const entries = (await fsp.readdir(appsDir)).sort();
   const backup = entries.find((name) => name.startsWith('.snotra-old-'));
   assert.deepEqual(entries, [backup, `${OTHER_NAME}.app`].sort());
   assert.match(backup, /^\.snotra-old-\d+\.app$/, 'the old bundle waits as the backup the helper removes');
   assert.equal(await fsp.readFile(path.join(appsDir, `${OTHER_NAME}.app`, 'new.txt'), 'utf8'), 'new');
   const script = await fsp.readFile(launches[0].args[0], 'utf8');
-  assert.ok(script.includes(`open ${shQuote(path.join(appsDir, `${OTHER_NAME}.app`))}`));
-  assert.ok(script.includes(`rm -rf ${shQuote(path.join(appsDir, backup))}`));
+  assert.ok(script.includes(`target=${shQuote(path.join(appsDir, `${OTHER_NAME}.app`))}`));
+  assert.ok(script.includes(`app=${shQuote(appBundlePath)}`), 'a rollback puts the old one back under its name');
+  assert.ok(script.includes(`backup=${shQuote(path.join(appsDir, backup))}`));
 });
 
 test('Windows: a package under the other name is installed and started under that name (#794)', async (t) => {
@@ -887,9 +933,9 @@ test('Linux-Ordner: a package under the other name is swapped in and started und
     workDir: path.join(root, 'work'),
   });
 
-  assert.deepEqual(result, { ok: true, relaunching: true });
+  assert.deepEqual(result, { ok: true, relaunching: true, logFile: path.join(root, 'snotra-update.log') });
   const script = await fsp.readFile(launches[0].args[0], 'utf8');
-  assert.ok(script.endsWith(`exec ${shQuote(path.join(installDir, OTHER_NAME))}\n`));
+  assert.ok(script.includes(`bin=${shQuote(path.join(installDir, OTHER_NAME))}`));
 });
 
 test('Windows: staging folders an earlier attempt left behind are removed, nothing else (#914)', async (t) => {

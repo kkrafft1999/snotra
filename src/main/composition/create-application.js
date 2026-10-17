@@ -1055,6 +1055,8 @@ function createApplication({
 
   return {
     runUpdateCheck,
+    /** Once the window is open: an update helper waiting for this start may delete the old version (#1003). */
+    confirmUpdateStarted: () => updates.confirmInstallStarted?.() ?? Promise.resolve(false),
     dispose,
     /** The quit waits for this before the process ends (#679). */
     whenWritesSettled: () => storage.whenWritesSettled(),
