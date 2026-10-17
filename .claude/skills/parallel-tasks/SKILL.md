@@ -4,7 +4,8 @@ description: >-
   Builds an overview of what is already running and proposes 3–5 further tasks
   from the board that can run in parallel with it, each with a suggested model
   and reasoning effort; the user picks tasks and models, and every picked task
-  is started as its own linked Claude Code session. Triggers on sentences like
+  is started as its own linked Claude Code session; once all are done, their
+  worktrees and local branches are cleaned up. Triggers on sentences like
   "was kann ich parallel angehen?", "gib mir die nächsten Aufgaben zum
   Parallelisieren", "Übersicht über mögliche nächste Aufgaben", "was können wir
   noch parallel starten?", "starte weitere Aufgaben in eigenen Sessions",
@@ -149,6 +150,8 @@ then call `mcp__ccd_session__start_session`:
   Move the issue to "In progress" on board 2 when you start.
   Other worktrees run their tests at the same time and share node_modules:
   rerun once on ENOTEMPTY or a locked file before suspecting your change.
+  Leave this worktree and branch in place after the merge; the planning
+  session removes them.
   ```
 
 - `background` (at least 80 characters): that this session was started by the
@@ -159,6 +162,42 @@ After the calls, one short German summary: which sessions run (linked as
 `[title](#local_<id>)`), on which model and effort, and which tasks were not
 started. Then stop — do not poll. When a session reports back, check its PR
 before telling the user it is done.
+
+## Step 6 — clean up once all tasks are done
+
+When the last session started in Step 5 has finished, the planning session
+tidies up locally — always, without being asked. "Finished" means: every
+session has stopped working, and its PR is **merged** or the task was
+abandoned. One that is still running or waiting on the user keeps its worktree;
+report it and clean up only the others.
+
+For each finished session (`list_sessions` with `linked: true` gives branch
+and `cwd`):
+
+1. **Merge confirmed** — `gh pr view <nr> --json state,headRefOid` says
+   `MERGED`, and `headRefOid` equals the local branch tip
+   (`git rev-parse <branch>`). A squash merge leaves the branch unmerged in
+   git's eyes, so `git branch -d` refuses; this check is what makes
+   `git branch -D` safe. Different SHAs mean local commits that never reached
+   the PR — stop and ask.
+2. **Nothing unique left in the worktree** — in this order, because
+   `git status` refreshes the index and hides its timestamp:
+   1. the timestamp of `.git/worktrees/<name>/index`, read first;
+   2. `ls -A <worktree>/out` — `out/` is gitignored, and builds, mockups and
+      reports live there; `git worktree remove` deletes them without asking;
+   3. `git -C <worktree> status --porcelain` — must be empty.
+
+   Anything found: name it to the user and leave that worktree in place.
+3. **Remove** — `git worktree remove <worktree>`, then `git branch -D
+   <branch>`. GitHub has already deleted the remote branch on merge
+   (`delete_branch_on_merge`); never delete a remote branch by hand.
+
+Then, in the main checkout: `git worktree prune`, `git fetch --prune`, and
+`git pull --ff-only` on `main`, so the merged work is there locally.
+
+Finish with one German line per task: PR merged, worktree and branch removed,
+or what was kept and why. Offer to archive the finished sessions — archive
+only on the user's yes.
 
 ## Notes
 
