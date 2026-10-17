@@ -33,7 +33,7 @@ Was ein Chat von sich aus darf, hängt von seinem Modus und von der Risikoklasse
 - **Keine eigenen Mails, Nachrichten, Kalender oder Tickets.** Das geht nur über einen MCP-Server, den du anbindest.
 - **Keine Office-Dateien oder PDFs schreiben.** Snotra liest ihren Text, aber kein Tool legt sie an oder ändert sie.
 - **Nichts außerhalb des geöffneten Ordners ungefragt.** Ein Pfad außerhalb wird in jedem Modus auf einer Karte erfragt; dein Benutzerordner als Ganzes, die Wurzel eines Laufwerks und Snotras eigener Speicher werden nie angeboten.
-- **Keine Befehle, die weiterlaufen.** Jeder Befehl und jeder Python-Aufruf läuft einmal und endet: Zwischen zwei Aufrufen bleibt nichts erhalten, nichts wartet auf eine Eingabe, nichts läuft im Hintergrund weiter.
+- **Keine Befehle, die weiterlaufen.** Jeder Befehl und jeder Python-Aufruf läuft einmal und endet: Zwischen zwei Aufrufen bleibt nichts erhalten, nichts wartet auf eine Eingabe, und was ein Befehl im Hintergrund startet, endet mit ihm — [seit 1.25] auch unter Windows. Übrig bleiben kann ein Programm, das sich absichtlich ablöst (ein Daemon, unter macOS oder unter Linux ohne Sandbox), und unter Windows eines, das Windows für den Befehl startet, etwa eine geplante Aufgabe, ein Dienst oder eine Office-Anwendung, die der Befehl steuert. Lässt Windows Snotra den Hintergrund nicht beenden — weil deine Organisation PowerShell einschränkt oder gar keine PowerShell da ist —, läuft der Befehl trotzdem, und seine Ausgabe sagt es.
 - **Keine Änderung an den eigenen Einstellungen.** Das Modell kann vorschlagen, einen Skill oder ein Tool für den Chat einzuschalten, aber erst dein Klick auf diese Karte tut es — Modus, Schlüssel und dauerhafte Einstellungen bleiben bei dir.
 
 ## Ohne geöffneten Ordner

@@ -33,7 +33,7 @@ What a chat may do on its own depends on its mode and on the risk class of each 
 - **No mail, messages, calendar or tickets of its own.** That comes only through an MCP server you connect.
 - **No Office files or PDFs written.** Snotra reads their text, but no tool creates or changes them.
 - **No work outside the open folder unasked.** A path outside it is asked about on a card in every mode; your home folder as a whole, the root of a disk and Snotra's own storage are never offered.
-- **No commands that keep running.** Each command or Python call runs once and ends: nothing is kept between calls, nothing waits for input, nothing stays in the background.
+- **No commands that keep running.** Each command or Python call runs once and ends: nothing is kept between calls, nothing waits for input, and what a command starts in the background ends with it — [since 1.25] on Windows as well. What can stay behind is a program that detaches itself on purpose (a daemon, on macOS or on Linux without the sandbox) and, on Windows, a program that Windows starts for the command, such as a scheduled task, a service or an Office application the command controls. Where Windows does not let Snotra end the background — PowerShell restricted by your organisation, or no PowerShell at all — the command still runs, and its output says so.
 - **No changes to its own settings.** The model can suggest switching a skill or tool on for the chat, but only your click on that card does it — the mode, keys and lasting settings stay yours.
 
 ## Without an open folder

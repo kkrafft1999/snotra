@@ -23,6 +23,7 @@
 
 const { PYTHON_EXECUTION_LIMITS } = require('../../application/ports/code-execution-port');
 const { createChildRunner } = require('./child-run');
+const { pythonJobArgs } = require('./windows-job');
 const { planSpawn } = require('./sandboxed-spawn');
 const { createMessage } = require('../../shared/contracts/message');
 
@@ -231,15 +232,23 @@ function createPythonRunnerService({
     // What the script printed so far, for the card about a waiting connection.
     let readOutput = null;
     let target;
+    // -B: keine .pyc-Dateien neben dem Skript. -u: ungepuffert, sonst geht
+    // die Ausgabe eines abgebrochenen Laufs verloren.
+    const pythonArgs = ['-B', '-u', scriptPath, ...normalizeArgv(argv)];
     try {
       target = await planSpawn({
         sandbox,
         // Switched off for this workspace by the user (#357).
         disabled: sandboxDisabled === true,
         grants: sandboxGrants,
-        // -B: keine .pyc-Dateien neben dem Skript. -u: ungepuffert, sonst
-        // geht die Ausgabe eines abgebrochenen Laufs verloren.
-        argv: [detected.command, ...(detected.args || []), '-B', '-u', scriptPath, ...normalizeArgv(argv)],
+        // On Windows a first interpreter puts itself into a Job Object and
+        // runs this one inside it, so that what the script leaves in the
+        // background ends with it (#991).
+        argv: [
+          detected.command,
+          ...(detected.args || []),
+          ...(platform === 'win32' ? pythonJobArgs(pythonArgs) : pythonArgs),
+        ],
         workspaceRoot,
         runTmp: dir,
         domains: networkDomains,
