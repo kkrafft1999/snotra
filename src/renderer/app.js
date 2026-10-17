@@ -664,7 +664,7 @@ void toolPermissions.refresh();
 void initAppVersionBadge({ api });
 
 // The start-up counts as a chat switch until its chat is on screen (#564).
-trackChatSwitch((async () => {
+const startup = trackChatSwitch((async () => {
   let uiPrefs = {
     // Faellt das Lesen der Prefs aus, bleibt `contentPaneVisible` ungesetzt —
     // genau wie im Contract, wenn nichts gespeichert ist (Issues #255, #258).
@@ -745,3 +745,8 @@ trackChatSwitch((async () => {
   // The chat and its folder are known now (#773).
   void chatConfig.refresh();
 })());
+// "Usable" in PERF-1: the folder and its chat are restored, including a chat
+// load the folder's opening started on its own. The mark stays in this
+// window's performance timeline; e2e/perf-report.mjs reads it, nothing sends
+// it anywhere (#984).
+void startup.then(chatSwitchesSettled).then(() => performance.mark('snotra:ready'));

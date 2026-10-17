@@ -1,0 +1,61 @@
+name: Performance
+
+# Measures the performance budgets PERF-1 to PERF-4 of
+# docs/quality-requirements.md in the real app (#984) and writes them to the
+# job summary, plus report.json as an artifact.
+#
+# Reporting only: a missed budget does not fail the run, only a measurement
+# that breaks does. The job is not a required check and not part of ci.yml, so
+# it neither holds up a pull request nor turns main red on a slow runner. Once
+# the numbers have proven stable, the budgets get a gate of their own — that
+# is a decision of its own, not a flag flipped here.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: perf-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perf:
+    name: Performance (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Download the Electron binary
+        run: node scripts/install-electron.js
+      - name: Xvfb (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+      - name: Measure (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum npm run perf
+      - name: Measure
+        if: runner.os != 'Linux'
+        run: npm run perf
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: perf-${{ matrix.os }}
+          path: out/perf/
+          if-no-files-found: ignore
+          retention-days: 90
