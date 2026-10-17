@@ -40,11 +40,15 @@ test('sanitizeChatMessagesForStore strips UI fields and keeps rich assistant dat
     {
       role: 'assistant',
       content: 'Answer',
+      // Still streaming when written: stored as cut off (#979).
+      interrupted: true,
       toolTrace: ['Tool läuft …', 'Tool fertig'],
       reasoningText: 'denkt nach',
     },
   ]);
   assert.equal(stored[0].streaming, undefined);
+  assert.equal(stored[1].streaming, undefined);
+  assert.equal(stored[1].phase, undefined);
 });
 
 test('normalizeLoadedMessages adds renderer-ready assistant shape', () => {
@@ -425,4 +429,44 @@ test('a session keeps its config overrides, cleaned, and drops an empty set', ()
   assert.deepEqual(normalizeSessionForLoad({ ...kept }).configOverrides, kept.configOverrides);
   assert.equal(Object.hasOwn(normalizeSessionForStore(row({ tools: { on: [] } }), opts), 'configOverrides'), false);
   assert.equal(Object.hasOwn(normalizeSessionForStore(row('nonsense'), opts), 'configOverrides'), false);
+});
+
+// A turn saved while its run goes on (#979) is stored as cut off; the write
+// after the run settles drops the mark. A crash leaves the mark behind.
+test('a turn written mid-run is stored as interrupted, a settled one is not (#979)', () => {
+  const running = sanitizeChatMessagesForStore([
+    { role: 'user', content: 'Read the notes' },
+    { role: 'assistant', content: '', streaming: true, toolTrace: [{ line: 'Read notes.txt', tool: 'read_file' }], phase: 'waiting' },
+  ]);
+  assert.deepEqual(running[1], {
+    role: 'assistant',
+    content: '',
+    interrupted: true,
+    toolTrace: [{ line: 'Read notes.txt', tool: 'read_file' }],
+  });
+
+  const settled = sanitizeChatMessagesForStore([
+    { role: 'user', content: 'Read the notes' },
+    { role: 'assistant', content: 'Done.', streaming: false, toolTrace: [{ line: 'Read notes.txt', tool: 'read_file' }] },
+  ]);
+  assert.equal(settled[1].interrupted, undefined);
+});
+
+test('a turn cut off before its first step is kept with its mark, and comes back with it (#979)', () => {
+  const stored = sanitizeChatMessagesForStore([
+    { role: 'user', content: 'Hello' },
+    { role: 'assistant', content: '', streaming: true, toolTrace: [] },
+  ]);
+  assert.deepEqual(stored, [
+    { role: 'user', content: 'Hello' },
+    { role: 'assistant', content: '', interrupted: true },
+  ]);
+  const loaded = normalizeLoadedMessages(stored);
+  assert.equal(loaded.length, 2);
+  assert.equal(loaded[1].interrupted, true);
+  assert.equal(loaded[1].streaming, false);
+  // Stored again after the restart, the mark stays.
+  assert.equal(sanitizeChatMessagesForStore(loaded)[1].interrupted, true);
+  // An ordinary answer has no mark at all, not a `false` one.
+  assert.equal('interrupted' in normalizeLoadedMessages([{ role: 'assistant', content: 'Hi' }])[0], false);
 });

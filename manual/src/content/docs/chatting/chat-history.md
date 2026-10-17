@@ -27,6 +27,7 @@ Click the rightmost button in the title bar, *Show chat history*. The history ap
 
 - **A chat works on in the background.** Switch to another chat while Snotra is still answering, and the answer carries on. The history marks that chat *Working…*, or *Needs your approval* when a card waits for you there; [since 1.18] a system notification says so as well.
 - **Snotra picks up where you left off.** At the next start it opens the folder's most recent chat.
+- [since 1.25] **A cut-off answer keeps its finished steps.** If Snotra closes or crashes while an answer is under way, or you reload the window with *View › Reload*, the chat keeps every step that had finished. The answer comes back with the note *Interrupted.* under it; send your question again to carry on. A reload stops the answer that was running.
 - [since 1.23] **Each chat shows what it cost.** Next to its time, the history shows the chat's estimated API cost, for example *~$0.42*. More on [See what a chat costs](../chat-cost/).
 - **A new chat starts fresh:** without the earlier conversation, without marks in the tree, in the folder's default mode.
 

@@ -761,3 +761,81 @@ test('main takes the chat id by the engine\'s rule: trimmed, never cut down (#53
   abort({ sender: { id: 7 } }, { chatId: long });
   assert.deepEqual(aborts, [[7, undefined], [7, 'chat-1'], [7, null]]);
 });
+
+// A reloaded or crashed renderer has lost the chats its runs write into
+// (#979); main stops them instead of letting them go on unseen.
+function makeWatchedSender(id) {
+  const { EventEmitter } = require('node:events');
+  const sent = [];
+  const sender = Object.assign(new EventEmitter(), {
+    id,
+    isDestroyed: () => false,
+    send: (channel, payload) => sent.push({ channel, payload }),
+  });
+  return { sender, sent };
+}
+
+function makeHangingProvider() {
+  const releases = [];
+  const provider = {
+    defaultModel: 'test-model',
+    fields: {},
+    streamChatRound: ({ abortSignal }) =>
+      new Promise((resolve) => {
+        const finish = () => resolve({ cancelled: true, message: { role: 'assistant', content: '' } });
+        if (abortSignal.aborted) return finish();
+        abortSignal.addEventListener('abort', finish, { once: true });
+        releases.push(() => resolve(assistantText('still here')));
+      }),
+  };
+  return { provider, releases };
+}
+
+for (const [what, emit] of [
+  ['a reload of the window', (s) => s.emit('did-start-navigation', { isMainFrame: true, isSameDocument: false })],
+  ['a crashed renderer', (s) => s.emit('render-process-gone', {}, { reason: 'crashed' })],
+  ['a destroyed window', (s) => s.emit('destroyed')],
+]) {
+  test(`${what} stops every run of that window, not another window's (#979)`, async () => {
+    const { provider, releases } = makeHangingProvider();
+    const { sendHandler } = setupChatHandlers({ provider });
+    const one = makeWatchedSender(7);
+    const other = makeWatchedSender(8);
+
+    const runA = sendHandler({ sender: one.sender }, { messages: [{ role: 'user', content: 'A' }], chatId: 'chat-a' });
+    const runB = sendHandler({ sender: one.sender }, { messages: [{ role: 'user', content: 'B' }], chatId: 'chat-b' });
+    const runC = sendHandler({ sender: other.sender }, { messages: [{ role: 'user', content: 'C' }], chatId: 'chat-c' });
+    await new Promise((resolve) => setImmediate(resolve));
+    emit(one.sender);
+
+    assert.equal((await runA).cancelled, true);
+    assert.equal((await runB).cancelled, true);
+    releases[2]();
+    assert.equal((await runC).content, 'still here');
+  });
+}
+
+test('a navigation inside the page or of a sub-frame leaves the runs alone (#979)', async () => {
+  const { provider, releases } = makeHangingProvider();
+  const { sendHandler } = setupChatHandlers({ provider });
+  const { sender } = makeWatchedSender(7);
+
+  const run = sendHandler({ sender }, { messages: [{ role: 'user', content: 'A' }], chatId: 'chat-a' });
+  await new Promise((resolve) => setImmediate(resolve));
+  sender.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true });
+  sender.emit('did-start-navigation', { isMainFrame: false, isSameDocument: false });
+  releases[0]();
+  assert.equal((await run).content, 'still here');
+});
+
+test('a window is watched once, however many turns it sends (#979)', async () => {
+  const chatEngine = { send: async () => ({ content: '' }), abort: () => {} };
+  const ipcMain = makeIpcMain();
+  registerChatHandlers({ ipcMain, chatEngine, REQ, PUSH });
+  const send = ipcMain.handlers.get(REQ.CHAT_SEND);
+  const { sender } = makeWatchedSender(7);
+  for (let i = 0; i < 3; i += 1) await send({ sender }, { messages: [{ role: 'user', content: 'Hi' }], chatId: 'chat-a' });
+  assert.equal(sender.listenerCount('did-start-navigation'), 1);
+  assert.equal(sender.listenerCount('render-process-gone'), 1);
+  assert.equal(sender.listenerCount('destroyed'), 1);
+});

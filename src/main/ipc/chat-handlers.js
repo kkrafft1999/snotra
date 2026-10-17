@@ -27,6 +27,24 @@ function registerChatHandlers({
     webContents.send(channel, { ...payload, ...route });
   };
 
+  // A renderer that reloads, navigates or dies has lost the chats its runs
+  // write into (#979): nobody would see their steps or answer their cards,
+  // and the reloaded page cannot pick them up again. Their runs stop. The
+  // turn up to its last finished step is already saved, marked as cut off.
+  // Watched from a window's first send on, once per window.
+  const watched = new WeakSet();
+  const watchSender = (webContents) => {
+    if (!webContents || watched.has(webContents) || typeof webContents.on !== 'function') return;
+    watched.add(webContents);
+    const sessionId = webContents.id;
+    const stopRuns = () => engine.abort(sessionId);
+    webContents.on('did-start-navigation', (details) => {
+      if (details?.isMainFrame !== false && !details?.isSameDocument) stopRuns();
+    });
+    webContents.on('render-process-gone', stopRuns);
+    webContents.once?.('destroyed', stopRuns);
+  };
+
   // Stops the run of the named chat only; without one, every run of the window.
   // An id that is given but not usable names the run without a chat, as it
   // does on send (#532) — it does not widen the stop to the whole window.
@@ -59,6 +77,7 @@ function registerChatHandlers({
     // The renderer's own label for this turn; it only ever comes back to it.
     const runId = sanitizeRouteId(payload?.runId, 64);
     const route = { chatId, runId };
+    watchSender(event.sender);
     try {
       return await engine.send({
         sessionId: event.sender.id,

@@ -1112,6 +1112,18 @@ threw a run's result away as soon as another chat was opened.
   state from when it left. A finished run writes into its own chat and does
   not make it the folder's active chat. Deleting a running chat stops the run
   first, so that its answer cannot bring the chat back.
+- **Saved while it runs (#979):** the renderer writes a running turn after
+  every finished step (`checkpointRun` in `ChatStream.js`), one write at a
+  time per run, without the step still running. A message that is still
+  streaming when it is written is stored with `interrupted: true`; the write
+  after the run settles drops the mark. A crash, a quit or a reload therefore
+  leaves the turn up to its last finished step, and the restored chat shows
+  it with an *Interrupted* note. Once the page unloads (`beforeunload`), the
+  renderer writes nothing more of a run.
+- **A window that reloads or dies (#979):** `chat-handlers.js` watches a
+  window from its first send on and stops all of its runs on a main-frame
+  `did-start-navigation`, on `render-process-gone` and on `destroyed`. The
+  reloaded page cannot pick a run up again, so none goes on unseen.
 - **Mode:** the policy file holds the mode of the chat on screen.
   `chat-session-settings` remembers the mode a chat had when it left the screen
   (`modeFor`), and the policy port answers a run with its own chat's mode.

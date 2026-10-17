@@ -469,6 +469,26 @@ export function initChatStream({
   }
 
   /**
+   * Under a turn whose run never settled (#979): the app was closed, crashed
+   * or reloaded while it ran. The steps above it are the ones that finished.
+   * The keys stay on the nodes, so a language switch translates them along.
+   */
+  function buildInterruptedNote() {
+    const note = document.createElement('p');
+    note.className = 'chat-interrupted-note';
+    note.setAttribute('role', 'note');
+    const label = document.createElement('strong');
+    label.className = 'chat-interrupted-label';
+    label.setAttribute('data-i18n', 'chat.interrupted.label');
+    label.textContent = t('chat.interrupted.label');
+    const text = document.createElement('span');
+    text.setAttribute('data-i18n', 'chat.interrupted.text');
+    text.textContent = t('chat.interrupted.text');
+    note.append(label, ' ', text);
+    return note;
+  }
+
+  /**
    * A chat answer as nodes, never as `innerHTML` on a live node (#402): the
    * images in it have no `src` yet, `showWorkspaceImages()` decides on them.
    * Its tables get their scrolling frame and number alignment here (#961).
@@ -745,6 +765,7 @@ export function initChatStream({
           inner.replaceChildren(renderAnswer(m.content));
           void showWorkspaceImages(inner);
           li.appendChild(inner);
+          if (m.interrupted) li.appendChild(buildInterruptedNote());
           // Karten des abgeschlossenen Zuges (Entscheidung, Verfall, Abbruch)
           // bleiben an ihrer Nachricht, bis der Chat gewechselt wird.
           approvalCards?.mount(li, m);
@@ -982,7 +1003,46 @@ export function initChatStream({
   const DELETED = Symbol('deleted');
 
   function persistableMessages(messages) {
-    return messages.filter((m) => !m.greeting);
+    return messages.filter((m) => !m.greeting).map(withoutRunningStep);
+  }
+
+  /**
+   * A turn saved mid-run (#979) keeps the steps that are done. The one still
+   * running has no result yet; written down, it would come back after a crash
+   * looking finished.
+   */
+  function withoutRunningStep(message) {
+    if (!message.streaming || !message.toolRunning || !Array.isArray(message.toolTrace)) return message;
+    return { ...message, toolTrace: message.toolTrace.slice(0, -1) };
+  }
+
+  /**
+   * Saves a running turn after each finished step (#979), so that a crash, a
+   * quit or a reload keeps the chat up to the last step done; the turn is
+   * stored as cut off until the run settles and writes it once more. One
+   * write at a time per run: steps that finish while one is under way go
+   * with the next, and a run that has ended writes nothing more from here.
+   */
+  function checkpointRun(run) {
+    if (pageUnloading) return;
+    if (run.checkpointing) {
+      run.checkpointDue = true;
+      return;
+    }
+    run.checkpointing = true;
+    void (async () => {
+      try {
+        do {
+          run.checkpointDue = false;
+          if (!isRunning(run) || appStore.chatRuns.get(run.chatId) !== run) break;
+          const chat = isOnScreen(run) ? currentChatSnapshot() : run.chat;
+          if (!chat) break;
+          await persistChat(chat);
+        } while (run.checkpointDue);
+      } finally {
+        run.checkpointing = false;
+      }
+    })();
   }
 
   /** Whether `chat` is exactly what the history holds for it right now. */
@@ -1299,6 +1359,7 @@ export function initChatStream({
       delete last.toolRunning;
       delete last.runningCallIndex;
       delete last.permissionNote;
+      checkpointRun(run);
     }
 
     if (!isOnScreen(run)) return;
@@ -1411,6 +1472,12 @@ export function initChatStream({
       }
     }
   }
+
+  // Set when the page unloads — a reload, a quit (#979). From then on nothing
+  // of a run is written any more: what is saved is the turn up to its last
+  // finished step.
+  let pageUnloading = false;
+  window.addEventListener('beforeunload', () => { pageUnloading = true; });
 
   // Registered once (#320): the runs of all chats arrive on the same channels.
   if (typeof api.onChatDelta === 'function') {
@@ -1657,9 +1724,15 @@ export function initChatStream({
     // Replaced by a newer turn in the same chat (stop, then send again) or
     // deleted with its chat: the turn has nothing left to write.
     if (appStore.chatRuns.get(run.chatId) !== run) return;
+    // The page is going away under a run (#979): main stops the run when the
+    // window reloads, and its cancelled reply can still reach this page. It
+    // would be saved as a turn the user stopped; the save made after its last
+    // finished step stays instead, marked as cut off.
+    if (pageUnloading) appStore.chatRuns.delete(run.chatId);
     syncChatInFlight();
     syncElapsedTicker();
     notifyRunsChanged();
+    if (pageUnloading) return;
 
     const onScreen = isOnScreen(run);
     const chat = onScreen ? null : run.chat;
