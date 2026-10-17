@@ -63,7 +63,7 @@ test('the renderer comes from the app scheme, and the CSP refuses a script from 
   assert.equal(result.ran, false, 'the script from the disk did not run');
   assert.equal(result.remote, 'refused');
   assert.ok(
-    result.violations.some((v) => v.directive === 'script-src-elem' && v.blocked.startsWith('https://snotra-origin.invalid')),
+    result.violations.some((v) => v.directive === 'script-src-elem' && URL.canParse(v.blocked) && new URL(v.blocked).host === 'snotra-origin.invalid'),
     `the CSP is in force: ${JSON.stringify(result.violations)}`,
   );
   assert.equal(result.violations.some((v) => v.blocked.startsWith('snotra-app:')), false, 'the app\'s own scripts pass');

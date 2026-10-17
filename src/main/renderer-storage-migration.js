@@ -24,6 +24,7 @@ const nodePath = require('path');
 const { pathToFileURL } = require('url');
 const { appUrl } = require('./app-protocol');
 
+// Written out again in READ_SCRIPT below; the test holds the two together.
 const MIGRATED_KEYS = Object.freeze(['theme', 'manual.zoom']);
 const MARKER_FILENAME = 'renderer-storage-origin.json';
 const DEADLINE_MS = 3000;
@@ -43,19 +44,33 @@ function withDeadline(promise, ms) {
   ]).finally(() => clearTimeout(timer));
 }
 
+// Both scripts are fixed text: no value from either store is ever part of
+// code. The keys are written out here; the values travel to the new origin in
+// the page's fragment, which never reaches the protocol handler.
+const READ_SCRIPT = `(() => {
+  const out = {};
+  for (const key of ['theme', 'manual.zoom']) {
+    const value = localStorage.getItem(key);
+    if (value !== null) out[key] = value;
+  }
+  return out;
+})()`;
+// What the new origin already holds was set after the update and wins.
+const WRITE_SCRIPT = `(() => {
+  const values = JSON.parse(decodeURIComponent(location.hash.slice(1)));
+  for (const [key, value] of Object.entries(values)) {
+    if (typeof value === 'string' && localStorage.getItem(key) === null) localStorage.setItem(key, value);
+  }
+})()`;
+
 async function copyStorage(contents, keys, fileCarrier) {
   await contents.loadURL(pathToFileURL(fileCarrier).href);
-  const values = await contents.executeJavaScript(
-    `(() => { const out = {}; for (const k of ${JSON.stringify(keys)}) { const v = localStorage.getItem(k); if (v !== null) out[k] = v; } return out; })()`,
-  );
-  const found = Object.keys(values ?? {}).filter((key) => keys.includes(key) && typeof values[key] === 'string');
+  const values = await contents.executeJavaScript(READ_SCRIPT);
+  const found = keys.filter((key) => typeof values?.[key] === 'string');
   if (found.length === 0) return [];
-  await contents.loadURL(appUrl(CARRIER));
   const moved = Object.fromEntries(found.map((key) => [key, values[key]]));
-  // What the new origin already holds was set after the update and wins.
-  await contents.executeJavaScript(
-    `(() => { const v = ${JSON.stringify(moved)}; for (const k of Object.keys(v)) if (localStorage.getItem(k) === null) localStorage.setItem(k, v[k]); })()`,
-  );
+  await contents.loadURL(`${appUrl(CARRIER)}#${encodeURIComponent(JSON.stringify(moved))}`);
+  await contents.executeJavaScript(WRITE_SCRIPT);
   return found;
 }
 

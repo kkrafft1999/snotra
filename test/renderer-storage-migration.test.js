@@ -11,7 +11,7 @@ const os = require('os');
 const path = require('path');
 const { pathToFileURL } = require('url');
 
-const { migrateRendererStorage, MARKER_FILENAME } = require('../src/main/renderer-storage-migration');
+const { migrateRendererStorage, MARKER_FILENAME, MIGRATED_KEYS } = require('../src/main/renderer-storage-migration');
 
 async function profile(t, { store = true } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-move-'));
@@ -29,17 +29,19 @@ function fakeWindow(stores, { failOn = null } = {}) {
     destroy() { this.destroyed = true; },
     webContents: {
       current: null,
+      hash: '',
       async loadURL(url) {
         if (failOn && url.startsWith(failOn)) throw new Error('ERR_FAILED');
         window.loads.push(url);
         this.current = url.startsWith('file:') ? 'file' : 'app';
+        this.hash = new URL(url).hash;
       },
       async executeJavaScript(code) {
         const localStorage = {
           getItem: (key) => stores[this.current][key] ?? null,
           setItem: (key, value) => { stores[this.current][key] = value; },
         };
-        return new Function('localStorage', `return ${code};`)(localStorage);
+        return new Function('localStorage', 'location', `return ${code};`)(localStorage, { hash: this.hash });
       },
     },
   };
@@ -55,12 +57,31 @@ test('the appearance and the zoom move over, and what the new origin has wins', 
   assert.deepEqual(stores.app, { 'manual.zoom': '0.9', theme: 'dark' }, 'only the known keys, none overwritten');
   assert.equal(window.loads[0], pathToFileURL(path.join(dir, 'storage-carrier.html')).href, 'the file: page lies outside app.asar');
   await assert.rejects(fs.access(path.join(dir, 'storage-carrier.html')), 'and is gone afterwards');
-  assert.equal(window.loads[1], 'snotra-app://app/storage-carrier.html');
+  assert.equal(window.loads[1].split('#')[0], 'snotra-app://app/storage-carrier.html');
+  assert.deepEqual(JSON.parse(decodeURIComponent(window.loads[1].split('#')[1])), { theme: 'dark', 'manual.zoom': '1.2' },
+    'the values travel in the fragment, not in code');
   assert.equal(window.destroyed, false, 'the window stays until the app window is open');
   result.release();
   assert.equal(window.destroyed, true);
   const marker = JSON.parse(await fs.readFile(path.join(dir, MARKER_FILENAME), 'utf8'));
   assert.equal(marker.origin, 'snotra-app://app');
+});
+
+test('the read script asks for every key the move knows', async (t) => {
+  const dir = await profile(t);
+  const stores = { file: Object.fromEntries(MIGRATED_KEYS.map((key) => [key, `v-${key}`])), app: {} };
+  const result = await migrateRendererStorage({ createWindow: () => fakeWindow(stores), userDataDir: dir, fs });
+  assert.deepEqual(result.moved, [...MIGRATED_KEYS]);
+  assert.deepEqual(stores.app, stores.file);
+});
+
+test('a value that looks like code stays a value', async (t) => {
+  const dir = await profile(t);
+  const tricky = "dark'); globalThis.ran = true; ('";
+  const stores = { file: { theme: tricky }, app: {} };
+  await migrateRendererStorage({ createWindow: () => fakeWindow(stores), userDataDir: dir, fs });
+  assert.equal(stores.app.theme, tricky);
+  assert.equal(globalThis.ran, undefined);
 });
 
 test('once done, it never runs again', async (t) => {
