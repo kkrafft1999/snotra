@@ -162,8 +162,10 @@ already replaced the refusal by a card ([`architecture-review.md`](./architectur
 | PERF-4 | The app sits idle with a chat open. | — | ≤ 1 GB of memory across all its processes. |
 
 The performance budgets apply to a current Apple Silicon Mac. On Windows, Linux
-and the CI runners twice the time is allowed. None of them is
-measured today; how to measure them is part of phase 2.
+and the CI runners twice the time is allowed. `npm run perf`
+measures all four on every push to `main` and reports them without gating
+(#984); what it measures is described in
+[`test-concept.md`](./test-concept.md#performance-report).
 
 ## 5. Non-goals
 

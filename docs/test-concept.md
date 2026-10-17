@@ -23,6 +23,7 @@ before a merge — and about the rule that keeps any speed-up honest:
 | **Look scripts** | `e2e/manual-*.mjs` | Screenshots of a state, for a person to look at | Everything automated — no gate |
 | **Manual screenshots** | `manual/`, `npm run screenshots` | The generated motifs of the user manual, four variants each | — |
 | **Release hand checks** | [`release.md`](./release.md) › *Manual checks before tagging* | What only a person can judge in the packaged app | — |
+| **Performance report** | `e2e/perf-report.mjs`, `npm run perf` | The budgets PERF-1 to PERF-4 measured in the running app — see [*Performance report*](#performance-report) | Reports, does not gate |
 | **Benchmark** | `bench/tool-accuracy/` | Whether the model still picks the right tool; real model, costs tokens | Never part of CI |
 | **Coverage** | `npm run coverage` | A local ratchet, not a merge condition | — |
 
@@ -44,9 +45,10 @@ and the flaky files were largely the same. The rules for them are in
 | While working | Single files: `node --test test/<file>.test.js` | Developer or agent |
 | Before every push | `npm test` and `npm run test:e2e`, in full | Developer or agent ([`git-workflow.md`](../.claude/rules/git-workflow.md)) |
 | Pull request, push to `main` | `ci.yml`: both suites on three platforms — the three required checks | GitHub |
+| Push to `main` | `perf.yml`: the performance report on three platforms — not a required check | GitHub |
 | Release tag | The same `ci.yml`, as the gate before any build | GitHub |
 | Before tagging | Release hand checks | Owner |
-| On demand | Look scripts, coverage, benchmark | Developer or agent |
+| On demand | Look scripts, coverage, benchmark, `npm run perf` | Developer or agent |
 
 This stays as it is. In particular the local rule does not change: before a
 push, everything runs.
@@ -174,6 +176,38 @@ measured to prune).
 - **Prove it denser.** A change that touches one of these tests runs the suite
   at a higher concurrency than usual a few times before it is merged — that is
   where the races show.
+
+## Performance report
+
+Since [#984](https://github.com/kkrafft1999/snotra/issues/984) the budgets of
+[`quality-requirements.md`](./quality-requirements.md) (PERF-1 to PERF-4) are
+measured, not read off the code. `e2e/perf-report.mjs` starts the real app the
+way the E2E tests do — `launchApp`, the fake model server — against one fixture
+from `e2e/helpers/perf-fixture.mjs`: a history of 200 chats, one of them 200
+messages long, and a workspace with 2000 folders plus one folder with more
+entries than a listing shows.
+
+| Budget | What is measured |
+| --- | --- |
+| PERF-1 | Main process created → the renderer's `snotra:ready` mark, set once the folder and its chat are restored. One warm-up start (it also encrypts the seeded history), then the median of five. |
+| PERF-2 | The worse of: the slowest key event while typing below the long chat (Event Timing), and the median of three switches to the long chat, from the click to the first paint with its last message. |
+| PERF-3 | The longest animation frame (`long-animation-frame`) while a 50 KB answer streams in and while the large folder opens. A deliberate 150 ms frame checks first that the observer reports at all; a window that draws nothing would otherwise pass for one that never stalls. |
+| PERF-4 | `app.getAppMetrics()`, working set summed over all processes, after 10 s idle with a chat open — after the start and again after the scenarios; the higher one counts. On macOS the working set includes shared pages, so it reads high. |
+
+The time budgets double on Windows, Linux and every CI runner, as the quality
+model says; the memory budget does not. `scripts/perf-budgets.js` holds that
+arithmetic and is unit-tested.
+
+**It reports, it does not gate.** `perf.yml` runs on every push to `main` and
+by hand, writes the table to the job summary and `report.json` as an artifact.
+A missed budget leaves the run green; only a measurement that breaks turns it
+red. It is not a required check and not part of `ci.yml`, so a slow runner
+holds up nothing. Locally `npm run perf -- --strict` exits with 1 on a missed
+budget. Turning the budgets into a gate is a decision of its own, once the
+numbers have shown how much they scatter between runs.
+
+A change that is meant to make the app faster — [#998](https://github.com/kkrafft1999/snotra/issues/998) is the first in line —
+shows its effect by running the report before and after.
 
 ## When to revisit
 
