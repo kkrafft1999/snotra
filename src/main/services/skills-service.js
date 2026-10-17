@@ -50,6 +50,18 @@ function withMenuPaths(skill, locale) {
   };
 }
 
+/**
+ * The system skills ship as a folder in the app bundle, readable inside
+ * app.asar as well. Without an app that knows its path — a test — there are
+ * none.
+ *
+ * @param {{ app?: { getAppPath?: () => string }, path: typeof import('path') }} deps
+ * @returns {string|null}
+ */
+function bundledSystemSkillsDir({ app, path }) {
+  return typeof app?.getAppPath === 'function' ? path.join(app.getAppPath(), 'system-skills') : null;
+}
+
 function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBodyChars = MAX_SKILL_BODY_CHARS }) {
   if (!fs || !path) throw new TypeError('createSkillsService benötigt fs und path.');
 
@@ -423,6 +435,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
 }
 
 module.exports = {
+  bundledSystemSkillsDir,
   createSkillsService,
   MAX_SKILLS_PER_DIRECTORY,
 };
