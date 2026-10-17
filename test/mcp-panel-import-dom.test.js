@@ -17,7 +17,7 @@ const BLOCK = JSON.stringify({
       env: { JIRA_TOKEN: '<dein-token>' },
     },
     heise: { command: 'npx', args: ['-y', 'server-heise'], env: { LANG: 'de_DE' } },
-    'remote-docs': { url: 'https://example.com/mcp' },
+    'remote-docs': { type: 'sse', url: 'https://example.com/sse' },
   },
 });
 
@@ -113,7 +113,7 @@ test('der übersprungene Eintrag steht mit Begründung da, nicht bloß weg', asy
   const block = document.getElementById('mcp-import-skipped');
   assert.equal(block.classList.contains('hidden'), false);
   assert.match(block.textContent, /remote-docs/);
-  assert.match(block.textContent, /URL/);
+  assert.match(block.textContent, /HTTP\+SSE/);
 });
 
 test('Geheimnisse und Platzhalter werden in der Zeile benannt', async () => {
@@ -261,7 +261,7 @@ test('the partial count follows the number, in German as well (CR-B14-09)', asyn
   try {
     setLocale('de');
     await oeffnen();
-    const remote = { url: 'https://example.com/mcp' };
+    const remote = { type: 'sse', url: 'https://example.com/sse' };
     await einfuegen(JSON.stringify({ mcpServers: { a: { command: 'npx' }, b: remote, c: remote } }));
     assert.equal(document.getElementById('mcp-import-count').textContent,
       '1 von 3 Einträgen kann übernommen werden.');

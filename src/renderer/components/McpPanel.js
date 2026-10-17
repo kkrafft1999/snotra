@@ -2,7 +2,7 @@ import contracts from '../generated/contracts.js';
 import { t, tPlural, tMessage, onLocaleChange } from '../i18n.js';
 import { describeConnection, connectionStatusElement } from '../utils/mcp-connection-view.js';
 
-const { MCP_CONNECTION_STATES, parseMcpServersBlock, toMcpServerInput } = contracts;
+const { MCP_CONNECTION_STATES, MCP_TRANSPORTS, parseMcpServersBlock, toMcpServerInput } = contracts;
 
 /**
  * Einstellungen › MCP (Issue #109, Teil von #62).
@@ -20,7 +20,12 @@ const { MCP_CONNECTION_STATES, parseMcpServersBlock, toMcpServerInput } = contra
  * Geheime env-Werte kommen nie in den Renderer zurück. Ein gespeichertes
  * Geheimnis erscheint im Formular als Platzhalter; wer es nicht anfasst,
  * schickt `{ keep: true }` statt eines Wertes, den diese Seite gar nicht
- * kennt.
+ * kennt. The headers of a remote server (#341) work the same way.
+ *
+ * A server is a local process or a remote endpoint (#341). The form shows the
+ * fields of the chosen transport and sends only those; every save — the
+ * switch in the list included — sends the transport it was given, so editing
+ * a remote server never turns it into a local one.
  */
 
 const CLOSE_ICON_HTML =
@@ -103,6 +108,15 @@ export function joinArgs(args) {
 // The status texts are shared with Settings › Security (#462).
 export { describeConnection };
 
+function isRemote(server) {
+  return server?.transport === MCP_TRANSPORTS.HTTP;
+}
+
+/** What the list and the import preview show under a server's name. */
+function endpointLine(server) {
+  return isRemote(server) ? server.url || '' : `${server.command || ''} ${joinArgs(server.args)}`.trim();
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -132,6 +146,38 @@ export function initMcpPanel({ api }) {
   const fieldCwd = document.getElementById('mcp-field-cwd');
   const envList = document.getElementById('mcp-env-list');
   const btnEnvAdd = document.getElementById('btn-mcp-env-add');
+  const transportChoice = document.getElementById('mcp-field-transport');
+  const fieldsStdio = document.getElementById('mcp-fields-stdio');
+  const fieldsHttp = document.getElementById('mcp-fields-http');
+  const fieldUrl = document.getElementById('mcp-field-url');
+  const headerList = document.getElementById('mcp-header-list');
+  const btnHeaderAdd = document.getElementById('btn-mcp-header-add');
+  const endpointHint = document.getElementById('mcp-endpoint-hint');
+
+  /**
+   * The two lists of name/value rows. Same row, same rules for secrets —
+   * only the words, the hint and the button that adds one differ.
+   */
+  const ROW_KINDS = {
+    env: {
+      list: envList,
+      addButton: btnEnvAdd,
+      hintId: 'mcp-env-hint',
+      placeholder: 'NAME',
+      nameLabel: 'mcpDialog.env.name',
+      valueLabel: 'mcpDialog.env.value',
+      removeLabel: 'mcpDialog.env.remove',
+    },
+    headers: {
+      list: headerList,
+      addButton: btnHeaderAdd,
+      hintId: 'mcp-header-hint',
+      placeholder: 'Authorization',
+      nameLabel: 'mcpDialog.headers.name',
+      valueLabel: 'mcpDialog.headers.value',
+      removeLabel: 'mcpDialog.headers.remove',
+    },
+  };
   const formError = document.getElementById('mcp-form-error');
   const testResult = document.getElementById('mcp-test-result');
   const testHint = document.getElementById('mcp-test-hint');
@@ -227,7 +273,7 @@ export function initMcpPanel({ api }) {
 
       const main = el('div', 'mcp-row__main');
       main.append(el('span', 'mcp-row__name', server.label || server.id));
-      const meta = el('span', 'mcp-row__meta', `${server.command} ${joinArgs(server.args)}`.trim());
+      const meta = el('span', 'mcp-row__meta', endpointLine(server));
       meta.title = meta.textContent;
       main.append(meta);
       row.append(main);
@@ -313,7 +359,7 @@ export function initMcpPanel({ api }) {
 
   /** Ein-/Ausschalten geht ohne Umweg über den Dialog. */
   async function setEnabled(server, enabled) {
-    const payload = toPayload(server, { enabled, env: keepAllEnv(server) });
+    const payload = toPayload(server, { enabled });
     let result = null;
     try {
       result = await api.saveMcpServer?.(payload);
@@ -332,22 +378,24 @@ export function initMcpPanel({ api }) {
     return false;
   }
 
-  /** Beim bloßen Umschalten bleiben alle env-Werte, wie sie sind. */
-  function keepAllEnv(server) {
-    const env = {};
-    for (const entry of server.env || []) {
-      env[entry.key] = entry.secret ? { secret: true, keep: true } : { secret: false, value: entry.value ?? '' };
+  /** Beim bloßen Umschalten bleiben alle env- und Header-Werte, wie sie sind. */
+  function keepAll(entries) {
+    const out = {};
+    for (const entry of entries || []) {
+      out[entry.key] = entry.secret ? { secret: true, keep: true } : { secret: false, value: entry.value ?? '' };
     }
-    return env;
+    return out;
   }
 
+  /** The stored server as a save payload — with its transport (B16 review on #341). */
   function toPayload(server, patch = {}) {
+    const endpoint = isRemote(server)
+      ? { transport: MCP_TRANSPORTS.HTTP, url: server.url, headers: keepAll(server.headers) }
+      : { transport: MCP_TRANSPORTS.STDIO, command: server.command, args: server.args, cwd: server.cwd, env: keepAll(server.env) };
     return {
       id: server.id,
       label: server.label,
-      command: server.command,
-      args: server.args,
-      cwd: server.cwd,
+      ...endpoint,
       enabled: server.enabled,
       // One switch per tool since #449, on the Security page; the server keeps
       // no deselection of its own (mcp-disabled-tools-migration.js).
@@ -367,22 +415,23 @@ export function initMcpPanel({ api }) {
    * kept, its name and its "secret" box are locked: renaming it or storing it
    * in plain text needs the value, which this side does not know.
    */
-  function envRow(entry = { key: '', secret: true, hasValue: false, value: '' }) {
+  function secretRow(kindName, entry = { key: '', secret: true, hasValue: false, value: '' }) {
+    const kind = ROW_KINDS[kindName];
     const stored = entry.secret === true && entry.hasValue === true;
     const row = el('div', 'mcp-env-row');
 
     const key = el('input', 'modal-input modal-input--mono mcp-env-row__key');
     key.type = 'text';
     key.value = entry.key || '';
-    key.placeholder = 'NAME';
+    key.placeholder = kind.placeholder;
     key.autocomplete = 'off';
     key.spellcheck = false;
-    key.setAttribute('aria-label', t('mcpDialog.env.name'));
+    key.setAttribute('aria-label', t(kind.nameLabel));
 
     const value = el('input', 'modal-input modal-input--mono mcp-env-row__value');
     value.autocomplete = 'off';
     value.spellcheck = false;
-    value.setAttribute('aria-label', t('mcpDialog.env.value'));
+    value.setAttribute('aria-label', t(kind.valueLabel));
 
     const opts = el('div', 'mcp-env-row__opts');
     const secretLabel = el('label', 'mcp-env-row__secret');
@@ -410,7 +459,7 @@ export function initMcpPanel({ api }) {
       secret.disabled = kept;
       // The hint below the list says why both are locked.
       for (const node of [key, secret]) {
-        if (kept) node.setAttribute('aria-describedby', 'mcp-env-hint');
+        if (kept) node.setAttribute('aria-describedby', kind.hintId);
         else node.removeAttribute('aria-describedby');
       }
     }
@@ -436,13 +485,13 @@ export function initMcpPanel({ api }) {
     const remove = el('button', 'settings-dialog__icon-close');
     remove.type = 'button';
     remove.innerHTML = CLOSE_ICON_HTML;
-    remove.setAttribute('aria-label', t('mcpDialog.env.remove'));
+    remove.setAttribute('aria-label', t(kind.removeLabel));
     remove.addEventListener('click', () => {
       // The pressed button goes with its row; the focus moves to the next
       // row, else the previous one, else "Add variable" (CR-B14-07).
       const neighbour = row.nextElementSibling || row.previousElementSibling;
       row.remove();
-      (neighbour?.querySelector('.mcp-env-row__key') || btnEnvAdd)?.focus();
+      (neighbour?.querySelector('.mcp-env-row__key') || kind.addButton)?.focus();
       updateUnsaved();
     });
     opts.append(remove);
@@ -451,9 +500,9 @@ export function initMcpPanel({ api }) {
     return row;
   }
 
-  function readEnv() {
+  function readRows(list) {
     const env = {};
-    for (const row of envList?.querySelectorAll('.mcp-env-row') || []) {
+    for (const row of list?.querySelectorAll('.mcp-env-row') || []) {
       const key = row.querySelector('.mcp-env-row__key');
       const value = row.querySelector('.mcp-env-row__value');
       const secret = row.querySelector('.mcp-env-row__secret input');
@@ -512,13 +561,69 @@ export function initMcpPanel({ api }) {
     else btnTest?.removeAttribute('aria-describedby');
   }
 
+  function readEnv() {
+    return readRows(envList);
+  }
+
+  function readHeaders() {
+    return readRows(headerList);
+  }
+
+  function selectedTransport() {
+    const checked = transportChoice?.querySelector('input:checked');
+    return checked?.value === MCP_TRANSPORTS.HTTP ? MCP_TRANSPORTS.HTTP : MCP_TRANSPORTS.STDIO;
+  }
+
+  function setTransport(transport) {
+    for (const input of transportChoice?.querySelectorAll('input') || []) {
+      input.checked = input.value === transport;
+    }
+    syncTransport();
+  }
+
+  /** Only the fields of the chosen transport are on screen; the others keep what was typed. */
+  function syncTransport() {
+    const remote = selectedTransport() === MCP_TRANSPORTS.HTTP;
+    fieldsHttp?.classList.toggle('hidden', !remote);
+    fieldsStdio?.classList.toggle('hidden', remote);
+  }
+
+  /**
+   * Saving another address or another transport switches the server off and
+   * forgets its tools (#341). The form says so before it happens.
+   */
+  function endpointChanges() {
+    if (!editing) return false;
+    const transport = selectedTransport();
+    if (transport !== (editing.transport || MCP_TRANSPORTS.STDIO)) return true;
+    return transport === MCP_TRANSPORTS.HTTP && String(fieldUrl?.value || '').trim() !== (editing.url || '');
+  }
+
+  /** The notice goes in when it applies and out when it no longer does. */
+  function showEndpointNotice(show) {
+    if (!endpointHint || show === (endpointHint.childElementCount > 0)) return;
+    if (!show) {
+      endpointHint.replaceChildren();
+      return;
+    }
+    const box = el('div', 'settings-mcp-warning');
+    const mark = el('span', 'settings-mcp-warning__mark', '!');
+    mark.setAttribute('aria-hidden', 'true');
+    box.append(mark, el('p', null, t('mcpDialog.endpoint.changed')));
+    endpointHint.replaceChildren(box);
+  }
+
   function formState() {
-    return JSON.stringify([fieldLabel.value, fieldCommand.value, fieldArgs.value, fieldCwd.value, readEnv()]);
+    const transport = selectedTransport();
+    return JSON.stringify(transport === MCP_TRANSPORTS.HTTP
+      ? [fieldLabel.value, transport, fieldUrl.value, readHeaders()]
+      : [fieldLabel.value, transport, fieldCommand.value, fieldArgs.value, fieldCwd.value, readEnv()]);
   }
 
   /** Test only applies to a stored server whose form shows what is stored. */
   function updateUnsaved() {
     formUnsaved = Boolean(editing) && formState() !== storedFormState;
+    showEndpointNotice(endpointChanges());
     syncDialogActions();
   }
 
@@ -534,11 +639,15 @@ export function initMcpPanel({ api }) {
     fieldId.value = server?.id || '';
     fieldId.disabled = Boolean(server);
     fieldLabel.value = server?.label || '';
+    setTransport(isRemote(server) ? MCP_TRANSPORTS.HTTP : MCP_TRANSPORTS.STDIO);
     fieldCommand.value = server?.command || '';
     fieldArgs.value = joinArgs(server?.args);
     fieldCwd.value = server?.cwd || '';
     envList.replaceChildren();
-    for (const entry of server?.env || []) envList.append(envRow(entry));
+    for (const entry of server?.env || []) envList.append(secretRow('env', entry));
+    if (fieldUrl) fieldUrl.value = server?.url || '';
+    headerList?.replaceChildren();
+    for (const entry of server?.headers || []) headerList?.append(secretRow('headers', entry));
     btnDelete.classList.toggle('hidden', !server);
     btnTest.classList.toggle('hidden', !server);
     storedFormState = formState();
@@ -595,16 +704,24 @@ export function initMcpPanel({ api }) {
 
   async function save() {
     if (dialogBusy) return;
+    // Only the chosen transport's fields go out; what was typed into the
+    // other ones stays in the form, not in the configuration.
+    const endpoint = selectedTransport() === MCP_TRANSPORTS.HTTP
+      ? { transport: MCP_TRANSPORTS.HTTP, url: String(fieldUrl?.value || '').trim(), headers: readHeaders() }
+      : {
+        transport: MCP_TRANSPORTS.STDIO,
+        command: String(fieldCommand.value || '').trim(),
+        args: readArgs(),
+        cwd: String(fieldCwd.value || '').trim(),
+        env: readEnv(),
+      };
     const payload = {
       id: String(fieldId.value || '').trim().toLowerCase(),
       label: String(fieldLabel.value || '').trim(),
-      command: String(fieldCommand.value || '').trim(),
-      args: readArgs(),
-      cwd: String(fieldCwd.value || '').trim(),
+      ...endpoint,
       enabled: editing ? editing.enabled : true,
       disabledTools: [],
       knownTools: knownToolsOf(editing),
-      env: readEnv(),
       // "Add server" never replaces an existing one; main refuses a taken id
       // (CR-B14-03). Editing — and the import, which says "replaces" — do.
       ...(editing ? {} : { create: true }),
@@ -694,7 +811,10 @@ export function initMcpPanel({ api }) {
         t('mcpImport.candidate.duplicate', { id: candidate.id }), t('mcpImport.candidate.replaces'), true));
     }
     if (candidate.cwd) notes.push(importNoteRow(t('mcpImport.candidate.cwd', { cwd: candidate.cwd })));
-    const secrets = candidate.env.filter((entry) => entry.secret).map((entry) => entry.key);
+    // Environment variables of a local server, headers of a remote one —
+    // the same rules for both (#341).
+    const values = [...(candidate.env || []), ...(candidate.headers || [])];
+    const secrets = values.filter((entry) => entry.secret).map((entry) => entry.key);
     if (secrets.length > 0) {
       notes.push(importNoteRow(
         tPlural('mcpImport.candidate.secrets', secrets.length, { names: secrets.join(', ') }), t('mcpImport.candidate.secret')));
@@ -702,7 +822,7 @@ export function initMcpPanel({ api }) {
     // Encrypted is the default, so what is not encrypted has to be said —
     // a `DATABASE_URL` can carry a password without looking like a secret
     // (CR-B14-02). An empty value has its own note below.
-    const plain = candidate.env.filter((entry) => !entry.secret && entry.value !== '').map((entry) => entry.key);
+    const plain = values.filter((entry) => !entry.secret && entry.value !== '').map((entry) => entry.key);
     if (plain.length > 0) {
       notes.push(importNoteRow(
         tPlural('mcpImport.candidate.plainValues', plain.length, { names: plain.join(', ') }), t('mcpImport.candidate.plain')));
@@ -744,7 +864,7 @@ export function initMcpPanel({ api }) {
       // ueberrascht spaeter der Tool-Namensraum.
       head.append(el('span', 'mcp-import__id', candidate.id));
       main.append(head);
-      main.append(el('div', 'mcp-import__cmd', `${candidate.command} ${joinArgs(candidate.args)}`.trim()));
+      main.append(el('div', 'mcp-import__cmd', endpointLine(candidate)));
 
       const notes = importNotesFor(candidate);
       if (notes.length > 0) {
@@ -935,11 +1055,15 @@ export function initMcpPanel({ api }) {
     event.stopPropagation();
     closeImport();
   });
-  btnEnvAdd?.addEventListener('click', () => {
-    const row = envRow();
-    envList.append(row);
-    row.querySelector('input')?.focus();
-  });
+  for (const kindName of Object.keys(ROW_KINDS)) {
+    const { list, addButton } = ROW_KINDS[kindName];
+    addButton?.addEventListener('click', () => {
+      const row = secretRow(kindName);
+      list.append(row);
+      row.querySelector('input')?.focus();
+    });
+  }
+  transportChoice?.addEventListener('change', syncTransport);
   // Escape schliesst nur den Unterdialog, nicht den ganzen
   // Einstellungs-Dialog darunter.
   dialog?.addEventListener('keydown', (event) => {
@@ -953,6 +1077,10 @@ export function initMcpPanel({ api }) {
   onLocaleChange(() => {
     render();
     renderImportPreview();
+    if (endpointHint?.childElementCount) {
+      endpointHint.replaceChildren();
+      showEndpointNotice(true);
+    }
   });
 
   return {

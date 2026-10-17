@@ -9973,6 +9973,17 @@ select.modal-input {
   line-height: 1;
 }
 
+/* The transport choice of the server dialog (#341). The segmented control
+   keeps its own width; the notice above the buttons only appears when a save
+   would switch the server off. */
+.mcp-transport {
+  max-width: 100%;
+}
+
+.mcp-endpoint-hint .settings-mcp-warning {
+  margin: 4px 0 0;
+}
+
 /* Umgebungsvariablen: vier Spalten, solange Platz ist — sonst umbrechen
    statt die Felder auf Briefmarkengroesse zu quetschen. */
 .mcp-env-list {

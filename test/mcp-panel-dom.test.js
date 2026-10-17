@@ -802,3 +802,167 @@ test('servers that never reached the service are named, and a reload clears it (
   await flush();
   assert.equal(errorEl.textContent, '');
 });
+
+// --- Remote servers (#341) ---------------------------------------------------
+
+function remoteKatalog() {
+  return katalog({
+    servers: [{
+      id: 'docs',
+      label: 'Docs',
+      transport: 'http',
+      url: 'https://mcp.example.com/mcp',
+      command: '',
+      args: [],
+      cwd: null,
+      enabled: true,
+      disabledTools: [],
+      knownTools: ['search'],
+      env: [],
+      headers: [
+        { key: 'Authorization', secret: true, hasValue: true },
+        { key: 'X-Team', secret: false, hasValue: true, value: 'core' },
+      ],
+    }],
+    connections: [{ serverId: 'docs', state: 'failed', toolCount: 0, toolNames: [], error: { key: 'mcp.http.unauthorized', params: { label: 'Docs' } }, stderr: '' }],
+  });
+}
+
+const transportInput = (value) => document.querySelector(`#mcp-field-transport input[value="${value}"]`);
+const visible = (id) => !document.getElementById(id).classList.contains('hidden');
+const headerRows = () => [...document.querySelectorAll('#mcp-header-list .mcp-env-row')];
+
+function choose(value) {
+  const input = transportInput(value);
+  input.checked = true;
+  input.dispatchEvent(new window.Event('change', { bubbles: true }));
+}
+
+test('the list shows a remote server by its address and says the connection failed (#341)', async () => {
+  await mount({}, remoteKatalog());
+  const [row] = rows();
+  assert.equal(row.querySelector('.mcp-row__meta').textContent, 'https://mcp.example.com/mcp');
+  assert.match(row.querySelector('.mcp-status').textContent, /Connection failed/);
+  assert.match(row.querySelector('.mcp-row__error').textContent, /not authorised \(401\)/);
+});
+
+test('the transport choice is a labelled radio group; Remote shows address and headers instead of the process (#341)', async () => {
+  await mount();
+  document.getElementById('btn-add-mcp-server').click();
+  await flush();
+  const group = document.getElementById('mcp-field-transport');
+  assert.equal(group.getAttribute('role'), 'radiogroup');
+  assert.equal(document.getElementById(group.getAttribute('aria-labelledby')).textContent, 'Connection');
+  assert.equal(transportInput('stdio').checked, true, 'a new server starts as a local process');
+  assert.equal(visible('mcp-fields-stdio'), true);
+  assert.equal(visible('mcp-fields-http'), false);
+
+  choose('http');
+  assert.equal(visible('mcp-fields-stdio'), false);
+  assert.equal(visible('mcp-fields-http'), true);
+  assert.equal(document.getElementById('mcp-field-url').getAttribute('aria-describedby'), 'mcp-url-hint');
+});
+
+test('saving a new remote server sends address and headers, secret by default, and no process fields (#341)', async () => {
+  const { calls } = await mount();
+  document.getElementById('btn-add-mcp-server').click();
+  await flush();
+  type(document.getElementById('mcp-field-id'), 'docs');
+  // Typed first, then switched away from: it must not travel along.
+  type(document.getElementById('mcp-field-command'), 'npx');
+  choose('http');
+  type(document.getElementById('mcp-field-url'), ' https://mcp.example.com/mcp ');
+  document.getElementById('btn-mcp-header-add').click();
+  await flush();
+  const [row] = headerRows();
+  const fields = envFields(row);
+  assert.equal(fields.key.placeholder, 'Authorization');
+  assert.equal(fields.key.getAttribute('aria-label'), 'Header name');
+  assert.equal(fields.secret.checked, true);
+  assert.equal(fields.value.type, 'password');
+  type(fields.key, 'Authorization');
+  type(fields.value, 'Bearer abc');
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+
+  const [, payload] = calls.find(([kind]) => kind === 'save');
+  assert.equal(payload.transport, 'http');
+  assert.equal(payload.url, 'https://mcp.example.com/mcp');
+  assert.deepEqual(payload.headers, { Authorization: { secret: true, value: 'Bearer abc' } });
+  assert.equal('command' in payload, false);
+  assert.equal('env' in payload, false);
+  assert.equal(payload.create, true);
+});
+
+test('the switch of a remote server keeps its transport, address and headers (B16 on #341)', async () => {
+  const { calls } = await mount({}, remoteKatalog());
+  rows()[0].querySelector('input.ds-switch').click();
+  await flush();
+  const [, payload] = calls.find(([kind]) => kind === 'save');
+  assert.equal(payload.enabled, false);
+  assert.equal(payload.transport, 'http');
+  assert.equal(payload.url, 'https://mcp.example.com/mcp');
+  assert.deepEqual(payload.headers, {
+    Authorization: { secret: true, keep: true },
+    'X-Team': { secret: false, value: 'core' },
+  });
+  assert.equal('command' in payload, false);
+});
+
+test('editing a remote server shows it as remote, keeps its secret header and its transport (#341)', async () => {
+  const { calls } = await mount({}, remoteKatalog());
+  rows()[0].querySelector('[data-mcp-action="edit"]').click();
+  await flush();
+  assert.equal(transportInput('http').checked, true);
+  assert.equal(document.getElementById('mcp-field-url').value, 'https://mcp.example.com/mcp');
+  const [auth, team] = headerRows().map(envFields);
+  assert.equal(auth.value.value, TOKEN_PLACEHOLDER);
+  assert.equal(auth.key.readOnly, true);
+  assert.equal(auth.key.getAttribute('aria-describedby'), 'mcp-header-hint');
+  assert.equal(team.value.value, 'core');
+  assert.equal(document.getElementById('mcp-endpoint-hint').textContent, '');
+
+  type(document.getElementById('mcp-field-label'), 'Documentation');
+  document.getElementById('btn-mcp-server-save').click();
+  await flush();
+  const [, payload] = calls.find(([kind]) => kind === 'save');
+  assert.equal(payload.transport, 'http');
+  assert.deepEqual(payload.headers.Authorization, { secret: true, keep: true });
+  assert.equal(payload.label, 'Documentation');
+});
+
+test('a new address or transport is announced before saving switches the server off (#341)', async () => {
+  await mount({}, remoteKatalog());
+  rows()[0].querySelector('[data-mcp-action="edit"]').click();
+  await flush();
+  const hint = document.getElementById('mcp-endpoint-hint');
+  // A live region that stays in place; what is put into it is said.
+  assert.equal(hint.getAttribute('role'), 'status');
+  assert.equal(hint.textContent, '');
+
+  type(document.getElementById('mcp-field-url'), 'https://other.example.com/mcp');
+  assert.match(hint.textContent, /switches the server off/);
+  const box = hint.firstElementChild;
+  type(document.getElementById('mcp-field-url'), 'https://other.example.com/mcp/');
+  assert.equal(hint.firstElementChild, box, 'typing on does not say it again');
+  type(document.getElementById('mcp-field-url'), 'https://mcp.example.com/mcp');
+  assert.equal(hint.textContent, '');
+
+  choose('stdio');
+  assert.match(hint.textContent, /switches the server off/);
+  // Test waits for the save, as for any unsaved change.
+  assert.equal(document.getElementById('btn-mcp-server-test').getAttribute('aria-disabled'), 'true');
+});
+
+test('the import preview shows a remote server by its address and flags its secret header (#341)', async () => {
+  await mount();
+  document.getElementById('btn-import-mcp-servers').click();
+  await flush();
+  const input = document.getElementById('mcp-import-input');
+  input.value = JSON.stringify({ mcpServers: { docs: { type: 'http', url: 'https://mcp.example.com/mcp', headers: { Authorization: 'Bearer abc' } } } });
+  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await flush();
+  const row = document.querySelector('#mcp-import-list .mcp-import__row');
+  assert.equal(row.querySelector('.mcp-import__cmd').textContent, 'https://mcp.example.com/mcp');
+  assert.match(row.textContent, /Authorization will be stored encrypted/);
+});

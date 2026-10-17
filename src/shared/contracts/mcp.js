@@ -9,8 +9,10 @@
  * (#108). Die Fehlertexte sind bewusst schon die, die der Nutzer später zu
  * sehen bekommt, damit nicht jede Schicht ihre eigenen erfindet.
  *
- * Bewusst eng geschnitten: nur stdio, nur `tools`. Resources, Prompts,
- * Sampling und HTTP/SSE bleiben draußen (Abgrenzung in #62).
+ * Bewusst eng geschnitten: nur `tools`. Resources, Prompts und Sampling
+ * bleiben draußen (Abgrenzung in #62). Two transports: a local process over
+ * stdio (#106) and a remote endpoint over Streamable HTTP (#341); the older
+ * HTTP+SSE transport is not supported.
  *
  * CommonJS, damit Main (require) und der Renderer (generiertes ESM-Bundle)
  * dieselben Werte sehen.
@@ -28,9 +30,9 @@ const { createMessage, isMessage } = require('./message');
  */
 const MCP_PROTOCOL_VERSION = '2025-06-18';
 
-/** Nur stdio im MVP — HTTP/SSE ist bewusst ausgeklammert. */
-const MCP_TRANSPORTS = { STDIO: 'stdio' };
-const MCP_TRANSPORT_LIST = Object.freeze([MCP_TRANSPORTS.STDIO]);
+/** A local process over stdio, or a remote endpoint over Streamable HTTP (#341). */
+const MCP_TRANSPORTS = { STDIO: 'stdio', HTTP: 'http' };
+const MCP_TRANSPORT_LIST = Object.freeze([MCP_TRANSPORTS.STDIO, MCP_TRANSPORTS.HTTP]);
 
 /**
  * Lebenszyklus einer Verbindung. `failed` und `stopped` sind getrennt: das
@@ -54,6 +56,10 @@ const MCP_LIMITS = {
   MAX_ENV_ENTRIES: 64,
   ENV_KEY_MAX_CHARS: 128,
   ENV_VALUE_MAX_CHARS: 4096,
+  URL_MAX_CHARS: 2048,
+  MAX_HEADERS: 32,
+  HEADER_NAME_MAX_CHARS: 128,
+  HEADER_VALUE_MAX_CHARS: 8192,
   MAX_TOOLS: 200,
   TOOL_NAME_MAX_CHARS: 128,
   DESCRIPTION_MAX_CHARS: 4096,
@@ -61,6 +67,10 @@ const MCP_LIMITS = {
   STDERR_MAX_BYTES: 64 * 1024,
   /** Eine einzelne JSON-RPC-Zeile. Schützt vor einem Server, der nie „\n" schickt. */
   MAX_MESSAGE_BYTES: 8 * 1024 * 1024,
+  /** What of a refused HTTP answer is kept to explain the refusal (#341). */
+  HTTP_ERROR_BODY_MAX_CHARS: 2048,
+  /** Redirects followed on the same origin before giving up (#341). */
+  MAX_REDIRECTS: 5,
 };
 
 const MCP_TIMEOUTS = {
@@ -81,6 +91,14 @@ const SERVER_ID_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
 // `x` as much as server `a` with tool `_x` (CR-B16-07).
 const SERVER_ID_FORBIDDEN = /__|_$/;
 const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+// A header name is an HTTP token (RFC 9110 §5.6.2).
+const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+// The headers the transport sets itself, or that only the HTTP stack may set.
+// A configured value would either be overwritten or break the exchange.
+const RESERVED_HEADER_NAMES = Object.freeze([
+  'accept', 'connection', 'content-length', 'content-type', 'host', 'keep-alive',
+  'mcp-protocol-version', 'mcp-session-id', 'te', 'trailer', 'transfer-encoding', 'upgrade',
+]);
 
 function isValidMcpServerId(value) {
   return (
@@ -162,6 +180,134 @@ function normalizeEnv(raw, errors) {
   return out;
 }
 
+/**
+ * Loopback hosts, the only ones a server may be reached on over plain `http`
+ * (#341). A token sent in the clear to any other host is readable on the way;
+ * one sent to this machine is not.
+ */
+function isLoopbackHost(hostname) {
+  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (host === 'localhost' || host.endsWith('.localhost')) return true;
+  if (host === '::1') return true;
+  return /^127(\.\d{1,3}){3}$/.test(host);
+}
+
+/**
+ * Checks the address of a remote server and returns it in normal form.
+ * `https` is required except on loopback; private network addresses are
+ * fine, because the user typed the address, not the model (unlike
+ * `fetch_url`). Credentials in the URL are refused: they would sit in the
+ * configuration in plain text, where a header is stored encrypted.
+ *
+ * @returns {{ url: string, error: {key: string, params?: object}|null }}
+ */
+function normalizeMcpServerUrl(raw) {
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if (!value) return { url: '', error: createMessage('mcp.error.urlMissing') };
+  if (value.length > MCP_LIMITS.URL_MAX_CHARS) {
+    return { url: '', error: createMessage('mcp.error.urlTooLong', { max: MCP_LIMITS.URL_MAX_CHARS }) };
+  }
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch {
+    return { url: '', error: createMessage('mcp.error.urlInvalid') };
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    return { url: '', error: createMessage('mcp.error.urlScheme') };
+  }
+  if (parsed.protocol === 'http:' && !isLoopbackHost(parsed.hostname)) {
+    return { url: '', error: createMessage('mcp.error.urlNeedsHttps') };
+  }
+  if (parsed.username || parsed.password) {
+    return { url: '', error: createMessage('mcp.error.urlCredentials') };
+  }
+  parsed.hash = '';
+  return { url: parsed.href, error: null };
+}
+
+/** Does a header name stay clear of what the transport sets itself? */
+function isReservedMcpHeaderName(name) {
+  return RESERVED_HEADER_NAMES.includes(String(name || '').toLowerCase());
+}
+
+/**
+ * The two maps that can carry secrets — environment variables of a local
+ * server, headers of a remote one. They are stored and shown the same way
+ * (see below); only their names and limits differ.
+ */
+const SECRET_MAP_KINDS = Object.freeze({
+  env: Object.freeze({
+    isValidName: (key) => key.length <= MCP_LIMITS.ENV_KEY_MAX_CHARS && ENV_KEY_PATTERN.test(key),
+    maxEntries: MCP_LIMITS.MAX_ENV_ENTRIES,
+    valueMaxChars: MCP_LIMITS.ENV_VALUE_MAX_CHARS,
+    notObject: 'mcp.error.envNotObject',
+    tooMany: 'mcp.error.tooManyEnv',
+    nameInvalid: 'mcp.error.envNameInvalid',
+    valueNotString: 'mcp.error.envValueNotString',
+    needsSecretFlag: 'mcp.error.envNeedsSecretFlag',
+  }),
+  headers: Object.freeze({
+    isValidName: (key) => key.length <= MCP_LIMITS.HEADER_NAME_MAX_CHARS && HEADER_NAME_PATTERN.test(key),
+    maxEntries: MCP_LIMITS.MAX_HEADERS,
+    valueMaxChars: MCP_LIMITS.HEADER_VALUE_MAX_CHARS,
+    notObject: 'mcp.error.headersNotObject',
+    tooMany: 'mcp.error.tooManyHeaders',
+    nameInvalid: 'mcp.error.headerNameInvalid',
+    valueNotString: 'mcp.error.headerValueNotString',
+    needsSecretFlag: 'mcp.error.headerNeedsSecretFlag',
+  }),
+});
+
+/**
+ * What a header name or value must not be beyond its syntax: one the
+ * transport sets itself, a second spelling of one already there, or a value
+ * with a line break or control character, which no HTTP stack sends.
+ */
+function headerProblem(key, value, seenLower) {
+  if (isReservedMcpHeaderName(key)) return createMessage('mcp.error.headerReserved', { name: key });
+  if (seenLower.has(key.toLowerCase())) return createMessage('mcp.error.headerDuplicate', { name: key });
+  // eslint-disable-next-line no-control-regex
+  if (typeof value === 'string' && /[\u0000-\u0008\u000a-\u001f\u007f]/.test(value)) {
+    return createMessage('mcp.error.headerValueInvalid', { name: key });
+  }
+  return null;
+}
+
+/** Runtime headers: flat `{ Name: "value" }`, as the transport sends them. */
+function normalizeHeaders(raw, errors) {
+  const kind = SECRET_MAP_KINDS.headers;
+  if (raw === undefined || raw === null) return {};
+  if (typeof raw !== 'object' || Array.isArray(raw)) {
+    errors.push(createMessage(kind.notObject));
+    return {};
+  }
+  const out = {};
+  const seenLower = new Set();
+  for (const [key, value] of Object.entries(raw)) {
+    if (seenLower.size >= kind.maxEntries) {
+      errors.push(createMessage(kind.tooMany, { max: kind.maxEntries }));
+      break;
+    }
+    if (!kind.isValidName(key)) {
+      errors.push(createMessage(kind.nameInvalid, { name: key.slice(0, 40) }));
+      continue;
+    }
+    if (typeof value !== 'string') {
+      errors.push(createMessage(kind.valueNotString, { name: key }));
+      continue;
+    }
+    const problem = headerProblem(key, value, seenLower);
+    if (problem) {
+      errors.push(problem);
+      continue;
+    }
+    seenLower.add(key.toLowerCase());
+    out[key] = value.slice(0, kind.valueMaxChars);
+  }
+  return out;
+}
+
 /** Namen abgewählter Tools — Dopplungen und Leeres fallen weg. */
 function normalizeDisabledTools(raw) {
   if (!Array.isArray(raw)) return [];
@@ -196,6 +342,18 @@ function normalizeKnownTools(raw) {
 }
 
 /**
+ * The transport an entry asks for. Missing means stdio — that is what every
+ * entry stored before #341 is — unless the entry has an address and no
+ * command, which only a remote server can be.
+ */
+function transportOf(raw) {
+  if (raw.transport !== undefined && raw.transport !== null) return raw.transport;
+  const hasUrl = typeof raw.url === 'string' && raw.url.trim() !== '';
+  const hasCommand = typeof raw.command === 'string' && raw.command.trim() !== '';
+  return hasUrl && !hasCommand ? MCP_TRANSPORTS.HTTP : MCP_TRANSPORTS.STDIO;
+}
+
+/**
  * Prüft eine Serverkonfiguration und liefert sie in Normalform.
  *
  * @param {unknown} raw
@@ -221,20 +379,32 @@ function validateMcpServerConfig(raw) {
     errors.push(createMessage('mcp.error.idCharset'));
   }
 
-  const transport = raw.transport === undefined || raw.transport === null
-    ? MCP_TRANSPORTS.STDIO
-    : raw.transport;
+  const transport = transportOf(raw);
   if (!isMcpTransport(transport)) {
     errors.push(createMessage('mcp.error.transportUnsupported'));
   }
+  const remote = transport === MCP_TRANSPORTS.HTTP;
 
-  const command = text(raw.command, MCP_LIMITS.COMMAND_MAX_CHARS);
-  if (!command) errors.push(createMessage('mcp.error.commandMissing'));
+  // A remote server has an address and headers instead of a process. The
+  // process fields stay in the value, empty, so every reader finds the same
+  // shape; a local server has no `url` or `headers` at all.
+  let command = '';
+  let args = [];
+  let env = {};
+  let cwd = '';
+  let endpoint = null;
+  if (remote) {
+    const { url, error } = normalizeMcpServerUrl(raw.url);
+    if (error) errors.push(error);
+    endpoint = { url, headers: normalizeHeaders(raw.headers, errors) };
+  } else {
+    command = text(raw.command, MCP_LIMITS.COMMAND_MAX_CHARS);
+    if (!command) errors.push(createMessage('mcp.error.commandMissing'));
+    args = normalizeArgs(raw.args, errors);
+    env = normalizeEnv(raw.env, errors);
+    cwd = text(raw.cwd, MCP_LIMITS.COMMAND_MAX_CHARS);
+  }
 
-  const args = normalizeArgs(raw.args, errors);
-  const env = normalizeEnv(raw.env, errors);
-
-  const cwd = text(raw.cwd, MCP_LIMITS.COMMAND_MAX_CHARS);
   const label = text(raw.label, MCP_LIMITS.LABEL_MAX_CHARS) || id;
 
   const value = {
@@ -245,6 +415,7 @@ function validateMcpServerConfig(raw) {
     args,
     env,
     cwd: cwd || null,
+    ...(endpoint || {}),
     // Fehlend heißt eingeschaltet: wer einen Server einträgt, will ihn nutzen.
     enabled: raw.enabled === undefined || raw.enabled === null ? true : raw.enabled === true,
     disabledTools: normalizeDisabledTools(raw.disabledTools),
@@ -506,26 +677,40 @@ function mcpRiskClassesFor(annotations) {
  * geschuetzt — Vergessen darf nicht der teure Fall sein.
  */
 
-/** Eingabeform beim Speichern: was die Oberflaeche (#109) schickt. */
-function normalizeMcpEnvInput(raw) {
+/**
+ * Eingabeform beim Speichern: was die Oberflaeche (#109) schickt. The headers
+ * of a remote server (#341) take the same form as `env`, so they go through
+ * the same code with their own names and limits.
+ */
+function normalizeSecretMapInput(raw, kindName) {
+  const kind = SECRET_MAP_KINDS[kindName];
   const errors = [];
   if (raw === undefined || raw === null) return { entries: [], errors };
   if (typeof raw !== 'object' || Array.isArray(raw)) {
-    return { entries: [], errors: [createMessage('mcp.error.envNotObject')] };
+    return { entries: [], errors: [createMessage(kind.notObject)] };
   }
   const entries = [];
+  const seenLower = new Set();
   for (const [key, spec] of Object.entries(raw)) {
-    if (entries.length >= MCP_LIMITS.MAX_ENV_ENTRIES) {
-      errors.push(createMessage('mcp.error.tooManyEnv', { max: MCP_LIMITS.MAX_ENV_ENTRIES }));
+    if (entries.length >= kind.maxEntries) {
+      errors.push(createMessage(kind.tooMany, { max: kind.maxEntries }));
       break;
     }
-    if (key.length > MCP_LIMITS.ENV_KEY_MAX_CHARS || !ENV_KEY_PATTERN.test(key)) {
-      errors.push(createMessage('mcp.error.envNameInvalid', { name: key.slice(0, 40) }));
+    if (!kind.isValidName(key)) {
+      errors.push(createMessage(kind.nameInvalid, { name: key.slice(0, 40) }));
       continue;
     }
     if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
-      errors.push(createMessage('mcp.error.envNeedsSecretFlag', { name: key }));
+      errors.push(createMessage(kind.needsSecretFlag, { name: key }));
       continue;
+    }
+    if (kindName === 'headers') {
+      const problem = headerProblem(key, spec.keep === true ? '' : spec.value, seenLower);
+      if (problem) {
+        errors.push(problem);
+        continue;
+      }
+      seenLower.add(key.toLowerCase());
     }
     // Vorgabe geheim: nur ein ausdrueckliches `secret: false` macht Klartext.
     const secret = spec.secret !== false;
@@ -535,32 +720,48 @@ function normalizeMcpEnvInput(raw) {
       continue;
     }
     if (typeof spec.value !== 'string') {
-      errors.push(createMessage('mcp.error.envValueNotString', { name: key }));
+      errors.push(createMessage(kind.valueNotString, { name: key }));
       continue;
     }
-    entries.push({ key, secret, value: spec.value.slice(0, MCP_LIMITS.ENV_VALUE_MAX_CHARS), keep: false });
+    entries.push({ key, secret, value: spec.value.slice(0, kind.valueMaxChars), keep: false });
   }
   return { entries, errors };
 }
 
+function normalizeMcpEnvInput(raw) {
+  return normalizeSecretMapInput(raw, 'env');
+}
+
+function normalizeMcpHeadersInput(raw) {
+  return normalizeSecretMapInput(raw, 'headers');
+}
+
 /** Gespeicherte Form pruefen — kaputte Eintraege fallen weg statt zu werfen. */
-function normalizeStoredMcpEnv(raw) {
+function normalizeStoredSecretMap(raw, kindName) {
+  const kind = SECRET_MAP_KINDS[kindName];
   const out = {};
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
   for (const [key, entry] of Object.entries(raw)) {
-    if (!ENV_KEY_PATTERN.test(key) || !entry || typeof entry !== 'object') continue;
+    if (!kind.isValidName(key) || !entry || typeof entry !== 'object') continue;
     if (typeof entry.enc === 'string' && entry.enc) out[key] = { enc: entry.enc };
     else if (typeof entry.value === 'string') out[key] = { value: entry.value };
   }
   return out;
 }
 
+function normalizeStoredMcpEnv(raw) {
+  return normalizeStoredSecretMap(raw, 'env');
+}
+
+function normalizeStoredMcpHeaders(raw) {
+  return normalizeStoredSecretMap(raw, 'headers');
+}
+
 /**
  * Anzeigeform. Der verschluesselte Wert wird nicht etwa entschluesselt und
  * dann maskiert — er wird hier gar nicht erst angefasst.
  */
-function maskStoredMcpEnv(stored) {
-  const normalized = normalizeStoredMcpEnv(stored);
+function maskStoredSecretMap(normalized) {
   return Object.keys(normalized)
     .sort()
     .map((key) => {
@@ -572,9 +773,18 @@ function maskStoredMcpEnv(stored) {
     });
 }
 
+function maskStoredMcpEnv(stored) {
+  return maskStoredSecretMap(normalizeStoredMcpEnv(stored));
+}
+
+function maskStoredMcpHeaders(stored) {
+  return maskStoredSecretMap(normalizeStoredMcpHeaders(stored));
+}
+
 /**
- * Eingabe eines ganzen Servers beim Speichern. Die Felder ausser `env` sind
- * dieselben wie zur Laufzeit, deshalb prueft sie derselbe Validator.
+ * Eingabe eines ganzen Servers beim Speichern. Die Felder ausser `env` und
+ * `headers` sind dieselben wie zur Laufzeit, deshalb prueft sie derselbe
+ * Validator.
  *
  * `create: true` marks a new server ("Add server"): an identifier that is
  * already taken is refused instead of replacing that server (CR-B14-03). It
@@ -583,11 +793,19 @@ function maskStoredMcpEnv(stored) {
  */
 function validateMcpServerInput(raw) {
   const create = raw?.create === true;
-  const base = validateMcpServerConfig({ ...(raw && typeof raw === 'object' ? raw : {}), env: {} });
-  const { entries, errors: envErrors } = normalizeMcpEnvInput(raw?.env);
-  const errors = [...base.errors, ...envErrors];
-  if (errors.length > 0) return { ok: false, value: null, env: [], create, errors };
-  return { ok: true, value: base.value, env: entries, create, errors: [] };
+  const source = raw && typeof raw === 'object' ? raw : {};
+  const base = validateMcpServerConfig({ ...source, env: {}, headers: {} });
+  const remote = base.value?.transport === MCP_TRANSPORTS.HTTP
+    || (!base.value && transportOf(source) === MCP_TRANSPORTS.HTTP);
+  // Only the map of the server's own transport is read: a local server sends
+  // no headers anywhere, a remote one starts no process to hand `env` to.
+  const { entries, errors: envErrors } = remote ? { entries: [], errors: [] } : normalizeMcpEnvInput(raw?.env);
+  const { entries: headerEntries, errors: headerErrors } = remote
+    ? normalizeMcpHeadersInput(raw?.headers)
+    : { entries: [], errors: [] };
+  const errors = [...base.errors, ...envErrors, ...headerErrors];
+  if (errors.length > 0) return { ok: false, value: null, env: [], headers: [], create, errors };
+  return { ok: true, value: base.value, env: entries, headers: headerEntries, create, errors: [] };
 }
 
 module.exports = {
@@ -617,7 +835,13 @@ module.exports = {
   mcpRiskClassesFor,
   normalizeKnownTools,
   normalizeMcpEnvInput,
+  normalizeMcpHeadersInput,
   normalizeStoredMcpEnv,
+  normalizeStoredMcpHeaders,
   maskStoredMcpEnv,
+  maskStoredMcpHeaders,
   validateMcpServerInput,
+  normalizeMcpServerUrl,
+  isLoopbackHost,
+  isReservedMcpHeaderName,
 };

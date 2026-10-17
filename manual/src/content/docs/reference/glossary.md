@@ -51,7 +51,7 @@ The list of your earlier chats, on the right of the window. See [Continue an ear
 
 ### MCP server
 
-A small program that offers Snotra tools from another system — an issue tracker, a database — through the Model Context Protocol. Snotra starts it on your computer. See [Connect an MCP server](../../customising/mcp-servers/).
+A program that offers Snotra tools from another system — an issue tracker, a database — through the Model Context Protocol. Snotra starts it on your computer, or reaches it over the network by its address. See [Connect an MCP server](../../customising/mcp-servers/).
 
 ### Memory
 

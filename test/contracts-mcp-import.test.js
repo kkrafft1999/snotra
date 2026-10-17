@@ -82,21 +82,80 @@ test('ein Komma in einem Argument bleibt stehen', () => {
   assert.deepEqual(candidates[0].args, ['--liste=a,b,c']);
 });
 
-test('Einträge mit HTTP- oder SSE-Transport werden mit Begründung übersprungen', () => {
+test('remote entries are imported over Streamable HTTP; legacy SSE and WebSocket are skipped with a reason (#341)', () => {
   const block = JSON.stringify({
     mcpServers: {
-      fern: { type: 'sse', url: 'https://example.com/sse' },
-      auchfern: { url: 'https://example.com/mcp' },
+      legacy: { type: 'sse', url: 'https://example.com/sse' },
+      socket: { type: 'ws', url: 'wss://example.com/ws' },
+      cursor: { url: 'https://example.com/mcp' },
+      claude: { type: 'http', url: 'https://example.com/mcp2', headers: { Authorization: 'Bearer abc' } },
+      vendor: { type: 'streamable-http', url: 'https://example.com/mcp3' },
       nah: { command: 'npx', args: ['-y', 'server'] },
     },
   });
   const { ok, candidates, skipped } = parseMcpServersBlock(block);
-  assert.equal(ok, true, 'der brauchbare Eintrag rettet den Import');
-  assert.deepEqual(candidates.map((c) => c.id), ['nah']);
-  assert.deepEqual(skipped.map((s) => s.name), ['fern', 'auchfern']);
-  assert.deepEqual(skipped[0].reason,
-    { key: 'mcpImport.skippedReason.remoteTransport', params: { transport: 'sse' } });
-  assert.equal(skipped[1].reason.key, 'mcpImport.skippedReason.url');
+  assert.equal(ok, true);
+  assert.deepEqual(candidates.map((c) => `${c.id}:${c.transport}`), ['cursor:http', 'claude:http', 'vendor:http', 'nah:stdio']);
+  assert.deepEqual(skipped.map((s) => s.name), ['legacy', 'socket']);
+  assert.deepEqual(skipped[0].reason, { key: 'mcpImport.skippedReason.legacySse' });
+  assert.deepEqual(skipped[1].reason, { key: 'mcpImport.skippedReason.remoteTransport', params: { transport: 'ws' } });
+  assert.equal(candidates[1].url, 'https://example.com/mcp2');
+  assert.deepEqual(candidates[1].headers, [{ key: 'Authorization', value: 'Bearer abc', secret: true }]);
+});
+
+test('an imported address takes the same check as a typed one (#341)', () => {
+  const { candidates, skipped } = parseMcpServersBlock(JSON.stringify({
+    mcpServers: {
+      plain: { url: 'http://mcp.example.com/mcp' },
+      local: { url: 'http://localhost:3000/mcp' },
+      broken: { type: 'http', url: 'not a url' },
+    },
+  }));
+  assert.deepEqual(candidates.map((c) => c.id), ['local']);
+  assert.deepEqual(skipped.map((s) => [s.name, s.reason.key]), [
+    ['plain', 'mcp.error.urlNeedsHttps'],
+    ['broken', 'mcp.error.urlInvalid'],
+  ]);
+});
+
+test('imported headers follow the preview rules of env (#341)', () => {
+  const [candidate] = parseMcpServersBlock(JSON.stringify({
+    mcpServers: {
+      remote: {
+        type: 'http',
+        url: 'https://example.com/mcp',
+        headers: {
+          'X-API-Key': 'k-123',
+          'X-Team': 'core',
+          Authorization: 'Bearer ${GITHUB_TOKEN}',
+          'Content-Type': 'application/json',
+          Empty: '',
+        },
+      },
+    },
+  })).candidates;
+  assert.deepEqual(candidate.headers.map((h) => `${h.key}:${h.secret}`), [
+    'X-API-Key:true', 'X-Team:false', 'Authorization:true', 'Empty:false',
+  ]);
+  const notes = candidate.notes.map((note) => `${note.key}:${note.params?.name || ''}`);
+  assert.ok(notes.includes('mcpImport.note.envPlaceholder:Authorization'), notes.join());
+  assert.ok(notes.includes('mcpImport.note.headerReserved:Content-Type'), notes.join());
+  assert.ok(notes.includes('mcpImport.note.envValueEmpty:Empty'), notes.join());
+});
+
+test('a remote candidate becomes a switched-off http server input (#341)', () => {
+  const [candidate] = parseMcpServersBlock(JSON.stringify({
+    mcpServers: { remote: { type: 'http', url: 'https://example.com/mcp', headers: { Authorization: 'Bearer abc', 'X-Team': 'core' } } },
+  })).candidates;
+  assert.deepEqual(toMcpServerInput(candidate), {
+    id: 'remote',
+    label: 'remote',
+    transport: 'http',
+    url: 'https://example.com/mcp',
+    headers: { Authorization: { value: 'Bearer abc', secret: true }, 'X-Team': { value: 'core', secret: false } },
+    enabled: false,
+    disabledTools: [],
+  });
 });
 
 test('ein Eintrag ohne Kommando wird übersprungen, nicht stillschweigend übernommen', () => {

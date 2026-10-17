@@ -340,3 +340,104 @@ test('das Speichern aus dem Formular loescht den Katalog nicht', async (t) => {
   assert.equal(server.label, 'GitHub (neu)');
   assert.deepEqual(server.knownTools, ['search', 'create_issue']);
 });
+
+// --- Remote servers (#341) ---------------------------------------------------
+
+const BEARER = 'Bearer sk-remote-geheim-1234567890';
+const REMOTE = {
+  id: 'remote',
+  label: 'Remote',
+  transport: 'http',
+  url: 'https://mcp.example.com/mcp',
+  headers: { Authorization: { value: BEARER }, 'X-Team': { secret: false, value: 'core' } },
+};
+
+test('a remote server stores its secret headers encrypted and shows them masked (#341)', async (t) => {
+  const { storage, file } = await makeStore(t);
+  assert.equal((await storage.saveMcpServer(REMOTE)).ok, true);
+
+  const raw = await fs.readFile(file(), 'utf8');
+  assert.equal(raw.includes('sk-remote-geheim'), false, 'the token never sits in the file in plain text');
+  assert.match(raw, /core/);
+
+  const [shown] = await storage.readMcpServers();
+  assert.equal(shown.transport, 'http');
+  assert.equal(shown.url, 'https://mcp.example.com/mcp');
+  assert.deepEqual(shown.headers, [
+    { key: 'Authorization', secret: true, hasValue: true },
+    { key: 'X-Team', secret: false, hasValue: true, value: 'core' },
+  ]);
+  assert.equal(JSON.stringify(shown).includes('sk-remote-geheim'), false);
+
+  const [runtime] = await storage.getMcpServersForRuntime();
+  assert.deepEqual(runtime.headers, { Authorization: BEARER, 'X-Team': 'core' });
+  assert.deepEqual(await storage.getMcpSecretValues(), [BEARER]);
+});
+
+test('without encryption a secret header is not stored at all (#341)', async (t) => {
+  const { storage } = await makeStore(t, { encryption: false });
+  const result = await storage.saveMcpServer(REMOTE);
+  assert.equal(result.ok, false);
+  assert.deepEqual(result.errors, [{ key: 'mcp.error.noSecureStorage', params: { names: 'Authorization' } }]);
+  assert.deepEqual(await storage.readMcpServers(), []);
+});
+
+test('a save without a transport keeps the stored one, its address and headers (B16 on #341)', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer(REMOTE);
+  // What a form that only knows stdio sends when the switch is flipped.
+  const result = await storage.saveMcpServer({ id: 'remote', label: 'Remote', command: '', args: [], enabled: false, env: {} });
+  assert.equal(result.ok, true, JSON.stringify(result.errors));
+  const [shown] = await storage.readMcpServers();
+  assert.equal(shown.transport, 'http');
+  assert.equal(shown.url, 'https://mcp.example.com/mcp');
+  assert.equal(shown.enabled, false);
+  assert.deepEqual((await storage.getMcpServersForRuntime())[0].headers, { Authorization: BEARER, 'X-Team': 'core' });
+});
+
+test('keep holds a stored secret header while other fields change (#341)', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer(REMOTE);
+  const result = await storage.saveMcpServer({
+    ...REMOTE,
+    label: 'Renamed',
+    headers: { Authorization: { secret: true, keep: true } },
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual((await storage.getMcpServersForRuntime())[0].headers, { Authorization: BEARER });
+  const missing = await storage.saveMcpServer({ ...REMOTE, headers: { 'X-Other': { secret: true, keep: true } } });
+  assert.deepEqual(missing.errors, [{ key: 'mcp.error.headerKeepMissing', params: { names: 'X-Other' } }]);
+});
+
+test('a changed address switches the server off and forgets its tools (#341)', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer({ ...REMOTE, enabled: true });
+  await storage.updateMcpServerKnownTools('remote', ['echo', 'add']);
+
+  // The same address keeps both.
+  assert.equal((await storage.saveMcpServer({ ...REMOTE, label: 'Same place', enabled: true })).endpointChanged, false);
+  let [shown] = await storage.readMcpServers();
+  assert.equal(shown.enabled, true);
+  assert.deepEqual(shown.knownTools, ['echo', 'add']);
+
+  const moved = await storage.saveMcpServer({ ...REMOTE, url: 'https://other.example.com/mcp', enabled: true, knownTools: ['echo'] });
+  assert.equal(moved.ok, true);
+  assert.equal(moved.endpointChanged, true);
+  [shown] = await storage.readMcpServers();
+  assert.equal(shown.url, 'https://other.example.com/mcp');
+  assert.equal(shown.enabled, false);
+  assert.deepEqual(shown.knownTools, []);
+});
+
+test('switching a server between local and remote counts as a changed endpoint (#341)', async (t) => {
+  const { storage } = await makeStore(t);
+  await storage.saveMcpServer(GITHUB);
+  await storage.updateMcpServerKnownTools('github', ['search']);
+  const result = await storage.saveMcpServer({ ...REMOTE, id: 'github' });
+  assert.equal(result.endpointChanged, true);
+  const [shown] = await storage.readMcpServers();
+  assert.equal(shown.transport, 'http');
+  assert.equal(shown.enabled, false);
+  assert.deepEqual(shown.knownTools, []);
+  assert.deepEqual(shown.env, [], 'the environment of the local process does not travel along');
+});
