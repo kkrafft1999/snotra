@@ -33,7 +33,7 @@ Er trägt noch den Namen der Plattform, Snotra AI, obwohl die App Snotra Agent h
 | `tool-policy.json` und `tool-policy.key` | Der Modus, deine Sperren und Erlaubnisse, der Standardmodus eines Ordners. Signiert, damit eine veränderte Datei auffällt. |
 | `mcp-servers.json` | Die MCP-Server. Geheime Umgebungsvariablen und Header sind verschlüsselt. |
 | `web-search-config.json` | Der Schlüssel für die Websuche, verschlüsselt. |
-| `chat-history.json` | Deine Chats, verschlüsselt. |
+| `chat-history/` | [seit 1.25] Deine Chats, verschlüsselt: `index.json` mit der Liste und eine Datei je Chat. Bis 1.24 lagen sie in einer Datei, `chat-history.json`; der erste Start von 1.25 zieht sie um und entfernt die alte Datei, sobald die Kopie geprüft ist. |
 | `chat-attachments/` | Die Bilder, die zu deinen Chats gehören, ein Ordner je Chat. |
 | `folder-history.json` und `last-folder.json` | Die zuletzt benutzten Ordner und der, der beim nächsten Start öffnet. |
 | `window-state.json` | Größe und Platz des Fensters. |
@@ -54,7 +54,7 @@ Um bei null anzufangen, beende Snotra und verschiebe den Ordner an eine andere S
 
 API-Schlüssel, geheime Umgebungsvariablen, der Suchschlüssel und deine Chats sind mit einem Schlüssel des Systems verschlüsselt: unter macOS dem Schlüsselbund-Eintrag *Snotra AI Safe Storage*, unter Windows dem Benutzerkonto, unter Linux dem Schlüsselbund. Eine Kopie des Ordners nützt deshalb auf einem anderen Computer oder in einem anderen Konto nichts, und die Schlüssel müssen dort neu eingegeben werden. Wo das System keinen verschlüsselten Speicher bietet — ein Linux-Desktop ohne Schlüsselbund, zum Beispiel —, sagt Snotra *Verschlüsselter Speicher ist auf diesem System nicht verfügbar*, statt einen Schlüssel zu speichern.
 
-Ändert sich der Schlüssel, wird ein Chat-Verlauf, der sich nicht mehr lesen lässt, nicht gelöscht: Er bleibt als `chat-history.json.undecryptable-<Zeit>` neben dem neuen liegen.
+Ändert sich der Schlüssel, wird ein Chat-Verlauf, der sich nicht mehr lesen lässt, nicht gelöscht: Der Ordner bleibt als `chat-history.undecryptable-<Zeit>` neben dem neuen liegen.
 
 ## In einem Projekt
 

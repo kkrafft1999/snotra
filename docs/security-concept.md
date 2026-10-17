@@ -180,7 +180,7 @@ requires a new `read-sensitive` approval. The same rule applies when old
 conversations are loaded; redaction is the default, not a question. The mark is
 stored with the history — and the history is encrypted only where `safeStorage`
 is available. Without it (a Linux desktop without a keyring, a keychain that
-refuses) `chat-history.json` is written as plain JSON, the approved content of
+refuses) the history files (`chat-history/`, #985) are written as plain JSON, the approved content of
 a sensitive read and its mark included, like the UI preferences. The history is
 then protected by the user's account and nothing more; the revision "the
 history without encrypted storage" in section 9 records that.
@@ -1335,7 +1335,7 @@ domains, so a card for a host that is already kept is not shown.
 
 Section 4 said the provider-bound mark of a sensitive read is stored "with the
 history in the encrypted store". That holds where `safeStorage` is available.
-Where it is not, `chat-history.json` is written as plain JSON: the tool
+Where it is not, the history files (`chat-history/`, one per chat since #985) are written as plain JSON: the tool
 messages whose sensitive content the user approved, and the marks that bind
 them to a provider endpoint, sit in the file in the clear, with the rest of
 the conversation. Unlike the policy file, which drops to the fail-safe of

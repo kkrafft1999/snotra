@@ -25,7 +25,7 @@ Behalte die Kopie, bis du sicher bist, dass du sie nicht mehr brauchst. Snotra l
 
 Die Datei war nicht zu verstehen. Ihr Inhalt war beschädigt — durch einen Absturz beim Schreiben, ein Sync-Programm, eine Änderung von Hand —, oder eine neuere Snotra-Version hat sie geschrieben als die, die gerade läuft, etwa nachdem du zu einem älteren Release zurückgegangen bist. Snotra benennt die Datei um, hängt `.unreadable-` und die Uhrzeit an und fängt diesen Teil neu an. Jedes Byte der alten Datei steckt noch in der Kopie.
 
-Beim Chatverlauf heißt die Kopie `chat-history.json.unreadable-…`, oder `chat-history.json.undecryptable-…`, wenn er sich mit dem Schlüssel dieses Systems nicht entschlüsseln ließ. Für diesen Fall siehe [Schlüsselbund-Fragen und verschlüsselter Speicher](../keychain-and-storage/).
+Beim Chatverlauf ist die Kopie der ganze Ordner, `chat-history.unreadable-…`, oder `chat-history.undecryptable-…`, wenn er sich mit dem Schlüssel dieses Systems nicht entschlüsseln ließ; für diesen Fall siehe [Schlüsselbund-Fragen und verschlüsselter Speicher](../keychain-and-storage/). [seit 1.25] Ist nur die Datei eines einzelnen Chats beschädigt, legt Snotra nur diese Datei im Ordner beiseite, und der Hinweis sagt ***Ein Chat ließ sich nicht lesen und fehlt im Verlauf.*** Deine anderen Chats bleiben. Ein Verlauf von vor 1.25 bleibt als `chat-history.json.unreadable-…` oder `chat-history.json.undecryptable-…` liegen.
 
 ## Wenn Änderungen nicht gespeichert werden
 

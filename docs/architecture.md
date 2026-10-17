@@ -40,7 +40,7 @@ component level *inside* the main process.
 | **HTML preview** | `WebContentsView` with its own session (`snotra-html-preview`), the `snotra-html:` scheme and `sandbox: true` | Shows HTML pages from the workspace apart from the app's own UI ([#479](https://github.com/kkrafft1999/snotra/issues/479), see [HTML pages](#html-pages-479)). |
 | **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (#790): the page is `src/renderer/manual.html`, the content a bundle that `scripts/bundle-manual.js` builds into `src/manual/` from `manual/`. The app window's channels refuse it as a sender. |
 | **Execution sandbox** | Child processes through `@anthropic-ai/sandbox-runtime`: Seatbelt on macOS, bubblewrap on Linux; unisolated on Windows | `shell_execute` and `run_python` (#329): write only inside the workspace, network only through the proxy in main and only to approved domains. See [`security-concept.md`](./security-concept.md), section 9. |
-| **Local store** | JSON files in the userData folder; secrets encrypted with `safeStorage` | `llm-config.json`, `chat-history.json`, `ui-preferences.json`, `mcp-servers.json`, `tool-policy.json`, `web-search-config.json`, chat attachments, `memory.md`. |
+| **Local store** | JSON files in the userData folder; secrets encrypted with `safeStorage` | `llm-config.json`, `chat-history/` (an index and one file per chat), `ui-preferences.json`, `mcp-servers.json`, `tool-policy.json`, `web-search-config.json`, chat attachments, `memory.md`. |
 
 Two things look like containers and are not:
 
@@ -1054,9 +1054,67 @@ a key in the history bucket and opens no file access; the trust boundary remains
 decided, for the same reason, by the session itself and not by the currently
 active folder.
 
+### The chat history store (issue #985)
+
+`services/chat-history-store.js` keeps the history as a folder in userData,
+not as one file:
+
+```
+chat-history/
+  index.json    what the list needs of every chat — folder, title, time,
+                message count, cost, the chat's own model, mode, level and
+                overrides — and which chat each folder opens with
+  <hash>.json   one chat with its messages; the name is the first 32 hex
+                digits of the SHA-256 of its id
+```
+
+Every file is encrypted with `safeStorage` as the single file was, and plain
+JSON where encrypted storage is missing. Until #985 every list, save, delete
+and pointer change read, decrypted and parsed all chats, and every save
+encrypted all of them again on the main thread (AR-10).
+
+- **The index is read once and answered from memory.** `CHAT_HISTORY_GET`
+  sends the folder's chats as rows without messages
+  (`normalizeSessionMetaForList`: id, folder, the title to show — a message
+  descriptor for a chat without one —, time, message count, cost). A chat's
+  messages come with `CHAT_HISTORY_GET_SESSION` when it is opened; the last
+  eight chats read stay in memory in main. That call answers only for chats of
+  the active folder, the same ones the list hands out (#68).
+- **A save writes that chat's file and the index**, nothing else, and a save
+  whose chat is unchanged writes no chat file. A chat's own settings
+  (`patchSession`, from `chat-session-settings`) go into the index alone; the
+  index is the record for everything but the messages.
+- **The index is written behind the state in memory**: one write in flight,
+  and whatever changes meanwhile goes into the next. Every caller still waits
+  for the write that carries its change, so a failed save reaches the chat's
+  banner (#977). The chat's own file is written before the save returns.
+  Changes run one after the other inside the store, apart from
+  `withChatHistoryLock`, which the IPC handlers hold for their read-modify-write
+  and which the store never waits for. `whenWritesSettled` — what the quit
+  waits for (#679) — includes the store's queue and its index write.
+- **The index is a cache of the files.** Each load checks it against the
+  folder: an entry whose file is gone is dropped, a file without an entry is
+  read and taken in. A lost or broken index is rebuilt that way; a delete
+  removes the chat's file before it touches the index, so a delete that fails
+  leaves the chat in the list (#582) and one that half succeeded does not
+  bring it back.
+- **Migration** from `chat-history.json` (releases up to 1.24) happens on the
+  first load: its chats are written as files, read back and compared, then the
+  index is written, and only then is the old file removed. Anything that fails
+  on the way leaves it as it was, the store refuses writes for that run, and
+  the next start begins again. The index notes the SHA-256 of the file it took
+  in: a copy that outlives its removal is not taken in a second time, which
+  would bring back chats deleted since; one with another digest — an older
+  release run after the update — is merged, the newer copy of a chat winning.
+  An older release started after the migration sees an empty history; nothing
+  of the folder is touched by it.
+
+`MAX_CHAT_SESSIONS` (200) still applies across all folders; the oldest chats
+beyond it go with their files on the next save.
+
 ### Image attachments in the history (issue #94)
 
-Images live **next to** the history file, not inside it:
+Images live **next to** the history, not inside it:
 `services/chat-attachment-store.js` writes them to
 `chat-attachments/<chat-id>/<SHA-256>.<ext>` in the userData folder, and the
 session carries only `{ kind, mediaType, file }`. Four screenshots in one message
@@ -1079,7 +1137,9 @@ lock: `CHAT_HISTORY_DELETE` removes the chat's folder, and a
 `CHAT_HISTORY_UPSERT` removes the folders of the sessions it drops out of
 `MAX_CHAT_SESSIONS`. After that it sweeps everything for which there is no longer a
 session — but only while no history lies moved aside next to the live one
-(`chat-history.json.undecryptable-*` or `.unreadable-*`). Those folders may belong
+(`chat-history.json.undecryptable-*` or `.unreadable-*` from before #985, a
+whole `chat-history.undecryptable-*` folder, or a single chat file moved aside
+inside it). Those folders may belong
 to the chats in that copy, and the copy is kept so that it can be recovered, images
 included (#565). Once the copy is gone, the next save sweeps them.
 
@@ -1308,13 +1368,20 @@ What it does with a file it finds but cannot use is one rule for all of them:
   byte, and the store starts from its defaults. A move that fails throws, so
   nothing is written (#557).
 
-The chat history follows the same idea with its own names: a history that
-cannot be decrypted or parsed is moved aside as
-`chat-history.json.undecryptable-<stamp>` on the first read, one written by a
-newer release (`version` above this build's) as
-`chat-history.json.unreadable-<stamp>` (#566), and when that move fails, no save
-may write over it (#561). While such a copy lies there, the images of its chats
-are not swept (#565).
+The chat history follows the same idea with its own names, now per file
+(#985). An index or a chat file that cannot be read now — or an encrypted one
+while encrypted storage is missing (#658) — is left as it is: for the index the
+whole store shows empty and refuses every write, for a chat file that chat
+cannot be opened or saved. A file that cannot be decrypted or parsed is moved
+aside as `<name>.undecryptable-<stamp>`, one written by a newer release
+(`version` above this build's) as `<name>.unreadable-<stamp>` (#566), and when
+that move fails, nothing may write over it (#561). When nothing in the folder
+opens with this key — the key changed, not a file — the folder goes aside as
+one, `chat-history.undecryptable-<stamp>`, as the single file did; a broken
+index alone is moved aside without a notice and rebuilt from the chats, since
+no chat is lost. The single file of releases before #985 keeps its old names
+(`chat-history.json.undecryptable-<stamp>`, `.unreadable-<stamp>`). While any
+of these copies lies there, the images of their chats are not swept (#565).
 
 **Ciphertext waits for its key**
 ([#1060](https://github.com/kkrafft1999/snotra/issues/1060)). On macOS the key
@@ -1330,7 +1397,8 @@ every encrypted write waits for it: the chat history, the web search key and
 MCP secrets in `storage-service`, provider keys and headers in
 `ipc/settings-handlers.js` (before the config lock, so nothing else waits with
 them), and a new `tool-policy.key` in `tool-policy-store`. What only reads does
-not wait: a plain history is encrypted by a later read, a missing policy is
+not wait: a plain history is taken in as plain as it was and encrypted in the
+background once the key is there, a missing policy is
 read as the defaults without writing a file yet, a stored signature whose key
 is gone fails its check without a new key being made for it, and the
 active-chat pointer is written only when it changes — otherwise every new chat
