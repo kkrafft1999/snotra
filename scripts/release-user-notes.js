@@ -20,9 +20,11 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { LOCALES } = require('../src/shared/i18n/locales');
 
 const MARKER = (name) => `<!-- snotra:notes ${name} -->`;
-const LANGUAGES = ['en', 'de'];
+/** One section per interface language, in the registry's order. */
+const LANGUAGES = LOCALES;
 /** An earlier section, from the first marker to the end marker and the blank lines after it. */
 const EXISTING = /<!--\s*snotra:notes\s+[a-z]+\s*-->[^]*?<!--\s*snotra:notes\s+end\s*-->\s*/i;
 
@@ -50,7 +52,7 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--dry-run') args.dryRun = true;
-    else if (arg === '--en' || arg === '--de') args.files[arg.slice(2)] = argv[++i];
+    else if (LANGUAGES.some((lang) => arg === `--${lang}`)) args.files[arg.slice(2)] = argv[++i];
     else if (!args.tag) args.tag = arg;
     else throw new Error(`Unexpected argument: ${arg}`);
   }
