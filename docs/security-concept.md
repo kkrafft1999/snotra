@@ -363,6 +363,21 @@ history without encrypted storage" in section 9 records that.
   (#560). Local processes
   running with the user's rights are outside the protection goal; they could
   modify the app itself.
+- **The presence guarantee (#980):** each of these confirmations goes through
+  one port, the user-confirmation port, and means one thing: a person at this
+  machine answered a prompt the operating system drew. Only the desktop's
+  adapter — the native dialog in main — can say so; a front end that holds a
+  credential, a local program or the phone gets an implementation that
+  confirms nothing. A credential is not a person at the machine. A
+  confirmation hands main a receipt that is good once, for that action and
+  that root, rule or program, and for a minute, and that cannot be copied over
+  IPC or a network. The policy store refuses every loosening without one, so
+  "Auto", an allow rule, a removed block or pattern, the sandbox opt-out, a
+  program allowance, a kept host and a reset are reachable only through the
+  port, not by calling the store. Cancel is the default of every prompt. A
+  chat that comes back on screen gets "Auto" only when the signed policy names
+  it as confirmed, or its workspace's confirmed default is "Auto" — its own
+  history file is not enough.
 
 Snotra cannot reliably tell whether a permissible model call was caused
 indirectly by foreign text. The prompt rule supports the model; the effective

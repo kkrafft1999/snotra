@@ -26,6 +26,11 @@
  * for one program, in every workspace. Main resolves the program and checks
  * every folder itself, then confirms natively; an edit that only takes rights
  * away, and removing an allowance, need no confirmation.
+ *
+ * Since #980 every one of these asks through the user-confirmation port, not
+ * the dialog itself: the desktop's adapter shows the native message box, and
+ * its receipt is what the policy store accepts — a front end without a person
+ * at the machine gets no receipt and loosens nothing.
  */
 
 const {
@@ -46,6 +51,12 @@ const { createTranslator } = require('../../shared/i18n');
 const { menuPath } = require('../../shared/i18n/ui-quotes');
 const { isNarrowing, normalizeAllowancePath } = require('../../shared/contracts/program-allowances');
 const { describeSecurityOverview } = require('../../application/permissions/security-overview');
+const {
+  CONFIRMATION_ACTIONS,
+  permissionRuleSubject,
+  removedPatternsSubject,
+  createRefusingConfirmation,
+} = require('../../application/permissions/user-confirmation');
 
 // The three dialogs are built for the language the interface speaks at the
 // moment they open (#353). They live only until the click, so there is nothing
@@ -270,7 +281,11 @@ function programAllowanceDialog(entry, t, homeDir = '') {
 
 function registerToolPermissionHandlers({
   ipcMain,
+  // Only the folder picker of program allowances (#408); confirmations go
+  // through `confirmations`.
   dialog,
+  // The user-confirmation port (#980). Without one nothing loosens.
+  confirmations = createRefusingConfirmation(),
   getMainWindow = () => null,
   toolPolicyStore,
   approvals,
@@ -300,13 +315,10 @@ function registerToolPermissionHandlers({
     throw new Error('registerToolPermissionHandlers requires toolPolicyStore, approvals and sessionGrants.');
   }
 
-  async function confirmNatively(options) {
-    if (!dialog || typeof dialog.showMessageBox !== 'function') return false;
-    const win = getMainWindow();
-    const result = win && !win.isDestroyed?.()
-      ? await dialog.showMessageBox(win, options)
-      : await dialog.showMessageBox(options);
-    return result?.response === 0;
+  /** The receipt of a confirmed loosening (#980), or null when it was not confirmed. */
+  async function confirmLoosening(action, subject, prompt) {
+    const outcome = await confirmations.confirm({ action, subject, prompt });
+    return outcome?.confirmed === true && outcome.receipt ? outcome.receipt : null;
   }
 
   /**
@@ -498,14 +510,17 @@ function registerToolPermissionHandlers({
   ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_MODE, async (event, rawMode) => {
     const mode = normalizeToolPermissionMode(rawMode);
     if (mode !== rawMode) return createSettingsError(createMessage('permissions.error.unknownMode'));
+    // "Auto" is confirmed for the chat on screen, and remembered for it (#980).
+    const chatId = chatSessionSettings?.getCurrentChatId?.() ?? null;
+    let confirmation = null;
     if (mode === TOOL_PERMISSION_MODES.AUTO) {
       // Without safeStorage "Auto" cannot be stored (#419): say so instead of
       // asking for a confirmation that leads nowhere.
       if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.autoNeedsEncryption'));
-      const confirmed = await confirmNatively(autoModeDialog(createTranslator(getLocale())));
-      if (!confirmed) return createSettingsError(createMessage('permissions.error.autoNotEnabled'), 'cancelled');
+      confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.MODE_AUTO, chatId || '', autoModeDialog(createTranslator(getLocale())));
+      if (!confirmation) return createSettingsError(createMessage('permissions.error.autoNotEnabled'), 'cancelled');
     }
-    const result = await toolPolicyStore.setMode(mode);
+    const result = await toolPolicyStore.setMode(mode, { confirmation, chatId });
     if (!result.ok) return createSettingsError(result.error);
     await chatSessionSettings?.rememberMode(result.mode);
     afterModeChange(event.sender);
@@ -543,11 +558,16 @@ function registerToolPermissionHandlers({
         return createSettingsError(createMessage('permissions.error.allowNotForTool', { tool: preview.tool }));
       }
     }
+    let confirmation = null;
     if (preview.effect === PERMISSION_RULE_EFFECTS.ALLOW) {
-      const confirmed = await confirmNatively(allowRuleDialog(preview, createTranslator(getLocale())));
-      if (!confirmed) return createSettingsError(createMessage('permissions.error.ruleNotCreated'), 'cancelled');
+      confirmation = await confirmLoosening(
+        CONFIRMATION_ACTIONS.ALLOW_RULE,
+        permissionRuleSubject(preview),
+        allowRuleDialog(preview, createTranslator(getLocale())),
+      );
+      if (!confirmation) return createSettingsError(createMessage('permissions.error.ruleNotCreated'), 'cancelled');
     }
-    const result = await toolPolicyStore.addRule(candidate);
+    const result = await toolPolicyStore.addRule(candidate, { confirmation });
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
     return createSettingsOk();
@@ -558,11 +578,12 @@ function registerToolPermissionHandlers({
     if (!id) return createSettingsError(createMessage('permissions.error.ruleIdMissing'));
     const rule = await toolPolicyStore.findRule(id);
     if (!rule) return createSettingsError(createMessage('permissions.error.ruleNotFound'));
+    let confirmation = null;
     if (rule.effect === PERMISSION_RULE_EFFECTS.DENY) {
-      const confirmed = await confirmNatively(removeDenyRuleDialog(rule, createTranslator(getLocale())));
-      if (!confirmed) return createSettingsError(createMessage('permissions.error.denyNotRemoved'), 'cancelled');
+      confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.REMOVE_BLOCK, id, removeDenyRuleDialog(rule, createTranslator(getLocale())));
+      if (!confirmation) return createSettingsError(createMessage('permissions.error.denyNotRemoved'), 'cancelled');
     }
-    const result = await toolPolicyStore.removeRule(id);
+    const result = await toolPolicyStore.removeRule(id, { confirmation });
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
     return createSettingsOk();
@@ -574,11 +595,16 @@ function registerToolPermissionHandlers({
     // Dropping a pattern turns files that asked into ordinary reads (#514).
     const current = (await toolPolicyStore.read()).sensitivePathPatterns || [];
     const removed = current.filter((pattern) => !next.includes(pattern));
+    let confirmation = null;
     if (removed.length > 0) {
-      const confirmed = await confirmNatively(removePatternsDialog(removed, createTranslator(getLocale())));
-      if (!confirmed) return createSettingsError(createMessage('permissions.error.patternsNotRemoved'), 'cancelled');
+      confirmation = await confirmLoosening(
+        CONFIRMATION_ACTIONS.REMOVE_SENSITIVE_PATTERNS,
+        removedPatternsSubject(removed),
+        removePatternsDialog(removed, createTranslator(getLocale())),
+      );
+      if (!confirmation) return createSettingsError(createMessage('permissions.error.patternsNotRemoved'), 'cancelled');
     }
-    const result = await toolPolicyStore.setSensitivePathPatterns(next);
+    const result = await toolPolicyStore.setSensitivePathPatterns(next, { confirmation });
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
     return { ...createSettingsOk(), sensitivePathPatterns: result.sensitivePathPatterns };
@@ -624,11 +650,12 @@ function registerToolPermissionHandlers({
       denyRules: (state.workspaceRules?.[root] || []).filter((rule) => rule.effect === PERMISSION_RULE_EFFECTS.DENY).length,
       askAllDefaults: state.workspaceModes?.[root] === TOOL_PERMISSION_MODES.ASK_ALL ? 1 : 0,
     }, t);
+    let confirmation = null;
     if (losses.length > 0) {
-      const confirmed = await confirmNatively(resetDialog('resetWorkspace', losses, t, root));
-      if (!confirmed) return createSettingsError(createMessage('permissions.error.resetCancelled'), 'cancelled');
+      confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.RESET_WORKSPACE, root, resetDialog('resetWorkspace', losses, t, root));
+      if (!confirmation) return createSettingsError(createMessage('permissions.error.resetCancelled'), 'cancelled');
     }
-    const result = await toolPolicyStore.resetWorkspaceRules(root);
+    const result = await toolPolicyStore.resetWorkspaceRules(root, { confirmation });
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
     return createSettingsOk();
@@ -642,12 +669,13 @@ function registerToolPermissionHandlers({
     if (typeof enabled !== 'boolean') return createSettingsError(createMessage('permissions.error.invalidSandboxSetting'));
     const root = getActiveWorkspaceRoot();
     if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
+    let confirmation = null;
     if (!enabled) {
       if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.sandboxOffNeedsEncryption'));
-      const confirmed = await confirmNatively(sandboxOffDialog(root, createTranslator(getLocale())));
-      if (!confirmed) return createSettingsError(createMessage('permissions.error.sandboxNotSwitchedOff'), 'cancelled');
+      confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.SANDBOX_OFF, root, sandboxOffDialog(root, createTranslator(getLocale())));
+      if (!confirmation) return createSettingsError(createMessage('permissions.error.sandboxNotSwitchedOff'), 'cancelled');
     }
-    const result = await toolPolicyStore.setWorkspaceSandbox(root, enabled);
+    const result = await toolPolicyStore.setWorkspaceSandbox(root, enabled, { confirmation });
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
     return { ...createSettingsOk(), workspaceSandboxDisabled: !enabled };
@@ -661,12 +689,13 @@ function registerToolPermissionHandlers({
     const root = getActiveWorkspaceRoot();
     if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
     const current = await toolPolicyStore.readWorkspaceMode(root);
+    let confirmation = null;
     if (mode === TOOL_PERMISSION_MODES.AUTO && current !== TOOL_PERMISSION_MODES.AUTO) {
       if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.autoNeedsEncryption'));
-      const confirmed = await confirmNatively(workspaceAutoDialog(root, createTranslator(getLocale())));
-      if (!confirmed) return createSettingsError(createMessage('permissions.error.workspaceAutoNotSet'), 'cancelled');
+      confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.WORKSPACE_AUTO, root, workspaceAutoDialog(root, createTranslator(getLocale())));
+      if (!confirmation) return createSettingsError(createMessage('permissions.error.workspaceAutoNotSet'), 'cancelled');
     }
-    const result = await toolPolicyStore.setWorkspaceMode(root, mode);
+    const result = await toolPolicyStore.setWorkspaceMode(root, mode, { confirmation });
     if (!result.ok) return createSettingsError(result.error);
     if (!event.sender.isDestroyed?.()) event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
     return { ...createSettingsOk(), workspaceMode: mode };
@@ -687,11 +716,16 @@ function registerToolPermissionHandlers({
     const previous = stored.find((other) => other.path === (replacePath || entry.path))
       || stored.find((other) => other.path === entry.path)
       || null;
+    let confirmation = null;
     if (!isNarrowing(previous, entry)) {
-      const confirmed = await confirmNatively(programAllowanceDialog(entry, createTranslator(getLocale()), homeDir));
-      if (!confirmed) return createSettingsError(createMessage('permissions.allowance.error.notSaved'), 'cancelled');
+      confirmation = await confirmLoosening(
+        CONFIRMATION_ACTIONS.PROGRAM_ALLOWANCE,
+        entry.path,
+        programAllowanceDialog(entry, createTranslator(getLocale()), homeDir),
+      );
+      if (!confirmation) return createSettingsError(createMessage('permissions.allowance.error.notSaved'), 'cancelled');
     }
-    const result = await toolPolicyStore.setProgramAllowance(entry, { replacePath });
+    const result = await toolPolicyStore.setProgramAllowance(entry, { replacePath, confirmation });
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
     return { ...createSettingsOk(), entry };
@@ -751,9 +785,9 @@ function registerToolPermissionHandlers({
     }, t);
     // The widest action asks every time — it is the only confirmation the
     // page has for it; what protection goes with it is listed (#514).
-    const confirmed = await confirmNatively(resetDialog('resetAll', losses, t));
-    if (!confirmed) return createSettingsError(createMessage('permissions.error.resetCancelled'), 'cancelled');
-    const result = await toolPolicyStore.resetAll();
+    const confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.RESET_ALL, '', resetDialog('resetAll', losses, t));
+    if (!confirmation) return createSettingsError(createMessage('permissions.error.resetCancelled'), 'cancelled');
+    const result = await toolPolicyStore.resetAll({ confirmation });
     if (!result.ok) return createSettingsError(result.error);
     // Back to `smart` means every chat, including those in the background.
     chatSessionSettings?.forgetBackgroundModes?.();
@@ -782,13 +816,17 @@ function registerToolPermissionHandlers({
     if (request.alwaysAllowed !== true || !request.commandRule) return { ruleId: null };
     const rule = normalizePermissionRule({ ...request.commandRule, id: 'preview' });
     if (!rule) return { error: createMessage('permissions.error.invalidRule') };
-    const confirmed = await confirmNatively(commandRuleDialog(rule, createTranslator(getLocale())));
-    if (!confirmed) return { error: createMessage('approval.error.alwaysNotConfirmed'), code: 'cancelled' };
+    const confirmation = await confirmLoosening(
+      CONFIRMATION_ACTIONS.ALLOW_RULE,
+      permissionRuleSubject(rule),
+      commandRuleDialog(rule, createTranslator(getLocale())),
+    );
+    if (!confirmation) return { error: createMessage('approval.error.alwaysNotConfirmed'), code: 'cancelled' };
     // The run may have ended while the dialog was open; then nothing is kept.
     if (!approvals.getPendingRequest?.(event.sender.id, requestId)) {
       return { error: createMessage('approval.error.noPending') };
     }
-    const stored = await toolPolicyStore.addRule(request.commandRule);
+    const stored = await toolPolicyStore.addRule(request.commandRule, { confirmation });
     if (!stored.ok) return { error: stored.error };
     if (event.sender && typeof event.sender.send === 'function' && !event.sender.isDestroyed?.()) {
       event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
@@ -815,13 +853,13 @@ function registerToolPermissionHandlers({
       const pick = Array.isArray(sandboxPaths) ? sandboxPaths[i] : undefined;
       return entry.allow.includes(pick) ? pick : entry.allow[0];
     }))];
-    const confirmed = await confirmNatively(workspaceHostsDialog(hosts, root, createTranslator(getLocale())));
-    if (!confirmed) return { error: createMessage('approval.error.workspaceNotConfirmed'), code: 'cancelled' };
+    const confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.WORKSPACE_HOSTS, root, workspaceHostsDialog(hosts, root, createTranslator(getLocale())));
+    if (!confirmation) return { error: createMessage('approval.error.workspaceNotConfirmed'), code: 'cancelled' };
     // The command may have given up while the dialog was open; then nothing is kept.
     if (!approvals.getPendingRequest?.(event.sender.id, requestId)) {
       return { error: createMessage('approval.error.noPending') };
     }
-    const stored = await toolPolicyStore.addWorkspaceHosts(root, hosts);
+    const stored = await toolPolicyStore.addWorkspaceHosts(root, hosts, { confirmation });
     if (!stored.ok) return { error: stored.error };
     if (event.sender && typeof event.sender.send === 'function' && !event.sender.isDestroyed?.()) {
       event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});

@@ -21,6 +21,8 @@ const { createWorkspaceActivation } = require('../services/workspace-activation'
 const { createToolPolicyStore } = require('../services/tool-policy-store');
 const { KEY_ALWAYS_DURABLE } = require('../services/safe-storage-key-durability');
 const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
+const { createNativeConfirmationAdapter } = require('../adapters/native-confirmation-adapter');
+const { createConfirmationReceipts } = require('../../application/permissions/user-confirmation');
 const { createSessionGrants } = require('../../application/permissions/session-grants');
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/workspace-tree');
@@ -253,6 +255,16 @@ function createApplication({
     },
   };
 
+  // Loosening only through the user-confirmation port (#980): the desktop's
+  // adapter issues a receipt after the native dialog, the store redeems it.
+  // Each side gets only its half of the registry.
+  const confirmationReceipts = createConfirmationReceipts();
+  const confirmations = createNativeConfirmationAdapter({
+    dialog,
+    getMainWindow,
+    receipts: { issue: confirmationReceipts.issue },
+  });
+
   // Tool-Berechtigungen (Issue #66): signierter Policy-Speicher, Karten-Adapter
   // und Sitzungsfreigaben leben im Main; der Renderer stoesst nur an.
   const toolPolicyStore = createToolPolicyStore({
@@ -263,6 +275,7 @@ function createApplication({
     path,
     crypto,
     uiPrefsPath: storage.getUIPrefsPath(),
+    confirmationReceipts: { redeem: confirmationReceipts.redeem },
   });
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH });
   const sessionGrants = createSessionGrants({ nextId: () => crypto.randomUUID() });
@@ -288,8 +301,12 @@ function createApplication({
     // an approval in the chat just left. Now each chat keeps its own: the new
     // chat inherits nothing because approvals are bound to their chat, and
     // what the left chat no longer needs goes in `onActivated`.
-    // A chat whose "Auto" the store refuses falls back to "Smart" there (#419).
-    applyMode: (mode) => toolPolicyStore.setMode(mode),
+    // A chat whose "Auto" the store refuses falls back to "Smart" there (#419)
+    // — the store gives it "Auto" only where it was confirmed before (#980).
+    applyMode: (mode, { chatId }) => toolPolicyStore.restoreMode(mode, {
+      chatId,
+      workspaceRoot: workspaceState.getActiveWorkspaceRoot(),
+    }),
     onChatModeChanged: (chatId) => invalidateChatPermissions(chatId),
     onActivated: () => pruneChatScopedPermissions(),
   });
@@ -729,7 +746,7 @@ function createApplication({
     rootDir: PDFJS_VENDOR_DIR,
   });
   registerFsHandlers({
-    ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog, getLocale: getAppLocale, pdfAssets,
+    ipcMain, filesystem, REQ, PUSH, fileContextMenu, getMainWindow, dialog, confirmations, getLocale: getAppLocale, pdfAssets,
     getWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
   });
   // The menu behind ‹ and › in the preview header (#822).
@@ -817,6 +834,7 @@ function createApplication({
     uiPrefsStore,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
     dialog,
+    confirmations,
     getMainWindow,
     getLocale: getAppLocale,
   });
@@ -851,6 +869,7 @@ function createApplication({
   registerToolPermissionHandlers({
     ipcMain,
     dialog,
+    confirmations,
     getMainWindow,
     toolPolicyStore,
     approvals,

@@ -9,6 +9,11 @@ const path = require('path');
 const crypto = require('crypto');
 const { createToolPolicyStore, POLICY_FILENAME, POLICY_KEY_FILENAME, MAX_WORKSPACE_HOSTS } = require('../src/main/services/tool-policy-store');
 
+// The store's own logic, with every loosening confirmed. That it refuses a
+// loosening without a receipt of the user-confirmation port (#980) is
+// test/user-confirmation.test.js.
+const CONFIRM_ALL = { redeem: () => true };
+
 function makeSafeStorage(available = true) {
   return {
     isEncryptionAvailable: () => available,
@@ -26,7 +31,7 @@ async function makeStore(t, { available = true, legacyPrefs } = {}) {
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
   const uiPrefsPath = path.join(dir, 'ui-preferences.json');
   if (legacyPrefs) await fs.writeFile(uiPrefsPath, JSON.stringify(legacyPrefs), 'utf8');
-  const store = createToolPolicyStore({
+  const store = createToolPolicyStore({ confirmationReceipts: CONFIRM_ALL,
     app: { getPath: () => dir },
     safeStorage: makeSafeStorage(available),
     fs,
@@ -283,7 +288,7 @@ test('program allowances: none by default, stored normalized, an edit keeps its 
 test('program allowances: without safeStorage none can be stored, and stored ones do not count', async (t) => {
   const { dir, store } = await makeStore(t);
   await store.setProgramAllowance(TODO);
-  const locked = createToolPolicyStore({
+  const locked = createToolPolicyStore({ confirmationReceipts: CONFIRM_ALL,
     app: { getPath: () => dir }, safeStorage: makeSafeStorage(false), fs, path, crypto, log: { warn() {} }, now: () => 1000,
   });
   // The signature cannot be checked, so the allowance is dropped like an allow rule.
@@ -359,7 +364,7 @@ test('workspace hosts: at most a fixed number per workspace', async (t) => {
 test('workspace hosts: without safeStorage none can be kept, and kept ones do not count', async (t) => {
   const { dir, store } = await makeStore(t);
   await store.addWorkspaceHosts('/a', ['gitlab.example.com:22']);
-  const locked = createToolPolicyStore({
+  const locked = createToolPolicyStore({ confirmationReceipts: CONFIRM_ALL,
     app: { getPath: () => dir }, safeStorage: makeSafeStorage(false), fs, path, crypto, log: { warn() {} }, now: () => 1000,
   });
   assert.deepEqual((await locked.read()).workspaceHosts, {});
@@ -530,7 +535,7 @@ async function makeFlakyStore(t) {
       return fs.readFile(file, ...rest);
     },
   };
-  const store = createToolPolicyStore({
+  const store = createToolPolicyStore({ confirmationReceipts: CONFIRM_ALL,
     app: { getPath: () => dir },
     safeStorage: makeSafeStorage(true),
     fs: flakyFs,
@@ -575,7 +580,7 @@ test('an unreadable key file is not replaced (#512)', async (t) => {
   const { dir, store } = await makeFlakyStore(t);
   const keyBefore = await fs.readFile(path.join(dir, POLICY_KEY_FILENAME), 'utf8');
   // A fresh store, so the key is not cached from the set-up.
-  const fresh = createToolPolicyStore({
+  const fresh = createToolPolicyStore({ confirmationReceipts: CONFIRM_ALL,
     app: { getPath: () => dir },
     safeStorage: makeSafeStorage(true),
     fs: { ...fs, readFile: async (file, ...rest) => {
@@ -602,7 +607,7 @@ test('an unreadable key file is not replaced (#512)', async (t) => {
 test('a key that is read but cannot be decrypted is lost and replaced (concept §7)', async (t) => {
   const { dir } = await makeFlakyStore(t);
   await fs.writeFile(path.join(dir, POLICY_KEY_FILENAME), Buffer.from('not-a-key').toString('base64'), 'utf8');
-  const fresh = createToolPolicyStore({
+  const fresh = createToolPolicyStore({ confirmationReceipts: CONFIRM_ALL,
     app: { getPath: () => dir },
     safeStorage: makeSafeStorage(true),
     fs,
