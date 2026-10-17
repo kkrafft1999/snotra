@@ -13,6 +13,51 @@
  *
  * @typedef {import('../../shared/contracts/message').Message} Message
  *
+ * A text a provider definition gives the settings: plain, or a message the
+ * interface resolves in its own language.
+ * @typedef {string|Message} ProviderText
+ *
+ * One option of a preset field or of the API style.
+ * @typedef {Object} ProviderOption
+ * @property {string} value
+ * @property {ProviderText} [label]
+ *
+ * A field the add-model dialog shows for the provider's presets (#414); the
+ * settings contract builds its view from this (`buildPresetFieldViews`).
+ * @typedef {Object} ProviderPresetField
+ * @property {string} key
+ * @property {'select'} type  `PRESET_FIELD_TYPES`
+ * @property {'dropdown'|'segmented'|'switch'} [control]  `PRESET_FIELD_CONTROLS`; a switch has two options, the first is off
+ * @property {ProviderText} [label]
+ * @property {ProviderText} [toggleLabel]  the switch's label next to it
+ * @property {ProviderText} [hint]
+ * @property {string} [defaultValue]  the first option when absent
+ * @property {boolean} [affectsPresetIdentity]  a different value is a different entry
+ * @property {string} [detailPrefix]
+ * @property {'default'|'mono'} [detailStyle]  `PRESET_DETAIL_STYLES`
+ * @property {ProviderOption[]} options
+ * @property {(value: string) => string} [formatDetail]  the text of the entry's detail line, empty for none
+ *
+ * A starting point for the "OpenAI-compatible" provider (#193).
+ * @typedef {Object} ProviderTemplate
+ * @property {string} id
+ * @property {ProviderText} [label]
+ * @property {string} [baseUrl]
+ * @property {'chat'|'full'} [apiStyle]
+ * @property {ProviderText} [hint]
+ *
+ * @typedef {Object} ProviderPresentation
+ * @property {ProviderText} [apiKeyPlaceholder]
+ * @property {string} [baseUrlPlaceholder]
+ * @property {ProviderText} [insecureTlsHint]
+ * @property {boolean} [connectionDetail]  the settings show the connection as a detail line (#202)
+ * @property {boolean} [manualModel]  the model can be typed in where no list is reachable
+ * @property {string} [offeredModels]  pattern (source of a case-insensitive RegExp) of the models still offered (#724)
+ * @property {ProviderText} [offeredModelsHint]  what the dialog says about a model that does not match
+ * @property {ProviderOption[]} [apiStyleOptions]
+ * @property {ProviderTemplate[]} [templates]
+ * @property {ProviderPresetField[]} [presetFields]
+ *
  * @typedef {Object} ProviderConfig
  * @property {string} [apiKey]        Entschlüsselter API-Key (falls fields.apiKey).
  * @property {string} [baseUrl]       Server-URL (falls fields.baseUrl).
@@ -56,7 +101,7 @@
  * @property {{ images: boolean }} [capabilities]  what the provider passes on, when it does not depend on the configuration (#93)
  * @property {{ levels: string[], defaultLevel?: string, appliesTo?: (model: string) => boolean }} [reasoning]
  *   the reasoning levels a chat can choose (#725)
- * @property {Object} [presentation]  how the settings show the provider: placeholders, offered models, entry fields
+ * @property {ProviderPresentation} [presentation]  how the settings show the provider: placeholders, offered models, entry fields
  * @property {(config: ProviderConfig) => Promise<{models?: Array<{id: string, label?: string}>, error?: string|Message}>} listModels
  * @property {(params: {config: ProviderConfig, model: string, messages: Array<Object>, tools?: Array<Object>, callbacks?: StreamCallbacks, abortSignal?: AbortSignal, cacheKey?: string}) => Promise<ChatRoundResult>} streamChatRound
  * @property {() => void} [dispose]        Ressourcen freigeben (App-Ende).

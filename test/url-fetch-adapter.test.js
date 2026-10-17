@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createHttpUrlFetchAdapter } = require('../src/main/adapters/http-url-fetch-adapter');
-const { URL_FETCH_ERROR_CODES, URL_FETCH_LIMITS } = require('../src/application/ports/url-fetch-port');
+const { URL_FETCH_ERROR_CODES, URL_FETCH_LIMITS } = require('../src/shared/contracts/url-fetch');
 
 // Issue #95: alle Tests ohne Netz. `fetchImpl` und die Namensauflösung sind
 // eingesetzt, damit auch Weiterleitungen und gesperrte Ziele prüfbar sind.

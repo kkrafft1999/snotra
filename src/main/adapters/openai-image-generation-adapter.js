@@ -34,7 +34,7 @@ const {
   IMAGE_BACKGROUNDS,
   IMAGE_MIME_BY_FORMAT,
   IMAGE_GENERATION_LIMITS: LIMITS,
-} = require('../../application/ports/image-generation-port');
+} = require('../../shared/contracts/image-generation');
 
 const OPENAI_API_BASE = 'https://api.openai.com/v1';
 

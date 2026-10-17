@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createTavilyWebSearchAdapter, TAVILY_ENDPOINT } = require('../src/main/adapters/tavily-web-search-adapter');
-const { WEB_SEARCH_ERROR_CODES, WEB_SEARCH_LIMITS } = require('../src/application/ports/web-search-port');
+const { WEB_SEARCH_ERROR_CODES, WEB_SEARCH_LIMITS } = require('../src/shared/contracts/web-search');
 
 function jsonResponse(body, { status = 200 } = {}) {
   return {

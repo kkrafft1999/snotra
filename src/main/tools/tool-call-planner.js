@@ -197,8 +197,37 @@ function stableStringify(value) {
 }
 
 /**
+ * What the planner takes from `fs-service.js`: the two path operations it calls
+ * (#1098). Written from the consumer's side, like a port — a method the planner
+ * starts to call has to be added here, which is where a wrong argument or a
+ * misread result is caught. `fs-service.js` itself is outside the checked set
+ * (#1098, section 5).
+ *
+ * @typedef {Object} ToolPathResolution
+ * @property {string} [absPath]  the checked absolute path
+ * @property {string} [root]  the root that was actually used
+ * @property {string} [prefix]  prefix for relative paths made from it
+ * @property {string|null} [skillName]
+ * @property {boolean} [outside]  resolved through a root a card opened outside the folder (#792)
+ * @property {string} [code]  `OUTSIDE_WORKSPACE` when only a card could open the path
+ * @property {string} [error]
+ *
+ * @typedef {Object} FsService
+ * @property {(absPath: string) => Promise<string>} resolveExistingRealPath
+ * @property {(workspaceRoot: string|null, relativePath: string, options?: {
+ *   skillRoots?: Array<{name: string, dir: string}>,
+ *   outsideRoots?: Array<{root: string, only: string|null, access: 'read'|'write'}>,
+ *   access?: 'read'|'write',
+ * }) => Promise<ToolPathResolution>} resolveToolPath
+ *
+ * What a card may open outside the open folder (#792), from `outside-access.js`
+ * — typed from its factory, which is already part of the checked program.
+ * @typedef {ReturnType<typeof import('../services/outside-access').createOutsideAccess>} OutsideAccess
+ */
+
+/**
  * @param {object} deps
- * @param {Object} deps.fsService  liefert resolveToolPath und listApplyPatchTargets (not typed yet)
+ * @param {FsService} deps.fsService  liefert resolveToolPath und resolveExistingRealPath
  * @param {typeof import('fs/promises')} deps.fs
  * @param {typeof import('path')} deps.path
  * @param {string[]} [deps.protectedRoots]  absolute Ordner, die für Tools hart gesperrt sind (userData)
@@ -213,7 +242,7 @@ function stableStringify(value) {
  *   the program allowance a shell command gets, or why it does not (#408)
  * @param {() => Promise<object[]>} [deps.readProgramAllowances]
  *   the stored allowances, to notice a change between plan and run (#408)
- * @param {Object} [deps.outsideAccess]  what a card may open outside the open folder (#792), see outside-access.js
+ * @param {OutsideAccess} [deps.outsideAccess]  what a card may open outside the open folder (#792)
  */
 function createToolCallPlanner({
   fsService,
@@ -226,7 +255,7 @@ function createToolCallPlanner({
   isSandboxDisabled = null,
   matchProgramAllowance = null,
   readProgramAllowances = null,
-  outsideAccess = null,
+  outsideAccess,
 }) {
   const protectedReal = new Set();
   let protectedResolved = false;
