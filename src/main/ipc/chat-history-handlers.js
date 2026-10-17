@@ -82,37 +82,47 @@ function registerChatHistoryHandlers({
     }
   }
 
-  function bucketKeyForSession(store, id) {
-    const session = typeof id === 'string' ? store.sessions.find((s) => s.id === id) : null;
+  async function bucketKeyForSession(id) {
+    const session = typeof id === 'string' ? await chatHistoryStore.getSessionMeta(id) : null;
     const root = session
       ? chatHistoryStore.normalizeWorkspaceRoot(session.workspaceRoot)
       : chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
     return chatHistoryStore.workspaceBucketKey(root);
   }
+
+  // The list carries no messages (#985): every chat of the folder with what
+  // its row shows, and which one the folder opens with. A chat's messages
+  // come with CHAT_HISTORY_GET_SESSION when it is opened.
   ipcMain.handle(REQ.CHAT_HISTORY_GET, async () => {
-    const store = await chatHistoryStore.readChatHistoryStore();
     const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
-    const sessions = store.sessions
+    const sessions = (await chatHistoryStore.listSessions())
       .filter((s) => chatHistoryStore.sessionMatchesWorkspace(s, wsRoot))
-      .map((s) => chatHistoryStore.normalizeSessionForLoad(s))
+      .map((s) => chatHistoryStore.normalizeSessionMetaForList(s))
       .filter(Boolean);
-    const activeChatId = store.activeByWorkspace[chatHistoryStore.workspaceBucketKey(wsRoot)] || null;
+    const activeChatId = await chatHistoryStore.getActiveChatId(chatHistoryStore.workspaceBucketKey(wsRoot));
     return { sessions, activeChatId, workspaceRoot: wsRoot };
+  });
+
+  // One chat with its messages, as the list used to carry every chat (#985).
+  // Only one of the active folder's — the same chats the list hands out (#68).
+  ipcMain.handle(REQ.CHAT_HISTORY_GET_SESSION, async (_event, rawId) => {
+    const id = sanitizeChatId(rawId);
+    if (!id) return { session: null };
+    const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
+    const session = await chatHistoryStore.getSession(id);
+    if (!session || !chatHistoryStore.sessionMatchesWorkspace(session, wsRoot)) return { session: null };
+    return { session: chatHistoryStore.normalizeSessionForLoad(session) };
   });
 
   ipcMain.handle(REQ.CHAT_HISTORY_UPSERT, async (_event, sessionRow) =>
     skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
-      const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-      const existing =
-        sessionRow && typeof sessionRow.id === 'string'
-          ? store.sessions.find((x) => x.id === sessionRow.id.trim())
-          : null;
+      const sessionId = typeof sessionRow?.id === 'string' ? sessionRow.id.trim() : '';
+      const existing = sessionId ? await chatHistoryStore.getSession(sessionId) : null;
       const titleProvided =
         typeof sessionRow?.title === 'string' && sessionRow.title.trim().length > 0;
       // Bilder zuerst auf die Platte, danach normalisieren: die Normalisierung
       // nimmt nur Datei-Referenzen an, Base64 kommt so gar nicht erst in die
       // Verlaufsdatei (Issue #94).
-      const sessionId = typeof sessionRow?.id === 'string' ? sessionRow.id.trim() : '';
       const messages = sessionId
         ? await chatAttachments.persistMessages(sessionId, sessionRow?.messages)
         : sessionRow?.messages;
@@ -159,27 +169,16 @@ function registerChatHistoryHandlers({
         previousUpdatedAt !== null && !chatHistoryStore.storedChatMessagesChanged(existing.messages, normalized.messages)
           ? previousUpdatedAt
           : now();
-      const idx = store.sessions.findIndex((x) => x.id === normalized.id);
-      if (idx >= 0) store.sessions[idx] = normalized;
-      else store.sessions.push(normalized);
-      store.sessions.sort((a, b) => b.updatedAt - a.updatedAt);
-      let droppedIds = new Set();
-      if (store.sessions.length > chatHistoryStore.MAX_CHAT_SESSIONS) {
-        const dropped = store.sessions.slice(chatHistoryStore.MAX_CHAT_SESSIONS);
-        store.sessions = store.sessions.slice(0, chatHistoryStore.MAX_CHAT_SESSIONS);
-        droppedIds = new Set(dropped.map((s) => s.id));
-        for (const [k, v] of Object.entries(store.activeByWorkspace)) {
-          if (droppedIds.has(v)) delete store.activeByWorkspace[k];
-        }
-      }
-      await chatHistoryStore.writeChatHistoryStore(store);
+      // The store drops the oldest chats beyond MAX_CHAT_SESSIONS, with their
+      // folder pointers.
+      const { droppedIds } = await chatHistoryStore.saveSession(normalized);
       // Under the same lock: the images of the chats this save dropped go by
       // id. Everything else without a session is swept only while no history
       // lies moved aside next to this one — the folders may belong to its
       // chats, and the copy is kept so that it can be recovered (#565).
       for (const id of droppedIds) await chatAttachments.deleteChat(id);
       if (!(await chatHistoryStore.hasSetAsideChatHistory())) {
-        await chatAttachments.pruneChats(store.sessions.map((s) => s.id));
+        await chatAttachments.pruneChats((await chatHistoryStore.listSessions()).map((s) => s.id));
       }
       return { ok: true };
     })));
@@ -189,12 +188,8 @@ function registerChatHistoryHandlers({
       // One id for the list, the pointers, the folder and the settings (#567).
       const id = sanitizeChatId(rawId);
       if (!id) return { ok: false };
-      const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-      store.sessions = store.sessions.filter((s) => s.id !== id);
-      for (const [k, v] of Object.entries(store.activeByWorkspace)) {
-        if (v === id) delete store.activeByWorkspace[k];
-      }
-      await chatHistoryStore.writeChatHistoryStore(store);
+      // The chat's file, its entry and every folder pointer to it.
+      await chatHistoryStore.deleteSession(id);
       await chatAttachments.deleteChat(id);
       chatSessionSettings.forget(id);
       return { ok: true };
@@ -202,20 +197,13 @@ function registerChatHistoryHandlers({
 
   ipcMain.handle(REQ.CHAT_HISTORY_SET_ACTIVE, async (_event, id) =>
     skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
-      const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-      const wsKey = bucketKeyForSession(store, id);
-      const before = store.activeByWorkspace[wsKey];
+      const wsKey = await bucketKeyForSession(id);
       if (id === null || id === undefined || id === '') {
-        delete store.activeByWorkspace[wsKey];
+        await chatHistoryStore.setActiveChatId(wsKey, null);
       } else if (typeof id === 'string') {
-        store.activeByWorkspace[wsKey] = id;
+        // A pointer that stays as it was is not written again (#1060, #564).
+        await chatHistoryStore.setActiveChatId(wsKey, id);
       }
-      // A pointer that stays as it was is not written again. On a fresh
-      // Windows profile every encrypted write waits for the key (#1060), and
-      // a new chat — which clears a pointer that is not there — would wait
-      // with it before its mode is applied (#564).
-      if (store.activeByWorkspace[wsKey] === before) return { ok: true };
-      await chatHistoryStore.writeChatHistoryStore(store);
       return { ok: true };
     })));
 

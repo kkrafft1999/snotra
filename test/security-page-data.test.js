@@ -20,7 +20,7 @@ function makeData(overrides = {}) {
   const notified = [];
   const data = createSecurityPageData({
     chatHistoryStore: {
-      readChatHistoryStore: async () => ({ sessions: SESSIONS }),
+      listSessions: async () => SESSIONS.filter(Boolean),
       normalizeWorkspaceRoot: (root) => root,
       sessionMatchesWorkspace: (session, root) => session.workspaceRoot === root,
     },

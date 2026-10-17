@@ -33,7 +33,7 @@ It still carries the name of the platform, Snotra AI, although the app is called
 | `tool-policy.json` and `tool-policy.key` | The mode, your blocks and allowances, the default mode of a folder. Signed, so a changed file is noticed. |
 | `mcp-servers.json` | The MCP servers. Secret environment variables and headers are encrypted. |
 | `web-search-config.json` | The key for the web search, encrypted. |
-| `chat-history.json` | Your chats, encrypted. |
+| `chat-history/` | [since 1.25] Your chats, encrypted: `index.json` with the list, and one file per chat. Up to 1.24 they were in one file, `chat-history.json`; the first start of 1.25 moves them over and removes the old file once the copy has been checked. |
 | `chat-attachments/` | The images that belong to your chats, one folder per chat. |
 | `folder-history.json` and `last-folder.json` | The recent folders, and the one that opens at the next start. |
 | `window-state.json` | Size and place of the window. |
@@ -54,7 +54,7 @@ To start from scratch, quit Snotra and move the folder somewhere else. Keys and 
 
 API keys, secret environment variables, the search key and your chats are encrypted with a key from the system: on macOS the keychain item *Snotra AI Safe Storage*, on Windows the user account, on Linux the keyring. A copy of the folder is therefore useless on another computer or another account, and the keys have to be entered again there. Where the system offers no encrypted storage — a Linux desktop without a keyring, say — Snotra says *Encrypted storage is not available on this system* instead of saving a key.
 
-If the key changes, a chat history that can no longer be read is not deleted: it is kept as `chat-history.json.undecryptable-<time>` next to the new one.
+If the key changes, a chat history that can no longer be read is not deleted: the folder is kept as `chat-history.undecryptable-<time>` next to the new one.
 
 ## In a project
 

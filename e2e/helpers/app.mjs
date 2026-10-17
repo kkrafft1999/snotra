@@ -157,6 +157,20 @@ export async function rendererToolEvents(page) {
 }
 
 /**
+ * The saved chats of the open folder, each with its messages, as main hands
+ * them out — the saved state, not the one on screen. Since #985 the history
+ * list carries no messages, so every chat is opened on its own.
+ */
+export function storedChats(page) {
+  return page.evaluate(async () => {
+    const api = window.electronAPI;
+    const history = await api.getChatHistory();
+    const chats = await Promise.all((history?.sessions || []).map((row) => api.getChatSession(row.id)));
+    return chats.map((chat) => chat?.session).filter(Boolean);
+  });
+}
+
+/**
  * What the composer shows right now: the text still in the input, whether the
  * send button is disabled or turned into a stop button, and the hint line.
  * `sendChatMessage` returns without a trace when a guard turns the send away

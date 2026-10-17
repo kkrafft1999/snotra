@@ -25,7 +25,7 @@ Keep the copy until you are sure you do not need it. Snotra never deletes it.
 
 The file could not be understood. Its content was damaged — a crash while it was written, a sync tool, an edit by hand — or it was written by a newer version of Snotra than the one running now, for example after you went back to an older release. Snotra renames the file by adding `.unreadable-` and the time, then starts that part afresh. Every byte of the old file is still in the copy.
 
-For the chat history the copy is called `chat-history.json.unreadable-…`, or `chat-history.json.undecryptable-…` when it could not be decrypted with this system's key. See [Keychain questions and encrypted storage](../keychain-and-storage/) for that case.
+For the chat history the copy is the whole folder, `chat-history.unreadable-…`, or `chat-history.undecryptable-…` when it could not be decrypted with this system's key; see [Keychain questions and encrypted storage](../keychain-and-storage/) for that case. [since 1.25] When only one chat's file is damaged, only that file is put aside inside the folder, and the notice says ***One chat could not be read and is missing from the history.*** Your other chats stay. A history from before 1.25 is kept as `chat-history.json.unreadable-…` or `chat-history.json.undecryptable-…`.
 
 ## When changes are not saved
 

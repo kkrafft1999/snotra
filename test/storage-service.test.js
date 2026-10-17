@@ -4,6 +4,7 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createStorageService } = require('../src/main/services/storage-service');
+const { chatSessionFileName } = require('../src/main/services/chat-history-store');
 const { LLM_CONFIG_VERSION } = require('../src/shared/contracts/settings');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
 
@@ -439,17 +440,15 @@ test('an MCP configuration that cannot be read fails the save and keeps the othe
 
 test('a chat history that cannot be read is shown empty but never written back (#473)', () =>
   withTmpDir(async (tmpDir) => {
-    const before = await makeStorage(tmpDir).readChatHistoryStore({ skipMigration: true });
-    before.sessions.push({ id: 'c1', title: 'Kept', messages: [], updatedAt: 1 });
-    await makeStorage(tmpDir).writeChatHistoryStore(before);
     const target = path.join(tmpDir, 'chat-history.json');
+    await fs.writeFile(target, JSON.stringify({ version: 2, sessions: [{ id: 'c1', title: 'Kept', messages: [], updatedAt: 1 }] }), 'utf8');
     const original = await fs.readFile(target, 'utf8');
 
     const { fs: flaky } = fsWithFailingRead('chat-history.json', 'EACCES');
     const storage = createStorageService({
       app: { getPath: () => tmpDir },
-      // With encryption available, a plain read migrates — and used to write
-      // the empty store it got from the failed read.
+      // With encryption available, a plain file is taken into the folder —
+      // which would write over what a failed read could not see.
       safeStorage: makeEncryptedSafeStorage(),
       fs: flaky,
       path,
@@ -460,18 +459,16 @@ test('a chat history that cannot be read is shown empty but never written back (
       platform: 'linux',
     });
 
-    const shown = await storage.readChatHistoryStore();
-    assert.deepEqual(shown.sessions, [], 'shown empty');
+    assert.deepEqual(await storage.listChatSessions(), [], 'shown empty');
     assert.equal(await fs.readFile(target, 'utf8'), original, 'the migration wrote nothing');
 
-    const forUpsert = await storage.readChatHistoryStore({ skipMigration: true });
-    forUpsert.sessions.push({ id: 'c2', title: 'New', messages: [], updatedAt: 2 });
-    await assert.rejects(() => storage.writeChatHistoryStore(forUpsert), /could not be read/);
+    const fresh = storage.normalizeSessionForStore({ id: 'c2', title: 'New', messages: [{ role: 'user', content: 'x' }], updatedAt: 2 });
+    await assert.rejects(() => storage.saveChatSession(fresh), /could not be read/);
     assert.equal(await fs.readFile(target, 'utf8'), original);
     assert.deepEqual(
-      (await fs.readdir(tmpDir)).filter((name) => name.startsWith('chat-history.json.')),
-      [],
-      'nothing was quarantined: the content may be fine',
+      (await fs.readdir(tmpDir)).filter((name) => name.startsWith('chat-history')),
+      ['chat-history.json'],
+      'nothing was set aside or written next to it: the content may be fine',
     );
   }));
 
@@ -509,70 +506,56 @@ test('a folder history that cannot be read stays as it was when a folder opens (
 test('withChatHistoryLock serializes concurrent upserts', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);
+  const order = [];
+  const upsert = (id, updatedAt) => storage.withChatHistoryLock(async () => {
+    order.push(`read ${id}`);
+    assert.equal(await storage.getChatSession(id), null);
+    await storage.saveChatSession(storage.normalizeSessionForStore({
+      id,
+      workspaceRoot: null,
+      title: id.toUpperCase(),
+      updatedAt,
+      messages: [{ role: 'user', content: id }],
+    }));
+    order.push(`wrote ${id}`);
+  });
 
-  await Promise.all([
-    storage.withChatHistoryLock(async () => {
-      const store = await storage.readChatHistoryStore({ skipMigration: true });
-      store.sessions.push({
-        id: 'a',
-        workspaceRoot: null,
-        title: 'A',
-        updatedAt: 1,
-        messages: [],
-      });
-      await storage.writeChatHistoryStore(store);
-    }),
-    storage.withChatHistoryLock(async () => {
-      const store = await storage.readChatHistoryStore({ skipMigration: true });
-      store.sessions.push({
-        id: 'b',
-        workspaceRoot: null,
-        title: 'B',
-        updatedAt: 2,
-        messages: [],
-      });
-      await storage.writeChatHistoryStore(store);
-    }),
-  ]);
+  await Promise.all([upsert('a', 1), upsert('b', 2)]);
 
-  const final = await storage.readChatHistoryStore();
-  assert.equal(final.sessions.length, 2);
+  assert.deepEqual(order, ['read a', 'wrote a', 'read b', 'wrote b']);
+  const final = await makeStorage(tmpDir).listChatSessions();
+  assert.deepEqual(final.map((s) => s.id), ['b', 'a']);
 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-test('writeChatHistoryStore encrypts when safeStorage available', async () => {
+test('a chat and the history index are written encrypted when safeStorage is available', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorageWithEncryption(tmpDir);
-  const store = {
-    version: 2,
-    activeByWorkspace: {},
-    sessions: [{
-      id: 's1',
-      workspaceRoot: null,
-      title: 'Test',
-      updatedAt: 1,
-      messages: [{ role: 'user', content: 'hello' }],
-    }],
-  };
 
-  await storage.writeChatHistoryStore(store);
+  await storage.saveChatSession(storage.normalizeSessionForStore({
+    id: 's1',
+    workspaceRoot: null,
+    title: 'Test',
+    updatedAt: 1,
+    messages: [{ role: 'user', content: 'hello' }],
+  }));
 
-  const raw = await fs.readFile(path.join(tmpDir, 'chat-history.json'), 'utf8');
-  const onDisk = JSON.parse(raw);
-  assert.equal(onDisk.encrypted, true);
-  assert.equal(typeof onDisk.payload, 'string');
-  assert.equal(onDisk.version, undefined);
+  for (const file of [path.join(tmpDir, 'chat-history', 'index.json'), path.join(tmpDir, 'chat-history', chatSessionFileName('s1'))]) {
+    const onDisk = JSON.parse(await fs.readFile(file, 'utf8'));
+    assert.equal(onDisk.encrypted, true);
+    assert.equal(typeof onDisk.payload, 'string');
+    assert.equal(onDisk.version, undefined);
+  }
 
-  const roundtrip = await storage.readChatHistoryStore();
-  assert.equal(roundtrip.sessions.length, 1);
-  assert.equal(roundtrip.sessions[0].id, 's1');
-  assert.equal(roundtrip.sessions[0].messages[0].content, 'hello');
+  const roundtrip = makeStorageWithEncryption(tmpDir);
+  assert.deepEqual((await roundtrip.listChatSessions()).map((s) => s.id), ['s1']);
+  assert.equal((await roundtrip.getChatSession('s1')).messages[0].content, 'hello');
 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-test('readChatHistoryStore migrates plaintext to encrypted on read', async () => {
+test('a plain single history file is taken in encrypted on the first read', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const plaintext = {
     version: 2,
@@ -592,17 +575,17 @@ test('readChatHistoryStore migrates plaintext to encrypted on read', async () =>
   );
 
   const storage = makeStorageWithEncryption(tmpDir);
-  const store = await storage.readChatHistoryStore();
-  assert.equal(store.sessions[0].id, 'legacy');
+  const sessions = await storage.listChatSessions();
+  assert.equal(sessions[0].id, 'legacy');
 
-  const raw = await fs.readFile(path.join(tmpDir, 'chat-history.json'), 'utf8');
-  const onDisk = JSON.parse(raw);
+  const onDisk = JSON.parse(await fs.readFile(path.join(tmpDir, 'chat-history', chatSessionFileName('legacy')), 'utf8'));
   assert.equal(onDisk.encrypted, true);
+  assert.equal(await fs.stat(path.join(tmpDir, 'chat-history.json')).catch(() => null), null, 'the single file is gone');
 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-test('parallel readChatHistoryStore migrates plaintext once under encryption', async () => {
+test('parallel reads take a plain single history file in once, encrypted', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const plaintext = {
     version: 2,
@@ -625,30 +608,28 @@ test('parallel readChatHistoryStore migrates plaintext once under encryption', a
   let writeCount = 0;
   const realOpen = fs.open.bind(fs);
   fs.open = async (filePath, ...rest) => {
-    if (String(filePath).includes('chat-history.json.tmp-')) {
+    if (path.basename(String(filePath)).startsWith(`${chatSessionFileName('s1')}.tmp-`)) {
       writeCount += 1;
     }
     return realOpen(filePath, ...rest);
   };
 
   const results = await Promise.all([
-    storage.readChatHistoryStore(),
-    storage.readChatHistoryStore(),
-    storage.readChatHistoryStore(),
+    storage.listChatSessions(),
+    storage.listChatSessions(),
+    storage.listChatSessions(),
   ]);
 
   fs.open = realOpen;
 
   assert.equal(writeCount, 1);
-  for (const store of results) {
-    assert.equal(store.sessions.length, 1);
-    assert.equal(store.sessions[0].id, 's1');
-    assert.equal(store.sessions[0].messages[0].content, 'hello');
-    assert.equal(store.activeByWorkspace.__none__, 's1');
+  for (const sessions of results) {
+    assert.deepEqual(sessions.map((s) => [s.id, s.messageCount]), [['s1', 1]]);
   }
+  assert.equal(await storage.getActiveChatId('__none__'), 's1');
+  assert.equal((await storage.getChatSession('s1')).messages[0].content, 'hello');
 
-  const raw = await fs.readFile(path.join(tmpDir, 'chat-history.json'), 'utf8');
-  const onDisk = JSON.parse(raw);
+  const onDisk = JSON.parse(await fs.readFile(path.join(tmpDir, 'chat-history', chatSessionFileName('s1')), 'utf8'));
   assert.equal(onDisk.encrypted, true);
 
   await fs.rm(tmpDir, { recursive: true, force: true });
@@ -766,30 +747,28 @@ test('readUIPrefs verwirft den alten Schreibschalter allowWorkspaceWrite (Issue 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
 
-test('readChatHistoryStore falls back to plaintext when encryption unavailable', async () => {
+test('the chat history falls back to plaintext when encryption is unavailable', async () => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   const storage = makeStorage(tmpDir);
-  const store = {
-    version: 2,
-    activeByWorkspace: { __none__: 's1' },
-    sessions: [{
-      id: 's1',
-      workspaceRoot: null,
-      title: 'Plain',
-      updatedAt: 3,
-      messages: [],
-    }],
-  };
 
-  await storage.writeChatHistoryStore(store);
+  await storage.saveChatSession(storage.normalizeSessionForStore({
+    id: 's1',
+    workspaceRoot: null,
+    title: 'Plain',
+    updatedAt: 3,
+    messages: [{ role: 'user', content: 'plain' }],
+  }));
+  await storage.setActiveChatId('__none__', 's1');
 
-  const raw = await fs.readFile(path.join(tmpDir, 'chat-history.json'), 'utf8');
-  const onDisk = JSON.parse(raw);
-  assert.equal(onDisk.encrypted, undefined);
-  assert.equal(onDisk.sessions[0].id, 's1');
+  const index = JSON.parse(await fs.readFile(path.join(tmpDir, 'chat-history', 'index.json'), 'utf8'));
+  assert.equal(index.encrypted, undefined);
+  assert.equal(index.sessions[0].id, 's1');
+  const chat = JSON.parse(await fs.readFile(path.join(tmpDir, 'chat-history', chatSessionFileName('s1')), 'utf8'));
+  assert.equal(chat.encrypted, undefined);
+  assert.equal(chat.session.messages[0].content, 'plain');
 
-  const roundtrip = await storage.readChatHistoryStore();
-  assert.equal(roundtrip.activeByWorkspace.__none__, 's1');
+  const roundtrip = makeStorage(tmpDir);
+  assert.equal(await roundtrip.getActiveChatId('__none__'), 's1');
 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
@@ -812,16 +791,15 @@ test('an undecryptable encrypted chat history is quarantined, not overwritten', 
   const original = JSON.stringify({ encrypted: true, payload: Buffer.from('garbage-from-other-key').toString('base64') });
   await fs.writeFile(path.join(tmpDir, 'chat-history.json'), original, 'utf8');
 
-  const store = await storage.readChatHistoryStore();
-  assert.deepEqual(store.sessions ?? [], [], 'leerer Store');
+  assert.deepEqual(await storage.listChatSessions(), [], 'leerer Store');
 
   const quarantined = await quarantineFiles(tmpDir);
   assert.equal(quarantined.length, 1, 'genau eine Quarantaene-Datei');
   assert.equal(await fs.readFile(path.join(tmpDir, quarantined[0]), 'utf8'), original, 'Originalbytes erhalten');
   assert.equal(await fs.stat(path.join(tmpDir, 'chat-history.json')).catch(() => null), null, 'Original verschoben');
 
-  await storage.writeChatHistoryStore(store);
-  const fresh = JSON.parse(await fs.readFile(path.join(tmpDir, 'chat-history.json'), 'utf8'));
+  await storage.setActiveChatId('__none__', 'next');
+  const fresh = JSON.parse(await fs.readFile(path.join(tmpDir, 'chat-history', 'index.json'), 'utf8'));
   assert.equal(fresh.encrypted, true, 'neue Datei ist verschluesselt');
   assert.equal(await fs.readFile(path.join(tmpDir, quarantined[0]), 'utf8'), original, 'Quarantaene unveraendert');
 });
@@ -832,10 +810,9 @@ test('#658: an encrypted history is left in place while encryption is unavailabl
   await fs.writeFile(path.join(tmpDir, 'chat-history.json'), original, 'utf8');
   const storage = makeStorage(tmpDir);
 
-  const store = await storage.readChatHistoryStore();
-  assert.deepEqual(store.sessions ?? [], []);
+  assert.deepEqual(await storage.listChatSessions(), []);
   assert.deepEqual(await quarantineFiles(tmpDir), [], 'nothing set aside');
-  await assert.rejects(storage.writeChatHistoryStore(store), { code: 'CHAT_HISTORY_UNREADABLE' });
+  await assert.rejects(storage.setActiveChatId('__none__', 'x'), { code: 'CHAT_HISTORY_UNREADABLE' });
   assert.equal(await fs.readFile(path.join(tmpDir, 'chat-history.json'), 'utf8'), original, 'file untouched');
 });
 
@@ -844,8 +821,8 @@ test('parallel reads of an unreadable history create exactly one quarantine file
   const storage = makeStorageWithEncryption(tmpDir);
   await fs.writeFile(path.join(tmpDir, 'chat-history.json'), JSON.stringify({ encrypted: true, payload: 'AAAA' }), 'utf8');
 
-  const stores = await Promise.all([1, 2, 3].map(() => storage.readChatHistoryStore()));
-  assert.equal(stores.length, 3);
+  const lists = await Promise.all([1, 2, 3].map(() => storage.listChatSessions()));
+  assert.equal(lists.length, 3);
   assert.equal((await quarantineFiles(tmpDir)).length, 1);
 });
 
@@ -854,7 +831,7 @@ test('corrupt plaintext history is quarantined as well', async (t) => {
   const storage = makeStorage(tmpDir);
   await fs.writeFile(path.join(tmpDir, 'chat-history.json'), '{ this is not json', 'utf8');
 
-  await storage.readChatHistoryStore();
+  await storage.listChatSessions();
   assert.equal((await quarantineFiles(tmpDir)).length, 1);
   assert.equal(await fs.stat(path.join(tmpDir, 'chat-history.json')).catch(() => null), null);
 });
@@ -864,8 +841,11 @@ test('reading an unreadable history inside the history lock resolves and quarant
   const storage = makeStorageWithEncryption(tmpDir);
   await fs.writeFile(path.join(tmpDir, 'chat-history.json'), JSON.stringify({ encrypted: true, payload: 'AAAA' }), 'utf8');
 
-  const store = await storage.withChatHistoryLock(() => storage.readChatHistoryStore({ skipMigration: true }));
-  assert.deepEqual(store.sessions ?? [], []);
+  const sessions = await storage.withChatHistoryLock(async () => {
+    assert.equal(await storage.getChatSession('a'), null);
+    return storage.listChatSessions();
+  });
+  assert.deepEqual(sessions, []);
   assert.equal((await quarantineFiles(tmpDir)).length, 1);
 });
 
@@ -873,9 +853,9 @@ test('a missing history file produces an empty store and no quarantine', async (
   const tmpDir = await makeTmpDir(t, 'snotra-storage-');
   const storage = makeStorageWithEncryption(tmpDir);
 
-  const store = await storage.readChatHistoryStore();
-  assert.deepEqual(store.sessions ?? [], []);
+  assert.deepEqual(await storage.listChatSessions(), []);
   assert.deepEqual(await quarantineFiles(tmpDir), []);
+  assert.deepEqual(await fs.readdir(tmpDir), [], 'reading writes nothing');
 });
 
 test('folder history: removeFolderFromHistory drops exactly one entry and keeps order', async (t) => {

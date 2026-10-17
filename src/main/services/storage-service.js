@@ -33,11 +33,12 @@ const {
   normalizeLoadedMessages,
   normalizeSessionForStore: buildNormalizedSessionForStore,
   normalizeSessionForLoad,
+  normalizeSessionMetaForList,
   storedChatMessagesChanged,
 } = require('./chat-history-normalization');
 const { renameWithRetry, readFileWithRetry } = require('./rename-with-retry');
 const { writeFileAtomic } = require('./atomic-write');
-const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
+const { createChatHistoryStore } = require('./chat-history-store');
 const { NOTICE_STORES } = require('../../shared/contracts/notices');
 const { KEY_ALWAYS_DURABLE } = require('./safe-storage-key-durability');
 
@@ -61,16 +62,6 @@ function createStorageService({
   const LAST_FOLDER_FILENAME = 'last-folder.json';
   const FOLDER_HISTORY_FILENAME = 'folder-history.json';
   const UI_PREFS_FILENAME = 'ui-preferences.json';
-  const CHAT_HISTORY_FILENAME = 'chat-history.json';
-  const CHAT_HISTORY_VERSION = 2;
-  /**
-   * Suffixes of a history moved aside: one that could not be decrypted or
-   * parsed, and one written by a newer release (#566).
-   */
-  const CHAT_HISTORY_SET_ASIDE_SUFFIXES = Object.freeze({
-    UNDECRYPTABLE: 'undecryptable',
-    UNREADABLE: 'unreadable',
-  });
   const WEB_SEARCH_CONFIG_FILENAME = 'web-search-config.json';
   const MCP_CONFIG_FILENAME = 'mcp-servers.json';
 
@@ -95,14 +86,14 @@ function createStorageService({
    * the console: `set-aside` with the copy's path in `keptAs`, `not-saved`
    * while a file that is there cannot be read or moved, and `saved-again`
    * once a write to such a file goes through. `path` is the store's file.
-   * Files that are not a store are not reported.
+   * Files that are not a store are not reported. `store` is for a file whose
+   * name says nothing — a chat's file in the history folder (#985).
    */
   const filesNotSaved = new Set();
 
-  function reportStoreFile(type, filePath, keptAs = null) {
+  function reportStoreFile(type, filePath, keptAs = null, store = NOTICE_STORES[path.basename(filePath)]) {
     if (typeof onStoreFileEvent !== 'function') return;
     const file = path.basename(filePath);
-    const store = NOTICE_STORES[file];
     if (!store) return;
     if (type === 'not-saved') filesNotSaved.add(filePath);
     else filesNotSaved.delete(filePath);
@@ -224,16 +215,17 @@ function createStorageService({
    * waits for it (#679). Work queued while waiting is waited for as well.
    */
   async function whenWritesSettled() {
+    const inFlight = () => [...fileLocks.values(), ...pendingWrites.values(), ...chatHistory.pendingWork()];
     for (;;) {
-      const pending = [...fileLocks.values(), ...pendingWrites.values()];
-      await Promise.all(pending);
-      const now = [...fileLocks.values(), ...pendingWrites.values()];
+      const pending = inFlight();
+      await Promise.all(pending.map((p) => p.catch(() => {})));
+      const now = inFlight();
       if (now.length === pending.length && now.every((p, i) => p === pending[i])) return;
     }
   }
 
   function withChatHistoryLock(fn) {
-    return withFileLock(getChatHistoryPath(), fn);
+    return withFileLock(chatHistory.storeDir(), fn);
   }
 
   function getLLMConfigPath() {
@@ -1258,14 +1250,6 @@ function createStorageService({
     });
   }
 
-  function getChatHistoryPath() {
-    return path.join(app.getPath('userData'), CHAT_HISTORY_FILENAME);
-  }
-
-  function defaultChatHistoryStore() {
-    return { version: CHAT_HISTORY_VERSION, activeByWorkspace: {}, sessions: [] };
-  }
-
   function normalizeWorkspaceRoot(raw) {
     if (typeof raw !== 'string') return null;
     const trimmed = raw.trim();
@@ -1289,204 +1273,23 @@ function createStorageService({
     return buildNormalizedSessionForStore(s, { normalizeWorkspaceRoot, ...options });
   }
 
-  function parseChatHistoryStoreData(data) {
-    if (!data || typeof data !== 'object') return null;
-    // Written by a newer release (#566): its sessions may carry what this
-    // build would drop on the next write, so it is not read at all.
-    if (isNewerChatHistoryVersion(data.version)) return null;
-    const sessionsIn = Array.isArray(data.sessions) ? data.sessions : [];
-    const sessions = sessionsIn
-      .map((x) => normalizeSessionForStore(x))
-      .filter(Boolean);
-
-    const activeByWorkspace = {};
-    if (data.activeByWorkspace && typeof data.activeByWorkspace === 'object') {
-      for (const [k, v] of Object.entries(data.activeByWorkspace)) {
-        if (typeof k === 'string' && k && typeof v === 'string' && v) {
-          activeByWorkspace[k] = v;
-        }
-      }
-    } else if (typeof data.activeChatId === 'string' && data.activeChatId) {
-      activeByWorkspace[NO_WORKSPACE_KEY] = data.activeChatId;
-    }
-
-    return {
-      version: CHAT_HISTORY_VERSION,
-      activeByWorkspace,
-      sessions,
-    };
-  }
-
-  function isNewerChatHistoryVersion(version) {
-    return Number.isFinite(version) && version > CHAT_HISTORY_VERSION;
-  }
-
-  async function loadChatHistoryStoreFromDisk() {
-    let raw;
-    try {
-      raw = await readFileWithRetry(fs, getChatHistoryPath(), { platform });
-    } catch (error) {
-      // Keine Datei (Erststart): leer starten, nichts zu retten.
-      if (error?.code === 'ENOENT') {
-        return { store: defaultChatHistoryStore(), wasEncrypted: false, unreadable: false };
-      }
-      // There is a file, it just could not be read (#473). Nothing to
-      // quarantine, since its content may be fine — but nothing to write
-      // back either.
-      return { store: defaultChatHistoryStore(), wasEncrypted: false, unreadable: false, readFailed: true };
-    }
-
-    // Ab hier existiert eine Datei. Laesst sie sich nicht interpretieren
-    // (kaputtes JSON, fremder safeStorage-Schluessel z. B. nach der
-    // Umbenennung der App), darf sie
-    // NICHT stillschweigend ueberschrieben werden: unreadable = true, der
-    // Aufrufer stellt sie in Quarantaene (quarantineUnreadableChatHistory).
-    let wasEncrypted = false;
-    try {
-      let data = JSON.parse(raw);
-      if (!data || typeof data !== 'object') {
-        return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
-      }
-      if (data.encrypted === true && typeof data.payload === 'string') {
-        wasEncrypted = true;
-        // Without encrypted storage the key is out of reach for this run, not
-        // wrong (#658) — a refusing keychain, a broken signature as in #657.
-        // The file is fine and the next start may read it: leave it in place
-        // and refuse writes, like a failed read.
-        if (!safeStorage.isEncryptionAvailable()) {
-          return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: false, readFailed: true };
-        }
-        const decrypted = decryptIfPossible(data.payload);
-        if (!decrypted) return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
-        data = JSON.parse(decrypted);
-      }
-      const store = parseChatHistoryStoreData(data);
-      if (!store) {
-        const setAsideAs = isNewerChatHistoryVersion(data?.version)
-          ? CHAT_HISTORY_SET_ASIDE_SUFFIXES.UNREADABLE
-          : CHAT_HISTORY_SET_ASIDE_SUFFIXES.UNDECRYPTABLE;
-        return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true, setAsideAs };
-      }
-      return { store, wasEncrypted, unreadable: false };
-    } catch {
-      return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
-    }
-  }
-
-  // Unlesbaren Verlauf beiseitelegen statt beim naechsten Write zu zerstoeren.
-  // Bewusst ohne withChatHistoryLock: die Handler halten den Lock bereits,
-  // wenn sie mit skipMigration lesen; ein verschachtelter Lock wuerde
-  // deadlocken. rename ist atomar, ein parallel lesender Zweiter scheitert
-  // harmlos mit ENOENT.
-  /**
-   * Returns false when the file is still where it was (#561) — the caller
-   * must then not hand out a store that could be written over it.
-   */
-  async function quarantineUnreadableChatHistory(suffix = CHAT_HISTORY_SET_ASIDE_SUFFIXES.UNDECRYPTABLE) {
-    const source = getChatHistoryPath();
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const target = `${source}.${suffix}-${stamp}`;
-    try {
-      await renameWithRetry(fs, source, target, { platform });
-      if (typeof log?.warn === 'function') {
-        log.warn(`[chat-history] Verlauf nicht lesbar, gesichert als ${target}`);
-      }
-      // Only the set-aside is reported here: a history that stays unreadable
-      // already has its own notice in the chat, at the moment a save is
-      // refused (#977).
-      reportStoreFile('set-aside', source, target);
-      return true;
-    } catch (err) {
-      if (err && err.code === 'ENOENT') return true;
-      if (typeof log?.warn === 'function') {
-        log.warn(`[chat-history] Verlauf nicht lesbar, Sicherung fehlgeschlagen: ${err?.message || err}`);
-      }
-      return false;
-    }
-  }
-
-  /** An empty store for an unreadable file — writable only once it is moved aside. */
-  async function storeAfterQuarantine(suffix) {
-    return (await quarantineUnreadableChatHistory(suffix)) ? defaultChatHistoryStore() : storeFromFailedRead();
-  }
-
-  /**
-   * Is a history moved aside still lying next to the live one (#565)? Its
-   * chats are not in the store, but their images may still be wanted — the
-   * copy is kept so that it can be recovered, images included.
-   */
-  async function hasSetAsideChatHistory() {
-    const prefixes = Object.values(CHAT_HISTORY_SET_ASIDE_SUFFIXES).map(
-      (suffix) => `${CHAT_HISTORY_FILENAME}.${suffix}-`
-    );
-    let names;
-    try {
-      names = await fs.readdir(app.getPath('userData'));
-    } catch {
-      // Not listable: assume there is one, so nothing is swept on a guess.
-      return true;
-    }
-    return names.some((name) => prefixes.some((prefix) => name.startsWith(prefix)));
-  }
-
-  async function migrateChatHistoryToEncryptedIfNeeded(store, wasEncrypted) {
-    if (safeStorage.isEncryptionAvailable() && !wasEncrypted) {
-      await writeChatHistoryStore(store);
-    }
-  }
-
-  /**
-   * An empty store handed out because the file could not be read (#473).
-   * Readers get it like any other, so the list simply shows nothing; only
-   * `writeChatHistoryStore` refuses it. The handlers read, change and write
-   * back the very same object, so this catches every write path at once —
-   * including readers that only display and never write.
-   */
-  const storesFromFailedReads = new WeakSet();
-
-  function storeFromFailedRead() {
-    const store = defaultChatHistoryStore();
-    storesFromFailedReads.add(store);
-    return store;
-  }
-
-  async function readChatHistoryStore({ skipMigration = false } = {}) {
-    const { store, wasEncrypted, unreadable, readFailed, setAsideAs } = await loadChatHistoryStoreFromDisk();
-    if (readFailed) return storeFromFailedRead();
-    if (unreadable) return storeAfterQuarantine(setAsideAs);
-    if (skipMigration) return store;
-    // Not while the key behind safeStorage is still on its way to the disk
-    // (#1060): the read would wait for it. The plain file stays as it is until
-    // a later read or the next save encrypts it.
-    if (safeStorage.isEncryptionAvailable() && !wasEncrypted && !safeStorageKey.wouldWait()) {
-      return withChatHistoryLock(async () => {
-        const fresh = await loadChatHistoryStoreFromDisk();
-        if (fresh.readFailed) return storeFromFailedRead();
-        if (fresh.unreadable) return storeAfterQuarantine(fresh.setAsideAs);
-        await migrateChatHistoryToEncryptedIfNeeded(fresh.store, fresh.wasEncrypted);
-        return fresh.store;
-      });
-    }
-    return store;
-  }
-
-  async function writeChatHistoryStore(store) {
-    if (storesFromFailedReads.has(store)) {
-      log?.warn?.('[chat-history] The history file could not be read; this save is skipped rather than written over it.');
-      throw Object.assign(
-        new Error('The chat history could not be read; it is not overwritten with an empty one.'),
-        { code: CHAT_HISTORY_UNREADABLE },
-      );
-    }
-    if (safeStorage.isEncryptionAvailable()) {
-      const payload = await encryptForDisk(JSON.stringify(store));
-      if (payload) {
-        await writeJsonAtomic(getChatHistoryPath(), { encrypted: true, payload });
-        return;
-      }
-    }
-    await writeJsonAtomic(getChatHistoryPath(), store);
-  }
+  // One file per chat and an index, held in memory (#985).
+  const chatHistory = createChatHistoryStore({
+    fs,
+    path,
+    safeStorage,
+    safeStorageKey,
+    userDataPath: () => app.getPath('userData'),
+    writeJsonAtomic,
+    encryptForDisk,
+    decryptIfPossible,
+    reportStoreFile,
+    normalizeWorkspaceRoot,
+    noWorkspaceKey: NO_WORKSPACE_KEY,
+    maxChatSessions: MAX_CHAT_SESSIONS,
+    log,
+    platform,
+  });
 
   async function persistLastFolder(folderPath) {
     const raw = typeof folderPath === 'string' ? folderPath.trim() : '';
@@ -1648,9 +1451,16 @@ function createStorageService({
     normalizeLoadedMessages,
     normalizeSessionForLoad,
     normalizeSessionForStore,
-    readChatHistoryStore,
-    writeChatHistoryStore,
-    hasSetAsideChatHistory,
+    normalizeSessionMetaForList,
+    listChatSessions: chatHistory.listSessions,
+    getChatSessionMeta: chatHistory.getSessionMeta,
+    getChatSession: chatHistory.getSession,
+    getActiveChatId: chatHistory.getActiveChatId,
+    saveChatSession: chatHistory.saveSession,
+    patchChatSession: chatHistory.patchSession,
+    deleteChatSession: chatHistory.deleteSession,
+    setActiveChatId: chatHistory.setActiveChatId,
+    hasSetAsideChatHistory: chatHistory.hasSetAsideChatHistory,
     storedChatMessagesChanged,
     withChatHistoryLock,
     persistLastFolder,

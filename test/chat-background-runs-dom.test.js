@@ -8,6 +8,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom } = require('./helpers/dom.js');
+const { fakeChatHistoryApi } = require('./helpers/chat-history-api.js');
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
@@ -369,15 +370,12 @@ test('opening another folder frees the composer before the round trips return (#
   await flush();
   assert.equal(stopShown(), true);
 
-  api.getChatHistory = async () => ({
-    sessions: [{
-      id: 'chat-b',
-      workspaceRoot: '/other',
-      updatedAt: 1,
-      messages: [{ role: 'user', content: 'Earlier.' }, { role: 'assistant', content: 'Answer.' }],
-    }],
-    activeChatId: null,
-  });
+  Object.assign(api, fakeChatHistoryApi([{
+    id: 'chat-b',
+    workspaceRoot: '/other',
+    updatedAt: 1,
+    messages: [{ role: 'user', content: 'Earlier.' }, { role: 'assistant', content: 'Answer.' }],
+  }]));
   // The restored chat becomes the folder's active one — that is the call held.
   const ipc = gatedCall((id) => id === 'chat-b');
   api.setActiveChatId = ipc.fn;

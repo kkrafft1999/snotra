@@ -485,6 +485,7 @@ module.exports = {
   'notice.storeSetAside.uiPreferences': 'Your view settings were reset.',
   'notice.storeSetAside.folderHistory': 'The list of recent folders was reset.',
   'notice.storeSetAside.chatHistory': 'The chat history starts empty.',
+  'notice.storeSetAside.chatSession': 'One chat could not be read and is missing from the history.',
   'notice.storeSetAside.text': 'Snotra could not read {file}, so it put the file aside unchanged and started afresh. Nothing in it is lost; the old file is here:',
   'notice.storeNotSaved.models': 'Changes to your model settings are not saved.',
   'notice.storeNotSaved.webSearch': 'Changes to the web search settings are not saved.',

@@ -12,15 +12,22 @@ const {
  * wo er bewusst *nicht* wiederherstellt.
  */
 
-/** Verlaufsspeicher im Arbeitsspeicher, mit derselben Form wie der echte. */
+/** Verlaufsspeicher im Arbeitsspeicher, mit derselben Schnittstelle wie der echte (#985). */
 function createFakeChatHistoryStore(sessions = []) {
-  const store = { version: 2, activeByWorkspace: {}, sessions: [...sessions] };
+  const store = { version: 3, activeByWorkspace: {}, sessions: [...sessions] };
+  const find = (id) => store.sessions.find((s) => s && s.id === id) || null;
   return {
     store,
     withChatHistoryLock: (fn) => fn(),
-    readChatHistoryStore: async () => store,
-    writeChatHistoryStore: async (next) => {
-      store.sessions = next.sessions;
+    getSessionMeta: async (id) => find(id),
+    patchSession: async (id, patch) => {
+      const session = find(id);
+      if (!session) return false;
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === undefined) delete session[key];
+        else session[key] = value;
+      }
+      return true;
     },
   };
 }
@@ -184,7 +191,7 @@ test('ein gelöschter Chat wird vergessen', async () => {
 
 test('ein nicht schreibbarer Verlauf bricht den Wechsel nicht ab', async () => {
   const history = createFakeChatHistoryStore([{ id: 'chat-a' }]);
-  history.writeChatHistoryStore = async () => {
+  history.patchSession = async () => {
     throw new Error('Platte voll');
   };
   const warnings = [];
@@ -449,8 +456,8 @@ test('a chat in the background answers with its own level (#725)', async () => {
 test('the stored level is read from the history once, not for every round (#725)', async () => {
   const { settings, history } = setup({ sessions: [{ id: 'chat-a', reasoningEffort: 'minimal' }] });
   let reads = 0;
-  const read = history.readChatHistoryStore;
-  history.readChatHistoryStore = async (...args) => {
+  const read = history.getSessionMeta;
+  history.getSessionMeta = async (...args) => {
     reads += 1;
     return read(...args);
   };

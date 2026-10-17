@@ -225,6 +225,8 @@ const REQUEST_CHANNELS = Object.freeze({
   FEEDBACK_SEND: 'feedback:send',
 
   CHAT_HISTORY_GET: 'chatHistory:get',
+  /** One chat with its messages, when it is opened; the list has none (#985). */
+  CHAT_HISTORY_GET_SESSION: 'chatHistory:getSession',
   CHAT_HISTORY_UPSERT: 'chatHistory:upsert',
   CHAT_HISTORY_DELETE: 'chatHistory:delete',
   CHAT_HISTORY_SET_ACTIVE: 'chatHistory:setActive',

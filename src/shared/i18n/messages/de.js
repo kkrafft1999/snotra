@@ -491,6 +491,7 @@ module.exports = {
   'notice.storeSetAside.uiPreferences': 'Deine Ansichtseinstellungen wurden zurückgesetzt.',
   'notice.storeSetAside.folderHistory': 'Die Liste der zuletzt geöffneten Ordner wurde zurückgesetzt.',
   'notice.storeSetAside.chatHistory': 'Der Chatverlauf beginnt leer.',
+  'notice.storeSetAside.chatSession': 'Ein Chat ließ sich nicht lesen und fehlt im Verlauf.',
   'notice.storeSetAside.text': 'Snotra konnte {file} nicht lesen, hat die Datei unverändert beiseitegelegt und neu angefangen. Verloren ist nichts; die alte Datei liegt hier:',
   'notice.storeNotSaved.models': 'Änderungen an deinen Modelleinstellungen werden nicht gespeichert.',
   'notice.storeNotSaved.webSearch': 'Änderungen an den Einstellungen der Websuche werden nicht gespeichert.',

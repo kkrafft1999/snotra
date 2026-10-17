@@ -207,7 +207,7 @@ entries than a listing shows.
 
 | Budget | What is measured |
 | --- | --- |
-| PERF-1 | Main process created → the renderer's `snotra:ready` mark, set once the folder and its chat are restored. One warm-up start (it also encrypts the seeded history), then the median of five. |
+| PERF-1 | Main process created → the renderer's `snotra:ready` mark, set once the folder and its chat are restored. One warm-up start (it also moves the seeded single-file history into the per-chat folder of #985 and encrypts it), then the median of five. |
 | PERF-2 | The worse of: the slowest key event while typing below the long chat (Event Timing), and the median of three switches to the long chat, from the click to the first paint with its last message. |
 | PERF-3 | The longest animation frame (`long-animation-frame`) while a 50 KB answer streams in and while the large folder opens. A deliberate 150 ms frame checks first that the observer reports at all; a window that draws nothing would otherwise pass for one that never stalls. |
 | PERF-4 | `app.getAppMetrics()`, working set summed over all processes, after 10 s idle with a chat open — after the start and again after the scenarios; the higher one counts. On macOS the working set includes shared pages, so it reads high. |

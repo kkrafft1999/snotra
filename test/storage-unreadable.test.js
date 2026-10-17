@@ -225,9 +225,8 @@ test('a chat history whose quarantine fails is not overwritten by the next save 
   const storage = makeStorage(dir, { fsImpl: fsFailingRenameTo('.undecryptable-').fs, platform: 'win32' });
 
   await assert.rejects(() => storage.withChatHistoryLock(async () => {
-    const store = await storage.readChatHistoryStore({ skipMigration: true });
-    store.sessions.push({ id: 'n1', title: 'new', messages: [{ role: 'user', content: 'hi' }], updatedAt: Date.now() });
-    await storage.writeChatHistoryStore(store);
+    assert.equal(await storage.getChatSession('n1'), null);
+    await storage.saveChatSession(storage.normalizeSessionForStore({ id: 'n1', title: 'new', messages: [{ role: 'user', content: 'hi' }], updatedAt: Date.now() }));
   }), { code: 'CHAT_HISTORY_UNREADABLE' });
 
   assert.equal(await fs.readFile(target, 'utf8'), original);
@@ -240,7 +239,7 @@ test('the chat history quarantine retries on Windows (#561)', async (t) => {
   const { fs: flaky, calls } = fsFailingRenameTo('.undecryptable-', { times: 2 });
   const storage = makeStorage(dir, { fsImpl: flaky, platform: 'win32' });
 
-  await storage.readChatHistoryStore();
+  await storage.listChatSessions();
 
   assert.equal(calls.failed, 2);
   const copies = await copiesOf(dir, 'chat-history.json', 'undecryptable');

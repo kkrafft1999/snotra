@@ -10,6 +10,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom, flush } = require('./helpers/dom.js');
+const { fakeChatHistoryApi } = require('./helpers/chat-history-api.js');
 
 const SESSION = {
   id: 'chat-alt',
@@ -27,7 +28,7 @@ async function setup() {
 
   const activations = [];
   const api = {
-    getChatHistory: async () => ({ sessions: [SESSION], activeChatId: null }),
+    ...fakeChatHistoryApi([SESSION]),
     setActiveChatId: async () => ({ ok: true }),
     setUIPrefs: async () => ({ ok: true }),
     deleteChatSession: async () => ({ ok: true }),

@@ -9,7 +9,7 @@ import { readFile, writeFile, access } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents, sendChat } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents, sendChat, storedChats } from './helpers/app.mjs';
 import { routeOpenAiImages, landscapePng } from './helpers/fake-images.mjs';
 
 const toolNamesOf = (request) => (request?.body?.tools || []).map((tool) => tool.function?.name);
@@ -36,7 +36,7 @@ async function approveUntilDone(page, what, evidence, lastTurn) {
  * the model's own title; both are writes the test can neither see in the DOM
  * nor wait out with a pause.
  */
-const storedSessions = (page) => page.evaluate(async () => (await window.electronAPI.getChatHistory())?.sessions ?? []);
+const storedSessions = (page) => storedChats(page);
 
 test('generate_image draws through the Images API into the workspace', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();

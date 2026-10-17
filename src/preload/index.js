@@ -177,6 +177,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener(channel, listener);
   },
   getChatHistory: () => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET),
+  // A chat's messages, read when it is opened (#985).
+  getChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET_SESSION, id),
   upsertChatSession: (session) => ipcRenderer.invoke(REQ.CHAT_HISTORY_UPSERT, session),
   generateChatTitle: (messages) => ipcRenderer.invoke(REQ.CHAT_TITLE, { messages }),
   // The diff of one or more changes to a file, by the ids of their summaries (#348).
