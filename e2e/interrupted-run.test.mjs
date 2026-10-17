@@ -9,11 +9,25 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir, waitForFolderChat, sendChat, rendererToolEvents } from './helpers/app.mjs';
 
 const HELD_TEXT = 'This answer never finishes.';
+
+/**
+ * Ends the app the way a crash does: no quit, no unload. On Windows the whole
+ * tree goes — killing only the main process left its renderer and GPU
+ * processes behind, they kept the profile's single-instance lock, and the
+ * restart quit at once (#979).
+ */
+async function killHard(child) {
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+  else child.kill('SIGKILL');
+  await exited;
+}
 
 /** The chat as main hands it out — the saved state, not the one on screen. */
 async function savedTurn(page) {
@@ -81,9 +95,7 @@ for (const how of ['kill', 'quit', 'reload']) {
 
     if (how === 'kill') {
       // No quit, no unload: the process is gone at once, as in a crash.
-      const exited = new Promise((resolve) => snotra.app.process().once('exit', resolve));
-      snotra.app.process().kill('SIGKILL');
-      await exited;
+      await killHard(snotra.app.process());
     } else if (how === 'quit') {
       await snotra.stop();
     } else {

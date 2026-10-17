@@ -10,6 +10,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
@@ -17,6 +18,19 @@ import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpe
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const SHOTS = path.resolve('out/mockup');
 await mkdir(SHOTS, { recursive: true });
+
+/**
+ * Ends the app the way a crash does: no quit, no unload. On Windows the whole
+ * tree goes — killing only the main process left its renderer and GPU
+ * processes behind, they kept the profile's single-instance lock, and the
+ * restart quit at once (#979).
+ */
+async function killHard(child) {
+  const exited = new Promise((resolve) => child.once('exit', resolve));
+  if (process.platform === 'win32') spawnSync('taskkill', ['/pid', String(child.pid), '/T', '/F']);
+  else child.kill('SIGKILL');
+  await exited;
+}
 
 const model = await startFakeModel();
 const workspace = await makeTempDir('snotra-interrupted-look-');
@@ -38,9 +52,7 @@ try {
     return (history?.sessions || []).some((s) => s.messages.some((m) => m.interrupted && m.toolTrace?.length));
   }, { what: 'step saved' });
 
-  const exited = new Promise((resolve) => snotra.app.process().once('exit', resolve));
-  snotra.app.process().kill('SIGKILL');
-  await exited;
+  await killHard(snotra.app.process());
 
   snotra = await launchApp({ userDataDir });
   page = snotra.page;
