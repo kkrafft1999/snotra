@@ -15,7 +15,7 @@
  */
 
 const { withRequestTimeout } = require('../services/request-timeout');
-const { WEB_SEARCH_ERROR_CODES, WEB_SEARCH_LIMITS } = require('../../application/ports/web-search-port');
+const { WEB_SEARCH_ERROR_CODES, WEB_SEARCH_LIMITS } = require('../../shared/contracts/web-search');
 
 const TAVILY_ENDPOINT = 'https://api.tavily.com/search';
 const SEARCH_TIMEOUT_MS = 20_000;

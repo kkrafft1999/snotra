@@ -10,10 +10,9 @@ const os = require('os');
 const path = require('path');
 
 const { createStorageService } = require('../src/main/services/storage-service');
-const { chatSessionFileName } = require('../src/main/services/chat-history-store');
+const { chatSessionFileName, CHAT_HISTORY_UNREADABLE } = require('../src/main/services/chat-history-store');
 const { createChatHistoryStorePort } = require('../src/main/adapters/persistence-store-adapters');
 const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
-const { CHAT_HISTORY_UNREADABLE } = require('../src/main/ports/chat-history-store-port');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
