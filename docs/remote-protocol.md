@@ -4,12 +4,13 @@ Specification of what Snotra Agent, the relay and the iPhone app of the mobile
 remote ([#1081](https://github.com/kkrafft1999/snotra/issues/1081)) exchange,
 down to the byte. Protocol version **1**.
 
-- **Part 1 — pairing** (this document, [#1112](https://github.com/kkrafft1999/snotra/issues/1112),
+- **Part 1 — pairing** (§1–§11, [#1112](https://github.com/kkrafft1999/snotra/issues/1112),
   written on 2026-10-18): the pairing code, the relay's endpoints, `MAC_P` and
   `MAC_D`, the safety phrase, with test vectors.
-- **Part 2 — the channel** ([#1113](https://github.com/kkrafft1999/snotra/issues/1113)):
-  tokens and presence on every connection, the handshake, the encrypted
-  envelopes and JSON-RPC inside them. Not written yet.
+- **Part 2 — the channel** (§12–§19, [#1113](https://github.com/kkrafft1999/snotra/issues/1113),
+  written on 2026-10-18): tokens and presence on every connection, the
+  handshake, the encrypted envelopes and JSON-RPC inside them, with test
+  vectors.
 
 It must not contradict the decision record
 [`remote-interface.md`](./remote-interface.md) (#989) or the
@@ -56,6 +57,9 @@ ASCII string, used as `lp(label)` at the start of its input:
 | `"snotra/v1 mac phone"` | `MAC_P` ([§6](#6-mac_p-and-mac_d)) |
 | `"snotra/v1 mac desktop"` | `MAC_D` ([§6](#6-mac_p-and-mac_d)) |
 | `"snotra/v1 phrase"` | The safety phrase ([§7](#7-the-safety-phrase)) |
+| `"snotra/v1 handshake"` | The transcript hash of a connection's handshake ([§14](#14-session-keys)) |
+| `"snotra/v1 session"` | The derivation of its session keys ([§14](#14-session-keys)) |
+| `"snotra/v1 envelope"` | The associated data of every envelope ([§15](#15-envelopes)) |
 
 ## 3. Keys
 
@@ -407,6 +411,202 @@ The concept (snotra-mobile, §5.1 and §10) took these over on 2026-10-18:
 - **The QR code's relay host is checked** against the hosts the app ships
   with.
 - **The word list** is the EFF short word list 2.0, named in the app's About.
+
+## 12. Connecting
+
+Part 2 starts where part 1 ends: the channel is `paired`, the desktop holds
+the phone's public keys and the phone the desktop's. Everything below happens
+**every time** a side connects — the app comes to the foreground, the desktop
+starts, either one finds its network again.
+
+1. **Token.** `POST /v1/challenges`, then `POST /v1/tokens` ([§5.9](#59-tokens))
+   → custom token → ID token. The ID token lives an hour; a side renews it the
+   same way before it runs out. Firebase's refresh tokens are kept in memory
+   only, never on disk.
+2. **Stream.** The desktop follows `/channels/{channelId}` by REST streaming
+   (`Accept: text/event-stream`, `?auth=<ID token>`); on `auth_revoked` it
+   renews the token and resumes. The phone listens through the SDK.
+3. **Presence** (decided 2026-10-18):
+   - The **desktop** writes `/channels/{channelId}/presence/desktop` =
+     `{ "lastSeen": {".sv": "timestamp"} }` every 30 seconds while it runs and
+     is connected, and deletes it when it quits. REST streaming has no
+     `onDisconnect`, so the phone shows the desktop as offline once
+     `lastSeen` is more than 90 seconds old, or the record is gone.
+   - The **phone** sets `/channels/{channelId}/presence/phone` =
+     `{ "online": true, "since": {".sv": "timestamp"} }` and registers
+     `onDisconnect().removeValue()` with the SDK.
+   - The desktop's indicator (R8) says *connected* only once a session stands,
+     not because the phone's presence record exists.
+4. **Handshake** ([§13](#13-the-handshake)), always started by the phone:
+   after connecting, when the desktop's presence comes back, and after any
+   failure of [§16](#16-order-replay-and-failure).
+
+## 13. The handshake
+
+Two records, each written by one side and overwritten by its next handshake:
+
+```
+/channels/{channelId}/handshake/phone     { "v": [1], "e": b64u(32 bytes) }      handshake 1, by the phone
+/channels/{channelId}/handshake/desktop   { "v": 1, "e": b64u(32 bytes) }        handshake 2, by the desktop
+                                          { "error": "protocol-unsupported", "v": [1] }
+```
+
+- **Handshake 1.** The phone draws a fresh X25519 key pair for every
+  handshake (`Curve25519.KeyAgreement.PrivateKey()`), and writes its public
+  key `e_P` with the protocol versions it speaks, `v`, in the order it
+  prefers them.
+- **Handshake 2.** The desktop answers every new handshake 1 with a fresh pair
+  of its own, `e_D`, and the highest version both speak — or with
+  `protocol-unsupported` and its own list, which the phone shows as *update
+  the app* or *update Snotra*. A new handshake 1 ends the desktop's previous
+  session with that phone.
+- Both forget their ephemeral private key as soon as the session keys are
+  derived ([§14](#14-session-keys)).
+- **The relay's rules:** only the phone writes `handshake/phone`, only the
+  desktop `handshake/desktop`, neither before the channel is `paired`.
+- Neither record is signed. Authentication comes from the long-term agreement
+  inside the key derivation: a side with the wrong long-term key — a relay in
+  the middle, a phone that was removed — derives different keys, and its
+  first envelope does not open.
+
+## 14. Session keys
+
+```
+ss   = ECDH-P256(own agree private key, other side's agree public key)        x-coordinate, 32 bytes
+ee   = X25519(own ephemeral private key, other side's ephemeral public key)    32 bytes
+th   = SHA-256(lp("snotra/v1 handshake") ‖ lp(channelId) ‖ KB_D ‖ KB_P
+               ‖ lp(offered) ‖ lp(e_P) ‖ u8(chosen) ‖ lp(e_D))
+okm  = HKDF-SHA256(ikm = ss ‖ ee, salt = th, info = lp("snotra/v1 session"), L = 64)
+
+k_to-desktop = okm[0..32]      k_to-phone = okm[32..64]      sid = th[0..8]
+```
+
+- `ss` says **who** is talking: only the holders of the two long-term agree
+  keys can compute it. On the phone it is computed inside the Secure Enclave
+  (`SecureEnclave.P256.KeyAgreement`), on the desktop in main.
+- `ee` gives **forward secrecy**: a long-term key stolen later opens no past
+  session.
+- `th` binds the keys to this channel, these long-term keys, the versions on
+  offer and the version chosen — a relay that strips a version from
+  handshake 1 changes `th`, and with it every key. `offered` is one byte per
+  version, in handshake 1's order; `chosen` is handshake 2's `v`.
+- `sid`, 8 bytes, written as 16 hex digits, names the session in the paths of
+  its envelopes.
+- **Key confirmation** is the first envelope: the phone's `session.hello`
+  ([§17](#17-json-rpc-in-the-channel)). Until it opens, the desktop counts no
+  connection.
+
+## 15. Envelopes
+
+```
+/channels/{channelId}/to-desktop/{sid}/{counter}    { "c": b64u(ciphertext ‖ tag), "at": {".sv": "timestamp"} }
+/channels/{channelId}/to-phone/{sid}/{counter}
+```
+
+- **One envelope, one JSON-RPC message**, UTF-8, at most **256 KiB** of
+  plaintext. A larger answer is paged by its method (`chat.more`), never split
+  across envelopes.
+- **`counter`** runs 0, 1, 2 … per session and direction, written as 16 hex
+  digits so that the keys sort as numbers.
+- **AEAD:** ChaCha20-Poly1305 (RFC 8439) with
+  - the key `k_to-desktop` or `k_to-phone`,
+  - the nonce `0x00000000 ‖ u64be(counter)`,
+  - the associated data `lp("snotra/v1 envelope") ‖ lp(sid) ‖ lp(direction) ‖ u64be(counter)`,
+    `direction` being `"to-desktop"` or `"to-phone"`,
+  - the 16-byte tag appended to the ciphertext.
+- **A nonce never repeats under a key:** each session and direction has its
+  own key, and the counter only grows. A session ends after 2³² envelopes in
+  one direction or 24 hours at the latest; then the phone starts a new
+  handshake.
+- **Deleted after reading:** the receiver deletes an envelope as soon as it has
+  handled it; the relay's clean-up deletes whatever is older than ten minutes,
+  and the envelopes of a session that ended.
+- **The relay's rules:** a side creates records only in its own outbox and
+  never overwrites one; it reads and deletes only in its inbox; both only while
+  the channel is `paired`.
+- **No padding in version 1:** the relay sees each envelope's size, as the
+  concept's threat model states.
+
+## 16. Order, replay and failure
+
+Each side keeps, per session, the next counter it expects from the other,
+starting at 0:
+
+| An envelope arrives with … | The receiver |
+| --- | --- |
+| `counter = next` | opens it, delivers it, then delivers every held envelope that now follows on |
+| `next < counter ≤ next + 32` | holds it; if the gap is not filled within 5 seconds, starts over |
+| `counter < next`, or already held | drops it — a replay |
+| `counter > next + 32` | starts over |
+| a tag that does not verify | drops it and starts over |
+| another `sid` | ignores it, and deletes it if it belongs to an ended session |
+
+*Starting over* means: end the session, and — on the phone — a new handshake.
+After three failed handshakes within a minute the phone stops and says it
+cannot connect, instead of looping; the desktop says nothing until a session
+stands.
+
+## 17. JSON-RPC in the channel
+
+- **The profile of [`remote-interface.md` §6](./remote-interface.md#6-message-layer)**,
+  one message per envelope, no batches.
+- **The phone sends requests** (`to-desktop`); **the desktop sends answers and
+  events** (`to-phone`). The desktop never sends a request.
+- **`session.hello` first.** The phone's first envelope of a session is
+  `session.hello`; the desktop answers it before anything else and mints the
+  connection there — `kind: "relay"`, a fresh `connectionId`
+  ([§7.1 of the record](./remote-interface.md#71-the-connection)). Any other
+  method before it gets `connection-unknown`.
+- **Events in order:** per connection the envelope counter is the event
+  sequence of the record's §6.1. `chat.delta` is batched per chat into one
+  envelope every 150 ms.
+- **A new session is a new connection.** Its subscriptions start empty; the
+  phone opens its chat again and gets a snapshot (record §6.5).
+
+## 18. Channel test vectors
+
+[`remote-protocol/channel-v1.json`](./remote-protocol/channel-v1.json) takes
+the long-term keys and the channel id of the pairing vectors and adds:
+
+- both sides' ephemeral X25519 keys (raw private, public), handshake 1 and 2
+  with their paths, and the answer to a version nobody shares;
+- `ss`, `ee`, `th`, `sid` and both session keys;
+- four envelopes — `session.hello` and its answer, a `chat.delta` with
+  non-ASCII text, an `approval.respond` — each with path, nonce, associated
+  data, plaintext and the record as it is stored;
+- one envelope with a flipped bit that must not open;
+- a run of counters for the order rule of §16 and what the receiver does with
+  each.
+
+Nothing in the channel is random once the ephemeral keys are fixed, so
+`test/remote-protocol-channel-vectors.test.js` compares the whole file with
+what `node scripts/remote-protocol-channel-vectors.js` writes, and recomputes
+every value with Node's `crypto`. The app loads the ephemeral keys with
+`Curve25519.KeyAgreement.PrivateKey(rawRepresentation:)`.
+
+## 19. Why not Noise KK
+
+The concept asked to check the handshake against the Noise pattern `KK`, and to
+write it as Noise if the primitives allow. They do not:
+
+- `KK` mixes four Diffie-Hellman results — `ee`, `es`, `se`, `ss`. `es` and
+  `se` pair one side's ephemeral key with the other's long-term key, so both
+  have to live on one curve.
+- The long-term keys are P-256, because the Secure Enclave knows nothing else;
+  the ephemeral keys are X25519, as the concept chose. So only `ss` and `ee`
+  can be computed — `KK` without `es` and `se`.
+
+What that keeps: both sides authenticated through `ss`, forward secrecy
+through `ee`, every handshake field bound by `th`, and key confirmation by the
+first envelope. What it gives up is resistance to **key-compromise
+impersonation**: whoever holds the desktop's long-term agree key could pose as
+the phone *towards that desktop*. Holding it means having read the desktop's
+`safeStorage`, which is a compromised desktop — outside the protection goal
+([`security-concept.md`](./security-concept.md) §5). The phone's key cannot
+leave the Secure Enclave.
+
+If that changes, P-256 ephemeral keys would allow all four results — a `KK`
+over P-256, outside Noise's named curves. It is noted here, not proposed.
 
 ## Related
 
