@@ -35,9 +35,9 @@ function tabOrder(bar) {
 test('in a wide bar the pills sit after the mic, in one row', async () => {
   const dom = setupRendererDom();
   try {
-    const { applyComposerBarLayout } = await importRenderer('components', 'ComposerBarLayout.js');
+    const { applyComposerBarLayout, STACK_BAR_BELOW } = await importRenderer('components', 'ComposerBarLayout.js');
     const p = parts(dom.document);
-    assert.equal(applyComposerBarLayout(p, 560), false);
+    assert.equal(applyComposerBarLayout(p, STACK_BAR_BELOW + 100), false);
     assert.equal(p.bar.dataset.stacked, undefined);
     assert.equal(p.pills.parentElement, p.start);
     assert.equal(p.pills.previousElementSibling, p.anchor, 'right after the voice status, as in the markup');
@@ -87,4 +87,10 @@ test('the stylesheet has the rules the layout switches on', () => {
   assert.match(STYLES, /\.chat-composer-bar\[data-stacked='true'\]\s*>\s*\.chat-composer-pills\s*\{[^}]*flex:\s*1 1 100%/);
   // The gutter grows with the panel: 16 px docked, 64 px from 640 px on.
   assert.match(STYLES, /--chat-gutter-x:\s*clamp\(16px, calc\(15% - 32px\), 64px\);/);
+});
+
+test('the pills show their chevron, except on a disabled pill (#1125)', () => {
+  assert.doesNotMatch(STYLES, /(^|\})\s*\.chat-model-pill-chevron\s*\{[^}]*display:\s*none/,
+    'no rule hides the chevron on every pill');
+  assert.match(STYLES, /\.chat-model-pill--btn:disabled \.chat-model-pill-chevron\s*\{[^}]*display:\s*none/);
 });
