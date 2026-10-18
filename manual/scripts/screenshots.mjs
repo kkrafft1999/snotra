@@ -1102,10 +1102,15 @@ const MOTIFS = {
     },
   },
 
-  /** Settings › General. */
+  /** Settings › General, with "System" picked as the appearance (#999), so that both themes show the same choice. */
   'settings-general': {
     async setUp({ app, page }) {
       await openSettingsPanel(app, page, 'general');
+      await page.click('#choice-app-theme input[value="system"] + span');
+      // The "Saved" next to the choice fades after a moment; the picture shows the choice, not the save.
+      await poll(() => page.evaluate(() => document.querySelector('#choice-app-theme input[value="system"]').checked
+        && !document.getElementById('status-app-theme').classList.contains('is-visible')),
+      { what: 'System picked, "Saved" faded', timeoutMs: 15000 });
       await page.mouse.move(0, 0);
       return clipAround(page, SETTINGS_PANEL, 0);
     },

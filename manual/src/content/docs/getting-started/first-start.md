@@ -30,4 +30,4 @@ The order does not matter. Snotra needs both to work for you.
 2. Choose *General* on the left (*Allgemein* in the German interface).
 3. Under *Interface language* (*Sprache der Oberfläche*), pick *English* or *Deutsch*.
 
-The window and the menu bar switch at once, without a restart. In the same section, *Appearance* switches between a light and a dark interface.
+The window and the menu bar switch at once, without a restart. In the same section, *Appearance* switches between a light and a dark interface, or follows your system with *System*.

@@ -2488,6 +2488,17 @@ Pitfalls of the driver are documented in the header of `e2e/helpers/app.mjs` —
 above all: Playwright's own waiting hangs here (timer throttling in the
 renderer), which is why the driver polls itself.
 
+**Accessibility** ([#999](https://github.com/kkrafft1999/snotra/issues/999)):
+`e2e/accessibility.test.mjs` runs axe-core (WCAG 2.1 A and AA, a devDependency
+handed to the page through `e2e/helpers/axe.mjs`, never shipped) over the
+welcome page, the help window, the workspace and every settings section, light
+and dark. A finding that needs more than a small fix is excluded there by rule
+and element, with the issue that carries it. Contrast that can be computed
+without a window — every ink of `tokens.css` on the grounds it is meant for —
+is `test/token-contrast.test.js`. How the app sounds stays a hand check, once
+per platform with VoiceOver, NVDA and Orca, in the release checklist
+([`release.md`](./release.md)).
+
 Since [#237](https://github.com/kkrafft1999/snotra/issues/237) the smoke test
 also runs in `ci.yml`, in the same job as `npm test`, on all three platforms. On
 Linux the runner has no display — the step runs there via

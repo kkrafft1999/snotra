@@ -35,12 +35,12 @@ Die Zeile unten in jedem Bereich sagt es, weil es sich unterscheidet:
 
 ## Der Bereich Allgemein
 
-![Einstellungen › Allgemein: ein Textfeld für den System-Prompt, die Schalter „Umgebungsinformationen mitschicken“ und „AGENTS.md mitschicken“ und die Wahl zwischen Hell und Dunkel.](screenshots/settings-general.webp)
+![Einstellungen › Allgemein: ein Textfeld für den System-Prompt, die Schalter „Umgebungsinformationen mitschicken“ und „AGENTS.md mitschicken“ und die Wahl zwischen Hell, Dunkel und System.](screenshots/settings-general.webp)
 
 - ***System-Prompt*** — deine eigenen Anweisungen für jedes Gespräch: eine Rolle, ein Ton, feste Regeln. Geht unverändert an das Modell. Standardmäßig leer; Snotra setzt hier nichts Eigenes.
 - ***Umgebungsinformationen mitschicken*** — nennt dem Modell den vollständigen Pfad des geöffneten Ordners (der deinen Benutzernamen enthält), ob es ein Git-Repository ist, deine Plattform, die Shell und das heutige Datum. Ohne das rät das Modell die Plattform für Befehle und datiert „letzte Woche“ nach seinem Trainingsstand. Standardmäßig an.
 - ***AGENTS.md mitschicken*** — die Projektanweisungen; siehe [Einem Projekt seine Anweisungen geben](../project-instructions/). Standardmäßig an.
-- ***Erscheinungsbild*** — hell oder dunkel. Diese Wahl bleibt auf diesem Rechner.
+- ***Erscheinungsbild*** — *Hell*, *Dunkel* oder [seit 1.26] *System*: Snotra folgt dann der hellen oder dunklen Einstellung von macOS, Windows oder Linux und wechselt mit, während es offen ist. Voreingestellt ist *Hell*. Diese Wahl bleibt auf diesem Rechner.
 - ***Sprache der Oberfläche*** — Englisch oder Deutsch, sofort umgestellt. Sie gilt für Fenster und Menüleiste; was an das Modell geht, bleibt Englisch.
 - ***Benachrichtigen, wenn Snotra auf deine Freigabe wartet*** — [seit 1.18] eine Systembenachrichtigung, wenn eine Freigabekarte wartet, während Snotra im Hintergrund ist oder die Karte in einem anderen Chat steht. Sie nennt den Chat und was wartet; ein Klick holt Snotra mit diesem Chat nach vorn. Standardmäßig an.
 - ***Beim Start nach Updates suchen*** — [seit 1.24] fragt ein paar Sekunden nach jedem Start bei GitHub nach einer neueren Version und öffnet den Update-Dialog, wenn es eine gibt. Ausgeschaltet sucht Snotra nur, wenn du selbst nachfragst; siehe [Snotra Agent aktualisieren](../../updating/update-snotra/). Standardmäßig an.
@@ -55,3 +55,4 @@ In deinem Profilordner, außerhalb der App und außerhalb deiner Projekte: `~/Li
 - **Eine Änderung wirkt nicht.** Bei *Modelle*, *Skills* und den Textfeldern unter *Allgemein* auf *Übernehmen* klicken.
 - ***Einstellungen konnten nicht geladen werden.*** Schließ die Einstellungen und öffne sie noch einmal. Bleibt es dabei, nennt die Meldung die Datei, die sich nicht lesen ließ.
 - **Es erscheint keine Benachrichtigung.** Prüf den Schalter oben und die Mitteilungseinstellungen des Systems für Snotra Agent (unter macOS *Systemeinstellungen › Mitteilungen*). Die Zeile des Chats im Verlauf zeigt *Wartet auf deine Freigabe* ohnehin.
+- ***System* bleibt hell (oder dunkel).** Snotra folgt dem, was das System als Vorliebe meldet: unter macOS *Systemeinstellungen › Erscheinungsbild*, unter Windows *Einstellungen › Personalisierung › Farben › Modus auswählen*, unter Linux dem hellen oder dunklen Stil der Arbeitsumgebung (in GNOME *Einstellungen › Darstellung*). Gibt eine Linux-Arbeitsumgebung den Stil nicht an Programme weiter, bleibt Snotra hell; wähl dort *Hell* oder *Dunkel*.

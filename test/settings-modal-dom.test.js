@@ -1295,6 +1295,21 @@ test('der Dialog zeigt das geltende Erscheinungsbild', async (t) => {
   assert.equal(checkedValue('app-theme'), 'dark');
 });
 
+test('"System" is a third appearance, shown as itself and picked at once (#999)', async (t) => {
+  const { mounted, gesetzt } = mountMitTheme({ theme: 'system' });
+  const { dom } = await mounted;
+  t.after(dom.cleanup);
+
+  const values = [...document.querySelectorAll('input[name="app-theme"]')].map((radio) => radio.value);
+  assert.deepEqual(values, ['light', 'dark', 'system']);
+  assert.equal(checkedValue('app-theme'), 'system', 'the choice, not the theme it gives right now');
+
+  pick('app-theme', 'light');
+  pick('app-theme', 'system');
+  await flush();
+  assert.deepEqual(gesetzt, ['light', 'system']);
+});
+
 test('das Erscheinungsbild wechselt sofort, ohne „Uebernehmen" (#297)', async (t) => {
   let committed = 0;
   const { mounted, gesetzt } = mountMitTheme({
