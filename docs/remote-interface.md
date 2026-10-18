@@ -592,6 +592,7 @@ listed together where they share their class.
 | `diagnostics:report-error`, `diagnostics:copy` | desktop | The window's own errors; a client reports its own |
 | `update:check`, `ignoreVersion`, `download`, `cancelDownload`, `discardDownload`, `install`, `update:available`, `update:progress` (push) | desktop | Updating the app is the desktop's business |
 | `feedback:getDiagnostics`, `feedback:send` | desktop | The feedback form |
+| `remote:getState`, `remote:pair:start`, `remote:pair:cancel`, `remote:unpair`, `remote:state` (push) | desktop, **never** remote | Pairing and removing the phone (#1114); a phone must not be able to pair another or remove itself through the protocol, and the *Allow* is the confirmation port's |
 | `voice:start`, `voice:audio`, `voice:stop`, `voice:cancel`, `voice:transcript` (push), `whisper:transcribe`, `whisper:cancel` | desktop | The microphone belongs to the window; a phone has its own dictation |
 | all eleven `ui:*` pushes and `ui:preview-history-choice` | desktop | Menu items and shortcuts of the window |
 | all `manual:*` channels | desktop | The manual window; it is also published at docs.snotra-ai.dev |

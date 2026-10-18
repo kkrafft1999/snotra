@@ -950,6 +950,12 @@ module.exports = {
   'skills.makeGlobal.error.noHome': 'Your home folder could not be found.',
   'skills.makeGlobal.error.noDialog': 'No confirmation available.',
   'skills.makeGlobal.ok': 'OK',
+  // The native sheet that lets a phone in as the mobile remote (#1114).
+  'remote.pairing.confirm.message': 'Allow this phone to access Snotra?',
+  'remote.pairing.confirm.detail': 'Only allow it if your phone shows these six words:\n\n{words}\n\nThe phone can then read and write your chats in the workspaces you open for it.',
+  'remote.pairing.confirm.replacing': 'The phone paired so far loses its access.',
+  'remote.pairing.confirm.allow': 'Allow',
+  'remote.pairing.confirm.deny': 'Deny',
   'settings.skills.note.summary': 'A skill is a <code lang="en">SKILL.md</code> with instructions on how the model should work — ticked skills go into the system prompt.',
   'settings.skills.note.body': '<p><strong>System skills</strong> ship with the app and are on by default. <strong>Folder skills</strong> are read from three places: <code lang="en">.agents/skills</code> in the open folder, globally from <code lang="en">~/.snotra/skills</code> — the recommended place — and still from the old location <code lang="en">~/.agents/skills</code>. On a name clash the open folder wins, then <code lang="en">~/.snotra/skills</code>. Directories belonging to other tools, <code lang="en">.claude</code> for instance, are not read. Folder skills are somebody else’s content and are loaded only after you pick them.</p><p><code lang="en">~/.snotra</code> is Snotra’s own user directory — the root for user data that belongs to Snotra; <code lang="en">skills</code> is its first inhabitant. Snotra creates it and moves a skill into it only when you ask for it: <strong>Make global</strong> on a skill of the open folder.</p>',
   'settings.skills.suggestion.label': 'Suggestions in the chat',

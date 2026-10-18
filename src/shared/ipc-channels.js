@@ -223,6 +223,16 @@ const REQUEST_CHANNELS = Object.freeze({
   /** The feedback form (#1045): the diagnostics it shows, and sending it. */
   FEEDBACK_GET_DIAGNOSTICS: 'feedback:getDiagnostics',
   FEEDBACK_SEND: 'feedback:send',
+  /**
+   * Pairing a phone as the mobile remote (#1114, for *Settings › Remote
+   * access*, #1110). The window starts, cancels and removes; it reads the
+   * state and gets every change over PUSH_CHANNELS.REMOTE_STATE. The *Allow*
+   * is not among them: main asks for it in a native dialog (#980).
+   */
+  REMOTE_GET_STATE: 'remote:getState',
+  REMOTE_PAIR_START: 'remote:pair:start',
+  REMOTE_PAIR_CANCEL: 'remote:pair:cancel',
+  REMOTE_UNPAIR: 'remote:unpair',
 
   CHAT_HISTORY_GET: 'chatHistory:get',
   /** One chat with its messages, when it is opened; the list has none (#985). */
@@ -278,6 +288,8 @@ const PUSH_CHANNELS = Object.freeze({
   NOTICE_POSTED: 'notices:posted',
   /** A notice whose cause is gone, e.g. a file saved again: `{ id }`. */
   NOTICE_WITHDRAWN: 'notices:withdrawn',
+  /** The pairing state changed (#1114): a normalized state, see contracts/remote/pairing-state.js. */
+  REMOTE_STATE: 'remote:state',
   UPDATE_AVAILABLE: 'update:available',
   /** Fortschritt des laufenden Update-Downloads (Issue #232). */
   UPDATE_PROGRESS: 'update:progress',

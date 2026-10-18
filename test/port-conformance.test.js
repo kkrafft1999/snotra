@@ -15,7 +15,8 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const PORT_DIRS = ['src/application/ports', 'src/main/ports'];
-const ADAPTER_DIR = 'src/main/adapters';
+// The driven adapters, and the remote bridge's in their own folder (#1114).
+const ADAPTER_DIRS = ['src/main/adapters', 'src/main/remote'];
 
 /**
  * Ports whose implementation lies outside the checked set, with the reason.
@@ -60,7 +61,7 @@ function declaredPorts() {
 /** `XPort` → the adapter files whose factories return it. */
 function implementedPorts() {
   const implemented = new Map();
-  for (const file of jsFiles(ADAPTER_DIR)) {
+  for (const file of ADAPTER_DIRS.flatMap(jsFiles)) {
     for (const match of read(file).matchAll(/@returns \{import\('[^']+'\)\.([A-Za-z]+Port)\b/g)) {
       implemented.set(match[1], [...(implemented.get(match[1]) || []), file]);
     }
@@ -71,7 +72,7 @@ function implementedPorts() {
 /** The JSDoc block right above each `function createX(`, keyed by the name. */
 function adapterFactories() {
   const factories = [];
-  for (const file of jsFiles(ADAPTER_DIR)) {
+  for (const file of ADAPTER_DIRS.flatMap(jsFiles)) {
     const source = read(file);
     for (const match of source.matchAll(/^(?:async )?function (create[A-Za-z]+)\(/gm)) {
       const before = source.slice(0, match.index).trimEnd();
@@ -112,7 +113,7 @@ test('every adapter factory names the port it implements', () => {
 test('the type check covers the core, the ports, the contracts and the adapters', () => {
   // tsconfig.json is JSONC; its comments are whole lines.
   const config = JSON.parse(read('tsconfig.json').replace(/^\s*\/\/.*$/gm, ''));
-  for (const dir of ['src/application', 'src/main/ports', 'src/main/adapters', 'src/shared/contracts']) {
+  for (const dir of ['src/application', 'src/main/ports', 'src/main/adapters', 'src/main/remote', 'src/shared/contracts']) {
     assert.ok(config.include.includes(`${dir}/**/*.js`), `${dir} fell out of the include list`);
   }
   assert.equal(config.compilerOptions.checkJs, true);

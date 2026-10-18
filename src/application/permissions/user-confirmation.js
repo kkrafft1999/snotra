@@ -38,6 +38,8 @@ const CONFIRMATION_ACTIONS = Object.freeze({
   IMPORT_ITEMS: 'import-items',
   /** A workspace skill moved into the global skill folder (#764) — subject: the skill name. */
   SKILL_MAKE_GLOBAL: 'skill-make-global',
+  /** A phone let in as the mobile remote, after comparing the six words (#1114) — subject: the channel id. */
+  REMOTE_PAIRING: 'remote-pairing',
 });
 
 const CONFIRMATION_REFUSALS = Object.freeze({

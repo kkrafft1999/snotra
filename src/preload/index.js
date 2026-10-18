@@ -268,6 +268,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener(channel, listener);
   },
 
+  // Pairing a phone as the mobile remote (#1114, for #1110). Nothing but the
+  // request crosses over; the Allow is asked by main in a native dialog
+  // (#980) and cannot be sent from here.
+  remote: {
+    getState: () => ipcRenderer.invoke(REQ.REMOTE_GET_STATE),
+    startPairing: () => ipcRenderer.invoke(REQ.REMOTE_PAIR_START),
+    cancelPairing: () => ipcRenderer.invoke(REQ.REMOTE_PAIR_CANCEL),
+    unpair: () => ipcRenderer.invoke(REQ.REMOTE_UNPAIR),
+    onState: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on(PUSH.REMOTE_STATE, listener);
+      return () => ipcRenderer.removeListener(PUSH.REMOTE_STATE, listener);
+    },
+  },
+
   // The error path (#978): what the window's global handlers caught goes to
   // main's log; the diagnostics report is built and copied by main.
   reportUncaughtError: (report) => ipcRenderer.invoke(REQ.DIAGNOSTICS_REPORT_ERROR, report),
