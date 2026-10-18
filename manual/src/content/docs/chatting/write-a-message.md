@@ -31,7 +31,8 @@ Whether an image goes along depends on the provider, not only on the model:
 
 - *OpenAI* — yes.
 - *OpenAI-compatible* — only when *Allow image attachments* is switched on for the entry under *Settings › Models*. Otherwise Snotra says that image attachments are switched off for this connection.
-- *Anthropic (Claude)*, *Google (Gemini)*, *Ollama* — not yet. Claude and Gemini understand images, and so do some Ollama models, but Snotra cannot pass them on to these providers yet ([#90](https://github.com/kkrafft1999/snotra/issues/90), [#91](https://github.com/kkrafft1999/snotra/issues/91), [#92](https://github.com/kkrafft1999/snotra/issues/92)). Snotra says so instead of pasting.
+- *Anthropic (Claude)* [since 1.27] — yes.
+- *Google (Gemini)*, *Ollama* — not yet. Gemini understands images, and so do some Ollama models, but Snotra cannot pass them on to these providers yet ([#91](https://github.com/kkrafft1999/snotra/issues/91), [#92](https://github.com/kkrafft1999/snotra/issues/92)). Snotra says so instead of pasting.
 
 The overview per provider is in [Models](../../customising/models/#the-providers).
 

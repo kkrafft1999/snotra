@@ -31,7 +31,8 @@ Ob ein Bild mitgeht, hängt am Anbieter, nicht nur am Modell:
 
 - *OpenAI* — ja.
 - *OpenAI-kompatibel* — nur, wenn für den Eintrag unter *Einstellungen › Modelle* *Bild-Anhänge erlauben* eingeschaltet ist. Sonst sagt Snotra, dass für diese Verbindung Bild-Anhänge ausgeschaltet sind.
-- *Anthropic (Claude)*, *Google (Gemini)*, *Ollama (lokal)* — noch nicht. Claude und Gemini verstehen Bilder, manche Ollama-Modelle auch, aber Snotra kann sie an diese Anbieter noch nicht weiterreichen ([#90](https://github.com/kkrafft1999/snotra/issues/90), [#91](https://github.com/kkrafft1999/snotra/issues/91), [#92](https://github.com/kkrafft1999/snotra/issues/92)). Snotra sagt das, statt das Bild einzufügen.
+- *Anthropic (Claude)* [seit 1.27] — ja.
+- *Google (Gemini)*, *Ollama (lokal)* — noch nicht. Gemini versteht Bilder, manche Ollama-Modelle auch, aber Snotra kann sie an diese Anbieter noch nicht weiterreichen ([#91](https://github.com/kkrafft1999/snotra/issues/91), [#92](https://github.com/kkrafft1999/snotra/issues/92)). Snotra sagt das, statt das Bild einzufügen.
 
 Die Übersicht je Anbieter steht unter [Modelle](../../customising/models/#die-anbieter).
 

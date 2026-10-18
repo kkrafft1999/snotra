@@ -29,12 +29,12 @@ test('ollama exposes dispose as alias for destroyInsecureDispatcher', () => {
 });
 
 // Bild-Anhaenge (Issue #93): Das Flag beschreibt, ob *unser* Adapter Bilder
-// abbildet — nicht, was der Anbieter koennte. Es wandert mit #90 (Anthropic),
-// #91 (Google) und #92 (Ollama) auf true.
+// abbildet — nicht, was der Anbieter koennte. Es wandert mit #91 (Google) und
+// #92 (Ollama) auf true; #90 (Anthropic) ist erledigt.
 test('jeder Provider deklariert, ob er Bilder weiterreicht', () => {
   const expected = {
     openai: true,
-    anthropic: false,
+    anthropic: true,
     google: false,
     ollama: false,
   };

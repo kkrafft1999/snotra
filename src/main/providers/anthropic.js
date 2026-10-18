@@ -1,5 +1,6 @@
 const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
+const { imageAttachmentsOf } = require('../../shared/contracts/attachments');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const { iterSseEvents, describeFetchErrorMessage, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, createEmptyUsage, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
@@ -231,7 +232,23 @@ function translateMessagesToAnthropic(messages, { model, replayThinking = true }
     flushPendingToolResults();
 
     if (m.role === 'user') {
-      out.push({ role: 'user', content: typeof m.content === 'string' ? m.content : '' });
+      const text = typeof m.content === 'string' ? m.content : '';
+      // imageAttachmentsOf keeps png, jpeg, gif and webp — the formats
+      // Anthropic takes; anything else never reaches the request (#90).
+      const images = imageAttachmentsOf(m);
+      if (images.length === 0) {
+        out.push({ role: 'user', content: text });
+        continue;
+      }
+      // Images go in front of the question, as Anthropic recommends. An empty
+      // text block is refused by the API, and a screenshot without a question
+      // is a valid input.
+      const content = images.map((image) => ({
+        type: 'image',
+        source: { type: 'base64', media_type: image.mediaType.toLowerCase(), data: image.dataBase64 },
+      }));
+      if (text) content.push({ type: 'text', text });
+      out.push({ role: 'user', content });
       continue;
     }
     if (m.role === 'assistant') {
@@ -491,8 +508,8 @@ module.exports = {
   id: 'anthropic',
   name: 'Anthropic (Claude)',
   fields: { apiKey: true },
-  // Auf true, sobald translateMessagesToAnthropic Bilder abbildet (Issue #90).
-  capabilities: { images: false },
+  // translateMessagesToAnthropic maps image attachments (#90).
+  capabilities: { images: true },
   defaultModel: 'claude-sonnet-4-6',
   // The levels depend on how the model thinks (#994); see thinkingModeOf.
   reasoning: {
