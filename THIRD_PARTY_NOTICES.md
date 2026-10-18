@@ -13,6 +13,16 @@ dependencies, whose licences come with them in `node_modules`.
 - **Licence:** MIT, Copyright (c) 2023 Berri AI. The full text ships next to
   the data in `src/main/data/model-prices-LICENSE.txt`.
 
+## EFF short word list 2.0
+
+- **What:** `src/shared/contracts/remote/safety-words-v1.json`, the 1,296 words
+  of the mobile remote's safety phrase (docs/remote-protocol.md §7, #1116).
+  The dice numbers were dropped; order and spelling are as published.
+- **Source:** https://www.eff.org/dice
+- **Licence:** CC BY 3.0 US, Electronic Frontier Foundation. Attribution and
+  licence link ship next to the data in
+  `src/shared/contracts/remote/safety-words-v1-LICENSE.txt`.
+
 ## Inter
 
 - **What:** the UI font in `src/renderer/vendor/fonts/`.

@@ -20,6 +20,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const VECTOR_FILE = path.join(__dirname, '..', 'docs', 'remote-protocol', 'pairing-v1.json');
+const WORD_LIST_FILE = 'src/shared/contracts/remote/safety-words-v1.json';
+const SAFETY_WORDS = require(`../${WORD_LIST_FILE}`).words;
 
 /** Crockford's base32 alphabet: no I, L, O or U. */
 const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -27,8 +29,8 @@ const PAIRING_ID_SYMBOLS = 4; // 20 bits, minted by the relay
 const SECRET_SYMBOLS = 15; // 75 bits, from the desktop's CSPRNG
 const CODE_SYMBOLS = PAIRING_ID_SYMBOLS + SECRET_SYMBOLS + 1; // + check symbol
 
-/** The size of the safety-phrase word list; the list itself is open decision O1 of the spec. */
-const WORD_LIST_SIZE = 1296;
+/** The EFF short word list 2.0 (decided 2026-10-18, #1116). */
+const WORD_LIST_SIZE = SAFETY_WORDS.length;
 const PHRASE_WORDS = 6;
 
 const LABEL = Object.freeze({
@@ -199,6 +201,15 @@ function phraseIndices(desktopKeys, phoneKeys, listSize = WORD_LIST_SIZE, words 
   return { hash0: first, values, indices };
 }
 
+/** The words for the indices, and the checksum that pins the list to protocol version 1. */
+function phraseWords(indices) {
+  return indices.map((i) => SAFETY_WORDS[i]);
+}
+
+function wordListSha256() {
+  return sha256(Buffer.from(`${SAFETY_WORDS.join('\n')}\n`, 'utf8')).toString('hex');
+}
+
 // ---------------------------------------------------------------- proofs for the relay
 
 function openMessage(challenge, desktopKeys) {
@@ -307,10 +318,14 @@ function buildVectors(previous = null) {
     macP: b64u(macPhone(code, input.channelId, desktopKeys, phoneKeys)),
     macD: b64u(macDesktop(code, input.channelId, desktopKeys, phoneKeys)),
     phrase: {
+      list: WORD_LIST_FILE,
+      listSha256: wordListSha256(),
       listSize: WORD_LIST_SIZE,
       hash0: hex(phrase.hash0),
       values: phrase.values,
       indices: phrase.indices,
+      words: phraseWords(phrase.indices),
+      shown: phraseWords(phrase.indices).join(' · '),
     },
     challenge: b64u(input.challenge),
     proofs: [
@@ -343,7 +358,9 @@ module.exports = {
   CODE_SYMBOLS,
   LABEL,
   PHRASE_WORDS,
+  SAFETY_WORDS,
   VECTOR_FILE,
+  WORD_LIST_FILE,
   WORD_LIST_SIZE,
   buildVectors,
   claimMessage,
@@ -356,10 +373,12 @@ module.exports = {
   openMessage,
   parseCode,
   phraseIndices,
+  phraseWords,
   publicPoint,
   qrPayload,
   readVectors,
   tokenMessage,
   transcript,
   verify,
+  wordListSha256,
 };
