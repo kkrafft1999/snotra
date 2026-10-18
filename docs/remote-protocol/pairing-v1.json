@@ -91,6 +91,8 @@
   "macP": "-VuIbz3haCYUWMpOZgkXSb3L-HrT9SpBlR1--_wdss4",
   "macD": "ckov3jFxhzzyMbokW04fDGjjnZHVkPqt43Z2hV0yg3k",
   "phrase": {
+    "list": "src/shared/contracts/remote/safety-words-v1.json",
+    "listSha256": "7aa57a4d3ecf6581729992bad9575bacdebf7c28378af2aec6a50f11aec326f5",
     "listSize": 1296,
     "hash0": "4cc6b847816230166896636bee4a7ad290198022f802ccdce112250dbc0c5b8d",
     "values": [
@@ -108,7 +110,16 @@
       646,
       854,
       827
-    ]
+    ],
+    "words": [
+      "coffeecake",
+      "groundhog",
+      "maestro",
+      "kangaroo",
+      "ozone",
+      "oncoming"
+    ],
+    "shown": "coffeecake · groundhog · maestro · kangaroo · ozone · oncoming"
   },
   "challenge": "Q0VkFp3dYNCf1cETu0_MC6oDHPWuKOkxTFBxMa2vkbQ",
   "proofs": [

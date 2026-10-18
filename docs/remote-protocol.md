@@ -16,8 +16,8 @@ It must not contradict the decision record
 [mobile remote concept](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md);
 where it changes the concept, [§11](#11-changes-to-the-concept) says so. The
 flow it details is drawn in [`remote-pairing-sequence.svg`](./remote-pairing-sequence.svg)
-— step numbers below refer to that diagram. The points in
-[§10](#10-open-decisions) are the owner's and stay open until decided.
+— step numbers below refer to that diagram. The two choices this part ran into
+were decided by the owner on 2026-10-18 ([§10](#10-decisions)).
 
 Nothing of it is built yet. The reference implementation that pins the bytes
 is [`scripts/remote-protocol-vectors.js`](../scripts/remote-protocol-vectors.js);
@@ -109,8 +109,8 @@ neither the desktop nor the phone sends the code anywhere. The phone sends the
 pairing id in the URL path, and proves that it knows the secret only through
 `MAC_P`.
 
-**Why these sizes** — see [§10](#10-open-decisions), O2, for the trade-off
-against the concept's 128 bits:
+**Why these sizes** — decided on 2026-10-18 against the concept's 128 bits
+([§10](#10-decisions), O2):
 
 | Part | Bits | What it has to hold |
 | --- | --- | --- |
@@ -321,11 +321,20 @@ H0 = SHA-256(lp("snotra/v1 phrase") ‖ KB_D ‖ KB_P),   H(i+1) = SHA-256(H(i))
   first six indices make the phrase. With `N = 1296` the bound is 64,800 and
   one value in about ninety is skipped.
 - **One fixed word list, never translated** (decided 2026-10-18): a desktop in
-  German and a phone in English show the same six words. The list is part of
-  protocol version 1; another list is version 2. Which list — [§10](#10-open-decisions),
-  O1.
-- Shown in lower case, numbered 1 to 6, in order. The desktop shows them large
-  in *Settings › Remote access* and again in the native sheet.
+  German and a phone in English show the same six words. The list is the
+  **EFF short word list 2.0** — 1,296 words of 3 to 10 letters, each with a
+  unique three-letter prefix — in
+  [`src/shared/contracts/remote/safety-words-v1.json`](../src/shared/contracts/remote/safety-words-v1.json),
+  index = position in its `words` array (`N = 1296`). It is part of protocol
+  version 1: SHA-256 of the words joined by `\n`, with a final `\n`, is
+  `7aa57a4d3ecf6581729992bad9575bacdebf7c28378af2aec6a50f11aec326f5`; another list is version 2.
+- **Attribution.** The list is © Electronic Frontier Foundation under CC BY 3.0
+  US. Every product that shows the phrase names it where it lists third-party
+  material: the desktop in `THIRD_PARTY_NOTICES.md` and the licence note next
+  to the JSON file, the iPhone app in its About screen.
+- Shown in lower case as published (one word, `yo-yo`, has a hyphen), numbered
+  1 to 6, in order, joined by ` · ` where they share a line. The desktop shows
+  them large in *Settings › Remote access* and again in the native sheet.
 
 Six words from 1,296 carry 62 bits. A relay that wanted the same phrase for
 keys of its own would have to find them inside the pairing's five minutes —
@@ -362,7 +371,8 @@ fixed inputs and every value derived from them:
 - the code — pairing id, secret, check, typed key, QR payload, `K`;
 - parse cases: what a person may type, and the canonical code or the error;
 - the channel id, `T`, `MAC_P`, `MAC_D`;
-- the phrase: `H0`, the 16-bit values read, the six indices for `N = 1296`;
+- the phrase: `H0`, the 16-bit values read, the six indices, the six words and
+  the list checksum;
 - for each proof the exact message (hex) and one signature that verifies.
 
 The private scalars are SHA-256 hashes of short labels, so the file can be
@@ -374,22 +384,19 @@ the scalars with `P256.Signing.PrivateKey(rawRepresentation:)` and
 its own tests; a signature it makes itself must verify in Node and the other
 way round.
 
-Words follow the indices once O1 is decided.
+## 10. Decisions
 
-## 10. Open decisions
+Decided by the owner on 2026-10-18 (#1116), from the options this part first
+listed as open:
 
-Decisions that belong to the owner. Each has a recommendation; none is taken
-by this document.
-
-| # | Question | Options | Recommendation |
+| # | Question | Decided | Considered |
 | --- | --- | --- | --- |
-| O1 | **The word list** of the safety phrase | (a) the EFF *short word list 2*: 1,296 words chosen to be memorable, each with a unique three-letter prefix, licence CC BY 3.0 US (attribution in the app's About); (b) BIP-39 English: 2,048 words, well known — from crypto wallets, where twelve such words *are* the key; (c) the PGP word list: two lists of 256 made for reading aloud, 48 bits for six words, long words | (a). Short words fit a phone's width, and nobody mistakes the phrase for a wallet's recovery words, which people are taught never to show. The derivation in §7 works for any `N`; (b) would only change the bound |
-| O2 | **The size of the secret**, against the length of the typed key | (a) 75 bits in twenty symbols — the length the concept shows; (b) 128 bits as the concept says, in 31 symbols (eight groups of four); (c) 128 bits in the QR code and a separate, shorter code for typing | (a). The secret has to hold for five minutes against an offline search, not forever, and 75 bits do with a wide margin (§4). (b) asks for 31 symbols on a phone keyboard; (c) is two codes to explain |
+| O1 | **The word list** of the safety phrase | The **EFF short word list 2.0**: 1,296 memorable words, each with a unique three-letter prefix, CC BY 3.0 US (§7). Nobody mistakes the phrase for a wallet's recovery words | BIP-39 English (2,048 words — known from crypto wallets, where such words *are* the key); the PGP word list (two lists of 256 for reading aloud, 48 bits for six words); the EFF short word list 1 (words of at most five letters, without unique prefixes) |
+| O2 | **The size of the secret**, against the length of the typed key | **75 bits in twenty symbols**, the length the concept shows. The secret has to hold for five minutes against an offline search, not forever (§4) | 128 bits in 31 symbols, eight groups of four on a phone keyboard; 128 bits in the QR code and a second, shorter code for typing |
 
 ## 11. Changes to the concept
 
-The concept (snotra-mobile, §5.1) is updated to match once O1 and O2 are
-decided:
+The concept (snotra-mobile, §5.1 and §10) took these over on 2026-10-18:
 
 - **The secret is 75 bits, not 128**, and the twenty symbols of the typed key
   are pairing id, secret and a check symbol — the concept's example had twenty
@@ -399,6 +406,7 @@ decided:
   `open → pending → paired`.
 - **The QR code's relay host is checked** against the hosts the app ships
   with.
+- **The word list** is the EFF short word list 2.0, named in the app's About.
 
 ## Related
 

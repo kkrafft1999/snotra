@@ -84,6 +84,33 @@ test('the safety phrase: six indices into the word list, the same from both side
   assert.notDeepEqual(ref.phraseIndices(keysOf('phone'), keysOf('desktop'), phrase.listSize).indices, phrase.indices);
 });
 
+test('the words: the published EFF short word list 2.0, unchanged but for the dice numbers', () => {
+  const list = require(`../${ref.WORD_LIST_FILE}`);
+  assert.equal(list.words.length, 1296);
+  // Dice numbers 1111 … 6666 in order rebuild the published file byte for byte.
+  const dice = [];
+  for (let n = 0; n < 1296; n += 1) dice.push(n.toString(6).padStart(4, '0').replace(/[0-5]/g, (d) => String(Number(d) + 1)));
+  const published = list.words.map((w, i) => `${dice[i]}\t${w}\n`).join('');
+  assert.equal(require('node:crypto').createHash('sha256').update(published).digest('hex'), list.sourceSha256);
+  assert.equal(new Set(list.words).size, 1296, 'no word twice');
+  assert.equal(new Set(list.words.map((w) => w.slice(0, 3))).size, 1296, 'a unique three-letter prefix each');
+  for (const w of list.words) assert.match(w, /^[a-z][a-z-]*[a-z]$/);
+  assert.match(list.attribution, /Electronic Frontier Foundation/);
+  assert.match(list.attribution, /CC BY 3\.0 US/);
+  const licence = fs.readFileSync(path.join(__dirname, '..', 'src', 'shared', 'contracts', 'remote', 'safety-words-v1-LICENSE.txt'), 'utf8');
+  assert.match(licence, /creativecommons\.org\/licenses\/by\/3\.0\/us/);
+  assert.match(fs.readFileSync(path.join(__dirname, '..', 'THIRD_PARTY_NOTICES.md'), 'utf8'), /safety-words-v1\.json/);
+});
+
+test('the phrase in words, and the checksum that pins the list to version 1', () => {
+  const { phrase } = vectors;
+  assert.deepEqual(phrase.words, phrase.indices.map((i) => ref.SAFETY_WORDS[i]));
+  assert.equal(phrase.shown, phrase.words.join(' · '));
+  assert.equal(phrase.listSha256, ref.wordListSha256());
+  const spec = fs.readFileSync(path.join(__dirname, '..', 'docs', 'remote-protocol.md'), 'utf8');
+  assert.ok(spec.includes(phrase.listSha256), 'the spec names the list checksum');
+});
+
 test('a value at or above the largest multiple of the list size is skipped, not folded', () => {
   // 1296 words: values 64800..65535 would make the first 736 words likelier.
   const bound = Math.floor(65536 / 1296) * 1296;

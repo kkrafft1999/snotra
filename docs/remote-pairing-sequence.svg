@@ -143,7 +143,7 @@
   <text class="lbl" x="420.875" y="701" text-anchor="middle">QR payload, typed key, expiry</text>
   <rect class="note" x="154.95999999999998" y="718" width="330.08000000000004" height="54" rx="5"/>
   <text class="note-t" x="172.95999999999998" y="736">QR code of snotra-pair:v1/&lt;relay&gt;/&lt;20 symbols&gt;</text>
-  <text class="note-t" x="172.95999999999998" y="750">key 7KQM-3XWD-P9TA-HV2N-RC6E · 5:00 countdown</text>
+  <text class="note-t" x="172.95999999999998" y="750">key 0111-EP9D-ZH4Q-PYT4-HWWF · 5:00 countdown</text>
   <text class="note-t" x="172.95999999999998" y="764">“Waiting for your phone …”</text>
   <line class="m-ret" x1="294" y1="804" x2="91.5" y2="804"/>
   <polyline class="m-ret head-open" points="100,799 91.5,804 100,809"/>
@@ -242,11 +242,11 @@
   <text class="lbl-sub" x="383.44" y="1735" text-anchor="middle">IPC push · the panel shows them large to compare</text>
   <line class="m-req" x1="534" y1="1818" x2="91.5" y2="1818"/>
   <polygon class="head m-req-head" points="91.5,1818 101,1813 101,1823"/>
-  <rect class="label-bg" x="155.28" y="1755" width="314.94" height="57" rx="3"/>
+  <rect class="label-bg" x="140.42999999999998" y="1755" width="344.64000000000004" height="57" rx="3"/>
   <text class="lbl" x="312.75" y="1767" text-anchor="middle">native sheet on the app window</text>
   <text class="lbl-sub" x="312.75" y="1781" text-anchor="middle">confirmation port (#980), drawn by main</text>
   <text class="lbl-sub" x="312.75" y="1795" text-anchor="middle">“Allow ‘iPhone’ to access Snotra? Only if the phone</text>
-  <text class="lbl-sub" x="312.75" y="1809" text-anchor="middle">shows: amber · lantern · …” · Deny is the default</text>
+  <text class="lbl-sub" x="312.75" y="1809" text-anchor="middle">shows: coffeecake · groundhog · …” · Deny is the default</text>
   <line class="m-req" x1="116" y1="1864" x2="558.5" y2="1864"/>
   <polygon class="head m-req-head" points="558.5,1864 549,1859 549,1869"/>
   <rect class="label-bg" x="212.45" y="1829" width="249.60000000000002" height="29" rx="3"/>

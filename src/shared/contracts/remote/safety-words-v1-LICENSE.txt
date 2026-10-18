@@ -1,0 +1,12 @@
+safety-words-v1.json
+
+EFF short word list 2.0
+Copyright (c) 2016 Electronic Frontier Foundation
+https://www.eff.org/dice
+https://www.eff.org/files/2016/09/08/eff_short_wordlist_2_0.txt
+
+Licensed under the Creative Commons Attribution 3.0 United States License
+(CC BY 3.0 US): https://creativecommons.org/licenses/by/3.0/us/
+
+Changes: the four-digit dice numbers in front of each word were dropped and
+the words were put into a JSON array. Order and spelling are as published.
