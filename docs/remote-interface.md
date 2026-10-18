@@ -722,3 +722,6 @@ by this record.
   AR-14.
 - Mobile remote: [concept](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md),
   epic [#1081](https://github.com/kkrafft1999/snotra/issues/1081).
+- [`remote-pairing-sequence.svg`](./remote-pairing-sequence.svg) — pairing a
+  phone and the relay channel step by step, from *Settings › Remote access* to
+  *Remove phone* (agreed 2026-10-18).
