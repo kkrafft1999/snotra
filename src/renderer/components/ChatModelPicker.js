@@ -62,7 +62,7 @@ export function initChatModelPicker({
   /**
    * Why the active model gets no images, for the composer's refusal (#995):
    * on a connection it is the user's switch, otherwise Snotra's missing
-   * adapter for the provider (#90–#92) — not the model.
+   * adapter for the provider (#91–#92) — not the model.
    */
   function activeImageLimit() {
     const preset = (appStore.llmState.presets || [])

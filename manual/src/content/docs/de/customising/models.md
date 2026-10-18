@@ -30,7 +30,7 @@ Jede Zeile ist ein Eintrag: ein Anbieter mit einem Modell. Jede Zeile hat
 | Anbieter | Zugang | Bilder | Gut zu wissen |
 | --- | --- | --- | --- |
 | *OpenAI* | API-Schlüssel | Ja | GPT-5 und neuer, mit Bildern und Reasoning-Stufen. Ein Schlüssel für alle OpenAI-Einträge. |
-| *Anthropic (Claude)* | API-Schlüssel | Noch nicht — Snotra reicht sie nicht weiter ([#90](https://github.com/kkrafft1999/snotra/issues/90)) | Ein Schlüssel für alle Anthropic-Einträge. Reasoning-Stufen für die Modelle, die nachdenken — [welche](../../chatting/model-and-reasoning/#welche-modelle-stufen-haben). |
+| *Anthropic (Claude)* | API-Schlüssel | Ja [seit 1.27] | Ein Schlüssel für alle Anthropic-Einträge. Reasoning-Stufen für die Modelle, die nachdenken — [welche](../../chatting/model-and-reasoning/#welche-modelle-stufen-haben). |
 | *Google (Gemini)* | API-Schlüssel | Noch nicht — Snotra reicht sie nicht weiter ([#91](https://github.com/kkrafft1999/snotra/issues/91)) | Ein Schlüssel für alle Google-Einträge. Reasoning-Stufen ab Gemini 2.5. |
 | *Ollama (lokal)* | Server-URL | Noch nicht — Snotra reicht sie nicht weiter ([#92](https://github.com/kkrafft1999/snotra/issues/92)) | Die eigene Schnittstelle von Ollama, standardmäßig `http://localhost:11434`. Reasoning-Stufen für gpt-oss, aus und an für andere nachdenkende Modelle. |
 | *OpenAI-kompatibel* | Server-URL, Schlüssel optional | Wenn für den Eintrag *Bild-Anhänge erlauben* eingeschaltet ist | Alles andere mit einer Schnittstelle nach OpenAI-Muster. Jeder Eintrag hat seine eigene Adresse, seinen eigenen Schlüssel und Namen. |

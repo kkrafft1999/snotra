@@ -95,8 +95,8 @@ test('the provider refusal names Snotra and the provider, not the model (#995)',
     assert.ok(messages['chat.image.error.connectionWithoutImages'].length > 10);
   }
 
-  const named = rejectionMessage(INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES, { provider: 'Anthropic (Claude)' });
-  assert.match(named, /Anthropic \(Claude\)/);
+  const named = rejectionMessage(INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES, { provider: 'Google (Gemini)' });
+  assert.match(named, /Google \(Gemini\)/);
   assert.doesNotMatch(named, /model/i);
   assert.doesNotMatch(rejectionMessage(INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES), /\{provider\}/);
 });

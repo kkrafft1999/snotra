@@ -28,7 +28,7 @@ export const INTAKE_REJECTIONS = Object.freeze({
   UNSUPPORTED_TYPE: 'unsupported-type',
   TOO_MANY: 'too-many',
   TOO_LARGE: 'too-large',
-  // Snotra has no image adapter for this provider yet (#90–#92) — the model
+  // Snotra has no image adapter for this provider yet (#91–#92) — the model
   // behind it may well take images, so the message must not blame it (#995).
   PROVIDER_PASSES_NO_IMAGES: 'provider-passes-no-images',
   // An OpenAI-compatible connection with "Allow image attachments" off: the
