@@ -1,6 +1,6 @@
 # A security concept for tool calls
 
-Written 2026-09-05, last brought in line with the code on 2026-10-17 ([#1010](https://github.com/kkrafft1999/snotra/issues/1010)) ·
+Written 2026-09-05, last brought in line with the code on 2026-10-18 ([#1100](https://github.com/kkrafft1999/snotra/issues/1100)) ·
 the concept behind [#65](https://github.com/kkrafft1999/snotra/issues/65).
 Where the model grew after the first version, the sections below carry the
 current rule and point to the revision at the end of section 9 that dated it.
@@ -360,9 +360,17 @@ history without encrypted storage" in section 9 records that.
   a URL field ignores a requested one (#537). Saving holds to the same rule: an
   entry saved with a new address keeps neither its old key nor its old headers,
   only what the save itself brings, and the dialog says so before saving
-  (#560). Local processes
-  running with the user's rights are outside the protection goal; they could
-  modify the app itself.
+  (#560). Local processes running with the user's rights are outside the
+  protection goal; they could modify the app itself. Two exceptions hold once
+  Snotra listens on localhost for other front ends
+  ([`remote-interface.md`](./remote-interface.md), #989). Other users of the
+  machine and web pages in the user's browser can reach a loopback port, so
+  they are inside the goal, kept out by the interface's own checks — loopback
+  only, a credential only the user can read, `Host` and `Origin` checked. And
+  the processes Snotra starts itself — commands, interpreters, MCP servers —
+  are inside it as well: one that reached the interface could approve the
+  agent's next call. What a remote front end may do, and what stays undefended
+  where no sandbox runs, is in the threat model of that record (section 9).
 - **The presence guarantee (#980):** each of these confirmations goes through
   one port, the user-confirmation port, and means one thing: a person at this
   machine answered a prompt the operating system drew. Only the desktop's
