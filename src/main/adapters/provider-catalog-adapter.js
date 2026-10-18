@@ -1,5 +1,7 @@
 'use strict';
 
+const { imageCapabilitiesOf } = require('../../shared/contracts/attachments');
+
 function toCatalogEntry(provider) {
   if (!provider) return null;
   return {
@@ -16,7 +18,7 @@ function toCatalogEntry(provider) {
     fields: provider.fields || {},
     presentation: provider.presentation,
     apiBase: provider.apiBase || '',
-    capabilities: { images: provider.capabilities?.images === true },
+    capabilities: imageCapabilitiesOf(provider.capabilities),
     optionalApiKey: provider.optionalApiKey === true,
     connectionPerPreset: provider.connectionPerPreset === true,
     // The reasoning levels a chat can choose, and for which models (#725).

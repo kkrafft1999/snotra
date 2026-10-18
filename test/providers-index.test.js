@@ -28,14 +28,14 @@ test('ollama exposes dispose as alias for destroyInsecureDispatcher', () => {
   assert.equal(ollama.dispose, ollama.destroyInsecureDispatcher);
 });
 
-// Bild-Anhaenge (Issue #93): Das Flag beschreibt, ob *unser* Adapter Bilder
-// abbildet — nicht, was der Anbieter koennte. Es wandert mit #91 (Google) und
-// #92 (Ollama) auf true; #90 (Anthropic) ist erledigt.
+// Image attachments (#93): the flag says whether *our* adapter maps images,
+// not what the provider could take. It turns true for Ollama with #92;
+// Anthropic (#90) and Google (#91) are done.
 test('jeder Provider deklariert, ob er Bilder weiterreicht', () => {
   const expected = {
     openai: true,
     anthropic: true,
-    google: false,
+    google: true,
     ollama: false,
   };
   for (const [id, images] of Object.entries(expected)) {
@@ -44,6 +44,21 @@ test('jeder Provider deklariert, ob er Bilder weiterreicht', () => {
   for (const meta of providers.listProviderMeta()) {
     assert.equal(typeof meta.capabilities?.images, 'boolean', meta.id);
   }
+});
+
+// A provider that takes fewer image formats names them (#91) — only formats
+// the composer can attach, or the list would promise what never arrives.
+test('a provider narrows the image formats only to ones Snotra attaches', () => {
+  const { IMAGE_ATTACHMENT_MEDIA_TYPES } = require('../src/shared/contracts/attachments');
+  for (const meta of providers.listProviderMeta()) {
+    const own = meta.capabilities?.imageMediaTypes;
+    if (own === undefined) continue;
+    assert.ok(own.length > 0, meta.id);
+    for (const type of own) assert.ok(IMAGE_ATTACHMENT_MEDIA_TYPES.includes(type), `${meta.id}: ${type}`);
+  }
+  assert.deepEqual([...providers.getProvider('google').capabilities.imageMediaTypes],
+    ['image/png', 'image/jpeg', 'image/webp']);
+  assert.equal(providers.getProvider('anthropic').capabilities.imageMediaTypes, undefined);
 });
 
 test('openai offers its levels to the chat, not as a preset field (#726)', () => {

@@ -5,7 +5,7 @@ import { APP_LOCALES, onLocaleChange, t, tMessage } from '../i18n.js';
 import contracts from '../generated/contracts.js';
 import { toolLogDebug } from '../chat/toolLogDebug.js';
 
-const { resolveChatTitle } = contracts;
+const { resolveChatTitle, providerImageMediaTypes } = contracts;
 
 export function initChatModelPicker({
   api,
@@ -62,7 +62,7 @@ export function initChatModelPicker({
   /**
    * Why the active model gets no images, for the composer's refusal (#995):
    * on a connection it is the user's switch, otherwise Snotra's missing
-   * adapter for the provider (#91–#92) — not the model.
+   * adapter for the provider (#92) — not the model.
    */
   function activeImageLimit() {
     const preset = (appStore.llmState.presets || [])
@@ -71,6 +71,20 @@ export function initChatModelPicker({
     const pid = appStore.llmState.chatTarget?.providerId;
     const p = pid ? findProviderView(pid) : null;
     return { limitedBy: 'provider', provider: p?.name ? tMessage(p.name) : '' };
+  }
+
+  /**
+   * The image formats the active model takes, and the name the composer's
+   * refusal gives it (#91). A connection whose switch is on takes them all;
+   * a provider can name fewer (Gemini: no GIF).
+   */
+  function activeImageFormats() {
+    const preset = (appStore.llmState.presets || [])
+      .find((pr) => pr.id === appStore.llmState.activePresetId);
+    if (preset?.connection) return { mediaTypes: providerImageMediaTypes(null), provider: '' };
+    const pid = appStore.llmState.chatTarget?.providerId;
+    const p = pid ? findProviderView(pid) : null;
+    return { mediaTypes: providerImageMediaTypes(p?.capabilities), provider: p?.name ? tMessage(p.name) : '' };
   }
 
   /**
@@ -544,6 +558,7 @@ export function initChatModelPicker({
     activeProviderConfigured,
     activeProviderSupportsImages,
     activeImageLimit,
+    activeImageFormats,
     refreshLLMState,
     updateChatChrome,
     syncChatTitle,

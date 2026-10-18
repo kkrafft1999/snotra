@@ -10,6 +10,7 @@ const {
 } = require('../../shared/contracts/settings');
 const { reasoningDefaultFor, reasoningLevelsFor, resolveReasoningLevel } = require('../../shared/contracts/reasoning');
 const { createCostEntry } = require('../../shared/contracts/cost');
+const { imageCapabilitiesOf } = require('../../shared/contracts/attachments');
 
 /**
  * `reasoningLevelFor(chatId)` answers with the chat's own reasoning level, or
@@ -163,9 +164,9 @@ function createProviderLlmAdapter({
       // Der Anzeigename gehoert in jede Meldung, die den Anbieter nennt —
       // sonst steht „OpenAI-kompatibel" da, wo der Nutzer „LM Studio" sieht.
       providerName: providerDisplayName(provider, config),
-      capabilities: typeof provider.capabilitiesFor === 'function'
-        ? { images: provider.capabilitiesFor(config)?.images === true }
-        : { images: provider.capabilities?.images === true },
+      capabilities: imageCapabilitiesOf(typeof provider.capabilitiesFor === 'function'
+        ? provider.capabilitiesFor(config)
+        : provider.capabilities),
     };
   }
 

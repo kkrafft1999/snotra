@@ -43,7 +43,7 @@
  * @property {{ baseUrl?: string } & Object<string, unknown>} config  Per-send snapshot der Provider-Konfiguration
  * @property {string} model
  * @property {string} [providerName]  display name, for messages to the user
- * @property {{ images?: boolean }} [capabilities]  what the provider passes on (#93)
+ * @property {{ images?: boolean, imageMediaTypes?: string[] }} [capabilities]  what the provider passes on (#93); `imageMediaTypes` where it takes fewer than all image formats (#91)
  */
 
 /**

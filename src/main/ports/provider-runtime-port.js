@@ -93,13 +93,13 @@
  *   Welche Konfig-Felder der Provider braucht.
  * @property {boolean} [optionalApiKey] Der Key darf leer bleiben (Issue #193).
  * @property {boolean} [connectionPerPreset] Verbindung gehoert zum Eintrag (Issue #202).
- * @property {(config: ProviderConfig) => {images: boolean}} [capabilitiesFor]
+ * @property {(config: ProviderConfig) => {images: boolean, imageMediaTypes?: string[]}} [capabilitiesFor]
  *   Faehigkeiten, die erst aus der Konfiguration folgen statt fest am Adapter zu haengen.
  * @property {string} [defaultModel]
  * @property {string} [defaultBaseUrl]
  * @property {boolean} [defaultInsecureTls]
  * @property {string} [apiBase]            Anzeige-URL der API (Settings-UI).
- * @property {{ images: boolean }} [capabilities]  what the provider passes on, when it does not depend on the configuration (#93)
+ * @property {{ images: boolean, imageMediaTypes?: readonly string[] }} [capabilities]  what the provider passes on, when it does not depend on the configuration (#93); `imageMediaTypes` where it takes fewer than all image formats (#91)
  * @property {{ levels: string[] | ((model: string) => string[]), defaultLevel?: string | ((model: string) => string), appliesTo?: (model: string) => boolean }} [reasoning]
  *   the reasoning levels a chat can choose (#725); per model where the
  *   provider's models differ (#994)
