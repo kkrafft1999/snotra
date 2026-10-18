@@ -169,3 +169,60 @@ test('a thought part is thinking, not answer text (#541)', async (t) => {
   assert.equal(res.message.content, 'Answer');
   assert.deepEqual(sink.reasoningDeltas, ['Let me think']);
 });
+
+// Reasoning levels (#994).
+
+const { reasoningLevelsFor, reasoningDefaultFor } = require('../src/shared/contracts/reasoning');
+
+function geminiAnswer() {
+  return helperSse([
+    `data: ${JSON.stringify({ candidates: [{ content: { parts: [{ text: 'Weighing it', thought: true }, { text: 'Answer' }] }, finishReason: 'STOP' }] })}\n\n`,
+  ]);
+}
+
+async function bodyFor(t, model, reasoningEffort) {
+  const calls = mockFetch(t, () => geminiAnswer());
+  const sink = collectCallbacks();
+  const res = await google.streamChatRound({
+    config: { apiKey: 'k', reasoningEffort },
+    model,
+    messages: [{ role: 'user', content: 'q' }],
+    callbacks: sink.callbacks,
+  });
+  return { body: JSON.parse(calls[0].options.body), res, sink };
+}
+
+test('every Gemini model that thinks offers the levels it takes (#994)', () => {
+  assert.deepEqual(reasoningLevelsFor(google, 'gemini-2.5-pro'), ['low', 'medium', 'high']);
+  assert.deepEqual(reasoningLevelsFor(google, 'models/gemini-2.5-flash-lite'), ['low', 'medium', 'high']);
+  assert.deepEqual(reasoningLevelsFor(google, 'gemini-3-pro-preview'), ['low', 'high']);
+  assert.deepEqual(reasoningLevelsFor(google, 'gemini-3.1-pro-preview'), ['low', 'medium', 'high']);
+  assert.deepEqual(reasoningLevelsFor(google, 'gemini-3-flash-preview'), ['minimal', 'low', 'medium', 'high']);
+  assert.deepEqual(reasoningLevelsFor(google, 'gemini-3.8-flash'), ['low', 'medium', 'high']);
+  for (const model of ['gemini-2.0-flash', 'gemini-1.5-pro', 'gemma-3-27b-it', 'gemini-3.1-flash-lite-image', 'gemini-2.5-flash-preview-tts']) {
+    assert.deepEqual(reasoningLevelsFor(google, model), [], model);
+  }
+  assert.equal(reasoningDefaultFor(google, 'gemini-2.5-pro'), 'medium');
+  // 3 Pro has no medium; it starts at high, its own default.
+  assert.equal(reasoningDefaultFor(google, 'gemini-3-pro-preview'), 'high');
+});
+
+test('Gemini 3 gets a thinking level, with the thoughts streamed as reasoning (#994)', async (t) => {
+  const { body, res, sink } = await bodyFor(t, 'gemini-3-flash-preview', 'minimal');
+  assert.deepEqual(body.generationConfig, { thinkingConfig: { includeThoughts: true, thinkingLevel: 'MINIMAL' } });
+  assert.equal(res.message.content, 'Answer');
+  assert.deepEqual(sink.reasoningDeltas, ['Weighing it']);
+});
+
+test('Gemini 2.5 gets a thinking budget instead (#994)', async (t) => {
+  const { body } = await bodyFor(t, 'gemini-2.5-pro', 'high');
+  assert.deepEqual(body.generationConfig, { thinkingConfig: { includeThoughts: true, thinkingBudget: 24576 } });
+  assert.equal(body.generationConfig.thinkingConfig.thinkingLevel, undefined);
+});
+
+test('a model without thinking, or a level it lacks, gets no thinkingConfig (#994)', async (t) => {
+  for (const [model, level] of [['gemini-2.0-flash', 'high'], ['gemini-3-pro-preview', 'medium'], ['gemini-2.5-flash', undefined]]) {
+    const { body } = await bodyFor(t, model, level);
+    assert.equal(body.generationConfig, undefined, `${model} ${level}`);
+  }
+});

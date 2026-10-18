@@ -173,6 +173,16 @@ async function storeOpenAiKey(page, config) {
   if (!saved?.ok) throw new Error(`OpenAI key not stored: ${JSON.stringify(saved)}`);
 }
 
+/** Stores a placeholder Anthropic key the same way; nothing is sent to Anthropic. */
+async function storeAnthropicKey(page, config) {
+  const saved = await page.evaluate(({ rows, active }) => window.electronAPI.commitSettings({
+    presets: rows,
+    activePresetId: active,
+    providerPatches: { anthropic: { apiKey: 'sk-ant-manual-placeholder' } },
+  }), { rows: config.presets, active: config.activePresetId });
+  if (!saved?.ok) throw new Error(`Anthropic key not stored: ${JSON.stringify(saved)}`);
+}
+
 /**
  * Approves every card as it asks, until the model has received the request of
  * its last turn (`lastTurn`) and the run is over.
@@ -840,6 +850,37 @@ const MOTIFS = {
         { what: 'drawn tree after the reload' });
       await poll(() => page.evaluate(() => /gpt-5-mini/.test(document.getElementById('chat-model-pill-label')?.textContent ?? '')),
         { what: 'pill on gpt-5-mini' });
+      await page.click('#btn-chat-model-picker');
+      await poll(() => shown(page, 'chat-model-menu'), { what: 'model menu' });
+      return clipAround(page, ['#chat-model-menu', '#chat-input-row'], 16);
+    },
+  },
+
+  /**
+   * The same menu on a Claude model (#994): every provider shows the levels
+   * its chosen model takes.
+   */
+  'model-menu-claude': {
+    prefs: { chatPanelWidth: WIDE_CHAT },
+    configure(config) {
+      const local = config.presets[0];
+      local.model = 'qwen3:8b';
+      local.connection.displayName = 'Ollama';
+      config.presets.unshift(
+        { id: 'claude-opus-5-5', providerId: 'anthropic', model: 'claude-opus-5-5', menuVisible: true },
+        { id: 'claude-sonnet-4-6', providerId: 'anthropic', model: 'claude-sonnet-4-6', menuVisible: true },
+      );
+      config.activePresetId = 'claude-opus-5-5';
+      config.activeProvider = 'anthropic';
+    },
+    async setUp({ page, config }) {
+      await storeAnthropicKey(page, config);
+      // As for 'model-menu': the window learns about the key on a reload.
+      await page.reload();
+      await poll(() => page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length > 0),
+        { what: 'drawn tree after the reload' });
+      await poll(() => page.evaluate(() => /claude-opus-5-5/.test(document.getElementById('chat-model-pill-label')?.textContent ?? '')),
+        { what: 'pill on claude-opus-5-5' });
       await page.click('#btn-chat-model-picker');
       await poll(() => shown(page, 'chat-model-menu'), { what: 'model menu' });
       return clipAround(page, ['#chat-model-menu', '#chat-input-row'], 16);

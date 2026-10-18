@@ -8,7 +8,7 @@ const {
   extractPresetOptions,
   filterDeclaredPresetOptions,
 } = require('../../shared/contracts/settings');
-const { reasoningLevelsFor, resolveReasoningLevel } = require('../../shared/contracts/reasoning');
+const { reasoningDefaultFor, reasoningLevelsFor, resolveReasoningLevel } = require('../../shared/contracts/reasoning');
 const { createCostEntry } = require('../../shared/contracts/cost');
 
 /**
@@ -47,10 +47,11 @@ function createProviderLlmAdapter({
     const provider = providerRuntime.getProvider(raw.providerId);
     const model = typeof raw.model === 'string' ? raw.model.trim() : '';
     const providerOptions = resolveProviderOptions(raw, provider);
+    const levelModel = model || provider?.defaultModel;
     const reasoningEffort = resolveReasoningLevel({
-      levels: reasoningLevelsFor(provider, model || provider?.defaultModel),
+      levels: reasoningLevelsFor(provider, levelModel),
       own: ownLevel,
-      defaultLevel: provider?.reasoning?.defaultLevel,
+      defaultLevel: reasoningDefaultFor(provider, levelModel),
     });
     return createChatModelTarget({
       providerId: raw.providerId,

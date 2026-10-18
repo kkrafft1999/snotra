@@ -63,7 +63,8 @@
  * @property {string} [baseUrl]       Server-URL (falls fields.baseUrl).
  * @property {boolean} [insecureTls]  TLS-Prüfung deaktivieren (falls fields.insecureTls).
  * @property {string} [model]         Zuletzt gespeichertes Modell.
- * @property {string} [reasoningEffort] Nur OpenAI: none|minimal|low|medium|high|xhigh|max.
+ * @property {string} [reasoningEffort] The chat's reasoning level, one of the
+ *   levels `provider.reasoning` names for the model (#725, #994).
  *
  * @typedef {Object} StreamCallbacks
  * @property {() => void} [onMarkGenerating]        Erster sichtbarer Output dieser Runde.
@@ -99,8 +100,9 @@
  * @property {boolean} [defaultInsecureTls]
  * @property {string} [apiBase]            Anzeige-URL der API (Settings-UI).
  * @property {{ images: boolean }} [capabilities]  what the provider passes on, when it does not depend on the configuration (#93)
- * @property {{ levels: string[], defaultLevel?: string, appliesTo?: (model: string) => boolean }} [reasoning]
- *   the reasoning levels a chat can choose (#725)
+ * @property {{ levels: string[] | ((model: string) => string[]), defaultLevel?: string | ((model: string) => string), appliesTo?: (model: string) => boolean }} [reasoning]
+ *   the reasoning levels a chat can choose (#725); per model where the
+ *   provider's models differ (#994)
  * @property {ProviderPresentation} [presentation]  how the settings show the provider: placeholders, offered models, entry fields
  * @property {(config: ProviderConfig) => Promise<{models?: Array<{id: string, label?: string}>, error?: string|Message}>} listModels
  * @property {(params: {config: ProviderConfig, model: string, messages: Array<Object>, tools?: Array<Object>, callbacks?: StreamCallbacks, abortSignal?: AbortSignal, cacheKey?: string}) => Promise<ChatRoundResult>} streamChatRound

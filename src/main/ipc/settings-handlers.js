@@ -17,8 +17,8 @@ const {
 const { createMessage } = require('../../shared/contracts/message');
 const { KEY_ALWAYS_DURABLE } = require('../services/safe-storage-key-durability');
 const {
-  DEFAULT_REASONING_LEVEL,
   normalizeReasoningLevel,
+  reasoningDefaultFor,
   reasoningLevelsFor,
   resolveReasoningLevel,
 } = require('../../shared/contracts/reasoning');
@@ -122,14 +122,16 @@ function registerSettingsHandlers({
    */
   function reasoningLevelsOf(target) {
     const provider = providerCatalog.getProvider(target?.providerId);
+    const model = target?.model || provider?.defaultModel;
     return {
       provider,
-      levels: reasoningLevelsFor(provider, target?.model || provider?.defaultModel),
+      levels: reasoningLevelsFor(provider, model),
+      defaultLevel: reasoningDefaultFor(provider, model),
     };
   }
 
   async function chatReasoningState(target) {
-    const { provider, levels } = reasoningLevelsOf(target);
+    const { levels, defaultLevel } = reasoningLevelsOf(target);
     if (levels.length === 0) return { level: null, levels: [], defaultLevel: null };
     let own = null;
     try {
@@ -137,7 +139,6 @@ function registerSettingsHandlers({
     } catch {
       own = null;
     }
-    const defaultLevel = provider.reasoning.defaultLevel || DEFAULT_REASONING_LEVEL;
     return {
       level: resolveReasoningLevel({ levels, own, defaultLevel }),
       levels,

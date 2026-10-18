@@ -2127,8 +2127,10 @@ body {
   cursor: default;
 }
 
-.chat-model-pill--btn:disabled /* Model and level in the pill (#727): a long model name gives way, the level
- * never does — it is what the pill is looked at for. */
+/* Model and level in the pill (#727): a long model name gives way, the level
+ * never does — it is what the pill is looked at for. Until #994 a stray
+ * `:disabled` prefix limited this rule to the disabled pill, and the level was
+ * cut off with the name. */
 #chat-model-pill-label {
   display: inline-flex;
   min-width: 0;
