@@ -10812,6 +10812,11 @@ select.modal-input {
   margin-bottom: 0;
 }
 
+/* "Saved" next to the switch, also on the amber ground of a tile that is off. */
+.settings-sandbox-tile .settings-instant-status:not(.is-error) {
+  color: var(--ds-blue-strong);
+}
+
 .settings-sandbox-block {
   margin-top: 18px;
   padding-top: 14px;
@@ -10858,11 +10863,11 @@ select.modal-input {
   margin-left: 0;
 }
 
-/* While the sandbox is off, its allowances rest: shown, but quieter. The
-   words above them say it; the opacity only follows. */
-.settings-sandbox-block--resting .allowance-row,
-.settings-sandbox-block--resting .settings-sandbox-line {
-  opacity: 0.62;
+/* While the sandbox is off, its allowances rest. The words above them say
+   it; the dashed edge follows — not a fade, which would take the text below
+   its contrast. */
+.settings-sandbox-block--resting .allowance-row {
+  border-style: dashed;
 }
 
 .settings-sandbox-empty {

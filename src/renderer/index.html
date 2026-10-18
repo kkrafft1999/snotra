@@ -594,20 +594,23 @@
             <span class="settings-nav-item__desc" data-i18n="settings.nav.models.desc">API, connection, preferences</span>
           </button>
           <!-- Navigation B of #1119: one group Tools, not clickable, with three
-               entries. The heading is for the eye; each entry carries it in
-               its name. -->
+               entries. The heading is for the eye; each entry carries the
+               group, hidden, at the front of its name. -->
           <div class="settings-nav-group" id="settings-nav-group-tools" aria-hidden="true" data-i18n="settings.nav.group.tools">Tools</div>
-          <button type="button" class="settings-nav-item settings-nav-item--sub" role="tab" aria-selected="false" aria-controls="panel-settings-security" id="tab-settings-security" data-settings-panel="security" data-settings-group="tools" aria-labelledby="settings-nav-group-tools tab-settings-security-label" aria-describedby="tab-settings-security-desc">
-            <span id="tab-settings-security-label" data-i18n="settings.nav.security">Autonomy</span>
-            <span class="settings-nav-item__desc" id="tab-settings-security-desc" data-i18n="settings.nav.security.desc">How freely Snotra acts, and with which tools</span>
+          <button type="button" class="settings-nav-item settings-nav-item--sub" role="tab" aria-selected="false" aria-controls="panel-settings-security" id="tab-settings-security" data-settings-panel="security" data-settings-group="tools">
+            <span class="visually-hidden" data-i18n="settings.nav.group.tools">Tools</span>
+            <span data-i18n="settings.nav.security">Autonomy</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.security.desc">How freely Snotra acts, and with which tools</span>
           </button>
-          <button type="button" class="settings-nav-item settings-nav-item--sub" role="tab" aria-selected="false" aria-controls="panel-settings-sandbox" id="tab-settings-sandbox" data-settings-panel="sandbox" data-settings-group="tools" aria-labelledby="settings-nav-group-tools tab-settings-sandbox-label" aria-describedby="tab-settings-sandbox-desc">
-            <span id="tab-settings-sandbox-label" data-i18n="settings.nav.sandbox">Security</span>
-            <span class="settings-nav-item__desc" id="tab-settings-sandbox-desc" data-i18n="settings.nav.sandbox.desc">Sandbox and what runs may reach</span>
+          <button type="button" class="settings-nav-item settings-nav-item--sub" role="tab" aria-selected="false" aria-controls="panel-settings-sandbox" id="tab-settings-sandbox" data-settings-panel="sandbox" data-settings-group="tools">
+            <span class="visually-hidden" data-i18n="settings.nav.group.tools">Tools</span>
+            <span data-i18n="settings.nav.sandbox">Security</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.sandbox.desc">Sandbox and what runs may reach</span>
           </button>
-          <button type="button" class="settings-nav-item settings-nav-item--sub" role="tab" aria-selected="false" aria-controls="panel-settings-tools" id="tab-settings-tools" data-settings-panel="tools" data-settings-group="tools" aria-labelledby="settings-nav-group-tools tab-settings-tools-label" aria-describedby="tab-settings-tools-desc">
-            <span id="tab-settings-tools-label" data-i18n="settings.nav.tools">Setup</span>
-            <span class="settings-nav-item__desc" id="tab-settings-tools-desc" data-i18n="settings.nav.tools.desc">Interpreter, keys, MCP servers</span>
+          <button type="button" class="settings-nav-item settings-nav-item--sub" role="tab" aria-selected="false" aria-controls="panel-settings-tools" id="tab-settings-tools" data-settings-panel="tools" data-settings-group="tools">
+            <span class="visually-hidden" data-i18n="settings.nav.group.tools">Tools</span>
+            <span data-i18n="settings.nav.tools">Setup</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.tools.desc">Interpreter, keys, MCP servers</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-skills" id="tab-settings-skills" data-settings-panel="skills">
             <span data-i18n="settings.nav.skills">Skills</span>

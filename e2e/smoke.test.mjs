@@ -1365,7 +1365,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   }));
   assert.equal(tabs.securityVisible, true);
   assert.equal(tabs.modelsHidden, true);
-  assert.match(tabs.heading, /^Tools & (security|Sicherheit)$/);
+  assert.match(tabs.heading, /^Tools › (Autonomy|Autonomie)$/);
   assert.equal(tabs.permissionsTab, false, 'the Permissions tab is gone');
 
   // Die Grundausstattung steht nicht in der Liste (#195). Hier statt im
