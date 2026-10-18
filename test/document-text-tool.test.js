@@ -18,12 +18,13 @@ const { createDocumentTextExtractor, pdfjsDataUrl, DOCUMENT_TEXT_TIME_BUDGET_MS 
 const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
 const { toolCategory } = require('../src/shared/contracts/tool-categories');
 const { makeDocx, makeXlsx, p } = require('./helpers/ooxml-fixtures');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const PDFJS_DIR = path.join(__dirname, '..', 'src', 'renderer', 'vendor', 'pdfjs');
 
 async function makeFixture(t, { extractor, maxBytes } = {}) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-doctext-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const workspace = path.join(base, 'projekt');
   await fs.mkdir(path.join(workspace, 'docs'), { recursive: true });
   await fs.writeFile(path.join(workspace, 'docs', 'angebot.docx'), makeDocx({ body: p('Angebot') + p('Preis 900 €') }));

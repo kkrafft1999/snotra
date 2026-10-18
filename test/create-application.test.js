@@ -6,6 +6,7 @@ const path = require('path');
 const { createApplication } = require('../src/main/composition/create-application');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeDir, removeTempDir } = require('./helpers/temp-dir');
 
 function makeProvidersModule(disposeTracker) {
   return {
@@ -39,7 +40,7 @@ function makeProvidersModule(disposeTracker) {
 function makeApplication(t, { getMainWindow, updates, env = {} } = {}) {
   return async () => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-app-'));
-    t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+    t.after(() => removeTempDir(tmpDir));
     const disposed = { called: false };
     const ipcMain = createMockIpcMain();
     const workspaceState = {
@@ -195,7 +196,7 @@ test('createApplication wires the skill catalog channels', async (t) => {
 
 test('a folder switch drops the cached skill scans, so a folder that comes back is read afresh (#578)', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-app-rescan-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const a = path.join(tmpDir, 'a');
   const b = path.join(tmpDir, 'b');
   const skillDir = path.join(a, '.agents', 'skills', 'gone-soon');
@@ -239,14 +240,14 @@ test('a folder switch drops the cached skill scans, so a folder that comes back 
   assert.deepEqual(await names(), ['gone-soon']);
   await open(b);
   // Deleted while another folder is open — nothing watches `a` now.
-  await fs.rm(skillDir, { recursive: true, force: true });
+  await removeDir(skillDir);
   await open(a);
   assert.deepEqual(await names(), []);
 });
 
 test('createApplication findet System-Skills unter app.getAppPath()/system-skills', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-app-skills-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const skillDir = path.join(tmpDir, 'system-skills', 'demo-system-skill');
   await fs.mkdir(skillDir, { recursive: true });
   await fs.writeFile(

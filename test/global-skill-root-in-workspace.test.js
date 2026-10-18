@@ -14,13 +14,14 @@ const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const READ_ONLY = /Skill folders are read-only\. Keep what a skill produces in "\.agents\/data\/" in the open folder\./;
 const SKILL_TEXT = '---\nname: demo\ndescription: d\n---\n\nBe helpful.\n';
 
 async function makeHome(t) {
   const home = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-global-skill-')));
-  t.after(() => fs.rm(home, { recursive: true, force: true }));
+  t.after(() => removeTempDir(home));
   const snotraSkills = path.join(home, '.snotra', 'skills');
   const agentsSkills = path.join(home, '.agents', 'skills');
   const demo = path.join(snotraSkills, 'demo');
@@ -135,7 +136,7 @@ test('a workspace skill is a project file and stays writable', async (t) => {
 
 test('a case variant of a global skill folder that does not exist yet is refused where case is ignored', async (t) => {
   const home = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-global-skill-case-')));
-  t.after(() => fs.rm(home, { recursive: true, force: true }));
+  t.after(() => removeTempDir(home));
   // Neither skills folder exists yet: realpath cannot correct the case.
   const snotraSkills = path.join(home, '.snotra', 'skills');
   const agentsSkills = path.join(home, '.agents', 'skills');

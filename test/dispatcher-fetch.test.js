@@ -15,6 +15,7 @@ const { execFileSync } = require('node:child_process');
 const { Agent } = require('undici');
 const { fetchVia } = require('../src/main/services/dispatcher-fetch');
 const compatible = require('../src/main/providers/openai-compatible');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const MODELS = JSON.stringify({ data: [{ id: 'local-model' }] });
 
@@ -27,7 +28,7 @@ async function listen(t, server) {
 /** A throwaway self-signed certificate, or null where openssl is missing. */
 function selfSignedCertificate(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-tls-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDirSync(dir));
   const key = path.join(dir, 'key.pem');
   const cert = path.join(dir, 'cert.pem');
   try {

@@ -31,6 +31,7 @@ const { createUpdateService } = require('../src/main/services/update-service');
 const { writeMinimalAsar } = require('./helpers/asar.js');
 // The running app's own name: a rollback restarts it under that name (#794).
 const { APP_NAME } = require('../src/main/app-identity');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const onWindows = process.platform === 'win32';
 const EXE = `${APP_NAME}.exe`;
@@ -93,7 +94,7 @@ before(() => {
   ]);
 });
 after(() => {
-  if (standInExe) fs.rmSync(path.dirname(standInExe), { recursive: true, force: true });
+  if (standInExe) removeTempDirSync(path.dirname(standInExe));
 });
 
 /** A copy of the stand-in as the app's .exe in `folder`, labelled `label`. */
@@ -318,7 +319,7 @@ function parseErrors(script) {
         + '$e | ForEach-Object { $_.Extent.StartLineNumber.ToString() + ": " + $_.Message }',
     ], { encoding: 'utf8' }).trim();
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   }
 }
 

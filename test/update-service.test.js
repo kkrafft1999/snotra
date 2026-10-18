@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { translateMessage } = require('../src/shared/i18n');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 // Main hands over keys since #353; the German wording is checked through the
 // catalogue.
@@ -410,7 +411,7 @@ function makeUserDataApp(t, version = '1.12.0') {
   const os = require('node:os');
   const path = require('node:path');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-update-status-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDirSync(dir));
   return {
     dir,
     statusFile: path.join(dir, 'update-install-failed.json'),

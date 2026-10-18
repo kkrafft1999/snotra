@@ -25,6 +25,7 @@ const {
   createPermissionDeniedToolResult,
 } = require('../src/shared/contracts/tool-permissions');
 const { hasKey, translate } = require('../src/shared/i18n');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // Menuepfade werden im Modelltext bewusst so zitiert, wie sie auf dem
 // Bildschirm stehen — sonst schickt das Modell den Nutzer zu einem Menuepunkt,
@@ -339,7 +340,7 @@ function stringsIn(value, found = []) {
 
 test('tool errors reach the model in English (#309)', async (t) => {
   const workspace = await fsPromises.mkdtemp(nodePath.join(os.tmpdir(), 'snotra-309-'));
-  t.after(() => fsPromises.rm(workspace, { recursive: true, force: true }));
+  t.after(() => removeTempDir(workspace));
   await fsPromises.writeFile(nodePath.join(workspace, 'a.txt'), 'one\ntwo\n');
   await fsPromises.writeFile(nodePath.join(workspace, 'notes.txt'), 'plain prose only\n');
   await fsPromises.mkdir(nodePath.join(workspace, 'dir'));

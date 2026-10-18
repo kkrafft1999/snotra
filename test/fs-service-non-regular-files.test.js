@@ -9,6 +9,7 @@ const { createFsService } = require('../src/main/services/fs-service');
 const { NOT_A_REGULAR_FILE_ERROR } = require('../src/main/services/read-regular-file');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { createTranslator } = require('../src/shared/i18n');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // FIFOs exist on macOS and Linux only.
 const fifoOnly = { skip: process.platform === 'win32' };
@@ -36,7 +37,7 @@ async function makeRoot(t) {
   const fifos = [];
   t.after(async () => {
     fifos.forEach(release);
-    await fs.rm(root, { recursive: true, force: true });
+    await removeTempDir(root);
   });
   return {
     root,
@@ -153,7 +154,7 @@ test('the sensitive-content check never opens a named pipe (#643)', fifoOnly, as
 
 test('a .gitignore that leads out of the folder is ignored (#643)', async (t) => {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-gitignore-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const root = path.join(base, 'project');
   await fs.mkdir(root);
   await fs.writeFile(path.join(base, 'outside-ignore'), '*.txt\n', 'utf8');
@@ -173,7 +174,7 @@ test('a .gitignore that leads out of the folder is ignored (#643)', async (t) =>
 
 test('a .gitignore over its size limit is ignored, one below it applies (#643)', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-gitignore-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(root));
   await fs.writeFile(path.join(root, 'a.txt'), 'x\n', 'utf8');
   const svc = makeService();
   const paths = async () => (await svc.listWorkspacePaths(root)).entries.map((entry) => entry.path);

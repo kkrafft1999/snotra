@@ -20,6 +20,7 @@ const { createApplication } = require('../src/main/composition/create-applicatio
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { MCP_CONNECTION_STATES } = require('../src/shared/contracts/mcp');
+const { removeTempDir, removeTempDirSync } = require('./helpers/temp-dir');
 
 // The application reads the PATH of the user's login shell once (#111), and an
 // interactive shell runs the user's own profile to do it. On a developer
@@ -39,7 +40,7 @@ after(() => {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
-  fsSync.rmSync(emptyHome, { recursive: true, force: true });
+  removeTempDirSync(emptyHome);
 });
 
 const TOKEN = 'ghp_streng_geheim_1234567890';
@@ -165,7 +166,7 @@ test('ohne MCP-Einrichtung antworten die Kanäle statt zu werfen', async () => {
 
 async function makeApp(t) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-mcp-app-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const ipcMain = createMockIpcMain();
   const app = createApplication({
     app: { getPath: () => tmpDir, getVersion: () => '9.9.9' },
@@ -292,7 +293,7 @@ test('a token inside a keyed status error is masked as well (#338)', async (t) =
 
 test('die gespeicherte Konfiguration übersteht einen Neustart der Anwendung', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-mcp-restart-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
 
   const build = () => {
     const ipcMain = createMockIpcMain();

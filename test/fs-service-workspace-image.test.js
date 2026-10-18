@@ -11,6 +11,7 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 const {
   MAX_WORKSPACE_IMAGE_BYTES,
   WORKSPACE_IMAGE_ERRORS,
@@ -28,7 +29,7 @@ function makeFsService() {
 
 async function makeWorkspace(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-ws-image-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   // `realpath`, weil /tmp unter macOS selbst ein Symlink ist: Ohne das wuerde
   // schon der Normalfall als Ausbruch gelesen.
   return fs.realpath(dir);

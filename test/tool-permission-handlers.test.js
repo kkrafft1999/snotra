@@ -16,6 +16,7 @@ const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ip
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createTestConfirmations } = require('./helpers/confirmations');
 const { CONFIRMATION_ACTIONS } = require('../src/application/permissions/user-confirmation');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 function makeSafeStorage(available = true) {
   return {
@@ -44,7 +45,7 @@ async function setup(t, {
   describeWorkspaceChats = undefined,
 } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-perm-ipc-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });
   const sessionGrants = createSessionGrants();
   const dialogCalls = [];

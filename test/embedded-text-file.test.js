@@ -10,13 +10,14 @@ const { createProjectInstructionsAdapter } = require('../src/main/adapters/proje
 const { createMemoryAdapter } = require('../src/main/adapters/memory-adapter');
 const { MEMORY_SCOPES, MEMORY_ORIGINS } = require('../src/shared/contracts/memory');
 const { PROJECT_INSTRUCTION_SOURCES: SRC } = require('../src/shared/contracts/project-instructions');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // Against the real file system: the point of #534 is what a symlink does,
 // and an in-memory stand-in has none.
 
 async function sandbox(t) {
   const base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-embedded-')));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const home = path.join(base, 'home');
   const workspace = path.join(base, 'cloned-repo');
   const outside = path.join(base, 'outside');

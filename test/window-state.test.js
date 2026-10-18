@@ -11,6 +11,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const {
   fitToWorkArea,
@@ -145,7 +146,7 @@ test('die Ablage schreibt und liest denselben Zustand', () => {
   // Eine kaputte Datei darf den Start nicht kippen.
   fs.writeFileSync(filePath, '{ halb ge', 'utf8');
   assert.equal(store.read(), null);
-  fs.rmSync(dir, { recursive: true, force: true });
+  removeTempDirSync(dir);
 });
 
 test('ein fehlgeschlagener Schreibversuch bleibt folgenlos', () => {

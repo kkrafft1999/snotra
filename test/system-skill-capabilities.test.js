@@ -20,6 +20,7 @@ const { bundleManual } = require('../scripts/bundle-manual.js');
 const search = require('../src/shared/manual/manual-search.js');
 const { headingSlug } = require('../src/shared/runtime/heading-slug.js');
 const { translateMessage } = require('../src/shared/i18n');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const ROOT = path.join(__dirname, '..');
 const SKILL_PATH = path.join(ROOT, 'system-skills', 'snotra-capabilities', 'SKILL.md');
@@ -62,7 +63,7 @@ test.before(() => {
 });
 
 test.after(() => {
-  fs.rmSync(bundleDir, { recursive: true, force: true });
+  removeTempDirSync(bundleDir);
 });
 
 const topHits = (locale, query) => search.searchManual(indexes[locale], query, { limit: 3 }).map((hit) => hit.slug);

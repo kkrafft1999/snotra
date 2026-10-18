@@ -6,6 +6,7 @@ const path = require('path');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { LLM_CONFIG_VERSION } = require('../src/shared/contracts/settings');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 /**
  * Files the store finds but cannot use (#557, #561, #562). A file that is there
@@ -61,7 +62,7 @@ function fsFailingRenameTo(marker, { times = Infinity } = {}) {
 
 async function tmpDir(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-unreadable-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 

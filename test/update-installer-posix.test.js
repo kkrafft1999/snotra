@@ -15,7 +15,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
@@ -26,6 +25,7 @@ const {
   buildLinuxDirScript,
 } = require('../src/main/services/update-installer');
 const { createUpdateService } = require('../src/main/services/update-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const SKIP = process.platform === 'win32' ? 'the POSIX helpers need /bin/sh' : false;
 const VERSION = '1.8.0';
@@ -61,7 +61,7 @@ function makeFixture(t) {
     for (const child of fixture.pids) {
       try { child.kill('SIGKILL'); } catch { /* gone already */ }
     }
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTempDir(root);
   });
   return fixture;
 }

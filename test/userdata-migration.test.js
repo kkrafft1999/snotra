@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
+const { removeTempDir } = require('./helpers/temp-dir');
 const {
   createUserDataMigration,
   MIGRATION_MARKER_FILENAME,
@@ -20,7 +21,7 @@ function makeLog() {
 
 async function makeDirs(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-migration-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const sourceDir = path.join(base, 'Weyouze Anything');
   const targetDir = path.join(base, 'Snotra AI');
   return { base, sourceDir, targetDir };

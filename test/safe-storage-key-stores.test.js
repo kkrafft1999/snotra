@@ -28,6 +28,7 @@ const { createMockProviderCatalog } = require('./helpers/provider-ports');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createHeldSafeStorageKey, settle } = require('./helpers/held-safe-storage-key');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 function makeSafeStorage(available = true) {
   return {
@@ -66,7 +67,7 @@ const providerCatalog = createMockProviderCatalog((id) => (Object.hasOwn(PROVIDE
 
 async function tempDir(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-1060-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 

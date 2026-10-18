@@ -12,6 +12,7 @@ const crypto = require('crypto');
 const { createToolPolicyStore, POLICY_FILENAME, POLICY_KEY_FILENAME, MAX_GLOBAL_HOSTS } = require('../src/main/services/tool-policy-store');
 const { CONFIRMATION_ACTIONS, createConfirmationReceipts, programAllowanceSubject, globalHostsSubject } = require('../src/application/permissions/user-confirmation');
 const { combineProgramAllowances } = require('../src/shared/contracts/program-allowances');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const CONFIRM_ALL = { redeem: () => true };
 const WS = '/home/u/garden-planner';
@@ -33,7 +34,7 @@ function makeSafeStorage(available = true) {
 
 async function makeStore(t, { receipts = CONFIRM_ALL, available = true, dir: given = null } = {}) {
   const dir = given || await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-scopes-'));
-  if (!given) t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  if (!given) t.after(() => removeTempDir(dir));
   const store = createToolPolicyStore({
     confirmationReceipts: receipts,
     app: { getPath: () => dir },

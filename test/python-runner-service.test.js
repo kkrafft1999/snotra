@@ -16,6 +16,7 @@ const os = require('os');
 const { createPythonRunnerService, interpreterCandidates, clampTimeout } =
   require('../src/main/services/python-runner-service');
 const { PYTHON_EXECUTION_LIMITS } = require('../src/shared/contracts/code-execution');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 /**
  * Python gibt unter Windows CRLF aus. Fuer die Tests ist nur der Inhalt
@@ -250,7 +251,7 @@ test('run arbeitet im übergebenen Verzeichnis', async (t) => {
     const result = await service.run({ code: 'print(open("daten.csv").read().strip())', cwd: dir });
     assert.deepEqual(lines(result.stdout), ['a,b', '1,2']);
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 });
 
@@ -289,7 +290,7 @@ test('disposeSync ends a running script when the app quits (#506)', async (t) =>
   // under load, before the interpreter had even started: nothing was there to
   // end, and the script ran into its own time limit (#907).
   const marker = path.join(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-py-dispose-')), 'running');
-  t.after(() => fs.rm(path.dirname(marker), { recursive: true, force: true }));
+  t.after(() => removeTempDir(path.dirname(marker)));
   const pending = service.run({
     code: `import time\nopen(${JSON.stringify(marker)}, 'w').close()\ntime.sleep(30)`,
     timeoutMs: 60_000,
@@ -352,6 +353,6 @@ test('run hinterlässt keine Skriptdatei im Arbeitsverzeichnis', async (t) => {
     await service.run({ code: 'print(1)', cwd: dir });
     assert.deepEqual(await fs.readdir(dir), []);
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 });

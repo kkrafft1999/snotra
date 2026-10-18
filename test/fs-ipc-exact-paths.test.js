@@ -9,6 +9,7 @@ const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
 const { createFileContextMenu } = require('../src/main/services/file-context-menu');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // CR-B17-08 (#649): the tree's paths are used exactly as sent, and whether a
 // path is a folder is main's own lstat, not a flag from the renderer.
@@ -18,7 +19,7 @@ const skipOnWindows = { skip: process.platform === 'win32' };
 
 async function setup(t) {
   const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-exact-')));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const workspace = path.join(dir, 'ws');
   await fs.mkdir(workspace);
 

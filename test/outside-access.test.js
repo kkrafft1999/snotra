@@ -17,6 +17,7 @@ const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner')
 const { createToolApprovalRequestDto } = require('../src/shared/contracts/tool-permissions');
 const { normalizeSandboxOutside } = require('../src/shared/contracts/chat');
 const { toolTraceEntryForStore } = require('../src/main/services/chat-history-normalization');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const posixOnly = { skip: process.platform === 'win32' ? 'POSIX paths' : false };
 
@@ -91,7 +92,7 @@ test('a grant becomes a root: a folder as itself, a file as its folder with that
 
 async function fixture(t) {
   const base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-outside-')));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const home = path.join(base, 'home');
   const workspace = path.join(home, 'project');
   const notes = path.join(home, 'notes');

@@ -10,6 +10,7 @@ const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 const { parseSkillPath, formatSkillPath } = require('../src/shared/runtime/skill-path');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 function makeFsService() {
   return createFsService({ fs, path, maxReadFileBytes: 1024 * 1024, maxWriteFileBytes: 1024 * 1024 });
@@ -62,7 +63,7 @@ test('parseSkillPath trennt Skill-Name und Restpfad', () => {
 
 test('read_file_text liest eine Datei aus dem Verzeichnis eines eingeschalteten Skills', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const out = JSON.parse(
@@ -79,7 +80,7 @@ test('read_file_text liest eine Datei aus dem Verzeichnis eines eingeschalteten 
 
 test('Lese-Tools bleiben ohne Präfix auf dem Arbeitsordner', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const ok = JSON.parse(
@@ -95,7 +96,7 @@ test('Lese-Tools bleiben ohne Präfix auf dem Arbeitsordner', async (t) => {
 
 test('Skill-Pfade brechen nicht aus dem Skill-Verzeichnis aus', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   for (const rel of ['skill:demo/../../geheim.txt', 'skill:demo/references/../../../geheim.txt']) {
@@ -106,7 +107,7 @@ test('Skill-Pfade brechen nicht aus dem Skill-Verzeichnis aus', async (t) => {
 
 test('Ein Symlink aus dem Skill-Verzeichnis heraus wird abgewiesen', async (t) => {
   const { base, workspace, skillDir, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const linked = await createSymlinkOrSkip(
     t,
     path.join(base, 'geheim.txt'),
@@ -124,7 +125,7 @@ test('Ein Symlink aus dem Skill-Verzeichnis heraus wird abgewiesen', async (t) =
 
 test('Unbekannte oder fehlende Skills liefern eine sprechende Meldung', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const unknown = JSON.parse(
@@ -141,7 +142,7 @@ test('Unbekannte oder fehlende Skills liefern eine sprechende Meldung', async (t
 
 test('Schreib-Tools erreichen kein Skill-Verzeichnis', async (t) => {
   const { base, workspace, skillDir } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const written = JSON.parse(
@@ -161,7 +162,7 @@ test('Schreib-Tools erreichen kein Skill-Verzeichnis', async (t) => {
 
 test('search_in_files und find_files liefern Treffer mit skill:-Präfix zurück', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const found = JSON.parse(
@@ -188,7 +189,7 @@ test('search_in_files und find_files liefern Treffer mit skill:-Präfix zurück'
 
 test('list_directory und list_directory_tree zeigen den Skill-Ordner', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const listed = JSON.parse(
@@ -208,7 +209,7 @@ test('list_directory und list_directory_tree zeigen den Skill-Ordner', async (t)
 
 test('the registry keeps every write tool out of a skill folder (#548)', async (t) => {
   const { base, workspace, skillDir, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const registry = createWorkspaceToolRegistry({ fsService: makeFsService() });
   // `approved` stands for the engine's policy approval (#66); a leftover
   // `writableSkills` from the #429 days opens nothing.
@@ -240,7 +241,7 @@ test('the registry keeps every write tool out of a skill folder (#548)', async (
 
 test('load_skill says the folder is read-only and where the skill keeps its data (#548)', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const out = JSON.parse(await makeFsService().runLoadSkillTool({ name: 'demo' }, workspace, { skillRoots }));
   assert.match(out.files, /It is read-only: what the skill produces and wants to keep goes into "\.agents\/data\/" in the open folder\./);
 });
@@ -251,7 +252,7 @@ test('load_skill says the folder is read-only and where the skill keeps its data
 
 test('load_skill liefert die Anleitung ohne Frontmatter', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const out = JSON.parse(await svc.runLoadSkillTool({ name: 'demo' }, workspace, { skillRoots }));
@@ -265,7 +266,7 @@ test('load_skill liefert die Anleitung ohne Frontmatter', async (t) => {
 
 test('load_skill braucht keinen geöffneten Ordner', async (t) => {
   const { base, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const out = JSON.parse(await svc.runLoadSkillTool({ name: 'demo' }, null, { skillRoots }));
@@ -274,7 +275,7 @@ test('load_skill braucht keinen geöffneten Ordner', async (t) => {
 
 test('load_skill weist unbekannte, leere und ungültige Namen ab', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const unknown = JSON.parse(await svc.runLoadSkillTool({ name: 'fehlt' }, workspace, { skillRoots }));
@@ -293,7 +294,7 @@ test('load_skill weist unbekannte, leere und ungültige Namen ab', async (t) => 
 
 test('load_skill meldet eine SKILL.md ohne Anleitung, statt leer zu antworten', async (t) => {
   const { base, workspace, skillDir, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   await fs.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: demo\n---\n\n   \n', 'utf8');
@@ -309,7 +310,7 @@ test('load_skill meldet eine SKILL.md ohne Anleitung, statt leer zu antworten', 
 
 test('load_skill läuft über die Registry als Skill-Schritt, nicht als Dateizugriff', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const registry = createWorkspaceToolRegistry({ fsService: makeFsService() });
 
   const out = JSON.parse(
@@ -364,7 +365,7 @@ test('load_skill trägt die eingeschalteten Skills als enum im Schema (#173)', (
 
 test('read_file_text reads a skill file by its absolute path', async (t) => {
   const { base, workspace, skillDir, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const out = JSON.parse(
@@ -382,7 +383,7 @@ test('an absolute path matches a skill folder reached through a symlink', async 
   // Like ~/.agents/skills -> ~/.claude/skills: the skill is configured under
   // the link, the skill itself reports the real location.
   const { base, workspace, skillDir } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const linked = path.join(base, 'linked-skills');
   if (!(await createSymlinkOrSkip(t, path.dirname(skillDir), linked, 'dir'))) return;
   const skillRoots = [{ name: 'demo', dir: path.join(linked, 'demo') }];
@@ -403,7 +404,7 @@ test('an absolute path matches a skill folder reached through a symlink', async 
 
 test('absolute paths outside every skill folder stay refused', async (t) => {
   const { base, workspace, skillDir, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   for (const relative_path of [path.join(base, 'geheim.txt'), `${skillDir}${path.sep}..${path.sep}..${path.sep}geheim.txt`]) {
@@ -414,7 +415,7 @@ test('absolute paths outside every skill folder stay refused', async (t) => {
 
 test('a symlink inside a skill folder cannot be followed out by absolute path', async (t) => {
   const { base, workspace, skillDir, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const link = path.join(skillDir, 'raus.txt');
   if (!(await createSymlinkOrSkip(t, path.join(base, 'geheim.txt'), link, 'file'))) return;
   const svc = makeFsService();
@@ -426,7 +427,7 @@ test('a symlink inside a skill folder cannot be followed out by absolute path', 
 
 test('an absolute path inside the workspace stays a workspace path', async (t) => {
   const { base, workspace, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   const out = JSON.parse(
@@ -438,7 +439,7 @@ test('an absolute path inside the workspace stays a workspace path', async (t) =
 
 test('write tools do not reach a skill folder by absolute path either', async (t) => {
   const { base, workspace, skillDir } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
   const target = path.join(skillDir, 'references', 'anleitung.md');
 
@@ -449,7 +450,7 @@ test('write tools do not reach a skill folder by absolute path either', async (t
 
 test('load_skill reports the skill folder and how to reach its files', async (t) => {
   const { base, workspace, skillDir, skillRoots } = await makeFixture();
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const svc = makeFsService();
 
   for (const root of [workspace, null]) {

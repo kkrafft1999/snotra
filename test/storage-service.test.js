@@ -7,6 +7,7 @@ const { createStorageService } = require('../src/main/services/storage-service')
 const { chatSessionFileName } = require('../src/main/services/chat-history-store');
 const { LLM_CONFIG_VERSION } = require('../src/shared/contracts/settings');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const mockProviders = {
   getProvider(id) {
@@ -218,7 +219,7 @@ test('normalizeSessionForStore defaults missing tokenUsage to zero', () => {
 
 test('a first run starts in the system language when the app speaks it (#1013)', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const withLocale = (locale) => createStorageService({
     app: { getPath: () => tmpDir, getLocale: () => locale },
     safeStorage: { isEncryptionAvailable: () => false },
@@ -265,7 +266,7 @@ test('writeJsonAtomic keeps previous file on interrupted write simulation', asyn
   assert.equal(after, original);
   assert.deepEqual((await fs.readdir(tmpDir)).filter((name) => name.includes('.tmp-')), []);
 
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await removeTempDir(tmpDir);
 });
 
 /** fs whose rename fails `times` times with `code` before it goes through. */
@@ -312,7 +313,7 @@ test('on Windows a briefly held preferences file is replaced on a later attempt 
     // No temporary file is left behind.
     assert.deepEqual((await fs.readdir(tmpDir)).filter((name) => name.includes('.tmp-')), []);
   } finally {
-    await fs.rm(tmpDir, { recursive: true, force: true });
+    await removeTempDir(tmpDir);
   }
 });
 
@@ -329,7 +330,7 @@ test('elsewhere the first failed rename is the answer, and the file stays as it 
     assert.equal(await fs.readFile(target, 'utf8'), original);
     assert.deepEqual((await fs.readdir(tmpDir)).filter((name) => name.includes('.tmp-')), []);
   } finally {
-    await fs.rm(tmpDir, { recursive: true, force: true });
+    await removeTempDir(tmpDir);
   }
 });
 
@@ -361,7 +362,7 @@ async function withTmpDir(fn) {
   try {
     return await fn(tmpDir);
   } finally {
-    await fs.rm(tmpDir, { recursive: true, force: true });
+    await removeTempDir(tmpDir);
   }
 }
 
@@ -526,7 +527,7 @@ test('withChatHistoryLock serializes concurrent upserts', async () => {
   const final = await makeStorage(tmpDir).listChatSessions();
   assert.deepEqual(final.map((s) => s.id), ['b', 'a']);
 
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await removeTempDir(tmpDir);
 });
 
 test('a chat and the history index are written encrypted when safeStorage is available', async () => {
@@ -552,7 +553,7 @@ test('a chat and the history index are written encrypted when safeStorage is ava
   assert.deepEqual((await roundtrip.listChatSessions()).map((s) => s.id), ['s1']);
   assert.equal((await roundtrip.getChatSession('s1')).messages[0].content, 'hello');
 
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await removeTempDir(tmpDir);
 });
 
 test('a plain single history file is taken in encrypted on the first read', async () => {
@@ -582,7 +583,7 @@ test('a plain single history file is taken in encrypted on the first read', asyn
   assert.equal(onDisk.encrypted, true);
   assert.equal(await fs.stat(path.join(tmpDir, 'chat-history.json')).catch(() => null), null, 'the single file is gone');
 
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await removeTempDir(tmpDir);
 });
 
 test('parallel reads take a plain single history file in once, encrypted', async () => {
@@ -632,7 +633,7 @@ test('parallel reads take a plain single history file in once, encrypted', async
   const onDisk = JSON.parse(await fs.readFile(path.join(tmpDir, 'chat-history', chatSessionFileName('s1')), 'utf8'));
   assert.equal(onDisk.encrypted, true);
 
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await removeTempDir(tmpDir);
 });
 
 test('readUIPrefs kennt Breite und Zustand der Verlaufsspalte', async () => {
@@ -664,7 +665,7 @@ test('readUIPrefs kennt Breite und Zustand der Verlaufsspalte', async () => {
   prefs = await storage.readUIPrefs();
   assert.equal(prefs.chatHistoryWidth, 800);
 
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await removeTempDir(tmpDir);
 });
 
 test('readUIPrefs merkt sich auch die weggeschaltete Chat-Spalte', async () => {
@@ -685,7 +686,7 @@ test('readUIPrefs merkt sich auch die weggeschaltete Chat-Spalte', async () => {
   prefs = await storage.readUIPrefs();
   assert.equal(prefs.chatPanelVisible, false);
 
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await removeTempDir(tmpDir);
 });
 
 test('readUIPrefs validates and clamps sidebarWidth and chatPanelWidth', async () => {
@@ -722,7 +723,7 @@ test('readUIPrefs validates and clamps sidebarWidth and chatPanelWidth', async (
   assert.equal(prefs.sidebarWidth, undefined);
   assert.equal(prefs.chatPanelWidth, undefined);
 
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await removeTempDir(tmpDir);
 });
 
 test('readUIPrefs verwirft den alten Schreibschalter allowWorkspaceWrite (Issue #66)', async () => {
@@ -744,7 +745,7 @@ test('readUIPrefs verwirft den alten Schreibschalter allowWorkspaceWrite (Issue 
   const onDisk = JSON.parse(await fs.readFile(storage.getUIPrefsPath(), 'utf8'));
   assert.equal('allowWorkspaceWrite' in onDisk, false, 'Migration entfernt den Schalter beim naechsten Schreiben');
 
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await removeTempDir(tmpDir);
 });
 
 test('the chat history falls back to plaintext when encryption is unavailable', async () => {
@@ -770,14 +771,14 @@ test('the chat history falls back to plaintext when encryption is unavailable', 
   const roundtrip = makeStorage(tmpDir);
   assert.equal(await roundtrip.getActiveChatId('__none__'), 's1');
 
-  await fs.rm(tmpDir, { recursive: true, force: true });
+  await removeTempDir(tmpDir);
 });
 
 // --- Unlesbarer Chat-Verlauf: Quarantaene statt Ueberschreiben (#54) ---
 
 async function makeTmpDir(t, prefix) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 
@@ -860,7 +861,7 @@ test('a missing history file produces an empty store and no quarantine', async (
 
 test('folder history: removeFolderFromHistory drops exactly one entry and keeps order', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const storage = makeStorage(tmpDir);
 
   const dirs = {};
@@ -887,7 +888,7 @@ test('folder history: removeFolderFromHistory drops exactly one entry and keeps 
 
 test('folder history: removing an entry leaves the folder and last-folder.json untouched', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const storage = makeStorage(tmpDir);
 
   const ws = path.join(tmpDir, 'ws');
@@ -932,7 +933,7 @@ function v3ConfigMitCompat() {
 
 async function tmpStore(t) {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-202-'));
-  t.after(() => fs.rm(tmp, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmp));
   return { tmp, storage: makeStorageWithEncryption(tmp) };
 }
 
@@ -1270,7 +1271,7 @@ test('whenWritesSettled waits for a write under the lock, and for one queued beh
     await Promise.all([first, settled]);
     assert.deepEqual(order, ['first', 'prefs', 'settled']);
   } finally {
-    await fs.rm(tmpDir, { recursive: true, force: true });
+    await removeTempDir(tmpDir);
   }
 });
 

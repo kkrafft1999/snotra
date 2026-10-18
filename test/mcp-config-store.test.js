@@ -14,6 +14,7 @@ const path = require('path');
 
 const { createStorageService } = require('../src/main/services/storage-service');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const TOKEN = 'ghp_streng_geheim_1234567890';
 
@@ -31,7 +32,7 @@ function fakeSafeStorage(available = true) {
 
 async function makeStore(t, { encryption = true } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-mcp-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const storage = createStorageService({
     app: { getPath: () => tmpDir },
     safeStorage: fakeSafeStorage(encryption),

@@ -12,6 +12,7 @@ const path = require('node:path');
 const { marked } = require('marked');
 const { bundleManual, parsePage, LOCALES } = require('../scripts/bundle-manual.js');
 const { importRenderer, setupRendererDom } = require('./helpers/dom.js');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const MANUAL_DIR = path.join(__dirname, '..', 'manual');
 const DOCS_DIR = path.join(MANUAL_DIR, 'src', 'content', 'docs');
@@ -32,7 +33,7 @@ test.before(async () => {
 
 test.after(() => {
   dom?.cleanup();
-  fs.rmSync(targetDir, { recursive: true, force: true });
+  removeTempDirSync(targetDir);
 });
 
 function readBundledPage(locale, slug) {

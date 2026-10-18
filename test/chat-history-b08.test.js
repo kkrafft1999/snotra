@@ -17,6 +17,7 @@ const { sanitizeChatMessagesForStore } = require('../src/main/services/chat-hist
 const { CHAT_ACTIVATION } = require('../src/shared/contracts/chat');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeDir, removeTempDir } = require('./helpers/temp-dir');
 
 const PNG_1PX =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -42,7 +43,7 @@ function switchableSafeStorage() {
 
 async function tempUserData(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-b08-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 
@@ -118,7 +119,7 @@ test('#565: a history that cannot be decrypted keeps its images while its copy i
 
   // Once the copy is gone, the next save sweeps as before.
   safeStorage.state.decrypts = true;
-  await fs.rm(path.join(dir, copies[0]), { recursive: true });
+  await removeDir(path.join(dir, copies[0]));
   await second.ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, textChat('chat-c'));
   assert.deepEqual(await attachmentFolders(dir), []);
 });

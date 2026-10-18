@@ -11,6 +11,7 @@ const { marked } = require('marked');
 const { bundleManual } = require('../scripts/bundle-manual.js');
 const search = require('../src/shared/manual/manual-search.js');
 const { headingSlug } = require('../src/shared/runtime/heading-slug.js');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 let targetDir = null;
 let bundle = null;
@@ -33,7 +34,7 @@ test.before(async () => {
 });
 
 test.after(() => {
-  fs.rmSync(targetDir, { recursive: true, force: true });
+  removeTempDirSync(targetDir);
 });
 
 const excerptText = (result) => result.excerpt.map((part) => part.text).join('');

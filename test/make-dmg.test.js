@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const pkg = require('../package.json');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 const {
   makeDmg, detach, withCustomIconFlag, dmgFileName, VOLUME_NAME, LAYOUT, VOLUME_ICON, BACKGROUND,
   BACKGROUND_IN_VOLUME,
@@ -19,7 +20,7 @@ const ROOT = path.join(__dirname, '..');
 
 function tmpDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-make-dmg-test-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDirSync(dir));
   return dir;
 }
 

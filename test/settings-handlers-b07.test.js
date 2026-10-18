@@ -15,6 +15,7 @@ const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { getProvider } = require('../src/main/providers');
 const { createSettingsPresentationService } = require('../src/main/services/settings-presentation-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 /**
  * Findings of the B07 review on the settings handlers: a stored secret stays
@@ -107,7 +108,7 @@ test('a new address with a new key stores the new key only (#560)', () => {
 
 async function setup(t, { onShowHiddenFilesChanged = null } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-b07-settings-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const providerCatalog = createMockProviderCatalog((id) => (Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : null), {
     listMeta: () => Object.values(PROVIDERS),
   });
