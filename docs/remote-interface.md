@@ -17,9 +17,10 @@ identity and trust, and the threat model. Two kinds of front end are in view:
   [its concept](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md)
   ([#1081](https://github.com/kkrafft1999/snotra/issues/1081)).
 
-The wire format in full detail, with examples and test vectors, follows as
-`docs/remote-protocol.md` in phase 1 of #1081, once the decisions here hold.
-This record is what that specification must not contradict.
+The wire format in full detail, with examples and test vectors, is
+[`remote-protocol.md`](./remote-protocol.md): part 1, pairing, since
+2026-10-18 (#1112); part 2, the channel, follows (#1113). This record is what
+that specification must not contradict.
 
 ## 1. Context
 
@@ -722,6 +723,8 @@ by this record.
   AR-14.
 - Mobile remote: [concept](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md),
   epic [#1081](https://github.com/kkrafft1999/snotra/issues/1081).
+- [`remote-protocol.md`](./remote-protocol.md) — the bytes: pairing code,
+  relay endpoints, MACs, safety phrase, test vectors (#1112).
 - [`remote-pairing-sequence.svg`](./remote-pairing-sequence.svg) — pairing a
   phone and the relay channel step by step, from *Settings › Remote access* to
   *Remove phone* (agreed 2026-10-18).

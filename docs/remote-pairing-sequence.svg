@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1580 3354" width="1580" height="3354" role="img" aria-labelledby="title desc">
   <title id="title">Mobile remote — pairing a phone, and the channel through the relay</title>
-  <desc id="desc">Sequence diagram with seven lifelines: you at the desktop, the dialog Settings › Remote access, the remote bridge in the desktop's main process, the relay's Cloud Functions, the relay's Realtime Database, the iPhone app, and you with the phone. Phase 1, open a pairing: the desktop creates identity keys once and a 128-bit pairing secret that never leaves the machine, registers a channel and a five-minute one-use pairing at the relay, and only then shows the QR code with the typed key; without a claim in five minutes, or on Cancel, the pairing and the channel are deleted. Phase 2, scan and claim: the phone scans the code, creates its keys in the Secure Enclave, fetches the desktop's public keys, sends its own public keys with an HMAC over both under the pairing secret, and the relay links them to the channel, refusing any second key. Phase 3, confirm in person: the desktop checks the HMAC, both sides show the same six-word safety phrase, and only a click on Allow at the desktop completes the pairing; the relay sets the channel to paired. Phase 4, connect: on every start both sides get a token by a signed challenge, mark their presence, run an X25519 handshake through the database and derive session keys; from then on every message is an encrypted envelope in the other side's outbox, which the relay can carry but not read. Phase 5, end: Remove phone deletes the channel, and the phone deletes its keys. Three points were added to the concept on 2026-10-18: the outboxes stay closed until the channel is paired, the desktop sends a confirmation MAC that the phone checks, and the desktop's presence is a heartbeat because REST streaming has no onDisconnect.</desc>
+  <desc id="desc">Sequence diagram with seven lifelines: you at the desktop, the dialog Settings › Remote access, the remote bridge in the desktop's main process, the relay's Cloud Functions, the relay's Realtime Database, the iPhone app, and you with the phone. Phase 1, open a pairing: the desktop creates identity keys once and a pairing secret that never leaves the machine, registers a channel and a five-minute one-use pairing at the relay, and only then shows the QR code with the typed key; without a claim in five minutes, or on Cancel, the pairing and the channel are deleted. Phase 2, scan and claim: the phone scans the code, creates its keys in the Secure Enclave, fetches the desktop's public keys, sends its own public keys with an HMAC over both under the pairing secret, and the relay links them to the channel, refusing any second key. Phase 3, confirm in person: the desktop checks the HMAC, both sides show the same six-word safety phrase, and only a click on Allow in the native sheet of the confirmation port completes the pairing; the desktop sends its own MAC, the relay sets the channel to paired and the phone checks that MAC. The words come from one fixed list in every language. Phase 4, connect: on every start both sides get a token by a signed challenge, mark their presence, run an X25519 handshake through the database and derive session keys; from then on every message is an encrypted envelope in the other side's outbox, which the relay can carry but not read. Phase 5, end: Remove phone deletes the channel, and the phone deletes its keys. Three points were added to the concept on 2026-10-18: the outboxes stay closed until the channel is paired, the desktop sends a confirmation MAC that the phone checks, and the desktop's presence is a heartbeat because REST streaming has no onDisconnect.</desc>
   <style>
       text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       .canvas { fill: #F9F9F9; }
@@ -56,7 +56,7 @@
   </style>
   <rect class="canvas" x="0" y="0" width="1580" height="3354"/>
   <text class="page-title" x="40" y="54">Mobile remote — pairing a phone, and the channel through the relay</text>
-  <text class="page-sub" x="40" y="82">What happens behind Settings › Remote access. Agreed on 2026-10-18; it details the mobile remote concept (snotra-mobile, §4.2 and §5) and docs/remote-interface.md.</text>
+  <text class="page-sub" x="40" y="82">What happens behind Settings › Remote access. Agreed on 2026-10-18; bytes and endpoints: docs/remote-protocol.md.</text>
   <rect class="group" x="206" y="122" width="468" height="94" rx="8"/>
   <text class="group-l" x="216" y="137">SNOTRA AGENT — DESKTOP</text>
   <rect class="group" x="686" y="122" width="468" height="94" rx="8"/>
@@ -114,19 +114,19 @@
   <rect class="note" x="407.91999999999996" y="412" width="304.16" height="68" rx="5"/>
   <text class="note-t" x="425.91999999999996" y="430">First time only: identity keys (P-256 sign</text>
   <text class="note-t" x="425.91999999999996" y="444">+ agree), kept via safeStorage</text>
-  <text class="note-t" x="425.91999999999996" y="458">pairingSecret: 128 random bits, never</text>
+  <text class="note-t" x="425.91999999999996" y="458">pairingSecret from the CSPRNG, never</text>
   <text class="note-t" x="425.91999999999996" y="472">leaves this machine</text>
   <line class="m-req" x1="586" y1="526" x2="798.5" y2="526"/>
   <polygon class="head m-req-head" points="798.5,526 789,521 789,531"/>
-  <rect class="label-bg" x="588" y="491" width="273.36" height="29" rx="3"/>
-  <text class="lbl" x="724.6800000000001" y="503" text-anchor="middle">POST /pairing</text>
-  <text class="lbl-sub" x="724.6800000000001" y="517" text-anchor="middle">{desktopKeys, proof-of-possession signature}</text>
+  <rect class="label-bg" x="594.18" y="491" width="196.14000000000001" height="29" rx="3"/>
+  <text class="lbl" x="692.25" y="503" text-anchor="middle">POST /v1/pairings</text>
+  <text class="lbl-sub" x="692.25" y="517" text-anchor="middle">{challenge, desktopKeys, proof}</text>
   <line class="m-req" x1="826" y1="586" x2="1038.5" y2="586"/>
   <polygon class="head m-req-head" points="1038.5,586 1029,581 1029,591"/>
-  <rect class="label-bg" x="828" y="537" width="297.12" height="43" rx="3"/>
-  <text class="lbl" x="976.56" y="549" text-anchor="middle">create channel and pairing</text>
-  <text class="lbl-sub" x="976.56" y="563" text-anchor="middle">/channels/{channelId} {desktopKeys}</text>
-  <text class="lbl-sub" x="976.56" y="577" text-anchor="middle">/pairing/{pairingId} {channelId, +5 min, unused}</text>
+  <rect class="label-bg" x="828" y="537" width="314.94" height="43" rx="3"/>
+  <text class="lbl" x="985.47" y="549" text-anchor="middle">create channel and pairing</text>
+  <text class="lbl-sub" x="985.47" y="563" text-anchor="middle">/channels/{channelId} {desktopKeys, status open}</text>
+  <text class="lbl-sub" x="985.47" y="577" text-anchor="middle">/pairing/{pairingId} {channelId, +5 min, one claim}</text>
   <line class="m-ret" x1="774" y1="632" x2="561.5" y2="632"/>
   <polyline class="m-ret head-open" points="570,627 561.5,632 570,637"/>
   <rect class="label-bg" x="498.63999999999993" y="597" width="273.36" height="29" rx="3"/>
@@ -141,19 +141,19 @@
   <polyline class="m-ret head-open" points="330,705 321.5,710 330,715"/>
   <rect class="label-bg" x="309.75" y="689" width="222.24999999999997" height="15" rx="3"/>
   <text class="lbl" x="420.875" y="701" text-anchor="middle">QR payload, typed key, expiry</text>
-  <rect class="note" x="129.04" y="718" width="381.92" height="54" rx="5"/>
-  <text class="note-t" x="147.04" y="736">QR code of snotra-pair:v1/&lt;relay&gt;/&lt;pairingId&gt;/&lt;secret&gt;</text>
-  <text class="note-t" x="147.04" y="750">key 7KQM-3XWD-P9TA-HV2N-RC6E · 5:00 countdown</text>
-  <text class="note-t" x="147.04" y="764">“Waiting for your phone …”</text>
+  <rect class="note" x="154.95999999999998" y="718" width="330.08000000000004" height="54" rx="5"/>
+  <text class="note-t" x="172.95999999999998" y="736">QR code of snotra-pair:v1/&lt;relay&gt;/&lt;20 symbols&gt;</text>
+  <text class="note-t" x="172.95999999999998" y="750">key 7KQM-3XWD-P9TA-HV2N-RC6E · 5:00 countdown</text>
+  <text class="note-t" x="172.95999999999998" y="764">“Waiting for your phone …”</text>
   <line class="m-ret" x1="294" y1="804" x2="91.5" y2="804"/>
   <polyline class="m-ret head-open" points="100,799 91.5,804 100,809"/>
   <rect class="label-bg" x="132.375" y="783" width="120.74999999999999" height="15" rx="3"/>
   <text class="lbl" x="192.75" y="795" text-anchor="middle">QR code and key</text>
   <line class="m-req" x1="586" y1="882" x2="798.5" y2="882"/>
   <polygon class="head m-req-head" points="798.5,882 789,877 789,887"/>
-  <rect class="label-bg" x="588.375" y="847" width="207.75" height="29" rx="3"/>
-  <text class="lbl" x="692.25" y="859" text-anchor="middle">DELETE /pairing/{pairingId}</text>
-  <text class="lbl-sub" x="692.25" y="873" text-anchor="middle">signed by the desktop</text>
+  <rect class="label-bg" x="588" y="847" width="236.74999999999997" height="29" rx="3"/>
+  <text class="lbl" x="706.375" y="859" text-anchor="middle">DELETE /v1/pairings/{pairingId}</text>
+  <text class="lbl-sub" x="706.375" y="873" text-anchor="middle">bearer token, role desktop</text>
   <line class="m-req" x1="826" y1="914" x2="1038.5" y2="914"/>
   <polygon class="head m-req-head" points="1038.5,914 1029,909 1029,919"/>
   <rect class="label-bg" x="832" y="893" width="200.5" height="15" rx="3"/>
@@ -173,13 +173,13 @@
   <rect class="label-bg" x="1283.25" y="1019" width="178.75" height="29" rx="3"/>
   <text class="lbl" x="1372.625" y="1031" text-anchor="middle">Pair › scan the QR code</text>
   <text class="lbl-sub" x="1372.625" y="1045" text-anchor="middle">or type the key</text>
-  <rect class="note" x="1140.88" y="1062" width="278.24" height="40" rx="5"/>
-  <text class="note-t" x="1158.88" y="1080">Parse snotra-pair:v1 · create identity</text>
-  <text class="note-t" x="1158.88" y="1094">keys in the Secure Enclave (P-256)</text>
+  <rect class="note" x="1127.92" y="1062" width="304.16" height="40" rx="5"/>
+  <text class="note-t" x="1145.92" y="1080">Check relay host and check symbol ·</text>
+  <text class="note-t" x="1145.92" y="1094">create identity keys in the Secure Enclave</text>
   <line class="m-req" x1="1254" y1="1148" x2="801.5" y2="1148"/>
   <polygon class="head m-req-head" points="801.5,1148 811,1143 811,1153"/>
   <rect class="label-bg" x="897.01" y="1113" width="261.48" height="29" rx="3"/>
-  <text class="lbl" x="1027.75" y="1125" text-anchor="middle">GET /pairing/{pairingId}</text>
+  <text class="lbl" x="1027.75" y="1125" text-anchor="middle">GET /v1/pairings/{pairingId}</text>
   <text class="lbl-sub" x="1027.75" y="1139" text-anchor="middle">App Check (App Attest) · rate limit per IP</text>
   <line class="m-ret" x1="826" y1="1194" x2="1278.5" y2="1194"/>
   <polyline class="m-ret head-open" points="1270,1189 1278.5,1194 1270,1199"/>
@@ -191,14 +191,14 @@
   <text class="note-t" x="1171.84" y="1234">  phoneKeys ‖ desktopKeys)</text>
   <line class="m-req" x1="1254" y1="1288" x2="801.5" y2="1288"/>
   <polygon class="head m-req-head" points="801.5,1288 811,1283 811,1293"/>
-  <rect class="label-bg" x="899.98" y="1253" width="255.54000000000002" height="29" rx="3"/>
-  <text class="lbl" x="1027.75" y="1265" text-anchor="middle">POST /pairing/{pairingId}/claim</text>
-  <text class="lbl-sub" x="1027.75" y="1279" text-anchor="middle">{phoneKeys, MAC_P, signature} · App Check</text>
+  <rect class="label-bg" x="879.19" y="1253" width="297.12" height="29" rx="3"/>
+  <text class="lbl" x="1027.75" y="1265" text-anchor="middle">POST /v1/pairings/{pairingId}/claim</text>
+  <text class="lbl-sub" x="1027.75" y="1279" text-anchor="middle">{challenge, phoneKeys, MAC_P, proof} · App Check</text>
   <line class="m-req" x1="826" y1="1334" x2="1038.5" y2="1334"/>
   <polygon class="head m-req-head" points="1038.5,1334 1029,1329 1029,1339"/>
-  <rect class="label-bg" x="828" y="1299" width="302" height="29" rx="3"/>
-  <text class="lbl" x="979" y="1311" text-anchor="middle">channel.phoneKeys + MAC_P · pairing used</text>
-  <text class="lbl-sub" x="979" y="1325" text-anchor="middle">one use; a second key on the channel is refused</text>
+  <rect class="label-bg" x="828" y="1299" width="303.06" height="29" rx="3"/>
+  <text class="lbl" x="979.53" y="1311" text-anchor="middle">phoneKeys + MAC_P · status = pending</text>
+  <text class="lbl-sub" x="979.53" y="1325" text-anchor="middle">one claim; a second key on the channel is refused</text>
   <line class="m-ret" x1="826" y1="1366" x2="1278.5" y2="1366"/>
   <polyline class="m-ret head-open" points="1270,1361 1278.5,1366 1270,1371"/>
   <rect class="label-bg" x="919.375" y="1345" width="265.75" height="15" rx="3"/>
@@ -257,10 +257,10 @@
   <text class="note-t" x="419.44" y="1904">forget pairingSecret, drop an old phone (R1)</text>
   <line class="m-req" x1="586" y1="1972" x2="798.5" y2="1972"/>
   <polygon class="head m-req-head" points="798.5,1972 789,1967 789,1977"/>
-  <rect class="label-bg" x="588" y="1923" width="258.5" height="43" rx="3"/>
-  <text class="lbl" x="717.25" y="1935" text-anchor="middle">POST /channels/{channelId}/confirm</text>
-  <text class="lbl-sub" x="717.25" y="1949" text-anchor="middle">signed by the desktop</text>
-  <text class="lbl-sub" x="717.25" y="1963" text-anchor="middle">+ MAC_D for the phone</text>
+  <rect class="label-bg" x="588" y="1923" width="280.25" height="43" rx="3"/>
+  <text class="lbl" x="728.125" y="1935" text-anchor="middle">POST /v1/channels/{channelId}/confirm</text>
+  <text class="lbl-sub" x="728.125" y="1949" text-anchor="middle">bearer token, role desktop</text>
+  <text class="lbl-sub" x="728.125" y="1963" text-anchor="middle">{MAC_D} for the phone</text>
   <line class="m-req" x1="826" y1="2018" x2="1038.5" y2="2018"/>
   <polygon class="head m-req-head" points="1038.5,2018 1029,2013 1029,2023"/>
   <rect class="label-bg" x="828" y="1983" width="243.99999999999997" height="29" rx="3"/>
@@ -289,14 +289,14 @@
   <text class="phase-s" x="1536" y="2195" text-anchor="end">every time the app opens — the relay carries ciphertext between exactly two keys</text>
   <line class="m-req" x1="586" y1="2254" x2="798.5" y2="2254"/>
   <polygon class="head m-req-head" points="798.5,2254 789,2249 789,2259"/>
-  <rect class="label-bg" x="595.625" y="2219" width="193.25" height="29" rx="3"/>
-  <text class="lbl" x="692.25" y="2231" text-anchor="middle">token by signed challenge</text>
-  <text class="lbl-sub" x="692.25" y="2245" text-anchor="middle">role desktop</text>
+  <rect class="label-bg" x="594.18" y="2219" width="196.14000000000001" height="29" rx="3"/>
+  <text class="lbl" x="692.25" y="2231" text-anchor="middle">POST /v1/tokens</text>
+  <text class="lbl-sub" x="692.25" y="2245" text-anchor="middle">signed challenge · role desktop</text>
   <line class="m-req" x1="1254" y1="2254" x2="801.5" y2="2254"/>
   <polygon class="head m-req-head" points="801.5,2254 811,2249 811,2259"/>
-  <rect class="label-bg" x="959.68" y="2219" width="196.14000000000001" height="29" rx="3"/>
-  <text class="lbl" x="1057.75" y="2231" text-anchor="middle">token by signed challenge</text>
-  <text class="lbl-sub" x="1057.75" y="2245" text-anchor="middle">role phone · Secure Enclave key</text>
+  <rect class="label-bg" x="965.62" y="2219" width="184.26000000000002" height="29" rx="3"/>
+  <text class="lbl" x="1057.75" y="2231" text-anchor="middle">POST /v1/tokens</text>
+  <text class="lbl-sub" x="1057.75" y="2245" text-anchor="middle">signed challenge · role phone</text>
   <line class="m-req" x1="586" y1="2300" x2="1038.5" y2="2300"/>
   <polygon class="head m-req-head" points="1038.5,2300 1029,2295 1029,2305"/>
   <rect class="label-bg" x="642.9" y="2265" width="338.70000000000005" height="29" rx="3"/>
@@ -375,9 +375,9 @@
   <text class="lbl" x="452.25" y="2977" text-anchor="middle">remote:unpair</text>
   <line class="m-req" x1="586" y1="3032" x2="798.5" y2="3032"/>
   <polygon class="head m-req-head" points="798.5,3032 789,3027 789,3037"/>
-  <rect class="label-bg" x="588" y="2997" width="215" height="29" rx="3"/>
-  <text class="lbl" x="695.5" y="3009" text-anchor="middle">DELETE /channels/{channelId}</text>
-  <text class="lbl-sub" x="695.5" y="3023" text-anchor="middle">signed by the desktop</text>
+  <rect class="label-bg" x="588" y="2997" width="236.74999999999997" height="29" rx="3"/>
+  <text class="lbl" x="706.375" y="3009" text-anchor="middle">DELETE /v1/channels/{channelId}</text>
+  <text class="lbl-sub" x="706.375" y="3023" text-anchor="middle">bearer token, role desktop</text>
   <line class="m-req" x1="826" y1="3078" x2="1038.5" y2="3078"/>
   <polygon class="head m-req-head" points="1038.5,3078 1029,3073 1029,3083"/>
   <rect class="label-bg" x="828" y="3043" width="213.96" height="29" rx="3"/>
@@ -410,8 +410,8 @@
   <text class="badge-n" x="576" y="681.8">8</text>
   <circle class="badge " cx="544" cy="710" r="9.5"/>
   <text class="badge-n" x="544" y="713.8">9</text>
-  <circle class="badge " cx="129.04" cy="745" r="9.5"/>
-  <text class="badge-n" x="129.04" y="748.8">10</text>
+  <circle class="badge " cx="154.95999999999998" cy="745" r="9.5"/>
+  <text class="badge-n" x="154.95999999999998" y="748.8">10</text>
   <circle class="badge " cx="304" cy="804" r="9.5"/>
   <text class="badge-n" x="304" y="807.8">11</text>
   <circle class="badge " cx="576" cy="882" r="9.5"/>
@@ -422,8 +422,8 @@
   <text class="badge-n" x="544" y="949.8">14</text>
   <circle class="badge " cx="1474" cy="1054" r="9.5"/>
   <text class="badge-n" x="1474" y="1057.8">15</text>
-  <circle class="badge " cx="1140.88" cy="1082" r="9.5"/>
-  <text class="badge-n" x="1140.88" y="1085.8">16</text>
+  <circle class="badge " cx="1127.92" cy="1082" r="9.5"/>
+  <text class="badge-n" x="1127.92" y="1085.8">16</text>
   <circle class="badge " cx="1264" cy="1148" r="9.5"/>
   <text class="badge-n" x="1264" y="1151.8">17</text>
   <circle class="badge " cx="816" cy="1194" r="9.5"/>
