@@ -26,6 +26,25 @@
  * @property {string} shell          Anzeigename der tatsaechlich benutzten Shell
  * @property {{isolated: boolean, domains?: string[], reason?: string, missing?: string[]}} [isolation]
  *   whether the run was isolated (#329); absent when no sandbox is wired
+ * @property {Object} [sandboxBlocked]  what the sandbox refused (#792), for the chat's tool row
+ *
+ * @typedef {Object} ShellExecutionRefusal  a run that never started
+ * @property {string} error   an English sentence for the model
+ * @property {boolean} [blocked]  refused by the command guard (concept §9)
+ *
+ * @typedef {Object} ShellExecutionRequest
+ * @property {string} command
+ * @property {string} [stdin]
+ * @property {number} [timeoutMs]
+ * @property {string} [cwd]
+ * @property {string} [workspaceRoot]
+ * @property {string[]} [networkDomains]
+ * @property {{writePaths?: string[], trustd?: boolean}|null} [programAllowance]  a program
+ *   allowance's folders and trustd (#408); its domains are part of `networkDomains`
+ * @property {Object|null} [sandboxGrants]  what the user allowed on a sandbox card (#792)
+ * @property {Function|null} [onSandboxNetworkAsk]  asks about a connection while the command waits (#792)
+ * @property {boolean} [sandboxDisabled]  the sandbox is switched off for this workspace (#357)
+ * @property {AbortSignal} [abortSignal]
  *
  * @typedef {Object} ShellDescription
  * @property {boolean} found
@@ -36,32 +55,15 @@
  * @property {string} [probeInvocation] Aufrufform der Erkennung (Issue #111)
  * @property {boolean} [interactive] Erkennung lief interaktiv, `.zshrc` war also dabei
  * @property {string} [path]         PATH aus dem Profil, einmal beim Start gelesen (#111)
- * @property {string} [error]
+ * @property {string|import('../../shared/contracts/message').Message} [error]  a catalogue
+ *   message, or the quoted output of the probe (#338); shown in Settings, never to the model
  *
  * @typedef {Object} ShellExecutionPort
  * @property {() => boolean} isAvailable
  *   Ob eine Shell gefunden und die Ausfuehrung eingeschaltet ist. Synchron,
  *   weil die Tool-Sichtbarkeit beim Bauen der Tool-Liste feststehen muss.
  * @property {() => ShellDescription} describe
- * @property {(request: { command: string, stdin?: string, timeoutMs?: number,
- *   cwd?: string, workspaceRoot?: string, networkDomains?: string[],
- *   abortSignal?: AbortSignal }) => Promise<ShellExecutionResult>} run
+ * @property {(request: ShellExecutionRequest) => Promise<ShellExecutionResult | ShellExecutionRefusal>} run
  */
 
-'use strict';
-
-const SHELL_EXECUTION_LIMITS = Object.freeze({
-  /** Builds und Testlaeufe dauern laenger als ein Python-Schnipsel (Issue #102). */
-  DEFAULT_TIMEOUT_MS: 30_000,
-  MAX_TIMEOUT_MS: 300_000,
-  MIN_TIMEOUT_MS: 500,
-  /** Je Strom (stdout/stderr) — danach wird gekappt und der Rest verworfen. */
-  MAX_OUTPUT_BYTES: 200_000,
-  /** Eine Kommandozeile, kein Skript; cmd.exe kann ohnehin nicht mehr. */
-  MAX_COMMAND_CHARS: 8_000,
-  MAX_STDIN_CHARS: 200_000,
-  /** Erkennung beim Start: eine Login-Shell liest Profile und braucht Luft. */
-  PROBE_TIMEOUT_MS: 10_000,
-});
-
-module.exports = { SHELL_EXECUTION_LIMITS };
+module.exports = {};

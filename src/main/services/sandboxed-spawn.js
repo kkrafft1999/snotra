@@ -24,13 +24,14 @@ const PASSTHROUGH = Object.freeze({
 
 /**
  * @param {object} request
- * @param {object|null} request.sandbox       the sandbox service, if wired
+ * @param {Object|null} request.sandbox       the sandbox service, if wired
  * @param {boolean} [request.disabled]         switched off for this workspace (#357)
  * @param {string[]} request.argv             [program, ...args]
  * @param {string} [request.workspaceRoot]
  * @param {string} request.runTmp
  * @param {string[]} [request.domains]
  * @param {{writePaths?: string[], trustd?: boolean}|null} [request.allowance]  a program allowance (#408)
+ * @param {Object|null} [request.grants]     what the user allowed on a sandbox card (#792)
  * @param {string} [request.commandId]
  * @param {string} [request.commandText]
  * @param {Function} [request.onNetworkAsk]  asks about a waiting connection (#792)

@@ -26,7 +26,7 @@ const {
   PROBE_MARKER,
   PATH_MARKER,
 } = require('../src/main/services/shell-runner-service');
-const { SHELL_EXECUTION_LIMITS } = require('../src/application/ports/shell-execution-port');
+const { SHELL_EXECUTION_LIMITS } = require('../src/shared/contracts/shell-execution');
 
 /**
  * Windows-Shells geben CRLF aus, eingecheckte Dateien kommen unter

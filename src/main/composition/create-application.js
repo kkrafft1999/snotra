@@ -23,6 +23,7 @@ const { createToolPolicyStore } = require('../services/tool-policy-store');
 const { KEY_ALWAYS_DURABLE } = require('../services/safe-storage-key-durability');
 const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
 const { createNativeConfirmationAdapter } = require('../adapters/native-confirmation-adapter');
+const { createConfigProposalAdapter } = require('../adapters/config-proposal-adapter');
 const { createConfirmationReceipts } = require('../../application/permissions/user-confirmation');
 const { createSessionGrants } = require('../../application/permissions/session-grants');
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
@@ -695,12 +696,10 @@ function createApplication({
     // A run that ended off screen takes its approvals with it.
     onRunSettled: () => pruneChatScopedPermissions(),
     // The chat's own skills and tools, and the card that changes them (#774).
-    configProposals: {
-      overridesFor: (chatId) => chatSessionSettings.configOverridesFor(chatId),
-      prepare: (input) => chatConfiguration.prepareProposal(input),
-      accept: (chatId, proposal) => chatSessionSettings.acceptConfigProposal(chatId, proposal),
-      decline: (chatId, proposal) => chatSessionSettings.declineConfigProposal(chatId, proposal),
-    },
+    configProposals: createConfigProposalAdapter({
+      chatSessionSettings,
+      prepareProposal: (input) => chatConfiguration.prepareProposal(input),
+    }),
     toolAdapterDeps: {
       fsService,
       fileChangeRecorder,

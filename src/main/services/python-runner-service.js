@@ -21,7 +21,11 @@
  * Abhaengigkeit auf den Shell-Dienst.
  */
 
-const { PYTHON_EXECUTION_LIMITS } = require('../../application/ports/code-execution-port');
+const { PYTHON_EXECUTION_LIMITS } = require('../../shared/contracts/code-execution');
+
+/** @typedef {import('../../application/ports/code-execution-port').CodeDescription} CodeDescription */
+/** @typedef {import('../../application/ports/code-execution-port').CodeExecutionRequest} CodeExecutionRequest */
+/** @typedef {import('../../application/ports/code-execution-port').CodeExecutionResult} CodeExecutionResult */
 const { createChildRunner } = require('./child-run');
 const { pythonJobArgs } = require('./windows-job');
 const { planSpawn } = require('./sandboxed-spawn');
@@ -71,6 +75,11 @@ function normalizeArgv(raw) {
  * @param {() => Promise<string>} [deps.readInterpreterOverride] eigener Pfad aus den Einstellungen
  * @param {() => Promise<string>} [deps.readShellPath] PATH aus dem Shell-Profil (Issue #111)
  * @param {string} [deps.platform]
+ * @param {NodeJS.ProcessEnv} [deps.env]
+ * @param {() => string} [deps.randomId]  names the run's temp folder
+ * @param {object} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
+ * @returns {import('../../application/ports/code-execution-port').CodeExecutionPort & {
+ *   detect: () => Promise<CodeDescription>, disposeSync: () => void }}
  */
 function createPythonRunnerService({
   spawn,
@@ -91,6 +100,7 @@ function createPythonRunnerService({
   // `error` is the detail Settings shows next to "No Python 3 found": a
   // catalogue message, or the quoted output of the probe (#338). The model
   // never reads it — `run()` has its own English sentence.
+  /** @type {CodeDescription} */
   let detected = { found: false, error: createMessage('runner.error.notChecked') };
   // PATH aus dem Shell-Profil, bei der Erkennung ermittelt. Leer heisst:
   // nichts zu reparieren (Windows) oder keine Shell gefunden.
@@ -193,6 +203,7 @@ function createPythonRunnerService({
   // Time limit, "Stop", output cap and the process tree (CR-B03-01).
   const children = createChildRunner({ spawn, platform });
 
+  /** @param {Partial<CodeExecutionRequest>} [request]  a missing program is refused, not thrown */
   async function run({
     code, stdin, argv, timeoutMs, cwd, workspaceRoot, networkDomains,
     // Allowed on a sandbox card (#792): `{ writePaths, readPaths, hosts }`.
@@ -283,13 +294,15 @@ function createPythonRunnerService({
         exposeOutput: (read) => { readOutput = read; },
         startError: 'Python could not be started.',
       });
-      if (outcome.error) return outcome;
+      // Narrows the union for the type check (#1098); the error is never empty.
+      if ('error' in outcome) return outcome;
       // What the sandbox refused (#792): as a list for the chat's tool row,
       // and in stderr for the model (#329). Looked up before annotating.
       const blocked = await target.blocked?.({
         failed: outcome.exitCode !== 0 && !outcome.aborted,
         output: outcome.stderr,
       });
+      /** @type {CodeExecutionResult} */
       const result = {
         ...outcome,
         stderr: target.annotate(outcome.stderr),

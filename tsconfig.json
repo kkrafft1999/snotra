@@ -34,6 +34,8 @@
     "src/main/adapters/**/*.js",
     "src/main/remote/**/*.js",
     "src/shared/contracts/**/*.js",
+    "src/main/services/shell-runner-service.js",
+    "src/main/services/python-runner-service.js",
     "types/**/*.d.ts"
   ]
 }

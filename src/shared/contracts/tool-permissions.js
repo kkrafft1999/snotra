@@ -124,6 +124,22 @@ const PERMISSION_RULE_EFFECTS = Object.freeze({
   DENY: 'deny',
 });
 
+/**
+ * The state of the signed policy file (concept §7). Owned by
+ * `main/services/tool-policy-store.js`; here so that the policy adapter can
+ * name it without importing the store (#1098).
+ */
+const TOOL_POLICY_INTEGRITY = Object.freeze({
+  OK: 'ok',
+  UNSIGNED: 'unsigned',
+  INVALID: 'invalid',
+  MISSING: 'missing',
+  // The file (or its key) is there but could not be read (#512). Not a broken
+  // file: nothing is known about it, so tools stay blocked and nothing is
+  // written over it.
+  UNREADABLE: 'unreadable',
+});
+
 const PERMISSION_RULE_SCOPES = Object.freeze({
   GLOBAL: 'global',
   WORKSPACE: 'workspace',
@@ -895,6 +911,7 @@ module.exports = {
   TOOL_EXECUTION_STATUSES,
   PERMISSION_RULE_EFFECTS,
   PERMISSION_RULE_SCOPES,
+  TOOL_POLICY_INTEGRITY,
   SESSION_GRANTABLE_CLASSES,
   PERSISTENT_ALLOW_CLASSES,
   COMMAND_RULE_TOOL,
