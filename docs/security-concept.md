@@ -723,8 +723,21 @@ circumvented, but recorded here:
   outlive its run (#519). A process that leaves the group on purpose (`setsid`,
   a daemon that forks twice) escapes that on macOS and without the sandbox; on
   Linux the sandbox's PID namespace ends it as well. Windows has no process
-  group to address once the parent is gone, so there a process started in the
-  background outlives the run.
+  group to address once the parent is gone. There the shell or interpreter
+  first puts itself into a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`
+  and holds its only handle, so everything the command starts — `Start-Process`,
+  `start`, a detached `subprocess.Popen` — is in that job and ends when the
+  shell or interpreter exits (#991). PowerShell makes the job in a line in
+  front of the command, through a P/Invoke type built with Reflection.Emit;
+  Python through a first interpreter that runs the script as its child. The
+  job allows no breakaway, so a process asking for `CREATE_BREAKAWAY_FROM_JOB`
+  is refused, and it is the innermost job, so the outer one libuv puts every
+  child into, which allows silent breakaway, lets nothing out either. What it
+  cannot hold is what Windows starts on the command's behalf in a process of
+  its own — a scheduled task, a service, a COM server such as an Office
+  application. Where no job can be made (PowerShell in Constrained Language
+  Mode, `cmd.exe` as the last fallback), the command runs as before and a note
+  in its error output says that its background is not contained.
 - **The residual risk, stated plainly.** There is no sandbox. An approved
   command can do anything the logged-in user can — outside the project folder as
   well, and on the network. In "auto" mode it runs without a question, because
