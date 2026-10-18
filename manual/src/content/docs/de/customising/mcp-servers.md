@@ -26,7 +26,7 @@ Ein MCP-Server ist fremder Code. Ein lokaler läuft auf deinem Rechner mit deine
 
 ## Einen Server hinzufügen
 
-1. Öffne *Einstellungen › Tool-Einrichtung* und klick unter *MCP-Server* auf *Server hinzufügen*.
+1. Öffne *Einstellungen › Tools › Einrichtung* und klick unter *MCP-Server* auf *Server hinzufügen*.
 2. Wähl unter *Verbindung* *Lokaler Prozess (stdio)* oder *Entfernt (HTTP)* und füll das Formular aus; die Felder sind unten erklärt.
 3. Klick auf *Speichern* und dann auf *Verbindung testen*. Das verbindet einmal und zeigt die Tools, die der Server anbietet — oder den Fehler, mit dem, was der Server mitgeschickt hat.
 
@@ -61,7 +61,7 @@ Importierte Server starten **ausgeschaltet**. Snotra liest nur, was du einfügst
 
 ## Was dann passiert
 
-- Die Tools des Servers erscheinen unter *Einstellungen › Tools & Sicherheit* in der Zeile *Externe Dienste*, nach Server gruppiert. Jedes lässt sich einzeln ausschalten, und jede Gruppe sagt, wie es ihrem Server geht: verbunden mit seiner Zahl an Tools, noch nicht verbunden, ausgeschaltet oder mit Grund gescheitert.
+- Die Tools des Servers erscheinen unter *Einstellungen › Tools › Autonomie* in der Zeile *Externe Dienste*, nach Server gruppiert. Jedes lässt sich einzeln ausschalten, und jede Gruppe sagt, wie es ihrem Server geht: verbunden mit seiner Zahl an Tools, noch nicht verbunden, ausgeschaltet oder mit Grund gescheitert.
 - Im Chat zeigt ein Tool, woher es kommt: `mcp__github__create_issue`. Ein Tool eines entfernten Servers sieht genauso aus und verhält sich genauso wie das eines lokalen.
 - Ein MCP-Tool zählt immer als Programmausführung **und** externer Dienst, in *Intelligent* fragt Snotra also vor jedem Aufruf. Ein Server, der ein Tool als zerstörerisch kennzeichnet, macht es noch strenger: Das Tool zählt dann zusätzlich als *Überschreiben ohne Rückweg*.
 - Ein Server wird erst verbunden, wenn er gebraucht wird. Er merkt sich die Tools, die er zuletzt gemeldet hat, damit du eines ausschalten kannst, bevor es dem Modell überhaupt angeboten wird.

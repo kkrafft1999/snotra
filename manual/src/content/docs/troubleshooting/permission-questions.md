@@ -23,12 +23,12 @@ A chat in which Snotra asked, did not ask, or refused something. The tool log ab
 ## Why did Snotra not ask?
 
 - In *Smart*, reading inside the open folder runs without asking.
-- An allowance applies: one for this session, one for good, or a remembered command. *Settings › Tools & security* lists them, and revokes them: [See and change what Snotra may do](../../safety/tools-and-security/#revoke-an-allowance-or-reset).
+- An allowance applies: one for this session, one for good, or a remembered command. *Settings › Tools › Autonomy* lists them, and revokes them: [See and change what Snotra may do](../../safety/tools-and-security/#revoke-an-allowance-or-reset).
 - The chat is in *Auto*, or the folder has *Auto* as its default. The mode pill in the chat input shows it: [Choose a mode](../../safety/choose-a-mode/).
 
 ## Why was a call refused without a card?
 
-- **A block covers it.** A block wins in every mode. The row of the risk class under *Settings › Tools & security* lists your blocks.
+- **A block covers it.** A block wins in every mode. The row of the risk class under *Settings › Tools › Autonomy* lists your blocks.
 - **The tool is switched off.** Shell commands and Python are off until you switch them on, in the row *Execute*.
 - **The target is never offered:** your home folder as a whole, the root of a disk, Snotra's own storage, and for writing places with credentials such as `~/.ssh`.
 - **You denied the same call before** in this run. Asking unchanged ends the run; the denial stands.
@@ -51,5 +51,5 @@ In this folder, commands and Python would run without the sandbox and without as
 
 ## If it doesn't work
 
-- **The permissions file was damaged or altered.** *Settings › Tools & security* says so. Snotra then runs in *Smart*, or in *Always ask* if that was set; allowances are discarded, blocks stay in force. Set up what you need again.
-- **You want to start from scratch.** *Reset workspace rules* or *Reset all permissions*, at the bottom of *Settings › Tools & security*.
+- **The permissions file was damaged or altered.** *Settings › Tools › Autonomy* says so. Snotra then runs in *Smart*, or in *Always ask* if that was set; allowances are discarded, blocks stay in force. Set up what you need again.
+- **You want to start from scratch.** *Reset workspace rules* or *Reset all permissions*, at the bottom of *Settings › Tools › Autonomy*.

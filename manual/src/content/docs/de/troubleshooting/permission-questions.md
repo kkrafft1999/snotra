@@ -23,12 +23,12 @@ Einen Chat, in dem Snotra gefragt, nicht gefragt oder etwas abgelehnt hat. Das T
 ## Warum hat Snotra nicht gefragt?
 
 - In *Intelligent* läuft Lesen im geöffneten Ordner ohne Nachfrage.
-- Eine Erlaubnis greift: eine für diese Sitzung, eine dauerhafte oder ein gemerkter Befehl. *Einstellungen › Tools & Sicherheit* listet sie auf und widerruft sie: [Sehen und ändern, was Snotra darf](../../safety/tools-and-security/#eine-freigabe-widerrufen-oder-zurücksetzen).
+- Eine Erlaubnis greift: eine für diese Sitzung, eine dauerhafte oder ein gemerkter Befehl. *Einstellungen › Tools › Autonomie* listet sie auf und widerruft sie: [Sehen und ändern, was Snotra darf](../../safety/tools-and-security/#eine-freigabe-widerrufen-oder-zurücksetzen).
 - Der Chat steht auf *Auto*, oder der Ordner hat *Auto* als Standard. Die Modus-Pille in der Chat-Eingabe zeigt es: [Einen Modus wählen](../../safety/choose-a-mode/).
 
 ## Warum wurde ein Aufruf ohne Karte abgelehnt?
 
-- **Eine Sperre erfasst ihn.** Eine Sperre gewinnt in jedem Modus. Die Zeile der Risikoklasse unter *Einstellungen › Tools & Sicherheit* listet deine Sperren.
+- **Eine Sperre erfasst ihn.** Eine Sperre gewinnt in jedem Modus. Die Zeile der Risikoklasse unter *Einstellungen › Tools › Autonomie* listet deine Sperren.
 - **Das Tool ist ausgeschaltet.** Shell-Befehle und Python sind aus, bis du sie einschaltest, in der Zeile *Ausführen*.
 - **Das Ziel wird nie angeboten:** dein Home-Ordner als Ganzes, das Wurzelverzeichnis einer Platte, Snotras eigener Speicher und zum Schreiben Orte mit Zugangsdaten wie `~/.ssh`.
 - **Du hast denselben Aufruf in diesem Lauf schon abgelehnt.** Fragt das Modell unverändert noch einmal, endet der Lauf; die Ablehnung bleibt.
@@ -51,5 +51,5 @@ In diesem Ordner liefen Befehle und Python ohne Sandbox und ohne Nachfrage: Du h
 
 ## Wenn es nicht klappt
 
-- **Die Berechtigungsdatei war beschädigt oder verändert.** *Einstellungen › Tools & Sicherheit* sagt es. Snotra läuft dann in *Intelligent*, oder in *Immer fragen*, wenn das eingestellt war; Erlaubnisse werden verworfen, Sperren bleiben in Kraft. Richte ein, was du brauchst, neu ein.
-- **Du willst von vorn anfangen.** *Workspace-Regeln zurücksetzen* oder *Alle Berechtigungen zurücksetzen*, unten unter *Einstellungen › Tools & Sicherheit*.
+- **Die Berechtigungsdatei war beschädigt oder verändert.** *Einstellungen › Tools › Autonomie* sagt es. Snotra läuft dann in *Intelligent*, oder in *Immer fragen*, wenn das eingestellt war; Erlaubnisse werden verworfen, Sperren bleiben in Kraft. Richte ein, was du brauchst, neu ein.
+- **Du willst von vorn anfangen.** *Workspace-Regeln zurücksetzen* oder *Alle Berechtigungen zurücksetzen*, unten unter *Einstellungen › Tools › Autonomie*.

@@ -16,7 +16,7 @@ Nothing beyond the app. Showing the old file uses your file manager: Finder on m
 The notice says ***Your model settings were reset.***, ***The chat history starts empty.*** or a similar line, depending on the file. Below it you see the file's name and the full path of the copy Snotra kept, for example `llm-config.json.unreadable-2026-10-16T09-12-44-120Z`.
 
 1. Choose *Reveal in Finder* (*Show in Explorer* on Windows) in the notice to see the copy.
-2. Set up again what was reset: your models under *Settings › Models*, the web search key and the MCP servers under *Settings › Tool setup*. The view settings and the list of recent folders fill themselves again as you work.
+2. Set up again what was reset: your models under *Settings › Models*, the web search key and the MCP servers under *Settings › Tools › Setup*. The view settings and the list of recent folders fill themselves again as you work.
 3. Close the notice with ×. It does not come back for this file until something happens to the file again.
 
 Keep the copy until you are sure you do not need it. Snotra never deletes it.

@@ -33,7 +33,7 @@ Read the card, then choose one of its buttons:
 
 [since 1.20] Once decided, the card folds to a single line: your decision and the question it answered, for example *Allowed once · Snotra wants to change `notes/spring-2026.md`*. Click the line to open the full card again — the details, the preview and what your decision meant — and click it once more to fold it. [since 1.21] The line stays with its answer when you ask the next question, until you open another chat.
 
-The tool line in the chat shows how it ended, for example *denied* or *blocked*, also later in the chat history. An allowance for the session shows up under *Settings › Tools & security* at the bottom of the page, where you can revoke it; a remembered command is listed in the row *Execute*. See [See and change what Snotra may do](../tools-and-security/).
+The tool line in the chat shows how it ended, for example *denied* or *blocked*, also later in the chat history. An allowance for the session shows up under *Settings › Tools › Autonomy* at the bottom of the page, where you can revoke it; a remembered command is listed in the row *Execute*. See [See and change what Snotra may do](../tools-and-security/).
 
 ## A file outside the open folder
 
@@ -44,7 +44,7 @@ The tool line in the chat shows how it ended, for example *denied* or *blocked*,
 3. Under *How long*, choose *Only this call* or *For this session*.
 4. Click *Allow* — *Allow and write* for a change — or *Deny*. *Esc* denies as well.
 
-Allowed, the call runs with exactly that opened; everything else outside stays closed. Allowed *for this session*, later calls in the same chat reach it without this card, and the mode decides about them as inside the open folder; the allowance is listed under *Settings › Tools & security* with the session allowances. Denied, the call does not run, and the model is told not to work around it; the same call again ends the run.
+Allowed, the call runs with exactly that opened; everything else outside stays closed. Allowed *for this session*, later calls in the same chat reach it without this card, and the mode decides about them as inside the open folder; the allowance is listed under *Settings › Tools › Autonomy* with the session allowances. Denied, the call does not run, and the model is told not to work around it; the same call again ends the run.
 
 [since 1.21] Once the call is through, the card gives way to a single line under the tool steps, for example *Asked about 1 path outside the project folder · allowed · File ~/notes/todo.md read*. Click it to read everything the card said: which tool wanted what, the path and what you opened, what your decision means and why Snotra asked. The line stays with the chat, also when you open it again later.
 

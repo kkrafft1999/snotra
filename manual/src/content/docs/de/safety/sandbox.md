@@ -1,6 +1,6 @@
 ---
 title: Befehle in der Sandbox ausführen
-description: Lass Snotra Shell-Befehle und Python ausführen, sieh nach, ob sie isoliert laufen, und gib einem einzelnen Ordner oder Programm mehr Spielraum, wenn es ihn braucht.
+description: Lass Snotra Shell-Befehle und Python ausführen, sieh nach, ob sie isoliert laufen, und richte die Sandbox pro Workspace ein — mehr Spielraum für einen Ordner, ein Programm oder einen Host, wenn es ihn braucht.
 sidebar:
   order: 5
 ---
@@ -15,10 +15,30 @@ Snotra kann Shell-Befehle und Python-Code ausführen: `git status`, einen Build,
 
 ## Befehle und Python einschalten
 
-1. Öffne *Einstellungen › Tools & Sicherheit* und klapp die Zeile *Ausführen* auf.
+1. Öffne *Einstellungen › Tools › Autonomie* und klapp die Zeile *Ausführen* auf.
 2. Schalte *Shell-Befehle erlauben* ein, *Python-Ausführung erlauben* oder beides.
 
-Befehle laufen unter macOS und Linux in deiner Login-Shell (zsh, bash …), mit dem `PATH` aus deinem Shell-Profil, und unter Windows in PowerShell oder `cmd.exe`. Python sucht Snotra selbst; willst du einen bestimmten Interpreter — eine virtuelle Umgebung mit den Paketen, die du brauchst, zum Beispiel —, stellst du ihn unter *Einstellungen › Tool-Einrichtung* ein.
+Befehle laufen unter macOS und Linux in deiner Login-Shell (zsh, bash …), mit dem `PATH` aus deinem Shell-Profil, und unter Windows in PowerShell oder `cmd.exe`. Python sucht Snotra selbst; willst du einen bestimmten Interpreter — eine virtuelle Umgebung mit den Paketen, die du brauchst, zum Beispiel —, stellst du ihn unter *Einstellungen › Tools › Einrichtung* ein.
+
+## Die Sandbox einrichten
+
+[seit 1.26] Alles zur Sandbox steht auf einer Seite: *Einstellungen › Tools › Sicherheit*. Das Schild neben dem Ordnernamen, der Link *Nicht isoliert* auf einer Karte und der Kasten *Die Sandbox hat … blockiert* unter einer Antwort führen ebenfalls dorthin, mit dem geöffneten Ordner ausgewählt.
+
+![Einstellungen › Tools › Sicherheit: links die Liste — Alle Workspaces mit 1 Programm und 1 Host, darunter die Workspaces gartenplaner (offen, 1 Programm · 2 Hosts), altes-projekt (Ordner fehlt) und rechnungs-tool (Sandbox aus, durchgestrichenes Schild in Bernstein). Rechts gartenplaner: die Kachel „Sandbox aktiv“ mit ihrem Schalter, darunter „Programme mit mehr Spielraum“.](screenshots/tool-security.webp)
+
+**Die Liste links** beginnt mit *Alle Workspaces*, gefolgt von jedem Ordner, der eine eigene Sandbox-Einstellung oder Freigabe hat, und dem geöffneten, markiert mit *offen*. Jeder Eintrag sagt in Form und Worten, wie er steht: ein Schild mit dem, was er über die Sandbox hinaus erlaubt (*1 Programm · 2 Hosts* oder *Sandbox an · nichts extra*), das durchgestrichene Schild in Bernstein mit *Sandbox aus* oder *Ordner fehlt* für einen Ordner, den es nicht mehr gibt. Auch einen Ordner, der gerade nicht offen ist, kannst du prüfen und ändern; die Änderung gilt beim nächsten Lauf dort.
+
+**Ein Workspace** zeigt von oben nach unten:
+
+- den Sandbox-Schalter, als Kachel, die sagt, ob Läufe dort isoliert sind,
+- *Programme mit mehr Spielraum*: seine eigenen und die für alle Workspaces, markiert mit *Alle Workspaces*,
+- *Offen gehaltene Hosts*: seine eigenen und die für alle Workspaces, ebenso markiert,
+- *Sandbox dieses Workspace zurücksetzen*,
+- nur beim geöffneten Workspace *Diese Sitzung*: was Karten in seinen Chats *Für diese Sitzung* freigegeben haben.
+
+Was überall gilt, steht in jedem Workspace mit da, geändert wird es aber nur unter *Alle Workspaces*: Die Markierung *Alle Workspaces* daneben führt dorthin. Solange die Sandbox eines Workspace aus ist, ruhen seine Freigaben, und die Seite sagt das.
+
+**Alle Workspaces** hält, was an keinen einzelnen Ordner gebunden ist: ob neue Workspaces mit Sandbox starten, die Programme und Hosts für jeden Ordner, was die Sandbox auf diesem Computer immer tut, und *Sandbox überall zurücksetzen*. Ist kein Ordner offen, beginnt die Seite dort.
 
 ## Was die Sandbox erlaubt
 
@@ -32,11 +52,11 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 ## Sehen, ob ein Lauf isoliert ist
 
-**Auf der Karte.** Eine Karte für einen Befehl trägt das Abzeichen *Isoliert* oder, in Bernstein, *Nicht isoliert* mit dem Grund und einem Link zur Sandbox-Einstellung. Sie nennt außerdem Shell, Arbeitsordner und Netzwerkzugriff.
+**Auf der Karte.** Eine Karte für einen Befehl trägt das Abzeichen *Isoliert* oder, in Bernstein, *Nicht isoliert* mit dem Grund und einem Link zur Sandbox-Einstellung unter *Einstellungen › Tools › Sicherheit*. Sie nennt außerdem Shell, Arbeitsordner und Netzwerkzugriff.
 
 ![Eine Freigabekarte mit dem Titel „Ausführung bestätigen“ und dem Abzeichen „Isoliert“: Snotra möchte einen Befehl in zsh ausführen. Darunter Shell, Arbeitsordner, Netzwerk „Kein Zugriff“, Grund und Modus, der Hinweis, dass der Lauf nur im Projektordner und einem temporären Ordner schreibt, der Befehl node src/kalender.js und die Knöpfe „Einmal erlauben“, „Diesen Befehl immer erlauben“ und „Ablehnen“.](screenshots/shell-approval.webp)
 
-**Neben dem Ordnernamen.** Solange Befehle oder Python eingeschaltet sind, steht oben in der Seitenleiste ein Schild neben dem Namen des Ordners: ein schlichtes Schild, solange Läufe in diesem Ordner isoliert sind, ein durchgestrichenes in Bernstein, solange sie es nicht sind. Ein Klick darauf führt zur Sandbox-Einstellung.
+**Neben dem Ordnernamen.** Solange Befehle oder Python eingeschaltet sind, steht oben in der Seitenleiste ein Schild neben dem Namen des Ordners: ein schlichtes Schild, solange Läufe in diesem Ordner isoliert sind, ein durchgestrichenes in Bernstein, solange sie es nicht sind. Ein Klick darauf führt zum Sandbox-Schalter dieses Ordners unter *Einstellungen › Tools › Sicherheit*.
 
 ![Die linke obere Ecke des Fensters: das Schild neben dem Ordnernamen gartenplaner, über dem Dateibaum.](screenshots/sandbox-shield.webp)
 
@@ -44,7 +64,7 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 [seit 1.18] Manchmal braucht ein Befehl mehr, als die Sandbox erlaubt: Ein Build-Tool schreibt seinen Cache unter `~/Library/Caches`, ein Werkzeug liest seine Anmeldung aus `~/.config/gcloud`, `pip` will einen Host, den der Aufruf nicht genannt hat. Die Sandbox verweigert es, und Snotra zeigt dir, was verweigert wurde, statt das Modell raten zu lassen.
 
-**Was du siehst.** Direkt unter den Tool-Schritten der Antwort steht ein Kasten mit dem, was blockiert wurde — Schreiben, Lesen an einem geschützten Ort oder eine Verbindung —, mit Pfad oder Host und dem Grund. Darunter liegt eingeklappt die Rohmeldung der Sandbox. Der Kasten bleibt beim Chat, auch wenn du ihn später wieder öffnest.
+**Was du siehst.** Direkt unter den Tool-Schritten der Antwort steht ein Kasten mit dem, was blockiert wurde — Schreiben, Lesen an einem geschützten Ort oder eine Verbindung —, mit Pfad oder Host und dem Grund. Darunter liegt eingeklappt die Rohmeldung der Sandbox. Der Kasten bleibt beim Chat, auch wenn du ihn später wieder öffnest. [seit 1.26] Sein Link *Sandbox-Einstellungen dieses Workspace* öffnet *Einstellungen › Tools › Sicherheit*.
 
 **Schreiben oder Lesen erlauben.** Bei Schreiben außerhalb des Projektordners oder Lesen an einem geschützten Ort erscheint direkt nach dem Lauf eine Karte — in jedem Modus, auch in *Auto*:
 
@@ -53,7 +73,7 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 3. Wähle unter *Wie lange* *Nur dieser Lauf* oder *Für diese Sitzung*.
 4. Klick auf *Freigeben und wiederholen* oder auf *Ablehnen*. *Esc* lehnt ebenfalls ab.
 
-**Was passiert.** Freigegeben läuft der Befehl ein zweites Mal von vorn, mit genau diesem Pfad offen; für alles andere bleibt die Sandbox an. Was der Befehl beim ersten Mal schon erledigt hat, passiert erneut. Der Kasten sagt danach, wie der zweite Lauf ausging. Für *diese Sitzung* freigegeben bekommen spätere Befehle und Python-Läufe im selben Chat den Pfad ohne Rückfrage; die Freigabe steht unter *Einstellungen › Tools & Sicherheit* bei den Sitzungsfreigaben, wo du sie widerrufen kannst, und sie endet mit dem Chat, einem Moduswechsel oder einem Neustart. Abgelehnt oder unbeantwortet läuft der Befehl nicht noch einmal, und das Modell hat die Ansage, dir zu sagen, was blockiert war, statt auszuweichen.
+**Was passiert.** Freigegeben läuft der Befehl ein zweites Mal von vorn, mit genau diesem Pfad offen; für alles andere bleibt die Sandbox an. Was der Befehl beim ersten Mal schon erledigt hat, passiert erneut. Der Kasten sagt danach, wie der zweite Lauf ausging. Für *diese Sitzung* freigegeben bekommen spätere Befehle und Python-Läufe im selben Chat den Pfad ohne Rückfrage; die Freigabe steht bei den Sitzungsfreigaben — unter *Einstellungen › Tools › Autonomie* und beim Ordner unter *Einstellungen › Tools › Sicherheit*, *Diese Sitzung* —, wo du sie widerrufen kannst, und sie endet mit dem Chat, einem Moduswechsel oder einem Neustart. Abgelehnt oder unbeantwortet läuft der Befehl nicht noch einmal, und das Modell hat die Ansage, dir zu sagen, was blockiert war, statt auszuweichen.
 
 **Eine Verbindung erlauben.** [seit 1.18] Verbindet sich ein Befehl mit einem Host außerhalb der Netzwerk-Domains seines Aufrufs, wartet die Verbindung, und eine Karte *Sandbox · Verbindung wartet* erscheint, während der Befehl noch läuft — in jedem Modus, auch in *Auto*:
 
@@ -64,7 +84,7 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 **Was dann passiert.** Erlaubt geht die Verbindung durch, und der Befehl läuft einfach weiter; nichts läuft zweimal. Für *diese Sitzung* erlaubt erreichen spätere Befehle im selben Chat den Host ohne Rückfrage; die Freigabe steht wie ein Pfad bei den Sitzungsfreigaben. Abgelehnt bleibt die Verbindung zu, und der Befehl scheitert von selbst; nach weiteren Hosts wird für ihn nicht mehr gefragt, und das Modell hat die Ansage, nicht auszuweichen. Gibt der Befehl auf, bevor du entscheidest — `pip` zum Beispiel nach 15 Sekunden —, sagt die Karte *Nicht mehr gewartet*, und eine zweite Karte nach dem Lauf bietet den Host mit *Freigeben und wiederholen* an.
 
-**Einen Host für den Ordner offen halten.** [seit 1.22] *Für diesen Workspace* ist die Antwort für einen Server, mit dem du jeden Tag arbeitest. Das Betriebssystem lässt dich das vorher bestätigen und nennt dabei Host und Ordner. Ab dann erreicht jeder Befehl und jeder Python-Lauf in diesem Ordner den Host — in jedem Chat und jedem Modus, auch nach einem Neustart —, und keine Karte fragt mehr nach ihm; für alles andere bleibt die Sandbox an. Der Host steht unter [*Einstellungen › Tools & Sicherheit*](../tools-and-security/#eine-freigabe-widerrufen-oder-zurücksetzen) in der Zeile *Ausführen*, wo du ihn wieder schließen kannst; *Workspace-Regeln zurücksetzen* schließt alle. Angeboten wird die Wahl nur für Verbindungen, nicht in *Immer fragen* und nur dort, wo Snotra sie verschlüsselt speichern kann. Brichst du den Systemdialog ab, bleibt die Karte offen.
+**Einen Host für den Ordner offen halten.** [seit 1.22] *Für diesen Workspace* ist die Antwort für einen Server, mit dem du jeden Tag arbeitest. Das Betriebssystem lässt dich das vorher bestätigen und nennt dabei Host und Ordner. Ab dann erreicht jeder Befehl und jeder Python-Lauf in diesem Ordner den Host — in jedem Chat und jedem Modus, auch nach einem Neustart —, und keine Karte fragt mehr nach ihm; für alles andere bleibt die Sandbox an. Der Host steht unter *Einstellungen › Tools › Sicherheit*, *Offen gehaltene Hosts*, wo du ihn wieder schließen kannst — siehe [Einen Host offen halten](#einen-host-offen-halten); *Sandbox dieses Workspace zurücksetzen* schließt alle. Angeboten wird die Wahl nur für Verbindungen, nicht in *Immer fragen* und nur dort, wo Snotra sie verschlüsselt speichern kann. Brichst du den Systemdialog ab, bleibt die Karte offen.
 
 **Wenn du geantwortet hast.** [seit 1.21] Ist der Befehl durch, weicht die Karte dem Kasten unter den Tool-Schritten. Hast du alles beantwortet, was er gefragt hat, klappt der Kasten zu einer einzigen Zeile zusammen — zum Beispiel *Die Sandbox hat 1 Zugriff blockiert · abgelehnt · Befehl „cat ~/.aws/config“ ausgeführt* —, und ein Klick öffnet ihn: was blockiert wurde und warum, wie du entschieden hast und was das geöffnet hat, wie der zweite Lauf ausging und die Rohmeldung der Sandbox. Ein Kasten mit etwas, das niemand beantwortet hat, oder mit einer Sperre im zweiten Lauf bleibt offen. Eine Karte, auf die der Befehl nicht mehr gewartet hat (*Nicht mehr gewartet*), bleibt, wie sie ist. Die Ausgabe des ersten Laufs, die die Karte gezeigt hat, wird nicht aufbewahrt.
 
@@ -95,23 +115,51 @@ Nur die SSH-Verbindung von Git nimmt diesen Weg. `ssh` oder `scp`, direkt aufger
 
 Wenn die Sandbox in einem Projekt etwas Berechtigtes verhindert — in ein Nachbar-Repository schreiben, ein Werkzeug, das ins Netz muss, ein älteres `pip` in einer virtuellen Umgebung:
 
-1. Klapp in *Einstellungen › Tools & Sicherheit* die Zeile *Ausführen* auf.
-2. Schalte unter *Sandbox für diesen Workspace* die Sandbox ab.
-3. Das Betriebssystem fragt: *In diesem Workspace ohne Sandbox ausführen?* Bestätige mit *Ohne Sandbox ausführen*.
+1. Öffne *Einstellungen › Tools › Sicherheit* und wähle den Ordner in der Liste. Der geöffnete ist schon ausgewählt.
+2. Schalte die Kachel *Sandbox aktiv* aus.
+3. Das Betriebssystem fragt: *In diesem Workspace ohne Sandbox ausführen?* und nennt den Ordner. Bestätige mit *Ohne Sandbox ausführen*.
 
-Das gilt nur für diesen einen Ordner, nie für alle, und es liegt bei deinen Berechtigungen, nicht im Ordner. Ab dann sagt jede Karte in diesem Ordner *Nicht isoliert*, auch das Modell erfährt es, und in *Auto* zeigt die Modus-Pille *Auto · nicht isoliert*. *Workspace-Regeln zurücksetzen* schaltet die Sandbox wieder ein.
+Das gilt nur für diesen einen Ordner, nie für alle, und es liegt bei deinen Berechtigungen, nicht im Ordner. Ab dann sagt jede Karte in diesem Ordner *Nicht isoliert*, auch das Modell erfährt es, und in *Auto* zeigt die Modus-Pille *Auto · nicht isoliert*. Die Liste zeigt den Ordner mit dem durchgestrichenen Schild in Bernstein und *Sandbox aus*. Wieder einschalten fragt nichts; *Sandbox dieses Workspace zurücksetzen* tut es ebenfalls.
+
+## Neue Ordner ohne Sandbox starten
+
+[seit 1.26] Neue Workspaces starten mit Sandbox. Willst du lieber für jeden Ordner selbst entscheiden:
+
+1. Öffne *Einstellungen › Tools › Sicherheit* und wähle *Alle Workspaces*.
+2. Schalte unter *Neue Workspaces* *Sandbox in neuen Workspaces an* aus.
+3. Das Betriebssystem fragt: *Neue Workspaces ohne Sandbox starten?* Bestätige mit *Ohne Sandbox starten*.
+
+Jeder Ordner, den du ab dann zum ersten Mal öffnest, läuft ohne Sandbox, und das Schild neben seinem Namen sagt es. Ordner, die Snotra schon kennt, behalten ihre Einstellung — die, die du vorher geöffnet hast, und die mit einer Sandbox-Einstellung. Wieder eingeschaltet, gilt der Standard wieder für neue Ordner; Ordner, die in der Zwischenzeit ohne Sandbox gestartet sind, bleiben so, bis du sie für sie einschaltest.
 
 ## Einem Programm mehr Spielraum geben
 
 Oft ist es ein einzelnes Programm, das mehr braucht — ein Werkzeug, dessen Anmeldung erneuert werden muss, oder `gh` und `terraform` unter macOS, die in der Sandbox nicht ins Netz kommen. Gib diesem Programm eine Freigabe, statt die Sandbox abzuschalten:
 
-1. Klick in der Zeile *Ausführen* unter *Freigaben pro Programm* auf *Programm hinzufügen*.
+1. Wähle unter *Einstellungen › Tools › Sicherheit* den Ordner — oder *Alle Workspaces* — und klick unter *Programme mit mehr Spielraum* auf *Programm hinzufügen*.
 2. Gib unter *Programm* seinen Namen ein, so wie du ihn im Terminal tippst, oder seinen vollständigen Pfad. Snotra zeigt, welche Datei es gefunden hat.
-3. Trag die *Domains, die es erreichen darf*, ein, eine pro Zeile, und unter *Ordner, in die es zusätzlich schreiben darf* jeden Ordner, in dem es seine Daten hält.
-4. Hak unter macOS *Zertifikate über macOS prüfen* an, für Programme in Go wie `gh` und `terraform`. Das schwächt die Isolation etwas ab; der Dialog sagt, wie.
-5. Klick auf *Speichern* und bestätige im Systemdialog.
+3. [seit 1.26] Behalte unter *Gilt für* *Dieser Workspace* — die übliche Wahl — oder wähle *Alle Workspaces* für ein Werkzeug, dem du in jedem Ordner traust. Ohne geöffneten Ordner geht nur *Alle Workspaces*; aus *Alle Workspaces* heraus ist es schon gewählt.
+4. Trag die *Domains, die es erreichen darf*, ein, eine pro Zeile, und unter *Ordner, in die es zusätzlich schreiben darf* jeden Ordner, in dem es seine Daten hält.
+5. Hak unter macOS *Zertifikate über macOS prüfen* an, für Programme in Go wie `gh` und `terraform`. Das schwächt die Isolation etwas ab; der Dialog sagt, wie.
+6. Klick auf *Speichern* und bestätige im Systemdialog, der den Ordner nennt oder *in jedem Workspace* sagt.
 
-Die Freigabe gilt in jedem Ordner, aber nur, wenn ein Befehl das Programm für sich allein ausführt — ohne Verkettung, Pipes oder Umleitungen — und nur für genau die Datei, die du gewählt hast, nicht für eine gleichnamige Datei in einem Projekt. Die Karte nennt die Freigabe oder sagt, warum sie nicht greift.
+Die Freigabe gilt nur, wenn ein Befehl das Programm für sich allein ausführt — ohne Verkettung, Pipes oder Umleitungen — und nur für genau die Datei, die du gewählt hast, nicht für eine gleichnamige Datei in einem Projekt. Die Karte nennt die Freigabe oder sagt, warum sie nicht greift. Hat ein Programm eine Freigabe für alle Workspaces und eine für diesen Workspace, addieren sie sich dort: jede Domain und jeder Ordner von beiden.
+
+Programmfreigaben von vor 1.26 gelten in allen Workspaces, wie bisher; eine davon verschiebst du mit *Bearbeiten* unter *Alle Workspaces* und *Gilt für* in einen einzelnen Workspace.
+
+## Einen Host offen halten
+
+Einen Host, den jeder Lauf in einem Ordner braucht — deinen Git-Server, einen Paket-Mirror —, kannst du offen halten, damit keine Karte nach ihm fragt:
+
+- **Für einen Workspace** [seit 1.22]: Wähle auf der Verbindungskarte *Für diesen Workspace*, siehe [Eine Verbindung erlauben](#wenn-die-sandbox-etwas-blockiert). [seit 1.26] Oder wähle unter *Einstellungen › Tools › Sicherheit* den Ordner und klick unter *Offen gehaltene Hosts* auf *Host hinzufügen*.
+- **Für alle Workspaces** [seit 1.26]: Wähle *Alle Workspaces* und klick unter *Überall offene Hosts* auf *Host hinzufügen*. Das bietet nur diese Seite an, nie eine Karte: Einen Host für jeden Ordner zu öffnen, ist eine Entscheidung für die Einstellungen, nicht für die Mitte eines Laufs.
+
+Gib den Host mit Port ein, etwa `api.example.com:443`, oder als `*.example.com` für jeden Host eine Ebene darunter. Eine Domain, die sich viele fremde Seiten teilen, etwa `github.io`, geht nur Host für Host. Klick auf *Offen halten* und bestätige im Systemdialog. Der Papierkorb neben einem Host schließt ihn wieder, ohne Dialog.
+
+## Aufräumen
+
+- ***Sandbox dieses Workspace zurücksetzen*** schaltet die Sandbox des gewählten Ordners wieder ein und entfernt seine eigenen Programme und Hosts. Was in allen Workspaces gilt, bleibt. Es fragt nichts, weil es nur Rechte wegnimmt.
+- ***Sandbox überall zurücksetzen*** unter *Alle Workspaces* schaltet die Sandbox in jedem Workspace und für neue wieder ein und entfernt alle Programm- und Host-Freigaben, auch die für alle Workspaces. Es fragt vorher im Systemdialog.
+- **Ein Ordner, den es nicht mehr gibt**, bleibt als *Ordner fehlt* in der Liste, solange Einstellungen für ihn gespeichert sind. Wähle ihn und klick auf *Einstellungen entfernen*.
 
 ## Wenn es nicht klappt
 
@@ -129,4 +177,6 @@ Die Freigabe gilt in jedem Ordner, aber nur, wenn ein Befehl das Programm für s
 - **Git über SSH: *Permission denied (publickey)*.** Der Schlüssel ist nicht im ssh-agent geladen, SSH hat also nichts, womit es sich anmelden kann. Lade ihn mit `ssh-add --apple-use-keychain ~/.ssh/<schlüssel>` und führ den Befehl noch einmal aus — siehe [Git über SSH nutzen](#git-über-ssh-nutzen).
 - **Git über SSH: *Host key verification failed*.** Der Host steht noch nicht in `~/.ssh/known_hosts`. Verbinde dich einmal aus einem Terminal mit ihm und bestätige seinen Schlüssel.
 - **macOS: `gh`, `terraform` oder ein anderes Go-Programm kommt nicht ins Netz.** Gib ihm eine Freigabe pro Programm mit *Zertifikate über macOS prüfen*.
-- ***Sandbox für diesen Workspace* lässt sich nicht abschalten.** Dafür braucht es den verschlüsselten Speicher des Systems; wo es den nicht gibt, bleibt die Einstellung an und sagt, warum.
+- **Die Sandbox eines Workspace lässt sich nicht abschalten.** Dafür braucht es den verschlüsselten Speicher des Systems; wo es den nicht gibt, bleibt der Schalter an, und die Kachel sagt, warum. Dasselbe gilt für Programme, Hosts und *Sandbox in neuen Workspaces an*.
+- **Windows: *Einstellungen › Tools › Sicherheit* hat nichts einzurichten.** Unter Windows gibt es noch keine Sandbox, also auch nichts, was sich erweitern ließe; die Seite sagt das bei jedem Workspace.
+- **Eine Freigabe greift in einem Ordner nicht.** Seine Sandbox ist dort aus — solange sie aus ist, ruhen die Freigaben, und die Seite markiert sie — oder die Freigabe gehört zu einem anderen Workspace. Wähle den Ordner in der Liste, um zu sehen, was dort gilt.

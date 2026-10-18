@@ -714,7 +714,58 @@ const MOTIFS = {
     },
   },
 
-  /** Settings › Tools & security for the demo project, shell commands on. */
+  /**
+   * Settings › Tools › Security (#1119): the demo project open with a program
+   * and two hosts of its own, a second folder with the sandbox off, a third
+   * one that is gone, and a program and a host for all workspaces.
+   */
+  'tool-security': {
+    prefs: { shellExecutionEnabled: true },
+    text: {
+      en: { other: 'invoice-tool', gone: 'old-project' },
+      de: { other: 'rechnungs-tool', gone: 'altes-projekt' },
+    },
+    async prepare({ userDataDir, workspace, locale }) {
+      const names = locale === 'de' ? ['rechnungs-tool', 'altes-projekt'] : ['invoice-tool', 'old-project'];
+      const others = names.map((name) => path.join(path.dirname(workspace), name));
+      for (const folder of others) {
+        await mkdir(folder, { recursive: true });
+        await writeFile(path.join(folder, 'README.md'), '# Example\n', 'utf8');
+      }
+      await writeFile(path.join(userDataDir, 'folder-history.json'), JSON.stringify({ paths: [workspace, ...others] }), 'utf8');
+    },
+    async setUp({ app, page, text, workspace }) {
+      // The system dialogs that confirm each allowance answer "yes".
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({ response: 0 });
+      });
+      const call = (name, ...args) => page.evaluate(([n, a]) => window.electronAPI[n](...a), [name, args]);
+      const openFolder = async (folder) => {
+        await call('activateFolder', folder);
+        await poll(async () => (await call('getSandboxOverview')).activeRoot === folder, { what: `${path.basename(folder)} open` });
+      };
+      const other = path.join(path.dirname(workspace), text.other);
+      const gone = path.join(path.dirname(workspace), text.gone);
+      await openFolder(other);
+      await call('setWorkspaceSandbox', false);
+      await openFolder(gone);
+      await call('addSandboxHosts', { hosts: ['pypi.org:443'], scope: 'workspace' });
+      await openFolder(workspace);
+      await rm(gone, { recursive: true, force: true });
+      await call('setProgramAllowance', { program: 'git', domains: ['github.com', 'api.github.com'], writePaths: [], trustd: false, scope: 'workspace' });
+      await call('setProgramAllowance', { program: 'curl', domains: ['registry.npmjs.org'], writePaths: [], trustd: false, scope: 'global' });
+      await call('addSandboxHosts', { hosts: ['huggingface.co:443', '*.pytorch.org'], scope: 'workspace' });
+      await call('addSandboxHosts', { hosts: ['gitlab.example.com:22'], scope: 'global' });
+      await openSettingsPanel(app, page, 'sandbox');
+      await poll(() => page.evaluate(() => document.querySelectorAll('.settings-sandbox-ws').length === 4
+        && document.querySelector('.settings-sandbox-ws[aria-current="true"]')?.dataset.tone === 'on'), { what: 'four entries, the open one chosen' });
+      // No focus ring on the tab the click left it on.
+      await page.evaluate(() => document.activeElement?.blur());
+      return clipAround(page, SETTINGS_PANEL, 0);
+    },
+  },
+
+  /** Settings › Tools › Autonomy for the demo project, shell commands on. */
   'tools-and-security': {
     prefs: { shellExecutionEnabled: true },
     async setUp({ app, page }) {

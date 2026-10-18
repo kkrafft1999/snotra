@@ -28,10 +28,10 @@ Snotra can draw an image from a description — an illustration for a README, a 
 
 The description leaves your computer, and OpenAI bills every image. That is why, in *Smart*, Snotra asks before every single image, and one answer draws at most four.
 
-Which of OpenAI's image models draws is set under *Settings › Tool setup › Image generation*.
+Which of OpenAI's image models draws is set under *Settings › Tools › Setup › Image generation*.
 
 ## If it doesn't work
 
-- **Snotra says it cannot draw images.** No OpenAI key is stored, or the tool *generate_image* is switched off under *Settings › Tools & security*, in the row *Change*.
+- **Snotra says it cannot draw images.** No OpenAI key is stored, or the tool *generate_image* is switched off under *Settings › Tools › Autonomy*, in the row *Change*.
 - **The image takes long.** Drawing can take a while; Snotra gives up after three minutes and says so.
 - **OpenAI refuses the description.** The answer shows OpenAI's reason. Change the request and ask again.

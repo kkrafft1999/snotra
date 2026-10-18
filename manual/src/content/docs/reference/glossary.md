@@ -61,7 +61,7 @@ What Snotra keeps for later chats: `.agents/memory.md` for a project, `~/.snotra
 
 How often Snotra asks you: *Smart*, *Always ask* or *Auto*. It belongs to the chat. See [Choose a mode](../../safety/choose-a-mode/).
 
-![The mode menu above the chat input: Smart, Always ask and Auto, each with a short description, "Always ask" selected. Below, the checkbox "“Always ask” for new chats in garden-planner too" and the link "All permissions in Settings › Tools & security".](screenshots/mode-menu.webp)
+![The mode menu above the chat input: Smart, Always ask and Auto, each with a short description, "Always ask" selected. Below, the checkbox "“Always ask” for new chats in garden-planner too" and the link "All permissions in Settings › Tools › Autonomy".](screenshots/mode-menu.webp)
 
 ### Model
 

@@ -20,7 +20,7 @@ Jeder Tool-Aufruf gehört zu einer Risikoklasse. Die Klasse entscheidet zusammen
 | *Ausführen* | Einen Shell-Befehl oder Python-Code ausführen | fragt — außer bei einem Befehl, den du immer erlaubt hast |
 | *Externe Dienste* | Im Web suchen, eine Seite abrufen, ein Bild erzeugen, die Tools von MCP-Servern | fragt, jedes Mal |
 
-*Einstellungen › Tools & Sicherheit* zeigt diese sechs Zeilen für den geöffneten Ordner, mit dem, was dort gilt, und warum: [Sehen und ändern, was Snotra darf](../tools-and-security/).
+*Einstellungen › Tools › Autonomie* zeigt diese sechs Zeilen für den geöffneten Ordner, mit dem, was dort gilt, und warum: [Sehen und ändern, was Snotra darf](../tools-and-security/).
 
 ## Warum Lesen läuft und alles andere fragt
 
