@@ -37,6 +37,51 @@ function isValidModelId(id) {
   return MODEL_ID_PATTERN.test(id);
 }
 
+/*
+ * Reasoning levels (#994). Gemini thinks in one of two ways, and the API
+ * refuses the other one with an error:
+ *
+ * - Gemini 3 and newer take `thinkingConfig.thinkingLevel`. Which levels a
+ *   model knows differs: 3 Pro only low and high, Flash and Flash-Lite up to
+ *   3.6 also `minimal`, the rest low, medium and high.
+ * - Gemini 2.5 takes a token budget, `thinkingConfig.thinkingBudget`. The
+ *   three budgets below are inside the range of Pro (128–32,768), Flash
+ *   (0–24,576) and Flash-Lite (512–24,576).
+ *
+ * Older models do not think and must not get a `thinkingConfig` at all.
+ * Image and other non-chat variants keep their own default.
+ */
+const THINKING_BUDGETS = { low: 1024, medium: 8192, high: 24576 };
+const NOT_FOR_LEVELS = /image|tts|audio|embedding|live|robotics/;
+
+function geminiModelOf(model) {
+  const id = bareModelId(model).toLowerCase();
+  const m = /^gemini-(\d+)(?:\.(\d+))?-([a-z]+)/.exec(id);
+  if (!m || NOT_FOR_LEVELS.test(id)) return null;
+  return { version: Number(m[1]) + (m[2] ? Number(m[2]) / 10 : 0), tier: m[3] };
+}
+
+function reasoningLevelsOf(model) {
+  const gemini = geminiModelOf(model);
+  if (!gemini) return [];
+  if (gemini.version < 2.5) return [];
+  if (gemini.version < 3) return gemini.tier === 'pro' || gemini.tier === 'flash' ? ['low', 'medium', 'high'] : [];
+  if (gemini.tier === 'pro' && gemini.version < 3.1) return ['low', 'high'];
+  if (gemini.tier === 'flash' && gemini.version <= 3.6) return ['minimal', 'low', 'medium', 'high'];
+  return ['low', 'medium', 'high'];
+}
+
+/**
+ * The `thinkingConfig` for a level, with the thoughts summarised into the
+ * stream — they come as thought parts, which are shown as reasoning.
+ */
+function thinkingConfigFor(model, level) {
+  const gemini = geminiModelOf(model);
+  if (!gemini || !reasoningLevelsOf(model).includes(level)) return null;
+  if (gemini.version < 3) return { includeThoughts: true, thinkingBudget: THINKING_BUDGETS[level] };
+  return { includeThoughts: true, thinkingLevel: level.toUpperCase() };
+}
+
 async function listModels(config) {
   try {
     return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
@@ -200,6 +245,9 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const body = { contents };
   if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
   if (tooling) body.tools = tooling;
+  const level = typeof config?.reasoningEffort === 'string' ? config.reasoningEffort.trim() : '';
+  const thinkingConfig = thinkingConfigFor(modelId, level);
+  if (thinkingConfig) body.generationConfig = { thinkingConfig };
 
   const url = `${API_BASE}/models/${encodeURIComponent(modelId)}:streamGenerateContent?alt=sse`;
 
@@ -324,6 +372,12 @@ module.exports = {
   // Auf true, sobald translateMessagesToGoogle Bilder abbildet (Issue #91).
   capabilities: { images: false },
   defaultModel: 'gemini-2.0-flash',
+  // The levels depend on the model generation (#994); see reasoningLevelsOf.
+  reasoning: {
+    levels: reasoningLevelsOf,
+    defaultLevel: (model) => (reasoningLevelsOf(model).includes('medium') ? 'medium' : 'high'),
+    appliesTo: (model) => reasoningLevelsOf(model).length > 0,
+  },
   apiBase: API_BASE,
   presentation: {
     apiKeyPlaceholder: 'AIza…',
@@ -332,4 +386,5 @@ module.exports = {
   streamChatRound,
   translateMessagesToGoogle,
   translateToolsToGoogle,
+  thinkingConfigFor,
 };

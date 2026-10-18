@@ -77,6 +77,50 @@ async function listModelsRequest(config) {
   return { models };
 }
 
+/*
+ * Reasoning levels (#994). Ollama takes `think` on /api/chat: a level word
+ * for the models that know levels (gpt-oss: low, medium, high), true or
+ * false for the others that think. Which model thinks is in `/api/show`, not
+ * in the model list, so the families are recognised by name; a model that
+ * turns out not to think is asked once more without `think` (see
+ * streamChatRound). What a model thinks streams back in `message.thinking`.
+ */
+const LEVEL_FAMILIES = /^gpt-oss(?:[:\-]|$)/;
+const THINKING_FAMILIES = [
+  /^deepseek-r1(?:[:\-]|$)/,
+  /^deepseek-v3\.[1-9]/,
+  /^qwen3(?:\.\d+)?(?!-?(?:coder|embedding|instruct))(?:[:\-]|$)/,
+  /^qwq(?:[:\-]|$)/,
+  /^magistral(?:[:\-]|$)/,
+  /^phi4-(?:mini-)?reasoning(?:[:\-]|$)/,
+  /^kimi-k2-thinking(?:[:\-]|$)/,
+  /^glm-(?:4\.[6-9]|[5-9])/,
+];
+const THINK_LEVELS = ['low', 'medium', 'high'];
+// A model that can only think or not: two positions, off and on.
+const THINK_SWITCH = ['none', 'on'];
+
+/** The bare model name: `hf.co/org/qwen3:8b` → `qwen3:8b`, lower case. */
+function bareModelName(model) {
+  const id = String(model ?? '').trim().toLowerCase();
+  return id.slice(id.lastIndexOf('/') + 1);
+}
+
+function reasoningLevelsOf(model) {
+  const name = bareModelName(model);
+  if (LEVEL_FAMILIES.test(name)) return THINK_LEVELS;
+  if (THINKING_FAMILIES.some((re) => re.test(name)) && !/-instruct/.test(name)) return THINK_SWITCH;
+  return [];
+}
+
+/** The `think` value for a level; undefined leaves the model's default. */
+function thinkValueFor(model, level) {
+  const levels = reasoningLevelsOf(model);
+  if (!levels.includes(level)) return undefined;
+  if (levels === THINK_LEVELS) return level;
+  return level !== 'none';
+}
+
 function translateMessagesToOllama(messages) {
   const out = [];
   for (const m of messages) {
@@ -89,6 +133,9 @@ function translateMessagesToOllama(messages) {
         role: 'assistant',
         content: typeof m.content === 'string' ? m.content : '',
       };
+      // Within a tool loop the model reads its own reasoning back; Ollama
+      // takes it in `thinking` (#994).
+      if (typeof m.ollamaThinking === 'string' && m.ollamaThinking) row.thinking = m.ollamaThinking;
       if (Array.isArray(m.tool_calls) && m.tool_calls.length > 0) {
         row.tool_calls = m.tool_calls.map((tc) => ({
           function: {
@@ -133,29 +180,44 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   };
   const tooling = translateToolsToOllama(tools);
   if (tooling) body.tools = tooling;
+  const level = typeof config?.reasoningEffort === 'string' ? config.reasoningEffort.trim() : '';
+  const think = thinkValueFor(model, level);
+  if (think !== undefined) body.think = think;
 
   const headers = { 'Content-Type': 'application/json' };
   let res;
-  try {
-    res = await fetchVia(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      dispatcher: dispatcherFor(url, config),
-      signal: abortSignal,
-    });
-  } catch (err) {
-    if (isAbortError(err)) {
-      return cancelledChatRound({ role: 'assistant', content: '' });
+  // A model recognised by its name may still not think — a fine-tune, an
+  // import under a known name. Ollama refuses `think` for it; the round then
+  // goes out once more without, as it did before #994.
+  for (;;) {
+    try {
+      res = await fetchVia(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        dispatcher: dispatcherFor(url, config),
+        signal: abortSignal,
+      });
+    } catch (err) {
+      if (isAbortError(err)) {
+        return cancelledChatRound({ role: 'assistant', content: '' });
+      }
+      return { error: describeFetchErrorMessage(err, base), code: 'NETWORK' };
     }
-    return { error: describeFetchErrorMessage(err, base), code: 'NETWORK' };
+    if (res.ok) break;
+    const error = await readErrorMessage(res);
+    if ('think' in body && /does not support thinking/i.test(error)) {
+      delete body.think;
+      continue;
+    }
+    return { error, code: String(res.status) };
   }
-  if (!res.ok) return { error: await readErrorMessage(res), code: String(res.status) };
   if (!res.body) return { error: createMessage('provider.error.noStream'), code: 'STREAM' };
 
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   let textOut = '';
+  let thinkingOut = '';
   const collectedToolCalls = [];
   // A round ends with `done: true`; a stream without it was cut off on the
   // way (#538).
@@ -176,6 +238,10 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
 
       const msg = payload.message;
       if (msg) {
+        if (typeof msg.thinking === 'string' && msg.thinking.length > 0) {
+          thinkingOut += msg.thinking;
+          callbacks.onReasoningDelta?.(msg.thinking);
+        }
         if (typeof msg.content === 'string' && msg.content.length > 0) {
           textOut += msg.content;
           callbacks.onTextDelta(msg.content);
@@ -227,6 +293,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     role: 'assistant',
     content: textOut.length > 0 ? textOut : collectedToolCalls.length ? null : '',
     ...(collectedToolCalls.length ? { tool_calls: collectedToolCalls } : {}),
+    ...(thinkingOut ? { ollamaThinking: thinkingOut } : {}),
   };
   return { message, finishReason, usage };
 }
@@ -239,6 +306,12 @@ module.exports = {
   // Auf true, sobald translateMessagesToOllama Bilder abbildet (Issue #92).
   capabilities: { images: false },
   defaultModel: 'llama3.2',
+  // Levels for gpt-oss, off and on for the other thinking models (#994).
+  reasoning: {
+    levels: reasoningLevelsOf,
+    defaultLevel: (model) => (reasoningLevelsOf(model) === THINK_SWITCH ? 'on' : 'medium'),
+    appliesTo: (model) => reasoningLevelsOf(model).length > 0,
+  },
   defaultBaseUrl: DEFAULT_BASE,
   defaultInsecureTls: false,
   apiBase: DEFAULT_BASE,
@@ -250,6 +323,7 @@ module.exports = {
   streamChatRound,
   translateMessagesToOllama,
   translateToolsToOllama,
+  thinkValueFor,
   destroyInsecureDispatcher,
   dispose: destroyInsecureDispatcher,
 };

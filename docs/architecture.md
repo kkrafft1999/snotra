@@ -1226,7 +1226,20 @@ after a failed model switch (#559).
 The third value per chat, part of epic #723. A provider declares the levels it
 knows and which of its models take one — `reasoning: { levels, defaultLevel,
 appliesTo }`, for OpenAI the seven from #718 for GPT-5 and newer (#724).
-`shared/contracts/reasoning.js` holds the rules both sides use.
+`levels` and `defaultLevel` may also be functions of the model, for providers
+whose models differ (#994): Anthropic (adaptive thinking with
+`output_config.effort`, or a `budget_tokens` budget for the older models),
+Google (`thinkingConfig.thinkingLevel` from Gemini 3 on, `thinkingBudget` for
+2.5) and Ollama (`think`: a word for gpt-oss, `none`/`on` for the other
+thinking models). `shared/contracts/reasoning.js` holds the rules both sides
+use (`reasoningLevelsFor`, `reasoningDefaultFor`).
+
+Anthropic's thinking blocks are carried on the round's assistant message
+(`anthropicThinking: { model, blocks }`) and go back, unchanged, only within
+the running turn and only to the model that wrote them. Newer Claude models
+bind a block to the history before it; when the engine shortens an old tool
+output mid-turn, the API refuses the block, and the round goes out once more
+without thinking. Ollama's thinking travels the same way as `ollamaThinking`.
 
 - **Stored:** `chat-session-settings` keeps `reasoningEffort` next to model and
   mode, in memory and in the chat's history row. Only main writes it:
@@ -1234,8 +1247,8 @@ appliesTo }`, for OpenAI the seven from #718 for GPT-5 and newer (#724).
   on screen, and `CHAT_HISTORY_UPSERT` drops whatever the renderer sends along.
   Unlike the mode, nothing is applied when a chat comes on screen.
 - **Read:** a round asks for it. `resolveChatTarget({ chatId })` in the LLM
-  adapter takes the chat's own level, else the provider's default (`medium`)
-  — the first the model takes — and puts it into the target
+  adapter takes the chat's own level, else the model's default (usually
+  `medium`) — the first the model takes — and puts it into the target
   as `reasoningEffort`, outside `providerOptions`. A model that takes no level
   gets none, also not one left in the stored configuration. The engine
   resolves the target once per send, so every round of a run, also one going

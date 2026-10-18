@@ -15,21 +15,44 @@ At least one model under *Settings › Models* — see [Connect a model](../../g
 
 1. Click the model pill in the input field. It names the model of this chat, for example `gpt-5-mini · medium`.
 2. Under *Model*, choose another one.
-3. Under *Reasoning*, choose a level, from `none` to `max`. This part only appears for models that have levels — OpenAI's models from GPT-5 on.
+3. Under *Reasoning*, choose a level. This part only appears for models that have levels; which ones those are, and which levels they take, is in the table below.
 
 ![The model menu above the chat input: under "Model" gpt-5-mini, gpt-5 and qwen3-coder; under "Reasoning" the levels none, minimal, low, medium, high, xhigh and max, with medium chosen, and the note "Applies to this chat. New chats start with medium." Below it the pill "gpt-5-mini · medium".](screenshots/model-menu.webp)
 
 [since 1.15] A higher level gives the model more room to work through a problem before it answers; it takes longer and costs more tokens. `medium` is a good default; go higher for a tricky change across several files, lower for quick questions.
 
+## Which models have levels
+
+[since 1.26] Every provider offers levels for its models that can think. Each model shows only the levels it takes, so what you see in the menu differs from model to model.
+
+| Provider | Models with levels | Levels | Starts at |
+| --- | --- | --- | --- |
+| *OpenAI* | GPT-5 and later | `none` `minimal` `low` `medium` `high` `xhigh` `max` | `medium` |
+| *Anthropic (Claude)* | Opus 4.7 and later, Sonnet 5 and later, Haiku 5 and later, Fable, Mythos | `low` `medium` `high` `xhigh` `max` | `medium` |
+| | Opus 4.6, Sonnet 4.6 | `low` `medium` `high` `max` | `medium` |
+| | Claude 3.7 Sonnet, Opus 4 to 4.5, Sonnet 4 and 4.5, Haiku 4.5 | `low` `medium` `high` | `medium` |
+| *Google (Gemini)* | Gemini 2.5 Pro, Flash and Flash-Lite | `low` `medium` `high` | `medium` |
+| | Gemini 3 Pro | `low` `high` | `high` |
+| | Gemini 3 Flash and Flash-Lite up to 3.6 | `minimal` `low` `medium` `high` | `medium` |
+| | Other Gemini models from 3 on | `low` `medium` `high` | `medium` |
+| *Ollama (local)* | gpt-oss | `low` `medium` `high` | `medium` |
+| | Other thinking models: DeepSeek-R1, Qwen3 (not the Coder and Instruct variants), QwQ, Magistral, Phi-4 reasoning, Kimi K2 Thinking, GLM 4.6 and later | `none` `on` — the model thinks or it doesn't | `on` |
+
+Older models of these providers — Claude 3.5, Gemini 2.0 and earlier, Ollama models that do not think — show no levels and keep working without. *OpenAI-compatible* servers show none either.
+
+With Claude, Gemini and Ollama the model's thoughts appear in the chat as *Intermediate steps (model)* while it works, the same way as with OpenAI. A higher level means a longer think, so the answer takes longer and costs more tokens.
+
 ## What happens
 
 - The next message goes to the chosen model, at the chosen level.
 - Model and level stay with the chat. A chat from the history comes back with its own, also after a restart.
-- A new chat starts with the model you chose last, and always at `medium`.
+- A new chat starts with the model you chose last, at `medium` — or, for a model without `medium`, at the level in the *Starts at* column above.
 - The pill names the model alone. Only when two entries have the same model — the same local model on two servers, say — does it add the name of the entry.
 
 ## If it doesn't work
 
 - **A model is missing from the menu.** Its switch under *Settings › Models* is off, or it is not in the list yet.
 - **The chat explains that the level is not available.** OpenAI decides which levels a model takes. The message names the levels it does take, where OpenAI says so; choose one of them.
-- **An older OpenAI model shows no levels.** Models before GPT-5 have none; they keep working without.
+- **A model shows no levels.** It is older than the models in the table, or Snotra does not know that it can think. It keeps working without a level.
+- **An Ollama model under its own name shows no levels.** Snotra recognises the thinking models by their name. A model imported or copied under another name answers at its own default.
+- **An Ollama model shows `none` and `on`, but thinks anyway, or never.** Some fine-tunes keep the name of their base model but not its thinking. Snotra then sends the message without the level, and the model answers as it always does.
