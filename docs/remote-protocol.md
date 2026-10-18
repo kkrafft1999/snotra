@@ -180,10 +180,10 @@ POST /v1/pairings
 
 - `proof = sign(desktop.sign, lp("snotra/v1 pair-open") ‖ lp(challenge) ‖ KB_D)`.
 - The relay checks the proof against `desktopKeys.sign`, creates
-  `/channels/{channelId}` with `status: "open"` and `/pairing/{pairingId}`
-  pointing at it, valid for **five minutes and one claim**.
+  `/channels/{channelId}/meta` with `status: "open"` and `/pairing/{pairingId}`
+  pointing at the channel, valid for **five minutes and one claim**.
 - The desktop then builds the code from `pairingId` and its own secret
-  ([§4](#4-the-pairing-code)) and follows `/channels/{channelId}` by REST
+  ([§4](#4-the-pairing-code)) and follows `/channels/{channelId}/meta` by REST
   streaming (step 8).
 
 ### 5.4 Look up
@@ -211,7 +211,7 @@ POST /v1/pairings/{pairingId}/claim                   X-Firebase-AppCheck
   `channelId` as its 16 raw bytes.
 - The relay checks that the pairing is alive and unclaimed and the proof
   verifies against `phoneKeys.sign`, then writes `phoneKeys` and `macP` into
-  the channel, sets `status: "pending"` and marks the pairing claimed. **A
+  the channel's `meta`, sets `status: "pending"` and marks the pairing claimed. **A
   second claim gets `404`**; a channel never takes a third key.
 - The relay cannot check `macP` — it does not know the secret.
 
@@ -253,7 +253,7 @@ DELETE /v1/channels/{channelId}                       Authorization: Bearer <ID 
 ```
 
 Deletes the channel with everything under it. Tokens for it are refused from
-then on, and the other side's stream sees the record vanish.
+then on, and the other side's stream sees `meta` vanish.
 
 ### 5.9 Tokens
 
@@ -271,10 +271,11 @@ POST /v1/tokens
 
 ### 5.10 What the clients read
 
-The relay alone writes these fields; the clients follow them by streaming.
+The relay alone writes these fields, all in a node of their own; the clients
+follow that node by streaming.
 
 ```
-/channels/{channelId}
+/channels/{channelId}/meta
     desktopKeys     { sign, agree }                      written on open
     phoneKeys       { sign, agree }                      written on claim
     macP            b64u                                 written on claim
@@ -283,11 +284,18 @@ The relay alone writes these fields; the clients follow them by streaming.
     createdAt, lastSeen                                  ms
 ```
 
-- **The desktop** reads the whole record.
-- **The phone** reads `desktopKeys`, `status` and `macD` — and while `status`
-  is not `paired`, nothing else under the channel. Both outboxes stay closed
-  until then (decided 2026-10-18).
-- A record that disappears means *cancelled, denied, expired or removed*.
+- **Nobody streams `/channels/{channelId}` itself.** In the Realtime Database
+  rules are not filters, and read access on a node cascades to everything
+  under it: a side that may read the channel may read both outboxes, and a
+  listener on it would receive an echo of every envelope it sends itself
+  (#1142). The relay's rules therefore grant read access on `meta` and on the
+  nodes of [§12](#12-connecting), never on the channel.
+- **The desktop** reads the whole of `meta`.
+- **The phone** reads `meta` as well — of it, it needs `desktopKeys`,
+  `status` and `macD`; `phoneKeys` and `macP` are its own. While `status` is
+  not `paired`, it reads nothing else under the channel. Both outboxes stay
+  closed until then (decided 2026-10-18).
+- A `meta` that disappears means *cancelled, denied, expired or removed*.
 
 ## 6. `MAC_P` and `MAC_D`
 
@@ -426,9 +434,21 @@ starts, either one finds its network again.
    → custom token → ID token. The ID token lives an hour; a side renews it the
    same way before it runs out. Firebase's refresh tokens are kept in memory
    only, never on disk.
-2. **Stream.** The desktop follows `/channels/{channelId}` by REST streaming
-   (`Accept: text/event-stream`, `?auth=<ID token>`); on `auth_revoked` it
-   renews the token and resumes. The phone listens through the SDK.
+2. **Stream.** Each side follows four nodes of the channel, never the channel
+   itself ([§5.10](#510-what-the-clients-read)), so that it receives nothing
+   it wrote:
+
+   | The desktop follows | The phone follows |
+   | --- | --- |
+   | `meta` | `meta` |
+   | `to-desktop` | `to-phone` |
+   | `handshake/phone` | `handshake/desktop` |
+   | `presence/phone` | `presence/desktop` |
+
+   The desktop streams each one by REST (`Accept: text/event-stream`,
+   `?auth=<ID token>`); on `auth_revoked` it renews the token and resumes. The
+   phone listens through the SDK. A `meta` that disappears ends the channel
+   for both, whatever the other streams still show.
 3. **Presence** (decided 2026-10-18):
    - The **desktop** writes `/channels/{channelId}/presence/desktop` =
      `{ "lastSeen": {".sv": "timestamp"} }` every 30 seconds while it runs and
@@ -526,7 +546,9 @@ k_to-desktop = okm[0..32]      k_to-phone = okm[32..64]      sid = th[0..8]
   and the envelopes of a session that ended.
 - **The relay's rules:** a side creates records only in its own outbox and
   never overwrites one; it reads and deletes only in its inbox; both only while
-  the channel is `paired`.
+  the channel is `paired`. Read access is granted on the inbox node itself, not
+  on the channel, so that it cannot cascade into the outbox
+  ([§5.10](#510-what-the-clients-read)).
 - **No padding in version 1:** the relay sees each envelope's size, as the
   concept's threat model states.
 
