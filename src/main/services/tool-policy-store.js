@@ -48,6 +48,7 @@ const {
   DEFAULT_TOOL_PERMISSION_MODE,
   PERMISSION_RULE_EFFECTS,
   PERMISSION_RULE_SCOPES,
+  TOOL_POLICY_INTEGRITY,
   normalizeToolPermissionMode,
   normalizePermissionRule,
   normalizePermissionRules,
@@ -93,16 +94,7 @@ const MAX_KNOWN_WORKSPACES = 1000;
 /** Chats remembered as confirmed into "Auto" (#980) — as many as chat settings keep. */
 const MAX_AUTO_CHATS = 500;
 
-const INTEGRITY = Object.freeze({
-  OK: 'ok',
-  UNSIGNED: 'unsigned',
-  INVALID: 'invalid',
-  MISSING: 'missing',
-  // The file (or its key) is there but could not be read (#512). Not a broken
-  // file: nothing is known about it, so tools stay blocked and nothing is
-  // written over it.
-  UNREADABLE: 'unreadable',
-});
+const INTEGRITY = TOOL_POLICY_INTEGRITY;
 
 /**
  * What `keyToVerify` returns for a key that is not made yet (#1060): it matches

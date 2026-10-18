@@ -15,7 +15,7 @@ const os = require('os');
 
 const { createPythonRunnerService, interpreterCandidates, clampTimeout } =
   require('../src/main/services/python-runner-service');
-const { PYTHON_EXECUTION_LIMITS } = require('../src/application/ports/code-execution-port');
+const { PYTHON_EXECUTION_LIMITS } = require('../src/shared/contracts/code-execution');
 
 /**
  * Python gibt unter Windows CRLF aus. Fuer die Tests ist nur der Inhalt

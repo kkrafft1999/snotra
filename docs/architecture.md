@@ -184,20 +184,17 @@ what main's tool registry calls and the core never sees
 typedefs are checked: the engine takes its ports typed
 (`ChatEngineDependencies` in `chat/chat-engine.js`), and every adapter names
 the port it returns, so `npm run typecheck` fails when the two disagree — see
-[Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc). Five of them —
-`tool-policy`, `own-secrets`, `config-proposal`, `shell-execution` and
-`code-execution` — are still implemented outside the checked files
-([#1098](https://github.com/kkrafft1999/snotra/issues/1098)). The ports:
+[Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc). The ports:
 
 - `llm-port` — streaming rounds against a provider
 - `tool-port` — tool registry and execution
 - `tool-policy-port` — the permission state a run is decided against: mode, the
   rules of all scopes, the sensitive path patterns, the versions that approvals
   bind to, the integrity of the policy file and the hosts kept open for the
-  workspace (#946). It has no adapter module of its own: a small object in
-  `main/composition/create-chat-application.js` reads `services/tool-policy-store.js`
-  (the signed policy file) and works out the mode for that chat. A file that
-  cannot be read makes it throw, and the engine stops tools (concept section 3, #512)
+  workspace (#946). `main/adapters/tool-policy-adapter.js` reads
+  `services/tool-policy-store.js` (the signed policy file) and works out the
+  mode for that chat. A file that cannot be read makes it throw, and the engine
+  stops tools (concept section 3, #512)
 - `tool-approval-port` — a card and the user's answer, without the core knowing
   how it is shown (#66). `main/adapters/tool-approval-adapter.js` binds every
   request to a random id, the window, the run, the call, the plan and the
@@ -224,7 +221,8 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   asks for a change (#774). The core asks the user on a card through the
   approval port and records the answer here; where the overrides are kept and
   how a proposal is checked is main's business
-  (`services/chat-session-settings.js`, `services/chat-configuration-service.js`)
+  (`services/chat-session-settings.js`, `services/chat-configuration-service.js`),
+  which `main/adapters/config-proposal-adapter.js` hands on
 - `remote-relay-port` — the blind relay of the mobile remote as the desktop's
   pairing sees it (#1114): open a pairing, follow the channel, confirm, cancel,
   delete. Channels and pairings are named by id only; tokens, challenges and
@@ -242,8 +240,9 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
 - `chat-preferences-port` — UI prefs, system prompt, tool round limit
 - `workspace-path-port` — path helpers (e.g. `basename`)
 - `own-secrets-port` — the app's own secrets, compared against the text the
-  prompt embeds by itself (#528); wired to the list in
-  `main/services/own-secrets.js` that the tool results are checked against
+  prompt embeds by itself (#528); `main/adapters/own-secrets-adapter.js` wires
+  it to the list in `main/services/own-secrets.js` that the tool results are
+  checked against
 - `skill-port` — bodies of the enabled skills for the system prompt
 - `environment-port` — environment details for the environment block in the
   system prompt (issue #138): working directory, git yes/no, platform, system
@@ -287,7 +286,8 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   `shared/runtime/url-safety.js`
 - `code-execution-port` — running a Python program (issue #86); interpreter
   detection, time limit and process-tree kill live in
-  `main/services/python-runner-service.js`. The PATH used for lookup and
+  `main/services/python-runner-service.js`, which implements the port itself;
+  its limits are in `shared/contracts/code-execution.js`. The PATH used for lookup and
   execution is not raised by the service itself: it comes in from outside as
   `readShellPath` (issue #111)
 - `mcp-port` — listing and calling tools of external MCP servers (issue #106,
@@ -418,7 +418,8 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
 - `shell-execution-port` — running a command in the operating system's shell
   (issue #102); shell detection (POSIX as a login shell, so that the PATH from
   the user profile applies), time limit and process-tree kill live in
-  `main/services/shell-runner-service.js`, the blocked effects as a pure check
+  `main/services/shell-runner-service.js`, which implements the port itself
+  (limits in `shared/contracts/shell-execution.js`), the blocked effects as a pure check
   in `shared/runtime/shell-command-guard.js`
 
 The shell service is at the same time the only place that starts a login shell
@@ -2353,7 +2354,10 @@ check the member names and miss every parameter and return shape.
 
 **What is checked.** The include list in `tsconfig.json` is deliberate:
 `src/application/` (the core and its ports), `src/main/ports/`,
-`src/main/adapters/` and `src/shared/contracts/`. Every file these import is
+`src/main/adapters/`, `src/main/remote/` and `src/shared/contracts/`, and by
+name the two runner services that implement their port themselves,
+`shell-runner-service.js` and `python-runner-service.js`
+([#1098](https://github.com/kkrafft1999/snotra/issues/1098)). Every file these import is
 checked as well — `checkJs` checks the whole program — which pulls in parts of
 `src/main/services/`, `src/main/tools/` and `src/shared/`. The rest of `src/`
 is outside, and so are the tests.
@@ -2371,19 +2375,21 @@ them, and each is a line of JSDoc:
   `@type {XPort['method']}`, so its parameters cannot drift either.
 
 `test/port-conformance.test.js` holds the other half: every port typedef has
-an adapter that names it, or an entry on a list of ports still implemented
-outside the checked set — that list may only shrink
-([#1098](https://github.com/kkrafft1999/snotra/issues/1098)) — and the gate is
-still wired up.
+an adapter — or one of the two runner services — that names it, without
+exceptions since [#1098](https://github.com/kkrafft1999/snotra/issues/1098); no
+port file exports a value; and the gate is still wired up. What used to be a
+small object in the composition root is an adapter module now
+(`tool-policy-adapter.js`, `own-secrets-adapter.js`,
+`config-proposal-adapter.js`), so the root stays wiring.
 
 **What a port file holds.** Types only. A port file declares its typedefs and
 ends in `module.exports = {};`; the values that belong to a port — the error
 codes, limits and option lists of the web search, the URL fetch and the image
-generation — live in `src/shared/contracts/` (`web-search.js`, `url-fetch.js`,
-`image-generation.js`), the history store's `CHAT_HISTORY_UNREADABLE` in the
-store that throws it. The two execution ports still export their limits, until
-the runner services move
-([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
+generation, and the limits of the two execution ports — live in
+`src/shared/contracts/` (`web-search.js`, `url-fetch.js`, `image-generation.js`,
+`shell-execution.js`, `code-execution.js`), the history store's
+`CHAT_HISTORY_UNREADABLE` in the store that throws it. The test above requires
+every port file and fails on any export.
 
 **Services that are not ports.** Where an adapter or the tool planner depends
 on a service that is not a port, it declares the members it calls itself, from
@@ -2420,21 +2426,29 @@ the next step ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
 - An enum check, `Object.values(ENUM).includes(value)`, compiles because
   `types/array-includes.d.ts` lets `includes` take any value; the frozen enums
   keep their literal types.
+- Without `strictNullChecks` a truthiness check does not narrow a union:
+  after `if (outcome.error) return outcome;` the compiler still sees the
+  `{ error }` member. Narrow with `'error' in outcome` where the error member
+  is the only one with that key.
+- A constant the checked set needs from a large unchecked module moves to
+  `src/shared/contracts/` rather than pulling that module in: the policy
+  file's `TOOL_POLICY_INTEGRITY` lives in `tool-permissions.js`, and
+  `services/tool-policy-store.js` keeps it as `INTEGRITY` (#1098).
 - `tsc` 7 rejects a `#` or a dash right after a bracketed name in
   `@param {…} [name]` / `@property {…} [name]`; write the description after
   two spaces, as elsewhere.
 
 ## Automated boundary guards
 
-What a test holds, as of 2026-10-17:
+What a test holds, as of 2026-10-18:
 
 | Test | What it checks |
 | ---- | ------------ |
 | `test/application-layer-imports.test.js` | `src/application/` imports only `application/` + `shared/`, no package, no Node built-in |
 | `test/infrastructure-boundaries.test.js` | Storage without a provider-registry leak; store ports without decrypted secrets; MCP settings handlers never reach the decrypting port |
 | `test/adapter-port-shapes.test.js` | Port adapters expose only permitted methods |
-| `npm run typecheck` (`tsc`, run by `npm test`) | The core, the ports, the contracts and the adapters type-check against their JSDoc; every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
-| `test/port-conformance.test.js` | Every port has an adapter that names it, or a listed reason why not yet; the type check is still in the gate (#1004) |
+| `npm run typecheck` (`tsc`, run by `npm test`) | The core, the ports, the contracts, the adapters and the two runner services type-check against their JSDoc; every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
+| `test/port-conformance.test.js` | Every port has an implementation that names it, no port file exports a value, the type check is still in the gate (#1004, #1098) |
 | `test/composition-root-wiring.test.js` | `create-application.js` holds wiring only: no branch beyond "was this optional dependency handed in", no loop, comparison, `try`/`catch` or clock, at most 1,000 lines ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)) |
 | `test/catch-discipline.test.js` | Every `catch` in `src/` rethrows, reports, logs or carries a comment why it may stay quiet; every `void call()` in the renderer has a `.catch`. Against a baseline that may only shrink, `test/catch-discipline-baseline.json`, per file and count; it also fails when the baseline lists more than the scan finds, so a fixed site comes off the list in the same change. A heuristic scanner, its limits are in the head of the test ([#1000](https://github.com/kkrafft1999/snotra/issues/1000)) |
 | `test/filesystem-port-typedef.test.js` | The `filesystem-port` typedef lists exactly the members of its adapter (#650) |

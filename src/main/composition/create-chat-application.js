@@ -1,7 +1,5 @@
 'use strict';
 
-const { createHash } = require('node:crypto');
-const { normalizeToolPermissionMode, isCommandRule } = require('../../shared/contracts/tool-permissions');
 const { createChatEngine } = require('../../application/chat/chat-engine');
 const { createSessionGrants } = require('../../application/permissions/session-grants');
 const { createProviderLlmAdapter } = require('../adapters/provider-llm-adapter');
@@ -9,7 +7,8 @@ const { createChatPreferencesAdapter } = require('../adapters/chat-preferences-a
 const { createNodeWorkspacePathAdapter } = require('../adapters/workspace-path-adapter');
 const { createWorkspaceToolAdapter } = require('../adapters/workspace-tool-adapter');
 const { createSkillsAdapter } = require('../adapters/skills-adapter');
-const { INTEGRITY } = require('../services/tool-policy-store');
+const { createToolPolicyAdapter } = require('../adapters/tool-policy-adapter');
+const { createOwnSecretsAdapter } = require('../adapters/own-secrets-adapter');
 
 /**
  * Verdrahtet die Chat-Engine mit ihren Ports. Seit Issue #66 gehören dazu der
@@ -58,30 +57,7 @@ function createChatApplication({
   const preferences = createChatPreferencesAdapter({ uiPrefsStore });
   const workspacePaths = createNodeWorkspacePathAdapter({ path });
   const skills = skillsService ? createSkillsAdapter(skillsService) : null;
-  const toolPolicy = toolPolicyStore
-    ? {
-        async read({ chatId = null } = {}) {
-          const state = await toolPolicyStore.read();
-          // A rules file that cannot be read grants nothing and blocks
-          // nothing; the engine stops tools on a throw (concept §3, #512).
-          if (state.integrity === INTEGRITY.UNREADABLE) throw new Error('The permission rules could not be read.');
-          return {
-            mode: modeForRun(state, chatId, resolveChatMode),
-            rules: state.rules,
-            sensitivePathPatterns: state.sensitivePathPatterns,
-            policyVersion: state.policyVersion,
-            rulesVersion: rulesVersionOf(state),
-            integrity: state.integrity,
-            encryptionAvailable: state.encryptionAvailable,
-            // Hosts kept open per workspace (#946) and in every workspace
-            // (#1119); not part of the rules version, so keeping one costs
-            // no chat its approvals.
-            workspaceHosts: state.workspaceHosts,
-            globalHosts: state.globalHosts,
-          };
-        },
-      }
-    : null;
+  const toolPolicy = toolPolicyStore ? createToolPolicyAdapter({ toolPolicyStore, resolveChatMode }) : null;
 
   const engine = createChatEngine({
     llm,
@@ -97,7 +73,7 @@ function createChatApplication({
     // The same list the tool results are compared against (§5), now also for
     // the skills, AGENTS.md and memory the prompt embeds (#528).
     ownSecrets: typeof toolAdapterDeps.readOwnSecrets === 'function'
-      ? { read: toolAdapterDeps.readOwnSecrets }
+      ? createOwnSecretsAdapter(toolAdapterDeps.readOwnSecrets)
       : null,
     sessionGrants,
     maxToolRounds,
@@ -109,39 +85,6 @@ function createChatApplication({
     engine, llm, tools, preferences, workspacePaths, skills, environment, projectInstructions, memory,
     toolPolicy, sessionGrants,
   };
-}
-
-/**
- * A remembered chat mode only counts while the policy file is intact. On a
- * failed signature the store falls back to `smart` (concept §7), and a chat in
- * the background must not keep a looser mode past that.
- */
-function modeForRun(state, chatId, resolveChatMode) {
-  if (state.integrity !== 'ok' && state.integrity !== 'missing') return state.mode;
-  if (!chatId) return state.mode;
-  let remembered = null;
-  try {
-    remembered = resolveChatMode(chatId);
-  } catch {
-    remembered = null;
-  }
-  return normalizeToolPermissionMode(remembered || state.mode);
-}
-
-/**
- * Everything a session approval depends on apart from the mode: the rules, the
- * sensitive path patterns and the integrity state. The store's
- * `policyVersion` also moves when only the mode is written — which now happens
- * whenever another chat comes on screen (#320).
- */
-function rulesVersionOf(state) {
-  const hash = createHash('sha256');
-  // Command rules (#121) are left out: they allow one `shell_execute` line,
-  // which no session approval can cover, so remembering a command must not
-  // cost the user the approvals of the chats that are open.
-  const rules = (Array.isArray(state.rules) ? state.rules : []).filter((rule) => !isCommandRule(rule));
-  hash.update(JSON.stringify([state.integrity, rules, state.sensitivePathPatterns]));
-  return hash.digest('hex').slice(0, 32);
 }
 
 module.exports = {

@@ -25,7 +25,12 @@
  * kommt und geht nicht zur Laufzeit, und ein Profil-Lauf kostet Zeit.
  */
 
-const { SHELL_EXECUTION_LIMITS } = require('../../application/ports/shell-execution-port');
+const { SHELL_EXECUTION_LIMITS } = require('../../shared/contracts/shell-execution');
+
+/** @typedef {import('../../application/ports/shell-execution-port').ShellExecutionPort} ShellExecutionPort */
+/** @typedef {import('../../application/ports/shell-execution-port').ShellDescription} ShellDescription */
+/** @typedef {import('../../application/ports/shell-execution-port').ShellExecutionRequest} ShellExecutionRequest */
+/** @typedef {import('../../application/ports/shell-execution-port').ShellExecutionResult} ShellExecutionResult */
 const { createChildRunner } = require('./child-run');
 const { withPowerShellJob, noteUncontained } = require('./windows-job');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
@@ -177,6 +182,8 @@ function clampTimeout(raw) {
  * @param {typeof import('fs/promises')} [deps.fs]  for the run's temp directory (#329)
  * @param {typeof import('path')} [deps.path]
  * @param {object} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
+ * @returns {import('../../application/ports/shell-execution-port').ShellExecutionPort & {
+ *   detect: () => Promise<ShellDescription>, disposeSync: () => void }}
  */
 function createShellRunnerService({
   spawn,
@@ -192,6 +199,7 @@ function createShellRunnerService({
   // `error` is the detail Settings shows next to "No shell found": a
   // catalogue message, or the quoted output of the probe (#338). The model
   // never reads it — `run()` has its own English sentence.
+  /** @type {ShellDescription} */
   let detected = { found: false, error: createMessage('runner.error.notChecked') };
 
   function probe(command, invocation) {
@@ -294,6 +302,7 @@ function createShellRunnerService({
   // Time limit, "Stop", output cap and the process tree (CR-B03-01).
   const children = createChildRunner({ spawn, platform });
 
+  /** @param {Partial<ShellExecutionRequest>} [request]  a missing command is refused, not thrown */
   async function run({
     command,
     stdin,
@@ -389,7 +398,8 @@ function createShellRunnerService({
         exposeOutput: (read) => { readOutput = read; },
         startError: 'The shell could not be started.',
       });
-      if (outcome.error) return outcome;
+      // Narrows the union for the type check (#1098); the error is never empty.
+      if ('error' in outcome) return outcome;
       // What the sandbox refused (#792): as a list for the chat's tool row,
       // and in stderr for the model (#329). Looked up before annotating.
       const blocked = await target.blocked?.({
@@ -397,6 +407,7 @@ function createShellRunnerService({
         output: outcome.stderr,
       });
       const stderr = target.annotate(outcome.stderr);
+      /** @type {ShellExecutionResult} */
       const result = {
         ...outcome,
         // cmd.exe cannot make a Job Object; the model hears so (#991).
