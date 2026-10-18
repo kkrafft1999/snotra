@@ -69,7 +69,7 @@ test('pill, popover and get_configuration report the same skills and tools', { t
   assert.equal(skill('pdf-export').description, 'Turns Markdown into a PDF.');
   assert.equal(answer.skills_settings, 'Settings › Skills');
   assert.deepEqual(answer.tools_off.find((tool) => tool.name === 'fetch_url'),
-    { name: 'fetch_url', reason: 'switched off by the user', settings: 'Settings › Tools & security' });
+    { name: 'fetch_url', reason: 'switched off by the user', settings: 'Settings › Tools › Autonomy' });
   assert.ok(answer.tools_on.includes('read_file_text'));
   // web_search has no key here, so it is not in the model's list — and the
   // prompt tells the model to look before it says it cannot search (#916).

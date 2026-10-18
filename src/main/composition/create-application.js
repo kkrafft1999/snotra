@@ -18,6 +18,7 @@ const { createSkillsWatcher } = require('../services/skills-watcher');
 const { createWorkspaceWatcher } = require('../services/workspace-watcher');
 const { createSkillSuggestionService } = require('../services/skill-suggestion-service');
 const { createWorkspaceActivation } = require('../services/workspace-activation');
+const { createWorkspaceSandboxDefault } = require('../services/workspace-sandbox-default');
 const { createToolPolicyStore } = require('../services/tool-policy-store');
 const { KEY_ALWAYS_DURABLE } = require('../services/safe-storage-key-durability');
 const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
@@ -340,6 +341,8 @@ function createApplication({
   // And for the skill scans: set once the skill service exists (#578).
   let dropSkillScans = () => {};
 
+  const noteWorkspaceOpened = createWorkspaceSandboxDefault({ toolPolicyStore, onChanged: () => notifyToolPermissionsChanged() });
+
   // Einziger Weg, auf dem der aktive Workspace gesetzt wird (Issue #68).
   // Ein Workspace-Wechsel verwirft offene Freigaben und Sitzungsfreigaben (Konzept §7).
   const workspaceActivation = createWorkspaceActivation({
@@ -364,6 +367,9 @@ function createApplication({
       // one just left would go stale unnoticed and be served again when it
       // comes back (#578). Dropped here, it is read afresh then.
       dropSkillScans();
+      // A folder opened for the first time while new workspaces start
+      // without the sandbox gets that setting (#1119).
+      noteWorkspaceOpened(root);
     },
   });
 
@@ -437,7 +443,7 @@ function createApplication({
     os,
     platform: process.platform,
     readUserPath: async () => (await shellRunnerService.detect()).path || '',
-    readAllowances: () => toolPolicyStore.readProgramAllowances(),
+    readAllowances: (workspaceRoot) => toolPolicyStore.readProgramAllowances(workspaceRoot),
     protectedRoots: [app.getPath('userData')],
     sensitivePaths: sensitiveReadPaths({ platform: process.platform, userDataPath: app.getPath('userData') }),
   });
@@ -711,7 +717,7 @@ function createApplication({
       isSandboxDisabled: (workspaceRoot) => toolPolicyStore.isWorkspaceSandboxDisabled(workspaceRoot),
       // Program allowances (#408), from the same file.
       matchProgramAllowance: (request) => programAllowances.match(request),
-      readProgramAllowances: () => toolPolicyStore.readProgramAllowances(),
+      readProgramAllowances: (workspaceRoot) => toolPolicyStore.readProgramAllowances(workspaceRoot),
       maxScanBytes: LIMITS.MAX_READ_FILE_BYTES,
       // Einmal je Lauf: Tool-Katalog der MCP-Server neu einlesen (Issue #107).
       refreshDynamicTools: async () => {
@@ -864,6 +870,8 @@ function createApplication({
     pythonRunner,
     shellRunner,
     sandboxService,
+    workspaceFolderStore,
+    fs,
     onSandboxDetected: notifyToolPermissionsChanged,
   });
   registerToolPermissionHandlers({
@@ -884,6 +892,8 @@ function createApplication({
     describeChats: securityPageData.describeChats,
     describeTools: securityPageData.describeTools,
     describeWorkspaceChats: securityPageData.describeWorkspaceChats,
+    listKnownWorkspaces: securityPageData.listKnownWorkspaces,
+    folderExists: securityPageData.folderExists,
     platform: process.platform,
     homeDir: os.homedir(),
   });

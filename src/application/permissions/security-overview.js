@@ -166,6 +166,12 @@ function describeExecution(execution, tools) {
     workspaceHosts: Array.isArray(source.workspaceHosts)
       ? source.workspaceHosts.filter((host) => typeof host === 'string' && host)
       : [],
+    // This workspace's own program allowances, and the hosts open in every
+    // workspace (#1119): what the line leading to Tools › Security counts.
+    workspacePrograms: Array.isArray(source.workspacePrograms) ? source.workspacePrograms : [],
+    globalHosts: Array.isArray(source.globalHosts)
+      ? source.globalHosts.filter((host) => typeof host === 'string' && host)
+      : [],
   };
 }
 

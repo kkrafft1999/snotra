@@ -423,14 +423,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_SENSITIVE_PATHS, patterns),
   clearToolSessionGrants: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_CLEAR_SESSION_GRANTS),
   revokeToolSessionGrant: (grantId) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REVOKE_SESSION_GRANT, grantId),
-  removeWorkspaceToolHost: (host) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_WORKSPACE_HOST, host),
+  removeWorkspaceToolHost: (host, root) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_WORKSPACE_HOST, host, root ?? null),
   resetWorkspaceToolRules: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES),
   resetAllToolPermissions: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_ALL),
-  setWorkspaceSandbox: (enabled) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, enabled),
+  setWorkspaceSandbox: (enabled, root) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, enabled, root ?? null),
   setWorkspaceMode: (mode) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, mode),
   setProgramAllowance: (payload) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_PROGRAM_ALLOWANCE, payload),
-  removeProgramAllowance: (programPath) =>
-    ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_PROGRAM_ALLOWANCE, String(programPath ?? '')),
+  removeProgramAllowance: (programPath, scope) =>
+    ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_PROGRAM_ALLOWANCE, String(programPath ?? ''), scope ?? undefined),
+  // Settings › Tools › Security (#1119).
+  getSandboxOverview: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_GET_SANDBOX_OVERVIEW),
+  addSandboxHosts: (payload) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_ADD_HOSTS, payload),
+  removeGlobalToolHost: (host) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_GLOBAL_HOST, host),
+  setNewWorkspaceSandbox: (enabled) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_NEW_WORKSPACE_SANDBOX, enabled),
+  resetWorkspaceSandbox: (root) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_SANDBOX, root ?? null),
+  resetSandboxEverywhere: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_SANDBOX_EVERYWHERE),
   resolveAllowanceProgram: (text) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESOLVE_PROGRAM, String(text ?? '')),
   chooseAllowanceFolder: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_CHOOSE_ALLOWANCE_FOLDER),
   onToolPermissionsChanged: (callback) => {

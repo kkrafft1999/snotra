@@ -299,20 +299,8 @@ test('a slot keeps what was typed and the focus when a live update redraws the r
   }
 });
 
-test('the card\'s "Sandbox setting" opens the execute row on the switch', async () => {
-  const dom = setupRendererDom();
-  try {
-    const page = await openPage(overviewWith());
-    const doc = dom.document;
-    assert.equal(await page.panel.reveal('sandbox'), true);
-    assert.equal(row(doc, 'execute').querySelector('.settings-security-row__toggle').getAttribute('aria-expanded'), 'true');
-    assert.equal(doc.activeElement === doc.getElementById('input-workspace-sandbox'), true);
-    assert.equal(await page.panel.reveal('allowances'), true);
-    assert.equal(doc.activeElement === doc.getElementById('btn-add-program-allowance'), true);
-  } finally {
-    dom.cleanup();
-  }
-});
+// The card's "Sandbox setting" and the folder shield lead to Tools › Security
+// since #1119: test/tool-security-panel-dom.test.js.
 
 // CR-B13-03 (#598): a control used by keyboard keeps the focus. happy-dom
 // keeps it on a disabled element where Chromium does not, so `focusFixup`
@@ -453,26 +441,5 @@ test('opening the page does not take back a default mode saved a moment ago', as
   }
 });
 
-// CR-B13-04 (#599): in "Auto" no card confirms the domains a run names.
-test('the execute row says who confirms the domains, in the default mode of the workspace', async () => {
-  const { describeSecurityRow } = await importRenderer('utils', 'security-overview-view.js');
-  const { setLocale } = await importRenderer('i18n.js');
-  const network = (mode) => {
-    const overview = overviewWith({ mode });
-    const execute = overview.classes.find((entry) => entry.riskClass === 'execute');
-    return describeSecurityRow(execute, overview).where.execute.facts.at(-1);
-  };
-  assert.equal(network('smart'), 'Reaches the internet only for domains you confirm on the approval card');
-  assert.equal(network('auto'), 'Reaches the internet only for the domains a call names — in “Auto” without asking');
-  // The pages of the earlier tests listen to the language too; they need a
-  // document to redraw into.
-  const dom = setupRendererDom();
-  setLocale('de');
-  try {
-    assert.equal(network('auto'), 'Erreicht das Internet nur für die Domains, die ein Aufruf nennt — in „Auto“ ohne Rückfrage');
-  } finally {
-    setLocale('en');
-    await settle();
-    dom.cleanup();
-  }
-});
+// CR-B13-04 (#599): in "Auto" no card confirms the domains a run names. Since
+// #1119 the sandbox tile on Tools › Security says so: test/sandbox-opt-out.test.js.

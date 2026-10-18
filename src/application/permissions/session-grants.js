@@ -209,7 +209,11 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
     return true;
   }
 
-  /** What may be shown of each approval, oldest first (#447). */
+  /**
+   * What may be shown of each approval, oldest first (#447). For one a
+   * sandbox card gave, its kind — folder, path or host — so Tools › Security
+   * can list it with the workspace (#1119).
+   */
   function list() {
     return grants.map((entry) => ({
       id: entry.id,
@@ -217,6 +221,7 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
       tool: entry.tool,
       classes: [...entry.classes],
       scope: entry.scope,
+      ...(entry.sandbox ? { sandbox: entry.sandbox.kind } : {}),
       grantedAt: entry.grantedAt,
     }));
   }

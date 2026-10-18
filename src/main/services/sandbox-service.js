@@ -1233,8 +1233,8 @@ function annotateBlockedTrustd(stderr) {
   if (!/x509: OSStatus -26276\b/.test(text) || text.includes('<sandbox_certificates>')) return text;
   const note = 'The certificate check was refused inside the sandbox: this program verifies certificates '
     + 'through the macOS trust service (trustd), which the sandbox keeps closed. The host was not reached. '
-    + 'If the user trusts the program, they can allow certificate checks for it under Settings › Tools & security › '
-    + 'Execute › Program allowances. Tell them that instead of working around it.';
+    + 'If the user trusts the program, they can allow certificate checks for it under Settings › Tools › Security › '
+    + 'Programs with more room. Tell them that instead of working around it.';
   return `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n<sandbox_certificates>\n${note}\n</sandbox_certificates>\n`;
 }
 

@@ -50,11 +50,14 @@ const { createMessage } = require('../../shared/contracts/message');
 const { createTranslator } = require('../../shared/i18n');
 const { menuPath } = require('../../shared/i18n/ui-quotes');
 const { isNarrowing, normalizeAllowancePath } = require('../../shared/contracts/program-allowances');
+const { grantedHosts } = require('../services/sandbox-violations');
 const { describeSecurityOverview } = require('../../application/permissions/security-overview');
 const {
   CONFIRMATION_ACTIONS,
   permissionRuleSubject,
   removedPatternsSubject,
+  programAllowanceSubject,
+  globalHostsSubject,
   createRefusingConfirmation,
 } = require('../../application/permissions/user-confirmation');
 
@@ -202,7 +205,7 @@ function workspaceHostsDialog(hosts, root, t) {
     detail: t('permissionDialog.workspaceHosts.detail', {
       hosts: hosts.join('\n'),
       root,
-      place: menuPath(t.locale, 'settings.security'),
+      place: menuPath(t.locale, SANDBOX_SETTING_PAGE),
     }),
     buttons: [t('permissionDialog.workspaceHosts.confirm'), t('permissionDialog.cancel')],
     defaultId: 1,
@@ -210,8 +213,56 @@ function workspaceHostsDialog(hosts, root, t) {
   };
 }
 
-/** Where the sandbox switch lives, quoted in its dialog (#357). */
-const SANDBOX_SETTING_PAGE = 'settings.security';
+/**
+ * Where the sandbox switch, the program allowances and the hosts live,
+ * quoted in their dialogs (#357) — Settings › Tools › Security since #1119.
+ */
+const SANDBOX_SETTING_PAGE = 'settings.sandbox';
+
+/** Hosts open in every workspace (#1119): only from the settings, never from a card. */
+function globalHostsDialog(hosts, t) {
+  return {
+    type: 'warning',
+    title: t('permissionDialog.globalHosts.title'),
+    message: t('permissionDialog.globalHosts.title'),
+    detail: t('permissionDialog.globalHosts.detail', {
+      hosts: hosts.join('\n'),
+      place: menuPath(t.locale, SANDBOX_SETTING_PAGE),
+    }),
+    buttons: [t('permissionDialog.globalHosts.confirm'), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
+/** New workspaces without the sandbox (#1119). */
+function newWorkspaceSandboxOffDialog(t) {
+  return {
+    type: 'warning',
+    title: t('permissionDialog.newWorkspaceSandboxOff.title'),
+    message: t('permissionDialog.newWorkspaceSandboxOff.title'),
+    detail: t('permissionDialog.newWorkspaceSandboxOff.detail', {
+      mode: t('permissions.mode.auto'),
+      place: menuPath(t.locale, SANDBOX_SETTING_PAGE),
+    }),
+    buttons: [t('permissionDialog.newWorkspaceSandboxOff.confirm'), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
+
+/** "Reset the sandbox everywhere" (#1119): only takes rights away, but all of them. */
+function resetSandboxDialog(t) {
+  return {
+    type: 'warning',
+    title: t('permissionDialog.resetSandbox.title'),
+    message: t('permissionDialog.resetSandbox.title'),
+    detail: t('permissionDialog.resetSandbox.detail'),
+    buttons: [t('permissionDialog.resetSandbox.confirm'), t('permissionDialog.cancel')],
+    defaultId: 1,
+    cancelId: 1,
+  };
+}
 
 function sandboxOffDialog(root, t) {
   return {
@@ -254,7 +305,7 @@ function tildePath(value, homeDir) {
   return value.startsWith(`${homeDir}/`) ? `~${value.slice(homeDir.length)}` : value;
 }
 
-function programAllowanceDialog(entry, t, homeDir = '') {
+function programAllowanceDialog(entry, t, homeDir = '', root = null) {
   const lines = [];
   if (entry.domains.length > 0) lines.push(t('permissionDialog.allowance.domains', { domains: entry.domains.join(', ') }));
   if (entry.writePaths.length > 0) {
@@ -269,7 +320,9 @@ function programAllowanceDialog(entry, t, homeDir = '') {
     title: t('permissionDialog.allowance.title', { program }),
     message: t('permissionDialog.allowance.title', { program }),
     detail: [
-      t('permissionDialog.allowance.intro', { path: tildePath(entry.path, homeDir) }),
+      root
+        ? t('permissionDialog.allowance.intro.workspace', { path: tildePath(entry.path, homeDir), root: tildePath(root, homeDir) })
+        : t('permissionDialog.allowance.intro', { path: tildePath(entry.path, homeDir) }),
       lines.map((line) => `• ${line}`).join('\n'),
       t('permissionDialog.allowance.footer', { place: menuPath(t.locale, SANDBOX_SETTING_PAGE) }),
     ].join('\n\n'),
@@ -308,6 +361,11 @@ function registerToolPermissionHandlers({
   // offered, and the chats of a workspace with the mode each one runs on.
   describeTools = async () => [],
   describeWorkspaceChats = async () => [],
+  // Every folder Snotra has worked in (#1119), for new workspaces without
+  // the sandbox: those keep their setting.
+  listKnownWorkspaces = async () => [],
+  // Whether a folder is still there (#1119): a missing one is listed as such.
+  folderExists = async () => true,
   platform = process.platform,
   homeDir = '',
 }) {
@@ -410,11 +468,95 @@ function registerToolPermissionHandlers({
       tool: grant.tool,
       classes: grant.classes,
       scope: grant.scope,
+      // What a sandbox card opened (#792): a folder, a path or a host (#1119).
+      ...(typeof grant.sandbox === 'string' && grant.sandbox ? { sandbox: grant.sandbox } : {}),
       grantedAt: grant.grantedAt,
       chatId: grant.chatId,
       chatTitle: (grant.chatId && titles.get(grant.chatId)) || '',
       current: !!grant.chatId && grant.chatId === currentChatId,
     }));
+  }
+
+  /** Every root the policy holds a sandbox setting or an allowance for (#1119). */
+  function sandboxRootsOf(state) {
+    return [...new Set([
+      ...(Array.isArray(state.unsandboxedWorkspaces) ? state.unsandboxedWorkspaces : []),
+      ...Object.keys(state.workspaceProgramAllowances || {}),
+      ...Object.keys(state.workspaceHosts || {}),
+    ])];
+  }
+
+  /**
+   * The workspace a sandbox setting is changed for (#1119): the open one
+   * when the renderer names none — or one the policy holds a sandbox
+   * setting for already, so a workspace can be checked and cleaned up
+   * without opening it. Never a path the renderer makes up: anything else is
+   * null. Every loosening names the root in its system dialog.
+   */
+  async function sandboxRootFor(raw) {
+    const active = getActiveWorkspaceRoot() || null;
+    if (raw === undefined || raw === null || raw === '') return active;
+    if (typeof raw !== 'string') return null;
+    if (raw === active) return raw;
+    try {
+      return sandboxRootsOf(await toolPolicyStore.read()).includes(raw) ? raw : null;
+    } catch {
+      // Rules that cannot be read name no workspace: nothing is changed then.
+      return null;
+    }
+  }
+
+  /**
+   * Settings › Tools › Security (#1119): every workspace that has a sandbox
+   * setting or an allowance, and the open one; what applies in every
+   * workspace; and the sandbox's session allowances of the open workspace's
+   * chats. The open workspace comes first, the others by name.
+   */
+  async function buildSandboxOverview() {
+    const state = await toolPolicyStore.read();
+    const active = getActiveWorkspaceRoot() || null;
+    const [described, grants, chats] = await Promise.all([
+      typeof describeExecutionTools === 'function'
+        ? Promise.resolve().then(describeExecutionTools)
+          .catch(() => null /* without the sandbox's state the page still lists every workspace */)
+        : null,
+      describeSessionGrants(),
+      active
+        ? Promise.resolve().then(() => describeWorkspaceChats(active))
+          .catch(() => [] /* without the chats no session allowance is listed; the rest stands */)
+        : [],
+    ]);
+    const chatIds = new Set((Array.isArray(chats) ? chats : []).map((chat) => chat.id));
+    const others = sandboxRootsOf(state).filter((root) => root !== active)
+      .sort((a, b) => a.split(/[\\/]/).pop().localeCompare(b.split(/[\\/]/).pop()) || a.localeCompare(b));
+    const roots = active ? [active, ...others] : others;
+    const workspaces = await Promise.all(roots.map(async (root) => ({
+      root,
+      open: root === active,
+      missing: root === active ? false : !(await Promise.resolve().then(() => folderExists(root))
+        .catch(() => true /* a folder that cannot be checked is not called missing */)),
+      sandboxOff: state.unsandboxedWorkspaces.includes(root),
+      programs: state.workspaceProgramAllowances?.[root] || [],
+      hosts: state.workspaceHosts?.[root] || [],
+    })));
+    const sandbox = platform === 'win32'
+      ? { isolated: false, status: 'unavailable', reason: 'platform', platform }
+      : described?.sandbox || null;
+    return {
+      integrity: state.integrity,
+      encryptionAvailable: state.encryptionAvailable,
+      platform,
+      homeDir,
+      sandbox,
+      activeRoot: active,
+      newWorkspaceSandbox: state.newWorkspaceSandboxOff !== true,
+      global: {
+        programs: Array.isArray(state.programAllowances) ? state.programAllowances : [],
+        hosts: Array.isArray(state.globalHosts) ? state.globalHosts : [],
+      },
+      workspaces,
+      sessionGrants: grants.filter((grant) => grant.sandbox && (grant.current || chatIds.has(grant.chatId))),
+    };
   }
 
   async function buildState() {
@@ -440,8 +582,11 @@ function registerToolPermissionHandlers({
         : null,
       executionIsolation: await describeUnisolatedExecution(workspaceSandboxDisabled),
       sensitivePathPatterns: state.sensitivePathPatterns,
-      // Global, like the rules for all workspaces (#408).
+      // For every workspace (#408), and this workspace's own (#1119).
       programAllowances: Array.isArray(state.programAllowances) ? state.programAllowances : [],
+      workspacePrograms: root && Array.isArray(state.workspaceProgramAllowances?.[root]) ? state.workspaceProgramAllowances[root] : [],
+      // Hosts kept open in every workspace (#1119).
+      globalHosts: Array.isArray(state.globalHosts) ? state.globalHosts : [],
       platform,
       homeDir,
       sessionGrantCount: sessionGrants.count(),
@@ -498,6 +643,9 @@ function registerToolPermissionHandlers({
         pending: isolation.pending,
         programAllowances: Array.isArray(state.programAllowances) ? state.programAllowances : [],
         workspaceHosts: root && Array.isArray(state.workspaceHosts?.[root]) ? state.workspaceHosts[root] : [],
+        // What the line leading to Tools › Security counts (#1119).
+        workspacePrograms: root && Array.isArray(state.workspaceProgramAllowances?.[root]) ? state.workspaceProgramAllowances[root] : [],
+        globalHosts: Array.isArray(state.globalHosts) ? state.globalHosts : [],
       },
       sensitivePathPatterns: state.sensitivePathPatterns,
       integrity: state.integrity,
@@ -506,6 +654,8 @@ function registerToolPermissionHandlers({
   }
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_GET_SECURITY_OVERVIEW, async () => buildSecurityOverview());
+
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_GET_SANDBOX_OVERVIEW, async () => buildSandboxOverview());
 
   ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_MODE, async (event, rawMode) => {
     const mode = normalizeToolPermissionMode(rawMode);
@@ -628,12 +778,13 @@ function registerToolPermissionHandlers({
     return { ...createSettingsOk(), revoked };
   });
 
-  // A host kept open for the workspace (#946), by the name the page showed.
-  // Closing one only tightens: no dialog, no card or approval is voided.
-  ipcMain.handle(REQ.TOOL_PERMISSIONS_REMOVE_WORKSPACE_HOST, async (event, rawHost) => {
+  // A host kept open for a workspace (#946), by the name the page showed —
+  // the open one, or one listed on Tools › Security (#1119). Closing one only
+  // tightens: no dialog, no card or approval is voided.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_REMOVE_WORKSPACE_HOST, async (event, rawHost, rawRoot) => {
     const host = typeof rawHost === 'string' ? rawHost.trim() : '';
     if (!host || host.length > 300) return createSettingsError(createMessage('permissions.workspaceHosts.error.invalid'));
-    const root = getActiveWorkspaceRoot();
+    const root = await sandboxRootFor(rawRoot);
     if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
     const result = await toolPolicyStore.removeWorkspaceHost(root, host);
     if (!result.ok) return createSettingsError(result.error);
@@ -664,10 +815,11 @@ function registerToolPermissionHandlers({
   // The sandbox of the execution tools, per workspace (#357). Off is a
   // loosening and goes through the native dialog — unless it cannot be stored,
   // which is said before any dialog; on never asks. The root is the active
-  // one from main, never a path the renderer names.
-  ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, async (event, enabled) => {
+  // one, or one main already holds a sandbox setting for (#1119) — never a
+  // new path the renderer names.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, async (event, enabled, rawRoot) => {
     if (typeof enabled !== 'boolean') return createSettingsError(createMessage('permissions.error.invalidSandboxSetting'));
-    const root = getActiveWorkspaceRoot();
+    const root = await sandboxRootFor(rawRoot);
     if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
     let confirmation = null;
     if (!enabled) {
@@ -701,40 +853,162 @@ function registerToolPermissionHandlers({
     return { ...createSettingsOk(), workspaceMode: mode };
   });
 
-  // Program allowances (#408). The renderer sends what the dialog holds; main
-  // resolves the program and checks the folders on its own, and asks natively
-  // before anything widens the sandbox.
+  /**
+   * The scope an allowance is stored in (#1119): `{ root: null }` for every
+   * workspace, or the workspace it names — the open one, or one listed on
+   * the page. Null when the renderer names a scope main does not know.
+   */
+  async function allowanceScopeFor(scope, rawRoot) {
+    if (scope === 'global') return { root: null };
+    if (scope !== 'workspace') return null;
+    const root = await sandboxRootFor(rawRoot);
+    return root ? { root } : null;
+  }
+
+  // Program allowances (#408), for one workspace or every workspace (#1119).
+  // The renderer sends what the dialog holds; main resolves the program and
+  // checks the folders on its own, and asks natively before anything widens
+  // the sandbox — a move from one workspace to every workspace included.
   ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_PROGRAM_ALLOWANCE, async (event, raw) => {
     if (!programAllowances) return createSettingsError(createMessage('permissions.allowance.error.unavailable'));
     const data = raw && typeof raw === 'object' ? raw : {};
+    // Before #1119 every allowance was global; a caller that names no scope still means that.
+    const target = await allowanceScopeFor(data.scope === undefined ? 'global' : data.scope, data.root);
+    if (!target) return createSettingsError(createMessage('permissions.error.noWorkspace'));
     const prepared = await programAllowances.prepareEntry(data);
     if (!prepared.ok) return createSettingsError(prepared.error);
     const entry = prepared.entry;
     const replacePath = normalizeAllowancePath(data.previousPath);
+    let replaceRoot = target.root;
+    if (replacePath) {
+      const from = await allowanceScopeFor(data.previousScope === undefined ? data.scope ?? 'global' : data.previousScope, data.previousRoot);
+      if (!from) return createSettingsError(createMessage('permissions.error.noWorkspace'));
+      replaceRoot = from.root;
+    }
     const state = await toolPolicyStore.read();
-    const stored = Array.isArray(state.programAllowances) ? state.programAllowances : [];
-    const previous = stored.find((other) => other.path === (replacePath || entry.path))
-      || stored.find((other) => other.path === entry.path)
-      || null;
+    const listOf = (root) => (root
+      ? state.workspaceProgramAllowances?.[root] || []
+      : Array.isArray(state.programAllowances) ? state.programAllowances : []);
+    let previous = replacePath ? listOf(replaceRoot).find((other) => other.path === replacePath) || null : null;
+    let previousRoot = replaceRoot;
+    if (!previous) {
+      previous = listOf(target.root).find((other) => other.path === entry.path) || null;
+      previousRoot = target.root;
+    }
+    const narrowing = !!previous && isNarrowing(previous, entry) && (previousRoot === target.root || previousRoot === null);
     let confirmation = null;
-    if (!isNarrowing(previous, entry)) {
+    if (!narrowing) {
       confirmation = await confirmLoosening(
         CONFIRMATION_ACTIONS.PROGRAM_ALLOWANCE,
-        entry.path,
-        programAllowanceDialog(entry, createTranslator(getLocale()), homeDir),
+        programAllowanceSubject(entry.path, target.root),
+        programAllowanceDialog(entry, createTranslator(getLocale()), homeDir, target.root),
       );
       if (!confirmation) return createSettingsError(createMessage('permissions.allowance.error.notSaved'), 'cancelled');
     }
-    const result = await toolPolicyStore.setProgramAllowance(entry, { replacePath, confirmation });
+    const result = await toolPolicyStore.setProgramAllowance(entry, {
+      root: target.root,
+      replacePath,
+      replaceRoot,
+      confirmation,
+    });
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
-    return { ...createSettingsOk(), entry };
+    return { ...createSettingsOk(), entry, root: target.root };
   });
 
-  ipcMain.handle(REQ.TOOL_PERMISSIONS_REMOVE_PROGRAM_ALLOWANCE, async (event, rawPath) => {
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_REMOVE_PROGRAM_ALLOWANCE, async (event, rawPath, rawScope) => {
     const programPath = normalizeAllowancePath(rawPath);
     if (!programPath) return createSettingsError(createMessage('permissions.allowance.error.invalid'));
-    const result = await toolPolicyStore.removeProgramAllowance(programPath);
+    const scope = rawScope && typeof rawScope === 'object' ? rawScope : {};
+    const target = await allowanceScopeFor(scope.scope === undefined ? 'global' : scope.scope, scope.root);
+    if (!target) return createSettingsError(createMessage('permissions.error.noWorkspace'));
+    const result = await toolPolicyStore.removeProgramAllowance(programPath, { root: target.root });
+    if (!result.ok) return createSettingsError(result.error);
+    afterPolicyChange(event.sender);
+    return createSettingsOk();
+  });
+
+  // Hosts kept open from the settings (#1119): for one workspace, confirmed
+  // like "For this workspace" on a card, or for every workspace — which only
+  // this page offers. What may be typed is what a card could have offered.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_ADD_HOSTS, async (event, raw) => {
+    const data = raw && typeof raw === 'object' ? raw : {};
+    const typed = Array.isArray(data.hosts) ? data.hosts.filter((host) => typeof host === 'string' && host.length <= 300) : [];
+    const hosts = grantedHosts(typed);
+    if (hosts.length === 0 || hosts.length !== typed.length) {
+      return createSettingsError(createMessage('permissions.hosts.error.invalid'));
+    }
+    if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.workspaceHosts.error.needsEncryption'));
+    const t = createTranslator(getLocale());
+    if (data.scope === 'global') {
+      const confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.GLOBAL_HOSTS, globalHostsSubject(hosts), globalHostsDialog(hosts, t));
+      if (!confirmation) return createSettingsError(createMessage('permissions.hosts.error.notAdded'), 'cancelled');
+      const result = await toolPolicyStore.addGlobalHosts(hosts, { confirmation });
+      if (!result.ok) return createSettingsError(result.error);
+    } else {
+      const root = await sandboxRootFor(data.root);
+      if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
+      const confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.WORKSPACE_HOSTS, root, workspaceHostsDialog(hosts, root, t));
+      if (!confirmation) return createSettingsError(createMessage('permissions.hosts.error.notAdded'), 'cancelled');
+      const result = await toolPolicyStore.addWorkspaceHosts(root, hosts, { confirmation });
+      if (!result.ok) return createSettingsError(result.error);
+    }
+    if (!event.sender.isDestroyed?.()) event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+    return { ...createSettingsOk(), hosts };
+  });
+
+  // A host open everywhere (#1119), closed again — a tightening, no dialog.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_REMOVE_GLOBAL_HOST, async (event, rawHost) => {
+    const host = typeof rawHost === 'string' ? rawHost.trim() : '';
+    if (!host || host.length > 300) return createSettingsError(createMessage('permissions.workspaceHosts.error.invalid'));
+    const result = await toolPolicyStore.removeGlobalHost(host);
+    if (!result.ok) return createSettingsError(result.error);
+    if (!event.sender.isDestroyed?.()) event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+    return createSettingsOk();
+  });
+
+  // "Sandbox on in new workspaces" (#1119). Off is a loosening and asks;
+  // the folders Snotra knows by then keep their setting. On never asks.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_NEW_WORKSPACE_SANDBOX, async (event, enabled) => {
+    if (typeof enabled !== 'boolean') return createSettingsError(createMessage('permissions.error.invalidSandboxSetting'));
+    let confirmation = null;
+    let knownRoots = [];
+    if (!enabled) {
+      if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.sandboxOffNeedsEncryption'));
+      confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.NEW_WORKSPACE_SANDBOX_OFF, '', newWorkspaceSandboxOffDialog(createTranslator(getLocale())));
+      if (!confirmation) return createSettingsError(createMessage('permissions.error.sandboxNotSwitchedOff'), 'cancelled');
+      try {
+        knownRoots = (await listKnownWorkspaces()) || [];
+      } catch {
+        // The folders the policy holds settings for and the open one still keep theirs.
+        knownRoots = [];
+      }
+      const active = getActiveWorkspaceRoot();
+      if (active) knownRoots = [...knownRoots, active];
+    }
+    const result = await toolPolicyStore.setNewWorkspaceSandbox(enabled, { confirmation, knownRoots });
+    if (!result.ok) return createSettingsError(result.error);
+    if (!event.sender.isDestroyed?.()) event.sender.send(PUSH.TOOL_PERMISSIONS_CHANGED, {});
+    return { ...createSettingsOk(), newWorkspaceSandbox: enabled };
+  });
+
+  // "Reset sandbox for this workspace" (#1119), and "Remove" for a folder
+  // that is gone: only takes rights away, so no dialog.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_SANDBOX, async (event, rawRoot) => {
+    const root = await sandboxRootFor(rawRoot);
+    if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
+    const result = await toolPolicyStore.resetWorkspaceSandbox(root);
+    if (!result.ok) return createSettingsError(result.error);
+    afterPolicyChange(event.sender);
+    return createSettingsOk();
+  });
+
+  // "Reset the sandbox everywhere" (#1119): asked first, because it takes
+  // every allowance away at once.
+  ipcMain.handle(REQ.TOOL_PERMISSIONS_RESET_SANDBOX_EVERYWHERE, async (event) => {
+    const confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.RESET_SANDBOX, '', resetSandboxDialog(createTranslator(getLocale())));
+    if (!confirmation) return createSettingsError(createMessage('permissions.error.resetCancelled'), 'cancelled');
+    const result = await toolPolicyStore.resetSandboxEverywhere();
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(event.sender);
     return createSettingsOk();
@@ -899,6 +1173,9 @@ module.exports = {
   workspaceAutoDialog,
   commandRuleDialog,
   workspaceHostsDialog,
+  globalHostsDialog,
+  newWorkspaceSandboxOffDialog,
+  resetSandboxDialog,
   programAllowanceDialog,
   resetDialog,
   removePatternsDialog,

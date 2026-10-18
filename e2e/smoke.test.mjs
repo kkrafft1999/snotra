@@ -1452,7 +1452,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     }
     return null;
   }, { what: 'Skill-Text beim Modell' });
-  assert.match(skillResult, /Einstellungen › Tools & Sicherheit/, 'zitierter Menuepfad in der Oberflaechensprache');
+  assert.match(skillResult, /Einstellungen › Tools › Autonomie/, 'zitierter Menuepfad in der Oberflaechensprache');
   assert.equal(skillResult.includes('{menu:'), false, 'kein ungefuellter Platzhalter beim Modell');
   // Der Satz darum ist und bleibt englisch. (Dass im Quelltext des Skills
   // keine Seite fest in einer Sprache steht, haelt test/ui-quotes.test.js.)

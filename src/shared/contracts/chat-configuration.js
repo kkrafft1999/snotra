@@ -42,7 +42,7 @@ const CONFIG_SKILL_STATES = Object.freeze({
 
 /** Why a tool is not offered to the model. `null` means it is. */
 const TOOL_OFFER_REASONS = Object.freeze({
-  /** Unticked under Settings › Tools & security. */
+  /** Unticked under Settings › Tools › Autonomy. */
   SWITCHED_OFF: 'switchedOff',
   /** Something it needs is missing — see its setup. */
   NOT_CONFIGURED: 'notConfigured',

@@ -1012,6 +1012,8 @@ function createChatEngine({
         workspaceHosts: snapshot?.workspaceHosts && typeof snapshot.workspaceHosts === 'object'
           ? snapshot.workspaceHosts
           : {},
+        // Hosts kept open in every workspace (#1119).
+        globalHosts: Array.isArray(snapshot?.globalHosts) ? snapshot.globalHosts : [],
       };
     } catch {
       // Fehlerhafte Sicherheitsregeln blockieren Tools, statt Sperren zu
@@ -1916,13 +1918,17 @@ function createChatEngine({
 
       /**
        * What sandbox cards allowed for the shell and Python runs of this chat
-       * (#792) — and the hosts kept open for its workspace (#946) — or null.
+       * (#792) — and the hosts kept open for its workspace (#946) or for
+       * every workspace (#1119) — or null.
        */
       function sessionSandboxGrants(scopeKey, policy) {
         const granted = sessionGrants.sandboxPaths?.(scopeKey);
-        const kept = workspaceRoot && Array.isArray(policy?.workspaceHosts?.[workspaceRoot])
-          ? policy.workspaceHosts[workspaceRoot]
-          : [];
+        const kept = [
+          ...(Array.isArray(policy?.globalHosts) ? policy.globalHosts : []),
+          ...(workspaceRoot && Array.isArray(policy?.workspaceHosts?.[workspaceRoot])
+            ? policy.workspaceHosts[workspaceRoot]
+            : []),
+        ];
         const writePaths = granted?.writePaths || [];
         const readPaths = granted?.readPaths || [];
         const hosts = [...new Set([...kept, ...(granted?.hosts || [])])];

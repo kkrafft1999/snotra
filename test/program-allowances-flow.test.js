@@ -91,7 +91,7 @@ test('planner: the allowance goes into the plan, its key and the card, with its 
     command: 'ms-todo-cli lists', network_domains: ['example.com'],
   }, { workspaceRoot: WORKSPACE });
 
-  assert.deepEqual(requests, [{ command: 'ms-todo-cli lists', cwd: WORKSPACE }]);
+  assert.deepEqual(requests, [{ command: 'ms-todo-cli lists', cwd: WORKSPACE, workspaceRoot: WORKSPACE }]);
   assert.equal(plan.sandbox.allowance.command, `${TOOL} lists`);
   assert.equal(plan.sandbox.allowance.program, 'ms-todo-cli');
   assert.equal(typeof plan.sandbox.allowance.entryKey, 'string');
@@ -262,7 +262,7 @@ test('card: names the allowance with ~ paths, or why it stays off (en/de)', asyn
       kind: 'applied',
       prefix: 'Program allowance for ms-todo-cli:',
       text: 'also writes in ~/Library/Application Support/ms-todo and checks certificates through macOS.',
-      settingsLabel: 'Program allowances',
+      settingsLabel: 'Programs with more room',
     });
     assert.equal(
       buildApprovalCardView(skipped).isolation.allowance.text,

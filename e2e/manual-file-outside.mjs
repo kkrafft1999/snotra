@@ -152,7 +152,7 @@ try {
     `(cards so far: ${cards})`);
   console.log('box:', await lastBox());
 
-  // The session allowance in Settings › Tools & security.
+  // The session allowance in Settings › Tools › Autonomy.
   await app.evaluate(({ Menu }) => {
     for (const top of Menu.getApplicationMenu().items) {
       const item = top.submenu?.items.find((i) => /^(Einstellungen|Settings)/.test(i.label ?? ''));
