@@ -974,7 +974,14 @@ const MOTIFS = {
         const img = document.querySelector('[data-motif="answer"] img');
         return Boolean(img && img.complete && img.naturalWidth > 0);
       }), { what: 'image in the answer' });
-      await page.evaluate(() => document.querySelector('[data-motif="answer"]').scrollIntoView({ block: 'end' }));
+      // The answer is the last message: scrolled to the list's end, the gap
+      // below it stays clear of the composer. scrollIntoView() stops short when
+      // the list overflows by less than its bottom padding, and the clip then
+      // caught the top edge of the composer card (#1125).
+      await page.evaluate(() => {
+        const list = document.getElementById('chat-messages');
+        list.scrollTop = list.scrollHeight;
+      });
       return clipAround(page, '[data-motif="answer"]', 16);
     },
   },
