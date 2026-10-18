@@ -35,7 +35,7 @@
  */
 
 /**
- * What the desktop reads of `/channels/{channelId}` (protocol §5.10): `null`
+ * What the desktop reads of `/channels/{channelId}/meta` (protocol §5.10): `null`
  * once the record is gone — cancelled, denied, expired or removed.
  *
  * @typedef {Object} RemoteChannelRecord

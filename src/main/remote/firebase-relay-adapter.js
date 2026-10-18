@@ -8,7 +8,9 @@
  * - the Identity Toolkit's `accounts:signInWithCustomToken` to turn the
  *   relay's custom token into an ID token;
  * - the Realtime Database's REST streaming (server-sent events,
- *   `Accept: text/event-stream`, `?auth=<ID token>`) to follow the channel.
+ *   `Accept: text/event-stream`, `?auth=<ID token>`) to follow the channel's
+ *   `meta` node — never the channel itself, whose read access would cascade
+ *   into the phone's inbox (§5.10, #1142).
  *
  * Tokens live in this adapter's memory and nowhere else: not on disk, not in
  * an error, not in a log line. What the relay answers is checked for its
@@ -81,7 +83,7 @@ function keyBundleOf(value) {
 }
 
 /**
- * What the desktop reads of a channel (§5.10), from the database's tree. Keys
+ * What the desktop reads of a channel's `meta` (§5.10), from the database's tree. Keys
  * and the MAC keep their strings — whether they are valid points and the right
  * MAC is the core's question, asked through the crypto port.
  *
@@ -262,7 +264,7 @@ function createFirebaseRelayAdapter({
     /** One connection, until the stream ends; `true` once the channel is gone for good. */
     async function connect(onLive) {
       if (!endpoint) throw new RemoteRelayError(RELAY_REASONS.NOT_CONFIGURED);
-      const url = `${endpoint.databaseUrl}/channels/${channelId}.json?auth=${encodeURIComponent(tokenFor(channelId))}`;
+      const url = `${endpoint.databaseUrl}/channels/${channelId}/meta.json?auth=${encodeURIComponent(tokenFor(channelId))}`;
       const response = await fetchImpl(url, { headers: { Accept: 'text/event-stream' }, signal: controller.signal });
       if (!response.ok || !response.body) {
         throw new RemoteRelayError(reasonForStatus(response.status), { status: response.status });
