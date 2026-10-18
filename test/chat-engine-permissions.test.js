@@ -11,6 +11,7 @@ const { formatToolDisplayLine } = require('../src/shared/presentation/tool-displ
 
 const { translateMessage } = require('../src/shared/i18n');
 const { PERMISSION_DENIED_MESSAGE_KEYS } = require('../src/shared/contracts/tool-permissions');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // Die Begruendung der Karte reist seit #290 als Schluesselliste; zum Pruefen
 // des Wortlauts wird sie hier ausgesprochen.
@@ -697,7 +698,7 @@ test('broad searches leave out hits under a user-defined sensitive pattern (#525
     }
     assert.equal(approvals.requests.length, 0, 'leaving a hit out asks nothing');
   } finally {
-    await fs.rm(ws, { recursive: true, force: true });
+    await removeTempDir(ws);
   }
 });
 

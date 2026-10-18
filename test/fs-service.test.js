@@ -9,6 +9,7 @@ const {
   READ_DIRECTORY_MAX_ENTRIES,
 } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 function makeFsService({ locale } = {}) {
   return createFsService({
@@ -112,13 +113,13 @@ test('read_file_text respects workspace bounds through the registry', async () =
   );
   assert.match(bad.error, /outside the workspace/);
 
-  await fs.rm(tmpRoot, { recursive: true, force: true });
+  await removeTempDir(tmpRoot);
 });
 
 test('read_file_text rejects a symlink to a file outside the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -148,7 +149,7 @@ test('read_file_text rejects a symlink to a file outside the workspace', async (
 test('list_directory rejects a symlink to a directory outside the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -190,13 +191,13 @@ test('list_directory lists directories before files and hides dotfiles', async (
     { name: 'readme.md', kind: 'file' },
   ]);
 
-  await fs.rm(tmpRoot, { recursive: true, force: true });
+  await removeTempDir(tmpRoot);
 });
 
 test('list_directory below the cap returns every entry without a truncated flag (#379)', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.mkdir(path.join(tmpRoot, 'src'));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), '', 'utf8');
 
@@ -216,7 +217,7 @@ test('list_directory below the cap returns every entry without a truncated flag 
 test('list_directory cuts a long folder at the cap, folders first, and reports the rest (#379)', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const fileCount = LIST_DIRECTORY_MAX_ENTRIES + 4;
   await fs.mkdir(path.join(tmpRoot, 'zz-folder'));
   await Promise.all(Array.from({ length: fileCount }, (_, i) =>
@@ -257,7 +258,7 @@ test('write_file_text laeuft ohne Freigabe der Policy nicht (Issue #66)', async 
   assert.equal(denied.reason, 'not_approved');
   await assert.rejects(fs.access(path.join(tmpRoot, 'note.txt')));
 
-  await fs.rm(tmpRoot, { recursive: true, force: true });
+  await removeTempDir(tmpRoot);
 });
 
 test('write_file_text creates new files and reports created:true', async () => {
@@ -277,13 +278,13 @@ test('write_file_text creates new files and reports created:true', async () => {
   const written = await fs.readFile(path.join(tmpRoot, 'nested/new/note.txt'), 'utf8');
   assert.equal(written, 'hello world');
 
-  await fs.rm(tmpRoot, { recursive: true, force: true });
+  await removeTempDir(tmpRoot);
 });
 
 test('write_file_text rejects writes through a symlinked parent outside the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -311,7 +312,7 @@ test('write_file_text rejects writes through a symlinked parent outside the work
 test('write_file_text rejects a dangling symlink instead of following it', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -354,7 +355,7 @@ test('write_file_text overwrites existing files and reports overwritten:true', a
   const written = await fs.readFile(path.join(tmpRoot, 'existing.txt'), 'utf8');
   assert.equal(written, 'new content');
 
-  await fs.rm(tmpRoot, { recursive: true, force: true });
+  await removeTempDir(tmpRoot);
 });
 
 test('write_file_text respects workspace bounds and rejects directory targets', async () => {
@@ -398,7 +399,7 @@ test('write_file_text respects workspace bounds and rejects directory targets', 
   );
   assert.match(missingContent.error, /content/);
 
-  await fs.rm(tmpRoot, { recursive: true, force: true });
+  await removeTempDir(tmpRoot);
 });
 
 test('write_file_text enforces the max content size', async () => {
@@ -416,13 +417,13 @@ test('write_file_text enforces the max content size', async () => {
   assert.match(out.error, /too large/);
   await assert.rejects(fs.access(path.join(tmpRoot, 'big.txt')));
 
-  await fs.rm(tmpRoot, { recursive: true, force: true });
+  await removeTempDir(tmpRoot);
 });
 
 test('search_in_files finds matches with line numbers and context through the registry', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(
     path.join(tmpRoot, 'a.txt'),
     'zeile eins\nzeile zwei\nTREFFER hier\nzeile vier\nzeile fünf',
@@ -461,7 +462,7 @@ test('search_in_files finds matches with line numbers and context through the re
 test('search_in_files supports regex, case_sensitive and context_lines', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'foo1\nFOO2\nbar', 'utf8');
 
   const regex = JSON.parse(
@@ -488,7 +489,7 @@ test('search_in_files supports regex, case_sensitive and context_lines', async (
 test('search_in_files rejects missing query and invalid regex', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
 
   const missing = JSON.parse(
     await registry.execute('search_in_files', {}, { workspaceRoot: tmpRoot })
@@ -508,7 +509,7 @@ test('search_in_files rejects missing query and invalid regex', async (t) => {
 test('search_in_files rejects a known ReDoS pattern before scanning any file', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   // Die Zeile ist absichtlich kurz: der Test darf nie vom Muster abhängen, sondern nur von der Vorprüfung.
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'aaaa', 'utf8');
 
@@ -551,7 +552,7 @@ test('search_in_files aborts a slow regex when the worker time budget is exhaust
   });
   const registry = makeToolRegistry(svc);
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'harmlos!', 'utf8');
   await fs.writeFile(path.join(tmpRoot, 'b.txt'), `${'a'.repeat(400)}\n`, 'utf8');
 
@@ -573,7 +574,7 @@ test('search_in_files aborts a slow regex when the worker time budget is exhaust
 test('search_in_files probes only the first 10000 characters of a line', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), `${'x'.repeat(10000)}treffer\ntreffer`, 'utf8');
 
   for (const args of [{ query: 'treffer' }, { query: 'tref+er', is_regex: true }]) {
@@ -589,7 +590,7 @@ test('search_in_files probes only the first 10000 characters of a line', async (
 test('search_in_files respects workspace bounds', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
 
   const out = JSON.parse(
     await registry.execute(
@@ -604,7 +605,7 @@ test('search_in_files respects workspace bounds', async (t) => {
 test('search_in_files skips hidden entries by default, include_hidden enables them, .git stays excluded', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.mkdir(path.join(tmpRoot, '.hidden'));
   await fs.writeFile(path.join(tmpRoot, '.hidden', 'h.txt'), 'geheimer treffer', 'utf8');
   await fs.mkdir(path.join(tmpRoot, '.git'));
@@ -631,7 +632,7 @@ test('search_in_files skips hidden entries by default, include_hidden enables th
 test('search_in_files respects the root .gitignore including negation', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(
     path.join(tmpRoot, '.gitignore'),
     '# Kommentar\nignored-dir/\n*.log\n!keep.log\n',
@@ -656,7 +657,7 @@ test('search_in_files skips binary and oversized files', async (t) => {
   const svc = createFsService({ fs, path, maxReadFileBytes: 64, maxWriteFileBytes: 64 });
   const registry = makeToolRegistry(svc);
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'binary.bin'), Buffer.from('tref\0fer treffer'));
   await fs.writeFile(path.join(tmpRoot, 'big.txt'), `treffer ${'x'.repeat(100)}`, 'utf8');
   await fs.writeFile(path.join(tmpRoot, 'small.txt'), 'treffer', 'utf8');
@@ -674,7 +675,7 @@ test('search_in_files skips binary and oversized files', async (t) => {
 test('search_in_files caps results at max_results and reports truncated', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(
     path.join(tmpRoot, 'a.txt'),
     Array.from({ length: 10 }, (_, i) => `treffer ${i}`).join('\n'),
@@ -702,7 +703,7 @@ test('search_in_files stops after the scan limit and reports it', async (t) => {
   });
   const registry = makeToolRegistry(svc);
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'treffer', 'utf8');
   await fs.writeFile(path.join(tmpRoot, 'b.txt'), 'treffer', 'utf8');
 
@@ -719,7 +720,7 @@ test('search_in_files stops after the scan limit and reports it', async (t) => {
 test('search_in_files applies include and exclude globs', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.mkdir(path.join(tmpRoot, 'src'));
   await fs.mkdir(path.join(tmpRoot, 'dist'));
   await fs.writeFile(path.join(tmpRoot, 'src', 'a.js'), 'treffer', 'utf8');
@@ -754,7 +755,7 @@ test('search_in_files applies include and exclude globs', async (t) => {
 test('search_in_files searches a single file when relative_path is a file', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'treffer', 'utf8');
   await fs.writeFile(path.join(tmpRoot, 'b.txt'), 'treffer', 'utf8');
 
@@ -774,7 +775,7 @@ test('search_in_files searches a single file when relative_path is a file', asyn
 test('search_in_files does not follow symlinks out of the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -797,7 +798,7 @@ test('search_in_files does not follow symlinks out of the workspace', async (t) 
 test('find_files finds paths recursively by glob through the registry', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'x', 'utf8');
   await fs.mkdir(path.join(tmpRoot, 'sub'));
   await fs.writeFile(path.join(tmpRoot, 'sub', 'b.txt'), 'x', 'utf8');
@@ -825,7 +826,7 @@ test('find_files finds paths recursively by glob through the registry', async (t
 test('find_files matches directories and honors trailing-slash patterns', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.mkdir(path.join(tmpRoot, 'sub'));
   await fs.writeFile(path.join(tmpRoot, 'sub.txt'), 'x', 'utf8');
 
@@ -846,7 +847,7 @@ test('find_files matches directories and honors trailing-slash patterns', async 
 test('find_files rejects a missing pattern and a file as start path', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'x', 'utf8');
 
   const missing = JSON.parse(
@@ -867,7 +868,7 @@ test('find_files rejects a missing pattern and a file as start path', async (t) 
 test('find_files respects workspace bounds', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
 
   const out = JSON.parse(
     await registry.execute(
@@ -882,7 +883,7 @@ test('find_files respects workspace bounds', async (t) => {
 test('find_files skips hidden entries by default, include_hidden enables them, .git stays excluded', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.mkdir(path.join(tmpRoot, '.hidden'));
   await fs.writeFile(path.join(tmpRoot, '.hidden', 'h.txt'), 'x', 'utf8');
   await fs.mkdir(path.join(tmpRoot, '.git'));
@@ -909,7 +910,7 @@ test('find_files skips hidden entries by default, include_hidden enables them, .
 test('find_files respects the root .gitignore including negation', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(
     path.join(tmpRoot, '.gitignore'),
     '# Kommentar\nignored-dir/\n*.log\n!keep.log\n',
@@ -933,7 +934,7 @@ test('find_files respects the root .gitignore including negation', async (t) => 
 test('find_files caps results at max_results and reports truncated', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   for (let i = 0; i < 10; i++) {
     await fs.writeFile(path.join(tmpRoot, `f${i}.txt`), 'x', 'utf8');
   }
@@ -959,7 +960,7 @@ test('find_files stops after the scan limit and reports it', async (t) => {
   });
   const registry = makeToolRegistry(svc);
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'x', 'utf8');
   await fs.writeFile(path.join(tmpRoot, 'b.txt'), 'x', 'utf8');
 
@@ -976,7 +977,7 @@ test('find_files stops after the scan limit and reports it', async (t) => {
 test('find_files searches only below the given start folder', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.mkdir(path.join(tmpRoot, 'src'));
   await fs.mkdir(path.join(tmpRoot, 'dist'));
   await fs.writeFile(path.join(tmpRoot, 'src', 'a.js'), 'x', 'utf8');
@@ -995,7 +996,7 @@ test('find_files searches only below the given start folder', async (t) => {
 test('find_files does not follow symlinks out of the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -1018,7 +1019,7 @@ test('find_files does not follow symlinks out of the workspace', async (t) => {
 test('stat_path returns file metadata without content through the registry', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'eins\nzwei\n', 'utf8');
 
   const out = JSON.parse(
@@ -1038,7 +1039,7 @@ test('stat_path returns file metadata without content through the registry', asy
 test('stat_path reports directories without size and counts lines on request', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.mkdir(path.join(tmpRoot, 'sub'));
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), 'eins\nzwei\n', 'utf8');
   await fs.writeFile(path.join(tmpRoot, 'leer.txt'), '', 'utf8');
@@ -1082,7 +1083,7 @@ test('stat_path reports directories without size and counts lines on request', a
 test('stat_path reports missing paths as exists=false instead of an error', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
 
   const out = JSON.parse(
     await registry.execute(
@@ -1097,7 +1098,7 @@ test('stat_path reports missing paths as exists=false instead of an error', asyn
 test('stat_path requires relative_path and respects workspace bounds', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
 
   const missing = JSON.parse(
     await registry.execute('stat_path', {}, { workspaceRoot: tmpRoot })
@@ -1117,7 +1118,7 @@ test('stat_path requires relative_path and respects workspace bounds', async (t)
 test('stat_path rejects a symlink to a file outside the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -1152,7 +1153,7 @@ test('stat_path skips the line count for binary and oversized files', async (t) 
   });
   const registry = makeToolRegistry(svc);
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'binary.bin'), Buffer.from([0x41, 0x00, 0x42]));
   await fs.writeFile(path.join(tmpRoot, 'gross.txt'), 'mehr als acht Bytes\n', 'utf8');
 
@@ -1183,7 +1184,7 @@ test('stat_path skips the line count for binary and oversized files', async (t) 
 
 async function makeOutlineFixture(t, files) {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   for (const [name, lines] of Object.entries(files)) {
     await fs.writeFile(path.join(tmpRoot, name), lines.length ? `${lines.join('\n')}\n` : '', 'utf8');
   }
@@ -1457,7 +1458,7 @@ test('outline_file rejects binary and oversized files', async (t) => {
   });
   const registry = makeToolRegistry(svc);
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'bin.md'), Buffer.from([0x23, 0x00, 0x42]));
   await fs.writeFile(path.join(tmpRoot, 'gross.md'), '# mehr als acht Bytes\n', 'utf8');
 
@@ -1468,7 +1469,7 @@ test('outline_file rejects binary and oversized files', async (t) => {
 test('outline_file rejects a symlink to a file outside the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -1490,7 +1491,7 @@ test('outline_file rejects a symlink to a file outside the workspace', async (t)
 
 async function makeTreeFixture(t) {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const dirs = ['src/main/deep', 'src/shared', 'docs', 'empty', '.hidden', '.git', 'node_modules'];
   for (const dir of dirs) await fs.mkdir(path.join(tmpRoot, dir), { recursive: true });
   const files = {
@@ -1618,7 +1619,7 @@ test('list_directory_tree validates arguments and respects workspace bounds', as
 test('list_directory_tree does not follow symlinks out of the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -1639,7 +1640,7 @@ test('list_directory_tree does not follow symlinks out of the workspace', async 
 
 async function makeLinesFixture(t, lineCount = 10) {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const lines = Array.from({ length: lineCount }, (_, i) => `zeile ${i + 1}`);
   await fs.writeFile(path.join(tmpRoot, 'a.txt'), `${lines.join('\n')}\n`, 'utf8');
   return tmpRoot;
@@ -1711,7 +1712,7 @@ test('read_file_lines validates range parameters', async (t) => {
 test('read_file_lines reads a byte range and reports the first line', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'b.txt'), 'abc\ndef\nghi\n', 'utf8');
 
   const out = JSON.parse(
@@ -1769,7 +1770,7 @@ test('read_file_lines respects workspace bounds and rejects directories', async 
 test('read_file_lines rejects a symlink to a file outside the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -1798,7 +1799,7 @@ test('read_file_lines rejects a symlink to a file outside the workspace', async 
 test('read_file_lines rejects oversized files and enforces the slice budget', async (t) => {
   const smallRead = createFsService({ fs, path, maxReadFileBytes: 16 });
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'gross.txt'), 'x'.repeat(32), 'utf8');
   const tooBig = JSON.parse(
     await makeToolRegistry(smallRead).execute(
@@ -1857,7 +1858,7 @@ test('read_file_lines caps the line span per call', async (t) => {
 
 async function makeEditFixture(t, content = 'const a = 1;\nconst b = 2;\nconst c = 3;\n') {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'a.js'), content, 'utf8');
   return tmpRoot;
 }
@@ -1960,7 +1961,7 @@ test('edit_file respects workspace bounds and rejects directories', async (t) =>
 test('edit_file rejects a symlink to a file outside the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -1990,7 +1991,7 @@ test('edit_file enforces read and write size limits', async (t) => {
   const svc = createFsService({ fs, path, maxReadFileBytes: 1024, maxWriteFileBytes: 16 });
   const registry = makeToolRegistry(svc);
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'gross.txt'), 'x'.repeat(2048), 'utf8');
   await fs.writeFile(path.join(tmpRoot, 'klein.txt'), 'kurz\n', 'utf8');
 
@@ -2016,7 +2017,7 @@ test('edit_file enforces read and write size limits', async (t) => {
 
 async function makePatchFixture(t, files) {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   for (const [name, content] of Object.entries(files)) {
     await fs.writeFile(path.join(tmpRoot, name), content, 'utf8');
   }
@@ -2497,7 +2498,7 @@ test('apply_patch respects workspace bounds, folders and missing files', async (
 test('apply_patch rejects a symlink to a file outside the workspace', async (t) => {
   const registry = makeToolRegistry();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace);
@@ -2528,7 +2529,7 @@ test('apply_patch rejects a symlink to a file outside the workspace', async (t) 
 
 test('apply_patch enforces read, write and patch size limits', async (t) => {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.writeFile(path.join(tmpRoot, 'gross.txt'), 'x'.repeat(2048), 'utf8');
   await fs.writeFile(path.join(tmpRoot, 'klein.txt'), 'kurz\n', 'utf8');
 
@@ -2802,7 +2803,7 @@ test('apply_patch (patch) leaves no temp files behind after a multi-file success
 
 async function makeImportFixture(t) {
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-import-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   const workspace = path.join(tmpRoot, 'workspace');
   const outside = path.join(tmpRoot, 'outside');
   await fs.mkdir(workspace, { recursive: true });
@@ -2967,7 +2968,7 @@ test('importExternalItems lehnt fehlende, relative und nicht-Ordner-Ziele ab (#1
 test('readDirectory for the file tree lists everything below the cap (#76)', async (t) => {
   const fsService = makeFsService();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.mkdir(path.join(tmpRoot, 'src'));
   await fs.writeFile(path.join(tmpRoot, 'b.txt'), 'abc', 'utf8');
   await fs.writeFile(path.join(tmpRoot, '.hidden'), '', 'utf8');
@@ -2983,7 +2984,7 @@ test('readDirectory for the file tree lists everything below the cap (#76)', asy
 test('readDirectory marks symlinks with target and kind and sorts folder links with folders (#945)', async (t) => {
   const fsService = makeFsService();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.mkdir(path.join(tmpRoot, 'real-dir'));
   await fs.writeFile(path.join(tmpRoot, 'real.md'), 'x', 'utf8');
   const dirType = process.platform === 'win32' ? 'junction' : 'dir';
@@ -3013,7 +3014,7 @@ test('readDirectory marks symlinks with target and kind and sorts folder links w
 test('readDirectory cuts after sorting, folders first, and counts the rest (#76)', async (t) => {
   const fsService = makeFsService();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await fs.mkdir(path.join(tmpRoot, 'zz-folder'));
   await Promise.all(Array.from({ length: 150 }, (_, i) =>
     fs.writeFile(path.join(tmpRoot, `f${String(i).padStart(3, '0')}.txt`), 'x', 'utf8')));
@@ -3032,7 +3033,7 @@ test('readDirectory cuts after sorting, folders first, and counts the rest (#76)
 test('readDirectory caps the file tree at READ_DIRECTORY_MAX_ENTRIES by default (#76)', async (t) => {
   const fsService = makeFsService();
   const tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpRoot, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpRoot));
   await Promise.all(Array.from({ length: READ_DIRECTORY_MAX_ENTRIES + 3 }, (_, i) =>
     fs.writeFile(path.join(tmpRoot, `f${String(i).padStart(5, '0')}`), '', 'utf8')));
 

@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const { compileGlob, createGitignoreMatcher } = require('../src/main/services/glob-match');
 const { createFsService } = require('../src/main/services/fs-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 function matches(pattern, relPath) {
   return compileGlob(pattern).test(relPath);
@@ -119,7 +120,7 @@ test(
   async (t) => {
     const svc = createFsService({ fs, path, maxReadFileBytes: 1024 * 1024 });
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-glob-'));
-    t.after(() => fs.rm(root, { recursive: true, force: true }));
+    t.after(() => removeTempDir(root));
     await fs.writeFile(path.join(root, LONG_NAME), 'hit\n', 'utf8');
 
     let started = Date.now();
@@ -145,7 +146,7 @@ test(
 test('the GitHub template lines take effect in the @ list and in find_files (#644)', async (t) => {
   const svc = createFsService({ fs, path, maxReadFileBytes: 1024 * 1024 });
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-glob-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(root));
   await fs.writeFile(path.join(root, '.gitignore'), '[Bb]in/\n[Oo]bj/\n*.py[cod]\n\\#notes.txt\n', 'utf8');
   for (const dir of ['Bin', 'obj', 'src']) await fs.mkdir(path.join(root, dir));
   await fs.writeFile(path.join(root, 'Bin', 'app.dll'), 'x', 'utf8');

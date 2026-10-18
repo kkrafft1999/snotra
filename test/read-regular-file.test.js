@@ -9,12 +9,13 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const { readRegularFile } = require('../src/main/services/read-regular-file');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const POSIX = process.platform !== 'win32';
 
 async function tempDir(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-regular-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 

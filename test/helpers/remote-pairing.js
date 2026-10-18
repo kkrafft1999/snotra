@@ -25,6 +25,7 @@ const { createRemoteIdentityStore, FILE_NAME } = require('../../src/main/remote/
 const { createRemotePairingCryptoAdapter } = require('../../src/main/remote/pairing-protocol');
 const { pairingPrompt } = require('../../src/main/remote/pairing-prompt');
 const { writeFileAtomic } = require('../../src/main/services/atomic-write');
+const { removeTempDirSync } = require('./temp-dir');
 
 const b64u = (buffer) => Buffer.from(buffer).toString('base64url');
 const bytes = (text) => Buffer.from(text, 'base64url');
@@ -154,7 +155,7 @@ function createPhone() {
 
 function tempDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-remote-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDirSync(dir));
   return dir;
 }
 

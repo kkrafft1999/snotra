@@ -20,6 +20,7 @@ const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-too
 const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
 const { toolCategory, TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
 const { toolConfigGroup, CONFIG_TOOL_GROUPS } = require('../src/shared/contracts/chat-configuration');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const VENDORED_MARKED = path.join(__dirname, '..', 'src', 'renderer', 'vendor', 'marked.umd.js');
 const loadLexer = () => loadVendoredMarkedLexer(VENDORED_MARKED, { readFileSync: fs.readFileSync });
@@ -42,7 +43,7 @@ test.before(() => {
 });
 
 test.after(() => {
-  fs.rmSync(targetDir, { recursive: true, force: true });
+  removeTempDirSync(targetDir);
 });
 
 /** A manual service over pages given inline, for the edge cases. */

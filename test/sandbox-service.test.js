@@ -25,6 +25,7 @@ const {
   SANDBOX_REASONS,
 } = require('../src/main/services/sandbox-service');
 const { normalizeDomains, suggestDomains, resolveNetworkDomains } = require('../src/shared/runtime/sandbox-domains');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const posixOnly = { skip: process.platform === 'win32' ? 'needs /bin/sh' : false };
 
@@ -382,7 +383,7 @@ test('on macOS a pip from 24.2 on gets the certifi fallback, an older one does n
     assert.equal(prepared.env.PIP_USE_DEPRECATED, 'legacy-certs');
     prepared.release();
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 });
 
@@ -430,7 +431,7 @@ test('on macOS trustd opens only for a run whose allowance asks for it, and a bl
     assert.match(annotated, /Settings › Tools › Security › Programs with more room/);
     closed.release();
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 });
 

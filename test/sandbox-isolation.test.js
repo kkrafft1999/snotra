@@ -18,6 +18,7 @@ const os = require('os');
 
 const { createSandboxService } = require('../src/main/services/sandbox-service');
 const { createShellRunnerService } = require('../src/main/services/shell-runner-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const REQUIRED = process.env.SNOTRA_REQUIRE_SANDBOX === '1';
 
@@ -139,7 +140,7 @@ test.after(async () => {
   if (!setup) return;
   const ctx = await setup;
   await ctx.sandbox.shutdown();
-  await fs.rm(ctx.base, { recursive: true, force: true });
+  await removeTempDir(ctx.base);
 });
 
 test('a run writes inside the workspace, and nowhere outside it', async (t) => {

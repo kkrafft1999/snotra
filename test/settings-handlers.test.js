@@ -30,6 +30,7 @@ const { createProviderSecretsPort } = require('../src/main/adapters/provider-sec
 const { createSettingsPresentationService } = require('../src/main/services/settings-presentation-service');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeDir, removeTempDir } = require('./helpers/temp-dir');
 
 const mockProviders = {
   getProvider(id) {
@@ -179,7 +180,7 @@ function makeHandlerProviders({ listModelsImpl } = {}) {
 
 async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog, storageFs = fs, shellSettings = null, chatSessionSettings = null } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-settings-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const safeStorage = {
     isEncryptionAvailable: () => encryptionAvailable,
     encryptString: (plaintext) => Buffer.from(`enc:${plaintext}`, 'utf8'),
@@ -745,7 +746,7 @@ test('an unreadable stored key does not block the save; the chat moves to a usab
 test('removeFolderFromHistory drops one entry and returns the remaining list', async (t) => {
   const { ipcMain, workspaceActivation } = await setupHandlers(t);
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-ws-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const a = path.join(base, 'a');
   const b = path.join(base, 'b');
   await fs.mkdir(a);
@@ -778,7 +779,7 @@ test('getSkillCatalog reicht die gespeicherte Auswahl an den Skill-Service durch
   });
 
   const ws = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skills-'));
-  t.after(() => fs.rm(ws, { recursive: true, force: true }));
+  t.after(() => removeTempDir(ws));
   await workspaceActivation.activateChosenFolder(ws);
 
   // Auch ein mitgeschickter Pfad aendert nichts: es zaehlt der aktive Root.
@@ -806,7 +807,7 @@ test('reloadSkills verwirft den Cache und liefert den frischen Katalog', async (
 
 test('a ticked workspace skill is stored for the open folder, never in the global list (#576)', async (t) => {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skill-bind-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const home = path.join(base, 'home');
   const ws = path.join(base, 'ws');
   const writeSkill = async (dir, name) => {
@@ -845,7 +846,7 @@ test('activeSkills überleben den Weg durch setUIPrefs', async (t) => {
 test('activateFolder nimmt nur bekannte Ordner an (#68)', async (t) => {
   const { ipcMain, workspaceActivation, getActiveWorkspaceRoot } = await setupHandlers(t);
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-activate-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const known = path.join(base, 'known');
   const fremd = path.join(base, 'fremd');
   await fs.mkdir(known);
@@ -872,7 +873,7 @@ test('activateFolder nimmt nur bekannte Ordner an (#68)', async (t) => {
 test('activateFolder akzeptiert den letzten Ordner auch ohne Verlaufseintrag (#68)', async (t) => {
   const { ipcMain, workspaceActivation, getActiveWorkspaceRoot } = await setupHandlers(t);
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-last-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
 
   await workspaceActivation.activateChosenFolder(dir);
   assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, dir), {
@@ -888,11 +889,11 @@ test('activateFolder akzeptiert den letzten Ordner auch ohne Verlaufseintrag (#6
 test('activateFolder lehnt einen geloeschten Ordner ab (#68)', async (t) => {
   const { ipcMain, workspaceActivation } = await setupHandlers(t);
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-gone-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const gone = path.join(base, 'gone');
   await fs.mkdir(gone);
   await workspaceActivation.activateChosenFolder(gone);
-  await fs.rm(gone, { recursive: true, force: true });
+  await removeDir(gone);
 
   const res = await ipcMain.invoke(REQ.SETTINGS_ACTIVATE_FOLDER, gone);
   assert.equal(res.ok, false);
@@ -901,7 +902,7 @@ test('activateFolder lehnt einen geloeschten Ordner ab (#68)', async (t) => {
 test('activateChosenFolder lehnt eine Datei ab (#68)', async (t) => {
   const { workspaceActivation, getActiveWorkspaceRoot } = await setupHandlers(t);
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-file-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const file = path.join(base, 'notes.md');
   await fs.writeFile(file, 'hallo', 'utf8');
 

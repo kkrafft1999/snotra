@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { createMoveToTrash, trashName } = require('../src/main/services/move-to-trash');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // 2026-10-05 08:45:12 local time — Finder's suffix is the local time of day.
 const DATE = new Date(2026, 9, 5, 8, 45, 12);
@@ -16,7 +17,7 @@ const refused = () => {
 
 async function setUp(t, { withTrash = true } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-trash-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(root));
   const home = path.join(root, 'home');
   const workspace = path.join(root, 'OneDrive', 'Library - Shared');
   await fs.mkdir(workspace, { recursive: true });

@@ -13,13 +13,14 @@ const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const LIMITS = { maxReadFileBytes: 1024 * 1024, maxWriteFileBytes: 1024 * 1024 };
 const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
 
 async function makeWorkspace(t, files = {}) {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-edit-encoding-'));
-  t.after(() => fs.rm(workspace, { recursive: true, force: true }));
+  t.after(() => removeTempDir(workspace));
   for (const [rel, content] of Object.entries(files)) {
     await fs.writeFile(path.join(workspace, rel), content);
   }

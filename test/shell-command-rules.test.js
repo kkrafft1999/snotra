@@ -31,6 +31,7 @@ const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ip
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createTestConfirmations } = require('./helpers/confirmations');
 const { CONFIRMATION_ACTIONS, permissionRuleSubject } = require('../src/application/permissions/user-confirmation');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const ROOT = '/work/projekt';
 
@@ -266,7 +267,7 @@ function makeSender(id = 1) {
 
 async function setup(t, { dialogResponse = 0 } = {}) {
   const dir = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'snotra-cmd-rule-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const getMainWindow = () => ({ isDestroyed: () => false });
   const dialogCalls = [];
   const dialog = {

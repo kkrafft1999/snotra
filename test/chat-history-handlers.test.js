@@ -9,6 +9,7 @@ const { createMockProviderCatalog } = require('./helpers/provider-ports');
 const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const mockProviders = {
   getProvider(id) {
@@ -23,7 +24,7 @@ async function setup(t, { maxChatSessions = 3, chatSessionSettings, fsImpl = fs,
   let clock = 1_000_000;
   const now = () => (clock += 1000);
   const tmpDir = appDir || await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-chathist-'));
-  if (!appDir) t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  if (!appDir) t.after(() => removeTempDir(tmpDir));
   const storage = createStorageService({
     app: { getPath: () => tmpDir },
     safeStorage: { isEncryptionAvailable: () => false },

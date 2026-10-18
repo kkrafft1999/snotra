@@ -9,6 +9,7 @@ const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createSensitivePathMatcher } = require('../src/shared/runtime/sensitive-paths');
 const { scanSensitiveContent } = require('../src/shared/runtime/sensitive-content');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 function makeSensitivity() {
   const matcher = createSensitivePathMatcher();
@@ -20,7 +21,7 @@ function makeSensitivity() {
 
 async function makeFixture(t) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-sens-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(root));
   await fs.mkdir(path.join(root, 'src'), { recursive: true });
   await fs.mkdir(path.join(root, 'keys'), { recursive: true });
   await fs.writeFile(path.join(root, 'src', 'a.js'), 'const key = "x";\n', 'utf8');

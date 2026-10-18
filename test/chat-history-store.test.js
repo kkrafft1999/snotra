@@ -16,6 +16,7 @@ const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-ha
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const quiet = { warn() {}, info() {}, error() {}, log() {} };
 
@@ -37,7 +38,7 @@ function encrypt(data, key = 'enc') {
 
 async function tempDir(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-985-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 

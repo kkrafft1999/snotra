@@ -26,6 +26,7 @@ const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-t
 const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
 const { createSkillsService } = require('../src/main/services/skills-service');
 const { TOOL_CATEGORIES, toolCategoryForEntry } = require('../src/shared/contracts/tool-categories');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const VALID = '---\nname: release-notes\ndescription: Writes release notes. Use when asked for them.\n---\n\nDo it.\n';
 
@@ -83,7 +84,7 @@ async function withWorkspace(files, run) {
     }
     return await run(root);
   } finally {
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTempDir(root);
   }
 }
 

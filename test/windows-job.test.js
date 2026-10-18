@@ -20,6 +20,7 @@ const { createChildRunner } = require('../src/main/services/child-run');
 const { createShellRunnerService, buildShellArgs, INVOCATIONS, PROBE_MARKER } =
   require('../src/main/services/shell-runner-service');
 const { createPythonRunnerService } = require('../src/main/services/python-runner-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const windowsOnly = { skip: process.platform === 'win32' ? false : 'Job Objects are Windows' };
 
@@ -125,7 +126,7 @@ test('the first interpreter passes arguments, input, output and exit code throug
     // Without Windows there is no job to make: the run says so and goes on.
     assert.deepEqual(lines(result.stderr), [NOTICE, 'err']);
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 });
 

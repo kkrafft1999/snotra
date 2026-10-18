@@ -13,6 +13,7 @@ const { createFileChangeRecorder } = require('../src/main/services/file-change-r
 const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
 const { buildPreview } = require('../src/main/tools/tool-call-planner');
 const { IMAGE_GENERATION_ERROR_CODES: CODES } = require('../src/shared/contracts/image-generation');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // 1x1 PNG.
 const PNG = Buffer.from(
@@ -36,7 +37,7 @@ function makeImageService({ configured = true, generate } = {}) {
 
 async function makeWorkspace(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-image-')));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(root));
   return root;
 }
 

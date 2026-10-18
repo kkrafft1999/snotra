@@ -12,6 +12,7 @@ const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { translateMessage } = require('../src/shared/i18n');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // Main hands over keys since #353; the German wording is checked through the
 // catalogue.
@@ -36,7 +37,7 @@ const {
 /** A temp folder that is removed when the test `t` ends, passed or failed. */
 function makeTempDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-inst-test-'));
-  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 
@@ -54,7 +55,7 @@ async function writeAppAsar(packageDir, pkg = { productName: 'Snotra Agent', ver
     await fsp.mkdir(path.join(packageDir, 'resources'), { recursive: true });
     await asar.createPackage(src, path.join(packageDir, 'resources', 'app.asar'));
   } finally {
-    await fsp.rm(src, { recursive: true, force: true });
+    await removeTempDir(src);
   }
 }
 

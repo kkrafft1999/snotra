@@ -11,13 +11,14 @@ const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { removeDir, removeTempDir } = require('./helpers/temp-dir');
 
 const TMP_MARKER = '.snotra-tmp-';
 const LIMITS = { maxReadFileBytes: 1024 * 1024, maxWriteFileBytes: 1024 * 1024 };
 
 async function makeFixture(t, files = {}) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-overwrite-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const workspace = path.join(base, 'workspace');
   const outside = path.join(base, 'outside');
   await fs.mkdir(workspace);
@@ -227,7 +228,7 @@ test('elsewhere the first EPERM of the rename is the answer and the file keeps i
 
 test('a new file is not written through a folder swapped for a link out of the workspace', { skip: process.platform === 'win32' }, async (t) => {
   const base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-new-file-swap-')));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const ws = path.join(base, 'ws');
   const outside = path.join(base, 'outside');
   await fs.mkdir(path.join(ws, 'docs'), { recursive: true });
@@ -236,7 +237,7 @@ test('a new file is not written through a folder swapped for a link out of the w
   // The plan saw a real folder; then a run swaps it for a link out.
   const resolved = await svc.resolveWorkspacePathForAccess(ws, 'docs/new.md');
   assert.equal(resolved.error, undefined);
-  await fs.rm(path.join(ws, 'docs'), { recursive: true });
+  await removeDir(path.join(ws, 'docs'));
   await fs.symlink(outside, path.join(ws, 'docs'));
   const out = JSON.parse(await svc.runWriteFileTextTool({ relative_path: 'docs/new.md', content: 'x\n' }, ws));
   assert.ok(out.error, 'the write is refused');

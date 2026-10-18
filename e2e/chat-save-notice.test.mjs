@@ -8,11 +8,12 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir, waitForFolderChat, sendChat, storedChats } from './helpers/app.mjs';
+import { removeDir } from '../test/helpers/temp-dir.js';
 
 function banner(page) {
   return page.evaluate(() => {
@@ -55,7 +56,7 @@ test('an unreadable chat history shows the banner until a save goes through agai
   assert.ok(await banner(page), 'still there after the answer was not saved either');
 
   // Readable again: the next save goes through and takes the whole chat along.
-  await rm(historyFile, { recursive: true, force: true });
+  await removeDir(historyFile);
   model.queueAnswer({ match: 'SAVE-2', text: 'About 2 cm deep.' });
   await sendChat(page, 'And how deep? SAVE-2', { explain });
   await poll(async () => (await banner(page)) === null, { what: 'the banner to go', explain });

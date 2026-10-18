@@ -9,10 +9,11 @@ const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 const { createToolCallPlanner, validateArguments, buildPreview, PREVIEW_MAX_CHARS } = require('../src/main/tools/tool-call-planner');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 async function makeFixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-planner-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const workspace = path.join(base, 'projekt');
   const userData = path.join(base, 'userData');
   const skillDir = path.join(base, 'skills', 'demo');

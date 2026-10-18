@@ -15,6 +15,7 @@ const { createMockProviderCatalog } = require('./helpers/provider-ports');
 const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // 1×1 PNG, gross genug fuer einen echten Roundtrip und klein genug fuer den Test.
 const PNG_1PX =
@@ -28,7 +29,7 @@ function imageAttachment(dataBase64 = PNG_1PX, name = 'Screenshot.png') {
 
 async function setup(t, { maxChatSessions = 3 } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-attach-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const app = { getPath: () => tmpDir };
   const storage = createStorageService({
     app,
@@ -215,7 +216,7 @@ test('eine Chat-ID, die als Ordnername nicht taugt, führt nicht aus der Ablage 
 
 test('ohne Anhang-Ablage bleibt der Verlauf frei von Bilddaten', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-attach-off-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const storage = createStorageService({
     app: { getPath: () => tmpDir },
     safeStorage: { isEncryptionAvailable: () => false },

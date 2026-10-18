@@ -13,6 +13,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { Readable } = require('node:stream');
 const { translateMessage } = require('../src/shared/i18n');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // Main hands over keys since #353; the German wording is checked through the
 // catalogue.
@@ -29,7 +30,7 @@ const GITHUB_URL = 'https://objects.githubusercontent.com/snotra.dmg';
 /** A temp folder that is removed when the test `t` ends, passed or failed. */
 function makeTempDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-dl-test-'));
-  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 

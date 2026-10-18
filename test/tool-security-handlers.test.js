@@ -17,6 +17,7 @@ const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ip
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createTestConfirmations } = require('./helpers/confirmations');
 const { CONFIRMATION_ACTIONS, programAllowanceSubject } = require('../src/application/permissions/user-confirmation');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const OPEN = '/Users/u/garden-planner';
 const OTHER = '/Users/u/invoice-tool';
@@ -52,7 +53,7 @@ const fakeAllowances = {
 
 async function setup(t, { dialogResponse = 0, workspaceRoot = OPEN, locale = 'en', platform = 'darwin', knownWorkspaces = [] } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-toolsec-ipc-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });
   const sessionGrants = createSessionGrants();
   const dialogCalls = [];

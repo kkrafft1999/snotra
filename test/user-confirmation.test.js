@@ -29,6 +29,7 @@ const { createSessionGrants } = require('../src/application/permissions/session-
 const { normalizePermissionRule } = require('../src/shared/contracts/tool-permissions');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const ROOT = '/work/projekt';
 const SANDBOXED_TOOL = { path: '/usr/local/bin/tool', domains: ['example.com'], writePaths: [], trustd: false };
@@ -43,7 +44,7 @@ function makeSafeStorage() {
 
 async function makeStore(t, options = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-confirm-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return createToolPolicyStore({
     app: { getPath: () => dir }, safeStorage: makeSafeStorage(), fs, path, crypto, log: { warn() {} }, ...options,
   });

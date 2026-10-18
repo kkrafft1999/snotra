@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // SEARCH_MAX_OUTPUT_CHARS in fs-service.js.
 const OUTPUT_BUDGET = 64000;
@@ -15,7 +16,7 @@ function makeService(extra = {}) {
 
 async function makeRoot(t, files) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-search-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(root));
   for (const [name, content] of Object.entries(files)) {
     await fs.writeFile(path.join(root, name), content, 'utf8');
   }

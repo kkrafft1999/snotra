@@ -8,6 +8,7 @@ const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { createToolPolicyStore, POLICY_FILENAME, POLICY_KEY_FILENAME, MAX_WORKSPACE_HOSTS } = require('../src/main/services/tool-policy-store');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // The store's own logic, with every loosening confirmed. That it refuses a
 // loosening without a receipt of the user-confirmation port (#980) is
@@ -28,7 +29,7 @@ function makeSafeStorage(available = true) {
 
 async function makeStore(t, { available = true, legacyPrefs } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-policy-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const uiPrefsPath = path.join(dir, 'ui-preferences.json');
   if (legacyPrefs) await fs.writeFile(uiPrefsPath, JSON.stringify(legacyPrefs), 'utf8');
   const store = createToolPolicyStore({ confirmationReceipts: CONFIRM_ALL,
@@ -519,7 +520,7 @@ test('a tampered or unsigned file keeps "Always ask", never anything looser than
 
 async function makeFlakyStore(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-policy-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const failures = new Map();
   const flakyFs = {
     ...fs,

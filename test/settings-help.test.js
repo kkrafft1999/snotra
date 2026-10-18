@@ -14,6 +14,7 @@ const { bundleManual } = require('../scripts/bundle-manual.js');
 const { importRenderer, setupRendererDom, loadRendererMarkup } = require('./helpers/dom.js');
 const { cleanHelpTarget, registerManualOpenHandler } = require('../src/main/manual-window');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const LOCALES = ['en', 'de'];
 
@@ -50,7 +51,7 @@ test.before(async () => {
 
 test.after(() => {
   dom?.cleanup();
-  fs.rmSync(targetDir, { recursive: true, force: true });
+  removeTempDirSync(targetDir);
 });
 
 test('every help link leads to a page and section of the bundled manual, in both languages', () => {

@@ -21,6 +21,7 @@ const {
 } = require('../src/shared/contracts/remote/pairing-state');
 const { SAFETY_WORDS } = require('../src/main/remote/pairing-protocol');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const CODE = { display: '0111-EP9D-ZH4Q-PYT4-HWWF', qr: 'snotra-pair:v1/relay.example/0111EP9DZH4QPYT4HWWF', expiresAt: 1_700_000_000_000 };
 const WORDS = ['coffeecake', 'groundhog', 'maestro', 'kangaroo', 'ozone', 'oncoming'];
@@ -116,7 +117,7 @@ test('the handlers: four requests without arguments, and a push per change', asy
 
 test('createApplication wires the pairing, and nothing reaches the relay before a pairing starts (R7)', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-remote-app-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const relay = createInMemoryRelayAdapter();
   const ipcMain = createMockIpcMain();
   const application = createApplication({
