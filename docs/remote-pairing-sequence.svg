@@ -299,47 +299,47 @@
   <text class="lbl-sub" x="1057.75" y="2245" text-anchor="middle">signed challenge · role phone</text>
   <line class="m-req" x1="586" y1="2300" x2="1038.5" y2="2300"/>
   <polygon class="head m-req-head" points="1038.5,2300 1029,2295 1029,2305"/>
-  <rect class="label-bg" x="642.9" y="2265" width="338.70000000000005" height="29" rx="3"/>
-  <text class="lbl" x="812.25" y="2277" text-anchor="middle">presence/desktop · listen on to-desktop</text>
-  <text class="lbl-sub" x="812.25" y="2291" text-anchor="middle">heartbeat lastSeen — REST streaming has no onDisconnect</text>
+  <rect class="label-bg" x="639.93" y="2265" width="344.64000000000004" height="29" rx="3"/>
+  <text class="lbl" x="812.25" y="2277" text-anchor="middle">presence/desktop · listen on the channel</text>
+  <text class="lbl-sub" x="812.25" y="2291" text-anchor="middle">lastSeen every 30 s — REST streaming has no onDisconnect</text>
   <line class="m-req" x1="1254" y1="2332" x2="1041.5" y2="2332"/>
   <polygon class="head m-req-head" points="1041.5,2332 1051,2327 1051,2337"/>
-  <rect class="label-bg" x="877.5" y="2311" width="374.5" height="15" rx="3"/>
-  <text class="lbl" x="1064.75" y="2323" text-anchor="middle">presence/phone (onDisconnect) · listen on to-phone</text>
+  <rect class="label-bg" x="855.75" y="2311" width="396.25" height="15" rx="3"/>
+  <text class="lbl" x="1053.875" y="2323" text-anchor="middle">presence/phone (onDisconnect) · listen on the channel</text>
   <line class="m-req" x1="1254" y1="2378" x2="1041.5" y2="2378"/>
   <polygon class="head m-req-head" points="1041.5,2378 1051,2373 1051,2383"/>
-  <rect class="label-bg" x="1014.2799999999999" y="2343" width="237.72000000000003" height="29" rx="3"/>
-  <text class="lbl" x="1133.1399999999999" y="2355" text-anchor="middle">to-desktop: handshake 1</text>
-  <text class="lbl-sub" x="1133.1399999999999" y="2369" text-anchor="middle">ephemeral X25519 key, protocol version</text>
+  <rect class="label-bg" x="1002.4000000000001" y="2343" width="249.60000000000002" height="29" rx="3"/>
+  <text class="lbl" x="1127.2" y="2355" text-anchor="middle">handshake/phone: {v: [1], e}</text>
+  <text class="lbl-sub" x="1127.2" y="2369" text-anchor="middle">fresh X25519 key, the versions it speaks</text>
   <line class="m-evt" x1="1014" y1="2410" x2="561.5" y2="2410"/>
   <polygon class="head m-evt-head" points="561.5,2410 571,2405 571,2415"/>
   <rect class="label-bg" x="741.875" y="2389" width="91.75" height="15" rx="3"/>
   <text class="lbl" x="787.75" y="2401" text-anchor="middle">handshake 1</text>
   <line class="m-req" x1="586" y1="2456" x2="1038.5" y2="2456"/>
   <polygon class="head m-req-head" points="1038.5,2456 1029,2451 1029,2461"/>
-  <rect class="label-bg" x="730.125" y="2421" width="164.25" height="29" rx="3"/>
-  <text class="lbl" x="812.25" y="2433" text-anchor="middle">to-phone: handshake 2</text>
-  <text class="lbl-sub" x="812.25" y="2447" text-anchor="middle">ephemeral X25519 key</text>
+  <rect class="label-bg" x="699.33" y="2421" width="225.84" height="29" rx="3"/>
+  <text class="lbl" x="812.25" y="2433" text-anchor="middle">handshake/desktop: {v: 1, e}</text>
+  <text class="lbl-sub" x="812.25" y="2447" text-anchor="middle">fresh X25519 key, the version chosen</text>
   <line class="m-evt" x1="1066" y1="2488" x2="1278.5" y2="2488"/>
   <polygon class="head m-evt-head" points="1278.5,2488 1269,2483 1269,2493"/>
   <rect class="label-bg" x="1126.375" y="2467" width="91.75" height="15" rx="3"/>
   <text class="lbl" x="1172.25" y="2479" text-anchor="middle">handshake 2</text>
-  <rect class="note" x="424.12" y="2496" width="271.76" height="40" rx="5"/>
-  <text class="note-t" x="442.12" y="2514">Session keys: HKDF over static P-256,</text>
-  <text class="note-t" x="442.12" y="2528">ephemeral X25519 and the transcript</text>
-  <rect class="note" x="1144.12" y="2496" width="271.76" height="40" rx="5"/>
-  <text class="note-t" x="1162.12" y="2514">Session keys: HKDF over static P-256,</text>
-  <text class="note-t" x="1162.12" y="2528">ephemeral X25519 and the transcript</text>
+  <rect class="note" x="417.64" y="2496" width="284.72" height="40" rx="5"/>
+  <text class="note-t" x="435.64" y="2514">Session keys: HKDF(ss ‖ ee, salt = th),</text>
+  <text class="note-t" x="435.64" y="2528">one key per direction, sid = th[0..8]</text>
+  <rect class="note" x="1137.6399999999999" y="2496" width="284.72" height="40" rx="5"/>
+  <text class="note-t" x="1155.6399999999999" y="2514">Session keys: HKDF(ss ‖ ee, salt = th),</text>
+  <text class="note-t" x="1155.6399999999999" y="2528">one key per direction, sid = th[0..8]</text>
   <line class="m-req" x1="534" y1="2582" x2="321.5" y2="2582"/>
   <polygon class="head m-req-head" points="321.5,2582 331,2577 331,2587"/>
-  <rect class="label-bg" x="276.46000000000004" y="2547" width="255.54000000000002" height="29" rx="3"/>
-  <text class="lbl" x="404.23" y="2559" text-anchor="middle">phone connected</text>
-  <text class="lbl-sub" x="404.23" y="2573" text-anchor="middle">indicator (R8) · connection of kind relay</text>
+  <rect class="label-bg" x="205.18000000000004" y="2547" width="326.82" height="29" rx="3"/>
+  <text class="lbl" x="368.59000000000003" y="2559" text-anchor="middle">phone connected</text>
+  <text class="lbl-sub" x="368.59000000000003" y="2573" text-anchor="middle">once session.hello opens · indicator (R8), kind relay</text>
   <line class="m-req" x1="1254" y1="2660" x2="1041.5" y2="2660"/>
   <polygon class="head m-req-head" points="1041.5,2660 1051,2655 1051,2665"/>
-  <rect class="label-bg" x="971.75" y="2625" width="280.25" height="29" rx="3"/>
-  <text class="lbl" x="1111.875" y="2637" text-anchor="middle">to-desktop/{seq}: {nonce, ciphertext}</text>
-  <text class="lbl-sub" x="1111.875" y="2651" text-anchor="middle">message.send, approval.respond, …</text>
+  <rect class="label-bg" x="954.8800000000001" y="2625" width="297.12" height="29" rx="3"/>
+  <text class="lbl" x="1103.44" y="2637" text-anchor="middle">to-desktop/{sid}/{counter}: {c}</text>
+  <text class="lbl-sub" x="1103.44" y="2651" text-anchor="middle">session.hello, message.send, approval.respond, …</text>
   <line class="m-evt" x1="1014" y1="2706" x2="561.5" y2="2706"/>
   <polygon class="head m-evt-head" points="561.5,2706 571,2701 571,2711"/>
   <rect class="label-bg" x="624.34" y="2671" width="326.82" height="29" rx="3"/>
@@ -347,9 +347,9 @@
   <text class="lbl-sub" x="787.75" y="2697" text-anchor="middle">decrypt → conversation service · delete after reading</text>
   <line class="m-req" x1="586" y1="2752" x2="1038.5" y2="2752"/>
   <polygon class="head m-req-head" points="1038.5,2752 1029,2747 1029,2757"/>
-  <rect class="label-bg" x="675.5699999999999" y="2717" width="273.36" height="29" rx="3"/>
-  <text class="lbl" x="812.25" y="2729" text-anchor="middle">to-phone/{seq}: {nonce, ciphertext}</text>
-  <text class="lbl-sub" x="812.25" y="2743" text-anchor="middle">chat.delta every 150 ms, approval.request, …</text>
+  <rect class="label-bg" x="648.84" y="2717" width="326.82" height="29" rx="3"/>
+  <text class="lbl" x="812.25" y="2729" text-anchor="middle">to-phone/{sid}/{counter}: {c}</text>
+  <text class="lbl-sub" x="812.25" y="2743" text-anchor="middle">answers, chat.delta every 150 ms, approval.request, …</text>
   <line class="m-evt" x1="1066" y1="2798" x2="1278.5" y2="2798"/>
   <polygon class="head m-evt-head" points="1278.5,2798 1269,2793 1269,2803"/>
   <rect class="label-bg" x="1068" y="2763" width="231.78" height="29" rx="3"/>
@@ -360,7 +360,7 @@
   <text class="note-t" x="896.2" y="2838">size and time of each packet, IP addresses.</text>
   <text class="note-t" x="896.2" y="2852">Never the content. Leftovers go after 10 min.</text>
   <text class="frame-k" x="458" y="2611">loop</text>
-  <text class="frame-g" x="509.84" y="2611">[every protocol message, both ways — ChaCha20-Poly1305, counter nonce]</text>
+  <text class="frame-g" x="509.84" y="2611">[every JSON-RPC message, both ways — ChaCha20-Poly1305, counter nonce; session.hello first]</text>
   <rect class="phase" x="24" y="2888" width="1532" height="30" rx="4"/>
   <text class="phase-n" x="44" y="2909">5</text>
   <text class="phase-t" x="70" y="2909">End</text>
@@ -486,10 +486,10 @@
   <text class="badge-n" x="576" y="2459.8">46</text>
   <circle class="badge " cx="1056" cy="2488" r="9.5"/>
   <text class="badge-n" x="1056" y="2491.8">47</text>
-  <circle class="badge " cx="424.12" cy="2516" r="9.5"/>
-  <text class="badge-n" x="424.12" y="2519.8">48</text>
-  <circle class="badge " cx="1144.12" cy="2516" r="9.5"/>
-  <text class="badge-n" x="1144.12" y="2519.8">49</text>
+  <circle class="badge " cx="417.64" cy="2516" r="9.5"/>
+  <text class="badge-n" x="417.64" y="2519.8">48</text>
+  <circle class="badge " cx="1137.6399999999999" cy="2516" r="9.5"/>
+  <text class="badge-n" x="1137.6399999999999" y="2519.8">49</text>
   <circle class="badge " cx="544" cy="2582" r="9.5"/>
   <text class="badge-n" x="544" y="2585.8">50</text>
   <circle class="badge " cx="1264" cy="2660" r="9.5"/>

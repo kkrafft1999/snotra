@@ -1,0 +1,170 @@
+{
+  "protocol": 1,
+  "part": "channel",
+  "spec": "docs/remote-protocol.md",
+  "generatedBy": "node scripts/remote-protocol-channel-vectors.js",
+  "uses": "docs/remote-protocol/pairing-v1.json — the long-term keys and the channel id",
+  "note": "Deterministic: the file is compared as a whole. Hex for bytes that are only hashed or authenticated, base64url where the value travels in JSON.",
+  "labels": {
+    "handshake": "snotra/v1 handshake",
+    "session": "snotra/v1 session",
+    "envelope": "snotra/v1 envelope"
+  },
+  "ephemeral": {
+    "desktop": {
+      "private": "0d3e70a99d0747b3626f621345e5870c407f42f453c4e07545470f600674f2e0",
+      "public": "ol9wi8-CHY92DPV52CkdlESzYS16I1tyiv5-ViJcV1s"
+    },
+    "phone": {
+      "private": "a0a363fec1a84d27c95c25be333388c9ce08c336708179d7387b35df200fbb59",
+      "public": "cSgkZ2Vzy3JF31aUV2wkckxjVSJEj2kfNb4BLx73oxw"
+    }
+  },
+  "handshake1": {
+    "path": "/channels/iP4ic5AhWBa6BKSnukYcRg/handshake/phone",
+    "record": {
+      "v": [
+        1
+      ],
+      "e": "cSgkZ2Vzy3JF31aUV2wkckxjVSJEj2kfNb4BLx73oxw"
+    }
+  },
+  "handshake2": {
+    "path": "/channels/iP4ic5AhWBa6BKSnukYcRg/handshake/desktop",
+    "record": {
+      "v": 1,
+      "e": "ol9wi8-CHY92DPV52CkdlESzYS16I1tyiv5-ViJcV1s"
+    }
+  },
+  "versionMismatch": {
+    "offered": [
+      2
+    ],
+    "answer": {
+      "error": "protocol-unsupported",
+      "v": [
+        1
+      ]
+    }
+  },
+  "staticShared": "ed6b325d5e1236f81577172b652efabb1331a77718495026245f3c2f611e6c80",
+  "ephemeralShared": "a64144ef413f56198e8cabd153d656b2d7756998c66ae7451ce92b742497a752",
+  "transcriptHash": "4f0d9efa989ec3126c7c327adfabc1493a66fc06fb30b82c81c688774c3a079f",
+  "sid": "4f0d9efa989ec312",
+  "keys": {
+    "toDesktop": "f6a672779824ede2a5fce01ad393a65fd0de441a045f1ff3c24b5c433d5e322a",
+    "toPhone": "96494e935e842ac40ca9cd4f3edb321ca4b251a8d51688320e45ef9912901f94"
+  },
+  "envelopes": [
+    {
+      "direction": "to-desktop",
+      "counter": 0,
+      "path": "/channels/iP4ic5AhWBa6BKSnukYcRg/to-desktop/4f0d9efa989ec312/0000000000000000",
+      "nonce": "000000000000000000000000",
+      "aad": "0012736e6f7472612f763120656e76656c6f706500084f0d9efa989ec312000a746f2d6465736b746f700000000000000000",
+      "plaintext": "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"session.hello\",\"params\":{\"protocol\":[1],\"client\":{\"name\":\"Snotra mobile\",\"version\":\"1.0.0\"},\"capabilities\":[\"approvals\"]}}",
+      "record": {
+        "c": "ilLgJM2R_VgxCtoKOVwLgLl3l7eQ9HxErQnORqK_R4oBjYAAiP2_y1Aqgighmg-eVngOB99PrLqw1geNn2TtbHZjEalMHBHjvyNfi_m7KIw8PQ27xF7-x2p6a6Zeh_t_SvsOP4S5xV3S6n1Cs-ydc4FBTKoI_LA5VSXz98IRgNNxcssauQRRllrwat0CQjbCMIi0bUt3diSjbFobRrXjwcK5M-DywOJNN5cMxw",
+        "at": {
+          ".sv": "timestamp"
+        }
+      }
+    },
+    {
+      "direction": "to-phone",
+      "counter": 0,
+      "path": "/channels/iP4ic5AhWBa6BKSnukYcRg/to-phone/4f0d9efa989ec312/0000000000000000",
+      "nonce": "000000000000000000000000",
+      "aad": "0012736e6f7472612f763120656e76656c6f706500084f0d9efa989ec3120008746f2d70686f6e650000000000000000",
+      "plaintext": "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{\"protocol\":1,\"connectionId\":\"q8Xv0w3J7mH2bVt5kQ9RzA\",\"kind\":\"relay\",\"app\":{\"version\":\"1.26.0\"},\"methods\":[\"session.hello\",\"workspaces.list\",\"chats.list\",\"chat.open\",\"message.send\",\"run.abort\",\"approval.respond\"],\"approvalResponses\":[\"allow-once\",\"deny\"],\"limits\":{\"maxRequestBytes\":262144,\"maxTextChars\":100000,\"maxConnections\":4,\"eventBufferSeconds\":60}}}",
+      "record": {
+        "c": "ILu-cp8IPzUaXnqToGVyFl8ts658rbFc6Ensm97xHGhOU0-b3cp7bsf5qTNLe5Su-OqkL15CMefCOuXUlcC1_TFO-Cp_vkIiNTPrSvnm4naZXmkrax5f3uWPvcLERTJEogzP7cKKu3znVDqDF9fH4yCsqswOgkOXiswWEYtbKPbalvfcivcR85skOdeo-r0WhDhNr8Jsn_eaDHer2d4qTDzqqBl1DaG2rzNaNNtyEC4r73_4UPwXDYhl80tvX9s3p7P35gdqik-3u8HMQpymfkNZp0FobsVL8YULh3TvKmbRKJBBsBWjGE0savaiEnA_hkgLTf4e4d2bOhiqwNVjk5kodZQxP9g03rBm4G9DhAC_mT-dn0_cSbY70roKrZSboPDfyYGGTOe7v9Vxzk5JxWgvOdbfLC8pSyFVVnqJMU2JggAsf-KnWz2navVZlfvE7aTuTwGeMfvG5ek0qiDx4J1t_O4nhIvcxpU9T3lOdeNx-46wTIWJSe5hE2GiKYpoX5wLPm0aLocVbFiO-PzOFLk1KOEM2g",
+        "at": {
+          ".sv": "timestamp"
+        }
+      }
+    },
+    {
+      "direction": "to-phone",
+      "counter": 1,
+      "path": "/channels/iP4ic5AhWBa6BKSnukYcRg/to-phone/4f0d9efa989ec312/0000000000000001",
+      "nonce": "000000000000000000000001",
+      "aad": "0012736e6f7472612f763120656e76656c6f706500084f0d9efa989ec3120008746f2d70686f6e650000000000000001",
+      "plaintext": "{\"jsonrpc\":\"2.0\",\"method\":\"chat.delta\",\"params\":{\"chatId\":\"c-7f3a\",\"runId\":\"r-19\",\"text\":\"Größe geprüft – passt.\"}}",
+      "record": {
+        "c": "v-a2-nxFYy73625R4fi5zB_eaVn7biV2ncT2zLs4OlAaSoUn_QYErDYIGNvhhcvbguuS8cr3SErKXUKG96XKCdLeaGkhnwC52NgQbV2X7U0Hb7NE7sxmzp_-8cljHh0kIfej52YWguO9WfJQseY1xdn4o1uj_MH3WUU_BUtYSLNwBewPeS6Jfg",
+        "at": {
+          ".sv": "timestamp"
+        }
+      }
+    },
+    {
+      "direction": "to-desktop",
+      "counter": 1,
+      "path": "/channels/iP4ic5AhWBa6BKSnukYcRg/to-desktop/4f0d9efa989ec312/0000000000000001",
+      "nonce": "000000000000000000000001",
+      "aad": "0012736e6f7472612f763120656e76656c6f706500084f0d9efa989ec312000a746f2d6465736b746f700000000000000001",
+      "plaintext": "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"approval.respond\",\"params\":{\"requestId\":\"a-42\",\"response\":\"allow-once\"}}",
+      "record": {
+        "c": "_bDwgnjHIrHWHExp_AM-EzmMWQWL4ax6ZHmncpLPSIij8vp6QM9kwTpS_i-VX0-CFTUBjW4js95JsrHC6m4yqdklPAqsQJgosvBdwogb0id3JQBPskgKr9dos-ULDR1lNNwlih_dfDUTHj-oKK4lm29NAnTiQmMZRFo",
+        "at": {
+          ".sv": "timestamp"
+        }
+      }
+    }
+  ],
+  "tampered": {
+    "path": "/channels/iP4ic5AhWBa6BKSnukYcRg/to-desktop/4f0d9efa989ec312/0000000000000000",
+    "record": {
+      "c": "i1LgJM2R_VgxCtoKOVwLgLl3l7eQ9HxErQnORqK_R4oBjYAAiP2_y1Aqgighmg-eVngOB99PrLqw1geNn2TtbHZjEalMHBHjvyNfi_m7KIw8PQ27xF7-x2p6a6Zeh_t_SvsOP4S5xV3S6n1Cs-ydc4FBTKoI_LA5VSXz98IRgNNxcssauQRRllrwat0CQjbCMIi0bUt3diSjbFobRrXjwcK5M-DywOJNN5cMxw"
+    },
+    "expect": "reject"
+  },
+  "order": {
+    "holdWindow": 32,
+    "arrivals": [
+      0,
+      2,
+      1,
+      1,
+      3,
+      40
+    ],
+    "actions": [
+      {
+        "counter": 0,
+        "action": "deliver",
+        "delivered": [
+          0
+        ]
+      },
+      {
+        "counter": 2,
+        "action": "hold"
+      },
+      {
+        "counter": 1,
+        "action": "deliver",
+        "delivered": [
+          1,
+          2
+        ]
+      },
+      {
+        "counter": 1,
+        "action": "drop"
+      },
+      {
+        "counter": 3,
+        "action": "deliver",
+        "delivered": [
+          3
+        ]
+      },
+      {
+        "counter": 40,
+        "action": "rehandshake"
+      }
+    ]
+  }
+}
