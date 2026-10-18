@@ -17,7 +17,7 @@ Mindestens ein Modell unter *Einstellungen › Modelle* — siehe [Ein Modell an
 2. Wähle unter *Modell* ein anderes.
 3. Wähle unter *Reasoning* eine Stufe. Dieser Teil erscheint nur bei Modellen mit Stufen; welche das sind und welche Stufen sie nehmen, steht in der Tabelle unten.
 
-![Das Modell-Menü über dem Chat-Eingabefeld: unter „Modell“ gpt-5-mini, gpt-5 und qwen3-coder; unter „Reasoning“ die Stufen none, minimal, low, medium, high, xhigh und max, medium gewählt, dazu der Hinweis, dass die Stufe für diesen Chat gilt und neue Chats mit medium starten. Darunter die Pille „gpt-5-mini · medium“.](screenshots/model-menu.webp)
+![Das Modell-Menü über dem Chat-Eingabefeld: unter „Modell“ gpt-5-mini, gpt-5 und qwen3-coder; unter „Reasoning“ die Stufen none, minimal, low, medium, high, xhigh und max, medium gewählt, dazu der Hinweis, dass die Stufe für diesen Chat gilt und neue Chats mit medium starten. Darunter die Pille, der Modellname gekürzt, die Stufe „medium“ ganz.](screenshots/model-menu.webp)
 
 [seit 1.15] Eine höhere Stufe lässt dem Modell mehr Raum, ein Problem durchzuarbeiten, bevor es antwortet; das dauert länger und kostet mehr Tokens. `medium` ist ein guter Standard; geh höher für eine knifflige Änderung über mehrere Dateien, niedriger für schnelle Fragen.
 
@@ -38,6 +38,8 @@ Mindestens ein Modell unter *Einstellungen › Modelle* — siehe [Ein Modell an
 | *Ollama (lokal)* | gpt-oss | `low` `medium` `high` | `medium` |
 | | Andere Modelle, die nachdenken: DeepSeek-R1, Qwen3 (ohne die Coder- und Instruct-Varianten), QwQ, Magistral, Phi-4 reasoning, Kimi K2 Thinking, GLM 4.6 und neuer | `none` `on` — das Modell denkt nach oder nicht | `on` |
 
+![Das Modell-Menü bei einem Claude-Modell: unter „Modell“ claude-opus-5-5, claude-sonnet-4-6 und qwen3:8b; unter „Reasoning“ die Stufen low, medium, high, xhigh und max, medium gewählt. Darunter die Pille, der Modellname gekürzt, die Stufe „medium“ ganz.](screenshots/model-menu-claude.webp)
+
 Ältere Modelle dieser Anbieter — Claude 3.5, Gemini 2.0 und früher, Ollama-Modelle, die nicht nachdenken — zeigen keine Stufen und funktionieren ohne weiter. *OpenAI-kompatible* Server zeigen ebenfalls keine.
 
 Bei Claude, Gemini und Ollama erscheinen die Gedanken des Modells im Chat als *Zwischenschritte (Modell)*, während es arbeitet, genau wie bei OpenAI. Eine höhere Stufe heißt längeres Nachdenken: Die Antwort dauert länger und kostet mehr Tokens.
@@ -47,7 +49,7 @@ Bei Claude, Gemini und Ollama erscheinen die Gedanken des Modells im Chat als *Z
 - Die nächste Nachricht geht an das gewählte Modell, mit der gewählten Stufe.
 - Modell und Stufe bleiben beim Chat. Ein Chat aus dem Verlauf kommt mit seinen eigenen zurück, auch nach einem Neustart.
 - Ein neuer Chat startet mit dem Modell, das du zuletzt gewählt hast, mit `medium` — oder, bei einem Modell ohne `medium`, mit der Stufe aus der Spalte *Startet mit* oben.
-- Die Pille nennt nur das Modell. Erst wenn zwei Einträge dasselbe Modell haben — dasselbe lokale Modell auf zwei Servern zum Beispiel —, kommt der Name des Eintrags dazu.
+- Die Pille nennt Modell und Stufe. Wird es eng, wird der Modellname gekürzt; die Stufe bleibt immer lesbar. Erst wenn zwei Einträge dasselbe Modell haben — dasselbe lokale Modell auf zwei Servern zum Beispiel —, kommt der Name des Eintrags dazu.
 
 ## Wenn es nicht klappt
 

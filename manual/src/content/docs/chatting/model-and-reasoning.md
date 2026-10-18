@@ -17,7 +17,7 @@ At least one model under *Settings › Models* — see [Connect a model](../../g
 2. Under *Model*, choose another one.
 3. Under *Reasoning*, choose a level. This part only appears for models that have levels; which ones those are, and which levels they take, is in the table below.
 
-![The model menu above the chat input: under "Model" gpt-5-mini, gpt-5 and qwen3-coder; under "Reasoning" the levels none, minimal, low, medium, high, xhigh and max, with medium chosen, and the note "Applies to this chat. New chats start with medium." Below it the pill "gpt-5-mini · medium".](screenshots/model-menu.webp)
+![The model menu above the chat input: under "Model" gpt-5-mini, gpt-5 and qwen3-coder; under "Reasoning" the levels none, minimal, low, medium, high, xhigh and max, with medium chosen, and the note "Applies to this chat. New chats start with medium." Below it the pill, the model name shortened and the level "medium" in full.](screenshots/model-menu.webp)
 
 [since 1.15] A higher level gives the model more room to work through a problem before it answers; it takes longer and costs more tokens. `medium` is a good default; go higher for a tricky change across several files, lower for quick questions.
 
@@ -38,6 +38,8 @@ At least one model under *Settings › Models* — see [Connect a model](../../g
 | *Ollama (local)* | gpt-oss | `low` `medium` `high` | `medium` |
 | | Other thinking models: DeepSeek-R1, Qwen3 (not the Coder and Instruct variants), QwQ, Magistral, Phi-4 reasoning, Kimi K2 Thinking, GLM 4.6 and later | `none` `on` — the model thinks or it doesn't | `on` |
 
+![The model menu on a Claude model: under "Model" claude-opus-5-5, claude-sonnet-4-6 and qwen3:8b; under "Reasoning" the levels low, medium, high, xhigh and max, with medium chosen. Below it the pill, the model name shortened and the level "medium" in full.](screenshots/model-menu-claude.webp)
+
 Older models of these providers — Claude 3.5, Gemini 2.0 and earlier, Ollama models that do not think — show no levels and keep working without. *OpenAI-compatible* servers show none either.
 
 With Claude, Gemini and Ollama the model's thoughts appear in the chat as *Intermediate steps (model)* while it works, the same way as with OpenAI. A higher level means a longer think, so the answer takes longer and costs more tokens.
@@ -47,7 +49,7 @@ With Claude, Gemini and Ollama the model's thoughts appear in the chat as *Inter
 - The next message goes to the chosen model, at the chosen level.
 - Model and level stay with the chat. A chat from the history comes back with its own, also after a restart.
 - A new chat starts with the model you chose last, at `medium` — or, for a model without `medium`, at the level in the *Starts at* column above.
-- The pill names the model alone. Only when two entries have the same model — the same local model on two servers, say — does it add the name of the entry.
+- The pill names the model and the level. When space is short, the model name is shortened; the level always stays readable. Only when two entries have the same model — the same local model on two servers, say — does it add the name of the entry.
 
 ## If it doesn't work
 
