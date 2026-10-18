@@ -1,5 +1,6 @@
 const { withRequestTimeout, userMessageOf, LOCAL_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
+const { imageAttachmentsOf } = require('../../shared/contracts/attachments');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const { Agent } = require('undici');
 const { fetchVia } = require('../services/dispatcher-fetch');
@@ -121,11 +122,30 @@ function thinkValueFor(model, level) {
   return level !== 'none';
 }
 
+/**
+ * A user turn's images, as Ollama takes them: plain base64 in the message's
+ * `images`, next to its text (#92). The attachment carries no `data:` prefix
+ * once main has normalised it; one that slipped through is cut off here, since
+ * Ollama does not read a data URL. Ollama decodes all four formats Snotra
+ * attaches (PNG, JPEG, GIF, WebP — checked in its source at v0.40.6), so none
+ * is filtered out. Whether the model sees the image depends on the model.
+ */
+function imagesForOllama(m) {
+  return imageAttachmentsOf(m).map((image) => image.dataBase64.replace(/^data:[^,]*,/, ''));
+}
+
 function translateMessagesToOllama(messages) {
   const out = [];
   for (const m of messages) {
-    if (m.role === 'system' || m.role === 'user') {
+    if (m.role === 'system') {
       out.push({ role: m.role, content: typeof m.content === 'string' ? m.content : '' });
+      continue;
+    }
+    if (m.role === 'user') {
+      const row = { role: 'user', content: typeof m.content === 'string' ? m.content : '' };
+      const images = imagesForOllama(m);
+      if (images.length > 0) row.images = images;
+      out.push(row);
       continue;
     }
     if (m.role === 'assistant') {
@@ -303,8 +323,8 @@ module.exports = {
   // The name carries a word — "local" — and is therefore a key (#310).
   name: createMessage('provider.name.ollama'),
   fields: { baseUrl: true, insecureTls: true },
-  // Auf true, sobald translateMessagesToOllama Bilder abbildet (Issue #92).
-  capabilities: { images: false },
+  // translateMessagesToOllama maps image attachments (#92).
+  capabilities: { images: true },
   defaultModel: 'llama3.2',
   // Levels for gpt-oss, off and on for the other thinking models (#994).
   reasoning: {

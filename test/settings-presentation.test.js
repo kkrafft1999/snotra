@@ -101,7 +101,7 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
 
   // Der Composer liest die Bild-Faehigkeit aus dieser Sicht (Issue #93).
   assert.equal(openaiProvider.capabilities.images, true);
-  assert.equal(ollamaProvider.capabilities.images, false);
+  assert.equal(ollamaProvider.capabilities.images, true);
   // …and which formats, where a provider takes fewer than all (#91).
   assert.deepEqual(openaiProvider.capabilities, { images: true });
   assert.deepEqual(dto.providers.find((p) => p.id === 'google').capabilities,
