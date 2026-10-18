@@ -351,6 +351,11 @@ You **always** make sure that:
   visually hidden `#chat-announcer` (`role="status"`, #592).
 - Native HTML is used: `<button>`, `<input>`, `<ol>`/`<ul>`. **No** `<div>` with
   an `onclick`.
+- Contrast is computed, not judged by eye: `test/token-contrast.test.js` holds
+  every ink with the grounds it may stand on, light and dark (#999). A new
+  colour token, or an existing ink on a ground it was not used on before, adds
+  its pair there. `e2e/accessibility.test.mjs` runs axe-core over the main
+  screens in both themes.
 
 ## Workflow rules
 

@@ -15,7 +15,7 @@
 import contracts from '../generated/contracts.js';
 import { toolLineText } from '../utils/tool-log-summary.js';
 import { sandboxPath } from '../utils/program-allowance-view.js';
-import { t, tPlural } from '../i18n.js';
+import { APP_LOCALES, t, tPlural } from '../i18n.js';
 
 const { normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive, normalizeSandboxOutside } = contracts;
 
@@ -26,6 +26,14 @@ const SHIELD_OFF_ICON_HTML =
 
 const CHEVRON_ICON_HTML =
   '<svg class="chat-sandbox-blocked-chevron" viewBox="0 0 16 16" aria-hidden="true"><path d="M6 3.5 10.5 8 6 12.5"/></svg>';
+
+/**
+ * Asked for by the box's settings link (#1119) and answered by the app: open
+ * Settings › Tools › Security with the open workspace selected. An event,
+ * because the box is drawn inside the chat, which knows nothing of the
+ * settings.
+ */
+export const SANDBOX_SETTINGS_EVENT = 'snotra:open-sandbox-settings';
 
 const DENY_LIST_REASON = 'host is on the deny list';
 const USER_DENIED_REASON = 'user denied';
@@ -105,7 +113,7 @@ function buildOutsideAsk(run) {
     if (part === '{tool}') {
       const tool = document.createElement('code');
       tool.className = 'chat-sandbox-blocked-tool';
-      tool.lang = 'en';
+      tool.lang = APP_LOCALES.EN;
       tool.textContent = run.tool || t('tools.line.generic.fallbackName');
       ask.append(tool);
     } else {
@@ -373,6 +381,18 @@ export function buildSandboxBlockedBox(runs, { homeDir = '', open = false, onTog
   box.append(title);
 
   const parts = runs.map((run) => buildRun(run, homeDir, { withLine: runs.length > 1 }));
+  // Where the sandbox of this folder is set up (#1119).
+  const settings = document.createElement('p');
+  settings.className = 'chat-sandbox-blocked-settings';
+  const link = document.createElement('button');
+  link.type = 'button';
+  link.className = 'chat-sandbox-blocked-settings-link';
+  link.textContent = t('toolLog.sandbox.settings');
+  link.addEventListener('click', () => {
+    link.dispatchEvent(new CustomEvent(SANDBOX_SETTINGS_EVENT, { bubbles: true }));
+  });
+  settings.append(link);
+  parts.push(settings);
   if (!foldable) {
     box.append(...parts);
     return box;

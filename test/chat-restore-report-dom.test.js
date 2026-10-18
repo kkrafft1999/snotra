@@ -8,6 +8,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom } = require('./helpers/dom.js');
+const { fakeChatHistoryApi } = require('./helpers/chat-history-api.js');
 
 async function mountChat(history) {
   const dom = setupRendererDom();
@@ -22,7 +23,7 @@ async function mountChat(history) {
     onChatDelta: () => {},
     onChatProgress: () => {},
     onChatToolLine: () => {},
-    getChatHistory: async () => history,
+    ...fakeChatHistoryApi(() => history?.sessions, { activeChatId: () => history?.activeChatId ?? null }),
     setActiveChatId: async () => {},
     upsertChatSession: async () => ({ ok: true }),
     generateChatTitle: async () => ({ title: '' }),

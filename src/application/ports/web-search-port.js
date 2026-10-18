@@ -41,22 +41,4 @@
  *   => Promise<WebSearchOk|WebSearchError>} search
  */
 
-/** Fehlerarten, die der Handler unterscheiden koennen muss. */
-const WEB_SEARCH_ERROR_CODES = Object.freeze({
-  NO_API_KEY: 'NO_API_KEY',
-  INVALID_QUERY: 'INVALID_QUERY',
-  RATE_LIMITED: 'RATE_LIMITED',
-  UNAUTHORIZED: 'UNAUTHORIZED',
-  NETWORK: 'NETWORK',
-  SERVICE: 'SERVICE',
-});
-
-/** Obergrenzen der Suche — auch das Modell darf sie nicht ueberschreiten. */
-const WEB_SEARCH_LIMITS = Object.freeze({
-  DEFAULT_MAX_RESULTS: 5,
-  MAX_MAX_RESULTS: 10,
-  MAX_QUERY_CHARS: 400,
-  MAX_SNIPPET_CHARS: 500,
-});
-
-module.exports = { WEB_SEARCH_ERROR_CODES, WEB_SEARCH_LIMITS };
+module.exports = {};

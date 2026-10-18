@@ -7,6 +7,97 @@ const API_BASE = 'https://api.anthropic.com/v1';
 const ANTHROPIC_VERSION = '2023-06-01';
 const DEFAULT_MAX_TOKENS = 8192;
 
+/*
+ * Reasoning levels (#994). Claude models think in one of two ways:
+ *
+ * - Adaptive thinking (Opus 4.6 and newer, Sonnet 4.6 and newer, Haiku 5 and
+ *   newer, Fable, Mythos): `thinking: { type: 'adaptive' }` plus
+ *   `output_config.effort`. Opus and Sonnet 4.6 know four efforts, the later
+ *   models five — `xhigh` came with Opus 4.7.
+ * - A thinking budget (Claude 3.7 Sonnet, the 4.0–4.5 models):
+ *   `thinking: { type: 'enabled', budget_tokens }`, which has to stay below
+ *   `max_tokens` and at 1,024 or more. Three levels map onto three budgets.
+ *
+ * Older models do not think and get no level.
+ */
+const ADAPTIVE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
+const ADAPTIVE_EFFORTS_4_6 = ['low', 'medium', 'high', 'max'];
+const BUDGET_LEVELS = ['low', 'medium', 'high'];
+const THINKING_BUDGETS = { low: 2048, medium: 8192, high: 16384 };
+// Thinking counts against `max_tokens`. The room for the answer stays at the
+// default; the higher efforts get more, so that a long think does not cut the
+// answer off. Anthropic's output rate limit is estimated from `max_tokens`,
+// which is why it does not simply go to the model's maximum.
+const ADAPTIVE_MAX_TOKENS = { low: 16384, medium: 16384, high: 32768, xhigh: 32768, max: 32768 };
+
+/**
+ * Family and version of a Claude model id: `claude-opus-4-6`,
+ * `claude-sonnet-4-20250514`, `claude-3-7-sonnet-latest`. A date suffix is no
+ * minor version.
+ */
+function claudeModelOf(model) {
+  const id = String(model ?? '').trim().toLowerCase();
+  let m = /^claude-(opus|sonnet|haiku|fable|mythos)-(\d+)(?:-(\d{1,2})(?!\d))?/.exec(id);
+  if (m) return { family: m[1], version: Number(m[2]) + (m[3] ? Number(m[3]) / 10 : 0) };
+  m = /^claude-(\d+)(?:-(\d{1,2})(?!\d))?-(opus|sonnet|haiku)/.exec(id);
+  if (m) return { family: m[3], version: Number(m[1]) + (m[2] ? Number(m[2]) / 10 : 0) };
+  return null;
+}
+
+/** How `model` thinks: 'adaptive', 'adaptive-4.6', 'budget' or null. */
+function thinkingModeOf(model) {
+  const claude = claudeModelOf(model);
+  if (!claude) return null;
+  const { family, version } = claude;
+  if (family === 'fable' || family === 'mythos') return 'adaptive';
+  if (family === 'opus') {
+    if (version >= 4.7) return 'adaptive';
+    if (version >= 4.6) return 'adaptive-4.6';
+    return version >= 4 ? 'budget' : null;
+  }
+  if (family === 'sonnet') {
+    if (version >= 5) return 'adaptive';
+    if (version >= 4.6) return 'adaptive-4.6';
+    return version >= 3.7 ? 'budget' : null;
+  }
+  if (family === 'haiku') {
+    if (version >= 5) return 'adaptive';
+    return version >= 4.5 ? 'budget' : null;
+  }
+  return null;
+}
+
+function reasoningLevelsOf(model) {
+  const mode = thinkingModeOf(model);
+  if (mode === 'adaptive') return ADAPTIVE_EFFORTS;
+  if (mode === 'adaptive-4.6') return ADAPTIVE_EFFORTS_4_6;
+  if (mode === 'budget') return BUDGET_LEVELS;
+  return [];
+}
+
+/**
+ * The request fields for a level. Adaptive models are asked for summarised
+ * thinking: from Opus 4.7 on the default is `omitted`, which streams thinking
+ * blocks without text and leaves a long silence before the answer. The 4.6
+ * models summarise by default.
+ */
+function thinkingFieldsFor(model, level) {
+  const mode = thinkingModeOf(model);
+  if (!mode || !reasoningLevelsOf(model).includes(level)) return {};
+  if (mode === 'budget') {
+    const budget = THINKING_BUDGETS[level];
+    return {
+      thinking: { type: 'enabled', budget_tokens: budget },
+      max_tokens: budget + DEFAULT_MAX_TOKENS,
+    };
+  }
+  return {
+    thinking: mode === 'adaptive' ? { type: 'adaptive', display: 'summarized' } : { type: 'adaptive' },
+    output_config: { effort: level },
+    max_tokens: ADAPTIVE_MAX_TOKENS[level] || DEFAULT_MAX_TOKENS,
+  };
+}
+
 function authHeaders(apiKey) {
   return {
     'x-api-key': apiKey,
@@ -75,7 +166,30 @@ function isLikelyJsonString(s) {
   return t.length > 0 && (t[0] === '{' || t[0] === '[' || t === 'null' || t === 'true' || t === 'false' || /^-?\d/.test(t));
 }
 
-function translateMessagesToAnthropic(messages) {
+/**
+ * The turn that is still running: the messages after the last user message.
+ * Its thinking blocks go back with it — a tool loop with thinking on expects
+ * the reasoning that led to a call in front of the call. Earlier turns go
+ * without theirs, as they always have: Anthropic would drop them anyway, and
+ * a history that never carries them never changes under them.
+ */
+function currentTurnStart(messages) {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role === 'user') return i + 1;
+  }
+  return 0;
+}
+
+/** The thinking blocks a message carries for `model`; none from another model. */
+function thinkingBlocksFor(message, model) {
+  const thinking = message?.anthropicThinking;
+  if (!thinking || !Array.isArray(thinking.blocks) || !model || thinking.model !== model) return [];
+  return thinking.blocks.filter((b) => (b?.type === 'thinking' && typeof b.signature === 'string')
+    || (b?.type === 'redacted_thinking' && typeof b.data === 'string'));
+}
+
+function translateMessagesToAnthropic(messages, { model, replayThinking = true } = {}) {
+  const turnStart = replayThinking ? currentTurnStart(messages) : messages.length;
   let system = '';
   const out = [];
   let pendingToolResults = null; // array of tool_result blocks to flush on next non-tool message
@@ -91,7 +205,7 @@ function translateMessagesToAnthropic(messages) {
     pendingToolResults = null;
   };
 
-  for (const m of messages) {
+  for (const [index, m] of messages.entries()) {
     if (m.role === 'system') {
       system += (system ? '\n\n' : '') + (m.content || '');
       continue;
@@ -121,7 +235,8 @@ function translateMessagesToAnthropic(messages) {
       continue;
     }
     if (m.role === 'assistant') {
-      const blocks = [];
+      // Thinking comes first, unchanged — the API checks the signature.
+      const blocks = index >= turnStart ? thinkingBlocksFor(m, model).map((b) => ({ ...b })) : [];
       unmatchedToolUseIds = [];
       if (typeof m.content === 'string' && m.content.length > 0) {
         blocks.push({ type: 'text', text: m.content });
@@ -155,37 +270,67 @@ function translateMessagesToAnthropic(messages) {
   return { system: system || undefined, messages: out };
 }
 
+/** The round's thinking blocks as the API wants them back: unchanged, in order. */
+function collectThinkingBlocks(blocks, orderedIndexes) {
+  const out = [];
+  for (const idx of orderedIndexes) {
+    const b = blocks.get(idx);
+    if (b?.type === 'thinking' && b.signature) {
+      out.push({ type: 'thinking', thinking: b.text || '', signature: b.signature });
+    } else if (b?.type === 'redacted_thinking' && b.data) {
+      out.push({ type: 'redacted_thinking', data: b.data });
+    }
+  }
+  return out;
+}
+
 async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: createMessage('provider.error.noApiKey'), code: 'NO_API_KEY' };
 
-  const { system, messages: anthMessages } = translateMessagesToAnthropic(messages);
   const tooling = translateToolsToAnthropic(tools);
-  const body = {
-    model,
-    max_tokens: DEFAULT_MAX_TOKENS,
-    stream: true,
-    messages: anthMessages,
-  };
-  if (system) body.system = system;
-  if (tooling) body.tools = tooling;
+  const level = typeof config?.reasoningEffort === 'string' ? config.reasoningEffort.trim() : '';
+  const thinkingFields = thinkingFieldsFor(model, level);
+  function buildBody(replayThinking) {
+    const { system, messages: anthMessages } = translateMessagesToAnthropic(messages, { model, replayThinking });
+    const body = {
+      model,
+      max_tokens: DEFAULT_MAX_TOKENS,
+      stream: true,
+      messages: anthMessages,
+      ...thinkingFields,
+    };
+    if (system) body.system = system;
+    if (tooling) body.tools = tooling;
+    return body;
+  }
 
   const url = `${API_BASE}/messages`;
   const headers = authHeaders(apiKey);
 
   let res;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: abortSignal,
-    });
-  } catch (err) {
-    if (isAbortError(err)) return cancelledChatRound({ role: 'assistant', content: '' });
-    return { error: describeFetchErrorMessage(err, API_BASE), code: 'NETWORK' };
+  // Newer models bind a thinking block to the conversation before it. When
+  // the history of the running turn changed since — the chat engine shortens
+  // old tool outputs when the context runs full — the API refuses the block.
+  // The documented way out is to send the turn once more without its
+  // thinking; the model then goes on without that reasoning.
+  for (const replayThinking of [true, false]) {
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(buildBody(replayThinking)),
+        signal: abortSignal,
+      });
+    } catch (err) {
+      if (isAbortError(err)) return cancelledChatRound({ role: 'assistant', content: '' });
+      return { error: describeFetchErrorMessage(err, API_BASE), code: 'NETWORK' };
+    }
+    if (res.ok) break;
+    const error = await readErrorMessage(res);
+    if (replayThinking && res.status === 400 && /bound to a different conversation/i.test(error)) continue;
+    return { error, code: String(res.status) };
   }
-  if (!res.ok) return { error: await readErrorMessage(res), code: String(res.status) };
   if (!res.body) return { error: createMessage('provider.error.noStream'), code: 'STREAM' };
 
   const reader = res.body.getReader();
@@ -232,7 +377,9 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
           });
           notifyToolCallStart(callbacks, { index: idx, name: cb.name || '' });
         } else if (cb.type === 'thinking') {
-          blocks.set(idx, { type: 'thinking', text: '' });
+          blocks.set(idx, { type: 'thinking', text: cb.thinking || '', signature: cb.signature || '' });
+        } else if (cb.type === 'redacted_thinking') {
+          blocks.set(idx, { type: 'redacted_thinking', data: cb.data || '' });
         }
       } else if (type === 'content_block_delta') {
         const idx = payload.index;
@@ -252,6 +399,8 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
         } else if (d.type === 'thinking_delta' && typeof d.thinking === 'string') {
           block.text = (block.text || '') + d.thinking;
           callbacks.onReasoningDelta?.(d.thinking);
+        } else if (d.type === 'signature_delta' && typeof d.signature === 'string') {
+          block.signature = (block.signature || '') + d.signature;
         }
       } else if (type === 'content_block_stop') {
         // no-op; data already accumulated
@@ -322,10 +471,13 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     }
   }
 
+  const thinkingBlocks = collectThinkingBlocks(blocks, orderedIndexes);
   const message = {
     role: 'assistant',
     content: textOut.length > 0 ? textOut : tool_calls.length ? null : '',
     ...(tool_calls.length ? { tool_calls } : {}),
+    // Goes back with the next round of this turn (translateMessagesToAnthropic).
+    ...(thinkingBlocks.length ? { anthropicThinking: { model, blocks: thinkingBlocks } } : {}),
   };
 
   const finishReason = stopReason || messageStopped
@@ -342,6 +494,12 @@ module.exports = {
   // Auf true, sobald translateMessagesToAnthropic Bilder abbildet (Issue #90).
   capabilities: { images: false },
   defaultModel: 'claude-sonnet-4-6',
+  // The levels depend on how the model thinks (#994); see thinkingModeOf.
+  reasoning: {
+    levels: reasoningLevelsOf,
+    defaultLevel: 'medium',
+    appliesTo: (model) => thinkingModeOf(model) !== null,
+  },
   apiBase: API_BASE,
   presentation: {
     apiKeyPlaceholder: 'sk-ant-…',
@@ -350,4 +508,6 @@ module.exports = {
   streamChatRound,
   translateMessagesToAnthropic,
   translateToolsToAnthropic,
+  thinkingModeOf,
+  thinkingFieldsFor,
 };

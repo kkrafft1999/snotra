@@ -9,7 +9,8 @@
  * gibt es das App-Menue neben dem Apfel, auf Windows und Linux nicht.
  */
 
-const { createTranslator } = require('../../shared/i18n');
+const { DEFAULT_LOCALE, LOCALES, createTranslator } = require('../../shared/i18n');
+const { manualWebUrl } = require('../../shared/manual/manual-address');
 
 /**
  * „Einstellungen…“ hat auf jeder Plattform dasselbe Kuerzel, aber nicht
@@ -26,14 +27,11 @@ function createSettingsItem(openSettings, t) {
 }
 
 /**
- * The user manual on the web (#777); the German pages live under `/de/`. Since
+ * The user manual on the web (#777); every language but the root one lives under `/<code>/`. Since
  * #790 *Help › User manual* opens the copy that ships with the app; the web
  * stays the way without a bundled manual (`onOpenManual` not given).
  */
-const MANUAL_URLS = Object.freeze({
-  en: 'https://docs.snotra-ai.dev/',
-  de: 'https://docs.snotra-ai.dev/de/',
-});
+const MANUAL_URLS = Object.freeze(Object.fromEntries(LOCALES.map((code) => [code, manualWebUrl(code)])));
 
 /** Ids of the items the main process changes after the menu is built. */
 const MENU_ITEM_IDS = Object.freeze({
@@ -226,7 +224,7 @@ function createApplicationMenuTemplate({
         accelerator: 'F1',
         click: () => {
           if (onOpenManual) onOpenManual();
-          else shell.openExternal(MANUAL_URLS[locale] ?? MANUAL_URLS.en);
+          else shell.openExternal(MANUAL_URLS[locale] ?? MANUAL_URLS[DEFAULT_LOCALE]);
         },
       },
       { type: 'separator' },
@@ -235,10 +233,12 @@ function createApplicationMenuTemplate({
         click: () => { onCheckForUpdates(); },
       },
       { type: 'separator' },
+      // The feedback form (#1045); the sidebar has a button for it, too.
+      { label: t('menu.help.feedback'), click: () => send(PUSH.UI_OPEN_FEEDBACK) },
       // What a bug report needs (#978): the report on the clipboard, the log in the file manager.
       ...(onCopyDiagnostics ? [{ label: t('menu.help.copyDiagnostics'), click: () => { onCopyDiagnostics(); } }] : []),
       ...(onShowLog ? [{ label: t('menu.help.showLog'), click: () => { onShowLog(); } }] : []),
-      ...(onCopyDiagnostics || onShowLog ? [{ type: 'separator' }] : []),
+      { type: 'separator' },
       {
         label: t('menu.help.github'),
         click: () => shell.openExternal('https://github.com/kkrafft1999/snotra'),

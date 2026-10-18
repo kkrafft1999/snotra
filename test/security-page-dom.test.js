@@ -154,12 +154,17 @@ test('six rows, each a closed disclosure button with its status in words', async
     assert.equal(body.hidden, false);
     const questions = [...body.querySelectorAll('.settings-security-q__text')].map((el) => el.textContent);
     assert.deepEqual(questions, ['May Snotra run commands?', 'Does Snotra ask first?', 'What can a command reach?']);
-    assert.match(body.textContent, /Commands run in the sandbox/);
-    // The execution switches, the sandbox and the allowances sit in the row (#449).
+    // The execution switches sit in the row (#449); the sandbox, its
+    // programs and hosts are one line leading to Tools › Security (#1119).
     assert.ok(body.querySelector('#input-shell-enabled'));
     assert.ok(body.querySelector('#input-python-enabled'));
-    assert.ok(body.querySelector('#input-workspace-sandbox'));
-    assert.ok(body.querySelector('#btn-add-program-allowance'));
+    assert.equal(body.querySelector('#input-workspace-sandbox'), null);
+    assert.equal(body.querySelector('#btn-add-program-allowance'), null);
+    const link = body.querySelector('button.settings-sandbox-link');
+    assert.equal(link.dataset.tone, 'on');
+    assert.match(link.textContent, /Isolated in the sandbox/);
+    assert.match(link.textContent, /Nothing has more room in snotra/);
+    assert.match(link.querySelector('.settings-sandbox-link__go').textContent, /^Security$/);
     toggles[4].click();
     assert.equal(body.hidden, true);
   } finally {
@@ -174,7 +179,7 @@ test('what is set up elsewhere is linked: the interpreter, the search key, MCP s
     const doc = dom.document;
     row(doc, 'external').querySelector('.settings-security-row__toggle').click();
     const labels = [...row(doc, 'external').querySelectorAll('[data-security-link]')].map((b) => b.textContent);
-    assert.deepEqual(labels, ['Add the search key under Tool setup', 'Manage MCP servers under Tool setup']);
+    assert.deepEqual(labels, ['Add the search key under Tools › Setup', 'Manage MCP servers under Tools › Setup']);
     row(doc, 'external').querySelector('[data-security-link="mcp"]').click();
     assert.deepEqual(navigations.at(-1), ['tools', 'heading-mcp-servers', null]);
     row(doc, 'execute').querySelector('.settings-security-row__toggle').click();
@@ -233,30 +238,37 @@ test('many rules: the closed row counts, the open row lists each with its scope'
   }
 });
 
-test('hosts kept open for the workspace: counted on the closed row, listed and closable when open (#946)', async () => {
+test('hosts and programs: counted on the closed row and in the line that leads to Tools › Security (#946, #1119)', async () => {
   const dom = setupRendererDom();
   try {
     const hosts = ['gitlab.example.com:22', '*.pytorch.org'];
-    const page = await openPage(overviewWith({ execution: { sandbox: SANDBOX, programAllowances: [], workspaceHosts: hosts } }));
-    const removed = [];
-    page.toolPermissions.removeWorkspaceHost = async (host) => {
-      removed.push(host);
-      return { ok: true };
-    };
+    let opened = 0;
+    const { initSecurityPanel } = await importRenderer('components', 'SecurityPanel.js');
+    const overview = overviewWith({ execution: {
+      sandbox: SANDBOX,
+      programAllowances: [{ path: '/opt/bin/terraform', domains: [], writePaths: [], trustd: true }],
+      workspacePrograms: [{ path: '/opt/bin/gh', domains: [], writePaths: [], trustd: true }],
+      workspaceHosts: hosts,
+      globalHosts: ['gitlab.example.com:22'],
+    } });
+    const panel = initSecurityPanel({
+      api: { getSecurityOverview: async () => overview },
+      toolPermissions: fakePermissions(),
+      onOpenSandbox: () => { opened += 1; },
+    });
+    await panel.open();
     const doc = dom.document;
     const execute = row(doc, 'execute');
-    assert.equal(execute.querySelector('.settings-security-row__exceptions').textContent, '2 connections kept open');
+    // Kept open here or everywhere: both reach the run.
+    assert.equal(execute.querySelector('.settings-security-row__exceptions').textContent, '3 connections kept open');
     execute.querySelector('.settings-security-row__toggle').click();
-    const subheads = [...row(doc, 'execute').querySelectorAll('.settings-security-subhead')].map((el) => el.textContent);
-    assert.ok(subheads.includes('Connections kept open for this workspace, in every mode:'));
-    const codes = [...row(doc, 'execute').querySelectorAll('.settings-security-item__code')].map((el) => el.textContent);
-    assert.deepEqual(codes.filter((c) => hosts.includes(c)), hosts);
-    const close = row(doc, 'execute').querySelector('button[data-host-remove="gitlab.example.com:22"]');
-    assert.equal(close.getAttribute('aria-label'), 'Close the connection to gitlab.example.com:22 for this workspace');
-    assert.equal(close.dataset.ruleRemove, undefined, 'not taken for a rule');
-    close.click();
-    await settle();
-    assert.deepEqual(removed, ['gitlab.example.com:22']);
+    const link = row(doc, 'execute').querySelector('button.settings-sandbox-link');
+    assert.match(link.textContent, /In snotra: 1 program · 2 hosts\./);
+    assert.match(link.textContent, /In every workspace: 1 program · 1 host\./);
+    // Nothing to close here any more: that is on Tools › Security.
+    assert.equal(row(doc, 'execute').querySelector('button[data-host-remove]'), null);
+    link.click();
+    assert.equal(opened, 1);
   } finally {
     dom.cleanup();
   }
@@ -287,7 +299,7 @@ test('all tools off: every row is off and the summary says so', async () => {
     row(doc, 'execute').querySelector('.settings-security-row__toggle').click();
     // The sandbox is described even while execution is off (#448).
     assert.match(row(doc, 'execute').textContent, /Only matters while “Run Python” or “Run shell commands” is on/);
-    assert.match(row(doc, 'execute').textContent, /Commands run in the sandbox/);
+    assert.match(row(doc, 'execute').textContent, /Isolated in the sandbox/);
   } finally {
     dom.cleanup();
   }
@@ -302,7 +314,12 @@ test('sandbox off for the workspace: amber "No sandbox" next to the status, and 
     assert.ok(row(doc, 'execute').querySelector('.settings-security-pill--warning'));
     assert.match(doc.getElementById('settings-security-summary').textContent, /asks before every command \(without the sandbox\)/);
     row(doc, 'execute').querySelector('.settings-security-row__toggle').click();
-    assert.match(row(doc, 'execute').textContent, /You switched the sandbox off for this workspace/);
+    const link = row(doc, 'execute').querySelector('button.settings-sandbox-link');
+    // Amber with words and the struck-through shield, never the colour alone.
+    assert.equal(link.dataset.tone, 'off');
+    assert.match(link.textContent, /Not isolated/);
+    assert.match(link.textContent, /The sandbox is off for snotra: every run has your full rights\./);
+    assert.equal(link.querySelectorAll('.settings-sandbox-link__shield path').length, 2);
   } finally {
     dom.cleanup();
   }
@@ -318,8 +335,9 @@ test('Windows without a sandbox: the platform reason, not the workspace switch',
     assert.deepEqual(pill(doc, 'execute'), ['No sandbox', 'Asks']);
     row(doc, 'execute').querySelector('.settings-security-row__toggle').click();
     const text = row(doc, 'execute').textContent;
-    assert.doesNotMatch(text, /You switched the sandbox off/);
-    assert.ok(row(doc, 'execute').querySelector('.settings-security-answer--warning'));
+    assert.doesNotMatch(text, /The sandbox is off for/);
+    assert.match(text, /Windows has no sandbox yet/);
+    assert.equal(row(doc, 'execute').querySelector('button.settings-sandbox-link').dataset.tone, 'off');
   } finally {
     dom.cleanup();
   }

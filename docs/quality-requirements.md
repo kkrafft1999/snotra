@@ -35,7 +35,7 @@ providers the user configures. It has no server of its own.
 | Dependencies | Two runtime dependencies (`@anthropic-ai/sandbox-runtime`, `undici`); marked, DOMPurify, pdf.js and Prism are vendored. No CDN, CSP `default-src 'none'` — the app has to run offline. |
 | Platforms | macOS on Apple Silicon (signed, notarised), Windows x64 (unsigned for now, #19/#911), Linux x64 (deb, AppImage, tar.gz). **All three rank equally** — see the parity rule in §3. |
 | Providers | OpenAI (Responses and Chat Completions), Anthropic, Google, Ollama, OpenAI-compatible servers (LM Studio, MLX-LM, llama.cpp, vLLM, OpenRouter). **Every provider the app offers has to work** — again under the parity rule. |
-| Backend | No server of ours, no account, no telemetry — not even opt-in. Data goes to the providers and services the user sets up; the one automatic outbound call is the update check against the GitHub releases API. |
+| Backend | No server of ours that can read anything, no account, no telemetry — not even opt-in. Data goes to the providers and services the user sets up; the one automatic outbound call is the update check against the GitHub releases API. **Amended 2026-10-17** for the mobile remote ([concept in `kkrafft1999/snotra-mobile`](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md)): one exception, a *blind relay* in Firebase that carries end-to-end encrypted packets between the desktop and the user's paired phone. It is off until a phone is paired, holds no account and no key, and cannot read what it carries. |
 | Delivery | Ruleset on `main`: pull request required, unit and e2e tests on macOS, Windows and Linux mandatory, no bypass for anyone (#240). Squash merge. Releases are cut from a tag that must match `package.json` (#570). |
 | Languages | English is the source language of the UI and the manual, German is derived and held to the same standard (`.claude/rules/language.md`). |
 
@@ -82,9 +82,12 @@ These came out of the interview and override the ranking where they apply.
   the renderer would be faster. The rank decides *what* the product does when
   goals collide; this rule decides *where* the logic lives, and it is not traded
   for speed.
-- **Remote control stays on the machine.** Headless and mobile front ends reach
-  the core over localhost only. Anything further — LAN, VPN, the internet — is a
-  tunnel the user sets up themselves.
+- **Remote control stays on the machine — or goes end to end.** Headless and
+  CLI front ends reach the core over localhost only; anything further for them
+  is a tunnel the user sets up themselves. **Amended 2026-10-17:** the mobile
+  app reaches the desktop through the blind relay, end-to-end encrypted, paired
+  in person at the desktop, and never able to loosen a protection
+  ([concept in `kkrafft1999/snotra-mobile`](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md)).
 - **Prompt-injection detection is an extra layer, never the protection.** It
   may warn, it must not be relied on; isolation and approvals are what protect.
 - **Silent misbehaviour is the worst failure.** Of all the ways the app can
@@ -110,7 +113,8 @@ already replaced the refusal by a card ([`architecture-review.md`](./architectur
 | SEC-2 | The agent wants to run a shell or Python command that no rule allows. | Nothing runs before the user approves it. On macOS and Linux the approved command runs in the sandbox, which refuses network and writes outside the workspace. | Approval for every execution not covered by a rule; sandbox on by default. |
 | SEC-3 | A safety mechanism cannot be established — no OS keyring, sandbox unavailable, policy file unreadable. | The app falls back to the stricter state and says so in the UI. | No path that fails open; every degraded state is visible. |
 | SEC-4 | A tool result contains text that looks like an injection. | The extra layer may flag it to the user; the call itself is still bound by isolation and approvals. | A flag never loosens a boundary, and a missing flag never opens one. |
-| SEC-5 | A process tries to reach the core's remote-control interface (headless, mobile). | Only connections over the loopback interface are accepted, and only with a credential the app issued. | No listening socket on a non-loopback interface. |
+| SEC-5 | A process tries to reach the core's local remote-control interface (headless, CLI). | Only connections over the loopback interface are accepted, and only with a credential the app issued. | No listening socket on a non-loopback interface. |
+| SEC-6 | The relay of the mobile remote, or someone inside its Firebase project, reads, alters or injects messages, or a second device tries to join (added 2026-10-17). | It sees ciphertext and metadata only; a forged or replayed packet is dropped; a pairing completes only with a click at the desktop, and a channel admits exactly one phone. From the phone, approvals are *allow once* or *deny*; nothing that loosens a protection is reachable. | No private key or pairing secret ever reaches the relay; a third key is refused; the remote adapter of the confirmation port answers *no* to every loosening. |
 
 ### Usability and accessibility
 
@@ -173,12 +177,17 @@ What Snotra consciously does not optimise for. A request in one of these
 directions is declined with a reference to this section, not weighed anew.
 
 - **Multi-user operation.** No team server, no accounts, no shared workspaces —
-  the distinction from Open WebUI or LibreChat.
+  the distinction from Open WebUI or LibreChat. The mobile remote (2026-10-17)
+  does not change this: the phone is a further way in for the same person, one
+  paired device per installation, and a second user is prevented, not only
+  left out.
 - **An IDE.** Editing text files is in scope (#863, #864; the "the preview stays
   a preview" of #226 is superseded), but no language server, debugger or
   project build. Snotra is for work that isn't code.
-- **A backend of our own and telemetry** — see the constraints in §2.
-- **Remote control beyond localhost** — see the rules in §3.
+- **A backend of our own and telemetry** — see the constraints in §2; the
+  blind relay of the mobile remote is the one, dated exception.
+- **Remote control beyond localhost** — see the rules in §3; again with the
+  mobile remote as the one end-to-end encrypted exception.
 
 ## 6. Deliberately left open
 

@@ -1,6 +1,7 @@
 'use strict';
 
 const { createTranslator } = require('../../shared/i18n');
+const { CONFIRMATION_ACTIONS, createRefusingConfirmation } = require('../../application/permissions/user-confirmation');
 
 /** The reason codes of `planMakeGlobal`/`makeGlobal`, as catalogue keys. */
 const ERROR_KEYS = Object.freeze({
@@ -16,6 +17,9 @@ const ERROR_KEYS = Object.freeze({
  * over (#101): the renderer is not a security boundary
  * (docs/security-concept.md §5). No tool reaches this, so the model still
  * never writes outside the open folder (#160, #548).
+ *
+ * The confirmation goes through the user-confirmation port (#980); `dialog`
+ * is left with the error notices.
  */
 function registerSkillMoveHandlers({
   ipcMain,
@@ -24,6 +28,7 @@ function registerSkillMoveHandlers({
   uiPrefsStore,
   getActiveWorkspaceRoot = () => null,
   dialog = null,
+  confirmations = createRefusingConfirmation(),
   getMainWindow = () => null,
   getLocale = () => null,
 }) {
@@ -38,7 +43,7 @@ function registerSkillMoveHandlers({
 
   ipcMain.handle(REQ.SKILLS_MAKE_GLOBAL, async (_event, name) => {
     const t = createTranslator(getLocale());
-    if (!dialog) return { error: t('skills.makeGlobal.error.noDialog') };
+    if (!dialog || !confirmations.canConfirm()) return { error: t('skills.makeGlobal.error.noDialog') };
     const root = getActiveWorkspaceRoot();
     const workspaceRoot = typeof root === 'string' && root.trim() ? root : null;
     const skillName = typeof name === 'string' ? name : '';
@@ -66,17 +71,21 @@ function registerSkillMoveHandlers({
       switchedOn ? t('skills.makeGlobal.confirm.switchedOn') : null,
       `${t('skills.makeGlobal.confirm.from')} ${plan.from}\n${t('skills.makeGlobal.confirm.to')} ${plan.to}`,
     ].filter(Boolean).join('\n\n');
-    const { response } = await showMessageBox({
-      type: 'question',
-      buttons: [t('skills.makeGlobal.confirm.move'), t('skills.makeGlobal.confirm.cancel')],
-      // Cancel is the default and the Escape answer: Enter moves nothing (#59).
-      defaultId: 1,
-      cancelId: 1,
-      noLink: true,
-      message: t('skills.makeGlobal.confirm.message', { name: plan.name }),
-      detail,
+    const outcome = await confirmations.confirm({
+      action: CONFIRMATION_ACTIONS.SKILL_MAKE_GLOBAL,
+      subject: plan.name,
+      prompt: {
+        type: 'question',
+        buttons: [t('skills.makeGlobal.confirm.move'), t('skills.makeGlobal.confirm.cancel')],
+        // Cancel is the default and the Escape answer: Enter moves nothing (#59).
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true,
+        message: t('skills.makeGlobal.confirm.message', { name: plan.name }),
+        detail,
+      },
     });
-    if (response !== 0) return { cancelled: true };
+    if (!outcome.confirmed) return { cancelled: true };
 
     let result;
     try {

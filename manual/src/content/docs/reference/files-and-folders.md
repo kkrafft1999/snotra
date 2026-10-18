@@ -31,9 +31,9 @@ It still carries the name of the platform, Snotra AI, although the app is called
 | `llm-config.json` | The models in the list and how to reach them. Keys are stored encrypted. |
 | `ui-preferences.json` | Your settings and the layout: language, the system prompt, the switches, the width of the columns, the zoom of Markdown files, the Python interpreter, the image model. |
 | `tool-policy.json` and `tool-policy.key` | The mode, your blocks and allowances, the default mode of a folder. Signed, so a changed file is noticed. |
-| `mcp-servers.json` | The MCP servers. Secret environment variables are encrypted. |
+| `mcp-servers.json` | The MCP servers. Secret environment variables and headers are encrypted. |
 | `web-search-config.json` | The key for the web search, encrypted. |
-| `chat-history.json` | Your chats, encrypted. |
+| `chat-history/` | [since 1.25] Your chats, encrypted: `index.json` with the list, and one file per chat. Up to 1.24 they were in one file, `chat-history.json`; the first start of 1.25 moves them over and removes the old file once the copy has been checked. |
 | `chat-attachments/` | The images that belong to your chats, one folder per chat. |
 | `folder-history.json` and `last-folder.json` | The recent folders, and the one that opens at the next start. |
 | `window-state.json` | Size and place of the window. |
@@ -46,7 +46,7 @@ Anything else in the folder — `Cache`, `Local Storage` and the like — is the
 Almost none. Everything in them is set in the app, and the app writes the files itself, so a change made behind its back can be overwritten. One setting has no place in the app, and one file must stay as it is:
 
 - **`ui-preferences.json`** takes `historyCharLimit`, a number the settings do not show: the budget in characters for the chat history sent with each request (200,000 by default, 4,000 to 2,000,000). Older messages beyond it are left out, and large tool results of earlier rounds are cut short. Quit Snotra before you edit the file.
-- **`tool-policy.json`** is signed. Do not edit it: Snotra then falls back to *Smart* — or stays on *Always ask* — and drops your allowances; your blocks stay in force. Change permissions under *Settings › Tools & security* instead.
+- **`tool-policy.json`** is signed. Do not edit it: Snotra then falls back to *Smart* — or stays on *Always ask* — and drops your allowances; your blocks stay in force. Change permissions under *Settings › Tools › Autonomy* instead.
 
 To start from scratch, quit Snotra and move the folder somewhere else. Keys and chats are then gone from the app — keep a copy first.
 
@@ -54,7 +54,7 @@ To start from scratch, quit Snotra and move the folder somewhere else. Keys and 
 
 API keys, secret environment variables, the search key and your chats are encrypted with a key from the system: on macOS the keychain item *Snotra AI Safe Storage*, on Windows the user account, on Linux the keyring. A copy of the folder is therefore useless on another computer or another account, and the keys have to be entered again there. Where the system offers no encrypted storage — a Linux desktop without a keyring, say — Snotra says *Encrypted storage is not available on this system* instead of saving a key.
 
-If the key changes, a chat history that can no longer be read is not deleted: it is kept as `chat-history.json.undecryptable-<time>` next to the new one.
+If the key changes, a chat history that can no longer be read is not deleted: the folder is kept as `chat-history.undecryptable-<time>` next to the new one.
 
 ## In a project
 

@@ -20,7 +20,7 @@ Every tool call belongs to one risk class. The class, together with the [mode](.
 | *Execute* | Running a shell command or Python code | asks — except a command you told it to always allow |
 | *External services* | Searching the web, fetching a page, generating an image, the tools of MCP servers | asks, every time |
 
-*Settings › Tools & security* shows these six rows for the open folder, with what applies there and why: [See and change what Snotra may do](../tools-and-security/).
+*Settings › Tools › Autonomy* shows these six rows for the open folder, with what applies there and why: [See and change what Snotra may do](../tools-and-security/).
 
 ## Why reading runs and everything else asks
 

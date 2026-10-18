@@ -55,7 +55,7 @@ Was das Modell mit einer Anfrage bekommt: das Gespräch, die Anweisungen, die Be
 
 ### MCP-Server
 
-Ein kleines Programm, das Snotra über das Model Context Protocol Tools aus einem anderen System anbietet — einem Ticketsystem, einer Datenbank. Snotra startet es auf deinem Computer. Siehe [Einen MCP-Server anbinden](../../customising/mcp-servers/).
+Ein Programm, das Snotra über das Model Context Protocol Tools aus einem anderen System anbietet — einem Ticketsystem, einer Datenbank. Snotra startet es auf deinem Computer oder erreicht es übers Netz über seine Adresse. Siehe [Einen MCP-Server anbinden](../../customising/mcp-servers/).
 
 ### Modell
 
@@ -65,7 +65,7 @@ Das Sprachmodell, das in einem Chat antwortet, angeboten von einem [Anbieter](#a
 
 Wie oft Snotra dich fragt: *Intelligent*, *Immer fragen* oder *Auto*. Er gehört zum Chat. Siehe [Einen Modus wählen](../../safety/choose-a-mode/).
 
-![Das Modus-Menü über dem Chat-Eingabefeld: Intelligent, Immer fragen und Auto, jeweils mit einer kurzen Beschreibung, „Immer fragen“ ausgewählt. Darunter das Kästchen „„Immer fragen“ auch für neue Chats in gartenplaner“ und der Link „Alle Berechtigungen unter Einstellungen › Tools & Sicherheit“.](screenshots/mode-menu.webp)
+![Das Modus-Menü über dem Chat-Eingabefeld: Intelligent, Immer fragen und Auto, jeweils mit einer kurzen Beschreibung, „Immer fragen“ ausgewählt. Darunter das Kästchen „„Immer fragen“ auch für neue Chats in gartenplaner“ und der Link „Alle Berechtigungen unter Einstellungen › Tools › Autonomie“.](screenshots/mode-menu.webp)
 
 ### Reasoning-Stufe
 

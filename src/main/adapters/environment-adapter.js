@@ -20,6 +20,7 @@
  * @param {() => { found?: boolean, enabled?: boolean, label?: string }} [deps.describeShell]
  * @param {string} [deps.platform]
  * @param {() => Date} [deps.now]
+ * @returns {import('../../application/ports/environment-port').EnvironmentPort}
  */
 function createEnvironmentAdapter({
   fs,

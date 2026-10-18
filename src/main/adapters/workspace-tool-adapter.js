@@ -10,7 +10,7 @@ const { formatToolDisplayLine } = require('../../shared/presentation/tool-displa
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL, workspaceSkillOfPath } = require('../../shared/contracts/skills');
 const { checkSkillDocument } = require('../../shared/runtime/skill-frontmatter');
-const { translate } = require('../../shared/i18n');
+const { APP_LOCALES, translate } = require('../../shared/i18n');
 const { menuPath } = require('../../shared/i18n/ui-quotes');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { scanSensitiveContent, containsOwnSecret } = require('../../shared/runtime/sensitive-content');
@@ -35,25 +35,61 @@ const BROAD_LISTING_TOOLS = new Set(['list_directory', 'list_directory_tree', 'f
 const DECODED_CONTENT_TOOLS = new Set(['extract_document_text']);
 
 /**
- * @param {object} toolRegistry
+ * A tool definition as the adapter reads it; the registry's definitions carry
+ * more (handler, schemas, descriptions) and the planner reads those.
+ *
+ * @typedef {{
+ *   name: string,
+ *   riskClass: string,
+ *   additionalRiskClasses?: string[],
+ *   requiresWorkspace?: boolean,
+ *   skillPaths?: boolean,
+ *   parameters?: object,
+ * } & Record<string, any>} ToolDefinition
+ *
+ * What the adapter takes from the registry (`workspace-tool-registry.js`): the
+ * five members it calls (#1098). Written from the consumer's side, like a port,
+ * because the registry module is outside the checked set. The two guards
+ * `typeof … === 'function'` below are for registry stubs in tests, which
+ * implement less than this.
+ *
+ * @typedef {Object} ToolRegistry
+ * @property {(options?: import('../../application/ports/tool-port').ToolListOptions) => Array} getTools
+ * @property {(options?: import('../../application/ports/tool-port').ToolListOptions) => string} buildSystemPrompt
+ * @property {(name: string) => ToolDefinition|null} getDefinition
+ * @property {(name: string, disabledNames?: string[]) => boolean} isSwitchedOff
+ * @property {(name: string, args: import('../../application/ports/tool-port').ToolArguments, context: object) => Promise<string>} execute
+ *
+ * @typedef {import('../tools/tool-call-planner').FsService} FsService
+ * @typedef {import('../tools/tool-call-planner').OutsideAccess} OutsideAccess
+ */
+
+/**
+ * @param {ToolRegistry} toolRegistry  workspace-tool-registry.js
  * @param {object} [deps]
- * @param {object} [deps.fsService]  für Planung (Pfadauflösung) und Ausgabeprüfung
- * @param {object} [deps.fs]  fs/promises
- * @param {object} [deps.path]
+ * @param {FsService} [deps.fsService]  für Planung (Pfadauflösung) und Ausgabeprüfung
+ * @param {typeof import('fs/promises')} [deps.fs]
+ * @param {typeof import('path')} [deps.path]
  * @param {string[]} [deps.protectedRoots]  harte Grenzen (Snotra-eigener Speicher)
  * @param {(absPath: string) => Promise<void>} [deps.trashItem]  shell.trashItem für Wiederherstellungskopien
  * @param {() => Promise<string[]>} [deps.readOwnSecrets]  konfigurierte Provider-Schlüssel (nur zum Vergleich)
  * @param {() => {label?: string, login?: boolean}} [deps.describeShell]  erkannte Shell für die Freigabekarte (#102)
- * @param {() => Promise<object>} [deps.describeSandbox]  isolation state for the card (#329)
+ * @param {() => Promise<{isolated: boolean, reason?: string, missing?: string[]}>} [deps.describeSandbox]
+ *   isolation state for the card (#329)
  * @param {(workspaceRoot: string) => Promise<boolean>} [deps.isSandboxDisabled]  per-workspace opt-out (#357)
- * @param {(request: {command: string, cwd: string}) => Promise<object|null>} [deps.matchProgramAllowance]  #408
- * @param {() => Promise<object[]>} [deps.readProgramAllowances]  #408
+ * @param {(request: {command: string, cwd: string}) => Promise<object|null>} [deps.matchProgramAllowance]  (#408)
+ * @param {() => Promise<object[]>} [deps.readProgramAllowances]  (#408)
  * @param {number} [deps.maxScanBytes]
  * @param {{ record: Function }} [deps.fileChangeRecorder]  keeps before/after of every write (#348)
+ * @param {(options?: object) => Promise<void>} [deps.refreshDynamicTools]  the tools only known at run time (#107)
+ * @param {OutsideAccess} [deps.outsideAccess]  what a card may open outside the open folder (#792)
+ * @returns {import('../../application/ports/tool-port').ToolPort}
  */
 function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
   const {
-    fsService = null,
+    // No `= null` on the two typed services: a `null` default would make the
+    // local an `any` again, and the planner call below unchecked (#1098).
+    fsService,
     fs = null,
     path = null,
     protectedRoots = [],
@@ -67,7 +103,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     refreshDynamicTools = null,
     fileChangeRecorder = null,
     // What a card may open outside the open folder (#792, step 4).
-    outsideAccess = null,
+    outsideAccess,
   } = deps;
   const maxScanBytes = deps.maxScanBytes || 2 * 1024 * 1024;
   const planner =
@@ -161,6 +197,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       return definition ? definition.skillPaths === true : false;
     },
     buildTraceEntry(toolName, args, extra = {}) {
+      /** @type {import('../../application/ports/tool-port').ToolTraceEntry} */
       const entry = { tool: toolName, args, ...extra };
       // Liest das Tool aus einem Skill-Verzeichnis (Issue #61), merkt sich der
       // Eintrag den Skill-Namen — daraus wird im Chat die Skill-Kategorie.
@@ -188,6 +225,11 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     formatDisplayLine(entry, phase, locale) {
       return formatToolDisplayLine(entry, phase, locale);
     },
+    /**
+     * @param {string} name
+     * @param {import('../../application/ports/tool-port').ToolArguments} args
+     * @param {Partial<import('../../application/ports/tool-port').ToolPlanContext>} [context]
+     */
     async plan(name, args, context = {}) {
       const definition = typeof toolRegistry.getDefinition === 'function' ? toolRegistry.getDefinition(name) : null;
       if (!definition) {
@@ -208,6 +250,11 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       }
       return planner.plan(definition, args, context);
     },
+    /**
+     * @param {string} name
+     * @param {import('../../application/ports/tool-port').ToolArguments} args
+     * @param {Partial<import('../../application/ports/tool-port').ToolExecutionContext>} [context]
+     */
     async execute(name, args, context = {}) {
       const plan = context.plan || null;
       if (planner && plan) {
@@ -399,7 +446,7 @@ function describeSkillCheck(name, checked, locale) {
   return {
     skill: name,
     valid: false,
-    problem: translate('en', checked.key, checked.params),
+    problem: translate(APP_LOCALES.EN, checked.key, checked.params),
     note: 'Not a usable skill yet: the catalog skips it until SKILL.md is fixed. Fix it now.',
   };
 }

@@ -1,0 +1,39 @@
+// Type checking over the existing JSDoc (#1004). The app stays plain
+// JavaScript without a build step: `tsc` only reads, `noEmit` writes nothing.
+// What is checked and why is described in docs/architecture.md, "Plain JS,
+// checked by JSDoc".
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "target": "es2024",
+    "lib": ["es2024"],
+    "types": ["node"],
+    "skipLibCheck": true,
+    // Not `strict` as a whole: without `noImplicitAny` an unannotated
+    // parameter stays `any` instead of failing, and without
+    // `strictNullChecks` `null` passes where a value is declared. Both would
+    // flood the first round with findings that are not drift. What is on
+    // catches a port and its adapter disagreeing — a missing or extra
+    // member, a wrong shape, a wrong argument count — and callbacks that
+    // take the wrong parameters.
+    "strict": false,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "noImplicitThis": true
+  },
+  // A deliberate list, not the whole of `src/`: the core, the ports, the
+  // contracts and the adapters that implement the ports. Files these import
+  // are checked too, since `checkJs` checks every file in the program.
+  "include": [
+    "src/application/**/*.js",
+    "src/main/ports/**/*.js",
+    "src/main/adapters/**/*.js",
+    "src/main/remote/**/*.js",
+    "src/shared/contracts/**/*.js",
+    "types/**/*.d.ts"
+  ]
+}

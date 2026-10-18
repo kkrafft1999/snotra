@@ -243,3 +243,86 @@ test('streamChatRound only attaches the insecure-TLS dispatcher for https URLs w
   });
   assert.equal(noFlagCalls[0].options.dispatcher, undefined, 'https without insecureTls must not use the dispatcher');
 });
+
+// Reasoning levels (#994).
+
+const { reasoningLevelsFor, reasoningDefaultFor } = require('../src/shared/contracts/reasoning');
+
+function thinkingAnswer() {
+  return sseResponse([
+    line({ message: { role: 'assistant', content: '', thinking: 'Let me ' }, done: false }),
+    line({ message: { role: 'assistant', content: '', thinking: 'see.' }, done: false }),
+    line({ message: { role: 'assistant', content: 'Here.' }, done: false }),
+    line({ done: true, done_reason: 'stop', prompt_eval_count: 3, eval_count: 4 }),
+  ]);
+}
+
+test('gpt-oss offers levels, the other thinking models off and on, the rest none (#994)', () => {
+  assert.deepEqual(reasoningLevelsFor(ollama, 'gpt-oss:20b'), ['low', 'medium', 'high']);
+  assert.equal(reasoningDefaultFor(ollama, 'gpt-oss:20b'), 'medium');
+  for (const model of ['qwen3:8b', 'qwen3', 'deepseek-r1:14b', 'magistral:24b', 'hf.co/unsloth/Qwen3-8B-GGUF']) {
+    assert.deepEqual(reasoningLevelsFor(ollama, model), ['none', 'on'], model);
+    assert.equal(reasoningDefaultFor(ollama, model), 'on', model);
+  }
+  for (const model of ['llama3.2', 'qwen2.5:7b', 'qwen3-coder:30b', 'qwen3:30b-a3b-instruct-2507', 'qwen3-embedding']) {
+    assert.deepEqual(reasoningLevelsFor(ollama, model), [], model);
+  }
+});
+
+test('the level goes out as think: a word for gpt-oss, true or false for the others (#994)', async (t) => {
+  const calls = mockFetch(t, () => thinkingAnswer());
+  for (const [model, reasoningEffort] of [
+    ['gpt-oss:20b', 'high'],
+    ['qwen3:8b', 'on'],
+    ['qwen3:8b', 'none'],
+    ['llama3.2', 'high'],
+    ['gpt-oss:20b', 'on'],
+  ]) {
+    await ollama.streamChatRound({
+      config: { ...CONFIG, reasoningEffort },
+      model,
+      messages: [{ role: 'user', content: 'Hi' }],
+      callbacks: collectCallbacks().callbacks,
+    });
+  }
+  assert.deepEqual(calls.map((c) => JSON.parse(c.options.body).think), ['high', true, false, undefined, undefined]);
+});
+
+test('streamed thinking is reasoning, and goes back with the tool loop (#994)', async (t) => {
+  mockFetch(t, () => thinkingAnswer());
+  const sink = collectCallbacks();
+  const res = await ollama.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'medium' },
+    model: 'gpt-oss:20b',
+    messages: [{ role: 'user', content: 'Hi' }],
+    callbacks: sink.callbacks,
+  });
+  assert.deepEqual(sink.reasoningDeltas, ['Let me ', 'see.']);
+  assert.deepEqual(sink.textDeltas, ['Here.']);
+  assert.equal(res.message.content, 'Here.');
+  assert.equal(res.message.ollamaThinking, 'Let me see.');
+
+  const back = ollama.translateMessagesToOllama([{ role: 'user', content: 'Hi' }, res.message]);
+  assert.deepEqual(back[1], { role: 'assistant', content: 'Here.', thinking: 'Let me see.' });
+});
+
+test('a model that does not think after all is asked again without think (#994)', async (t) => {
+  let round = 0;
+  const calls = mockFetch(t, () => {
+    round += 1;
+    if (round === 1) {
+      return sseResponse([JSON.stringify({ error: '"qwen3-custom:latest" does not support thinking' })], { status: 400 });
+    }
+    return thinkingAnswer();
+  });
+  const res = await ollama.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'on' },
+    model: 'qwen3-custom:latest',
+    messages: [{ role: 'user', content: 'Hi' }],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.equal(res.message.content, 'Here.');
+  assert.equal(calls.length, 2);
+  assert.equal(JSON.parse(calls[0].options.body).think, true);
+  assert.equal('think' in JSON.parse(calls[1].options.body), false);
+});

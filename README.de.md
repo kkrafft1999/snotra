@@ -23,8 +23,8 @@ die App selbst Snotra AI — siehe
 **Funktioniert mit** OpenAI · Anthropic · Google Gemini · Ollama · jeder
 OpenAI-kompatiblen API (LM Studio, MLX-LM, llama.cpp, vLLM, OpenRouter …)
 
-**Erweiterbar mit** Agent Skills (`SKILL.md`) · MCP-Servern (stdio) ·
-eingebauten Workspace-Werkzeugen · jedem CLI auf deinem Rechner
+**Erweiterbar mit** Agent Skills (`SKILL.md`) · MCP-Servern (lokal oder über
+Streamable HTTP) · eingebauten Workspace-Werkzeugen · jedem CLI auf deinem Rechner
 
 **Läuft auf** macOS (Apple Silicon) · Windows (x64) · Linux (x64)
 
@@ -122,8 +122,9 @@ das Feld bewegt sich schnell, Korrekturen willkommen.
 Was Snotra noch fehlt: signierte Builds
 ([#19](https://github.com/kkrafft1999/snotra/issues/19)), eine Sandbox unter
 Windows (unter macOS und Linux laufen Befehle und Python isoliert — siehe [Befehle in der
-Sandbox ausführen](https://docs.snotra-ai.dev/de/safety/sandbox/)), MCP über HTTP
-([#341](https://github.com/kkrafft1999/snotra/issues/341)).
+Sandbox ausführen](https://docs.snotra-ai.dev/de/safety/sandbox/)) und die
+OAuth-Anmeldung bei entfernten MCP-Servern — sie verbinden sich mit einem
+API-Schlüssel oder Token im Header.
 
 ## Motivation
 

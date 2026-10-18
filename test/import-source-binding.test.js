@@ -11,6 +11,12 @@ const { createFilesystemIpcAdapter } = require('../src/main/adapters/filesystem-
 const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+
+/** The dialog for notices, and the confirmation port over the same dialog (#980). */
+function withDialog(dialog) {
+  return { dialog, confirmations: createNativeConfirmationAdapter({ dialog }) };
+}
 
 // CR-B17-05 (#646): the sources of an import are bound to what the user
 // dropped, refused by their real path as well, and a drop that cannot be
@@ -89,7 +95,7 @@ function wireApp(workspace, { dialogResponse = 0 } = {}) {
     REQ,
     PUSH,
     getMainWindow: () => null,
-    dialog: { showMessageBox: async (options) => { messageBoxes.push(options); return { response: dialogResponse }; } },
+    ...withDialog({ showMessageBox: async (options) => { messageBoxes.push(options); return { response: dialogResponse }; } }),
   });
   const invoked = [];
   const api = loadPreload({

@@ -15,7 +15,7 @@
  */
 
 const { withRequestTimeout } = require('../services/request-timeout');
-const { WEB_SEARCH_ERROR_CODES, WEB_SEARCH_LIMITS } = require('../../application/ports/web-search-port');
+const { WEB_SEARCH_ERROR_CODES, WEB_SEARCH_LIMITS } = require('../../shared/contracts/web-search');
 
 const TAVILY_ENDPOINT = 'https://api.tavily.com/search';
 const SEARCH_TIMEOUT_MS = 20_000;
@@ -81,6 +81,7 @@ function errorForStatus(status, body) {
  * @param {() => Promise<string|null>} deps.readApiKey  liest den entschluesselten Schluessel
  * @param {() => boolean} deps.hasApiKey  synchroner Stand fuer die Tool-Sichtbarkeit
  * @param {typeof fetch} [deps.fetchImpl]
+ * @returns {import('../../application/ports/web-search-port').WebSearchPort}
  */
 function createTavilyWebSearchAdapter({ readApiKey, hasApiKey, fetchImpl = fetch }) {
   return {
@@ -88,6 +89,7 @@ function createTavilyWebSearchAdapter({ readApiKey, hasApiKey, fetchImpl = fetch
       return hasApiKey() === true;
     },
 
+    /** @param {Partial<Parameters<import('../../application/ports/web-search-port').WebSearchPort['search']>[0]>} [request] */
     async search({ query, maxResults, language, abortSignal } = {}) {
       const text = typeof query === 'string' ? query.trim() : '';
       if (!text) {
@@ -177,6 +179,7 @@ function createTavilyWebSearchAdapter({ readApiKey, hasApiKey, fetchImpl = fetch
         .filter(Boolean)
         .slice(0, clampMaxResults(maxResults));
 
+      /** @type {import('../../application/ports/web-search-port').WebSearchOk} */
       const out = { ok: true, query: text, results };
       const answer = typeof payload?.answer === 'string' ? payload.answer.trim() : '';
       if (answer) out.answer = clampSnippet(answer);

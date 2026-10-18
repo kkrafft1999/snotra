@@ -14,6 +14,8 @@ const { createToolApprovalAdapter } = require('../src/main/adapters/tool-approva
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { createTestConfirmations } = require('./helpers/confirmations');
+const { CONFIRMATION_ACTIONS } = require('../src/application/permissions/user-confirmation');
 
 function makeSafeStorage(available = true) {
   return {
@@ -43,7 +45,6 @@ async function setup(t, {
 } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-perm-ipc-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
-  const toolPolicyStore = createToolPolicyStore({ app: { getPath: () => dir }, safeStorage: makeSafeStorage(encryption), fs, path, crypto, log: { warn() {} } });
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });
   const sessionGrants = createSessionGrants();
   const dialogCalls = [];
@@ -58,11 +59,18 @@ async function setup(t, {
       return openDialogResult;
     },
   };
+  const getMainWindow = () => ({ isDestroyed: () => false });
+  const { confirmations, storeReceipts, confirmed } = createTestConfirmations({ dialog, getMainWindow });
+  const toolPolicyStore = createToolPolicyStore({
+    app: { getPath: () => dir }, safeStorage: makeSafeStorage(encryption), fs, path, crypto, log: { warn() {} },
+    confirmationReceipts: storeReceipts,
+  });
   const ipcMain = createMockIpcMain();
   registerToolPermissionHandlers({
     ipcMain,
     dialog,
-    getMainWindow: () => ({ isDestroyed: () => false }),
+    confirmations,
+    getMainWindow,
     toolPolicyStore,
     approvals,
     sessionGrants,
@@ -81,7 +89,7 @@ async function setup(t, {
   });
   // Handler direkt mit einem Event aufrufen, dessen sender das Fenster ist.
   const invoke = (channel, sender, payload) => ipcMain.handlers.get(channel)({ sender }, payload);
-  return { toolPolicyStore, approvals, sessionGrants, dialogCalls, openDialogCalls, invoke };
+  return { toolPolicyStore, approvals, sessionGrants, dialogCalls, openDialogCalls, invoke, confirmed };
 }
 
 test('Auto braucht die native Bestätigung; Abbruch im Dialog ändert nichts', async (t) => {
@@ -191,7 +199,7 @@ test('the native dialogs speak the interface language and name the page the rule
   assert.equal(
     dialogCalls[1].detail,
     'From now on, the tool edit_file may access “docs/**” without asking (workspace /work/projekt). '
-      + 'The rule applies in “Smart” mode until you delete it under Settings › Tools & security.',
+      + 'The rule applies in “Smart” mode until you delete it under Settings › Tools › Autonomy.',
   );
 
   await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, sender, { effect: 'deny', riskClass: 'write', pathPattern: '*.md' });
@@ -202,10 +210,10 @@ test('the native dialogs speak the interface language and name the page the rule
   assert.deepEqual(dialogCalls[2].buttons, ['Delete block', 'Cancel']);
 });
 
-test('the German allowance dialog points to Einstellungen › Tools & Sicherheit, where the rules live (#353, #449)', async (t) => {
+test('the German allowance dialog points to Einstellungen › Tools › Autonomie, where the rules live (#353, #449)', async (t) => {
   const { invoke, dialogCalls } = await setup(t, { dialogResponse: 1 });
   await invoke(REQ.TOOL_PERMISSIONS_ADD_RULE, makeSender(), { effect: 'allow', riskClass: 'read' });
-  assert.match(dialogCalls[0].detail, /Modus „Intelligent“, bis du sie unter Einstellungen › Tools & Sicherheit löschst\.$/);
+  assert.match(dialogCalls[0].detail, /Modus „Intelligent“, bis du sie unter Einstellungen › Tools › Autonomie löschst\.$/);
 });
 
 test('sensible Pfadmuster, Reset-Reichweiten und Sitzungsfreigaben löschen', async (t) => {
@@ -314,7 +322,7 @@ test('sandbox off needs the native confirmation; cancelling stores nothing', asy
   assert.equal(dialogCalls[0].message, 'Run without sandbox in this workspace?');
   assert.match(dialogCalls[0].detail, /In \/work\/projekt, shell_execute and run_python will run with your full rights/);
   assert.match(dialogCalls[0].detail, /In “Auto” mode they run without asking/);
-  assert.match(dialogCalls[0].detail, /under Settings › Tools & security/);
+  assert.match(dialogCalls[0].detail, /under Settings › Tools › Security/);
   assert.deepEqual(dialogCalls[0].buttons, ['Run without sandbox', 'Cancel']);
   assert.equal(dialogCalls[0].cancelId, 1, 'Cancel is the default');
   assert.equal(await toolPolicyStore.isWorkspaceSandboxDisabled('/work/projekt'), false);
@@ -441,7 +449,7 @@ test('a new allowance needs the native confirmation, which names every right; ca
   assert.match(dialogCalls[0].detail, /• it may reach graph\.microsoft\.com, login\.microsoftonline\.com/);
   assert.match(dialogCalls[0].detail, /• it may write in ~\/Library\/Application Support\/ms-todo/);
   assert.match(dialogCalls[0].detail, /• it may check certificates through macOS\. That opens a system service outside the sandbox/);
-  assert.match(dialogCalls[0].detail, /under Settings › Tools & security/);
+  assert.match(dialogCalls[0].detail, /under Settings › Tools › Security/);
   assert.deepEqual(dialogCalls[0].buttons, ['Allow', 'Cancel']);
   assert.equal(dialogCalls[0].cancelId, 1, 'Cancel is the default');
   assert.deepEqual(await toolPolicyStore.readProgramAllowances(), []);
@@ -533,7 +541,7 @@ test('workspace default "auto" needs the native confirmation naming the folder; 
   assert.match(dialogCalls[0].detail, /Every new chat in \/work\/projekt will run in “Auto” mode/);
   assert.match(dialogCalls[0].detail, /also after an app restart/);
   assert.match(dialogCalls[0].detail, /switched to “Smart”/);
-  assert.match(dialogCalls[0].detail, /under Settings › Tools & security/);
+  assert.match(dialogCalls[0].detail, /under Settings › Tools › Autonomy/);
   assert.deepEqual(dialogCalls[0].buttons, ['Make “Auto” the default', 'Cancel']);
   assert.equal(dialogCalls[0].cancelId, 1, 'Cancel is the default');
   assert.equal(await toolPolicyStore.readWorkspaceMode('/work/projekt'), 'smart');
@@ -901,7 +909,7 @@ test('workspace host: confirmed natively, kept for the run\'s folder, and the ca
   assert.equal(dialogCalls[0].title, 'Allow these connections for this workspace?');
   assert.match(dialogCalls[0].detail, /\*\.example\.com/);
   assert.match(dialogCalls[0].detail, /\/work\/run-root/);
-  assert.match(dialogCalls[0].detail, /Settings › Tools & security/);
+  assert.match(dialogCalls[0].detail, /Settings › Tools › Security/);
   // The run's folder, not the one on screen.
   assert.deepEqual((await toolPolicyStore.read()).workspaceHosts, { '/work/run-root': ['*.example.com'] });
   assert.ok(sender.sent.some((s) => s.channel === PUSH.TOOL_PERMISSIONS_CHANGED));
@@ -955,9 +963,11 @@ test('workspace host: the command gave up while the dialog was open — nothing 
 });
 
 test('workspace host: listed for the open folder, closed one by one without a dialog', async (t) => {
-  const { invoke, toolPolicyStore, dialogCalls } = await setup(t, { workspaceRoot: '/work/projekt' });
-  await toolPolicyStore.addWorkspaceHosts('/work/projekt', ['gitlab.example.com:22', 'pypi.org:443']);
-  await toolPolicyStore.addWorkspaceHosts('/work/other', ['other.example.com:443']);
+  const { invoke, toolPolicyStore, dialogCalls, confirmed } = await setup(t, { workspaceRoot: '/work/projekt' });
+  await toolPolicyStore.addWorkspaceHosts('/work/projekt', ['gitlab.example.com:22', 'pypi.org:443'],
+    confirmed(CONFIRMATION_ACTIONS.WORKSPACE_HOSTS, '/work/projekt'));
+  await toolPolicyStore.addWorkspaceHosts('/work/other', ['other.example.com:443'],
+    confirmed(CONFIRMATION_ACTIONS.WORKSPACE_HOSTS, '/work/other'));
   const sender = makeSender(3);
   assert.deepEqual((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceHosts, ['gitlab.example.com:22', 'pypi.org:443']);
   const overview = await invoke(REQ.TOOL_PERMISSIONS_GET_SECURITY_OVERVIEW, sender);
@@ -986,5 +996,5 @@ test('workspace host: the German dialog speaks German and names the page', async
   await pending;
   assert.equal(dialogCalls[0].title, 'Diese Verbindungen für diesen Workspace erlauben?');
   assert.equal(dialogCalls[0].buttons[0], 'Für diesen Workspace erlauben');
-  assert.match(dialogCalls[0].detail, /Einstellungen › Tools & Sicherheit/);
+  assert.match(dialogCalls[0].detail, /Einstellungen › Tools › Sicherheit/);
 });

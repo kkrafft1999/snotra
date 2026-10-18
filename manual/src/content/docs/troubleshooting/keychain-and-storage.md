@@ -51,14 +51,14 @@ What still works and what does not:
 
 A red banner under the chat's title says ***This chat is not being saved.*** Snotra could not put the chat into the history, so what you write now is gone once you quit. The banner stays until a save goes through again, and the line below the heading says why:
 
-- ***Snotra could not read the chat history …*** The file `chat-history.json` in the [profile folder](../logs-and-reports/#the-profile-folder) is there, but Snotra cannot read it: another program holds it, its permissions changed, or this start has no encrypted storage for an encrypted history (see [above](#when-encrypted-storage-is-not-available)). Snotra leaves the file as it is rather than write an empty history over your chats.
+- ***Snotra could not read the chat history …*** The history's index, `chat-history/index.json` in the [profile folder](../logs-and-reports/#the-profile-folder), is there, but Snotra cannot read it: another program holds it, its permissions changed, or this start has no encrypted storage for an encrypted history (see [above](#when-encrypted-storage-is-not-available)). Snotra leaves the file as it is rather than write an empty history over your chats.
 - ***Snotra could not write this chat into the history.*** Reading worked, writing did not — the disk is full, for example, or the profile folder cannot be written to.
 
 Steps:
 
 1. Keep what you need from the chat: copy it, or ask Snotra to write a summary into a file of the open folder.
 2. Quit Snotra and start it again.
-3. If the banner comes back, make sure the profile folder can be written to and has room, and that no other program — a sync or backup tool — holds `chat-history.json`. With an encrypted history and no encrypted storage, [get the storage back](#steps-get-the-storage-back) first.
+3. If the banner comes back, make sure the profile folder can be written to and has room, and that no other program — a sync or backup tool — holds the `chat-history` folder. With an encrypted history and no encrypted storage, [get the storage back](#steps-get-the-storage-back) first.
 
 What happens then: as soon as a save goes through, the banner disappears and the chat on screen is saved with everything in it. The chats from earlier starts are still in the file.
 
@@ -67,4 +67,4 @@ What happens then: as soon as a save goes through, the banner disappears and the
 - **The models say *enter the key again*.** The stored key can no longer be decrypted — after a move to another computer, for example, or after the keychain item was deleted. Enter the key once more with the pencil of the entry under *Settings › Models*.
 - **macOS asks at every start.** You chose *Allow* instead of *Always Allow*. Choose *Always Allow* the next time.
 - **The history is back, but some chats are missing.** Those are the chats of a start without the storage; they were not saved, so the encrypted history was not overwritten.
-- **The history stays empty although the storage works.** The history could not be decrypted with this key — after a move to another computer, for example. Snotra does not overwrite it: it keeps it as `chat-history.json.undecryptable-…` in the [profile folder](../logs-and-reports/#the-profile-folder) and starts a new one.
+- **The history stays empty although the storage works.** The history could not be decrypted with this key — after a move to another computer, for example. Snotra does not overwrite it: it keeps it as `chat-history.undecryptable-…` in the [profile folder](../logs-and-reports/#the-profile-folder) and starts a new one.

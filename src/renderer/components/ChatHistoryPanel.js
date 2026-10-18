@@ -3,7 +3,7 @@ import { t, tMessage, onLocaleChange } from '../i18n.js';
 import contracts from '../generated/contracts.js';
 import { formatCostAmount } from './CostPanel.js';
 
-const { CHAT_ACTIVATION, resolveChatTitle, normalizeSessionCost, summarizeSessionCost } = contracts;
+const { CHAT_ACTIVATION, normalizeSessionCost, summarizeSessionCost } = contracts;
 
 /**
  * Der Chat-Verlauf als Spalte neben dem Chat (Epic #223, Phase B).
@@ -144,7 +144,9 @@ export function initChatHistoryPanel({
     open.type = 'button';
     open.className = 'chat-history-row-main';
     if (current) open.setAttribute('aria-current', 'true');
-    const title = tMessage(resolveChatTitle(s.title, s.messages));
+    // Main sends the title to show — the chat's own, or a descriptor for one
+    // without (#985): the list carries no messages to work it out from.
+    const title = tMessage(s.title) || t('chat.title.new');
     const titleEl = document.createElement('span');
     titleEl.className = 'chat-history-row-title';
     titleEl.textContent = title;
@@ -316,12 +318,17 @@ export function initChatHistoryPanel({
     await persistCurrentChat();
     appStore.chatSessionId += 1;
     // A chat whose run is still in memory opens from there (#320): the file
-    // only knows the state from when the run left the screen.
+    // only knows the state from when the run left the screen. Any other one
+    // brings its messages now; the list has none (#985).
     let s = null;
     if (!runs.canAttach(id)) {
-      const hist = await api.getChatHistory();
-      s = hist.sessions?.find((x) => x.id === id);
-      if (!s || !Array.isArray(s.messages)) return;
+      s = (await api.getChatSession(id))?.session;
+      if (!s || !Array.isArray(s.messages)) {
+        // Gone, or its file could not be read and was put aside — the list
+        // shows what is left, and a notice says what happened.
+        await renderHistoryList();
+        return;
+      }
     }
     // The chat on screen takes its run into the background.
     runs.detach();

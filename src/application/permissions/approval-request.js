@@ -38,6 +38,8 @@ function modeLabelKey(mode) {
  * Die Begruendung entsteht im Hauptprozess und wird im Renderer gelesen, wo
  * die aktive Sprache lebt — also reist der Schluessel, nicht der Satz (#293).
  * Der Modusname ist selbst ein Schluessel und wird beim Anzeigen eingesetzt.
+ *
+ * @param {{ mode?: string, askClasses?: string[], providerLabel?: string, recovery?: string, checkpoint?: string }} [input]
  */
 function describeApprovalReason({ mode, askClasses, providerLabel, recovery, checkpoint = 'access' } = {}) {
   const classes = normalizeRiskClasses(askClasses) || [];
@@ -78,6 +80,8 @@ function describeApprovalReason({ mode, askClasses, providerLabel, recovery, che
  * Umfang einer Sitzungsfreigabe in Worten (Konzept §6) — als Schluessel mit
  * seinen Werten (#290). Die Klassen reisen als Schluesselliste mit, damit auch
  * „Ändern" in der Sprache steht, in der die Karte gerade gelesen wird.
+ *
+ * @param {{ tool?: string, targets?: Array<{ path: string, skillName?: string, skillPath?: string }>, riskClasses?: string[] }} [input]
  */
 function describeSessionScope({ tool, targets, riskClasses } = {}) {
   const classKeys = (normalizeRiskClasses(riskClasses) || []).map((cls) => CLASS_KEYS[cls]).filter(Boolean);
@@ -132,6 +136,19 @@ function describeCommandRuleOffer({ tool, plan, classes, mode, checkpoint, works
  * Freigabe-Anfrage aus Plan und Policy-Ergebnis. `sessionAllowed` ist nur
  * wahr, wenn alle abgefragten Klassen sitzungsweise freigebbar sind und der
  * Modus Freigaben überhaupt berücksichtigt (nicht `ask-all`).
+ *
+ * @param {Object} [input]
+ * @param {string} [input.tool]
+ * @param {import('../ports/tool-port').ToolPlan} [input.plan]
+ * @param {string[]} [input.askClasses]
+ * @param {string} [input.mode]
+ * @param {string|null} [input.providerKey]
+ * @param {string} [input.providerLabel]
+ * @param {string|number} [input.policyVersion]
+ * @param {string|null} [input.chatId]
+ * @param {'access'|'output'|'sandbox'|'config'} [input.checkpoint]
+ * @param {string|null} [input.workspaceRoot]
+ * @param {boolean} [input.encryptionAvailable]
  */
 function buildApprovalRequest({
   tool,

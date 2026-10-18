@@ -1,0 +1,151 @@
+{
+  "protocol": 1,
+  "part": "pairing",
+  "spec": "docs/remote-protocol.md",
+  "generatedBy": "node scripts/remote-protocol-vectors.js",
+  "note": "Hex for byte strings that are only hashed or signed; base64url without padding where the value travels in JSON. Signatures are randomised: verify them, do not compare them.",
+  "labels": {
+    "codeCheck": "snotra/v1 code-check",
+    "macPhone": "snotra/v1 mac phone",
+    "macDesktop": "snotra/v1 mac desktop",
+    "phrase": "snotra/v1 phrase",
+    "pairOpen": "snotra/v1 pair-open",
+    "pairClaim": "snotra/v1 pair-claim",
+    "token": "snotra/v1 token"
+  },
+  "desktop": {
+    "signPrivate": "8feaea7480b5a6cdcb9111ba9fc9574ff2f39dcbda147cf24ecec5b7e03ba951",
+    "agreePrivate": "410bff05a2f172d131d240230b87f3e9a5a20e1603c417a1a3f37ff5dcc8f2e3",
+    "keys": {
+      "sign": "BNKfq2fzhcJwml4SzgYK6aybkHUoe6aKOzcbnm9qeGdDRTNWO2esg2Csvv9IunZ-fOyi4ns9B_BbjeQ5cEm0LPo",
+      "agree": "BA6RQ77pZjIh0rO7L0P-d5nQ2TScvi-43qT_YSy1rQIeVOajF2Sf5axy5qzgL-lLuEjLUmW06A5owh01oekVpyM"
+    },
+    "keyBundle": "004104d29fab67f385c2709a5e12ce060ae9ac9b9075287ba68a3b371b9e6f6a7867434533563b67ac8360acbeff48ba767e7ceca2e27b3d07f05b8de4397049b42cfa0041040e9143bee9663221d2b3bb2f43fe7799d0d9349cbe2fb8dea4ff612cb5ad021e54e6a317649fe5ac72e6ace02fe94bb848cb5265b4e80e68c21d35a1e915a723"
+  },
+  "phone": {
+    "signPrivate": "8e57c5fdcf18846ea16dfdadab041198bf0484361b3372aec99d7910c56fb8aa",
+    "agreePrivate": "187727e3475f46d65579c251a81b6760ae4b7061be608894a398b0e838e43e1a",
+    "keys": {
+      "sign": "BCMkSzFqlVP6SosgFkn727PkXBm0X1aKFr7UckbLWoqei3RdbbFEh4z3nH8xMttn-iNrUa6PkJUV6B8j8etNsNs",
+      "agree": "BEdzumXwx_cOO0mDU829Pa4RauQ3oAXoRcjsgpZsxgy7ZC2cNHbh5lin_EaxYWB6m54cgh88STtZV-iMa263mtI"
+    },
+    "keyBundle": "00410423244b316a9553fa4a8b201649fbdbb3e45c19b45f568a16bed47246cb5a8a9e8b745d6db144878cf79c7f3132db67fa236b51ae8f909515e81f23f1eb4db0db0041044773ba65f0c7f70e3b498353cdbd3dae116ae437a005e845c8ec82966cc60cbb642d9c3476e1e658a7fc46b161607a9b9e1c821f3c493b5957e88c6b6eb79ad2"
+  },
+  "code": {
+    "pairingIdValue": 1057,
+    "secretValue": "0x3ac96fe24bdbda2479c",
+    "pairingId": "0111",
+    "secret": "EP9DZH4QPYT4HWW",
+    "check": "F",
+    "code": "0111EP9DZH4QPYT4HWWF",
+    "display": "0111-EP9D-ZH4Q-PYT4-HWWF",
+    "qr": "snotra-pair:v1/relay.example/0111EP9DZH4QPYT4HWWF",
+    "macKey": "30313131455039445a4834515059543448575746"
+  },
+  "parse": [
+    {
+      "input": "0111-EP9D-ZH4Q-PYT4-HWWF",
+      "expect": {
+        "code": "0111EP9DZH4QPYT4HWWF"
+      }
+    },
+    {
+      "input": "0111-ep9d-zh4q-pyt4-hwwf",
+      "expect": {
+        "code": "0111EP9DZH4QPYT4HWWF"
+      }
+    },
+    {
+      "input": " 0111EP9DZH 4QPYT4HWWF ",
+      "expect": {
+        "code": "0111EP9DZH4QPYT4HWWF"
+      }
+    },
+    {
+      "input": "OlllEP9DZH4QPYT4HWWF",
+      "expect": {
+        "code": "0111EP9DZH4QPYT4HWWF"
+      }
+    },
+    {
+      "input": "0111EP9DZH4QPYT4HWW",
+      "expect": {
+        "error": "invalid-length"
+      }
+    },
+    {
+      "input": "0111EP9DZH4QPYT4HWWU",
+      "expect": {
+        "error": "invalid-symbol"
+      }
+    },
+    {
+      "input": "0111EP9DZH4QPYT4HWWG",
+      "expect": {
+        "error": "invalid-check"
+      }
+    }
+  ],
+  "channelId": "iP4ic5AhWBa6BKSnukYcRg",
+  "transcript": "001088fe227390215816ba04a4a7ba461c46004104d29fab67f385c2709a5e12ce060ae9ac9b9075287ba68a3b371b9e6f6a7867434533563b67ac8360acbeff48ba767e7ceca2e27b3d07f05b8de4397049b42cfa0041040e9143bee9663221d2b3bb2f43fe7799d0d9349cbe2fb8dea4ff612cb5ad021e54e6a317649fe5ac72e6ace02fe94bb848cb5265b4e80e68c21d35a1e915a72300410423244b316a9553fa4a8b201649fbdbb3e45c19b45f568a16bed47246cb5a8a9e8b745d6db144878cf79c7f3132db67fa236b51ae8f909515e81f23f1eb4db0db0041044773ba65f0c7f70e3b498353cdbd3dae116ae437a005e845c8ec82966cc60cbb642d9c3476e1e658a7fc46b161607a9b9e1c821f3c493b5957e88c6b6eb79ad2",
+  "macP": "-VuIbz3haCYUWMpOZgkXSb3L-HrT9SpBlR1--_wdss4",
+  "macD": "ckov3jFxhzzyMbokW04fDGjjnZHVkPqt43Z2hV0yg3k",
+  "phrase": {
+    "list": "src/shared/contracts/remote/safety-words-v1.json",
+    "listSha256": "7aa57a4d3ecf6581729992bad9575bacdebf7c28378af2aec6a50f11aec326f5",
+    "listSize": 1296,
+    "hash0": "4cc6b847816230166896636bee4a7ad290198022f802ccdce112250dbc0c5b8d",
+    "values": [
+      19654,
+      47175,
+      33122,
+      12310,
+      26774,
+      25451
+    ],
+    "indices": [
+      214,
+      519,
+      722,
+      646,
+      854,
+      827
+    ],
+    "words": [
+      "coffeecake",
+      "groundhog",
+      "maestro",
+      "kangaroo",
+      "ozone",
+      "oncoming"
+    ],
+    "shown": "coffeecake · groundhog · maestro · kangaroo · ozone · oncoming"
+  },
+  "challenge": "Q0VkFp3dYNCf1cETu0_MC6oDHPWuKOkxTFBxMa2vkbQ",
+  "proofs": [
+    {
+      "name": "pair-open",
+      "signer": "desktop",
+      "message": "0013736e6f7472612f763120706169722d6f70656e0020434564169ddd60d09fd5c113bb4fcc0baa031cf5ae28e9314c507131adaf91b4004104d29fab67f385c2709a5e12ce060ae9ac9b9075287ba68a3b371b9e6f6a7867434533563b67ac8360acbeff48ba767e7ceca2e27b3d07f05b8de4397049b42cfa0041040e9143bee9663221d2b3bb2f43fe7799d0d9349cbe2fb8dea4ff612cb5ad021e54e6a317649fe5ac72e6ace02fe94bb848cb5265b4e80e68c21d35a1e915a723",
+      "signature": "fwSp_aM7tEQMtxiPiPbWCe1WmHOjdlNirfrMkwrFIV-gRuM6DGvnkRpc_miUFeNkECxRoxSQFli1Fu07a8my6A"
+    },
+    {
+      "name": "pair-claim",
+      "signer": "phone",
+      "message": "0014736e6f7472612f763120706169722d636c61696d0020434564169ddd60d09fd5c113bb4fcc0baa031cf5ae28e9314c507131adaf91b4001088fe227390215816ba04a4a7ba461c4600410423244b316a9553fa4a8b201649fbdbb3e45c19b45f568a16bed47246cb5a8a9e8b745d6db144878cf79c7f3132db67fa236b51ae8f909515e81f23f1eb4db0db0041044773ba65f0c7f70e3b498353cdbd3dae116ae437a005e845c8ec82966cc60cbb642d9c3476e1e658a7fc46b161607a9b9e1c821f3c493b5957e88c6b6eb79ad2",
+      "signature": "3ijJIvOuimPzylCQDOAx1HxtVCBhtiDt-UA7x1ViGZPXiO5ZwghcwHBYzHZhwHDjvZuecRXn4SQ7VhLJkiM-fg"
+    },
+    {
+      "name": "token-desktop",
+      "signer": "desktop",
+      "message": "000f736e6f7472612f763120746f6b656e0020434564169ddd60d09fd5c113bb4fcc0baa031cf5ae28e9314c507131adaf91b4001088fe227390215816ba04a4a7ba461c4600076465736b746f70",
+      "signature": "vEGH4F-k7RhN2TCc7xeWsurhmCcEqgJeFeI6LrHmi6yqdThC-QzvRVdMjeYk3B1ft0OurI5-nkqE9EyZ9V9f2g"
+    },
+    {
+      "name": "token-phone",
+      "signer": "phone",
+      "message": "000f736e6f7472612f763120746f6b656e0020434564169ddd60d09fd5c113bb4fcc0baa031cf5ae28e9314c507131adaf91b4001088fe227390215816ba04a4a7ba461c46000570686f6e65",
+      "signature": "1vgNuNmYNLdXBT0HP3ZsRjfHJucNgG2P6p58sfWqo8YGVxM7SXQZqHx-krbRoy9Kvg9FxN9uwXdGP7Ki0LVpAg"
+    }
+  ]
+}

@@ -8,7 +8,7 @@
  * @property {string} [defaultBaseUrl]
  * @property {boolean} [defaultInsecureTls]
  * @property {{ apiKey?: boolean, baseUrl?: boolean, insecureTls?: boolean }} [fields]
- * @property {object} [presentation]
+ * @property {import('./provider-runtime-port').ProviderPresentation} [presentation]
  * @property {string} [apiBase]
  *
  * @typedef {Object} ProviderCatalogPort

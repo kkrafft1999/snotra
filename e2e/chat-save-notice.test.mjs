@@ -1,9 +1,10 @@
 // A chat that cannot be saved says so, in the real app (#977).
 //
-// `chat-history.json` is made a folder: it is there, and reading it fails on
-// every platform. Main then skips each save rather than write an empty history
-// over it (#473) — and the chat has to say that its chats are not being kept.
-// Once the file can be read again, the next save goes through and the banner goes.
+// The history's index (`chat-history/index.json`, #985) is made a folder: it
+// is there, and reading it fails on every platform. Main then skips each save
+// rather than write an empty history over it (#473) — and the chat has to say
+// that its chats are not being kept. Once the file can be read again, the next
+// save goes through and the banner goes.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +12,7 @@ import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, waitForFolderChat, sendChat } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, waitForFolderChat, sendChat, storedChats } from './helpers/app.mjs';
 
 function banner(page) {
   return page.evaluate(() => {
@@ -27,8 +28,8 @@ test('an unreadable chat history shows the banner until a save goes through agai
   await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
   await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en' }), 'utf8');
-  const historyFile = path.join(userDataDir, 'chat-history.json');
-  await mkdir(historyFile);
+  const historyFile = path.join(userDataDir, 'chat-history', 'index.json');
+  await mkdir(historyFile, { recursive: true });
   t.after(() => model.close());
 
   const snotra = await launchApp({ userDataDir });
@@ -62,10 +63,7 @@ test('an unreadable chat history shows the banner until a save goes through agai
   // from the failed round may still be retrying its rename onto the folder
   // (#472) and land first, with the older state. The writes to one file run
   // one after the other, so the newer one follows it.
-  const savedContents = async () => {
-    const history = await page.evaluate(() => window.electronAPI.getChatHistory());
-    return (history?.sessions || []).flatMap((s) => s.messages.map((m) => m.content)).join('\n');
-  };
+  const savedContents = async () => (await storedChats(page)).flatMap((s) => s.messages.map((m) => m.content)).join('\n');
   await poll(async () => /SAVE-2/.test(await savedContents()), { what: 'a saved history with SAVE-2', explain });
   assert.ok((await readFile(historyFile, 'utf8')).length > 0, 'the history is on disk again');
   assert.match(await savedContents(), /SAVE-1/, 'the question asked while saves failed is saved too');

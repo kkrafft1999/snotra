@@ -19,6 +19,7 @@ const {
   normalizeSandboxOutside,
 } = require('../../shared/contracts/chat');
 const { normalizeSessionCost } = require('../../shared/contracts/cost');
+const { createMessage, isMessage } = require('../../shared/contracts/message');
 const { normalizeChatConfigOverrides } = require('../../shared/contracts/chat-configuration');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
@@ -371,6 +372,26 @@ function resolveSessionTitle(sessionRow, messages, existingTitle) {
   return own(sessionRow.title) || own(existingTitle) || inferChatTitleText(messages);
 }
 
+/**
+ * The settings a chat carries beyond its messages, each optional: model and
+ * permission mode (#211), reasoning level (#725), what it switched for itself
+ * (#774) and its estimated cost (#949). Copied in this order, so that every
+ * form of a session lists its fields alike.
+ */
+function copyChatSettings(from, out) {
+  const modelPresetId = chatModelPresetIdForStore(from.modelPresetId);
+  if (modelPresetId) out.modelPresetId = modelPresetId;
+  const toolPermissionMode = chatToolPermissionModeForStore(from.toolPermissionMode);
+  if (toolPermissionMode) out.toolPermissionMode = toolPermissionMode;
+  const reasoningEffort = chatReasoningEffortForStore(from.reasoningEffort);
+  if (reasoningEffort) out.reasoningEffort = reasoningEffort;
+  const configOverrides = normalizeChatConfigOverrides(from.configOverrides);
+  if (configOverrides) out.configOverrides = configOverrides;
+  const cost = normalizeSessionCost(from.cost);
+  if (cost) out.cost = cost;
+  return out;
+}
+
 function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existingTitle, requireMessages = false } = {}) {
   if (!sessionRow || typeof sessionRow.id !== 'string' || !sessionRow.id.trim()) return null;
   const messages = sanitizeChatMessagesForStore(sessionRow.messages);
@@ -380,52 +401,100 @@ function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existing
     typeof normalizeWorkspaceRoot === 'function'
       ? normalizeWorkspaceRoot(sessionRow.workspaceRoot)
       : sessionRow.workspaceRoot || null;
-  const out = {
+  return copyChatSettings(sessionRow, {
     id: sessionRow.id.trim(),
     workspaceRoot,
     title: title.slice(0, 200),
     updatedAt: Number.isFinite(sessionRow.updatedAt) ? sessionRow.updatedAt : Date.now(),
     messages,
     tokenUsage: normalizeTokenUsageForStore(sessionRow.tokenUsage),
-  };
-  const modelPresetId = chatModelPresetIdForStore(sessionRow.modelPresetId);
-  if (modelPresetId) out.modelPresetId = modelPresetId;
-  const toolPermissionMode = chatToolPermissionModeForStore(sessionRow.toolPermissionMode);
-  if (toolPermissionMode) out.toolPermissionMode = toolPermissionMode;
-  const reasoningEffort = chatReasoningEffortForStore(sessionRow.reasoningEffort);
-  if (reasoningEffort) out.reasoningEffort = reasoningEffort;
-  // What this chat switched beyond the settings (#774).
-  const configOverrides = normalizeChatConfigOverrides(sessionRow.configOverrides);
-  if (configOverrides) out.configOverrides = configOverrides;
-  // The estimated cost, summed over the whole chat (#949).
-  const cost = normalizeSessionCost(sessionRow.cost);
-  if (cost) out.cost = cost;
-  return out;
+  });
 }
 
 function normalizeSessionForLoad(sessionRow) {
   if (!sessionRow || typeof sessionRow !== 'object') return null;
-  const out = {
+  return copyChatSettings(sessionRow, {
     id: sessionRow.id,
     workspaceRoot: sessionRow.workspaceRoot ?? null,
     title: typeof sessionRow.title === 'string' ? sessionRow.title : '',
     updatedAt: sessionRow.updatedAt,
     messages: normalizeLoadedMessages(sessionRow.messages),
     tokenUsage: normalizeTokenUsageForStore(sessionRow.tokenUsage),
+  });
+}
+
+/**
+ * What the history's index keeps of a chat (#985): everything but its
+ * messages, plus how many of them a reader gets and, for a chat without a
+ * title, what the list calls it instead. Built from a session in store form,
+ * so the list, the folder pointers and the chat's own settings are answered
+ * without opening the chat's file.
+ */
+function sessionMetaFromSession(session) {
+  const loaded = normalizeLoadedMessages(session.messages);
+  const meta = copyChatSettings(session, {
+    id: session.id,
+    workspaceRoot: session.workspaceRoot ?? null,
+    title: typeof session.title === 'string' ? session.title : '',
+    updatedAt: session.updatedAt,
+    messageCount: loaded.length,
+    tokenUsage: normalizeTokenUsageForStore(session.tokenUsage),
+  });
+  // "Image", "3 images" or "New chat" — a descriptor, worked out in the
+  // language the list is shown in (#359).
+  if (!meta.title) meta.untitled = inferChatTitle(loaded);
+  return meta;
+}
+
+/** An index entry as read back from the disk; `null` for one that is no entry. */
+function normalizeSessionMetaForStore(raw, { normalizeWorkspaceRoot } = {}) {
+  if (!raw || typeof raw !== 'object' || typeof raw.id !== 'string' || !raw.id.trim()) return null;
+  const meta = copyChatSettings(raw, {
+    id: raw.id.trim(),
+    workspaceRoot:
+      typeof normalizeWorkspaceRoot === 'function' ? normalizeWorkspaceRoot(raw.workspaceRoot) : raw.workspaceRoot || null,
+    title: typeof raw.title === 'string' ? raw.title.trim().slice(0, 200) : '',
+    updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0,
+    messageCount: Number.isInteger(raw.messageCount) && raw.messageCount > 0 ? raw.messageCount : 0,
+    tokenUsage: normalizeTokenUsageForStore(raw.tokenUsage),
+  });
+  if (!meta.title && isMessage(raw.untitled)) meta.untitled = createMessage(raw.untitled.key, raw.untitled.params);
+  return meta;
+}
+
+/**
+ * A chat as the history list gets it (#985): no messages, only what a row
+ * shows and what picks the chat a folder opens with. `title` is what the row
+ * says — the chat's own title, or a message descriptor when it has none.
+ */
+function normalizeSessionMetaForList(meta) {
+  if (!meta || typeof meta !== 'object' || typeof meta.id !== 'string') return null;
+  const out = {
+    id: meta.id,
+    workspaceRoot: meta.workspaceRoot ?? null,
+    title: meta.title || (isMessage(meta.untitled) ? meta.untitled : createMessage('chat.title.new')),
+    updatedAt: meta.updatedAt,
+    messageCount: Number.isInteger(meta.messageCount) ? meta.messageCount : 0,
   };
-  const modelPresetId = chatModelPresetIdForStore(sessionRow.modelPresetId);
-  if (modelPresetId) out.modelPresetId = modelPresetId;
-  const toolPermissionMode = chatToolPermissionModeForStore(sessionRow.toolPermissionMode);
-  if (toolPermissionMode) out.toolPermissionMode = toolPermissionMode;
-  const reasoningEffort = chatReasoningEffortForStore(sessionRow.reasoningEffort);
-  if (reasoningEffort) out.reasoningEffort = reasoningEffort;
-  // What this chat switched beyond the settings (#774).
-  const configOverrides = normalizeChatConfigOverrides(sessionRow.configOverrides);
-  if (configOverrides) out.configOverrides = configOverrides;
-  // The estimated cost, summed over the whole chat (#949).
-  const cost = normalizeSessionCost(sessionRow.cost);
+  const cost = normalizeSessionCost(meta.cost);
   if (cost) out.cost = cost;
   return out;
+}
+
+/**
+ * A whole chat in store form, from its index entry and the messages of its
+ * file. The entry wins for everything else: a chat's own settings are written
+ * to the index alone when they change (#985).
+ */
+function sessionFromMeta(meta, messages) {
+  return copyChatSettings(meta, {
+    id: meta.id,
+    workspaceRoot: meta.workspaceRoot ?? null,
+    title: meta.title,
+    updatedAt: meta.updatedAt,
+    messages,
+    tokenUsage: normalizeTokenUsageForStore(meta.tokenUsage),
+  });
 }
 
 module.exports = {
@@ -441,4 +510,8 @@ module.exports = {
   normalizeLoadedMessages,
   normalizeSessionForStore,
   normalizeSessionForLoad,
+  sessionMetaFromSession,
+  normalizeSessionMetaForStore,
+  normalizeSessionMetaForList,
+  sessionFromMeta,
 };

@@ -28,10 +28,10 @@ Snotra kann aus einer Beschreibung ein Bild zeichnen — eine Illustration für 
 
 Die Beschreibung verlässt deinen Rechner, und OpenAI rechnet jedes Bild ab. Deshalb fragt Snotra in *Intelligent* vor jedem einzelnen Bild, und eine Antwort zeichnet höchstens vier.
 
-Welches Bildmodell von OpenAI zeichnet, stellst du unter *Einstellungen › Tool-Einrichtung › Bilderzeugung* ein.
+Welches Bildmodell von OpenAI zeichnet, stellst du unter *Einstellungen › Tools › Einrichtung › Bilderzeugung* ein.
 
 ## Wenn es nicht klappt
 
-- **Snotra sagt, es könne keine Bilder zeichnen.** Es ist kein OpenAI-Schlüssel hinterlegt, oder das Tool *generate_image* ist unter *Einstellungen › Tools & Sicherheit* in der Zeile *Ändern* ausgeschaltet.
+- **Snotra sagt, es könne keine Bilder zeichnen.** Es ist kein OpenAI-Schlüssel hinterlegt, oder das Tool *generate_image* ist unter *Einstellungen › Tools › Autonomie* in der Zeile *Ändern* ausgeschaltet.
 - **Das Bild dauert lange.** Zeichnen kann eine Weile dauern; nach drei Minuten gibt Snotra auf und sagt es.
 - **OpenAI lehnt die Beschreibung ab.** Die Antwort zeigt den Grund von OpenAI. Ändere die Bitte und frag noch einmal.

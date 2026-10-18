@@ -63,6 +63,8 @@ const LIMITS = Object.freeze({
  * Files that ordinary builds read stay readable even where they may hold a
  * credential (`~/.m2/settings.xml`, `~/.gradle/gradle.properties`) — denying
  * them would break `mvn` and `gradle` inside the sandbox (CR-B03-04).
+ *
+ * @param {{ platform?: string, userDataPath?: string }} [options]
  */
 function sensitiveReadPaths({ platform, userDataPath } = {}) {
   const common = [
@@ -359,6 +361,8 @@ function networkGrantOptions(host, port) {
  * anything else for "not answered". `signal` aborts once the command's
  * process has ended; a question still open then goes back unanswered, and
  * the card after the run takes it up.
+ *
+ * @param {{ key?: string, domains?: string[], onNetworkAsk?: Function|null, readOutput?: Function|null }} [run]
  */
 function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = null } = {}) {
   const allowed = [];
@@ -459,6 +463,8 @@ function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = nu
  * @param {() => Promise<string>} [deps.readPythonCommand]  interpreter for the pip check
  * @param {NodeJS.ProcessEnv} [deps.env]
  * @param {number} [deps.violationSettleMs]  how long a finished run waits for late violations
+ * @param {string[]} [deps.protectedWritePaths]  folders a run may never write (#548, #650)
+ * @param {string} [deps.sshProxyScript]  the SSH tunnel helper (#932)
  */
 function createSandboxService({
   platform = process.platform,
@@ -504,6 +510,7 @@ function createSandboxService({
    * after that command's run offers it with a retry. Guessing from the runs
    * in flight could put one chat's connection on another chat's card.
    */
+  /** @param {{ host?: string, port?: number, encodedCommand?: string }} [request] */
   async function askNetwork({ host, port, encodedCommand } = {}) {
     const run = liveRuns.get(decodeCommandKey(encodedCommand));
     if (!run || run.closed) throw new Error('This connection belongs to no running command.');
@@ -874,10 +881,10 @@ function createSandboxService({
    * must call `release()` once its process has closed; until then the
    * domain allowance of this run stays in force.
    *
-   * @param {object} request
-   * @param {string} request.command   a complete shell command line
+   * @param {object} [request]
+   * @param {string} [request.command]   a complete shell command line; without one nothing runs
    * @param {string} [request.workspaceRoot]
-   * @param {string} request.runTmp    the run's own temp directory
+   * @param {string} [request.runTmp]    the run's own temp directory
    * @param {string[]} [request.allowedDomains]
    * @param {string[]} [request.extraWritePaths]  a program allowance's folders (#408)
    * @param {boolean} [request.weakerNetworkIsolation]  a program allowance's trustd (#408)
@@ -888,6 +895,7 @@ function createSandboxService({
    *   asks the user about a connection while the command waits (#792); without it nobody is asked
    * @param {() => {stdout: string, stderr: string}} [request.readOutput]  what the command printed so far
    * @param {AbortSignal} [request.abortSignal]
+   * @param {boolean} [request.skipDetect]  the self-test, which runs inside detection: skip it and the isolation check
    */
   async function prepare({
     command,
@@ -1225,8 +1233,8 @@ function annotateBlockedTrustd(stderr) {
   if (!/x509: OSStatus -26276\b/.test(text) || text.includes('<sandbox_certificates>')) return text;
   const note = 'The certificate check was refused inside the sandbox: this program verifies certificates '
     + 'through the macOS trust service (trustd), which the sandbox keeps closed. The host was not reached. '
-    + 'If the user trusts the program, they can allow certificate checks for it under Settings › Tools & security › '
-    + 'Execute › Program allowances. Tell them that instead of working around it.';
+    + 'If the user trusts the program, they can allow certificate checks for it under Settings › Tools › Security › '
+    + 'Programs with more room. Tell them that instead of working around it.';
   return `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n<sandbox_certificates>\n${note}\n</sandbox_certificates>\n`;
 }
 

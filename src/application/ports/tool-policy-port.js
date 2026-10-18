@@ -19,6 +19,9 @@
  *   does not void the approvals of a run in the background (#320).
  * @property {'ok'|'unsigned'|'invalid'|'missing'} [integrity]
  * @property {boolean} [encryptionAvailable]
+ * @property {Object<string, string[]>} [workspaceHosts]  root → hosts a connection card kept open for
+ *   that workspace (#946)
+ * @property {string[]} [globalHosts]  hosts kept open in every workspace (#1119)
  */
 
 /**

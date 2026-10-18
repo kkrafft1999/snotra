@@ -2,6 +2,9 @@
 
 const { isPathInside } = require('../../shared/runtime/path-inside');
 
+/**
+ * @returns {import('../../application/ports/workspace-path-port').WorkspacePathPort}
+ */
 function createNodeWorkspacePathAdapter({ path: pathMod }) {
   return {
     resolveRoot(rawRoot) {

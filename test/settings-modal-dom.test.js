@@ -923,7 +923,7 @@ test('geoeffnet startet der Dialog auf dem Modell-Tab', async (t) => {
   assert.equal(panelFor('models').hidden, false);
   assert.equal(document.getElementById('settings-panel-heading').textContent, 'Modelle');
   // Alle uebrigen Panels sind wirklich weg, nicht nur unsichtbar.
-  for (const key of ['security', 'tools', 'skills', 'general']) {
+  for (const key of ['security', 'sandbox', 'tools', 'skills', 'general']) {
     assert.equal(panelFor(key).hidden, true, `Panel ${key} muesste versteckt sein`);
   }
 });
@@ -933,8 +933,9 @@ test('ein Klick auf einen Tab schaltet Panel, aria-selected und Ueberschrift um'
   t.after(dom.cleanup);
 
   for (const [key, heading] of [
-    ['security', 'Tools & Sicherheit'],
-    ['tools', 'Tool-Einrichtung'],
+    ['security', 'Tools › Autonomie'],
+    ['sandbox', 'Tools › Sicherheit'],
+    ['tools', 'Tools › Einrichtung'],
     ['skills', 'Skills'],
     ['general', 'Allgemein'],
     ['models', 'Modelle'],
@@ -1293,6 +1294,21 @@ test('der Dialog zeigt das geltende Erscheinungsbild', async (t) => {
   t.after(dom.cleanup);
 
   assert.equal(checkedValue('app-theme'), 'dark');
+});
+
+test('"System" is a third appearance, shown as itself and picked at once (#999)', async (t) => {
+  const { mounted, gesetzt } = mountMitTheme({ theme: 'system' });
+  const { dom } = await mounted;
+  t.after(dom.cleanup);
+
+  const values = [...document.querySelectorAll('input[name="app-theme"]')].map((radio) => radio.value);
+  assert.deepEqual(values, ['light', 'dark', 'system']);
+  assert.equal(checkedValue('app-theme'), 'system', 'the choice, not the theme it gives right now');
+
+  pick('app-theme', 'light');
+  pick('app-theme', 'system');
+  await flush();
+  assert.deepEqual(gesetzt, ['light', 'system']);
 });
 
 test('das Erscheinungsbild wechselt sofort, ohne „Uebernehmen" (#297)', async (t) => {

@@ -1,21 +1,27 @@
 // Look instead of trust: starts the real app, opens the MCP server dialog for
 // an existing server and the MCP import dialog, and photographs both in German
 // and English, light and dark (#459 — the button row used to sit on the edge).
-// Not a test — a look.
+// Since #341 also the remote variant: an empty "Add server" form switched to
+// Remote, a stored remote server after a failed test (401 from a local fake
+// server), and the notice a changed address brings. Not a test — a look.
 //
 //   node e2e/manual-mcp-dialog.mjs
 //
 // Result: out/mockup/mcp-<dialog>-<locale>-<theme>.png
 
 import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
 
 const SHOTS = path.resolve('out/mockup');
+const require = createRequire(import.meta.url);
+const { startFakeMcpHttpServer } = require('../test/helpers/fake-mcp-http-server.js');
 
 const model = await startFakeModel();
+const remote = await startFakeMcpHttpServer({ mode: 'unauthorized' });
 const workspace = await makeTempDir('snotra-mcp-dialog-');
 const userDataDir = await makeTempDir('snotra-mcp-dialog-userdata-');
 await mkdir(SHOTS, { recursive: true });
@@ -26,6 +32,11 @@ await writeFile(path.join(userDataDir, 'mcp-servers.json'), JSON.stringify({
   servers: [{
     id: 'mcp-heimat', label: 'mcp-heimat', command: 'docker',
     args: ['run', '-i', '--rm', 'example.org/mcp-server/mcp-heimat:latest'], enabled: false,
+  }, {
+    // A header in plain text; a secret one cannot be written here without
+    // the app's keychain, and the form shows both kinds the same way.
+    id: 'wiki', label: 'Team wiki', transport: 'http', url: remote.url,
+    headers: { 'X-Team': { value: 'platform' } }, enabled: false,
   }],
 }), 'utf8');
 
@@ -90,6 +101,39 @@ try {
       await shoot('dialog-mcp-server', `server-${locale}-${theme}`);
       await page.evaluate(() => document.getElementById('btn-mcp-server-cancel').click());
 
+      // Remote (#341): an empty form switched to Remote …
+      await page.evaluate(() => {
+        document.getElementById('btn-add-mcp-server').click();
+        const input = document.querySelector('#mcp-field-transport input[value="http"]');
+        input.checked = true;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+        document.getElementById('btn-mcp-header-add').click();
+      });
+      await poll(() => visible('mcp-server-overlay'), { what: 'open add dialog' });
+      await page.waitForTimeout(200);
+      await shoot('dialog-mcp-server', `add-remote-${locale}-${theme}`);
+      await page.evaluate(() => document.getElementById('btn-mcp-server-cancel').click());
+
+      // … a stored remote server after a refused test …
+      await page.evaluate(() => [...document.querySelectorAll('#settings-mcp-list [data-mcp-action="edit"]')]
+        .find((b) => b.dataset.serverId === 'wiki').click());
+      await poll(() => visible('mcp-server-overlay'), { what: 'open remote dialog' });
+      await page.evaluate(() => document.getElementById('btn-mcp-server-test').click());
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('#mcp-test-result .mcp-test__fail'))),
+        { what: 'test result' });
+      await page.waitForTimeout(200);
+      await shoot('dialog-mcp-server', `remote-test-${locale}-${theme}`);
+
+      // … and the notice a new address brings.
+      await page.evaluate(() => {
+        const url = document.getElementById('mcp-field-url');
+        url.value = 'https://mcp.example.com/mcp';
+        url.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await page.waitForTimeout(200);
+      await shoot('dialog-mcp-server', `remote-changed-${locale}-${theme}`);
+      await page.evaluate(() => document.getElementById('btn-mcp-server-cancel').click());
+
       await page.evaluate(() => document.getElementById('btn-import-mcp-servers').click());
       await poll(() => visible('mcp-import-overlay'), { what: 'open import dialog' });
       await page.waitForTimeout(200);
@@ -101,4 +145,5 @@ try {
 } finally {
   await snotra.stop().catch(() => {});
   await model.close();
+  await remote.close();
 }

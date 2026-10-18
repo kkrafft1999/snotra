@@ -28,7 +28,7 @@ const { checkShellCommand } = require('../../shared/runtime/shell-command-guard'
 const { resolveRunDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../services/sandbox-service');
 const { normalizeProgramAllowances } = require('../../shared/contracts/program-allowances');
-const { createTranslator } = require('../../shared/i18n');
+const { APP_LOCALES, createTranslator } = require('../../shared/i18n');
 const { isPathInside } = require('../../shared/runtime/path-inside');
 const { outsideRootsFrom, OUTSIDE_WORKSPACE } = require('../services/outside-access');
 
@@ -197,10 +197,39 @@ function stableStringify(value) {
 }
 
 /**
+ * What the planner takes from `fs-service.js`: the two path operations it calls
+ * (#1098). Written from the consumer's side, like a port — a method the planner
+ * starts to call has to be added here, which is where a wrong argument or a
+ * misread result is caught. `fs-service.js` itself is outside the checked set
+ * (#1098, section 5).
+ *
+ * @typedef {Object} ToolPathResolution
+ * @property {string} [absPath]  the checked absolute path
+ * @property {string} [root]  the root that was actually used
+ * @property {string} [prefix]  prefix for relative paths made from it
+ * @property {string|null} [skillName]
+ * @property {boolean} [outside]  resolved through a root a card opened outside the folder (#792)
+ * @property {string} [code]  `OUTSIDE_WORKSPACE` when only a card could open the path
+ * @property {string} [error]
+ *
+ * @typedef {Object} FsService
+ * @property {(absPath: string) => Promise<string>} resolveExistingRealPath
+ * @property {(workspaceRoot: string|null, relativePath: string, options?: {
+ *   skillRoots?: Array<{name: string, dir: string}>,
+ *   outsideRoots?: Array<{root: string, only: string|null, access: 'read'|'write'}>,
+ *   access?: 'read'|'write',
+ * }) => Promise<ToolPathResolution>} resolveToolPath
+ *
+ * What a card may open outside the open folder (#792), from `outside-access.js`
+ * — typed from its factory, which is already part of the checked program.
+ * @typedef {ReturnType<typeof import('../services/outside-access').createOutsideAccess>} OutsideAccess
+ */
+
+/**
  * @param {object} deps
- * @param {object} deps.fsService  liefert resolveToolPath und listApplyPatchTargets
- * @param {object} deps.fs  fs/promises
- * @param {object} deps.path
+ * @param {FsService} deps.fsService  liefert resolveToolPath und resolveExistingRealPath
+ * @param {typeof import('fs/promises')} deps.fs
+ * @param {typeof import('path')} deps.path
  * @param {string[]} [deps.protectedRoots]  absolute Ordner, die für Tools hart gesperrt sind (userData)
  * @param {boolean} [deps.canTrash]  ob eine Wiederherstellungskopie in den Papierkorb möglich ist
  * @param {() => {label?: string, login?: boolean}} [deps.describeShell]  erkannte Shell für die Vorschau (#102)
@@ -208,11 +237,13 @@ function stableStringify(value) {
  *   isolation state for the card of the execution tools (#329)
  * @param {(workspaceRoot: string) => Promise<boolean>} [deps.isSandboxDisabled]
  *   whether the user switched the sandbox off for this workspace (#357)
- * @param {(request: {command: string, cwd: string}) => Promise<object|null>} [deps.matchProgramAllowance]
+ * @param {(request: {command: string, cwd: string, workspaceRoot: string}) => Promise<{ allowance?: object,
+ *   command?: string, entry?: object, skipped?: string }|null>} [deps.matchProgramAllowance]
  *   the program allowance a shell command gets, or why it does not (#408)
- * @param {() => Promise<object[]>} [deps.readProgramAllowances]
- *   the stored allowances, to notice a change between plan and run (#408)
- * @param {object} [deps.outsideAccess]  what a card may open outside the open folder (#792), see outside-access.js
+ * @param {(workspaceRoot: string) => Promise<object[]>} [deps.readProgramAllowances]
+ *   the allowances that apply in a workspace (#1119), to notice a change
+ *   between plan and run (#408)
+ * @param {OutsideAccess} [deps.outsideAccess]  what a card may open outside the open folder (#792)
  */
 function createToolCallPlanner({
   fsService,
@@ -225,7 +256,7 @@ function createToolCallPlanner({
   isSandboxDisabled = null,
   matchProgramAllowance = null,
   readProgramAllowances = null,
-  outsideAccess = null,
+  outsideAccess,
 }) {
   const protectedReal = new Set();
   let protectedResolved = false;
@@ -500,6 +531,7 @@ function createToolCallPlanner({
       }
       const realRuleRel = path.relative(realRoot, realAbs).split(path.sep).join('/');
       const rulePaths = [...new Set([lexicalRel, realRuleRel].map((rel) => `${resolved.prefix || ''}${rel}`))];
+      /** @type {import('../../application/ports/tool-port').ToolPlanTarget} */
       const target = {
         path: rawPath.trim() === '' ? '.' : rawPath.trim(),
         rulePaths,
@@ -539,7 +571,7 @@ function createToolCallPlanner({
     const sandboxDisabled = await readSandboxDisabled(toolName, workspaceRoot);
     // So is a program allowance (#408): the card names it, and the run gets
     // exactly the rights the card named or none.
-    const allowance = await readProgramAllowance(toolName, args, shellCwd, sandboxDisabled);
+    const allowance = await readProgramAllowance(toolName, args, shellCwd, sandboxDisabled, workspaceRoot);
     const planKey = stableStringify({
       tool: toolName,
       args,
@@ -585,7 +617,7 @@ function createToolCallPlanner({
       return {
         tool: toolName,
         error: `The ${toolName === 'run_python' ? 'program' : 'command'} and its input are longer than the approval `
-          + `card can show (${PREVIEW_MAX_CHARS.toLocaleString('en')} characters each). Write it to a file `
+          + `card can show (${PREVIEW_MAX_CHARS.toLocaleString(APP_LOCALES.EN)} characters each). Write it to a file `
           + 'first, or split it.',
         reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS,
         riskClasses: [...riskClasses],
@@ -635,10 +667,10 @@ function createToolCallPlanner({
    * its program does not apply. None without a sandbox to widen, and none
    * when anything goes wrong on the way: a failed check never grants.
    */
-  async function readProgramAllowance(toolName, args, cwd, sandboxDisabled) {
+  async function readProgramAllowance(toolName, args, cwd, sandboxDisabled, workspaceRoot) {
     if (toolName !== 'shell_execute' || sandboxDisabled || typeof matchProgramAllowance !== 'function') return null;
     try {
-      return (await matchProgramAllowance({ command: args?.command, cwd })) || null;
+      return (await matchProgramAllowance({ command: args?.command, cwd, workspaceRoot })) || null;
     } catch {
       return null;
     }
@@ -671,7 +703,7 @@ function createToolCallPlanner({
       if (now !== (planned.sandbox.disabled === true)) {
         return { ok: false, error: 'The sandbox setting of this workspace changed after the call was planned.' };
       }
-      if (planned.sandbox.allowance && !(await allowanceUnchanged(planned.sandbox.allowance))) {
+      if (planned.sandbox.allowance && !(await allowanceUnchanged(planned.sandbox.allowance, planned.sandbox.root))) {
         return { ok: false, error: 'The program allowance for this command changed after the call was planned.' };
       }
     }
@@ -691,12 +723,15 @@ function createToolCallPlanner({
     return { ok: true };
   }
 
-  /** The stored entry an approved allowance came from is still the same (#408). */
-  async function allowanceUnchanged(granted) {
+  /**
+   * The entry an approved allowance came from is still the same (#408) — in
+   * the workspace it was planned for, global and own added up (#1119).
+   */
+  async function allowanceUnchanged(granted, workspaceRoot) {
     if (typeof readProgramAllowances !== 'function') return false;
     let entries;
     try {
-      entries = normalizeProgramAllowances(await readProgramAllowances());
+      entries = normalizeProgramAllowances(await readProgramAllowances(workspaceRoot || null));
     } catch {
       return false;
     }

@@ -8,8 +8,8 @@
 // is the same everywhere: the new version is unpacked and verified **next to**
 // the old one, then a detached helper script takes over — wait until this app
 // has quit, rename, start, report a failure to the next start, put the old
-// version back and start it. On macOS and Linux the helper also waits until
-// the new version confirms that it runs before it deletes the backup (#1003).
+// version back and start it. The helper also waits until the new version
+// confirms that it runs before it deletes the backup (#1003, #1067).
 //
 // Everything that can go wrong before the restart goes wrong before it:
 // missing write access, a broken archive, the wrong version in the package.
@@ -397,6 +397,9 @@ function buildLinuxDirScript({
   ].join('\n');
 }
 
+/** How long the Windows helper waits for the new version to confirm its start. */
+const WINDOWS_START_SECONDS = 120;
+
 /**
  * Windows: wait for this process to end, swap the folders, start again.
  *
@@ -408,19 +411,27 @@ function buildLinuxDirScript({
  * failure is never silent: the helper logs every step, rolls back, leaves a
  * status file for the next start and restarts the old version.
  *
+ * The backup outlives the start of the new version, as on macOS and Linux
+ * (#1003, #1067): the helper writes `pendingFile`, starts the new `.exe` and
+ * waits until that file is gone. If the new process ends first, or nothing
+ * happens within `startSeconds`, the helper stops it, swaps the folders back,
+ * records the stage `start` and starts the old `.exe`.
+ *
  * `carryOver` lists entries of the app folder that are not part of the new
- * package (the downloaded ZIP, say). They move into the new folder instead of
- * being deleted along with the backup.
+ * package (the downloaded ZIP, say). Once the new version runs they move into
+ * its folder instead of being deleted along with the backup; until then they
+ * stay with the backup, which a rollback puts back as it is.
  *
  * `startedFile` is written as soon as the script runs, before it waits for
  * the app: the launcher holds the app back until it sees that file (#654).
  */
 function buildWindowsSwapScript({
   pid, installDir, stagedDir, stageRoot = stagedDir, backupDir, workDir,
-  logFile, statusFile, startedFile, version = '', carryOver = [], exeName = WINDOWS_EXE_NAME,
-  previousExeName = exeName,
+  logFile, statusFile, pendingFile, startedFile, version = '', carryOver = [], exeName = WINDOWS_EXE_NAME,
+  previousExeName = exeName, startSeconds = WINDOWS_START_SECONDS,
 }) {
   const carry = carryOver.length > 0 ? `@(${carryOver.map(psQuote).join(', ')})` : '@()';
+  const seconds = Number(startSeconds);
   return [
     '$ErrorActionPreference =' + " 'Stop'",
     `$procId  = ${Number(pid)}`,
@@ -431,6 +442,7 @@ function buildWindowsSwapScript({
     `$work    = ${psQuote(workDir)}`,
     `$log     = ${psQuote(logFile)}`,
     `$status  = ${psQuote(statusFile)}`,
+    `$pending = ${psQuote(pendingFile)}`,
     `$started = ${psQuote(startedFile)}`,
     `$version = ${psQuote(version)}`,
     `$carry   = ${carry}`,
@@ -451,6 +463,43 @@ function buildWindowsSwapScript({
     '      Start-Sleep -Milliseconds 500',
     '    }',
     '  }',
+    '}',
+    '',
+    // `swap` when the new version could not be put in place, `start` when it
+    // was but did not start (#1003).
+    'function Write-Failure([string]$step, [string]$reason) {',
+    "  Write-Log ('update failed: ' + $reason)",
+    '  try {',
+    '    [ordered]@{ version = $version; stage = $step; error = $reason; log = $log; at = (Get-Date -Format o) } |',
+    '      ConvertTo-Json | Set-Content -LiteralPath $status -Encoding UTF8',
+    '  } catch { }',
+    '  Remove-Item -LiteralPath $pending -Force -ErrorAction SilentlyContinue',
+    '}',
+    '',
+    'function Start-PreviousVersion {',
+    '  if (Test-Path -LiteralPath $oldExe) {',
+    "    Write-Log 'starting the previous version again'",
+    '    Start-Process -FilePath $oldExe',
+    '  } else {',
+    "    Write-Log ('the previous version is in ' + $backup)",
+    '  }',
+    '}',
+    '',
+    // Gently first; then the process and whatever else runs from the new
+    // folder, which would keep it from being moved back.
+    'function Stop-NewVersion($proc) {',
+    '  try {',
+    '    if (-not $proc.HasExited -and $proc.CloseMainWindow()) {',
+    '      for ($i = 0; $i -lt 25 -and -not $proc.HasExited; $i++) { Start-Sleep -Milliseconds 200 }',
+    '    }',
+    '  } catch { }',
+    '  Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue',
+    "  $prefix = $install.TrimEnd('\\') + '\\'",
+    '  try {',
+    '    Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |',
+    '      Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase) } |',
+    '      ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }',
+    '  } catch { }',
     '}',
     '',
     'Set-Location -LiteralPath (Split-Path -Parent $install)',
@@ -474,19 +523,55 @@ function buildWindowsSwapScript({
     '    throw',
     '  }',
     '} catch {',
-    '  $reason = $_.Exception.Message',
-    "  Write-Log ('update failed: ' + $reason)",
-    '  try {',
-    '    @{ version = $version; error = $reason; log = $log; at = (Get-Date -Format o) } |',
-    '      ConvertTo-Json | Set-Content -LiteralPath $status -Encoding UTF8',
-    '  } catch { }',
+    "  Write-Failure 'swap' $_.Exception.Message",
     '  Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue',
-    '  if (Test-Path -LiteralPath $oldExe) {',
-    "    Write-Log 'starting the previous version again'",
-    '    Start-Process -FilePath $oldExe',
-    '  } else {',
-    "    Write-Log ('the previous version is in ' + $backup)",
+    '  Start-PreviousVersion',
+    '  exit 1',
+    '}',
+    '',
+    // ASCII: the version is, and a byte order mark is not JSON.
+    'try {',
+    '  @{ version = $version } | ConvertTo-Json -Compress | Set-Content -LiteralPath $pending -Encoding ASCII',
+    "} catch { Write-Log ('could not write ' + $pending) }",
+    "Write-Log 'starting the new version'",
+    "$reason = ''",
+    'try {',
+    '  $new = Start-Process -FilePath $exe -PassThru',
+    // Without the handle .NET forgets the exit code of a process it did not wait for.
+    '  $null = $new.Handle',
+    `  $deadline = (Get-Date).AddSeconds(${seconds})`,
+    '  while (Test-Path -LiteralPath $pending) {',
+    '    if ($new.HasExited) {',
+    '      if (Test-Path -LiteralPath $pending) {',
+    "        $reason = 'the new version ended before it had started (exit code ' + $new.ExitCode + ')'",
+    '      }',
+    '      break',
+    '    }',
+    '    if ((Get-Date) -gt $deadline) {',
+    `      $reason = 'the new version did not start within ${seconds} seconds'`,
+    '      break',
+    '    }',
+    '    Start-Sleep -Milliseconds 200',
     '  }',
+    '} catch {',
+    "  $reason = 'the new version could not be started: ' + $_.Exception.Message",
+    '}',
+    '',
+    "if ($reason -ne '') {",
+    '  if ($new) { Stop-NewVersion $new }',
+    "  Write-Failure 'start' $reason",
+    // The failed folder goes back where it came from, so that the next
+    // install clears it away should it not go now.
+    '  try {',
+    '    Move-WithRetry $install $staged',
+    '    Move-WithRetry $backup $install',
+    '  } catch {',
+    "    Write-Log ('could not put the previous version back: ' + $_.Exception.Message)",
+    "    Write-Log ('the previous version is in ' + $backup)",
+    '    exit 1',
+    '  }',
+    '  Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue',
+    '  Start-PreviousVersion',
     '  exit 1',
     '}',
     '',
@@ -504,7 +589,6 @@ function buildWindowsSwapScript({
     'Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction SilentlyContinue',
     'Remove-Item -LiteralPath $work -Recurse -Force -ErrorAction SilentlyContinue',
     "Write-Log ('updated to ' + $version)",
-    'Start-Process -FilePath $exe',
     '',
   ].join('\n');
 }
@@ -901,6 +985,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
       workDir,
       logFile: helperLog,
       statusFile: files.statusFile,
+      pendingFile: files.pendingFile,
       startedFile,
       version,
       carryOver,

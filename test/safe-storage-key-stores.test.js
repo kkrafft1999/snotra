@@ -12,6 +12,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const { createStorageService } = require('../src/main/services/storage-service');
+const { chatSessionFileName } = require('../src/main/services/chat-history-store');
 const { createToolPolicyStore, POLICY_FILENAME, POLICY_KEY_FILENAME } = require('../src/main/services/tool-policy-store');
 const { registerSettingsHandlers } = require('../src/main/ipc/settings-handlers');
 const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
@@ -85,6 +86,8 @@ function makeStorage(dir, { safeStorageKey, encryption = true } = {}) {
 
 function makePolicyStore(dir, safeStorageKey) {
   return createToolPolicyStore({
+    // What is checked here is the key, not the confirmation (#980).
+    confirmationReceipts: { redeem: () => true },
     app: { getPath: () => dir },
     safeStorage: makeSafeStorage(true),
     safeStorageKey,
@@ -119,11 +122,9 @@ test('the history is written only once the key is on disk, and then encrypted', 
   const dir = await tempDir(t);
   const key = createHeldSafeStorageKey();
   const storage = makeStorage(dir, { safeStorageKey: key });
-  const file = path.join(dir, 'chat-history.json');
+  const file = path.join(dir, 'chat-history', 'index.json');
 
-  const store = await storage.readChatHistoryStore();
-  store.activeByWorkspace.__none__ = 'chat-1';
-  const writing = storage.writeChatHistoryStore(store);
+  const writing = storage.setActiveChatId('__none__', 'chat-1');
   await key.asked();
   assert.equal(await isSettled(writing), false, 'the save waits');
   assert.equal(await exists(file), false, 'nothing on disk before the key');
@@ -133,7 +134,7 @@ test('the history is written only once the key is on disk, and then encrypted', 
   await writing;
   const written = await readJson(file);
   assert.equal(written.encrypted, true);
-  assert.equal((await storage.readChatHistoryStore()).activeByWorkspace.__none__, 'chat-1');
+  assert.equal(await makeStorage(dir, { safeStorageKey: key }).getActiveChatId('__none__'), 'chat-1');
 });
 
 test('a history without encrypted storage is written at once', async (t) => {
@@ -141,28 +142,33 @@ test('a history without encrypted storage is written at once', async (t) => {
   const key = createHeldSafeStorageKey();
   const storage = makeStorage(dir, { safeStorageKey: key, encryption: false });
 
-  const store = await storage.readChatHistoryStore();
-  store.activeByWorkspace.__none__ = 'chat-1';
-  await storage.writeChatHistoryStore(store);
+  await storage.setActiveChatId('__none__', 'chat-1');
   assert.equal(key.waits, 0, 'nothing to wait for');
-  assert.equal((await readJson(path.join(dir, 'chat-history.json'))).activeByWorkspace.__none__, 'chat-1');
+  assert.equal((await readJson(path.join(dir, 'chat-history', 'index.json'))).activeByWorkspace.__none__, 'chat-1');
 });
 
 test('reading a plain history does not wait for the key; it is encrypted once the key is there', async (t) => {
   const dir = await tempDir(t);
-  const file = path.join(dir, 'chat-history.json');
-  await fs.writeFile(file, JSON.stringify({ version: 2, activeByWorkspace: { __none__: 'chat-1' }, sessions: [] }), 'utf8');
+  await fs.writeFile(path.join(dir, 'chat-history.json'), JSON.stringify({
+    version: 2,
+    activeByWorkspace: { __none__: 'chat-1' },
+    sessions: [{ id: 'chat-1', title: 'Plain', updatedAt: 1, messages: [{ role: 'user', content: 'hi' }] }],
+  }), 'utf8');
   const key = createHeldSafeStorageKey();
   const storage = makeStorage(dir, { safeStorageKey: key });
+  const index = path.join(dir, 'chat-history', 'index.json');
+  const chat = path.join(dir, 'chat-history', chatSessionFileName('chat-1'));
 
-  const store = await storage.readChatHistoryStore();
-  assert.equal(store.activeByWorkspace.__none__, 'chat-1');
-  assert.equal(key.waits, 0, 'the read did not wait');
-  assert.equal((await readJson(file)).encrypted, undefined, 'still the plain file');
+  // Taken into the folder as plain as it was, without waiting for the key.
+  assert.equal(await storage.getActiveChatId('__none__'), 'chat-1');
+  assert.equal((await storage.getChatSession('chat-1')).messages[0].content, 'hi');
+  assert.equal((await readJson(index)).encrypted, undefined, 'still plain');
+  assert.equal((await readJson(chat)).encrypted, undefined, 'still plain');
 
   key.release();
-  await storage.readChatHistoryStore();
-  assert.equal((await readJson(file)).encrypted, true, 'the next read encrypts it');
+  await storage.whenWritesSettled();
+  assert.equal((await readJson(index)).encrypted, true, 'encrypted once the key is there');
+  assert.equal((await readJson(chat)).encrypted, true);
 });
 
 test('a new chat on a fresh profile clears no pointer, so it writes nothing and does not wait', async (t) => {
@@ -180,7 +186,7 @@ test('a new chat on a fresh profile clears no pointer, so it writes nothing and 
 
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, null), { ok: true });
   assert.equal(key.waits, 0, 'the mode of the new chat is not held up behind the key (#564)');
-  assert.equal(await exists(path.join(dir, 'chat-history.json')), false);
+  assert.equal(await exists(path.join(dir, 'chat-history')), false);
 
   // A pointer that does change is history, encrypted, and waits like any save.
   const pointing = ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'chat-1');
@@ -188,7 +194,7 @@ test('a new chat on a fresh profile clears no pointer, so it writes nothing and 
   assert.equal(await isSettled(pointing), false);
   key.release();
   assert.deepEqual(await pointing, { ok: true });
-  assert.equal((await readJson(path.join(dir, 'chat-history.json'))).encrypted, true);
+  assert.equal((await readJson(path.join(dir, 'chat-history', 'index.json'))).encrypted, true);
 });
 
 test('files without ciphertext are not held', async (t) => {

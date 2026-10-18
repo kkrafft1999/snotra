@@ -211,19 +211,35 @@ function commandRuleCovers(rules, { toolName, riskClasses, shellCommand }) {
 }
 
 /**
- * @param {object} input
- * @param {string} input.mode
- * @param {string} input.toolName
- * @param {string[]} input.riskClasses  effektive Klassen des Aufrufs
+ * What the policy decided about one call. `ask` carries the classes the card
+ * asks about; `allow` and `deny` name where the decision came from.
+ *
+ * @typedef {Object} ToolPolicyVerdict
+ * @property {string} decision        a POLICY_DECISIONS value
+ * @property {string} mode
+ * @property {string} [source]        a PERMISSION_DECISION_SOURCES value; not on `ask`
+ * @property {string} [reason]        a PERMISSION_DENIAL_REASONS value, on `deny`
+ * @property {string} [ruleId]        the rule that decided
+ * @property {string[]} [ruleIds]     every allow rule that covers the call
+ * @property {string} [grantId]       the session approval that allowed it
+ * @property {string[]} [askClasses]  on `ask`
+ */
+
+/**
+ * @param {Object} [input]
+ * @param {string} [input.mode]
+ * @param {string} [input.toolName]
+ * @param {string[]} [input.riskClasses]  effektive Klassen des Aufrufs
  * @param {Array<{path: string}>} [input.targets]
  * @param {string|null} [input.root]  kanonische Workspace-Wurzel
  * @param {Array} [input.rules]  normalisierte Regeln (global + alle Workspaces)
- * @param {object|null} [input.sessionGrant]  passende, noch gültige Sitzungsfreigabe
+ * @param {import('./session-grants').SessionGrant|null} [input.sessionGrant]  passende, noch gültige Sitzungsfreigabe
  * @param {{ command: string|null, cwd: string, networkDomains: string[], stdin: boolean }|null} [input.shellCommand]
  *   the planned `shell_execute` call in the form command rules compare (#121)
  * @param {boolean} [input.toolDisabled]
  * @param {boolean} [input.unknownTool]
  * @param {{ reason?: string }|null} [input.hardLimit]
+ * @returns {ToolPolicyVerdict}
  */
 function decideToolPolicy(input = {}) {
   const mode = normalizeToolPermissionMode(input.mode);

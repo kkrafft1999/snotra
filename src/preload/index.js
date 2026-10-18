@@ -177,6 +177,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener(channel, listener);
   },
   getChatHistory: () => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET),
+  // A chat's messages, read when it is opened (#985).
+  getChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET_SESSION, id),
   upsertChatSession: (session) => ipcRenderer.invoke(REQ.CHAT_HISTORY_UPSERT, session),
   generateChatTitle: (messages) => ipcRenderer.invoke(REQ.CHAT_TITLE, { messages }),
   // The diff of one or more changes to a file, by the ids of their summaries (#348).
@@ -266,6 +268,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener(channel, listener);
   },
 
+  // Pairing a phone as the mobile remote (#1114, for #1110). Nothing but the
+  // request crosses over; the Allow is asked by main in a native dialog
+  // (#980) and cannot be sent from here.
+  remote: {
+    getState: () => ipcRenderer.invoke(REQ.REMOTE_GET_STATE),
+    startPairing: () => ipcRenderer.invoke(REQ.REMOTE_PAIR_START),
+    cancelPairing: () => ipcRenderer.invoke(REQ.REMOTE_PAIR_CANCEL),
+    unpair: () => ipcRenderer.invoke(REQ.REMOTE_UNPAIR),
+    onState: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on(PUSH.REMOTE_STATE, listener);
+      return () => ipcRenderer.removeListener(PUSH.REMOTE_STATE, listener);
+    },
+  },
+
   // The error path (#978): what the window's global handlers caught goes to
   // main's log; the diagnostics report is built and copied by main.
   reportUncaughtError: (report) => ipcRenderer.invoke(REQ.DIAGNOSTICS_REPORT_ERROR, report),
@@ -280,6 +297,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelUpdateDownload: () => ipcRenderer.invoke(REQ.UPDATE_CANCEL_DOWNLOAD),
   discardUpdateDownload: () => ipcRenderer.invoke(REQ.UPDATE_DISCARD_DOWNLOAD),
   installUpdate: () => ipcRenderer.invoke(REQ.UPDATE_INSTALL),
+  // Feedback (#1045). The window hands over what the user typed and the
+  // provider of the chat on screen; main picks the diagnostics and sends.
+  getFeedbackDiagnostics: (providerId) => ipcRenderer.invoke(REQ.FEEDBACK_GET_DIAGNOSTICS, providerId),
+  sendFeedback: (payload) => ipcRenderer.invoke(REQ.FEEDBACK_SEND, payload),
   onUpdateAvailable: (callback) => {
     const channel = PUSH.UPDATE_AVAILABLE;
     const listener = (_event, payload) => callback(payload);
@@ -377,6 +398,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // Menu "Help > Send Feedback…" (#1045): opens the feedback form.
+  onOpenFeedback: (callback) => {
+    const channel = PUSH.UI_OPEN_FEEDBACK;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // Tool-Berechtigungen (Issue #66). Der Renderer liest den Stand, stoesst
   // Aenderungen an und beantwortet Freigabe-Karten; die Entscheidung selbst
   // trifft der Main-Prozess (Policy, native Bestaetigung fuer Auto/Allow/Deny-Loeschen).
@@ -410,14 +438,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_SENSITIVE_PATHS, patterns),
   clearToolSessionGrants: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_CLEAR_SESSION_GRANTS),
   revokeToolSessionGrant: (grantId) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REVOKE_SESSION_GRANT, grantId),
-  removeWorkspaceToolHost: (host) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_WORKSPACE_HOST, host),
+  removeWorkspaceToolHost: (host, root) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_WORKSPACE_HOST, host, root ?? null),
   resetWorkspaceToolRules: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_RULES),
   resetAllToolPermissions: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_ALL),
-  setWorkspaceSandbox: (enabled) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, enabled),
+  setWorkspaceSandbox: (enabled, root) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, enabled, root ?? null),
   setWorkspaceMode: (mode) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, mode),
   setProgramAllowance: (payload) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_PROGRAM_ALLOWANCE, payload),
-  removeProgramAllowance: (programPath) =>
-    ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_PROGRAM_ALLOWANCE, String(programPath ?? '')),
+  removeProgramAllowance: (programPath, scope) =>
+    ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_PROGRAM_ALLOWANCE, String(programPath ?? ''), scope ?? undefined),
+  // Settings › Tools › Security (#1119).
+  getSandboxOverview: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_GET_SANDBOX_OVERVIEW),
+  addSandboxHosts: (payload) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_ADD_HOSTS, payload),
+  removeGlobalToolHost: (host) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_REMOVE_GLOBAL_HOST, host),
+  setNewWorkspaceSandbox: (enabled) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_SET_NEW_WORKSPACE_SANDBOX, enabled),
+  resetWorkspaceSandbox: (root) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_WORKSPACE_SANDBOX, root ?? null),
+  resetSandboxEverywhere: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESET_SANDBOX_EVERYWHERE),
   resolveAllowanceProgram: (text) => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_RESOLVE_PROGRAM, String(text ?? '')),
   chooseAllowanceFolder: () => ipcRenderer.invoke(REQ.TOOL_PERMISSIONS_CHOOSE_ALLOWANCE_FOLDER),
   onToolPermissionsChanged: (callback) => {

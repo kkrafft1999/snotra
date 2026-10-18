@@ -479,6 +479,9 @@ function normalizeSensitivePathPatterns(raw) {
  * Strukturiertes Ablehnungsergebnis für die Tool-Nachricht ans Modell
  * (Konzept §6): kein erfundenes Tool-Ergebnis, sondern ein klar erkennbarer
  * Fehler mit Grund. Enthält nie Argumente oder Inhalte.
+ *
+ * @param {{ reason?: string, message?: string, ruleId?: string|null, riskClasses?: string[] }} [denial]
+ * @returns {string}
  */
 function createPermissionDeniedToolResult({ reason, message, ruleId, riskClasses } = {}) {
   const safeReason = isPermissionDenialReason(reason) ? reason : PERMISSION_DENIAL_REASONS.POLICY_DENIED;
@@ -543,6 +546,30 @@ function normalizeApprovalTarget(raw) {
 /**
  * DTO der Freigabe-Anfrage an den Renderer (Konzept §6). Vorschau-Texte sind
  * bereits maskiert und gekürzt; der Renderer rendert sie als Daten.
+ *
+ * Every field is optional and checked here, so a caller may hand over what it
+ * has; what does not fit is dropped rather than passed on.
+ *
+ * @param {Object} [request]
+ * @param {string} [request.requestId]
+ * @param {string} [request.tool]
+ * @param {string[]} [request.riskClasses]
+ * @param {Array<object>} [request.targets]
+ * @param {string} [request.reason]
+ * @param {Array<object>} [request.reasonParts]  message descriptors, see `isMessage`
+ * @param {string} [request.mode]
+ * @param {boolean} [request.sessionAllowed]
+ * @param {boolean} [request.workspaceAllowed]
+ * @param {string} [request.sessionScopeLabel]
+ * @param {object} [request.sessionScope]  a message descriptor
+ * @param {string} [request.providerLabel]
+ * @param {Object} [request.preview]
+ * @param {string|null} [request.chatId]
+ * @param {boolean} [request.alwaysAllowed]
+ * @param {string} [request.alwaysUnavailableReason]
+ * @param {string} [request.checkpoint]
+ * @param {object} [request.sandbox]
+ * @param {object} [request.config]
  */
 function createToolApprovalRequestDto({
   requestId,
@@ -818,6 +845,16 @@ function normalizeToolApprovalResponse(raw) {
 /**
  * Bereinigter Audit-Eintrag zu einer Entscheidung, wie er in Tool-Zeile und
  * Verlauf landet (Konzept §9): keine Rohargumente, keine Inhalte.
+ *
+ * @param {Object} [decision]
+ * @param {string} [decision.decision]
+ * @param {string} [decision.source]
+ * @param {string} [decision.reason]
+ * @param {string|null} [decision.ruleId]
+ * @param {string[]} [decision.riskClasses]
+ * @param {string} [decision.mode]
+ * @param {string} [decision.status]
+ * @param {Array<string|{ path: string }>} [decision.targets]
  */
 function createPermissionAuditEntry({ decision, source, reason, ruleId, riskClasses, mode, status, targets } = {}) {
   const out = {

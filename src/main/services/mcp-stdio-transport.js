@@ -8,7 +8,9 @@
  * `initialize` oder `tools/call` bedeuten, steht im mcp-service. Genau diese
  * Trennung ist die Wechselstelle: Ein SDK-gestützter Transport müsste nur
  * `start`, `request`, `notify` und `close` in derselben Form anbieten, der
- * Dienst darüber bliebe unverändert (Entscheidung zu #106).
+ * Dienst darüber bliebe unverändert (Entscheidung zu #106). The Streamable
+ * HTTP transport (#341) does exactly that; the interface is written down in
+ * mcp-transport-errors.js.
  *
  * Das Framing ist zeilenbasiert, so schreibt es der stdio-Transport von MCP
  * vor: eine Nachricht je Zeile, keine eingebetteten Zeilenumbrüche. Unter
@@ -27,34 +29,13 @@ const { MCP_LIMITS, MCP_TIMEOUTS } = require('../../shared/contracts/mcp');
 const { createOutputSink } = require('./child-output-sink');
 const { createMessage } = require('../../shared/contracts/message');
 const { mergeWindowsEnv, windowsLaunch } = require('./windows-command');
-
-/**
- * A transport error is read on two channels (#338): a failed `tools/call`
- * hands `message` to the model, which reads English, while a failed start or
- * handshake ends up in the MCP status in Settings, which follows the interface
- * language. So each error carries both — the English sentence as `message`,
- * the catalogue message as `userMessage`.
- */
-function transportError(message, stderr, userMessage) {
-  const error = new Error(message);
-  error.stderr = stderr || '';
-  if (userMessage) error.userMessage = userMessage;
-  return error;
-}
+const { transportError, detailOf, serverErrorOf } = require('./mcp-transport-errors');
 
 /** Why the process ended, for both channels. */
 function exitReasonOf(code, signal) {
   return signal
     ? { text: `signal ${signal}`, message: createMessage('mcp.transport.reason.signal', { signal }) }
     : { text: `exit code ${code}`, message: createMessage('mcp.transport.reason.code', { code }) };
-}
-
-/** A third-party error text, or "unknown error" in the channel's language. */
-function detailOf(error) {
-  const text = typeof error?.message === 'string' ? error.message.trim() : '';
-  return text
-    ? { text, message: text }
-    : { text: 'unknown error', message: createMessage('mcp.transport.unknownError') };
 }
 
 function isFile(file) {
@@ -203,15 +184,7 @@ function createStdioTransport({
     pending.delete(message.id);
     entry.cleanup();
     if (message.error) {
-      const detail = detailOf(message.error);
-      const code = Number.isFinite(message.error.code) ? message.error.code : null;
-      entry.reject(transportError(
-        `The MCP server reports: ${detail.text}${code === null ? '' : ` (code ${code})`}`,
-        stderrText(),
-        code === null
-          ? createMessage('mcp.transport.serverError', { detail: detail.message })
-          : createMessage('mcp.transport.serverErrorCode', { detail: detail.message, code }),
-      ));
+      entry.reject(serverErrorOf(message.error, stderrText()));
       return;
     }
     entry.resolve(message.result === undefined ? {} : message.result);

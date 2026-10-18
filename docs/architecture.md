@@ -36,11 +36,11 @@ component level *inside* the main process.
 | Container | Technology | Responsibility |
 | --------- | ---------- | -------------- |
 | **Main process** | Electron main, Node.js | Composition root, IPC handlers, the chat engine and its tool loop (`src/application/`), the tool registry and planner, provider adapters, the services behind them (storage, file system, sandbox, MCP, updates, skills …), approvals, persistence. The only container that holds secrets, and the one that decides every access to the outside. |
-| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism | Chat, file tree, file views, settings — and, still, the state of the conversation: the run registry, when and what to persist, the cost sum and the title trigger live here, not in the core ([#981](https://github.com/kkrafft1999/snotra/issues/981)). Sees nothing but `window.electronAPI` from the preload and the contracts. |
+| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism; served from `snotra-app://app/` (`src/main/app-protocol.js`, [#1012](https://github.com/kkrafft1999/snotra/issues/1012)); the `GrantFileProtocolExtraPrivileges` fuse is off ([#1086](https://github.com/kkrafft1999/snotra/issues/1086)) | Chat, file tree, file views, settings — and, still, the state of the conversation: the run registry, when and what to persist, the cost sum and the title trigger live here, not in the core ([#981](https://github.com/kkrafft1999/snotra/issues/981)). Sees nothing but `window.electronAPI` from the preload and the contracts. |
 | **HTML preview** | `WebContentsView` with its own session (`snotra-html-preview`), the `snotra-html:` scheme and `sandbox: true` | Shows HTML pages from the workspace apart from the app's own UI ([#479](https://github.com/kkrafft1999/snotra/issues/479), see [HTML pages](#html-pages-479)). |
-| **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (#790): the page is `src/renderer/manual.html`, the content a bundle that `scripts/bundle-manual.js` builds into `src/manual/` from `manual/`. The app window's channels refuse it as a sender. |
+| **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (#790): the page is `src/renderer/manual.html`, from the same `snotra-app:` origin, the content a bundle that `scripts/bundle-manual.js` builds into `src/manual/` from `manual/`. The app window's channels refuse it as a sender. |
 | **Execution sandbox** | Child processes through `@anthropic-ai/sandbox-runtime`: Seatbelt on macOS, bubblewrap on Linux; unisolated on Windows | `shell_execute` and `run_python` (#329): write only inside the workspace, network only through the proxy in main and only to approved domains. See [`security-concept.md`](./security-concept.md), section 9. |
-| **Local store** | JSON files in the userData folder; secrets encrypted with `safeStorage` | `llm-config.json`, `chat-history.json`, `ui-preferences.json`, `mcp-servers.json`, `tool-policy.json`, `web-search-config.json`, chat attachments, `memory.md`. |
+| **Local store** | JSON files in the userData folder; secrets encrypted with `safeStorage` | `llm-config.json`, `chat-history/` (an index and one file per chat), `ui-preferences.json`, `mcp-servers.json`, `tool-policy.json`, `web-search-config.json`, chat attachments, `memory.md`. |
 
 Two things look like containers and are not:
 
@@ -56,13 +56,13 @@ Two things look like containers and are not:
 | LLM providers — OpenAI, Anthropic, Google, Ollama, OpenAI-compatible endpoints | Chat rounds, model lists | HTTPS + SSE; Ollama native with NDJSON |
 | OpenAI services | Image generation; transcription (Whisper) and live voice input | HTTPS; WebSocket for the realtime transcription |
 | Tavily, any URL | Web search, URL fetch | HTTPS |
-| MCP servers | Tools configured by the user | JSON-RPC over stdio, as local child processes |
+| MCP servers | Tools configured by the user | JSON-RPC over stdio, as local child processes; or over Streamable HTTP (HTTPS, JSON or SSE answers) to a remote endpoint (#341) |
 | GitHub Releases | Update check and download | HTTPS |
 | LiteLLM price table | Model prices for the cost estimate (#949), only on the user's click | HTTPS |
 | Operating system | Workspace folder, keychain behind `safeStorage` (on Windows DPAPI, with the key in Chromium's `Local State`, #1060), `sandbox-exec` / bubblewrap | File system, OS APIs |
 
-MCP servers are started by Snotra but are third-party software, so they count
-as an external system rather than a container.
+MCP servers are started or reached by Snotra but are third-party software, so
+they count as an external system rather than a container.
 
 **Relationships between the containers:**
 
@@ -74,6 +74,18 @@ as an external system rather than a container.
   on the preview's own session.
 - Manual window ↔ main: IPC on the manual's own channels.
 - Main ↔ local store: file reads and writes, secrets through `safeStorage`.
+
+**Front ends other than the window** — a CLI, a headless mode, the phone of
+the mobile remote — do not exist yet. How they will reach the main process is
+decided in [`remote-interface.md`](./remote-interface.md)
+([#989](https://github.com/kkrafft1999/snotra/issues/989)): one protocol over
+two transports, a listener on loopback and the blind relay; a small catalogue
+of methods instead of the IPC channels; and a *connection* with a kind in
+place of the `webContents` id as the session that runs, events and approvals
+are keyed by. The first piece of it is built: the desktop's half of pairing a
+phone ([#1114](https://github.com/kkrafft1999/snotra/issues/1114)), see
+[The remote bridge: pairing a phone](#the-remote-bridge-pairing-a-phone). It
+talks to the relay only once the user starts a pairing.
 
 ## Direction of dependencies
 
@@ -94,9 +106,11 @@ Shared (src/shared/: contracts, runtime, i18n, manual, presentation)
 **What is enforced.** `src/application/` imports only modules under
 `src/application/` and `src/shared/`, and no package or Node built-in
 (`test/application-layer-imports.test.js`). So the core knows neither Electron
-nor the file system nor any provider *implementation*. Nothing else in this
-picture is checked by a test: not the direction between the main layers, not
-the renderer's imports, not what the composition root may contain.
+nor the file system nor any provider *implementation*. The composition root is
+held to wiring by `test/composition-root-wiring.test.js` (see
+[Composition root](#composition-root)). Nothing else in this picture is checked
+by a test: not the direction between the main layers, not the renderer's
+imports.
 
 **Where the picture is rounder than the code:**
 
@@ -134,16 +148,18 @@ code is.
 | **Shared presentation** | `src/shared/presentation/` | `tool-display.js`: the lines of the tool log. For main adapters and tests; not imported by the core |
 | **Shared files** | `src/shared/ipc-channels.js`, `src/shared/manual-channels.js`, `src/shared/limits.js` | Channel names of both windows and the limits that several sides need |
 | **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming and the prompt blocks for environment, memory and project instructions. Only through injected ports |
+| **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
 | **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content and the overview the Security page reads. No Electron, no file system; the heart of [`security-concept.md`](./security-concept.md) |
-| **Application ports** | `src/application/ports/` | 18 typedef files, the contracts between the core and main — see [Ports](#ports) |
+| **Application ports** | `src/application/ports/` | 22 typedef files, the contracts between the core and main — see [Ports](#ports) |
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
+| **Remote bridge** | `src/main/remote/` | The adapters of the mobile remote (#1114): the protocol's bytes (`pairing-protocol.js`), the keys kept through `safeStorage`, the relay over Firebase's REST interfaces and in memory, the native sheet's wording. Type-checked like `adapters/` |
 | **Main ports** | `src/main/ports/` | 12 interface types for infrastructure (narrow surfaces, no leaks) |
 | **Providers** | `src/main/providers/` | Five provider modules and the two shared OpenAI transports behind `providers/index.js`, see [Provider adapters](#provider-adapters) |
 | **Tools** | `src/main/tools/` | The tool registry (definitions, handlers, risk classes; ~1.9k lines), the call planner (targets, plan key, sandbox plan) and argument conformance. Business rules, called through the tool adapter |
 | **Services** | `src/main/services/` | 76 modules (~22k lines) and by far the largest layer: storage, file system, sandbox, MCP, updates, skills, watchers, the signed policy store, outside access, program allowances, document text. Most of the backend's logic lives here |
 | **Composition root** | `src/main/composition/` | `createApplication()` builds services, adapters and engine and registers the IPC handlers — see [Composition root](#composition-root) |
 | **IPC** | `src/main/ipc/` | The handlers behind every channel, event push to the renderer, and `trusted-sender.js`, which refuses any sender that is not the app's own page. Mostly parse, validate and delegate; three of them hold logic ([#1006](https://github.com/kkrafft1999/snotra/issues/1006)) |
-| **Main shell** | `src/main/index.js`, `src/main/window.js`, `src/main/window-state.js`, `src/main/app-lifecycle.js`, `src/main/app-identity.js`, `src/main/permissions.js`, `src/main/workspace-state.js`, `src/main/manual-window.js`, `src/main/data/` | The Electron start-up and its windows, the single-instance lock, the media permissions, the active workspace root, the manual window; `data/` holds the bundled model price table |
+| **Main shell** | `src/main/index.js`, `src/main/window.js`, `src/main/window-state.js`, `src/main/app-lifecycle.js`, `src/main/app-identity.js`, `src/main/permissions.js`, `src/main/app-protocol.js`, `src/main/workspace-state.js`, `src/main/manual-window.js`, `src/main/data/` | The Electron start-up and its windows, the single-instance lock, the `snotra-app:` scheme the windows load from, the media permissions, the active workspace root, the manual window; `data/` holds the bundled model price table |
 | **Preload** | `src/preload/` | `index.js` builds `window.electronAPI` for the app window, `manual.js` the manual window's. Both are bundled by esbuild into one file each, because a sandboxed preload cannot load siblings |
 | **Renderer** | `src/renderer/` | DOM, CSS and native ES modules: chat, file tree, file views, settings, the manual page. It also owns the conversation state ([#981](https://github.com/kkrafft1999/snotra/issues/981)); apart from that it sees only `window.electronAPI` and the contracts |
 
@@ -153,16 +169,25 @@ re-exports under `src/main/` are gone (#531).
 ## Ports
 
 **Application ports** (`src/application/ports/`) — the contracts between the
-application layer and main. There are 18. Twelve are consumed by the chat
+application layer and main. There are 22. Twelve are consumed by the chat
 engine (`llm`, `tool`, `chat-preferences`, `workspace-path`, `skill`,
 `environment`, `project-instructions`, `memory`, `own-secrets`, `tool-policy`,
 `tool-approval`, `config-proposal`); the other six — `web-search`, `url-fetch`,
 `code-execution`, `shell-execution`, `mcp` and `image-generation` — describe
 what main's tool registry calls and the core never sees
-([#982](https://github.com/kkrafft1999/snotra/issues/982)). `memory`'s
+([#982](https://github.com/kkrafft1999/snotra/issues/982)); and
+`user-confirmation` is what main's IPC handlers ask before anything loosens
+([#980](https://github.com/kkrafft1999/snotra/issues/980)); the three
+`remote-*` ports are what the pairing of the mobile remote decides over
+([#1114](https://github.com/kkrafft1999/snotra/issues/1114)). `memory`'s
 `remember`/`forget`/`paths` serve the tools and the settings as well. The
-typedefs are prose — nothing checks them against the adapters, so a change to
-what the engine passes changes the port as well:
+typedefs are checked: the engine takes its ports typed
+(`ChatEngineDependencies` in `chat/chat-engine.js`), and every adapter names
+the port it returns, so `npm run typecheck` fails when the two disagree — see
+[Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc). Five of them —
+`tool-policy`, `own-secrets`, `config-proposal`, `shell-execution` and
+`code-execution` — are still implemented outside the checked files
+([#1098](https://github.com/kkrafft1999/snotra/issues/1098)). The ports:
 
 - `llm-port` — streaming rounds against a provider
 - `tool-port` — tool registry and execution
@@ -179,11 +204,41 @@ what the engine passes changes the port as well:
   policy version; an answer can carry a decision and nothing else, and without
   an interface the request is refused (`no_approval_ui`). The checkpoints
   `access`, `output`, `sandbox` and `config` all travel through it
+- `user-confirmation-port` — a person at the machine confirms what loosens a
+  protection (#980): "Auto", an allow rule, a block or a sensitive pattern
+  taken away, the sandbox off, a program allowance, hosts kept for a
+  workspace, a reset — and an import or a skill made global. Its guarantee is
+  **presence**: only `main/adapters/native-confirmation-adapter.js`, the native
+  message box over the window, can confirm; every other front end gets
+  `createRefusingConfirmation` from `application/permissions/user-confirmation.js`
+  and confirms nothing. A confirmation hands out a **receipt** — an object the
+  registry knows by identity, good once, for its action and subject, for a
+  minute — and `services/tool-policy-store.js` refuses every loosening without
+  one (`permissions.error.notConfirmed`), so a path around the port loosens
+  nothing. The composition root gives the registry's `issue` to the adapter
+  and its `redeem` to the store. Taking a protection back needs no receipt.
+  Letting a phone in as the mobile remote is an action of its own
+  (`remote-pairing`, #1114): its prompt can be closed unanswered through an
+  `AbortSignal` when the pairing expires or is cancelled meanwhile
 - `config-proposal-port` — what a chat switched for itself, and how the model
   asks for a change (#774). The core asks the user on a card through the
   approval port and records the answer here; where the overrides are kept and
   how a proposal is checked is main's business
   (`services/chat-session-settings.js`, `services/chat-configuration-service.js`)
+- `remote-relay-port` — the blind relay of the mobile remote as the desktop's
+  pairing sees it (#1114): open a pairing, follow the channel, confirm, cancel,
+  delete. Channels and pairings are named by id only; tokens, challenges and
+  proofs stay in the adapter, which signs through a function the core hands
+  in. `main/remote/firebase-relay-adapter.js` speaks Firebase's REST
+  interfaces, `main/remote/in-memory-relay-adapter.js` keeps the relay's rules
+  in memory for the tests
+- `remote-identity-port` — the desktop's long-term P-256 keys and the one
+  paired phone, kept through `safeStorage` by
+  `main/remote/identity-store-adapter.js`. The core gets the public points and
+  a signer, never a private key
+- `remote-pairing-crypto-port` — the pairing code, `MAC_P` and `MAC_D` and the
+  safety phrase of `remote-protocol.md` part 1, computed by
+  `main/remote/pairing-protocol.js` and proven against its test vectors
 - `chat-preferences-port` — UI prefs, system prompt, tool round limit
 - `workspace-path-port` — path helpers (e.g. `basename`)
 - `own-secrets-port` — the app's own secrets, compared against the text the
@@ -239,11 +294,33 @@ what the engine passes changes the port as well:
   part of #62). The core sees neither processes nor JSON-RPC: connection
   management (handshake, `tools/list`, `tools/call`, timeouts, cancellation,
   clean shutdown) lives in `main/services/mcp-service.js`, the line framing over
-  stdin/stdout in `main/services/mcp-stdio-transport.js`. The separation is
-  deliberate: consciously no `@modelcontextprotocol/sdk` as long as only stdio
-  and only `tools` are in play — the transport is the place where an SDK could
+  stdin/stdout in `main/services/mcp-stdio-transport.js`, and the exchange with
+  a remote server in `main/services/mcp-http-transport.js` (#341). Both
+  transports offer the same interface — `start`, `request`, `notify`, `close`,
+  `kill`, `stderrText`, `isAlive`, `onExit` — written down with the error
+  helpers they share in `main/services/mcp-transport-errors.js`; the service
+  picks one by the server's `transport` and reads the same above it. The
+  separation is deliberate: consciously no `@modelcontextprotocol/sdk` as long
+  as only `tools` are in play — the transport is the place where an SDK could
   dock later without port or core changing. Validation of the server
   configuration in `shared/contracts/mcp.js`.
+
+  The HTTP transport follows Streamable HTTP of the 2025-06-18 specification
+  with the built-in `fetch`: every message is a `POST` accepting JSON and SSE,
+  the answer to a request comes as a JSON body or inside an SSE stream (which
+  is cancelled as soon as the answer is in), a notification gets `202`. The
+  `Mcp-Session-Id` handed out with the answer to `initialize` and the
+  negotiated `MCP-Protocol-Version` ride along on every later message, and
+  closing sends `DELETE`. A `404` on a known session ends the connection with
+  `sessionExpired`: the service records it as stopped, not failed, runs a
+  fresh `initialize` on the next need and retries a `tools/call` once, since
+  the server refused it before running it. Redirects are followed by hand and
+  only on the same origin, so the configured headers never travel to another
+  host. Network and HTTP failures — TLS, DNS, refused, timeouts, `401`/`403`,
+  an OAuth challenge, a non-MCP answer, a `405` from an older HTTP+SSE server —
+  each get a catalogue message of their own, and the start of a refused JSON or
+  text body stands in for the stderr excerpt. Not implemented: the optional
+  `GET` stream, resuming with `Last-Event-ID`, the HTTP+SSE transport and OAuth.
 
   The transport stays free of MCP's meaning in both directions (CR-B16-02,
   -04): a request the server sends goes to an `onRequest` handler of the
@@ -289,14 +366,26 @@ what the engine passes changes the port as well:
   the tool list are built. After that the list is fixed for that run.
 
   The server list lives in `mcp-servers.json` in the userData directory (issue
-  #108), its own file as with the search service. Environment variables are
-  stored there per key either as `{ enc }` (encrypted via `safeStorage`) or as
-  `{ value }` (plain text) — **encrypted is the default**, plain text the
-  deliberate exception per key. Whoever does not touch the checkbox has their
+  #108), its own file as with the search service. Environment variables — and
+  the headers of a remote server (#341), which go through the same code with
+  their own names and limits — are stored there per key either as `{ enc }`
+  (encrypted via `safeStorage`) or as `{ value }` (plain text) — **encrypted is
+  the default**, plain text the deliberate exception per key. Whoever does not touch the checkbox has their
   token protected; forgetting must not be the expensive case. If encryption is
   not possible (Linux without a keyring), the server is **not** stored rather
   than putting a token down in plain text; the plain values alone could still be
   saved.
+
+  A remote server's address needs `https`, except on loopback; private
+  addresses are allowed because the user typed them, and credentials in the
+  URL are refused in favour of an encrypted header. A save without a
+  `transport` keeps the stored one with its address and headers (B16 review),
+  so an older form cannot turn a remote server into a local one. A save that
+  changes the endpoint — another address or another transport — switches the
+  server off and empties `knownTools`: nothing accepted for one endpoint
+  carries over to another (security concept §11). *Test connection* therefore
+  works on a switched-off server too; `connect` closes it again right after,
+  and `listTools` only lists enabled servers.
 
   This is operated in the settings dialog under "MCP" (issue #109). The section
   lives as its own renderer component in `renderer/components/McpPanel.js`: the
@@ -319,8 +408,9 @@ what the engine passes changes the port as well:
   Two read paths, deliberately separate and nailed down in
   `test/infrastructure-boundaries.test.js`: `createMcpConfigStorePort` returns
   the display form without secrets and is what handlers and renderer reach;
-  `createMcpSecretsPort` decrypts and exists only for the service that starts
-  the processes. MCP secrets additionally feed into `readOwnSecrets`
+  `createMcpSecretsPort` decrypts and is read only by `reload` in
+  `main/services/mcp-settings.js`, which hands the result to the service that
+  starts the processes. MCP secrets additionally feed into `readOwnSecrets`
   (`main/services/own-secrets.js`) — an MCP server could otherwise return its
   own token via a tool result — and are masked out of error messages and stderr
   excerpts (`main/services/mcp-status-masking.js`) before a status leaves the
@@ -516,8 +606,10 @@ mode; both take their words from `describeModePill` and
 `describeFolderSandbox`.
 
 **Program allowances** ([#408](https://github.com/kkrafft1999/snotra/issues/408))
-widen the sandbox for one program in every workspace: domains, writable
-folders and, on macOS, the trust service (`enableWeakerNetworkIsolation`). The
+widen the sandbox for one program — in one workspace or, since
+[#1119](https://github.com/kkrafft1999/snotra/issues/1119), in every workspace:
+domains, writable folders and, on macOS, the trust service
+(`enableWeakerNetworkIsolation`). The
 entry format is shared (`shared/contracts/program-allowances.js`) and stored in
 the signed policy file. `main/services/program-allowances-service.js` resolves
 programs through the shell's PATH, checks folders against Snotra's storage and
@@ -529,8 +621,27 @@ the plan key) or `plan.sandbox.allowanceSkipped`, and re-checks the stored
 entry in `verifyTargets`. The `shell_execute` handler hands the plan's
 allowance to the runner; `planSpawn` passes folders and trustd to
 `sandbox.prepare`, whose `buildConfig` adds them. The settings list lives in
-`renderer/components/ProgramAllowancesSetting.js`; widening goes through a
+`renderer/components/ToolSecurityPanel.js`, the dialog in
+`renderer/components/ProgramAllowanceDialog.js`; widening goes through a
 native confirmation in `main/ipc/tool-permission-handlers.js`.
+
+**Scopes of the sandbox grants**
+([#1119](https://github.com/kkrafft1999/snotra/issues/1119)). The policy file
+holds the sandbox switch, the hosts kept open and the program allowances per
+workspace (`unsandboxedWorkspaces`, `workspaceHosts`,
+`workspaceProgramAllowances`), program allowances and hosts for every
+workspace (`programAllowances` — the list every allowance was in before, so an
+older file needs no rewrite — and `globalHosts`), and whether new workspaces
+start without the sandbox (`newWorkspaceSandboxOff`, with the folders that
+were there before in `knownWorkspaces`). A global and a workspace allowance
+for the same program add up in that workspace
+(`combineProgramAllowances`); the store refuses a pair that would hold more
+than one allowance's worth. `readProgramAllowances(root)` gives a run what
+applies in its workspace, `noteWorkspaceOpened` writes the sandbox off for a
+folder opened for the first time while that default is off. Settings ›
+Tools › Security (`ToolSecurityPanel`) reads `getSandboxOverview` and may
+change a workspace that is not open; main accepts only a root it already holds
+a sandbox setting for, or the open one.
 
 Both network tools are marked in the registry as `requiresWorkspace: false`
 (issue #96): the engine no longer builds the tool list wholesale only with an
@@ -549,8 +660,10 @@ injected via composition:
 The web search key and the MCP stores are narrowed in
 `adapters/persistence-store-adapters.js` (`createWebSearchStorePort`,
 `createMcpConfigStorePort`, `createMcpSecretsPort`) without a typedef of their
-own in `ports/`. A typedef lists every member its adapter provides;
-`test/filesystem-port-typedef.test.js` holds `filesystem-port` to that.
+own in `ports/`. A typedef lists every member its adapter provides; the type
+check holds every adapter in `src/main/adapters/` to that, and
+`test/filesystem-port-typedef.test.js` holds `filesystem-port` to it in both
+directions.
 
 ### Self-update: three steps, three modules
 
@@ -604,22 +717,25 @@ each:
   Every helper reports to the user data folder, which no update replaces
   (#442, #1003): it logs each step to `update-install.log`, and when the
   update fails it leaves `update-install-failed.json` — version, reason, log
-  path, and on macOS and Linux the `stage` (`swap` or `start`) — puts the old
-  version back and starts it. The next start reads that file and shows the
+  path and the `stage` (`swap` or `start`) — puts the old version back and
+  starts it. The next start reads that file and shows the
   reason next to the same update, which is offered again.
 
-  On **macOS and Linux** the backup also outlives the start of the new version
-  (#1003). Before it launches the new version, the helper writes
-  `update-install-pending.json`; the new version removes it once its main
-  window is open (`confirmInstallStarted`). Only then does the helper delete
-  the backup. If the new process ends first, or nothing happens within two
-  minutes, the helper ends it, puts the old version back and starts that one.
-  Windows still deletes its backup as soon as the swap has worked.
+  On every platform the backup also outlives the start of the new version
+  (#1003, on Windows #1067). Before it launches the new version, the helper
+  writes `update-install-pending.json`; the new version removes it once its
+  main window is open (`confirmInstallStarted`). Only then does the helper
+  delete the backup. If the new process ends first, or nothing happens within
+  two minutes, the helper ends it, puts the old version back and starts that
+  one. On Windows the entries the user kept in the app folder (the downloaded
+  ZIP, say) move into the new folder only after that confirmation, so a
+  rollback finds them where they were.
 
   The scripts themselves are built as plain strings and tested as such; the
   POSIX helpers additionally run for real against stand-ins for the app
   (`test/update-installer-posix.test.js`), the Windows swap on the Windows
-  runner (`test/update-installer-windows.test.js`).
+  runner against a small compiled stand-in `.exe` that confirms, ends early or
+  hangs (`test/update-installer-windows.test.js`).
 
 The address of the package never leaves the main process: from `checkForUpdate`
 the renderer learns only name and size, and triggers the download without
@@ -716,8 +832,9 @@ What it does on each platform
   under its own name, as if a child of that name had changed; unless such a
   child exists, they count as an event on the folder itself.
 
-`onError` always names the folder whose watch failed. The composition writes it
-to the log, at most one line per watcher and minute.
+`onError` always names the folder whose watch failed. `services/watcher-warning.js`
+writes it to the log, at most one line per watcher and minute, with a count of
+what it held back since.
 
 On top of it sit two thin shells that only say *what* is being watched:
 
@@ -824,18 +941,39 @@ path on Windows.
 **`<img>` is the only element that keeps a URL** ([#423](https://github.com/kkrafft1999/snotra/issues/423)).
 The HTML profile allows more that loads on its own: `<video>`/`<audio>` with
 `<source>` and `<track>`, a `poster`, `<input type="image">`, a table's
-`background`. Each of them would read a local file past the main process —
-`'self'` covers `file:`. So the sanitizer forbids the media tags and `picture`,
+`background`. Each of them would read a local file past the main process
+while the page came from `file:`, where `'self'` covered the disk. Since
+[#1012](https://github.com/kkrafft1999/snotra/issues/1012) the page comes from
+`snotra-app://app/` and Chromium refuses it a `file:` URL anyway; the sanitizer
+stays the first barrier. So it forbids the media tags and `picture`,
 drops `poster` and `background`, and the same hook
 removes `src` from every element but `<img>`; `<input>` itself has to stay, the
 task lists render their checkboxes with it. The CSP says `media-src 'none'`:
 the voice recording records a stream and never plays one back.
 
 Two quirks hang on streaming: while the answer is running, `scheduleStreamRender`
-sets the complete `innerHTML` anew on every animation frame — which is why images
-get only a calm placeholder until the end. And completion cancels the still
-pending frame (`cancelStreamRender`), because it would otherwise write the
-intermediate state back over the image that was just loaded.
+draws it anew on every animation frame — which is why images get only a calm
+placeholder until the end. And completion cancels the still pending frame
+(`cancelStreamRender`), because it would otherwise write the intermediate state
+back over the image that was just loaded.
+
+**What a frame and a switch render**
+([#998](https://github.com/kkrafft1999/snotra/issues/998)). A frame of a
+streaming answer renders only its open block: `closedMarkdownLength` in
+`renderer/utils/helpers.js` says how much of the answer no further text can
+change, those blocks go on screen once and stay, and the rest goes through
+`marked` and DOMPurify again. Before, every frame rendered the whole answer so
+far, so the cost per frame grew with its length. A cut counts only after a blank
+line and once the next block's first line is complete; raw HTML and link
+definitions render the answer whole on every frame, as before, because cut
+apart they would come out differently. Each piece is sanitized on its own and
+appended as nodes, never as a string glued to the next one. When the run
+settles, the whole answer is rendered once more. Finished answers are rendered
+once and kept in a cache keyed by their Markdown (`renderFinishedAnswer` in
+`ChatStream.js`, up to 2 MB of Markdown, oldest out first): a chat switch, which
+draws every message again, copies their nodes with `importNode` instead of
+parsing and sanitizing them again. The images are resolved on the copy, against
+the folder open at the time.
 
 ## Workspace management in the main process
 
@@ -999,9 +1137,67 @@ a key in the history bucket and opens no file access; the trust boundary remains
 decided, for the same reason, by the session itself and not by the currently
 active folder.
 
+### The chat history store (issue #985)
+
+`services/chat-history-store.js` keeps the history as a folder in userData,
+not as one file:
+
+```
+chat-history/
+  index.json    what the list needs of every chat — folder, title, time,
+                message count, cost, the chat's own model, mode, level and
+                overrides — and which chat each folder opens with
+  <hash>.json   one chat with its messages; the name is the first 32 hex
+                digits of the SHA-256 of its id
+```
+
+Every file is encrypted with `safeStorage` as the single file was, and plain
+JSON where encrypted storage is missing. Until #985 every list, save, delete
+and pointer change read, decrypted and parsed all chats, and every save
+encrypted all of them again on the main thread (AR-10).
+
+- **The index is read once and answered from memory.** `CHAT_HISTORY_GET`
+  sends the folder's chats as rows without messages
+  (`normalizeSessionMetaForList`: id, folder, the title to show — a message
+  descriptor for a chat without one —, time, message count, cost). A chat's
+  messages come with `CHAT_HISTORY_GET_SESSION` when it is opened; the last
+  eight chats read stay in memory in main. That call answers only for chats of
+  the active folder, the same ones the list hands out (#68).
+- **A save writes that chat's file and the index**, nothing else, and a save
+  whose chat is unchanged writes no chat file. A chat's own settings
+  (`patchSession`, from `chat-session-settings`) go into the index alone; the
+  index is the record for everything but the messages.
+- **The index is written behind the state in memory**: one write in flight,
+  and whatever changes meanwhile goes into the next. Every caller still waits
+  for the write that carries its change, so a failed save reaches the chat's
+  banner (#977). The chat's own file is written before the save returns.
+  Changes run one after the other inside the store, apart from
+  `withChatHistoryLock`, which the IPC handlers hold for their read-modify-write
+  and which the store never waits for. `whenWritesSettled` — what the quit
+  waits for (#679) — includes the store's queue and its index write.
+- **The index is a cache of the files.** Each load checks it against the
+  folder: an entry whose file is gone is dropped, a file without an entry is
+  read and taken in. A lost or broken index is rebuilt that way; a delete
+  removes the chat's file before it touches the index, so a delete that fails
+  leaves the chat in the list (#582) and one that half succeeded does not
+  bring it back.
+- **Migration** from `chat-history.json` (releases up to 1.24) happens on the
+  first load: its chats are written as files, read back and compared, then the
+  index is written, and only then is the old file removed. Anything that fails
+  on the way leaves it as it was, the store refuses writes for that run, and
+  the next start begins again. The index notes the SHA-256 of the file it took
+  in: a copy that outlives its removal is not taken in a second time, which
+  would bring back chats deleted since; one with another digest — an older
+  release run after the update — is merged, the newer copy of a chat winning.
+  An older release started after the migration sees an empty history; nothing
+  of the folder is touched by it.
+
+`MAX_CHAT_SESSIONS` (200) still applies across all folders; the oldest chats
+beyond it go with their files on the next save.
+
 ### Image attachments in the history (issue #94)
 
-Images live **next to** the history file, not inside it:
+Images live **next to** the history, not inside it:
 `services/chat-attachment-store.js` writes them to
 `chat-attachments/<chat-id>/<SHA-256>.<ext>` in the userData folder, and the
 session carries only `{ kind, mediaType, file }`. Four screenshots in one message
@@ -1024,7 +1220,9 @@ lock: `CHAT_HISTORY_DELETE` removes the chat's folder, and a
 `CHAT_HISTORY_UPSERT` removes the folders of the sessions it drops out of
 `MAX_CHAT_SESSIONS`. After that it sweeps everything for which there is no longer a
 session — but only while no history lies moved aside next to the live one
-(`chat-history.json.undecryptable-*` or `.unreadable-*`). Those folders may belong
+(`chat-history.json.undecryptable-*` or `.unreadable-*` from before #985, a
+whole `chat-history.undecryptable-*` folder, or a single chat file moved aside
+inside it). Those folders may belong
 to the chats in that copy, and the copy is kept so that it can be recovered, images
 included (#565). Once the copy is gone, the next save sweeps them.
 
@@ -1053,7 +1251,10 @@ Two deliberately different rules for a new chat:
 - **Permission mode**: `smart` again every time. `auto` comes back only on an
   explicit switch in the history; on an automatic restore (app start, folder
   change) it falls back to `smart` — details in
-  [`security-concept.md`](./security-concept.md) §8.
+  [`security-concept.md`](./security-concept.md) §8. Even then the store's
+  `restoreMode` gives `auto` only to a chat it holds, signed, as confirmed for
+  `auto`, or whose workspace has `auto` as its confirmed default (#980); the
+  history file alone is not enough.
 
 An entry that no longer exists, or whose access is incomplete, falls back to the
 default (`isPresetUsable`) instead of opening the chat with a dead model.
@@ -1070,7 +1271,20 @@ after a failed model switch (#559).
 The third value per chat, part of epic #723. A provider declares the levels it
 knows and which of its models take one — `reasoning: { levels, defaultLevel,
 appliesTo }`, for OpenAI the seven from #718 for GPT-5 and newer (#724).
-`shared/contracts/reasoning.js` holds the rules both sides use.
+`levels` and `defaultLevel` may also be functions of the model, for providers
+whose models differ (#994): Anthropic (adaptive thinking with
+`output_config.effort`, or a `budget_tokens` budget for the older models),
+Google (`thinkingConfig.thinkingLevel` from Gemini 3 on, `thinkingBudget` for
+2.5) and Ollama (`think`: a word for gpt-oss, `none`/`on` for the other
+thinking models). `shared/contracts/reasoning.js` holds the rules both sides
+use (`reasoningLevelsFor`, `reasoningDefaultFor`).
+
+Anthropic's thinking blocks are carried on the round's assistant message
+(`anthropicThinking: { model, blocks }`) and go back, unchanged, only within
+the running turn and only to the model that wrote them. Newer Claude models
+bind a block to the history before it; when the engine shortens an old tool
+output mid-turn, the API refuses the block, and the round goes out once more
+without thinking. Ollama's thinking travels the same way as `ollamaThinking`.
 
 - **Stored:** `chat-session-settings` keeps `reasoningEffort` next to model and
   mode, in memory and in the chat's history row. Only main writes it:
@@ -1078,8 +1292,8 @@ appliesTo }`, for OpenAI the seven from #718 for GPT-5 and newer (#724).
   on screen, and `CHAT_HISTORY_UPSERT` drops whatever the renderer sends along.
   Unlike the mode, nothing is applied when a chat comes on screen.
 - **Read:** a round asks for it. `resolveChatTarget({ chatId })` in the LLM
-  adapter takes the chat's own level, else the provider's default (`medium`)
-  — the first the model takes — and puts it into the target
+  adapter takes the chat's own level, else the model's default (usually
+  `medium`) — the first the model takes — and puts it into the target
   as `reasoningEffort`, outside `providerOptions`. A model that takes no level
   gets none, also not one left in the stored configuration. The engine
   resolves the target once per send, so every round of a run, also one going
@@ -1188,37 +1402,51 @@ Electron bootstrap:
    preferences adapters → `createChatEngine`)
 4. Registers IPC handlers with injected dependencies
 
-The rule of #508 is that it holds wiring and nothing else, and #510 cut it from
-983 to 831 lines. It has grown back to about 1,090 and holds decisions again:
-how a chat stored at "Auto" is put back to "Smart" when the encrypted storage
-has gone (#419), the flow of the MCP settings test (reload the saved servers,
-connect one, mask the status), and the rate limit of the watcher warning (one
-log line per watcher and minute). Moving the three into services with tests,
-and a guard that keeps the file at wiring, is
-[#1005](https://github.com/kkrafft1999/snotra/issues/1005). It also imports
-`applyActivePreset` and `isPresetUsable` from `ipc/settings-handlers.js`, a
-handler module — the logic belongs in a service
-([#1006](https://github.com/kkrafft1999/snotra/issues/1006)). The rule for new
-code stays that of #508: whatever makes a decision or shapes data lives next to
-its topic and is tested there. These are the topics that did move out:
+The rule of #508 is that it holds wiring and nothing else. #510 cut it from
+983 to 831 lines; it grew back to about 1,120 with decisions in it again, and
+#1005 cut it to about 940. Whatever makes a decision or shapes data lives next
+to its topic and is tested there; the composition root creates it and passes
+it on.
+
+`test/composition-root-wiring.test.js` keeps it that way. It reads the source
+without comments and strings and fails on a branch whose condition is anything
+but "was this optional dependency handed in" (`Menu`, `shell`, `watchFile`,
+`manual` …, an explicit list), on a loop, `switch`, `try`/`catch`, `.catch(`,
+`else`, comparison, clock or timer, and on more than 1,000 lines. Falling back
+with `||` or `??` and optional calls stay allowed — they wire a default, they
+do not decide. A test in the same file feeds it the pieces #1005 moved out, so
+the guard itself is checked to catch them.
+
+It still imports `applyActivePreset` and `isPresetUsable` from
+`ipc/settings-handlers.js`, a handler module — the logic belongs in a service
+([#1006](https://github.com/kkrafft1999/snotra/issues/1006)).
+
+These are the topics that did move out:
 
 | Topic | Module |
 | ----- | ------ |
 | Own secrets (concept §5): which values a tool result must never carry | `services/own-secrets.js` |
 | Masking the status of an MCP server | `services/mcp-status-masking.js` |
 | The model's skill suggestion (`SKILLS_SUGGEST`) | `ipc/skill-suggestion-handlers.js` |
-| What Settings › Tools & security and the mode pill read | `services/security-page-data.js` |
+| What Settings › Tools › Autonomy, Tools › Security and the mode pill read | `services/security-page-data.js` |
 | Which skills and tools a chat has — the composer pill (`CHAT_GET_CONFIGURATION`) and the model's `get_configuration` (#773) | `services/chat-configuration-service.js`, `ipc/chat-configuration-handlers.js`; why a tool is not offered: `whyNotOffered` in `tools/workspace-tool-registry.js` |
 | The model's proposal to switch a skill or tool for one chat (`propose_config_change`, #774): checked in main, asked on a card (approval checkpoint `config`), kept in the chat's row | engine: `proposeConfigChange` / `refreshCapabilities` in `application/chat/chat-engine.js`, port `application/ports/config-proposal-port.js`; check: `prepareProposal` in `services/chat-configuration-service.js`; storage: `configOverridesFor` in `services/chat-session-settings.js`; arithmetic: `contracts/chat-configuration.js`; card: `renderer/utils/config-proposal-view.js` |
 | The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |
+| A chat whose "Auto" the policy store refuses runs at "Smart" (#419) | `applyModeOrDefault` in `services/chat-session-settings.js` |
+| Settings › MCP: the saved servers taken over into the service, the test of one server (reload, connect, mask), the start-up move of deselected tools (#449) | `services/mcp-settings.js` |
+| One log line per watcher and minute for a failing watch (#648) | `services/watcher-warning.js` |
+| The switch in front of `run_python` and `shell_execute`: offered only when found and switched on, the sandbox self-test only when on, and what is missing (#773) | `services/execution-tool-settings.js` |
+| The remembered interface language and hidden-files switch the menus read synchronously; preferences that are on until switched off | `services/remembered-ui-prefs.js`, `services/ui-pref-switches.js` |
+| A folder switch that changed the root: approvals pruned, watchers moved, skill scans dropped | `onWorkspaceChanged` of `services/workspace-activation.js`; the reactions stay wiring |
+| A push to the window only while it exists; the approval notification channels | `ipc/window-push.js`, `ipc/approval-notification-handlers.js` |
+| Where the bundled system skills are; the OS version for the feedback form | `bundledSystemSkillsDir` in `services/skills-service.js`, `osVersionReader` in `services/feedback-service.js` |
 | The estimated chat cost (#949): prices per model — override, local, table — and the price-table update, the only request it makes, on the user's click | service: `services/model-price-service.js` (snapshot `data/model-prices.json`, renewed by `scripts/update-model-prices.js`); a round priced in `adapters/provider-llm-adapter.js`, the turn summed in `application/chat/chat-engine.js`; arithmetic: `contracts/cost.js`; display: `renderer/components/CostPanel.js`, `renderer/components/ModelPricesSettings.js` |
 
-What legitimately stays in the module are the small state holders the wiring needs — the
-remembered language, the hidden-files switch, whether a web search key is
-present, the two execution switches — and the callbacks that tie services to
-one another (pruning chat-scoped permissions, telling the renderer to read
-again). They exist because two services meet there, not because of a rule of
-their own.
+What legitimately stays in the module is the one state holder that has no
+rule of its own — whether a web search key is present — and the callbacks that
+tie services to one another (pruning chat-scoped permissions, telling the
+renderer to read again, moving the watchers along on a folder switch). They
+exist because two services meet there, not because of a rule of their own.
 
 `src/main/index.js` is the Electron bootstrap, and it does more than call
 `createApplication()`. Before it, it registers the privileges of the preview
@@ -1253,13 +1481,20 @@ What it does with a file it finds but cannot use is one rule for all of them:
   byte, and the store starts from its defaults. A move that fails throws, so
   nothing is written (#557).
 
-The chat history follows the same idea with its own names: a history that
-cannot be decrypted or parsed is moved aside as
-`chat-history.json.undecryptable-<stamp>` on the first read, one written by a
-newer release (`version` above this build's) as
-`chat-history.json.unreadable-<stamp>` (#566), and when that move fails, no save
-may write over it (#561). While such a copy lies there, the images of its chats
-are not swept (#565).
+The chat history follows the same idea with its own names, now per file
+(#985). An index or a chat file that cannot be read now — or an encrypted one
+while encrypted storage is missing (#658) — is left as it is: for the index the
+whole store shows empty and refuses every write, for a chat file that chat
+cannot be opened or saved. A file that cannot be decrypted or parsed is moved
+aside as `<name>.undecryptable-<stamp>`, one written by a newer release
+(`version` above this build's) as `<name>.unreadable-<stamp>` (#566), and when
+that move fails, nothing may write over it (#561). When nothing in the folder
+opens with this key — the key changed, not a file — the folder goes aside as
+one, `chat-history.undecryptable-<stamp>`, as the single file did; a broken
+index alone is moved aside without a notice and rebuilt from the chats, since
+no chat is lost. The single file of releases before #985 keeps its old names
+(`chat-history.json.undecryptable-<stamp>`, `.unreadable-<stamp>`). While any
+of these copies lies there, the images of their chats are not swept (#565).
 
 **Ciphertext waits for its key**
 ([#1060](https://github.com/kkrafft1999/snotra/issues/1060)). On macOS the key
@@ -1275,7 +1510,8 @@ every encrypted write waits for it: the chat history, the web search key and
 MCP secrets in `storage-service`, provider keys and headers in
 `ipc/settings-handlers.js` (before the config lock, so nothing else waits with
 them), and a new `tool-policy.key` in `tool-policy-store`. What only reads does
-not wait: a plain history is encrypted by a later read, a missing policy is
+not wait: a plain history is taken in as plain as it was and encrypted in the
+background once the key is there, a missing policy is
 read as the defaults without writing a file yet, a stored signature whose key
 is gone fails its check without a new key being made for it, and the
 active-chat pointer is written only when it changes — otherwise every new chat
@@ -1294,8 +1530,11 @@ what is in which menu without starting Electron (`test/application-menu.test.js`
 ## Provider adapters
 
 `src/main/providers/` holds one module per provider that fulfils the contract
-from `providers/index.js` (`listModels`, `streamChatRound`, plus `fields`,
-`presentation`, `capabilities`). Five are registered: `openai`, `anthropic`,
+`ProviderAdapter` (`listModels`, `streamChatRound`, plus `fields`,
+`presentation`, `capabilities`, `reasoning`). Its typedef lives in
+`ports/provider-runtime-port.js`, the port the provider modules are reached
+through; until [#1004](https://github.com/kkrafft1999/snotra/issues/1004) it
+sat in `providers/index.js`, unchecked. Five are registered: `openai`, `anthropic`,
 `google`, `ollama` and `openai-compatible`. MLX-LM had a module of its own
 until issue #194; it is now a template of `openai-compatible`, and the
 `llm-config.json` migration to version 5 moves existing entries over.
@@ -1606,8 +1845,9 @@ text ─ splitDocument ─▶ front matter ─▶ key/value block (raw YAML if u
   ([#635](https://github.com/kkrafft1999/snotra/issues/635)).
 - **Nothing loads on its own.** The HTML is parsed into a `<template>` and every
   `src` moves to `data-md-src` before a node reaches the window. Under the CSP
-  `img-src 'self' data:` an `<img>` with an absolute path would otherwise load
-  straight from the disk (`'self'` covers `file:`), past the main process's
+  `img-src 'self' data:` an `<img>` with an absolute path would otherwise have
+  loaded straight from the disk while the page was on `file:` (until #1012,
+  `'self'` covered it), past the main process's
   check whether the path lies inside the workspace. An image from the web is
   never requested: it becomes a placeholder with its address; the smoke test
   proves the absence with a CSP violation listener.
@@ -1736,8 +1976,8 @@ no `nodeIntegration`, no `plugins`; `default-src 'none'`, `script-src 'self'`,
 itself — a worker falls back to `script-src`, and so does the decoders'
 JavaScript fallback, which the worker `import()`s when WebAssembly is
 refused. The data files are the part pdf.js would `fetch`; opening
-`connect-src` for them would, under `file:`, let the renderer read any file on
-the disk. They come through `pdf:readAsset` instead
+`connect-src` for them would have let the renderer read any file on the disk
+while it was on `file:`, and still gives it nothing it needs. They come through `pdf:readAsset` instead
 (`main/services/pdf-assets.js`): `cmaps/`, `standard_fonts/`, `wasm/`, a plain
 name, nothing else.
 
@@ -1751,8 +1991,8 @@ name, nothing else.
   option is not passed — an option pdf.js does not know protects nothing
   ([#641](https://github.com/kkrafft1999/snotra/issues/641)). In the page the
   CSP would refuse it: `script-src 'self'` without `'unsafe-eval'`. The
-  worker does not get that CSP — it is loaded from a `file:` URL, whose
-  response carries no policy, and a string timer runs there (checked on
+  worker does not get that CSP — it is loaded from a `snotra-app:` URL (a
+  `file:` one until #1012), whose response carries no policy, and a string timer runs there (checked on
   2026-10-02) — so in the worker what holds is the vendored code itself;
   `test/workspace-pdf.test.js` fails if a pdf.js update brings `eval` or
   `new Function` back.
@@ -2093,6 +2333,97 @@ into it, and if less than 100 px of the stored rectangle would be visible, drop
 the position — Electron then centres it. Without a stored state, the startup size
 from #208 applies (1536 × 960).
 
+## Plain JS, checked by JSDoc
+
+**Decision** ([#1004](https://github.com/kkrafft1999/snotra/issues/1004),
+2026-10-17). The app stays plain JavaScript without a build step — a founding
+decision that is not reopened here. The JSDoc it already carries is checked by
+the TypeScript compiler in read-only mode: `npm run typecheck` runs
+`tsc -p tsconfig.json` with `checkJs` and `noEmit`, and `npm test` runs it
+first (`pretest`), so the three required CI checks include it. `typescript` is
+a dev dependency; nothing of it reaches the package.
+
+**Why.** The ports were typedefs that nothing compared with the code. The
+architecture review counted 72 of them, found one typedef-parity test and four
+shape tests, and the code reviews kept finding drift by hand (#511, #525, #531,
+#538, #650). A second front end would be built against exactly those
+contracts. TypeScript sources with a build step would check more, but would
+undo the founding decision; a hand-written conformance test per port would
+check the member names and miss every parameter and return shape.
+
+**What is checked.** The include list in `tsconfig.json` is deliberate:
+`src/application/` (the core and its ports), `src/main/ports/`,
+`src/main/adapters/` and `src/shared/contracts/`. Every file these import is
+checked as well — `checkJs` checks the whole program — which pulls in parts of
+`src/main/services/`, `src/main/tools/` and `src/shared/`. The rest of `src/`
+is outside, and so are the tests.
+
+**How a port is held to its adapter.** Three things make the compiler compare
+them, and each is a line of JSDoc:
+
+- the core declares what it takes — `ChatEngineDependencies` types every port
+  the chat engine is built from;
+- every adapter factory names its port: `@returns {import('…-port').XPort}`.
+  A member that is missing, extra or of the wrong shape fails the check. An
+  adapter that offers main more than the port (the approval adapter's IPC
+  side, say) says so with an intersection, `XPort & { … }`;
+- a method defined on its own takes its type from the port,
+  `@type {XPort['method']}`, so its parameters cannot drift either.
+
+`test/port-conformance.test.js` holds the other half: every port typedef has
+an adapter that names it, or an entry on a list of ports still implemented
+outside the checked set — that list may only shrink
+([#1098](https://github.com/kkrafft1999/snotra/issues/1098)) — and the gate is
+still wired up.
+
+**What a port file holds.** Types only. A port file declares its typedefs and
+ends in `module.exports = {};`; the values that belong to a port — the error
+codes, limits and option lists of the web search, the URL fetch and the image
+generation — live in `src/shared/contracts/` (`web-search.js`, `url-fetch.js`,
+`image-generation.js`), the history store's `CHAT_HISTORY_UNREADABLE` in the
+store that throws it. The two execution ports still export their limits, until
+the runner services move
+([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
+
+**Services that are not ports.** Where an adapter or the tool planner depends
+on a service that is not a port, it declares the members it calls itself, from
+its own side: `ToolRegistry` in `workspace-tool-adapter.js`, `FsService` in
+`tool-call-planner.js`. `OutsideAccess` is derived from its factory with
+`ReturnType<typeof …>`, since that module is part of the checked program anyway.
+A call the typedef does not allow fails the check. The registry and
+`fs-service.js` themselves are outside the checked set, so the typedefs are not
+compared with them; deriving them would pull both in and put about 70 findings
+in front of this step. The provider modules' `presentation` is typed as
+`ProviderPresentation` in `provider-runtime-port.js`, the extras of
+`createMcpAdapter` as `Message` and `ToolDefinition`. A destructured service
+parameter takes no `= null` default — in a JS file that would make the local
+`any` again.
+
+**How strict.** `strict` is off, with `strictFunctionTypes`,
+`strictBindCallApply` and `noImplicitThis` on. That catches a port and its
+adapter disagreeing — a member, a shape, an argument count — and callbacks
+with the wrong parameters, without `noImplicitAny` turning every unannotated
+parameter into a finding or `strictNullChecks` every `null` default. Both are
+the next step ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
+
+**Conventions** that came out of the first run:
+
+- A function that checks untrusted input takes `{*}`, not `{unknown}` or
+  `{object}`: it accepts anything, and `{object}` would forbid reading the
+  very properties it checks. `{Object}` means a dependency that has no type
+  yet; it reads as `any` and is a known gap, not a statement. In the covered
+  set the services of the tool path no longer carry it (#1098); what remains
+  are the generic `deps` bags of the adapter factories.
+- A destructured parameter with a `= {}` default needs its optional fields
+  marked optional — a sanitizer with `Partial<…>` of the port's request —
+  since the compiler checks the default against the declared type.
+- An enum check, `Object.values(ENUM).includes(value)`, compiles because
+  `types/array-includes.d.ts` lets `includes` take any value; the frozen enums
+  keep their literal types.
+- `tsc` 7 rejects a `#` or a dash right after a bracketed name in
+  `@param {…} [name]` / `@property {…} [name]`; write the description after
+  two spaces, as elsewhere.
+
 ## Automated boundary guards
 
 What a test holds, as of 2026-10-17:
@@ -2102,7 +2433,12 @@ What a test holds, as of 2026-10-17:
 | `test/application-layer-imports.test.js` | `src/application/` imports only `application/` + `shared/`, no package, no Node built-in |
 | `test/infrastructure-boundaries.test.js` | Storage without a provider-registry leak; store ports without decrypted secrets; MCP settings handlers never reach the decrypting port |
 | `test/adapter-port-shapes.test.js` | Port adapters expose only permitted methods |
+| `npm run typecheck` (`tsc`, run by `npm test`) | The core, the ports, the contracts and the adapters type-check against their JSDoc; every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
+| `test/port-conformance.test.js` | Every port has an adapter that names it, or a listed reason why not yet; the type check is still in the gate (#1004) |
+| `test/composition-root-wiring.test.js` | `create-application.js` holds wiring only: no branch beyond "was this optional dependency handed in", no loop, comparison, `try`/`catch` or clock, at most 1,000 lines ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)) |
+| `test/catch-discipline.test.js` | Every `catch` in `src/` rethrows, reports, logs or carries a comment why it may stay quiet; every `void call()` in the renderer has a `.catch`. Against a baseline that may only shrink, `test/catch-discipline-baseline.json`, per file and count; it also fails when the baseline lists more than the scan finds, so a fixed site comes off the list in the same change. A heuristic scanner, its limits are in the head of the test ([#1000](https://github.com/kkrafft1999/snotra/issues/1000)) |
 | `test/filesystem-port-typedef.test.js` | The `filesystem-port` typedef lists exactly the members of its adapter (#650) |
+| `test/remote-key-leak.test.js` | The mobile remote's private keys and relay tokens reach no log, IPC payload or diagnostics report; the pairing code reaches the window only while it is shown (#1114) |
 | `test/architecture-doc.test.js` | Every path this document names exists, the layer table names every directory under `src/`, the port lists match the two `ports/` folders ([#1009](https://github.com/kkrafft1999/snotra/issues/1009)) |
 | `test/contracts*.test.js` | Wire enums and settings DTOs at the IPC boundary |
 | `test/*-presentation.test.js`, `test/chat-history-normalization.test.js` | Normalised display data for settings and history |
@@ -2118,11 +2454,10 @@ What a test holds, as of 2026-10-17:
 
 What no test holds, although the picture above suggests it: the direction
 between the main layers and the imports of the renderer, which are conventions
-only; and three things that drifted for want of a check — the content of the
-composition root ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)),
-the thinness of the IPC handlers
-([#1006](https://github.com/kkrafft1999/snotra/issues/1006)) and the size of a
-module.
+only; and two things that drifted for want of a check — the thinness of the
+IPC handlers ([#1006](https://github.com/kkrafft1999/snotra/issues/1006)) and
+the size of a module other than the composition root, which has had its guard
+since [#1005](https://github.com/kkrafft1999/snotra/issues/1005).
 
 ## Renderer tests against the DOM
 
@@ -2212,6 +2547,17 @@ divide the work, and what runs when, is in [`test-concept.md`](./test-concept.md
 Pitfalls of the driver are documented in the header of `e2e/helpers/app.mjs` —
 above all: Playwright's own waiting hangs here (timer throttling in the
 renderer), which is why the driver polls itself.
+
+**Accessibility** ([#999](https://github.com/kkrafft1999/snotra/issues/999)):
+`e2e/accessibility.test.mjs` runs axe-core (WCAG 2.1 A and AA, a devDependency
+handed to the page through `e2e/helpers/axe.mjs`, never shipped) over the
+welcome page, the help window, the workspace and every settings section, light
+and dark. A finding that needs more than a small fix is excluded there by rule
+and element, with the issue that carries it. Contrast that can be computed
+without a window — every ink of `tokens.css` on the grounds it is meant for —
+is `test/token-contrast.test.js`. How the app sounds stays a hand check, once
+per platform with VoiceOver, NVDA and Orca, in the release checklist
+([`release.md`](./release.md)).
 
 Since [#237](https://github.com/kkrafft1999/snotra/issues/237) the smoke test
 also runs in `ci.yml`, in the same job as `npm test`, on all three platforms. On
@@ -2343,7 +2689,7 @@ is the switch, not the placement.
 ### Baseline equipment of the tools
 
 Principle since [#180](https://github.com/kkrafft1999/snotra/issues/180): what is
-switched on in Settings › Tools & security goes to the model — and vice versa. Otherwise a schema costs
+switched on in Settings › Tools › Autonomy goes to the model — and vice versa. Otherwise a schema costs
 tokens in every round that nobody can deselect, because it does not appear in the
 list.
 
@@ -2445,9 +2791,17 @@ just like the contracts next to it:
 
 - `messages/en.js` and `messages/de.js` — flat catalogues with dotted keys
   (`settings.general.locale.label`).
+- `locales.js` — the registry of the languages: per language its catalogue,
+  its name in its own words, the language speech recognition is asked for, and
+  the address prefix of its pages in the web manual. Lists, pickers and the
+  voice input read from here; no other code names a language. A new language is
+  one catalogue, one entry here and one value in `APP_LOCALES`;
+  `test/locale-literals.test.js` fails on a `'de'` / `'en'` anywhere else.
 - `index.js` — `translate(locale, key, params)`, `translatePlural(…)` and
   `createTranslator(locale)`. Placeholders look like `{name}`; plurals use the
-  suffixes `.one` / `.other`.
+  suffixes of the language's CLDR categories (`.one` / `.other` for English and
+  German), chosen by `Intl.PluralRules`; a category the catalogue has no key for
+  reads as `.other`.
 
 The renderer loads native ESM and cannot import CommonJS directly.
 `scripts/sync-renderer-vendor.js` therefore builds an ESM bundle into
@@ -2607,7 +2961,7 @@ that does not exist once the interface was switchable, so since
 
 | Placeholder | Yields |
 | --- | --- |
-| `{menu:settings.tools}` | `Settings › Tool setup` / `Einstellungen › Tool-Einrichtung` — assembled from the navigation's own keys |
+| `{menu:settings.tools}` | `Settings › Tools › Setup` / `Einstellungen › Tools › Einrichtung` — assembled from the navigation's own keys |
 | `{label:permissions.mode.smart}` | `Smart` / `Intelligent` — one entry, quoted as it stands |
 
 A path is never written out as its own string. `test/ui-quotes.test.js` checks
@@ -2690,15 +3044,15 @@ Anything coming from a file, a model answer or a text field still goes through
 ### Main process: a remembered locale and a rebuilt menu
 
 The menu bar and the context menu are built **synchronously**; an `await` on
-the preferences would mean a menu opening without labels. `create-application`
-therefore keeps the locale in memory (the same construction as the web search
+the preferences would mean a menu opening without labels.
+`services/remembered-ui-prefs.js` therefore keeps the locale in memory (the same construction as the web search
 key) and hands `getAppLocale()` around. The language saves the moment it is
 picked in *Settings › General*, not on Apply (#297). A change runs like this:
 
 ```
 Renderer: language picked -> setUIPrefs({ appLocale })
   -> settings-handlers writes appLocale
-  -> onAppLocaleChanged -> create-application remembers the locale
+  -> onAppLocaleChanged -> remembered-ui-prefs remembers the locale
                         -> main/index.js rebuilds the menu bar
   -> Renderer: once the stored value comes back, setLocale() redraws the interface
 ```
@@ -2750,6 +3104,95 @@ there is no fallback: both need it.
 
 The shortcut `Cmd/Ctrl+D` hangs on *Edit › Voice Input*, like `Cmd/Ctrl+N` on
 its item, so it works with the focus in the input.
+
+## The remote bridge: pairing a phone
+
+The desktop's half of pairing the phone of the mobile remote
+([#1114](https://github.com/kkrafft1999/snotra/issues/1114), phase 1 of
+[#1081](https://github.com/kkrafft1999/snotra/issues/1081)): phases 1, 3 and
+5 of [`remote-pairing-sequence.svg`](./remote-pairing-sequence.svg), with the
+bytes of [`remote-protocol.md`](./remote-protocol.md) part 1. The channel
+itself — tokens on every start, presence, the handshake, the encrypted
+envelopes of part 2 — is not built yet, and neither is the panel
+*Settings › Remote access* ([#1110](https://github.com/kkrafft1999/snotra/issues/1110))
+that drives it.
+
+**Where the pieces are.**
+
+| Piece | Where | Does |
+| --- | --- | --- |
+| Decisions | `application/remote/remote-pairing.js` | The state machine: open, check the claim, ask, confirm, keep; expiry, cancel, *Deny*, remove. No Electron, no `crypto`, no network |
+| Relay | `remote-relay-port`; `main/remote/firebase-relay-adapter.js`, `main/remote/in-memory-relay-adapter.js` | The relay's endpoints over HTTPS, the Identity Toolkit for the ID token, the Realtime Database's REST streaming (`main/remote/event-stream.js`) — no Firebase SDK. The in-memory relay keeps the same rules for the tests, and its `phone` side is what the reference client of phase 3 will build on |
+| Keys | `remote-identity-port`; `main/remote/identity-store-adapter.js` | `remote-pairing.json` in the user data folder: one `safeStorage` ciphertext holding the two private keys and the paired phone. In memory the keys are `KeyObject`s inside a closure; the core gets public points and a signer |
+| Computations | `remote-pairing-crypto-port`; `main/remote/pairing-protocol.js` | Code, MACs, phrase and proofs, written from the spec and held to `remote-protocol/pairing-v1.json` by `test/remote-pairing-protocol.test.js` |
+| *Allow* | `user-confirmation-port`, action `remote-pairing` | The native sheet (`main/remote/pairing-prompt.js` words it), redeemed against the receipt registry like every other loosening |
+| Window | `main/ipc/remote-handlers.js`, `remote:*` channels | Start, cancel, remove, read the state; every change pushed. Normalized by `contracts/remote/pairing-state.js` on the way out |
+| Wiring | `main/composition/create-remote-bridge.js` | Puts the above together for `createApplication()` |
+
+**The flow.** *Start* creates the identity keys on first use, opens a pairing
+at the relay (`POST /v1/challenges`, `POST /v1/pairings`, signed), builds the
+code from the relay's pairing id and 75 bits of the CSPRNG, follows the
+channel, and gives the window the QR payload and the typed key for five
+minutes. When the phone's claim arrives, `MAC_P` is checked first: a wrong one
+cancels at once (*Pairing stopped*) and nobody is asked. A right one gives the
+six words; the person at the desktop is asked through the confirmation port,
+*Deny* the default. *Allow* sends `MAC_D`, keeps the phone's channel id and
+keys, forgets the code, and deletes the channel of a phone paired before (R1:
+one phone per computer — the old one keeps its access until this moment).
+*Remove phone* forgets the phone here at once and deletes the channel at the
+relay as far as it can be reached.
+
+**What it guarantees, and where the test is.**
+
+- **Nothing before the user starts (R7).** Building the bridge, reading its
+  state and starting the app create no key and send nothing
+  (`test/remote-pairing.test.js`, `test/remote-handlers.test.js`).
+- **No channel left behind.** Cancel, expiry, a wrong `MAC_P`, *Deny*, no
+  person to ask, and an *Allow* without a receipt each delete the pairing and
+  its channel at the relay (`test/remote-pairing.test.js`).
+- **The keys stay in main.** No private key, no relay token reaches a log
+  line, an IPC payload or the diagnostics report; errors carry a reason, never
+  the URL (which holds the ID token) or the body (`test/remote-key-leak.test.js`).
+  The window learns the state, the code while it is shown, and the words while
+  it asks — no key, token or channel id.
+- **Without real encryption nothing is kept**, and a pairing does not start
+  (#1012).
+
+**What the window sees.** The panel's eleven states (#1110) map onto the
+contract's: `empty` (1), `opening` and `code` (2), `confirm` (3), `paired` (4
+and 5, told apart by `phone.connected`, which stays false until part 2), the
+panel's own questions *Replace phone?* and *Remove phone?* (6, 7), `expired`
+(8), `stopped` (9), `unreachable` (10) and `denied` (11).
+
+**Not configured yet.** `main/remote/relay-endpoint.js` names the production
+relay; it is empty until the relay exists (snotra-promotion, phase 2 of #1081),
+so a pairing ends in `unreachable` with the reason `not-configured`. The panel
+ships only together with a relay.
+
+## Hooks
+
+Not built yet — designed in [`hooks.md`](./hooks.md) (#926, epic
+[#925](https://github.com/kkrafft1999/snotra/issues/925)), which is the
+contract the parts #927–#930 are built against. In short: user-defined
+commands that Snotra runs at six events of a run (`ChatStart`, `PromptSubmit`,
+`PreToolUse`, `PostToolUse`, `RunEnd`, `Notification`), defined in
+`~/.snotra/hooks.json` and in the folder's .agents/hooks.json. The structure
+follows the existing ports:
+
+- A hook port in `src/application/ports/`; the engine calls it at the events
+  and gets one combined result back, without knowing where hooks live or how
+  they run.
+- The combination of the policy verdict with a hook's answer — a hook can
+  tighten, never loosen — is a pure function next to `decideToolPolicy` in
+  `src/application/permissions/`.
+- Event names, schema, validation and answer parsing live in
+  `src/shared/contracts/`.
+- An adapter in `src/main/adapters/`, analogous to
+  `project-instructions-adapter.js`, reads the two files through
+  `embedded-text-file.js`, checks trust for workspace hooks against the signed
+  policy store and runs the commands through `sandboxed-spawn.js`.
+
+The ports list above gains the port once #927 builds it.
 
 ## Further functional modules
 

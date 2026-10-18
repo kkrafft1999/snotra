@@ -21,10 +21,15 @@
  */
 
 /**
+ * @typedef {{ scope: string, text: string, origin: string, workspaceRoot?: string|null }} MemoryRememberRequest
+ * @typedef {{ scope: string, line: number, text: string, workspaceRoot?: string|null }} MemoryForgetRequest
+ */
+
+/**
  * @typedef {Object} MemoryPort
  * @property {(options: { workspaceRoot?: string|null }) => Promise<MemoryFile[]>} load
- * @property {(request: { scope: string, text: string, origin: string, workspaceRoot?: string|null }) => Promise<{scope: string, file: string, text: string}>} remember
- * @property {(request: { scope: string, line: number, text: string, workspaceRoot?: string|null }) => Promise<{removed: boolean}>} forget
+ * @property {(request: MemoryRememberRequest) => Promise<{scope: string, file: string, text: string}>} remember
+ * @property {(request: MemoryForgetRequest) => Promise<{removed: boolean}>} forget
  *   — the entry is named by its line and its text, so a line that moved cannot take another entry (#577)
  * @property {(options: { workspaceRoot?: string|null }) => Record<string, string|null>} paths
  */

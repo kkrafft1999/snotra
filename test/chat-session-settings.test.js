@@ -12,15 +12,22 @@ const {
  * wo er bewusst *nicht* wiederherstellt.
  */
 
-/** Verlaufsspeicher im Arbeitsspeicher, mit derselben Form wie der echte. */
+/** Verlaufsspeicher im Arbeitsspeicher, mit derselben Schnittstelle wie der echte (#985). */
 function createFakeChatHistoryStore(sessions = []) {
-  const store = { version: 2, activeByWorkspace: {}, sessions: [...sessions] };
+  const store = { version: 3, activeByWorkspace: {}, sessions: [...sessions] };
+  const find = (id) => store.sessions.find((s) => s && s.id === id) || null;
   return {
     store,
     withChatHistoryLock: (fn) => fn(),
-    readChatHistoryStore: async () => store,
-    writeChatHistoryStore: async (next) => {
-      store.sessions = next.sessions;
+    getSessionMeta: async (id) => find(id),
+    patchSession: async (id, patch) => {
+      const session = find(id);
+      if (!session) return false;
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === undefined) delete session[key];
+        else session[key] = value;
+      }
+      return true;
     },
   };
 }
@@ -184,7 +191,7 @@ test('ein gelöschter Chat wird vergessen', async () => {
 
 test('ein nicht schreibbarer Verlauf bricht den Wechsel nicht ab', async () => {
   const history = createFakeChatHistoryStore([{ id: 'chat-a' }]);
-  history.writeChatHistoryStore = async () => {
+  history.patchSession = async () => {
     throw new Error('Platte voll');
   };
   const warnings = [];
@@ -449,8 +456,8 @@ test('a chat in the background answers with its own level (#725)', async () => {
 test('the stored level is read from the history once, not for every round (#725)', async () => {
   const { settings, history } = setup({ sessions: [{ id: 'chat-a', reasoningEffort: 'minimal' }] });
   let reads = 0;
-  const read = history.readChatHistoryStore;
-  history.readChatHistoryStore = async (...args) => {
+  const read = history.getSessionMeta;
+  history.getSessionMeta = async (...args) => {
     reads += 1;
     return read(...args);
   };
@@ -562,4 +569,45 @@ test('a chat not saved yet takes its overrides along on the first save (#774)', 
   await settings.acceptConfigProposal('chat-new', { kind: 'tool', name: 'fetch_url', enable: true });
   assert.equal(history.store.sessions.length, 0);
   assert.deepEqual(settings.valuesFor('chat-new').configOverrides, { tools: { on: ['fetch_url'] } });
+});
+
+test('a chat whose "Auto" the store refuses runs at "smart" rather than at the last chat\'s mode (#419)', async () => {
+  const history = createFakeChatHistoryStore([{ id: 'chat-auto', toolPermissionMode: 'auto' }]);
+  const modes = [];
+  const settings = createChatSessionSettings({
+    chatHistoryStore: history,
+    applyPreset: async () => {},
+    getDefaultPresetId: async () => 'preset-a',
+    // The store as it answers without encrypted storage: "Auto" is refused.
+    applyMode: async (mode) => {
+      modes.push(mode);
+      return mode === 'auto' ? { ok: false, error: { key: 'permissions.error.autoNeedsEncryption' } } : { ok: true };
+    },
+    getActiveMode: async () => 'ask-all',
+    log: { warn() {} },
+  });
+
+  await settings.activate('chat-auto');
+
+  assert.deepEqual(modes, ['auto', 'smart']);
+});
+
+test('a refused mode that already is "smart" is not tried twice (#419)', async () => {
+  const history = createFakeChatHistoryStore([{ id: 'chat-smart', toolPermissionMode: 'smart' }]);
+  const modes = [];
+  const settings = createChatSessionSettings({
+    chatHistoryStore: history,
+    applyPreset: async () => {},
+    getDefaultPresetId: async () => 'preset-a',
+    applyMode: async (mode) => {
+      modes.push(mode);
+      return { ok: false };
+    },
+    getActiveMode: async () => 'ask-all',
+    log: { warn() {} },
+  });
+
+  await settings.activate('chat-smart');
+
+  assert.deepEqual(modes, ['smart']);
 });

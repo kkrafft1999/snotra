@@ -16,6 +16,10 @@ function createSecurityPageData({
   pythonRunner,
   shellRunner,
   sandboxService,
+  /** The recent folders (#1119); optional. */
+  workspaceFolderStore = null,
+  /** fs/promises, to see whether a listed workspace is still there (#1119). */
+  fs = null,
   /** Called once a sandbox detection started from here is done. */
   onSandboxDetected = () => {},
 }) {
@@ -24,8 +28,7 @@ function createSecurityPageData({
     const wanted = new Set(chatIds);
     const titles = new Map();
     if (wanted.size === 0) return titles;
-    const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-    for (const session of store.sessions || []) {
+    for (const session of await chatHistoryStore.listSessions()) {
       if (session && wanted.has(session.id) && typeof session.title === 'string' && session.title.trim()) {
         titles.set(session.id, session.title.trim());
       }
@@ -60,9 +63,8 @@ function createSecurityPageData({
    * where a chat has none and starts on the workspace default.
    */
   async function describeWorkspaceChats(root) {
-    const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
     const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(root);
-    return (store.sessions || [])
+    return (await chatHistoryStore.listSessions())
       .filter((session) => session && typeof session.id === 'string' && chatHistoryStore.sessionMatchesWorkspace(session, wsRoot))
       .map((session) => ({
         id: session.id,
@@ -96,7 +98,42 @@ function createSecurityPageData({
     return { active, sandbox };
   }
 
-  return { describeChats, describeTools, describeWorkspaceChats, describeExecutionTools };
+  /**
+   * Every folder Snotra has worked in (#1119): the recent folders, the last
+   * one, and the folders of the stored chats. They keep their sandbox setting
+   * when new workspaces start without the sandbox.
+   */
+  async function listKnownWorkspaces() {
+    const roots = new Set();
+    const add = (value) => {
+      if (typeof value === 'string' && value) roots.add(value);
+    };
+    try {
+      for (const entry of (await workspaceFolderStore?.getValidatedFolderHistory?.()) || []) add(entry);
+      add(await workspaceFolderStore?.getValidatedLastFolder?.());
+    } catch {
+      /* the chats below still count */
+    }
+    try {
+      for (const session of (await chatHistoryStore.listSessions()) || []) add(session?.workspaceRoot);
+    } catch {
+      /* what was found so far counts */
+    }
+    return [...roots];
+  }
+
+  /** Whether a workspace listed on Tools › Security is still a folder (#1119). */
+  async function folderExists(root) {
+    if (!fs || typeof root !== 'string' || !root) return true;
+    try {
+      return (await fs.stat(root)).isDirectory();
+    } catch {
+      // Gone, or no longer a folder: the page lists it as missing.
+      return false;
+    }
+  }
+
+  return { describeChats, describeTools, describeWorkspaceChats, describeExecutionTools, listKnownWorkspaces, folderExists };
 }
 
 module.exports = { createSecurityPageData };

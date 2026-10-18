@@ -11,7 +11,8 @@
  *
  * Reading has the same trap (#473): a file that is about to be written back
  * must not be taken for missing just because a scanner held it for a moment.
- * `readFileWithRetry` retries under the same rules.
+ * `readFileWithRetry` retries under the same rules, and so does
+ * `unlinkWithRetry` for a chat's file that is deleted (#985).
  *
  * The window state is written synchronously on `close` — the process may be
  * gone right after — so it gets `renameSyncWithRetry`, which blocks between
@@ -72,4 +73,8 @@ function readFileWithRetry(fs, file, options) {
   return withTransientRetry(() => fs.readFile(file, 'utf8'), options);
 }
 
-module.exports = { renameWithRetry, renameSyncWithRetry, readFileWithRetry, RETRYABLE_CODES };
+function unlinkWithRetry(fs, file, options) {
+  return withTransientRetry(() => fs.unlink(file), options);
+}
+
+module.exports = { renameWithRetry, renameSyncWithRetry, readFileWithRetry, unlinkWithRetry, RETRYABLE_CODES };

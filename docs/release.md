@@ -222,6 +222,42 @@ what the release path above makes use of.
 What the tests cannot see is looked at by hand, in the packaged app of the
 release branch.
 
+### Screen readers on every platform
+
+Two tests already cover what can be computed (#999):
+`e2e/accessibility.test.mjs` runs axe-core (WCAG 2.1 A and AA) over the
+welcome page, the help window, the workspace and every section of the
+settings, light and dark; `test/token-contrast.test.js` checks every ink of
+`tokens.css` on the grounds it is meant for. What they cannot judge is how the
+app sounds. Each platform has its own screen reader and its own way of reading
+the same markup, so the pass below runs once per platform, not on the Mac
+alone:
+
+| Platform | Screen reader | On / off |
+| --- | --- | --- |
+| macOS | VoiceOver | `⌘F5` |
+| Windows | [NVDA](https://www.nvaccess.org/download/) | `Ctrl+Alt+N` / `Insert+Q` |
+| Linux (GNOME) | Orca | `Super+Alt+S` |
+
+With a folder open, in English and once in German:
+
+1. Move through the window with `Tab` alone, from the sidebar to the composer:
+   every stop is announced with a name and a role, and none is skipped or
+   silent. The focus ring is visible at every stop, light and dark.
+2. Send a message. The finished turn is said once — not the whole conversation
+   again (#592). An error is said as an error.
+3. Open *Settings* (`⌘,` / `Ctrl+,`). The dialog is announced with its title;
+   the arrows move through *Appearance* — *Light*, *Dark*, *System* — and each
+   is read as a radio button with its state; the confirmation is read after a
+   change.
+4. Approve and decline a command on an approval card with the keyboard alone;
+   the card's question and its buttons are read.
+5. Close the dialog with `Esc`: the focus is back where it was.
+
+The sections on the tree and its filter below end with a screen-reader step
+of their own. A finding goes into an issue, with the platform and the screen
+reader's version.
+
 ### New file, new folder, rename in the tree
 
 The DOM tests (`test/file-tree-create-rename-dom.test.js`) and the disk tests
@@ -271,10 +307,10 @@ and a screen reader (#74). With a folder open that has subfolders:
    and the focus is back on the row.
 7. With the row focused, have the agent or the terminal delete that file. The
    row disappears and the focus stays in the tree on another row.
-8. With VoiceOver (`⌘F5`) on macOS: the tree is announced as "Files", a row as
-   its name with level, "collapsed"/"expanded" and "selected"; a row with an
-   agent mark reads the mark as its description, a folder that cannot be read
-   reads the reason.
+8. With VoiceOver, NVDA and Orca (see above): the tree is announced as
+   "Files", a row as its name with level, "collapsed"/"expanded" and
+   "selected"; a row with an agent mark reads the mark as its description, a
+   folder that cannot be read reads the reason.
 
 ### Filtering the file tree
 
@@ -303,9 +339,9 @@ open:
    Explorer: it appears in the list within a second, the selection stays.
 7. Light and dark (*Settings › Appearance*): the selected row shows the blue
    bar on its left like the tree's selection, the underlines stay visible.
-8. With VoiceOver: the field is announced as a combo box "Filter files"; the
-   arrows read each entry as its name and folder; the count is read when it
-   changes.
+8. With VoiceOver, NVDA and Orca: the field is announced as a combo box
+   "Filter files"; the arrows read each entry as its name and folder; the count
+   is read when it changes.
 
 ### HTML pages in the preview
 
@@ -365,8 +401,39 @@ gh release create vX.Y.Z \
   "out/make/Snotra-Agent-X.Y.Z-mac-arm64.dmg#Snotra Agent (macOS, Apple Silicon)"
 ```
 
-The text from `--notes` becomes the release body and is shown as "what has
-changed" in the update dialog.
+The text from `--notes` becomes the release body. The update dialog does not
+show it as it stands — see the next section.
+
+### Notes for the user
+
+GitHub generates the release body from the pull request titles: one line per
+change, written for developers, most of them about tests, CI and documentation.
+The update dialog shows none of that (#1072). It shows only a section on top of
+the body, written for the user, in English and German, between markers that
+GitHub does not render:
+
+```markdown
+<!-- snotra:notes en -->
+- **Edit text files in the preview.** Changes are saved as you type.
+<!-- snotra:notes de -->
+- **Textdateien in der Vorschau bearbeiten.** Änderungen werden beim Tippen gespeichert.
+<!-- snotra:notes end -->
+
+## What's Changed
+…
+```
+
+The dialog picks the interface language and falls back to English; a body
+without the markers shows no notes box at all. The section is written once the
+pipeline has published the release, and can be rewritten at any time:
+
+```sh
+node scripts/release-user-notes.js vX.Y.Z --en notes.en.md --de notes.de.md
+```
+
+`--dry-run` prints the new body instead. A release that changes nothing a user
+notices still gets a section — one sentence saying so — otherwise the dialog
+offers the version without a word about it.
 
 ### Pre-releases
 

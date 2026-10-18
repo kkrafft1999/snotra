@@ -147,7 +147,7 @@ test('missing tools first with their reason and the way to the setting; the rest
   // No setting finds a shell for you — so no button that pretends one does.
   assert.deepEqual(actions, ['Switch on', 'Set up', null]);
   assert.equal(missing[1].querySelector('.chat-config-action').getAttribute('aria-label'),
-    'Set up: web_search – in Settings › Tool setup');
+    'Set up: web_search – in Settings › Tools › Setup');
 
   const summary = document.querySelector('.chat-config-summary');
   assert.equal(summary.textContent, '3 switched on');
@@ -189,7 +189,7 @@ test('the links under the lists open the skills and the security page', async (t
   await open();
   const links = [...document.querySelectorAll('.chat-config-link')];
   assert.deepEqual(links.map((link) => link.textContent),
-    ['Skills in Settings › Skills', 'Tools in Settings › Tools & security']);
+    ['Skills in Settings › Skills', 'Tools in Settings › Tools › Autonomy']);
   links[0].click();
   assert.deepEqual(opened, [{ panel: 'skills', target: null }]);
 });
@@ -207,7 +207,7 @@ test('keyboard: open moves the focus in, arrows walk the buttons, Escape goes ba
   key('ArrowDown');
   assert.equal(document.activeElement.textContent, 'Switch on');
   key('ArrowUp');
-  assert.equal(document.activeElement.textContent, 'Tools in Settings › Tools & security');
+  assert.equal(document.activeElement.textContent, 'Tools in Settings › Tools › Autonomy');
   key('Escape');
   assert.equal(popup.classList.contains('hidden'), true);
   assert.equal(byId('btn-chat-config').getAttribute('aria-expanded'), 'false');

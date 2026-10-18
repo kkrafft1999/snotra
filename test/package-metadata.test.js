@@ -95,6 +95,8 @@ test('the packaged app flips the Electron fuses that cost nothing', () => {
   assert.equal(fuses[FuseV1Options.EnableNodeOptionsEnvironmentVariable], false);
   assert.equal(fuses[FuseV1Options.EnableNodeCliInspectArguments], false);
   assert.equal(fuses[FuseV1Options.OnlyLoadAppFromAsar], true);
+  // No page is served from file: since #1012; the fuse went off in #1086.
+  assert.equal(fuses[FuseV1Options.GrantFileProtocolExtraPrivileges], false);
   // Needs a signed build on macOS; decided with code signing (#19).
   assert.equal(fuses[FuseV1Options.EnableEmbeddedAsarIntegrityValidation], undefined);
   assert.ok(pkg.devDependencies['@electron-forge/plugin-fuses']);

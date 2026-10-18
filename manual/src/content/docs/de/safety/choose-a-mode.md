@@ -27,14 +27,14 @@ Der Modus entscheidet, wie oft Snotra dich fragt. Er gehört zum Chat: Jeder Cha
 
 Zurück zu *Intelligent* oder weiter zu *Immer fragen* fragt nie nach — wer Snotra vorsichtiger macht, muss nichts bestätigen.
 
-![Das Modus-Menü über dem Chat-Eingabefeld: Intelligent, Immer fragen und Auto, jeweils mit einer kurzen Beschreibung, „Immer fragen“ ausgewählt. Darunter das Kästchen „„Immer fragen“ auch für neue Chats in gartenplaner“ und der Link „Alle Berechtigungen unter Einstellungen › Tools & Sicherheit“.](screenshots/mode-menu.webp)
+![Das Modus-Menü über dem Chat-Eingabefeld: Intelligent, Immer fragen und Auto, jeweils mit einer kurzen Beschreibung, „Immer fragen“ ausgewählt. Darunter das Kästchen „„Immer fragen“ auch für neue Chats in gartenplaner“ und der Link „Alle Berechtigungen unter Einstellungen › Tools › Autonomie“.](screenshots/mode-menu.webp)
 
 ## Einem Ordner einen Standardmodus geben
 
 Ein neuer Chat startet in *Intelligent*, außer sein Ordner hat einen eigenen Standard:
 
 - **Aus dem Chat:** Stell den Chat auf den gewünschten Modus, öffne das Menü noch einmal und hak *„‹Modus›“ auch für neue Chats in ‹Ordner›* an.
-- **Aus den Einstellungen:** Wähle ihn unter *Standardmodus* oben auf der Seite *Einstellungen › Tools & Sicherheit*.
+- **Aus den Einstellungen:** Wähle ihn unter *Standardmodus* oben auf der Seite *Einstellungen › Tools › Autonomie*.
 
 *Auto* als Standard bestätigst du einmal in einem Systemdialog, der den Ordner nennt, mit *„Auto“ als Standard*. Ab dann markiert das Menü diesen Modus mit *Standard in ‹Ordner›*, und jeder neue Chat im Ordner startet damit, auch nach einem Neustart. Einen einzelnen Chat kannst du trotzdem umstellen; das bleibt eine Entscheidung für diesen Chat.
 

@@ -26,6 +26,10 @@ export const SETTINGS_HELP = Object.freeze({
     slug: 'safety/tools-and-security',
     title: { en: 'See and change what Snotra may do', de: 'Sehen und ändern, was Snotra darf' },
   },
+  'panel.sandbox': {
+    slug: 'safety/sandbox',
+    title: { en: 'Run commands in the sandbox', de: 'Befehle in der Sandbox ausführen' },
+  },
   'panel.tools': {
     slug: 'customising/built-in-tools',
     title: { en: 'Set up the built-in tools', de: 'Die eingebauten Tools einrichten' },
@@ -61,14 +65,6 @@ export const SETTINGS_HELP = Object.freeze({
   permissionReset: {
     slug: 'safety/tools-and-security',
     section: { en: 'Revoke an allowance or reset', de: 'Eine Freigabe widerrufen oder zurücksetzen' },
-  },
-  workspaceSandbox: {
-    slug: 'safety/sandbox',
-    section: { en: 'Switch the sandbox off for one folder', de: 'Die Sandbox für einen Ordner abschalten' },
-  },
-  programAllowances: {
-    slug: 'safety/sandbox',
-    section: { en: 'Give one program more room', de: 'Einem Programm mehr Spielraum geben' },
   },
   sensitivePaths: {
     slug: 'safety/tools-and-security',

@@ -1,6 +1,8 @@
 import { t, tPlural, tMessage, getLocale } from '../i18n.js';
 import { modeLabel, riskClassLabel, describeRule, revealInvisible } from './tool-approval-view.js';
 import { describeSandboxStatus } from './sandbox-status-view.js';
+import { describeSandboxLink } from './tool-security-view.js';
+import { settingsPageName } from './settings-pages.js';
 import { describeConnection } from './mcp-connection-view.js';
 
 /**
@@ -56,7 +58,7 @@ function rowOf(overview, riskClass) {
 /** "Change under Tools" — the target named by its section in the nav. */
 export function linkLabel(key) {
   const target = SECURITY_LINK_TARGETS[key];
-  return t(`security.link.${key}`, { place: t(`settings.nav.${target?.panel || 'tools'}`) });
+  return t(`security.link.${key}`, { place: settingsPageName(target?.panel || 'tools') });
 }
 
 /**
@@ -344,36 +346,16 @@ function blocksOf(row) {
   });
 }
 
+/**
+ * The question "What can a command reach?" of the row Execute: since #1119
+ * one line with the state of the open folder that leads to Tools › Security,
+ * where the sandbox switch, the programs and the hosts live.
+ */
 function describeExecuteReach(overview) {
   const execution = overview.execution || {};
-  const sandbox = execution.sandbox;
-  let state;
-  if (execution.workspaceSandboxDisabled && sandbox?.reason !== 'platform') {
-    state = { kind: 'warning', text: t('security.a.where.execute.workspaceOff') };
-  } else if (sandbox?.isolated) {
-    state = { kind: 'isolated', text: t('security.a.where.execute.isolated') };
-  } else if (!sandbox || sandbox.status === 'unknown' || sandbox.status === 'testing') {
-    state = { kind: 'pending', text: t('security.a.where.execute.pending') };
-  } else {
-    state = { kind: 'warning', text: describeSandboxStatus(sandbox, true)?.text || t('security.a.where.execute.unavailable') };
-  }
-  // In "Auto" no card confirms the domains a run names (CR-B13-04).
-  const network = overview.defaultMode === 'auto'
-    ? t('security.a.where.execute.fact.network.auto')
-    : t('security.a.where.execute.fact.network');
-  // Hosts a connection card kept open for this workspace (#946), each one
-  // closable; listed whatever the sandbox state, so none is out of sight.
-  const hosts = (Array.isArray(execution.workspaceHosts) ? execution.workspaceHosts : [])
-    .filter((host) => typeof host === 'string' && host)
-    .map((host) => ({ host, removeLabel: t('security.host.remove', { host }) }));
   return {
     inactive: execution.toolsOn ? '' : t('security.a.where.execute.inactive'),
-    state,
-    facts: state.kind === 'isolated'
-      ? [t('security.a.where.execute.fact.write'), t('security.a.where.execute.fact.secrets'), network]
-      : [],
-    hostsHeading: hosts.length > 0 ? t('security.a.where.execute.hosts') : '',
-    hosts,
+    link: describeSandboxLink(overview),
   };
 }
 
@@ -454,7 +436,9 @@ export function describeSecurityRow(row, overview, mcp = null) {
     exceptions: exceptionParts(
       row,
       overview.allowancesApply === true,
-      Array.isArray(overview.execution?.workspaceHosts) ? overview.execution.workspaceHosts.length : 0,
+      // Kept open for this workspace (#946) or for every one (#1119).
+      (Array.isArray(overview.execution?.workspaceHosts) ? overview.execution.workspaceHosts.length : 0)
+        + (Array.isArray(overview.execution?.globalHosts) ? overview.execution.globalHosts.length : 0),
     ).join(' · '),
     pill,
     noSandbox: row.noSandbox === true ? t('security.status.noSandbox') : '',

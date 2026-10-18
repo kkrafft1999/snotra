@@ -14,6 +14,7 @@ import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpers/app.mjs';
+import { STACK_BAR_BELOW } from '../src/renderer/components/ComposerBarLayout.js';
 
 const pill = (page) => page.evaluate(() => document.getElementById('chat-model-pill-label').textContent);
 
@@ -135,20 +136,21 @@ test('a chosen reasoning level stays with its chat, a new chat starts with mediu
   assert.equal(await page.evaluate(() => document.getElementById('chat-model-menu').classList.contains('hidden')), true,
     'the menu closes after a level (#737)');
 
-  // The composer bar crossing 430 px (400 before #773) moves the pills, open
+  // The composer bar crossing STACK_BAR_BELOW moves the pills, open
   // menu included, and Chromium drops the focus on the way: the menu stays
   // open all the same (#741). Docked next to the README the bar is narrow
   // here, so the test sets the width both ways rather than relying on the
   // layout.
   const setBar = async (width) => {
     await page.evaluate((w) => { document.querySelector('.chat-composer-bar').style.width = w; }, width);
-    const stacked = parseInt(width, 10) < 430;
+    const stacked = parseInt(width, 10) < STACK_BAR_BELOW;
     await poll(() => page.evaluate((st) => (document.querySelector('.chat-composer-bar').dataset.stacked === 'true') === st, stacked),
       { what: `bar at ${width}` });
   };
-  await setBar('600px');
+  const wide = `${STACK_BAR_BELOW + 100}px`;
+  await setBar(wide);
   await openMenu(page);
-  for (const width of ['360px', '600px']) {
+  for (const width of ['360px', wide]) {
     await setBar(width);
     assert.deepEqual(await page.evaluate(() => ({
       open: !document.getElementById('chat-model-menu').classList.contains('hidden'),

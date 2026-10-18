@@ -1,4 +1,4 @@
-import { inertHtmlFragment, markdownToSafeHtml } from '../utils/helpers.js';
+import { closedMarkdownLength, inertHtmlFragment, markdownToSafeHtml } from '../utils/helpers.js';
 import { isOpenableChatLink, openChatLink } from '../chat/openChatLink.js';
 // Bild-Anhaenge im Composer (Issue #84): Aufnahme aus der Zwischenablage,
 // Limits und Verkleinern.
@@ -122,13 +122,13 @@ function buildGreetingMessage(workspaceRoot) {
  * Erste Wahl ist die gemerkte aktive Chat-ID, zweite die zuletzt gefuehrte
  * Session. Ohne diese zweite Stufe bliebe ein Ordner leer, sobald keine aktive
  * ID gemerkt ist — etwa nach „Neuer Chat“ ohne Eingabe oder nach dem Loeschen
- * des aktiven Chats.
+ * des aktiven Chats. The rows carry a message count, not the messages (#985).
  *
  * DOM-frei und exportiert, weil es keinen DOM-Test-Stack gibt (#78).
  */
 export function pickSessionToRestore(sessions, activeChatId) {
   const usable = Array.isArray(sessions)
-    ? sessions.filter((s) => s && Array.isArray(s.messages) && s.messages.length > 0)
+    ? sessions.filter((s) => s && Number(s.messageCount) > 0)
     : [];
   const active = activeChatId ? usable.find((s) => s.id === activeChatId) : null;
   if (active) return { session: active, wasActive: true };
@@ -176,6 +176,8 @@ export function initChatStream({
   onConfigChanged = () => {},
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
+  // The log role and aria-busy live on the wrapper around the list (#1103).
+  const chatLogEl = document.getElementById('chat-log');
   const chatInput = document.getElementById('chat-input');
   const btnChatSend = document.getElementById('btn-chat-send');
   const chatTokenUsageEl = document.getElementById('chat-token-usage');
@@ -431,7 +433,8 @@ export function initChatStream({
     const streamEl = bubble.querySelector('.chat-md-streaming');
     if (streamEl) {
       streamEl.classList.remove('chat-md-streaming');
-      streamEl.replaceChildren(renderAnswer(message.content || ''));
+      streamedAnswers.delete(streamEl);
+      streamEl.replaceChildren(renderFinishedAnswer(message.content || ''));
       // Erst jetzt: Waehrend des Streams stand hier nur ein Platzhalter.
       void showWorkspaceImages(streamEl);
     }
@@ -440,7 +443,7 @@ export function initChatStream({
   function syncChatBusyState() {
     const last = appStore.chatMessages[appStore.chatMessages.length - 1];
     const busy = !!(last && last.role === 'assistant' && last.streaming);
-    chatMessagesEl.setAttribute('aria-busy', busy ? 'true' : 'false');
+    chatLogEl.setAttribute('aria-busy', busy ? 'true' : 'false');
     syncLiveDot();
   }
 
@@ -497,6 +500,81 @@ export function initChatStream({
     return prepareChatTables(inertHtmlFragment(markdownToSafeHtml(markdown)));
   }
 
+  // Finished answers, rendered once (#998). A chat switch draws every message
+  // of the chat again, and Markdown plus the sanitizer cost far more than
+  // copying the nodes they produced. The key is the Markdown itself: an answer
+  // renders the same in every chat and every folder — its images are resolved
+  // on the copy, against the folder open at the time. The oldest entries go
+  // once the answers held add up to more than the limit.
+  const RENDERED_ANSWERS_MAX_CHARS = 2_000_000;
+  const renderedAnswers = new Map();
+  let renderedAnswersChars = 0;
+
+  /** A finished answer as nodes of this document, from the cache where it is there. */
+  function renderFinishedAnswer(markdown) {
+    const key = String(markdown ?? '');
+    let rendered = renderedAnswers.get(key);
+    if (rendered) {
+      renderedAnswers.delete(key);
+      renderedAnswers.set(key, rendered);
+    } else {
+      rendered = renderAnswer(key);
+      if (key.length <= RENDERED_ANSWERS_MAX_CHARS) {
+        renderedAnswers.set(key, rendered);
+        renderedAnswersChars += key.length;
+        for (const old of renderedAnswers.keys()) {
+          if (renderedAnswersChars <= RENDERED_ANSWERS_MAX_CHARS) break;
+          renderedAnswers.delete(old);
+          renderedAnswersChars -= old.length;
+        }
+      }
+    }
+    // The cached nodes belong to the inert document of `inertHtmlFragment` and
+    // never go on screen themselves; only a copy does, and nothing that is done
+    // to it — images filled in, tables framed — reaches the cache.
+    return document.importNode(rendered, true);
+  }
+
+  // The answer that is streaming (#998). The blocks above its open one are
+  // final (`closedMarkdownLength`): they stay on screen as they are, and each
+  // frame renders only the open block again. Before, every frame rendered the
+  // whole answer so far, so that a frame cost more the longer the answer got.
+  // Each piece goes through the same sanitizer and lands as nodes, never as a
+  // string glued to the next one. Kept per element, so a full redraw of the
+  // list starts afresh with its new one.
+  const streamedAnswers = new WeakMap();
+
+  function renderStreamingAnswer(streamEl, markdown) {
+    const text = String(markdown ?? '');
+    let state = streamedAnswers.get(streamEl);
+    if (!state || !text.startsWith(state.closed)) {
+      state = { closed: '', closedNodes: 0, whole: false };
+      streamedAnswers.set(streamEl, state);
+      streamEl.replaceChildren();
+    }
+    if (!state.whole) {
+      const closedLength = closedMarkdownLength(text.slice(state.closed.length));
+      if (closedLength === null) {
+        state.whole = true;
+      } else if (closedLength > 0) {
+        const closed = text.slice(state.closed.length, state.closed.length + closedLength);
+        const blocks = renderAnswer(closed);
+        while (streamEl.childNodes.length > state.closedNodes) streamEl.lastChild.remove();
+        state.closedNodes += blocks.childNodes.length;
+        streamEl.append(blocks);
+        state.closed += closed;
+      }
+    }
+    // Raw HTML or a link definition: such an answer renders as a whole, every
+    // frame, as all of them did before.
+    if (state.whole) {
+      streamEl.replaceChildren(renderAnswer(text));
+      return;
+    }
+    while (streamEl.childNodes.length > state.closedNodes) streamEl.lastChild.remove();
+    streamEl.append(renderAnswer(text.slice(state.closed.length)));
+  }
+
   /**
    * Bilder eines gerenderten Antwort-Knotens aufloesen (Issue #244). Relative
    * Pfade gelten gegen den **gerade** geoeffneten Ordner — ein in einem anderen
@@ -540,7 +618,7 @@ export function initChatStream({
     cancelStreamRender();
     streamRenderRaf = requestAnimationFrame(() => {
       streamRenderRaf = 0;
-      streamEl.replaceChildren(renderAnswer(text));
+      renderStreamingAnswer(streamEl, text);
       void showWorkspaceImages(streamEl, { streaming: true });
       followNewOutput();
     });
@@ -739,7 +817,7 @@ export function initChatStream({
 
           const stream = document.createElement('div');
           stream.className = 'chat-md-streaming chat-md';
-          stream.replaceChildren(renderAnswer(m.content || ''));
+          renderStreamingAnswer(stream, m.content || '');
           void showWorkspaceImages(stream, { streaming: true });
           li.appendChild(stream);
           approvalCards?.mount(li, m);
@@ -762,7 +840,7 @@ export function initChatStream({
           }
           const inner = document.createElement('div');
           inner.className = 'chat-md';
-          inner.replaceChildren(renderAnswer(m.content));
+          inner.replaceChildren(renderFinishedAnswer(m.content));
           void showWorkspaceImages(inner);
           li.appendChild(inner);
           if (m.interrupted) li.appendChild(buildInterruptedNote());
@@ -895,7 +973,15 @@ export function initChatStream({
 
     const hist = await api.getChatHistory();
     const sessions = Array.isArray(hist?.sessions) ? hist.sessions : [];
-    const { session: restore, wasActive } = pickSessionToRestore(sessions, hist?.activeChatId);
+    let { session: restore, wasActive } = pickSessionToRestore(sessions, hist?.activeChatId);
+    // The list has no messages (#985): the chat brings its own — unless its
+    // run is still in memory, which is newer than its file. One that cannot
+    // be read leaves the folder on a new chat, as an empty history would.
+    if (restore && !canAttachChat(restore.id)) {
+      const full = (await api.getChatSession(restore.id))?.session;
+      restore = full && Array.isArray(full.messages) && full.messages.length > 0 ? full : null;
+      if (!restore) wasActive = false;
+    }
     // A run in the chat just shown goes on in the background (#320).
     detachCurrentChat();
     if (restore) {

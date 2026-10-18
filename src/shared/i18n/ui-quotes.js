@@ -6,7 +6,7 @@
  * The model names a settings page so the user can find it — "the user can
  * enable it under …". The sentence around that goes to the model and stays
  * English (#276); only the quotation follows the interface language, because
- * an English interface has no page called "Einstellungen › Tool-Einrichtung".
+ * an English interface has no page called "Einstellungen › Tools › Einrichtung".
  *
  * A path is assembled from the **same catalogue entries as the navigation
  * itself**, never from a second list of its own. Rename a settings page and
@@ -24,19 +24,23 @@ const MENU_SEPARATOR = ' › ';
  */
 const MENU_PATHS = Object.freeze({
   settings: ['settings.title'],
-  'settings.tools': ['settings.title', 'settings.nav.tools'],
+  // Since #1119 the three tool pages sit in one group: Tools › Autonomy,
+  // Tools › Security, Tools › Setup.
+  'settings.tools': ['settings.title', 'settings.nav.group.tools', 'settings.nav.tools'],
   // Since #449 the one page for what a tool call may do; Permissions is gone.
-  'settings.security': ['settings.title', 'settings.nav.security'],
+  'settings.security': ['settings.title', 'settings.nav.group.tools', 'settings.nav.security'],
+  // The sandbox, the program allowances and the hosts kept open (#1119).
+  'settings.sandbox': ['settings.title', 'settings.nav.group.tools', 'settings.nav.sandbox'],
   'settings.skills': ['settings.title', 'settings.nav.skills'],
   'settings.skills.suggestions': ['settings.title', 'settings.nav.skills', 'settings.skills.suggestion.label'],
   'settings.memory': ['settings.title', 'settings.nav.memory'],
   // Since #767 the servers are part of Tool setup; the name stays for the texts that quote it.
-  'settings.mcp': ['settings.title', 'settings.nav.tools'],
+  'settings.mcp': ['settings.title', 'settings.nav.group.tools', 'settings.nav.tools'],
   'settings.general': ['settings.title', 'settings.nav.general'],
   'settings.models': ['settings.title', 'settings.nav.models'],
 });
 
-/** One path in one language, e.g. `Settings › Tool setup` / `Einstellungen › Tool-Einrichtung`. */
+/** One path in one language, e.g. `Settings › Tools › Setup` / `Einstellungen › Tools › Einrichtung`. */
 function menuPath(locale, name) {
   const keys = MENU_PATHS[name];
   if (!keys) return name;

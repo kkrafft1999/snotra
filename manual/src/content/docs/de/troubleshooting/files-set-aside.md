@@ -16,7 +16,7 @@ Nichts außer der App. Um die alte Datei zu zeigen, nutzt Snotra deinen Dateiman
 Der Hinweis lautet ***Deine Modelleinstellungen wurden zurückgesetzt.***, ***Der Chatverlauf beginnt leer.*** oder ähnlich, je nach Datei. Darunter stehen der Name der Datei und der vollständige Pfad der Kopie, die Snotra aufbewahrt hat, zum Beispiel `llm-config.json.unreadable-2026-10-16T09-12-44-120Z`.
 
 1. Wähle im Hinweis *Im Finder anzeigen* (unter Windows *Im Explorer anzeigen*), um die Kopie zu sehen.
-2. Richte wieder ein, was zurückgesetzt wurde: deine Modelle unter *Einstellungen › Modelle*, den Schlüssel für die Websuche und die MCP-Server unter *Einstellungen › Tool-Einrichtung*. Die Ansichtseinstellungen und die Liste der zuletzt geöffneten Ordner füllen sich beim Arbeiten von selbst wieder.
+2. Richte wieder ein, was zurückgesetzt wurde: deine Modelle unter *Einstellungen › Modelle*, den Schlüssel für die Websuche und die MCP-Server unter *Einstellungen › Tools › Einrichtung*. Die Ansichtseinstellungen und die Liste der zuletzt geöffneten Ordner füllen sich beim Arbeiten von selbst wieder.
 3. Schließ den Hinweis mit ×. Für diese Datei kommt er erst wieder, wenn ihr erneut etwas passiert.
 
 Behalte die Kopie, bis du sicher bist, dass du sie nicht mehr brauchst. Snotra löscht sie nie.
@@ -25,7 +25,7 @@ Behalte die Kopie, bis du sicher bist, dass du sie nicht mehr brauchst. Snotra l
 
 Die Datei war nicht zu verstehen. Ihr Inhalt war beschädigt — durch einen Absturz beim Schreiben, ein Sync-Programm, eine Änderung von Hand —, oder eine neuere Snotra-Version hat sie geschrieben als die, die gerade läuft, etwa nachdem du zu einem älteren Release zurückgegangen bist. Snotra benennt die Datei um, hängt `.unreadable-` und die Uhrzeit an und fängt diesen Teil neu an. Jedes Byte der alten Datei steckt noch in der Kopie.
 
-Beim Chatverlauf heißt die Kopie `chat-history.json.unreadable-…`, oder `chat-history.json.undecryptable-…`, wenn er sich mit dem Schlüssel dieses Systems nicht entschlüsseln ließ. Für diesen Fall siehe [Schlüsselbund-Fragen und verschlüsselter Speicher](../keychain-and-storage/).
+Beim Chatverlauf ist die Kopie der ganze Ordner, `chat-history.unreadable-…`, oder `chat-history.undecryptable-…`, wenn er sich mit dem Schlüssel dieses Systems nicht entschlüsseln ließ; für diesen Fall siehe [Schlüsselbund-Fragen und verschlüsselter Speicher](../keychain-and-storage/). [seit 1.25] Ist nur die Datei eines einzelnen Chats beschädigt, legt Snotra nur diese Datei im Ordner beiseite, und der Hinweis sagt ***Ein Chat ließ sich nicht lesen und fehlt im Verlauf.*** Deine anderen Chats bleiben. Ein Verlauf von vor 1.25 bleibt als `chat-history.json.unreadable-…` oder `chat-history.json.undecryptable-…` liegen.
 
 ## Wenn Änderungen nicht gespeichert werden
 

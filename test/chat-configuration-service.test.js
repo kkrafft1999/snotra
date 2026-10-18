@@ -180,10 +180,10 @@ test('for the model: states, reasons and the settings page in the interface lang
   assert.match(answer.skills.find((skill) => skill.name === 'meeting-notes').state, /this chat only/);
   assert.equal(Object.hasOwn(answer.skills.find((skill) => skill.name === 'broken'), 'description'), false);
   assert.deepEqual(answer.tools_off.find((tool) => tool.name === 'find_files'), {
-    name: 'find_files', reason: 'switched off by the user', settings: 'Einstellungen › Tools & Sicherheit',
+    name: 'find_files', reason: 'switched off by the user', settings: 'Einstellungen › Tools › Autonomie',
   });
   assert.deepEqual(answer.tools_off.find((tool) => tool.name === 'web_search'), {
-    name: 'web_search', reason: 'no web search key is set up', settings: 'Einstellungen › Tool-Einrichtung',
+    name: 'web_search', reason: 'no web search key is set up', settings: 'Einstellungen › Tools › Einrichtung',
   });
   assert.ok(answer.tools_on.includes('read_file_text'));
   assert.deepEqual(answer.tools_needing_a_folder, []);
@@ -260,7 +260,7 @@ test('prepareProposal: only a change the catalogue knows and allows becomes a ca
   assert.match((await prepare({ kind: 'tool', name: 'read_file_text', enable: true })).error, /is on in this chat already/);
   assert.match((await prepare({ kind: 'skill', name: 'release', enable: true })).error, /is on in this chat already/);
   assert.match((await prepare({ kind: 'skill', name: 'broken', enable: true })).error, /cannot be read/);
-  assert.match((await prepare({ kind: 'tool', name: 'web_search', enable: true })).error, /cannot be switched on from a chat: no web search key.*Settings › Tool setup/);
+  assert.match((await prepare({ kind: 'tool', name: 'web_search', enable: true })).error, /cannot be switched on from a chat: no web search key.*Settings › Tools › Setup/);
   assert.match((await prepare({ kind: 'tool', name: 'get_configuration', enable: false })).error, /cannot be switched from a chat/);
   assert.match((await prepare({ kind: 'tool', name: 'propose_config_change', enable: false })).error, /cannot be switched from a chat/);
   assert.match((await prepare({ kind: 'thing', name: 'x', enable: true })).error, /needs "kind"/);

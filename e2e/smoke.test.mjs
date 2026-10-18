@@ -172,6 +172,70 @@ const ANSWER_WITH_LINKS = [
 ].join('\n');
 
 /**
+ * A streamed answer the sanitizer has to cut while it is still streaming
+ * (#998). Markdown only, no raw HTML: that is the kind the chat renders block
+ * by block, each finished block once. The filler keeps it streaming for a
+ * few seconds after the links, long enough to look at them mid-stream.
+ */
+const STREAM_LINK_QUESTION = 'Zeig mir Links im Stream.';
+const STREAM_LINK_FILLER = 'Weiter im Text, Wort fuer Wort.';
+const STREAMED_ANSWER_WITH_LINKS = [
+  '## Links im Stream',
+  '',
+  'Siehe [die Doku](https://example.com/docs).',
+  '',
+  '[Bitte klicken](javascript:alert(1))',
+  '',
+  '[Anrufen](tel:+4912345)',
+  '',
+  '[Mail mit Zeilen](mailto:a@example.com?body=Hi%0D%0ABye)',
+  '',
+  Array.from({ length: 12 }, () => STREAM_LINK_FILLER).join(' '),
+  '',
+  'Ende.',
+].join('\n');
+
+/**
+ * Runs in the page: the links of the last answer as the chat shows them, and
+ * whether anything hostile got through. With `streaming`, only while the
+ * answer is still streaming.
+ */
+function lastAnswerLinks({ streaming = false } = {}) {
+  const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+  const last = bubbles[bubbles.length - 1];
+  const md = last?.querySelector(streaming ? '.chat-md-streaming' : '.chat-md');
+  if (!md) return null;
+  return {
+    busy: document.getElementById('chat-log').getAttribute('aria-busy') === 'true',
+    links: [...md.querySelectorAll('a')].map((a) => ({
+      text: a.textContent,
+      href: a.getAttribute('href'),
+      target: a.getAttribute('target'),
+      rel: a.getAttribute('rel'),
+    })),
+    hasIframe: !!md.querySelector('iframe'),
+    hasOnerror: !!md.querySelector('[onerror]'),
+    hasImageMap: !!md.querySelector('map, area, [usemap]'),
+    pwned: globalThis.__pwned === true,
+  };
+}
+
+/** The checks on the links of ANSWER_WITH_LINKS and STREAMED_ANSWER_WITH_LINKS. */
+function assertLinksSanitized(rendered, when) {
+  const doku = rendered.links.find((l) => l.text.includes('die Doku'));
+  assert.equal(doku.href, 'https://example.com/docs', when);
+  assert.equal(doku.target, '_blank', when);
+  assert.equal(doku.rel, 'noopener noreferrer', when);
+  assert.equal(rendered.links.find((l) => l.text.includes('Bitte klicken')).href, null, `javascript: removed — ${when}`);
+  assert.equal(rendered.links.find((l) => l.text.includes('Anrufen')).href, null, `tel: removed by the app's hook — ${when}`);
+  assert.equal(rendered.links.find((l) => l.text.includes('Mail mit Zeilen')).href, null, `a mailto: main would refuse — ${when}`);
+  assert.equal(rendered.hasIframe, false, when);
+  assert.equal(rendered.hasOnerror, false, when);
+  assert.equal(rendered.pwned, false, when);
+  assert.equal(rendered.hasImageMap, false, when);
+}
+
+/**
  * Baut ein echtes, graues PNG der gewuenschten Groesse. Selbst gebaut statt
  * einbasierter Konstante, weil die Breite hier die Aussage traegt: Ein Bild,
  * das breiter ist als das Chat-Panel, muss auf dessen Breite schrumpfen — das
@@ -589,7 +653,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const pdfRequests = [];
   const onPdfRequest = (request) => {
     const url = request.url();
-    if (!url.startsWith('file:') && !url.startsWith('data:') && !url.startsWith('devtools:')) pdfRequests.push(url);
+    if (!url.startsWith('snotra-app:') && !url.startsWith('file:') && !url.startsWith('data:') && !url.startsWith('devtools:')) pdfRequests.push(url);
   };
   page.on('request', onPdfRequest);
   await openInTree('spezifikation.pdf');
@@ -860,7 +924,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     const list = document.getElementById('chat-messages');
     const shown = [...list.querySelectorAll('.chat-msg.user')]
       .some((bubble) => (bubble.textContent || '').includes(question));
-    if (!shown || list.getAttribute('aria-busy') === 'true') return null;
+    if (!shown || document.getElementById('chat-log').getAttribute('aria-busy') === 'true') return null;
     const bubbles = list.querySelectorAll('.chat-msg.assistant');
     return { text: bubbles[bubbles.length - 1]?.textContent ?? '' };
   }, { id: runningChatId, question: BACKGROUND_QUESTION }), { what: 'zurueck im ersten Chat' });
@@ -886,7 +950,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
           rel: a.getAttribute('rel'),
         }));
         return {
-          busy: document.getElementById('chat-messages').getAttribute('aria-busy') === 'true',
+          busy: document.getElementById('chat-log').getAttribute('aria-busy') === 'true',
           links,
           hasIframe: !!last.querySelector('iframe'),
           hasOnerror: !!last.querySelector('[onerror]'),
@@ -920,6 +984,64 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const mail = rendered.links.find((l) => l.text.includes('Mail mit Zeilen'));
   assert.equal(mail.href, null, 'a mailto: main would refuse must not stay clickable (#595)');
   step('Sanitizing geprueft');
+
+  // --- Sanitizing on the paths of #998 -------------------------------------
+  // A switch draws a finished answer from the cache of rendered answers: a
+  // copy of what the sanitizer produced the first time. Away and back, and
+  // the copy holds the same guarantees.
+  const linkChatId = await page.evaluate(() =>
+    document.querySelector('.chat-history-row--current[data-chat-id]')?.dataset.chatId || null);
+  assert.ok(linkChatId, 'the chat with the links is in the history');
+  await page.evaluate(() => document.getElementById('btn-chat-new').click());
+  await poll(() => page.evaluate((id) =>
+    !document.querySelector(`.chat-history-row--current[data-chat-id="${id}"]`)
+    && ![...document.querySelectorAll('#chat-messages .chat-msg.user')].length, linkChatId),
+  { what: 'a new, empty chat on screen' });
+  await page.evaluate((id) =>
+    document.querySelector(`.chat-history-row[data-chat-id="${id}"] .chat-history-row-main`)?.click(), linkChatId);
+  const fromCache = await poll(async () => {
+    const back = await page.evaluate(({ id, question }) =>
+      !!document.querySelector(`.chat-history-row--current[data-chat-id="${id}"]`)
+      && [...document.querySelectorAll('#chat-messages .chat-msg.user')].some((b) => b.textContent.includes(question)),
+    { id: linkChatId, question: LINK_QUESTION });
+    if (!back) return null;
+    const state = await page.evaluate(lastAnswerLinks);
+    return state && !state.busy && state.links.length >= 4 ? state : null;
+  }, { what: 'the chat with the links back on screen' });
+  assertLinksSanitized(fromCache, 'answer drawn again after a chat switch');
+  assert.deepEqual(await page.evaluate(hijackState, ['chat', HIJACK_ATTRIBUTES]),
+    { survivors: [], chatPanelIsColumn: true }, 'the copy reaches no further than its bubble either (#635)');
+  step('Sanitizing after a chat switch checked');
+
+  // A streaming answer renders block by block: each finished block once, the
+  // open one on every frame. The sanitizer runs on each piece; checked here
+  // while the answer is still coming in, and the first link has to be the
+  // same node throughout — the old way replaced every node on every frame.
+  model.queueAnswer({ match: STREAM_LINK_QUESTION, text: STREAMED_ANSWER_WITH_LINKS, chunkDelayMs: 60 });
+  await ask(STREAM_LINK_QUESTION);
+  const midStream = await poll(async () => {
+    const state = await page.evaluate(() => {
+      const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
+      const md = bubbles[bubbles.length - 1]?.querySelector('.chat-md-streaming');
+      // Once the "Anrufen" line is there, the paragraph with the first link
+      // is a finished block; before that it was the open one.
+      const first = md?.textContent.includes('Anrufen') ? md.querySelector('a') : null;
+      if (first && !window.__smokeFirstStreamedLink) window.__smokeFirstStreamedLink = first;
+      return md?.textContent.includes('Weiter im Text') ? true : null;
+    });
+    if (!state) return null;
+    return page.evaluate(lastAnswerLinks, { streaming: true });
+  }, { what: 'the streamed links on screen while the answer streams', intervalMs: 20 });
+  assert.equal(midStream.busy, true, 'checked while the answer was still streaming');
+  assertLinksSanitized(midStream, 'mid-stream');
+  assert.equal(await page.evaluate(() => window.__smokeFirstStreamedLink?.isConnected === true), true,
+    'a finished block stays on screen while the answer streams on');
+  const streamedDone = await poll(async () => {
+    const state = await page.evaluate(lastAnswerLinks);
+    return state && !state.busy && !(await page.evaluate(() => !!document.querySelector('.chat-md-streaming'))) ? state : null;
+  }, { what: 'the streamed answer finished' });
+  assertLinksSanitized(streamedDone, 'streamed answer, finished');
+  step('Sanitizing while streaming checked');
 
   // --- Umgebungsangaben im Systemprompt (Issue #138) -----------------------
   // Nur hier pruefbar: Pfad, Plattform und Datum entstehen erst im echten
@@ -1074,7 +1196,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
         const last = bubbles[bubbles.length - 1];
         if (!last) return null;
         return {
-          busy: document.getElementById('chat-messages').getAttribute('aria-busy') === 'true',
+          busy: document.getElementById('chat-log').getAttribute('aria-busy') === 'true',
           geladen: [...last.querySelectorAll('img')].map((img) => ({
             alt: img.getAttribute('alt'),
             istDataUri: /^data:image\/(png|svg\+xml);base64,/.test(img.getAttribute('src') || ''),
@@ -1179,7 +1301,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
         const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
         const last = bubbles[bubbles.length - 1];
         if (!last || !last.textContent.includes('Hier ist sie')) return null;
-        if (document.getElementById('chat-messages').getAttribute('aria-busy') === 'true') return null;
+        if (document.getElementById('chat-log').getAttribute('aria-busy') === 'true') return null;
         return {
           elemente: [...last.querySelectorAll('video, audio, source, track, picture')].map((el) => el.tagName),
           urlAttribute: [...last.querySelectorAll('[src]:not(img), [poster], [background], [srcset]')]
@@ -1243,7 +1365,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   }));
   assert.equal(tabs.securityVisible, true);
   assert.equal(tabs.modelsHidden, true);
-  assert.match(tabs.heading, /^Tools & (security|Sicherheit)$/);
+  assert.match(tabs.heading, /^Tools › (Autonomy|Autonomie)$/);
   assert.equal(tabs.permissionsTab, false, 'the Permissions tab is gone');
 
   // Die Grundausstattung steht nicht in der Liste (#195). Hier statt im
@@ -1330,7 +1452,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     }
     return null;
   }, { what: 'Skill-Text beim Modell' });
-  assert.match(skillResult, /Einstellungen › Tools & Sicherheit/, 'zitierter Menuepfad in der Oberflaechensprache');
+  assert.match(skillResult, /Einstellungen › Tools › Autonomie/, 'zitierter Menuepfad in der Oberflaechensprache');
   assert.equal(skillResult.includes('{menu:'), false, 'kein ungefuellter Platzhalter beim Modell');
   // Der Satz darum ist und bleibt englisch. (Dass im Quelltext des Skills
   // keine Seite fest in einer Sprache steht, haelt test/ui-quotes.test.js.)

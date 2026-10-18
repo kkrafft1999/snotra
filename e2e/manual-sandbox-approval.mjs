@@ -146,7 +146,7 @@ try {
   const cardsAfter = await page.evaluate(() => document.querySelectorAll('#chat-messages .chat-approval-card--sandbox').length);
   console.log('second engine written without a card:', await exists(path.join(engines, '5.23.0', 'query-engine')), `(sandbox cards: ${cardsAfter})`);
 
-  // The session approval in Settings › Tools & security.
+  // The session approval in Settings › Tools › Autonomy.
   await app.evaluate(({ Menu }) => {
     for (const top of Menu.getApplicationMenu().items) {
       const item = top.submenu?.items.find((i) => /^(Einstellungen|Settings)/.test(i.label ?? ''));

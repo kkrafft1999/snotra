@@ -31,9 +31,9 @@ Er trägt noch den Namen der Plattform, Snotra AI, obwohl die App Snotra Agent h
 | `llm-config.json` | Die Modelle der Liste und wie sie erreichbar sind. Schlüssel liegen verschlüsselt. |
 | `ui-preferences.json` | Deine Einstellungen und das Layout: Sprache, der System-Prompt, die Schalter, die Breite der Spalten, der Zoom von Markdown-Dateien, der Python-Interpreter, das Bildmodell. |
 | `tool-policy.json` und `tool-policy.key` | Der Modus, deine Sperren und Erlaubnisse, der Standardmodus eines Ordners. Signiert, damit eine veränderte Datei auffällt. |
-| `mcp-servers.json` | Die MCP-Server. Geheime Umgebungsvariablen sind verschlüsselt. |
+| `mcp-servers.json` | Die MCP-Server. Geheime Umgebungsvariablen und Header sind verschlüsselt. |
 | `web-search-config.json` | Der Schlüssel für die Websuche, verschlüsselt. |
-| `chat-history.json` | Deine Chats, verschlüsselt. |
+| `chat-history/` | [seit 1.25] Deine Chats, verschlüsselt: `index.json` mit der Liste und eine Datei je Chat. Bis 1.24 lagen sie in einer Datei, `chat-history.json`; der erste Start von 1.25 zieht sie um und entfernt die alte Datei, sobald die Kopie geprüft ist. |
 | `chat-attachments/` | Die Bilder, die zu deinen Chats gehören, ein Ordner je Chat. |
 | `folder-history.json` und `last-folder.json` | Die zuletzt benutzten Ordner und der, der beim nächsten Start öffnet. |
 | `window-state.json` | Größe und Platz des Fensters. |
@@ -46,7 +46,7 @@ Alles andere im Ordner — `Cache`, `Local Storage` und Ähnliches — gehört d
 Fast keine. Alles darin stellst du in der App ein, und die App schreibt die Dateien selbst; eine Änderung hinter ihrem Rücken kann überschrieben werden. Eine Einstellung hat keinen Platz in der App, und eine Datei muss bleiben, wie sie ist:
 
 - **`ui-preferences.json`** nimmt `historyCharLimit` auf, eine Zahl, die die Einstellungen nicht zeigen: das Budget in Zeichen für den Chat-Verlauf, der mit jeder Anfrage geschickt wird (standardmäßig 200.000, 4.000 bis 2.000.000). Ältere Nachrichten darüber hinaus bleiben weg, und große Tool-Ergebnisse früherer Runden werden gekürzt. Beende Snotra, bevor du die Datei bearbeitest.
-- **`tool-policy.json`** ist signiert. Bearbeite sie nicht: Snotra fällt dann auf *Intelligent* zurück — oder bleibt bei *Immer fragen* — und verwirft deine Erlaubnisse; deine Sperren bleiben in Kraft. Ändere Berechtigungen stattdessen unter *Einstellungen › Tools & Sicherheit*.
+- **`tool-policy.json`** ist signiert. Bearbeite sie nicht: Snotra fällt dann auf *Intelligent* zurück — oder bleibt bei *Immer fragen* — und verwirft deine Erlaubnisse; deine Sperren bleiben in Kraft. Ändere Berechtigungen stattdessen unter *Einstellungen › Tools › Autonomie*.
 
 Um bei null anzufangen, beende Snotra und verschiebe den Ordner an eine andere Stelle. Schlüssel und Chats sind dann aus der App verschwunden — leg vorher eine Kopie an.
 
@@ -54,7 +54,7 @@ Um bei null anzufangen, beende Snotra und verschiebe den Ordner an eine andere S
 
 API-Schlüssel, geheime Umgebungsvariablen, der Suchschlüssel und deine Chats sind mit einem Schlüssel des Systems verschlüsselt: unter macOS dem Schlüsselbund-Eintrag *Snotra AI Safe Storage*, unter Windows dem Benutzerkonto, unter Linux dem Schlüsselbund. Eine Kopie des Ordners nützt deshalb auf einem anderen Computer oder in einem anderen Konto nichts, und die Schlüssel müssen dort neu eingegeben werden. Wo das System keinen verschlüsselten Speicher bietet — ein Linux-Desktop ohne Schlüsselbund, zum Beispiel —, sagt Snotra *Verschlüsselter Speicher ist auf diesem System nicht verfügbar*, statt einen Schlüssel zu speichern.
 
-Ändert sich der Schlüssel, wird ein Chat-Verlauf, der sich nicht mehr lesen lässt, nicht gelöscht: Er bleibt als `chat-history.json.undecryptable-<Zeit>` neben dem neuen liegen.
+Ändert sich der Schlüssel, wird ein Chat-Verlauf, der sich nicht mehr lesen lässt, nicht gelöscht: Der Ordner bleibt als `chat-history.undecryptable-<Zeit>` neben dem neuen liegen.
 
 ## In einem Projekt
 

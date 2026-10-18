@@ -384,7 +384,10 @@
   --ds-paper-ground: #141312;
 
   --ds-text-primary: #D0CBC6;    /* 10.3:1 on --ds-surface */
-  --ds-text-secondary: #999691;  /* 5.7:1 on --ds-surface; 3.8:1 on the composer, so not there */
+  /* 6.0:1 on --ds-surface, 4.6:1 on --ds-bg-header, 4.7:1 on --ds-chat-bg;
+   * 4.1:1 on the composer, so not there. Until #999 #999691, which missed
+   * 4.5:1 on the header and the chat ground (test/token-contrast.test.js). */
+  --ds-text-secondary: #9E9B96;
   --ds-bg-secondary: #262523;
   --ds-bg-tertiary: #2E2D2B;
   --ds-bg-hover: #2E2C2A;

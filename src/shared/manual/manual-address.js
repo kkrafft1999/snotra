@@ -9,14 +9,16 @@
  * and renderer read the same rule from here.
  */
 
+const { manualPathPrefix, splitManualLocale } = require('../i18n/locales');
+
 /** The web manual, for *Open on the web* and as the fallback without a bundle. */
 const MANUAL_WEB_BASE = 'https://docs.snotra-ai.dev/';
 const MANUAL_HOST = 'docs.snotra-ai.dev';
 const SLUG = /^[a-z0-9-]+(?:\/[a-z0-9-]+)*$/;
 
-/** Address of a page on docs.snotra-ai.dev — the German pages live under `/de/`. */
+/** Address of a page on docs.snotra-ai.dev — every language but the root one lives under `/<code>/`. */
 function manualWebUrl(locale, slug = 'index', fragment = '') {
-  const prefix = locale === 'de' ? 'de/' : '';
+  const prefix = manualPathPrefix(locale);
   const page = !slug || slug === 'index' ? '' : `${slug}/`;
   const hash = fragment ? `#${encodeURIComponent(fragment)}` : '';
   return `${MANUAL_WEB_BASE}${prefix}${page}${hash}`;
@@ -25,7 +27,7 @@ function manualWebUrl(locale, slug = 'index', fragment = '') {
 /**
  * `{ slug, fragment, locale }` of a page address on docs.snotra-ai.dev, or null
  * for anything else — another host, plain http, a file, an address that names
- * no page. `locale` is `'de'` for the German pages and null otherwise.
+ * no page. `locale` is the language of a page under `/<code>/` and null for the root one.
  */
 function parseManualAddress(href) {
   let url;
@@ -45,12 +47,7 @@ function parseManualAddress(href) {
   } catch {
     return null;
   }
-  let path = pathname.replace(/^\/+|\/+$/g, '');
-  let locale = null;
-  if (path === 'de' || path.startsWith('de/')) {
-    locale = 'de';
-    path = path.slice(2).replace(/^\/+/, '');
-  }
+  const { locale, rest: path } = splitManualLocale(pathname.replace(/^\/+|\/+$/g, ''));
   const slug = path.replace(/\.md$/, '').replace(/(?:^|\/)index$/, '') || 'index';
   if (!SLUG.test(slug)) return null;
   return { slug, fragment, locale };

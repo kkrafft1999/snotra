@@ -427,7 +427,7 @@ test('on macOS trustd opens only for a run whose allowance asks for it, and a bl
     assert.equal(closed.trustd, false);
     const annotated = closed.annotate(tls);
     assert.match(annotated, /<sandbox_certificates>/);
-    assert.match(annotated, /Program allowances/);
+    assert.match(annotated, /Settings › Tools › Security › Programs with more room/);
     closed.release();
   } finally {
     await fs.rm(dir, { recursive: true, force: true });

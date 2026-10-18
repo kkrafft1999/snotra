@@ -10,6 +10,10 @@
  */
 
 /**
+ * @typedef {import('../../shared/contracts/chat-configuration').ChatConfigOverrides} ChatConfigOverrides
+ */
+
+/**
  * @typedef {Object} ConfigProposal
  * @property {'skill'|'tool'} kind
  * @property {string} name
@@ -19,13 +23,13 @@
 
 /**
  * @typedef {Object} ConfigProposalPort
- * @property {(chatId: string|null) => Promise<object|null>} overridesFor
+ * @property {(chatId: string|null) => Promise<ChatConfigOverrides|null>} overridesFor
  *   what the chat switched beyond the settings (`normalizeChatConfigOverrides`)
  * @property {(input: { chatId: string|null, workspaceRoot: string|null, chatSkillNames: string[],
- *   overrides: object|null, proposal: ConfigProposal }) => Promise<{ error: string } | { declined: true } | { card: object }>} prepare
+ *   overrides: ChatConfigOverrides|null, proposal: ConfigProposal }) => Promise<{ error: string } | { declined: true } | { card: object }>} prepare
  *   checks a proposal; only `card` may reach the user
- * @property {(chatId: string, proposal: ConfigProposal) => Promise<object|null>} accept
- * @property {(chatId: string, proposal: ConfigProposal) => Promise<object|null>} decline
+ * @property {(chatId: string, proposal: ConfigProposal) => Promise<ChatConfigOverrides|null>} accept
+ * @property {(chatId: string, proposal: ConfigProposal) => Promise<ChatConfigOverrides|null>} decline
  */
 
 module.exports = {};

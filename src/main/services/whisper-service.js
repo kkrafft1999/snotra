@@ -3,6 +3,7 @@ const { createMessage } = require('../../shared/contracts/message');
 const { checkTranscriptionPayload } = require('../../shared/contracts/voice');
 const { readErrorMessage } = require('../providers/stream-helpers');
 const { describeFetchErrorMessage } = require('../../shared/runtime/fetch-errors');
+const { LEGACY_LOCALE, isSpeechLanguage, speechLanguageFor } = require('../../shared/i18n');
 
 const TRANSCRIPTIONS_URL = 'https://api.openai.com/v1/audio/transcriptions';
 
@@ -16,12 +17,8 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
   const fetchFn = fetchImpl;
 
   async function resolveLanguage(options) {
-    if (options?.language === 'de' || options?.language === 'en') return options.language;
-    if (getAppLocale) {
-      const locale = await getAppLocale();
-      return locale === 'en' ? 'en' : 'de';
-    }
-    return 'de';
+    if (isSpeechLanguage(options?.language)) return options.language;
+    return speechLanguageFor(getAppLocale ? await getAppLocale() : LEGACY_LOCALE);
   }
 
   async function transcribeAudio(audioBuffer, options) {
@@ -102,4 +99,5 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
 
 module.exports = {
   createWhisperService,
+  TRANSCRIPTIONS_URL,
 };

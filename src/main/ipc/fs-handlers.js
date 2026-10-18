@@ -2,6 +2,7 @@ const path = require('path');
 const { LIMITS } = require('../../shared/limits');
 const { formatBytes } = require('../../shared/runtime/format-bytes');
 const { createTranslator } = require('../../shared/i18n');
+const { CONFIRMATION_ACTIONS, createRefusingConfirmation } = require('../../application/permissions/user-confirmation');
 
 /**
  * Entscheidet, ob ein Import nativ bestätigt werden muss (Issue #101).
@@ -69,7 +70,10 @@ function registerFsHandlers({
   PUSH = null,
   fileContextMenu = null,
   getMainWindow = () => null,
+  // Error notices of the import only; its confirmation goes through
+  // `confirmations`, the user-confirmation port (#980).
   dialog = null,
+  confirmations = createRefusingConfirmation(),
   limits = LIMITS,
   // Sprache der Oberfläche (#292). Wie beim Kontextmenü bei jedem Dialog neu
   // gelesen — er lebt nur bis zum Klick, ein Neuaufbau erübrigt sich.
@@ -138,7 +142,8 @@ function registerFsHandlers({
   // Der Renderer stößt nur an; geprüft, bestätigt und kopiert wird hier.
   // Dasselbe Muster wie bei den schutzlockernden Aktionen aus #66: Main
   // bestätigt nativ, weil der Renderer keine Sicherheitsgrenze ist
-  // (docs/security-concept.md §5).
+  // (docs/security-concept.md §5) — through the user-confirmation port since
+  // #980, so a front end without a person at the machine cannot confirm it.
   ipcMain.handle(REQ.FS_IMPORT_ITEMS, async (_event, sourcePaths, destDir) => {
     const t = createTranslator(getLocale());
     const inspection = await filesystem.inspectImport(sourcePaths, destDir);
@@ -160,25 +165,29 @@ function registerFsHandlers({
     }
 
     if (needsImportConfirmation(inspection, limits)) {
-      if (!dialog) return { error: t('import.noDialog') };
+      if (!confirmations.canConfirm()) return { error: t('import.noDialog') };
       const skipNote = formatSkipNote(inspection, t);
       // Der aufgelöste Zielpfad aus der Prüfung, nicht der Rohwert aus dem
       // Renderer — im Dialog soll stehen, wohin wirklich kopiert wird.
       const target = inspection.destDir || destDir;
-      const { response } = await showMessageBox({
-        type: 'question',
-        buttons: [t('import.confirm.copy'), t('import.confirm.cancel')],
-        // „Abbrechen“ als Standard- und Escape-Antwort, damit Enter nichts kopiert (#59).
-        defaultId: 1,
-        cancelId: 1,
-        noLink: true,
-        message: t('import.confirm.message', {
-          summary: formatImportSummary(inspection, t),
-          target: path.basename(target),
-        }),
-        detail: `${target}${skipNote ? `\n\n${skipNote}` : ''}`,
+      const outcome = await confirmations.confirm({
+        action: CONFIRMATION_ACTIONS.IMPORT_ITEMS,
+        subject: target,
+        prompt: {
+          type: 'question',
+          buttons: [t('import.confirm.copy'), t('import.confirm.cancel')],
+          // „Abbrechen“ als Standard- und Escape-Antwort, damit Enter nichts kopiert (#59).
+          defaultId: 1,
+          cancelId: 1,
+          noLink: true,
+          message: t('import.confirm.message', {
+            summary: formatImportSummary(inspection, t),
+            target: path.basename(target),
+          }),
+          detail: `${target}${skipNote ? `\n\n${skipNote}` : ''}`,
+        },
       });
-      if (response !== 0) return { cancelled: true };
+      if (!outcome.confirmed) return { cancelled: true };
     }
 
     const result = await filesystem.importItems(sourcePaths, destDir);

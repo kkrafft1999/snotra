@@ -13,7 +13,7 @@ The Snotra window has up to four columns side by side: the file tree, the previe
 
 | Column | What it holds |
 | --- | --- |
-| **Sidebar** | The open folder's name and path, and its file tree. See [Work in the file tree](../file-tree/). |
+| **Sidebar** | The open folder's name and path, and its file tree. See [Work in the file tree](../file-tree/). At its foot, two buttons: [send feedback](../../troubleshooting/send-feedback/) and the [settings](../../customising/settings/). |
 | **Middle column** | The preview of the file you picked, or the welcome page. See [Look at a file](../preview/). |
 | **Chat** | The conversation, with the input field at the bottom. See [Write a message](../../chatting/write-a-message/). |
 | **History** | Your earlier chats. See [Continue an earlier chat](../../chatting/chat-history/). |

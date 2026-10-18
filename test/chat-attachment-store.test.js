@@ -50,8 +50,24 @@ async function setup(t, { maxChatSessions = 3 } = {}) {
     getActiveWorkspaceRoot: () => null,
   });
   const attachmentsDir = (chatId) => path.join(tmpDir, 'chat-attachments', chatId);
-  const readRawHistory = async () => fs.readFile(path.join(tmpDir, 'chat-history.json'), 'utf8');
+  const readRawHistory = () => readRawHistoryIn(tmpDir);
   return { ipcMain, chatAttachments, tmpDir, attachmentsDir, readRawHistory };
+}
+
+/** Every file of the history folder (#985) in one string. */
+async function readRawHistoryIn(tmpDir) {
+  const dir = path.join(tmpDir, 'chat-history');
+  const names = await fs.readdir(dir);
+  assert.ok(names.length > 0);
+  return (await Promise.all(names.map((name) => fs.readFile(path.join(dir, name), 'utf8')))).join('\n');
+}
+
+/** The chats as the renderer gets them since #985: the list, then each one opened. */
+async function getHistory(ipcMain) {
+  const list = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const sessions = [];
+  for (const row of list.sessions) sessions.push((await ipcMain.invoke(REQ.CHAT_HISTORY_GET_SESSION, row.id)).session);
+  return { ...list, sessions };
 }
 
 function sessionWithImage(id, { content = 'Was steht da?', attachments = [imageAttachment()] } = {}) {
@@ -71,7 +87,7 @@ test('Bild überlebt Speichern und Laden — als Datei-Referenz, nicht als Base6
   assert.equal(files.length, 1);
   assert.match(files[0], /^[0-9a-f]{64}\.png$/);
 
-  const { sessions } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const { sessions } = await getHistory(ipcMain);
   const [attachment] = sessions[0].messages[0].attachments;
   assert.equal(attachment.kind, 'image');
   assert.equal(attachment.mediaType, 'image/png');
@@ -97,7 +113,7 @@ test('dieselbe Nachricht mehrfach sichern legt keine zweite Datei an', async (t)
   );
 
   assert.deepEqual(await fs.readdir(attachmentsDir('chat-a')), [file]);
-  const { sessions } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const { sessions } = await getHistory(ipcMain);
   assert.equal(sessions[0].messages[0].attachments[0].file, file);
 });
 
@@ -106,7 +122,7 @@ test('Nachricht ohne Text, nur mit Bild, bleibt erhalten und benennt den Chat', 
 
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-a', { content: '' }));
 
-  const { sessions } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const { sessions } = await getHistory(ipcMain);
   assert.equal(sessions.length, 1);
   // Stored without a fallback title; the header and history work it out (#359).
   assert.equal(sessions[0].title, '');
@@ -123,7 +139,7 @@ test('fehlende Datei beim Laden ist kein Fehler, sondern ein leeres Ergebnis', a
 
   // Die Session selbst laedt weiterhin, samt Referenz — der Renderer zeigt
   // dafuer einen Platzhalter.
-  const { sessions } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const { sessions } = await getHistory(ipcMain);
   assert.equal(sessions[0].messages[0].attachments[0].file, file);
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_ATTACHMENT_READ, 'chat-a', file), { ok: false });
 });
@@ -220,9 +236,9 @@ test('ohne Anhang-Ablage bleibt der Verlauf frei von Bilddaten', async (t) => {
 
   await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-a'));
 
-  const raw = await fs.readFile(path.join(tmpDir, 'chat-history.json'), 'utf8');
+  const raw = await readRawHistoryIn(tmpDir);
   assert.equal(raw.includes(PNG_1PX), false);
-  const { sessions } = await ipcMain.invoke(REQ.CHAT_HISTORY_GET);
+  const { sessions } = await getHistory(ipcMain);
   assert.equal(sessions[0].messages[0].attachments, undefined);
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_ATTACHMENT_READ, 'chat-a', `${'a'.repeat(64)}.png`), { ok: false });
 });

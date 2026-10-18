@@ -12,7 +12,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, waitForFolderChat, sendChat, rendererToolEvents } from './helpers/app.mjs';
+import { launchApp, prepareUserData, poll, makeTempDir, waitForFolderChat, sendChat, rendererToolEvents, storedChats } from './helpers/app.mjs';
 
 const HELD_TEXT = 'This answer never finishes.';
 
@@ -31,8 +31,7 @@ async function killHard(child) {
 
 /** The chat as main hands it out — the saved state, not the one on screen. */
 async function savedTurn(page) {
-  const history = await page.evaluate(() => window.electronAPI.getChatHistory());
-  const session = (history?.sessions || []).find((s) => s.messages.some((m) => /CUT-OFF/.test(m.content)));
+  const session = (await storedChats(page)).find((s) => s.messages.some((m) => /CUT-OFF/.test(m.content)));
   return session ? session.messages[session.messages.length - 1] : null;
 }
 

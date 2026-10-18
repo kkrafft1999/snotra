@@ -18,7 +18,7 @@
  */
 
 import contracts from '../generated/contracts.js';
-import { t, tMessage, onLocaleChange } from '../i18n.js';
+import { t, tMessage, getLocale, onLocaleChange, DEFAULT_LOCALE } from '../i18n.js';
 import { formatMegabytes, formatSize, inertHtmlFragment, markdownToSafeHtml } from '../utils/helpers.js';
 import { invokeErrorMessage } from '../utils/invoke-error.js';
 
@@ -32,54 +32,35 @@ const FOCUSABLE = 'button:not([disabled]), a[href], summary, [tabindex]:not([tab
 
 
 /**
- * Trims GitHub's release notes down to what changed — still as Markdown.
+ * The part of a release body that is written for the user (#1072).
  *
- * GitHub generates part of the notes itself: a heading "What's Changed", one
- * line "… by @name in <PR link>" per change and a compare link at the end.
- * The dialog only cares *what* changed — who did it and under which number is
- * on the release page. Everything written by hand (highlights in bold, inline
- * code, a quoted warning) stays Markdown and is rendered by showNotes() (#736).
+ * GitHub's generated list names every pull request the way a developer titles
+ * it — test runs, CI, documentation. The dialog leaves all of that to the
+ * release page and shows only the section the release skill writes on top,
+ * once in English and once in German, between HTML comments that GitHub does
+ * not render:
+ *
+ *   <!-- snotra:notes en --> … <!-- snotra:notes de --> … <!-- snotra:notes end -->
+ *
+ * scripts/release-user-notes.js writes exactly this. The section in `locale`
+ * wins, English stands in for a missing one; a body without the markers — any
+ * release before #1072 — has nothing for the user, and the box stays away.
  */
-function formatReleaseNotes(notes) {
-  const lines = String(notes || '').replace(/\r\n?/g, '\n').split('\n');
-  const out = [];
-  // „New Contributors" ist eine reine Namensliste — die faellt komplett weg.
-  let skipping = false;
+const NOTES_MARKER = /<!--\s*snotra:notes\s+([a-z]+)\s*-->/gi;
 
-  for (const raw of lines) {
-    const line = raw.replace(/\s+$/, '');
-    if (/^\s{0,3}(\*\*)?Full Changelog(\*\*)?\s*:/i.test(line)) continue;
-
-    const heading = line.match(/^\s{0,3}#{1,6}\s+(.*?)\s*#*$/);
-    if (heading) {
-      const text = heading[1];
-      skipping = /^new contributors$/i.test(text);
-      if (skipping || /^what'?s changed$/i.test(text)) continue;
-      out.push(line);
-      continue;
-    }
-    if (skipping) continue;
-
-    const bullet = line.match(/^(\s*)([-*+])\s+(.*)$/);
-    if (bullet) {
-      const text = stripAuthorAndLink(bullet[3]);
-      if (text) out.push(`${bullet[1]}${bullet[2]} ${text}`);
-      continue;
-    }
-    out.push(line);
+function userReleaseNotes(notes, locale) {
+  const text = String(notes || '').replace(/\r\n?/g, '\n');
+  const sections = {};
+  let current = null;
+  let from = 0;
+  for (const match of text.matchAll(NOTES_MARKER)) {
+    if (current) sections[current] = text.slice(from, match.index).trim();
+    const name = match[1].toLowerCase();
+    if (name === 'end') break;
+    current = name;
+    from = match.index + match[0].length;
   }
-
-  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
-}
-
-/** „Titel by @name in https://…/pull/42" → „Titel". */
-function stripAuthorAndLink(text) {
-  return text
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')
-    .replace(/\s+in\s+<?https?:\/\/\S+>?\s*$/i, '')
-    .replace(/\s+by\s+@[^\s]+\s*$/i, '')
-    .replace(/\s*<?https?:\/\/\S+>?\s*$/, '')
-    .trim();
+  return sections[locale] || sections[DEFAULT_LOCALE] || '';
 }
 
 export function initUpdateDialog({ api }) {
@@ -105,7 +86,9 @@ export function initUpdateDialog({ api }) {
 
   /** Letzter Befund des Main-Prozesses; Grundlage aller Texte im Dialog. */
   let info = null;
-  /** Aufbereitete Aenderungsliste; leer heisst: es gibt nichts zu zeigen. */
+  /** The release body as GitHub delivers it — redrawn per language. */
+  let rawNotes = '';
+  /** The user section shown in the box; empty means there is nothing to show. */
   let notesText = '';
   /** Notes replaced since the box was last opened — see the toggle listener. */
   let notesFresh = false;
@@ -371,8 +354,9 @@ export function initUpdateDialog({ api }) {
     focusFirstAction();
   }
 
-  function showNotes(notes) {
-    notesText = formatReleaseNotes(notes);
+  function showNotes(notes, { keepOpen = false } = {}) {
+    rawNotes = notes;
+    notesText = userReleaseNotes(notes, getLocale());
     // `breaks: false` as for a Markdown file: GitHub's notes are written like
     // one, and a single line break inside a paragraph is a space there.
     const fragment = inertHtmlFragment(markdownToSafeHtml(notesText, { breaks: false }));
@@ -382,6 +366,8 @@ export function initUpdateDialog({ api }) {
       img.replaceWith(document.createTextNode(img.getAttribute('alt') || ''));
     }
     notesBodyEl.replaceChildren(fragment);
+    // A language switch swaps the text, not what the user had opened.
+    if (keepOpen) return;
     notesEl.open = false;
     notesFresh = true;
   }
@@ -472,10 +458,11 @@ export function initUpdateDialog({ api }) {
   // itself. Closed, there is nothing to draw — the next step does it anyway.
   onLocaleChange(() => {
     if (!isOpen()) return;
+    showNotes(rawNotes, { keepOpen: true });
     render(state, lastMessage);
   });
 
   return { checkNow, isOpen };
 }
 
-export { formatReleaseNotes };
+export { userReleaseNotes };

@@ -15,6 +15,7 @@
  */
 'use strict';
 
+const { APP_LOCALES } = require('./enums');
 const { toUsageNumber, normalizeUsage } = require('./usage');
 
 const SESSION_COST_VERSION = 1;
@@ -128,7 +129,12 @@ function priceKeyCandidates(providerId, model) {
   return [...new Set(out)];
 }
 
-/** `{ key, price }` of the first candidate the table knows, or null. */
+/**
+ * `{ key, price }` of the first candidate the table knows, or null.
+ *
+ * @param {Object<string, object>} models
+ * @param {{ providerId?: string, model?: string }} [target]
+ */
 function findModelPrice(models, { providerId, model } = {}) {
   if (!models || typeof models !== 'object') return null;
   for (const key of priceKeyCandidates(providerId, model)) {
@@ -204,6 +210,8 @@ function addTokens(a, b) {
  * The cost record of one model call. `price` is null when the model is
  * unknown — then `usd` is null too and the round counts as unpriced, never
  * as free.
+ *
+ * @param {{ providerId?: string, model?: string, usage?: object|null, price?: object|null, priceSource?: string|null }} [input]
  */
 function createCostEntry({ providerId, model, usage, price = null, priceSource = null } = {}) {
   const tokens = usageToCostTokens(usage);
@@ -333,7 +341,7 @@ function costEntryUsd(entry) {
  * nothing, and the dash — never 0 — for an unknown price. The currency sign
  * and its position follow the locale.
  */
-function formatUsd(value, locale = 'en') {
+function formatUsd(value, locale = APP_LOCALES.EN) {
   const n = Number(value);
   if (value === null || value === undefined || !Number.isFinite(n)) return '–';
   const format = new Intl.NumberFormat(locale, {

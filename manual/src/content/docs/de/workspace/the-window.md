@@ -13,7 +13,7 @@ Das Snotra-Fenster hat bis zu vier Spalten nebeneinander: den Dateibaum, die Vor
 
 | Spalte | Was darin steht |
 | --- | --- |
-| **Seitenleiste** | Name und Pfad des geöffneten Ordners und sein Dateibaum. Siehe [Im Dateibaum arbeiten](../file-tree/). |
+| **Seitenleiste** | Name und Pfad des geöffneten Ordners und sein Dateibaum. Siehe [Im Dateibaum arbeiten](../file-tree/). Unten zwei Knöpfe: [Feedback senden](../../troubleshooting/send-feedback/) und die [Einstellungen](../../customising/settings/). |
 | **Mittlere Spalte** | Die Vorschau der Datei, die du gewählt hast, oder die Willkommensseite. Siehe [Eine Datei ansehen](../preview/). |
 | **Chat** | Das Gespräch, unten mit dem Eingabefeld. Siehe [Eine Nachricht schreiben](../../chatting/write-a-message/). |
 | **Verlauf** | Deine früheren Chats. Siehe [Einen früheren Chat fortsetzen](../../chatting/chat-history/). |

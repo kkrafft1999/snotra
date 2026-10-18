@@ -125,7 +125,7 @@ function clampHistoryCharLimit(raw) {
 }
 
 function isAppLocale(value) {
-  return value === APP_LOCALES.DE || value === APP_LOCALES.EN;
+  return Object.values(APP_LOCALES).includes(value);
 }
 
 /**
@@ -163,6 +163,7 @@ function createSettingsError(error, code) {
   return out;
 }
 
+/** @param {{ models?: Array<{ id?: string, label?: string }>, error?: import('./message').Message|string|null }} [input] */
 function createListModelsResult({ models, error } = {}) {
   if (error) return { error: isMessage(error) ? error : String(error) };
   if (!Array.isArray(models)) return { models: [] };
@@ -340,8 +341,8 @@ function normalizePresetConnectionPatch(raw, provider) {
 
 /**
  * Normalisiert einen Preset-Eintrag für Persistenz und IPC.
- * @param {object} raw
- * @param {(id: string) => object|null} getProvider
+ * @param {*} raw  anything; only an object can pass
+ * @param {(id: string) => Object|null} getProvider
  */
 function normalizePresetWire(raw, getProvider) {
   if (!raw || typeof raw !== 'object') return null;
@@ -724,6 +725,10 @@ function hasConnectionDetail(source) {
  * "Server: localhost:11434 · TLS verified". `say` puts the catalogue entries
  * into words (#310): the renderer hands in `tMessage`, the main process a
  * translator bound to the stored language.
+ *
+ * @param {Object} source  a provider or its catalogue entry
+ * @param {{ baseUrl?: string, insecureTls?: boolean }} [connection]
+ * @param {Function} [say]
  */
 function formatConnectionDetail(source, { baseUrl, insecureTls } = {}, say = plainText) {
   if (!hasConnectionDetail(source)) return '';

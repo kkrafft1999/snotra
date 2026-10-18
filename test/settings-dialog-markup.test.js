@@ -79,10 +79,11 @@ test('die Tool-Einstellungen haben eine Karte für Shell-Befehle mit Warnhinweis
   assert.equal(html.split('id="settings-shell-status"').length - 1, 1);
 
   // The card ends where the next slot of the Security page begins — sliced
-  // further, the assertions below would also pass on the sandbox card's text.
+  // further, the assertions below would also pass on another card's text.
+  // Since #1119 that is the sensitive patterns: the sandbox has a page of its own.
   const cardStart = html.indexOf('id="settings-shell-card"');
-  const cardEnd = html.lastIndexOf('<div', html.indexOf('id="settings-sandbox-card"'));
-  assert.ok(cardEnd > cardStart, 'the sandbox slot follows the shell card');
+  const cardEnd = html.lastIndexOf('<div', html.indexOf('id="settings-sensitive-card"'));
+  assert.ok(cardEnd > cardStart, 'the sensitive patterns follow the shell card');
   const card = html.slice(cardStart, cardEnd);
   assert.ok(!card.includes('class="settings-security-slot'), 'the slice holds one card only');
   assert.match(card, /settings-note--warning/, 'die Warnung ist als solche ausgezeichnet');
@@ -182,14 +183,16 @@ test('das Erscheinungsbild wird unter „Allgemein“ gewählt, nicht in der Tit
   const groupAt = panel.indexOf('id="choice-app-theme"');
   assert.ok(groupAt > -1, 'die Auswahl liegt im Allgemein-Panel');
 
-  const group = panel.slice(groupAt, panel.indexOf('</div>', panel.indexOf('value="dark"')));
+  const group = panel.slice(groupAt, panel.indexOf('</div>', panel.indexOf('value="system"')));
   assert.match(group, /value="light"/);
   assert.match(group, /value="dark"/);
+  // Since #999 a third choice follows the operating system.
+  assert.match(group, /value="system"/);
 
   // Segment statt Auswahlliste (#297): eine Gruppe echter Radios, deren Name
   // fuer den Screenreader an der sichtbaren Ueberschrift haengt.
   assert.match(group, /role="radiogroup"/);
-  assert.equal(group.split('type="radio"').length - 1, 2);
+  assert.equal(group.split('type="radio"').length - 1, 3);
   assert.match(group, /aria-labelledby="label-app-theme"/);
   assert.match(panel.slice(0, groupAt), /id="label-app-theme"[^>]*>\s*Appearance/);
 });

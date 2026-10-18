@@ -180,7 +180,7 @@ requires a new `read-sensitive` approval. The same rule applies when old
 conversations are loaded; redaction is the default, not a question. The mark is
 stored with the history — and the history is encrypted only where `safeStorage`
 is available. Without it (a Linux desktop without a keyring, a keychain that
-refuses) `chat-history.json` is written as plain JSON, the approved content of
+refuses) the history files (`chat-history/`, #985) are written as plain JSON, the approved content of
 a sensitive read and its mark included, like the UI preferences. The history is
 then protected by the user's account and nothing more; the revision "the
 history without encrypted storage" in section 9 records that.
@@ -251,7 +251,8 @@ history without encrypted storage" in section 9 records that.
   previews or logs. Detected copies of our own secrets are blocked as well and
   cannot be approved. **Own secrets** are the API key of every provider and of
   every model entry with a connection of its own, the values of a gateway's
-  extra headers, the secrets stored for the MCP servers and the web search key
+  extra headers, the secrets stored for the MCP servers — environment variables
+  of a local server, headers of a remote one (#341) — and the web search key
   (#505). Each counts in every form it can turn up in: a header value with an
   auth scheme (`Bearer …`, `Basic …`, `Token …`) also as its bare token, since
   an `env` dump or a config file carries only that. The list is collected in
@@ -362,6 +363,21 @@ history without encrypted storage" in section 9 records that.
   (#560). Local processes
   running with the user's rights are outside the protection goal; they could
   modify the app itself.
+- **The presence guarantee (#980):** each of these confirmations goes through
+  one port, the user-confirmation port, and means one thing: a person at this
+  machine answered a prompt the operating system drew. Only the desktop's
+  adapter — the native dialog in main — can say so; a front end that holds a
+  credential, a local program or the phone gets an implementation that
+  confirms nothing. A credential is not a person at the machine. A
+  confirmation hands main a receipt that is good once, for that action and
+  that root, rule or program, and for a minute, and that cannot be copied over
+  IPC or a network. The policy store refuses every loosening without one, so
+  "Auto", an allow rule, a removed block or pattern, the sandbox opt-out, a
+  program allowance, a kept host and a reset are reachable only through the
+  port, not by calling the store. Cancel is the default of every prompt. A
+  chat that comes back on screen gets "Auto" only when the signed policy names
+  it as confirmed, or its workspace's confirmed default is "Auto" — its own
+  history file is not enough.
 
 Snotra cannot reliably tell whether a permissible model call was caused
 indirectly by foreign text. The prompt rule supports the model; the effective
@@ -560,7 +576,7 @@ rule beats them, they need `safeStorage`, a failed signature drops them, and
 "reset workspace rules" removes them. Adding one discards no open card and no
 session approval, because it can only turn a question into an allowance. Deny rules can block every class. "Sensitive paths" is a separate
 classification setting, not an allow rule. Rules can be created, reviewed and
-deleted individually in Settings › Tools & security, each in the row of its class; the
+deleted individually in Settings › Tools › Autonomy, each in the row of its class; the
 chat card creates no permanent rule unnoticed.
 
 **The second exception is a kept host (#946).** It is no rule and allows no
@@ -578,8 +594,11 @@ hosts and the folder before anything is stored; cancelling leaves the card
 open. Closing a host again asks nothing. Unlike an allow rule, a kept host is
 no answer to a question the mode asks: it applies in every mode, `ask-all`
 included, since the connection card appears in every mode by design and this
-is what makes it stop appearing. Settings › Tools & security lists the kept
-hosts of the open workspace with the execution tools, each removable on its own.
+is what makes it stop appearing. Settings › Tools › Security lists the kept
+hosts of every workspace, each removable on its own. Since #1119 a host can
+also be kept open in every workspace — only from that page, never from a card,
+in the same forms a card offers (no shared domain as a wildcard), confirmed in
+a native dialog that names exactly these hosts.
 
 Session approvals live exclusively in memory and apply to the same chat,
 workspace, tool, exact set of targets and classes. Sensitive read approvals
@@ -612,7 +631,7 @@ also resets the mode to `smart`.
 ## 8. Where it lives in the UI, and migration
 
 The chat bar shows the active mode next to the model selection, and that is
-where a chat's mode is changed. Settings › Tools & security offers the workspace default
+where a chat's mode is changed. Settings › Tools › Autonomy offers the workspace default
 (#413), the rule management and every other control of this concept, sorted by
 risk class (revision #437 below). A change applies to
 subsequent calls; actions already started cannot be prevented retroactively by
@@ -814,13 +833,16 @@ being switched off entirely — writing to a sibling repository or to
 predates the certifi fallback.
 
 - **Scope and storage.** One switch for both execution tools, per workspace,
-  off by default, in Settings › Tools & security › *Execute*. It lives in the policy
+  off by default, in Settings › Tools › Security (#1119). It lives in the policy
   file (section 7)
   as a list of canonical workspace roots — not in the folder, so a checked-out
   repository cannot switch it off for itself, and a folder of the same name
   elsewhere shares nothing. Switching it off is a protection-loosening action:
-  main confirms it in a native dialog (section 5) and binds the active root
-  itself, never a path from the renderer. Without `safeStorage` it cannot be
+  main confirms it in a native dialog (section 5) that names the root. The
+  root is the active one, or one the policy already holds a sandbox setting
+  for (#1119) — never a new path from the renderer. New workspaces start with
+  the sandbox on; switching that default off is confirmed natively as well,
+  and every folder Snotra knows by then keeps its setting. Without `safeStorage` it cannot be
   stored, and a failed signature drops it, like an allow rule; as with "Auto"
   (#419), the switch then does not offer "off" and main refuses it before the
   dialog (CR-B14-09). Switching it back on asks nothing. "Workspace-Regeln zurücksetzen" and "Alle Berechtigungen
@@ -865,9 +887,12 @@ card, the refreshed token could not be written back, and Go's TLS check was
 refused. A program allowance grants exactly those three things, to one
 program.
 
-- **Scope and storage.** Global, in Settings › Tools & security › *Execute* › *Program
-  allowances*,
-  none by default. An entry names the program by its absolute path and adds
+- **Scope and storage.** Per workspace or for every workspace (#1119), in
+  Settings › Tools › Security › *Programs with more room*, none by default.
+  Allowances stored before #1119 were all global and stay so. A global and a
+  workspace allowance for the same program add up in that workspace; the
+  confirmation is bound to the program and its scope, so one given for a
+  workspace cannot be spent on every workspace. An entry names the program by its absolute path and adds
   host names, writable folders and — macOS only — the trust service. It lives
   in the policy file next to the rules (section 7), is dropped by a failed
   signature and cannot be stored without `safeStorage`, like every loosening.
@@ -943,7 +968,7 @@ workspace can now carry a default mode of its own.
   approval: it changes nothing for a chat that is open.
 - **Where it is set.** A checkbox under the modes in the mode pill's menu makes
   the chat's current mode the default ("“Auto” for new chats in ‹folder›
-  too"), unticking it goes back to `smart`; Settings › Tools & security shows the
+  too"), unticking it goes back to `smart`; Settings › Tools › Autonomy shows the
   same value as a choice of three at the top of the page. The option that is the
   default carries the tag "Default in ‹folder›", and the pill's tooltip says
   when the chat runs at the default. "Workspace-Regeln zurücksetzen" puts the
@@ -1053,7 +1078,7 @@ is where a user sees it and what they can take back.
   keeps the server connections. Where sections 7 and 8 and the revisions for
   #357, #408 and #413 named Settings › Tools or Settings › Permissions, they now
   name this page (#449). Since #767 the page is called Settings › Tools &
-  security, and Tools and MCP are one page, Settings › Tool setup.
+  security, and Tools and MCP are one page, Settings › Tools › Setup.
 - **One switch per tool.** A tool is switched in the row of its own class and
   applies at once, like every other permission; there is no *Apply* for it any
   more. The execution tools are switched by their execution switch, which also
@@ -1239,7 +1264,7 @@ and still switch nothing:
   settings. The renderer never sends overrides: main writes them from the
   card's answer and reads them for every run and for the pill.
 - **Nothing beyond what a setting could do.** A card switches exactly what the
-  user could untick or tick under *Settings › Tools & security* or
+  user could untick or tick under *Settings › Tools › Autonomy* or
   *Settings › Skills*; the policy, the sandbox and every approval stay as they
   are. A tool switched on this way still asks before each call in *Smart*.
   A skill switched on is listed for `load_skill` like one from the settings,
@@ -1347,7 +1372,7 @@ domains, so a card for a host that is already kept is not shown.
 
 Section 4 said the provider-bound mark of a sensitive read is stored "with the
 history in the encrypted store". That holds where `safeStorage` is available.
-Where it is not, `chat-history.json` is written as plain JSON: the tool
+Where it is not, the history files (`chat-history/`, one per chat since #985) are written as plain JSON: the tool
 messages whose sensitive content the user approved, and the marks that bind
 them to a provider endpoint, sit in the file in the clear, with the rest of
 the conversation. Unlike the policy file, which drops to the fail-safe of
@@ -1375,7 +1400,7 @@ not a claim that the product modes are identical.
 
 | Decision | Ownership / the conservative interim state |
 | --- | --- |
-| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio only, every MCP tool carries `execute` **and** `external`, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. Still open: isolation of local server processes, which run with the user's rights (see #329 for the built-in execution tools), and endpoint changes, which only arise with a network transport. |
+| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio or, since #341, over Streamable HTTP; every MCP tool carries `execute` **and** `external` whatever the transport, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. **Endpoint changes settled in #341:** saving a server with another address or another transport switches it off and forgets its remembered tool catalogue, so nothing accepted for one endpoint carries over to another; it connects again only after the user switched it on (a connection test works on a switched-off server and closes it right after). A remote address needs `https` except on loopback; private network addresses are allowed, because the user enters the address deliberately — unlike `fetch_url`, where the model picks the target. Credentials in the URL are refused; headers are stored like environment variables (secret by default, `{ enc }` via `safeStorage`, not stored at all without encryption), count as own secrets and are masked in every status. They go to the configured origin only: redirects are followed by hand and only on the same origin. OAuth is not supported. Still open: isolation of local server processes, which run with the user's rights (see #329 for the built-in execution tools). |
 | Web search providers, permitted targets and redirects, and the amount of data | To be decided in #63. The request including the search text is external; search responses are untrusted. Provider keys stay in the adapter. |
 | The exact content patterns, false positives and the limits with large files | To be versioned and tested in #66; the minimum groups from section 4 are mandatory. No broad detection of personal data or entropy in the first step. |
 | A separate persistent audit journal with retention and export | An extension of #66/#67 where needed; sanitised decisions in the existing chat history for now. No unlimited full-text logging. |

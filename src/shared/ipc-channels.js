@@ -174,6 +174,14 @@ const REQUEST_CHANNELS = Object.freeze({
   TOOL_PERMISSIONS_REMOVE_PROGRAM_ALLOWANCE: 'toolPermissions:removeProgramAllowance',
   TOOL_PERMISSIONS_RESOLVE_PROGRAM: 'toolPermissions:resolveProgram',
   TOOL_PERMISSIONS_CHOOSE_ALLOWANCE_FOLDER: 'toolPermissions:chooseAllowanceFolder',
+  // Settings › Tools › Security (#1119): every workspace's sandbox, and what
+  // applies in every workspace.
+  TOOL_PERMISSIONS_GET_SANDBOX_OVERVIEW: 'toolPermissions:getSandboxOverview',
+  TOOL_PERMISSIONS_ADD_HOSTS: 'toolPermissions:addHosts',
+  TOOL_PERMISSIONS_REMOVE_GLOBAL_HOST: 'toolPermissions:removeGlobalHost',
+  TOOL_PERMISSIONS_SET_NEW_WORKSPACE_SANDBOX: 'toolPermissions:setNewWorkspaceSandbox',
+  TOOL_PERMISSIONS_RESET_WORKSPACE_SANDBOX: 'toolPermissions:resetWorkspaceSandbox',
+  TOOL_PERMISSIONS_RESET_SANDBOX_EVERYWHERE: 'toolPermissions:resetSandboxEverywhere',
   /** Renderer meldet sich als freigabefaehig an (Karten koennen angezeigt werden). */
   TOOL_APPROVAL_SUBSCRIBE: 'toolApproval:subscribe',
   /** Antwort auf eine Freigabe-Karte: nur requestId + Entscheidung. */
@@ -220,8 +228,23 @@ const REQUEST_CHANNELS = Object.freeze({
   UPDATE_CANCEL_DOWNLOAD: 'update:cancelDownload',
   UPDATE_DISCARD_DOWNLOAD: 'update:discardDownload',
   UPDATE_INSTALL: 'update:install',
+  /** The feedback form (#1045): the diagnostics it shows, and sending it. */
+  FEEDBACK_GET_DIAGNOSTICS: 'feedback:getDiagnostics',
+  FEEDBACK_SEND: 'feedback:send',
+  /**
+   * Pairing a phone as the mobile remote (#1114, for *Settings › Remote
+   * access*, #1110). The window starts, cancels and removes; it reads the
+   * state and gets every change over PUSH_CHANNELS.REMOTE_STATE. The *Allow*
+   * is not among them: main asks for it in a native dialog (#980).
+   */
+  REMOTE_GET_STATE: 'remote:getState',
+  REMOTE_PAIR_START: 'remote:pair:start',
+  REMOTE_PAIR_CANCEL: 'remote:pair:cancel',
+  REMOTE_UNPAIR: 'remote:unpair',
 
   CHAT_HISTORY_GET: 'chatHistory:get',
+  /** One chat with its messages, when it is opened; the list has none (#985). */
+  CHAT_HISTORY_GET_SESSION: 'chatHistory:getSession',
   CHAT_HISTORY_UPSERT: 'chatHistory:upsert',
   CHAT_HISTORY_DELETE: 'chatHistory:delete',
   CHAT_HISTORY_SET_ACTIVE: 'chatHistory:setActive',
@@ -273,6 +296,8 @@ const PUSH_CHANNELS = Object.freeze({
   NOTICE_POSTED: 'notices:posted',
   /** A notice whose cause is gone, e.g. a file saved again: `{ id }`. */
   NOTICE_WITHDRAWN: 'notices:withdrawn',
+  /** The pairing state changed (#1114): a normalized state, see contracts/remote/pairing-state.js. */
+  REMOTE_STATE: 'remote:state',
   UPDATE_AVAILABLE: 'update:available',
   /** Fortschritt des laufenden Update-Downloads (Issue #232). */
   UPDATE_PROGRESS: 'update:progress',
@@ -324,6 +349,8 @@ const PUSH_CHANNELS = Object.freeze({
   UI_TOGGLE_SIDEBAR: 'ui:toggle-sidebar',
   /** Menueeintrag "Einstellungen…" bzw. Cmd/Ctrl+Komma. */
   UI_OPEN_SETTINGS: 'ui:open-settings',
+  /** Menu "Help > Send Feedback…" (#1045). */
+  UI_OPEN_FEEDBACK: 'ui:open-feedback',
   /** Menu "File > New Chat" or Cmd/Ctrl+N (issue #381). */
   UI_NEW_CHAT: 'ui:new-chat',
   /** Menu "Edit > Voice Input" or Cmd/Ctrl+D (#859): start or stop a recording. */

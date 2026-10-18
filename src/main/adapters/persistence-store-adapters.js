@@ -1,5 +1,8 @@
 'use strict';
 
+/**
+ * @returns {import('../ports/llm-config-store-port').LlmConfigStorePort}
+ */
 function createLlmConfigStorePort(storage) {
   return {
     readLLMConfig: (...args) => storage.readLLMConfig(...args),
@@ -10,6 +13,9 @@ function createLlmConfigStorePort(storage) {
   };
 }
 
+/**
+ * @returns {import('../ports/ui-prefs-store-port').UiPrefsStorePort}
+ */
 function createUiPrefsStorePort(storage) {
   return {
     readUIPrefs: (...args) => storage.readUIPrefs(...args),
@@ -17,16 +23,26 @@ function createUiPrefsStorePort(storage) {
   };
 }
 
+/**
+ * @returns {import('../ports/chat-history-store-port').ChatHistoryStorePort}
+ */
 function createChatHistoryStorePort(storage) {
   return {
     MAX_CHAT_SESSIONS: storage.MAX_CHAT_SESSIONS,
-    readChatHistoryStore: (...args) => storage.readChatHistoryStore(...args),
-    writeChatHistoryStore: (...args) => storage.writeChatHistoryStore(...args),
+    listSessions: (...args) => storage.listChatSessions(...args),
+    getSessionMeta: (...args) => storage.getChatSessionMeta(...args),
+    getSession: (...args) => storage.getChatSession(...args),
+    getActiveChatId: (...args) => storage.getActiveChatId(...args),
+    saveSession: (...args) => storage.saveChatSession(...args),
+    patchSession: (...args) => storage.patchChatSession(...args),
+    deleteSession: (...args) => storage.deleteChatSession(...args),
+    setActiveChatId: (...args) => storage.setActiveChatId(...args),
     withChatHistoryLock: (...args) => storage.withChatHistoryLock(...args),
     hasSetAsideChatHistory: (...args) => storage.hasSetAsideChatHistory(...args),
     storedChatMessagesChanged: (...args) => storage.storedChatMessagesChanged(...args),
     normalizeSessionForStore: (...args) => storage.normalizeSessionForStore(...args),
     normalizeSessionForLoad: (...args) => storage.normalizeSessionForLoad(...args),
+    normalizeSessionMetaForList: (...args) => storage.normalizeSessionMetaForList(...args),
     normalizeWorkspaceRoot: (...args) => storage.normalizeWorkspaceRoot(...args),
     workspaceBucketKey: (...args) => storage.workspaceBucketKey(...args),
     sessionMatchesWorkspace: (...args) => storage.sessionMatchesWorkspace(...args),
@@ -69,6 +85,9 @@ function createMcpSecretsPort(storage) {
   };
 }
 
+/**
+ * @returns {import('../ports/workspace-folder-store-port').WorkspaceFolderStorePort}
+ */
 function createWorkspaceFolderStorePort(storage) {
   return {
     getValidatedLastFolder: (...args) => storage.getValidatedLastFolder(...args),

@@ -11,11 +11,13 @@ import { createWorkspacePathSource } from './tree/workspacePaths.js';
 import { initSkillAutocomplete } from './components/SkillAutocomplete.js';
 import { initSkillSuggestion } from './components/SkillSuggestion.js';
 import { createSkillCatalogSource } from './chat/skillCatalogSource.js';
+import { SANDBOX_SETTINGS_EVENT } from './chat/sandboxBlocked.js';
 import { initChatHistoryPanel } from './components/ChatHistoryPanel.js';
 import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateDialog } from './components/UpdateDialog.js';
 import { initAppNotices } from './components/AppNotices.js';
 import { initFileInfoDialog } from './components/FileInfoDialog.js';
+import { initFeedbackDialog } from './components/FeedbackDialog.js';
 import { initToolPermissionState } from './state/tool-permissions.js';
 import { initToolModePicker } from './components/ToolModePicker.js';
 import { initChatConfigIndicator } from './components/ChatConfigIndicator.js';
@@ -302,11 +304,15 @@ async function chatSwitchesSettled() {
 // Tool-Berechtigungen (Issue #67): ein geteilter Stand für Chat-Pille und
 // Einstellungen, Freigabe-Karten melden sich beim Main als Oberfläche an.
 const toolPermissions = initToolPermissionState({ api, whenChatSettled: chatSwitchesSettled });
-// The way to the sandbox switch — from the card (#357), the mode menu (#396)
-// and the shield next to the folder name (#398). The settings are built
-// further down and only reached on a click.
-const openSandboxSettings = () => settingsModal.openSettingsModal({ panel: 'security', focus: 'sandbox' });
-const openAllowanceSettings = () => settingsModal.openSettingsModal({ panel: 'security', focus: 'allowances' });
+// The way to the sandbox switch — from the card (#357), the mode menu (#396),
+// the shield next to the folder name (#398) and the blocked-resource box: since
+// #1119 Settings › Tools › Security, the open workspace selected. The settings
+// are built further down and only reached on a click.
+const openSandboxSettings = () => settingsModal.openSettingsModal({ panel: 'sandbox', focus: 'sandbox' });
+const openAllowanceSettings = () => settingsModal.openSettingsModal({ panel: 'sandbox', focus: 'programs' });
+// The box "The sandbox blocked …" under a message asks for it with an event
+// (#1119): it is drawn deep inside the chat, which knows nothing of the settings.
+document.addEventListener(SANDBOX_SETTINGS_EVENT, () => openSandboxSettings());
 const openSecuritySettings = () => settingsModal.openSettingsModal({ panel: 'security' });
 initToolModePicker({ toolPermissions, onOpenSandboxSettings: openSandboxSettings, onOpenSecuritySettings: openSecuritySettings });
 // Skills and tools of the open chat (#773). The settings are built further
@@ -528,6 +534,12 @@ const settingsModal = initSettingsModal({
   DEFAULT_MAX_TOOL_ROUNDS,
   onClosed: () => void chatConfig.refresh(),
 });
+
+// The feedback form (#1045), and the sidebar's foot that opens it and the
+// settings (the only button for them; the menu has both as well).
+const feedbackDialog = initFeedbackDialog({ api, appStore });
+document.getElementById('btn-sidebar-feedback')?.addEventListener('click', () => feedbackDialog.open());
+document.getElementById('btn-sidebar-settings')?.addEventListener('click', () => settingsModal.openSettingsModal());
 
 // Grundrauschen gegen den Chromium-Default (Issue #101): ein Drop *neben*
 // der Drop-Zone im Dateibaum darf die Datei nicht im Fenster oeffnen. Bewusst

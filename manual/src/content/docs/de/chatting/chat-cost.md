@@ -42,7 +42,7 @@ Dein Preis geht immer vor – der Tabelle und auch *Lokal – kostenlos*, etwa f
 
 ## Die Preistabelle aktualisieren
 
-Die Tabelle stammt von [LiteLLM](https://github.com/BerriAI/litellm), einer von der Community gepflegten Liste von Modellpreisen. Jedes Snotra-Release bringt eine aktuelle Kopie mit. Von sich aus lädt Snotra keine Preise; für eine neuere Tabelle klickst du unter *Preise für die Kostenschätzung* auf *Preise aktualisieren*. Das Datum der verwendeten Tabelle steht dort und unten in der Kostenfläche.
+Die Tabelle stammt von [LiteLLM](https://github.com/BerriAI/litellm), einer von der Community gepflegten Liste von Modellpreisen. Jedes Snotra-Release bringt eine aktuelle Kopie mit. Von sich aus lädt Snotra keine Preise; für eine neuere Tabelle klickst du unter *Preise für die Kostenschätzung* auf *Preise aktualisieren*. Snotra lädt sie dann von `raw.githubusercontent.com`, wo LiteLLM sie auf GitHub ablegt – eine andere Adresse kontaktiert der Button nicht. Das Datum der verwendeten Tabelle steht dort und unten in der Kostenfläche.
 
 Schlägt der Download fehl, gilt die bisherige Tabelle weiter, und Snotra sagt dir das.
 

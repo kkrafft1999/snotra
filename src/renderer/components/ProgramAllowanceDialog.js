@@ -1,6 +1,5 @@
 import contracts from '../generated/contracts.js';
-import { createInstantStatus } from './InstantSetting.js';
-import { describeAllowanceRow, programLabel, tildePath } from '../utils/program-allowance-view.js';
+import { programLabel, tildePath } from '../utils/program-allowance-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 import { onLocaleChange, t, tMessage } from '../i18n.js';
 
@@ -20,24 +19,17 @@ function el(tag, className, text) {
 }
 
 /**
- * Program allowances in Settings › Security › Execute (#408, #449): the list
- * of programs with extra rights inside the sandbox, and the dialog that edits
- * one.
+ * The dialog that adds or edits a program allowance (#408) — opened from
+ * Settings › Tools › Security (#1119), where the list lives.
  *
- * Like the workspace switch above it, the list lives in main's policy file
- * and takes effect at once — no "Apply". Main resolves the program and checks
+ * "Applies to" chooses the scope: the workspace the page shows, preselected,
+ * or every workspace, the deliberate choice. Without a workspace to offer
+ * only every workspace is possible. Main resolves the program and checks
  * every folder itself and asks in a native dialog before anything widens the
  * sandbox; the dialog here only helps to fill it in. A cancelled native
  * dialog leaves the form open and as it was.
  */
-export function initProgramAllowancesSetting({ api, toolPermissions }) {
-  const card = document.getElementById('settings-allowances-card');
-  const list = document.getElementById('settings-allowance-list');
-  const empty = document.getElementById('settings-allowance-empty');
-  const btnAdd = document.getElementById('btn-add-program-allowance');
-  const cardError = document.getElementById('settings-allowance-error');
-  const status = createInstantStatus(document.getElementById('status-program-allowances'));
-
+export function initProgramAllowanceDialog({ api, toolPermissions }) {
   const overlay = document.getElementById('program-allowance-overlay');
   const dialog = document.getElementById('dialog-program-allowance');
   const dialogTitle = document.getElementById('dialog-program-allowance-title');
@@ -47,6 +39,10 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
   const formError = document.getElementById('allowance-form-error');
   const fieldProgram = document.getElementById('allowance-field-program');
   const programStatus = document.getElementById('allowance-program-status');
+  const scopeWorkspace = document.getElementById('allowance-scope-workspace');
+  const scopeGlobal = document.getElementById('allowance-scope-global');
+  const scopeRoot = document.getElementById('allowance-scope-root');
+  const scopeWorkspaceDesc = document.getElementById('allowance-scope-workspace-desc');
   const fieldDomains = document.getElementById('allowance-field-domains');
   const domainsInvalid = document.getElementById('allowance-domains-invalid');
   const folderList = document.getElementById('allowance-folder-list');
@@ -55,27 +51,27 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
   const trustdGroup = document.getElementById('allowance-trustd-group');
   const fieldTrustd = document.getElementById('allowance-field-trustd');
 
-  if (!card || !list || !overlay || !dialog || !toolPermissions) {
-    return { update() {}, close() {} };
+  if (!overlay || !dialog || !toolPermissions) {
+    return { open() {}, close() {}, isOpen: () => false };
   }
 
-  let sandbox = null;
-  /** The entry the dialog edits; null while adding. */
+  /** The entry the dialog edits and the scope it lives in; null while adding. */
   let editing = null;
+  /** The workspace "This workspace" means here, or null when there is none. */
+  let workspace = null;
   let folders = [];
   let lastFocus = null;
   let saving = false;
   let resolveTimer = null;
   let resolveSeq = 0;
-  /** Programs whose removal is on its way; a second press does nothing. */
-  const removing = new Set();
+  /** Called with main's answer once an allowance is stored. */
+  let onSaved = null;
   /** Last answer for the program field: {state: 'hint'|'checking'|'found'|'error', text}. */
   let programState = { state: 'hint', text: '' };
 
   const state = () => toolPermissions.get() || {};
   const homeDir = () => (typeof state().homeDir === 'string' ? state().homeDir : '');
   const isMac = () => state().platform === 'darwin';
-  const entries = () => (Array.isArray(state().programAllowances) ? state().programAllowances : []);
 
   function setText(node, text) {
     if (!node) return;
@@ -83,92 +79,12 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     node.classList.toggle('hidden', !text);
   }
 
-  // ── The list ─────────────────────────────────────────────────────────
-
-  function renderList() {
-    // Shown while shell_execute is off as well (#449); the Security page says
-    // that it only matters while it is on. Hidden where there is no sandbox.
-    const visible = sandbox?.reason !== 'platform' && state().platform !== 'win32';
-    card.hidden = !visible;
-    // A push redraws the list; a focused Edit or Remove keeps its focus when
-    // its program is still listed (CR-B13-03).
-    const active = list.contains(document.activeElement) ? document.activeElement : null;
-    const focusPath = active?.closest('.allowance-row')?.dataset.path;
-    const focusAction = active?.dataset?.action;
-    list.replaceChildren();
-    const all = entries();
-    if (empty) empty.hidden = all.length > 0;
-    for (const entry of all) list.append(buildRow(entry));
-    if (focusPath && focusAction) {
-      const row = [...list.children].find((item) => item.dataset.path === focusPath);
-      row?.querySelector(`[data-action="${focusAction}"]`)?.focus();
-    }
+  /** Whatever went wrong on the way to main shows as the form's error. */
+  function showFailure(error) {
+    saving = false;
+    btnSave.disabled = false;
+    setText(formError, error?.message || t('settings.instant.failed'));
   }
-
-  function buildRow(entry) {
-    const view = describeAllowanceRow(entry, { homeDir: homeDir() });
-    const row = el('li', 'allowance-row');
-    row.dataset.path = entry.path;
-
-    const main = el('div', 'allowance-row__main');
-    main.append(el('span', 'allowance-row__name', view.name));
-    const pathEl = el('span', 'allowance-row__path', view.pathLabel);
-    pathEl.title = entry.path;
-    main.append(pathEl);
-    row.append(main);
-
-    const actions = el('div', 'allowance-row__actions');
-    const edit = el('button', 'btn-secondary btn-compact', t('settings.allowances.edit'));
-    edit.type = 'button';
-    edit.dataset.action = 'edit';
-    edit.setAttribute('aria-label', t('settings.allowances.edit.label', { program: view.name }));
-    edit.addEventListener('click', () => openDialog(entry));
-    const remove = el('button', 'btn-secondary btn-compact', t('settings.allowances.remove'));
-    remove.type = 'button';
-    remove.dataset.action = 'remove';
-    remove.setAttribute('aria-label', t('settings.allowances.remove.label', { program: view.name }));
-    remove.addEventListener('click', () => removeEntry(entry, row));
-    actions.append(edit, remove);
-    row.append(actions);
-
-    if (view.facts.length > 0) {
-      const facts = el('dl', 'allowance-row__facts');
-      for (const fact of view.facts) {
-        facts.append(el('dt', null, fact.label));
-        const dd = el('dd');
-        fact.values.forEach((value, index) => {
-          if (index > 0) dd.append(', ');
-          dd.append(fact.mono ? el('code', null, value) : value);
-        });
-        if (fact.tag) dd.append(el('span', 'allowance-tag', fact.tag));
-        facts.append(dd);
-      }
-      row.append(facts);
-    }
-    return row;
-  }
-
-  async function removeEntry(entry, row) {
-    if (removing.has(entry.path)) return;
-    setText(cardError, '');
-    status.clear();
-    // The focus has to land somewhere sensible once the row is gone.
-    const rows = [...list.children];
-    const index = rows.indexOf(row);
-    removing.add(entry.path);
-    const result = await toolPermissions.removeProgramAllowance(entry.path);
-    removing.delete(entry.path);
-    if (!result?.ok) {
-      setText(cardError, tMessage(result?.error) || t('settings.instant.failed'));
-      status.failed();
-      return;
-    }
-    status.saved();
-    const next = list.children[Math.min(index, list.children.length - 1)];
-    (next?.querySelector('[data-action="edit"]') || btnAdd)?.focus();
-  }
-
-  // ── The dialog ───────────────────────────────────────────────────────
 
   function renderProgramStatus() {
     if (!programStatus) return;
@@ -200,12 +116,28 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     if (foldersNone) foldersNone.hidden = folders.length > 0;
   }
 
+  /** "This workspace" names the folder, or says it needs one (#1119). */
+  function renderScope() {
+    if (!scopeWorkspace || !scopeGlobal) return;
+    scopeWorkspace.disabled = !workspace;
+    if (!workspace) scopeGlobal.checked = true;
+    if (scopeRoot) {
+      scopeRoot.textContent = workspace ? workspace.label : '';
+      scopeRoot.title = workspace ? workspace.root : '';
+      scopeRoot.hidden = !workspace;
+    }
+    if (scopeWorkspaceDesc) {
+      scopeWorkspaceDesc.textContent = workspace ? t('allowanceDialog.scope.workspaceDesc') : t('allowanceDialog.scope.workspaceNone');
+    }
+  }
+
   function renderDialogTexts() {
     dialogTitle.textContent = editing
-      ? t('allowanceDialog.title.edit', { program: programLabel(editing.path) })
+      ? t('allowanceDialog.title.edit', { program: programLabel(editing.entry.path) })
       : t('allowanceDialog.title.add');
     renderProgramStatus();
     renderFolders();
+    renderScope();
     showInvalidDomains(false);
   }
 
@@ -229,7 +161,7 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     }
     programState = { state: 'checking', text: t('allowanceDialog.program.checking') };
     renderProgramStatus();
-    resolveTimer = setTimeout(() => void resolveNow(text), RESOLVE_DELAY_MS);
+    resolveTimer = setTimeout(() => resolveNow(text).catch(showFailure), RESOLVE_DELAY_MS);
   }
 
   async function resolveNow(text) {
@@ -238,6 +170,7 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     try {
       result = typeof api?.resolveAllowanceProgram === 'function' ? await api.resolveAllowanceProgram(text) : null;
     } catch {
+      // No answer is drawn like a refusal below: the field says it is unavailable.
       result = null;
     }
     // An answer to an older spelling must not overwrite the current one.
@@ -248,8 +181,20 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     renderProgramStatus();
   }
 
-  function openDialog(entry) {
-    editing = entry || null;
+  /**
+   * Opens the dialog.
+   *
+   * @param {object} [options]
+   * @param {object|null} [options.entry]        the allowance to edit; null adds one
+   * @param {string|null} [options.entryRoot]    the workspace the edited entry belongs to; null: every workspace
+   * @param {'workspace'|'global'} [options.scope]  the preselected scope of a new entry
+   * @param {{root: string, label: string}|null} [options.workspace]  what "This workspace" means
+   * @param {(result: object) => void} [options.onSaved]
+   */
+  function open({ entry = null, entryRoot = null, scope = 'workspace', workspace: offered = null, onSaved: saved = null } = {}) {
+    editing = entry ? { entry, root: entryRoot || null } : null;
+    workspace = offered && typeof offered.root === 'string' && offered.root ? offered : null;
+    onSaved = typeof saved === 'function' ? saved : null;
     lastFocus = document.activeElement;
     saving = false;
     btnSave.disabled = false;
@@ -260,6 +205,11 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     folders = entry ? [...entry.writePaths] : [];
     fieldTrustd.checked = entry?.trustd === true;
     if (trustdGroup) trustdGroup.hidden = !isMac();
+    const preselect = editing ? (editing.root ? 'workspace' : 'global') : scope;
+    if (scopeWorkspace && scopeGlobal) {
+      scopeWorkspace.checked = preselect === 'workspace';
+      scopeGlobal.checked = preselect !== 'workspace';
+    }
     programState = entry
       ? { state: 'found', text: t('allowanceDialog.program.found', { path: tildePath(entry.path, homeDir()) }) }
       : { state: 'hint', text: '' };
@@ -270,23 +220,19 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
   }
 
   /** `focusTarget` wins over the element the dialog was opened from. */
-  function closeDialog(focusTarget = null) {
+  function close(focusTarget = null) {
     clearTimeout(resolveTimer);
     resolveSeq += 1;
     overlay.classList.add('hidden');
     overlay.setAttribute('aria-hidden', 'true');
     editing = null;
+    onSaved = null;
     try {
-      (focusTarget || lastFocus)?.focus();
+      const target = focusTarget || lastFocus;
+      if (target?.isConnected) target.focus();
     } catch {
       /* the element may be gone by now */
     }
-  }
-
-  /** The Edit button of a program's row, once the list shows it. */
-  function editButtonOf(programPath) {
-    const row = [...list.children].find((item) => item.dataset.path === programPath);
-    return row?.querySelector('[data-action="edit"]') || null;
   }
 
   async function addFolder() {
@@ -295,6 +241,7 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     try {
       result = typeof api?.chooseAllowanceFolder === 'function' ? await api.chooseAllowanceFolder() : null;
     } catch {
+      // Drawn below as the form's error: the picker is unavailable.
       result = null;
     }
     if (isCancelledResult(result)) {
@@ -309,6 +256,10 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     if (!folders.includes(result.path)) folders = [...folders, result.path];
     renderFolders();
     btnFolderAdd.focus();
+  }
+
+  function chosenScope() {
+    return workspace && scopeWorkspace?.checked ? { scope: 'workspace', root: workspace.root } : { scope: 'global', root: null };
   }
 
   async function save() {
@@ -327,21 +278,24 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     }
     saving = true;
     btnSave.disabled = true;
+    const target = chosenScope();
     const result = await toolPermissions.setProgramAllowance({
       program,
       domains: parsed.domains,
       writePaths: folders,
       trustd: isMac() && fieldTrustd.checked,
-      previousPath: editing?.path || null,
+      scope: target.scope,
+      root: target.root,
+      previousPath: editing?.entry.path || null,
+      previousScope: editing ? (editing.root ? 'workspace' : 'global') : undefined,
+      previousRoot: editing?.root || null,
     });
     saving = false;
     btnSave.disabled = false;
     if (result?.ok) {
-      // The saved program's row is where the focus belongs now — for a new
-      // entry the dialog was opened from a button that is still there, but
-      // the row is what changed.
-      closeDialog(editButtonOf(result.entry?.path) || btnAdd);
-      status.saved();
+      const done = onSaved;
+      close();
+      done?.(result);
       return;
     }
     // A cancelled system dialog: the user decided, nothing to explain.
@@ -356,11 +310,10 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
     btnSave.focus();
   }
 
-  btnAdd?.addEventListener('click', () => openDialog(null));
-  btnClose?.addEventListener('click', () => closeDialog());
-  btnCancel?.addEventListener('click', () => closeDialog());
-  btnSave?.addEventListener('click', () => void save());
-  btnFolderAdd?.addEventListener('click', () => void addFolder());
+  btnClose?.addEventListener('click', () => close());
+  btnCancel?.addEventListener('click', () => close());
+  btnSave?.addEventListener('click', () => save().catch(showFailure));
+  btnFolderAdd?.addEventListener('click', () => addFolder().catch(showFailure));
   fieldProgram?.addEventListener('input', scheduleResolve);
   fieldDomains?.addEventListener('input', () => showInvalidDomains(false));
   fieldDomains?.addEventListener('blur', () => showInvalidDomains(true));
@@ -368,25 +321,18 @@ export function initProgramAllowancesSetting({ api, toolPermissions }) {
   dialog.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     event.stopPropagation();
-    closeDialog();
+    close();
   });
 
-  toolPermissions.subscribe(() => renderList());
   onLocaleChange(() => {
-    renderList();
     if (!overlay.classList.contains('hidden')) renderDialogTexts();
   });
 
   return {
-    /** What the settings know about the sandbox; shows or hides the list. */
-    update(next = {}) {
-      sandbox = next.sandbox && typeof next.sandbox === 'object' ? next.sandbox : null;
-      status.clear();
-      setText(cardError, '');
-      renderList();
+    open,
+    close: () => {
+      if (!overlay.classList.contains('hidden')) close();
     },
-    close() {
-      if (!overlay.classList.contains('hidden')) closeDialog();
-    },
+    isOpen: () => !overlay.classList.contains('hidden'),
   };
 }

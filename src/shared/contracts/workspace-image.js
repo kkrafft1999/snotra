@@ -203,6 +203,7 @@ function isWindowsDrivePath(src) {
   return /^[a-z]:(?:[\\/]|%5c)/i.test(raw);
 }
 
+/** @param {{ mime?: string, base64?: string, mtimeMs?: number, size?: number }} [input] */
 function createWorkspaceImageResult({ mime, base64, mtimeMs = 0, size = 0 } = {}) {
   return { ok: true, mime, base64, mtimeMs, size };
 }

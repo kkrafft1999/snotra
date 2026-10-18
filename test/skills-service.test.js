@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { createSkillsService, MAX_SKILLS_PER_DIRECTORY } = require('../src/main/services/skills-service');
+const { createSkillsService, bundledSystemSkillsDir, MAX_SKILLS_PER_DIRECTORY } = require('../src/main/services/skills-service');
 const { translateMessage } = require('../src/shared/i18n');
 
 // The service hands over keys since #353; the German wording is checked through
@@ -58,15 +58,15 @@ test('Menüpfade im System-Skill folgen der Sprache, im Ordner-Skill nicht', asy
   const german = await service.getActiveSkills({ locale: 'de', activeSkills: ['snotra-capabilities', 'fremd'] });
   const bodyOf = (list, name) => list.find((skill) => skill.name === name).body;
 
-  assert.match(bodyOf(english, 'snotra-capabilities'), /`Settings › Tool setup`/);
-  assert.match(bodyOf(german, 'snotra-capabilities'), /`Einstellungen › Tool-Einrichtung`/);
+  assert.match(bodyOf(english, 'snotra-capabilities'), /`Settings › Tools › Setup`/);
+  assert.match(bodyOf(german, 'snotra-capabilities'), /`Einstellungen › Tools › Einrichtung`/);
   // Der Ordner-Skill bleibt Wort für Wort, wie er auf der Platte liegt.
   assert.match(bodyOf(german, 'fremd'), /\{menu:settings\.tools\}/);
 
   // Auch die Kurzbeschreibung im Katalog spricht die Sprache der Oberfläche.
   const catalog = await service.listCatalog({ locale: 'de' });
   const entry = catalog.skills.find((skill) => skill.name === 'snotra-capabilities');
-  assert.equal(entry.description, 'Switched off under Einstellungen › Tool-Einrichtung');
+  assert.equal(entry.description, 'Switched off under Einstellungen › Tools › Einrichtung');
 });
 
 test('findet System-Skills auch ohne geöffneten Ordner', async (t) => {
@@ -403,4 +403,10 @@ test('the per-folder cap keeps the first skills by name, whatever the directory 
   const { skills } = await service.listCatalog({});
   assert.equal(skills.length, MAX_SKILLS_PER_DIRECTORY);
   assert.deepEqual(skills.map((skill) => skill.name), names.slice(0, MAX_SKILLS_PER_DIRECTORY));
+});
+
+test('the system skills sit next to the app, and there are none without an app path', () => {
+  assert.equal(bundledSystemSkillsDir({ app: { getAppPath: () => '/App' }, path: path.posix }), '/App/system-skills');
+  assert.equal(bundledSystemSkillsDir({ app: {}, path }), null);
+  assert.equal(bundledSystemSkillsDir({ app: undefined, path }), null);
 });

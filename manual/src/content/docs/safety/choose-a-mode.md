@@ -27,14 +27,14 @@ The mode decides how often Snotra asks you. It belongs to the chat: every chat h
 
 Going back to *Smart* or on to *Always ask* never asks — making Snotra more careful needs no confirmation.
 
-![The mode menu above the chat input: Smart, Always ask and Auto, each with a short description, "Always ask" selected. Below, the checkbox "“Always ask” for new chats in garden-planner too" and the link "All permissions in Settings › Tools & security".](screenshots/mode-menu.webp)
+![The mode menu above the chat input: Smart, Always ask and Auto, each with a short description, "Always ask" selected. Below, the checkbox "“Always ask” for new chats in garden-planner too" and the link "All permissions in Settings › Tools › Autonomy".](screenshots/mode-menu.webp)
 
 ## Give a folder a default mode
 
 A new chat starts in *Smart*, unless its folder has a default of its own:
 
 - **From the chat:** switch the chat to the mode you want, open the menu again and tick *“‹mode›” for new chats in ‹folder› too*.
-- **From the settings:** choose it under *Default mode* at the top of *Settings › Tools & security*.
+- **From the settings:** choose it under *Default mode* at the top of *Settings › Tools › Autonomy*.
 
 *Auto* as a default is confirmed once in a system dialog that names the folder, with *Make “Auto” the default*. From then on the menu marks that mode with *Default in ‹folder›*, and every new chat in the folder starts with it, also after a restart. A single chat can still be switched; that stays a decision for that chat.
 

@@ -156,8 +156,8 @@ function createUpdateService({
   /**
    * Where the helper reports after this process has quit (#442, #1003): a log
    * of every step, and a status file that exists only when the update failed.
-   * On macOS and Linux the helper also writes `pendingFile` before it starts
-   * the new version, and waits for that version to remove it. All three sit
+   * The helper also writes `pendingFile` before it starts the new version,
+   * and waits for that version to remove it (#1003, #1067). All three sit
    * in the user data folder, which no update replaces.
    */
   function getHelperFiles() {
@@ -460,7 +460,8 @@ function createUpdateService({
     }
     let version = '';
     try {
-      const record = JSON.parse(raw);
+      // Windows PowerShell 5 writes UTF-8 with a byte order mark (#1067).
+      const record = JSON.parse(raw.replace(/^\uFEFF/, ''));
       if (typeof record?.version === 'string') version = record.version;
     } catch { /* unreadable: done with, like a stale one */ }
     const current = getCurrentVersion();

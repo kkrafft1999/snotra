@@ -12,7 +12,7 @@ const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-t
 const { createFileChangeRecorder } = require('../src/main/services/file-change-recorder');
 const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
 const { buildPreview } = require('../src/main/tools/tool-call-planner');
-const { IMAGE_GENERATION_ERROR_CODES: CODES } = require('../src/application/ports/image-generation-port');
+const { IMAGE_GENERATION_ERROR_CODES: CODES } = require('../src/shared/contracts/image-generation');
 
 // 1x1 PNG.
 const PNG = Buffer.from(
@@ -61,10 +61,10 @@ test('generate_image is offered only with an image service that has a key', () =
   assert.deepEqual(tool.function.parameters.properties.size.enum, ['1024x1024', '1536x1024', '1024x1536']);
 });
 
-test('a call without a configured service points to Settings › Tool setup', async () => {
+test('a call without a configured service points to Settings › Tools › Setup', async () => {
   const registry = createWorkspaceToolRegistry({ fsService: {}, imageGeneration: makeImageService({ configured: false }) });
   const output = await registry.execute('generate_image', { prompt: 'x', relative_path: 'a.png' }, { approved: true, locale: 'en' });
-  assert.match(JSON.parse(output).error, /Settings › Tool setup/);
+  assert.match(JSON.parse(output).error, /Settings › Tools › Setup/);
 });
 
 test('the image lands in the workspace; the model gets path and size, never the bytes', async (t) => {

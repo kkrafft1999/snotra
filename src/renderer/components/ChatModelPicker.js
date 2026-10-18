@@ -1,5 +1,5 @@
 import { dismissOnFocusLeave, dismissOnOutsideClick, followColumn, keepPopupInColumn } from '../utils/helpers.js';
-import { onLocaleChange, t, tMessage } from '../i18n.js';
+import { APP_LOCALES, onLocaleChange, t, tMessage } from '../i18n.js';
 // Titel-Inferenz aus der Contract-Schicht: Kopfzeile und Verlaufsliste zeigen
 // denselben Kurztitel, auch bevor die Konversation gespeichert wurde.
 import contracts from '../generated/contracts.js';
@@ -167,7 +167,7 @@ export function initChatModelPicker({
       // in the settings dialog, not in this quick switch.
       const title = document.createElement('span');
       title.className = 'chat-model-menu-opt-title';
-      title.lang = 'en';
+      title.lang = APP_LOCALES.EN;
       title.textContent = entryTitle(pr, presets);
       main.appendChild(title);
 
@@ -196,7 +196,7 @@ export function initChatModelPicker({
       input.value = value;
       input.checked = value === level;
       const text = document.createElement('span');
-      text.lang = 'en';
+      text.lang = APP_LOCALES.EN;
       text.textContent = value;
       option.append(input, text);
       chatReasoningLevels.appendChild(option);

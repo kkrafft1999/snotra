@@ -17,6 +17,9 @@ function unreadableReason(err) {
   return 'failed';
 }
 
+/**
+ * @returns {import('../ports/filesystem-port').FilesystemPort}
+ */
 function createFilesystemIpcAdapter({
   fsService,
   getActiveWorkspaceRoot,

@@ -61,7 +61,8 @@ const UNASKED_REASON = 'permission prompt failed';
 
 /**
  * @param {string} line  one violation line as the runtime stored it
- * @returns {{kind: string, target: string, operation: string, process?: string, reason?: string}|null}
+ * @returns {{kind: string, target: string, operation: string, process?: string, reason?: string, observed?: boolean}|null}
+ *   `observed`: a Linux write attempt the runtime filtered against its start lists only
  */
 function parseViolationLine(line) {
   const text = String(line ?? '').trim();

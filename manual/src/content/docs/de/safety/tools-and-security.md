@@ -1,6 +1,6 @@
 ---
 title: Sehen und ändern, was Snotra darf
-description: Einstellungen › Tools & Sicherheit zeigt für den geöffneten Ordner, welche Tools Snotra hat, wann es fragt und wo es handeln darf — und lässt dich das ändern.
+description: Einstellungen › Tools › Autonomie zeigt für den geöffneten Ordner, welche Tools Snotra hat, wann es fragt und wo es handeln darf — und lässt dich das ändern.
 sidebar:
   order: 4
 ---
@@ -9,15 +9,17 @@ Eine Seite in den Einstellungen zeigt alles, was im geöffneten Ordner über ein
 
 ## Die Seite öffnen
 
-Öffne die Einstellungen — auf macOS *Snotra Agent › Einstellungen…*, auf Windows und Linux *Ansicht › Einstellungen…*, oder mit `Cmd+,` / `Strg+,` — und wähle *Tools & Sicherheit*. Auch der Link unten im Modus-Menü des Chats führt dorthin.
+Öffne die Einstellungen — auf macOS *Snotra Agent › Einstellungen…*, auf Windows und Linux *Ansicht › Einstellungen…*, oder mit `Cmd+,` / `Strg+,` — und wähle unter *Tools* den Bereich *Autonomie*. [seit 1.26] Bis 1.25 hieß diese Seite *Tools & Sicherheit*. Auch der Link unten im Modus-Menü des Chats führt dorthin.
 
-![Einstellungen › Tools & Sicherheit für den Ordner gartenplaner: oben der Standardmodus Intelligent und eine Zusammenfassung — liest ohne Rückfrage, fragt vor jeder Dateiänderung, fragt vor jedem Befehl (in der Sandbox), fragt, bevor Web oder MCP genutzt werden. Darunter die Zeilen Lesen (Läuft), Sensible Daten lesen, Ändern und Überschreiben ohne Rückweg (jeweils Fragt).](screenshots/tools-and-security.webp)
+Die Sandbox, die Programme mit mehr Spielraum und die offen gehaltenen Hosts haben daneben eine eigene Seite, *Einstellungen › Tools › Sicherheit*: siehe [Befehle in der Sandbox ausführen](../sandbox/#die-sandbox-einrichten).
+
+![Einstellungen › Tools › Autonomie für den Ordner gartenplaner: oben der Standardmodus Intelligent und eine Zusammenfassung — liest ohne Rückfrage, fragt vor jeder Dateiänderung, fragt vor jedem Befehl (in der Sandbox), fragt, bevor Web oder MCP genutzt werden. Darunter die Zeilen Lesen (Läuft), Sensible Daten lesen, Ändern und Überschreiben ohne Rückweg (jeweils Fragt).](screenshots/tools-and-security.webp)
 
 ## Was sie zeigt
 
 - **Oben** den Ordner, für den sie gilt, seinen *Standardmodus* und einen Satz, der zusammenfasst, was Snotra dort tut. Wie der Standardmodus funktioniert, steht unter [Einen Modus wählen](../choose-a-mode/#einem-ordner-einen-standardmodus-geben).
 - **Sechs Zeilen**, eine pro Risikoklasse — *Lesen*, *Sensible Daten lesen*, *Ändern*, *Überschreiben ohne Rückweg*, *Ausführen*, *Externe Dienste*. Jede sagt, wie viele Tools sie hat, warum sie sich so verhält und ob ihre Aufrufe *Läuft*, *Fragt* oder *Aus* sind.
-- **Eine aufgeklappte Zeile** beantwortet drei Fragen: Darf Snotra das (die Tools, jedes mit seinem Schalter)? Fragt es vorher (der Modus, deine Freigaben, gemerkte Befehle, Sitzungsfreigaben)? Und wo oder was genau (die Ordner, die sensiblen Muster, die Sandbox, deine Sperren, was deinen Rechner verlässt)?
+- **Eine aufgeklappte Zeile** beantwortet drei Fragen: Darf Snotra das (die Tools, jedes mit seinem Schalter)? Fragt es vorher (der Modus, deine Freigaben, gemerkte Befehle, Sitzungsfreigaben)? Und wo oder was genau (die Ordner, die sensiblen Muster, deine Sperren, was deinen Rechner verlässt)? [seit 1.26] In der Zeile *Ausführen* ist die dritte Frage eine Zeile mit dem Zustand der Sandbox im geöffneten Ordner — *In der Sandbox abgeschirmt* mit der Zahl der Programme und Hosts, die mehr Spielraum haben, oder *Nicht isoliert* in Bernstein — und führt zu *Einstellungen › Tools › Sicherheit*.
 - **Unten** die *Sitzungsfreigaben*, die noch gelten, und die beiden Wege zum Zurücksetzen.
 
 Alles auf dieser Seite wirkt sofort. Was den Schutz lockert, bestätigst du vorher in einem Dialog des Betriebssystems.
@@ -46,9 +48,9 @@ Die Zeile *Sensible Daten lesen* listet die eingebauten Muster — `.env*`, `*.p
 ## Eine Freigabe widerrufen oder zurücksetzen
 
 - ***Sitzungsfreigaben*** listet jedes *Für diese Sitzung erlauben*, das noch gilt, nach Chat gruppiert, mit dem, was es umfasst, und wann du es gegeben hast. Widerruf sie einzeln oder mit *Alle widerrufen*.
-- ***Offene Verbindungen*** [seit 1.22] stehen in der Zeile *Ausführen* unter *Was kann ein Befehl erreichen?*: jeder Host, den eine Verbindungskarte *Für diesen Workspace* offen hält. Die zugeklappte Zeile zählt sie. Der Papierkorb neben einem Host schließt ihn wieder, ohne Dialog — die nächste Verbindung zu ihm fragt.
-- ***Workspace-Regeln zurücksetzen*** löscht die Sperren und Erlaubnisse nur des geöffneten Ordners, schließt die für ihn offenen Verbindungen, schaltet seine Sandbox wieder ein und setzt seinen Standardmodus zurück auf *Intelligent*.
-- ***Alle Berechtigungen zurücksetzen*** löscht jede Regel, deine eigenen sensiblen Muster, jede Freigabe pro Programm und jede Sitzungsfreigabe, schaltet die Sandbox überall wieder ein und stellt *Intelligent* wieder her, auch als Standard jedes Ordners. Das fragt immer in einem Systemdialog nach, der aufzählt, welcher Schutz dabei wegfällt.
+- ***Offen gehaltene Hosts*** [seit 1.22] — jeder Host, den eine Verbindungskarte *Für diesen Workspace* offen gehalten hat — zählt die zugeklappte Zeile *Ausführen*. [seit 1.26] Aufgelistet und geschlossen werden sie unter *Einstellungen › Tools › Sicherheit*, zusammen mit den Programmen, die mehr Spielraum haben: siehe [Befehle in der Sandbox ausführen](../sandbox/#einen-host-offen-halten).
+- ***Workspace-Regeln zurücksetzen*** löscht die Sperren und Erlaubnisse nur des geöffneten Ordners, schließt die für ihn offen gehaltenen Hosts, entfernt seine eigenen Programmfreigaben, schaltet seine Sandbox wieder ein und setzt seinen Standardmodus zurück auf *Intelligent*.
+- ***Alle Berechtigungen zurücksetzen*** löscht jede Regel, deine eigenen sensiblen Muster, jede Freigabe pro Programm, jeden offen gehaltenen Host und jede Sitzungsfreigabe, schaltet die Sandbox überall wieder ein — auch für neue Workspaces — und stellt *Intelligent* wieder her, auch als Standard jedes Ordners. Das fragt immer in einem Systemdialog nach, der aufzählt, welcher Schutz dabei wegfällt.
 
 ## Wenn es nicht klappt
 

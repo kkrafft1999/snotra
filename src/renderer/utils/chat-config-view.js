@@ -1,4 +1,5 @@
 import contracts from '../generated/contracts.js';
+import { settingsMenuPath } from './settings-pages.js';
 import { t, tPlural } from '../i18n.js';
 
 const {
@@ -32,7 +33,7 @@ const GROUP_ORDER = [
 
 /** `Settings › Skills` in the interface language, built from the nav labels themselves. */
 export function settingsPath(panel) {
-  return `${t('settings.title')} › ${t(`settings.nav.${panel}`)}`;
+  return settingsMenuPath(panel);
 }
 
 /**

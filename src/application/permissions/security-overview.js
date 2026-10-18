@@ -57,6 +57,7 @@ const { READ, READ_SENSITIVE, WRITE, DELETE, EXECUTE, EXTERNAL } = TOOL_RISK_CLA
 function rowsOfTool(tool) {
   const declared = new Set(tool.riskClasses);
   if (tool.mcpServer) {
+    /** @type {Set<string>} */
     const rows = new Set([EXTERNAL]);
     if (declared.has(DELETE)) rows.add(DELETE);
     return rows;
@@ -165,19 +166,25 @@ function describeExecution(execution, tools) {
     workspaceHosts: Array.isArray(source.workspaceHosts)
       ? source.workspaceHosts.filter((host) => typeof host === 'string' && host)
       : [],
+    // This workspace's own program allowances, and the hosts open in every
+    // workspace (#1119): what the line leading to Tools › Security counts.
+    workspacePrograms: Array.isArray(source.workspacePrograms) ? source.workspacePrograms : [],
+    globalHosts: Array.isArray(source.globalHosts)
+      ? source.globalHosts.filter((host) => typeof host === 'string' && host)
+      : [],
   };
 }
 
 /**
- * @param {object} input
- * @param {string|null} input.root              the open workspace, or null
- * @param {string} input.mode                   the workspace default (#413); `smart` without a folder
+ * @param {Object} [input]
+ * @param {string|null} [input.root]            the open workspace, or null
+ * @param {string} [input.mode]                 the workspace default (#413); `smart` without a folder
  * @param {Array} [input.globalRules]
  * @param {Array} [input.workspaceRules]        rules of this root only
  * @param {Array} [input.tools]                 `listRiskCatalog()` plus `disabled`
  * @param {Array} [input.sessionGrants]         display DTOs of #447
  * @param {Array} [input.chats]                 `{ id, title, mode, current }` of this workspace
- * @param {object} [input.execution]            sandbox state, workspace switch, program allowances, kept hosts
+ * @param {Object} [input.execution]            sandbox state, workspace switch, program allowances, kept hosts
  * @param {string[]} [input.sensitivePathPatterns]  the user's own patterns
  * @param {string} [input.integrity]
  * @param {boolean} [input.encryptionAvailable]

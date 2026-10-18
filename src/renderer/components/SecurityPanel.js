@@ -1,5 +1,5 @@
 import contracts from '../generated/contracts.js';
-import { t, tMessage, onLocaleChange } from '../i18n.js';
+import { APP_LOCALES, t, tMessage, onLocaleChange } from '../i18n.js';
 import { riskClassLabel } from '../utils/tool-approval-view.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
 import {
@@ -18,14 +18,18 @@ import { initWorkspaceModeSetting } from './WorkspaceModeSetting.js';
  * control under the question it answers. Every control applies at once;
  * loosening is confirmed natively by main, as everywhere else.
  *
- * Controls with a component of their own (the execution switches, the
- * sandbox switch, program allowances, sensitive patterns, the rule form) are
+ * Controls with a component of their own (the execution switches,
+ * sensitive patterns, the rule form) are
  * "slots": elements that live in `#settings-security-slots` and are moved
  * into the row they belong to on every draw. Their components keep working
  * on the same elements, and a redraw does not lose what was typed.
  *
  * Rows are disclosure buttons (`aria-expanded`); which ones are open survives
  * a redraw, so a live update does not fold the row the user is reading.
+ *
+ * The sandbox switch, the program allowances and the hosts moved to
+ * Tools › Security (#1119); the row Execute keeps one line with the state of
+ * the open folder that leads there.
  */
 
 const MCP_STARTING = contracts.MCP_CONNECTION_STATES.STARTING;
@@ -50,13 +54,21 @@ const SCOPE_ICONS = Object.freeze({
   workspace: `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>`,
 });
 
+/** The shield of the sandbox, struck through when a run is not isolated (#398). */
+function shieldIcon(off) {
+  return '<svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true" focusable="false">'
+    + '<path d="M8 1.6 3.2 3.4v3.9c0 3 2 5.5 4.8 6.7 2.8-1.2 4.8-3.7 4.8-6.7V3.4z"/>'
+    + (off ? '<path d="M1.8 1.8 14.2 14.2"/>' : '')
+    + '</svg>';
+}
+
+const GO_CHEVRON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"/></svg>';
+
 const TRASH_ICON = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>';
 
 const SLOT_IDS = Object.freeze({
   python: 'settings-python-card',
   shell: 'settings-shell-card',
-  sandbox: 'settings-sandbox-card',
-  allowances: 'settings-allowances-card',
   sensitive: 'settings-sensitive-card',
   ruleForm: 'settings-rule-form',
 });
@@ -75,6 +87,8 @@ export function initSecurityPanel({
   // (ToolPermissionsPanel.js); the rule form is opened from here.
   permissionsPanel = null,
   onNavigate = () => {},
+  // Tools › Security with the open workspace selected (#1119).
+  onOpenSandbox = () => {},
   // Writes `disabledTools` at once; resolves to whether it was stored.
   onToggleTool = async () => false,
 }) {
@@ -160,7 +174,7 @@ export function initSecurityPanel({
     let codeEl = null;
     if (code) {
       codeEl = el('code', 'settings-security-item__code', code);
-      codeEl.setAttribute('lang', 'en');
+      codeEl.setAttribute('lang', APP_LOCALES.EN);
     }
     // A tool is known by its name; its description is the quiet second
     // line, cut to one line with the whole sentence on hover.
@@ -315,23 +329,27 @@ export function initSecurityPanel({
     }
   }
 
+  /**
+   * One line with the state of the open folder that leads to Tools › Security
+   * (#1119): shape, title and text carry the state, not the colour alone.
+   */
   function renderExecuteReach(view, body) {
     const reach = view.execute;
     if (reach.inactive) body.appendChild(el('p', 'settings-security-note', reach.inactive));
-    body.appendChild(el('p', `settings-security-answer settings-security-answer--${reach.state.kind}`, reach.state.text));
-    if (reach.facts.length > 0) {
-      const ul = el('ul', 'settings-security-facts');
-      for (const fact of reach.facts) ul.appendChild(el('li', null, fact));
-      body.appendChild(ul);
-    }
-    if (reach.hosts.length > 0) {
-      body.appendChild(el('p', 'settings-security-subhead', reach.hostsHeading));
-      body.appendChild(itemList(reach.hosts.map((item) => {
-        return { code: item.host, control: removeButton(item.host, item.removeLabel, 'hostRemove') };
-      })));
-    }
-    placeSlot('sandbox', body);
-    placeSlot('allowances', body);
+    const link = el('button', 'settings-sandbox-link');
+    link.type = 'button';
+    link.dataset.tone = reach.link.tone;
+    link.dataset.sandboxLink = 'true';
+    const shield = el('span', 'settings-sandbox-link__shield');
+    shield.innerHTML = shieldIcon(reach.link.tone === 'off');
+    const text = el('span', 'settings-sandbox-link__text');
+    text.append(el('span', 'settings-sandbox-link__title', reach.link.title));
+    if (reach.link.body) text.append(el('span', 'settings-sandbox-link__body', reach.link.body));
+    const go = el('span', 'settings-sandbox-link__go', t('settings.nav.sandbox'));
+    go.insertAdjacentHTML('beforeend', GO_CHEVRON);
+    link.append(shield, text, go);
+    link.addEventListener('click', () => onOpenSandbox());
+    body.appendChild(link);
   }
 
   function renderSensitive(view, body) {
@@ -340,7 +358,7 @@ export function initSecurityPanel({
     const chips = el('p', 'settings-security-chips');
     for (const pattern of sensitive.builtIn) {
       const code = el('code', 'settings-security-chip', pattern);
-      code.setAttribute('lang', 'en');
+      code.setAttribute('lang', APP_LOCALES.EN);
       chips.appendChild(code);
     }
     body.appendChild(chips);
@@ -563,14 +581,12 @@ export function initSecurityPanel({
     }
     const remove = e.target.closest('button[data-rule-remove]');
     const revoke = e.target.closest('button[data-grant-revoke]');
-    const closeHost = e.target.closest('button[data-host-remove]');
-    const button = remove || revoke || closeHost;
+    const button = remove || revoke;
     if (!button || button.disabled) return;
     const riskClass = button.closest('.settings-security-row')?.dataset.riskClass;
     button.disabled = true;
     let result;
     if (remove) result = await toolPermissions.removeRule(remove.dataset.ruleRemove);
-    else if (closeHost) result = await toolPermissions.removeWorkspaceHost(closeHost.dataset.hostRemove);
     else result = await toolPermissions.revokeSessionGrant(revoke.dataset.grantRevoke);
     if (reportAction(result)) {
       // The item is gone after the redraw; the keyboard lands on its row.
@@ -606,36 +622,6 @@ export function initSecurityPanel({
     // After the redraw, which clears the line when the page could be read.
     showError(ok ? '' : t('settings.instant.failed'));
   });
-
-  /** Hidden by something inside the list — a slot that does not apply here. */
-  function hiddenWithinRows(node) {
-    for (let current = node; current && current !== rowsEl; current = current.parentElement) {
-      if (current.hidden || current.classList?.contains('hidden')) return true;
-    }
-    return false;
-  }
-
-  /**
-   * From the approval card, the mode pill and the folder shield: open the
-   * execute row and focus the control they are about. False when it is not
-   * shown here (no sandbox on this system).
-   */
-  async function reveal(target) {
-    if (!overview) await refresh();
-    const node = target === 'allowances'
-      ? slots.allowances?.querySelector('[data-action="edit"]') || document.getElementById('btn-add-program-allowance')
-      : document.getElementById('input-workspace-sandbox');
-    expanded.add('execute');
-    render();
-    const toggle = rowsEl.querySelector('.settings-security-row__toggle[data-risk-class="execute"]');
-    const shown = !!node && rowsEl.contains(node) && !hiddenWithinRows(node);
-    const focusTarget = shown ? node : toggle;
-    try {
-      focusTarget?.scrollIntoView({ block: 'center' });
-    } catch { /* happy-dom */ }
-    focusTarget?.focus();
-    return shown;
-  }
 
   function showError(message) {
     if (!errorEl) return;
@@ -731,5 +717,5 @@ export function initSecurityPanel({
     else render();
   });
 
-  return { open, close, refresh, render, reveal };
+  return { open, close, refresh, render };
 }

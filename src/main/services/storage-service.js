@@ -16,9 +16,12 @@ const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
 const { APP_LOCALES } = require('../../shared/contracts/enums');
 const { localeFromSystem } = require('../../shared/i18n');
 const {
+  MCP_TRANSPORTS,
   maskStoredMcpEnv,
+  maskStoredMcpHeaders,
   normalizeKnownTools,
   normalizeStoredMcpEnv,
+  normalizeStoredMcpHeaders,
   validateMcpServerConfig,
   validateMcpServerInput,
 } = require('../../shared/contracts/mcp');
@@ -30,11 +33,12 @@ const {
   normalizeLoadedMessages,
   normalizeSessionForStore: buildNormalizedSessionForStore,
   normalizeSessionForLoad,
+  normalizeSessionMetaForList,
   storedChatMessagesChanged,
 } = require('./chat-history-normalization');
 const { renameWithRetry, readFileWithRetry } = require('./rename-with-retry');
 const { writeFileAtomic } = require('./atomic-write');
-const { CHAT_HISTORY_UNREADABLE } = require('../ports/chat-history-store-port');
+const { createChatHistoryStore } = require('./chat-history-store');
 const { NOTICE_STORES } = require('../../shared/contracts/notices');
 const { KEY_ALWAYS_DURABLE } = require('./safe-storage-key-durability');
 
@@ -58,16 +62,6 @@ function createStorageService({
   const LAST_FOLDER_FILENAME = 'last-folder.json';
   const FOLDER_HISTORY_FILENAME = 'folder-history.json';
   const UI_PREFS_FILENAME = 'ui-preferences.json';
-  const CHAT_HISTORY_FILENAME = 'chat-history.json';
-  const CHAT_HISTORY_VERSION = 2;
-  /**
-   * Suffixes of a history moved aside: one that could not be decrypted or
-   * parsed, and one written by a newer release (#566).
-   */
-  const CHAT_HISTORY_SET_ASIDE_SUFFIXES = Object.freeze({
-    UNDECRYPTABLE: 'undecryptable',
-    UNREADABLE: 'unreadable',
-  });
   const WEB_SEARCH_CONFIG_FILENAME = 'web-search-config.json';
   const MCP_CONFIG_FILENAME = 'mcp-servers.json';
 
@@ -92,14 +86,14 @@ function createStorageService({
    * the console: `set-aside` with the copy's path in `keptAs`, `not-saved`
    * while a file that is there cannot be read or moved, and `saved-again`
    * once a write to such a file goes through. `path` is the store's file.
-   * Files that are not a store are not reported.
+   * Files that are not a store are not reported. `store` is for a file whose
+   * name says nothing — a chat's file in the history folder (#985).
    */
   const filesNotSaved = new Set();
 
-  function reportStoreFile(type, filePath, keptAs = null) {
+  function reportStoreFile(type, filePath, keptAs = null, store = NOTICE_STORES[path.basename(filePath)]) {
     if (typeof onStoreFileEvent !== 'function') return;
     const file = path.basename(filePath);
-    const store = NOTICE_STORES[file];
     if (!store) return;
     if (type === 'not-saved') filesNotSaved.add(filePath);
     else filesNotSaved.delete(filePath);
@@ -221,16 +215,17 @@ function createStorageService({
    * waits for it (#679). Work queued while waiting is waited for as well.
    */
   async function whenWritesSettled() {
+    const inFlight = () => [...fileLocks.values(), ...pendingWrites.values(), ...chatHistory.pendingWork()];
     for (;;) {
-      const pending = [...fileLocks.values(), ...pendingWrites.values()];
-      await Promise.all(pending);
-      const now = [...fileLocks.values(), ...pendingWrites.values()];
+      const pending = inFlight();
+      await Promise.all(pending.map((p) => p.catch(() => {})));
+      const now = inFlight();
       if (now.length === pending.length && now.every((p, i) => p === pending[i])) return;
     }
   }
 
   function withChatHistoryLock(fn) {
-    return withFileLock(getChatHistoryPath(), fn);
+    return withFileLock(chatHistory.storeDir(), fn);
   }
 
   function getLLMConfigPath() {
@@ -827,7 +822,9 @@ function createStorageService({
   // Eigene Datei wie bei der Websuche: MCP-Server sind kein LLM-Anbieter. Die
   // env-Werte liegen je Schluessel entweder verschluesselt (`enc`) oder im
   // Klartext (`value`) — verschluesselt ist die Vorgabe, Klartext die bewusste
-  // Ausnahme (Entscheidung zu #108).
+  // Ausnahme (Entscheidung zu #108). The headers of a remote server (#341)
+  // are stored the same way: an `Authorization` header is a token like any
+  // `GITHUB_TOKEN`.
   //
   // Zwei Lesewege, absichtlich getrennt: `readMcpServers` liefert die
   // Anzeigeform ohne Geheimnisse und ist das, was an den Renderer geht;
@@ -859,16 +856,22 @@ function createStorageService({
       && !(typeof data.version === 'number' && data.version > MCP_CONFIG_VERSION);
   }
 
-  /** Gespeicherte Eintraege in geprueftem Zustand, env in gespeicherter Form. */
+  function isRemoteMcpServer(server) {
+    return server.transport === MCP_TRANSPORTS.HTTP;
+  }
+
+  /** Gespeicherte Eintraege in geprueftem Zustand, env und headers in gespeicherter Form. */
   async function readMcpStoredServers({ forUpdate = false } = {}) {
     const data = await readMcpConfigRaw({ forUpdate });
     const out = [];
     const seen = new Set();
     for (const entry of data.servers) {
-      const { ok, value } = validateMcpServerConfig({ ...entry, env: {} });
+      const { ok, value } = validateMcpServerConfig({ ...entry, env: {}, headers: {} });
       if (!ok || seen.has(value.id)) continue;
       seen.add(value.id);
-      out.push({ ...value, env: normalizeStoredMcpEnv(entry?.env) });
+      out.push(isRemoteMcpServer(value)
+        ? { ...value, headers: normalizeStoredMcpHeaders(entry?.headers) }
+        : { ...value, env: normalizeStoredMcpEnv(entry?.env) });
     }
     return out;
   }
@@ -878,7 +881,21 @@ function createStorageService({
     return (await readMcpStoredServers()).map((server) => ({
       ...server,
       env: maskStoredMcpEnv(server.env),
+      ...(isRemoteMcpServer(server) ? { headers: maskStoredMcpHeaders(server.headers) } : {}),
     }));
+  }
+
+  /** A stored map in flat runtime form; a value that cannot be decrypted is left out. */
+  function decryptStoredMap(stored) {
+    const out = {};
+    for (const [key, entry] of Object.entries(stored || {})) {
+      if (typeof entry.value === 'string') out[key] = entry.value;
+      else {
+        const plain = decryptIfPossible(entry.enc);
+        if (plain !== null) out[key] = plain;
+      }
+    }
+    return out;
   }
 
   /**
@@ -888,17 +905,11 @@ function createStorageService({
    * Server startet dann ohne ihn und scheitert sichtbar am eigenen Fehler.
    */
   async function getMcpServersForRuntime() {
-    return (await readMcpStoredServers()).map((server) => {
-      const env = {};
-      for (const [key, entry] of Object.entries(server.env)) {
-        if (typeof entry.value === 'string') env[key] = entry.value;
-        else {
-          const plain = decryptIfPossible(entry.enc);
-          if (plain !== null) env[key] = plain;
-        }
-      }
-      return { ...server, env };
-    });
+    return (await readMcpStoredServers()).map((server) => ({
+      ...server,
+      env: decryptStoredMap(server.env),
+      ...(isRemoteMcpServer(server) ? { headers: decryptStoredMap(server.headers) } : {}),
+    }));
   }
 
   /**
@@ -909,10 +920,78 @@ function createStorageService({
   async function getMcpSecretValues() {
     const out = [];
     for (const server of await readMcpStoredServers()) {
-      for (const entry of Object.values(server.env)) {
+      for (const entry of [...Object.values(server.env), ...Object.values(server.headers || {})]) {
         if (typeof entry.enc !== 'string') continue;
         const plain = decryptIfPossible(entry.enc);
         if (plain) out.push(plain);
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Stores the entries of one secret map — `env` or `headers` — against what
+   * was stored before. Collects the refusals by kind instead of throwing, so
+   * one save names every problem at once.
+   */
+  async function storeSecretEntries(entries, before, problems) {
+    const stored = {};
+    for (const entry of entries) {
+      const previous = before?.[entry.key];
+      const storedSecret = typeof previous?.enc === 'string';
+      if (entry.keep) {
+        if (!previous) problems.keepMissing.push(entry.key);
+        else if (storedSecret !== entry.secret) problems.keepChanged.push(entry.key);
+        else stored[entry.key] = previous;
+        continue;
+      }
+      if (!entry.secret) {
+        stored[entry.key] = { value: entry.value };
+        continue;
+      }
+      if (!entry.value) {
+        if (storedSecret) problems.emptySecrets.push(entry.key);
+        else stored[entry.key] = { value: '' };
+        continue;
+      }
+      const enc = await encryptForDisk(entry.value);
+      if (!enc) {
+        problems.unencryptable.push(entry.key);
+        continue;
+      }
+      stored[entry.key] = { enc };
+    }
+    return stored;
+  }
+
+  function secretProblems() {
+    return { keepMissing: [], keepChanged: [], emptySecrets: [], unencryptable: [] };
+  }
+
+  /** Where a server's messages go: a process, or one address (#341). */
+  function mcpEndpointOf(server) {
+    return isRemoteMcpServer(server) ? `${server.transport} ${server.url}` : server.transport;
+  }
+
+  /**
+   * An input without a transport keeps the stored one (B16 review on #341):
+   * a form that only knew stdio would otherwise save a remote server back as
+   * a local one. Its address and headers stay with it when they are not sent
+   * either.
+   */
+  function withStoredTransport(input, previous) {
+    if (!previous || !input || typeof input !== 'object') return input;
+    if (input.transport !== undefined && input.transport !== null) return input;
+    const out = { ...input, transport: previous.transport };
+    if (isRemoteMcpServer(previous)) {
+      if (out.url === undefined) out.url = previous.url;
+      if (out.headers === undefined) {
+        out.headers = {};
+        for (const [key, entry] of Object.entries(previous.headers || {})) {
+          out.headers[key] = typeof entry.enc === 'string'
+            ? { secret: true, keep: true }
+            : { secret: false, value: entry.value };
+        }
       }
     }
     return out;
@@ -930,70 +1009,73 @@ function createStorageService({
    * so changing either takes a new one. An empty secret value has nothing to
    * encrypt and counts as "no value"; it is stored as an empty value, unless
    * it would replace a stored secret, which it never silently does.
+   *
+   * A changed endpoint — another address, or another transport — switches
+   * the server off and forgets its tool catalogue (#341, concept §11): what
+   * the user accepted from one endpoint never carries over to another. It
+   * comes back on only after the user switched it on again.
    */
   async function saveMcpServer(input) {
-    const { ok, value, env, create, errors } = validateMcpServerInput(input);
-    if (!ok) return { ok: false, errors };
+    const precheck = validateMcpServerInput(input);
+    // Only an input without a transport may still be completed from what is
+    // stored under its identifier; anything else is refused as it is.
+    const mayFallBack = (input?.transport === undefined || input?.transport === null)
+      && typeof input?.id === 'string' && input.id.trim() !== '';
+    if (!precheck.ok && !mayFallBack) return { ok: false, errors: precheck.errors };
 
     return withFileLock(getMcpConfigPath(), async () => {
       const servers = await readMcpStoredServers({ forUpdate: true });
+      const wantedId = String(input.id).trim().toLowerCase();
+      const stored = servers.find((server) => server.id === wantedId);
+      const { ok, value, env, headers, create, errors } = validateMcpServerInput(
+        input?.create === true ? input : withStoredTransport(input, stored),
+      );
+      if (!ok) return { ok: false, errors };
       const previous = servers.find((server) => server.id === value.id);
       // A new server must not take over an existing one — with its token and
       // its switch (CR-B14-03). Decided here, under the lock, not by the form.
       if (create && previous) {
         return { ok: false, errors: [createMessage('mcp.error.idExists', { id: value.id })] };
       }
-      const storedEnv = {};
-      const keepMissing = [];
-      const keepChanged = [];
-      const emptySecrets = [];
-      const unencryptable = [];
 
-      for (const entry of env) {
-        const before = previous?.env?.[entry.key];
-        const storedSecret = typeof before?.enc === 'string';
-        if (entry.keep) {
-          if (!before) keepMissing.push(entry.key);
-          else if (storedSecret !== entry.secret) keepChanged.push(entry.key);
-          else storedEnv[entry.key] = before;
-          continue;
-        }
-        if (!entry.secret) {
-          storedEnv[entry.key] = { value: entry.value };
-          continue;
-        }
-        if (!entry.value) {
-          if (storedSecret) emptySecrets.push(entry.key);
-          else storedEnv[entry.key] = { value: '' };
-          continue;
-        }
-        const enc = await encryptForDisk(entry.value);
-        if (!enc) {
-          unencryptable.push(entry.key);
-          continue;
-        }
-        storedEnv[entry.key] = { enc };
-      }
+      const envProblems = secretProblems();
+      const headerProblems = secretProblems();
+      const storedEnv = await storeSecretEntries(env, previous?.env, envProblems);
+      const storedHeaders = await storeSecretEntries(headers, previous?.headers, headerProblems);
 
       // Die Meldungen nennen die Schluessel, niemals die Werte.
       const names = (list) => ({ names: list.join(', ') });
       const refusals = [];
-      if (keepMissing.length > 0) refusals.push(createMessage('mcp.error.envKeepMissing', names(keepMissing)));
-      if (keepChanged.length > 0) refusals.push(createMessage('mcp.error.envKeepChanged', names(keepChanged)));
-      if (emptySecrets.length > 0) refusals.push(createMessage('mcp.error.envSecretEmpty', names(emptySecrets)));
+      const refuse = (list, key) => { if (list.length > 0) refusals.push(createMessage(key, names(list))); };
+      refuse(envProblems.keepMissing, 'mcp.error.envKeepMissing');
+      refuse(headerProblems.keepMissing, 'mcp.error.headerKeepMissing');
+      refuse(envProblems.keepChanged, 'mcp.error.envKeepChanged');
+      refuse(headerProblems.keepChanged, 'mcp.error.headerKeepChanged');
+      refuse(envProblems.emptySecrets, 'mcp.error.envSecretEmpty');
+      refuse(headerProblems.emptySecrets, 'mcp.error.headerSecretEmpty');
       // Lieber gar nicht speichern als ein Token im Klartext ablegen.
-      if (unencryptable.length > 0) refusals.push(createMessage('mcp.error.noSecureStorage', names(unencryptable)));
+      refuse([...envProblems.unencryptable, ...headerProblems.unencryptable], 'mcp.error.noSecureStorage');
       if (refusals.length > 0) return { ok: false, errors: refusals };
 
+      const endpointChanged = Boolean(previous) && mcpEndpointOf(previous) !== mcpEndpointOf(value);
       // Der Tool-Katalog gehoert dem Server, nicht dem Formular: schickt die
       // Oberflaeche keinen mit (sie kennt ihn nur bei laufender Verbindung),
-      // bleibt der gespeicherte stehen.
-      const knownTools = value.knownTools.length > 0 ? value.knownTools : previous?.knownTools || [];
+      // bleibt der gespeicherte stehen — unless it belongs to another endpoint.
+      const knownTools = endpointChanged
+        ? []
+        : value.knownTools.length > 0 ? value.knownTools : previous?.knownTools || [];
+      const entry = {
+        ...value,
+        enabled: endpointChanged ? false : value.enabled,
+        knownTools,
+        env: storedEnv,
+        ...(isRemoteMcpServer(value) ? { headers: storedHeaders } : {}),
+      };
       const next = servers.filter((server) => server.id !== value.id);
-      next.push({ ...value, knownTools, env: storedEnv });
+      next.push(entry);
       next.sort((a, b) => a.id.localeCompare(b.id));
       await writeJsonAtomic(getMcpConfigPath(), { version: MCP_CONFIG_VERSION, servers: next });
-      return { ok: true, errors: [] };
+      return { ok: true, errors: [], endpointChanged };
     });
   }
 
@@ -1168,14 +1250,6 @@ function createStorageService({
     });
   }
 
-  function getChatHistoryPath() {
-    return path.join(app.getPath('userData'), CHAT_HISTORY_FILENAME);
-  }
-
-  function defaultChatHistoryStore() {
-    return { version: CHAT_HISTORY_VERSION, activeByWorkspace: {}, sessions: [] };
-  }
-
   function normalizeWorkspaceRoot(raw) {
     if (typeof raw !== 'string') return null;
     const trimmed = raw.trim();
@@ -1199,204 +1273,23 @@ function createStorageService({
     return buildNormalizedSessionForStore(s, { normalizeWorkspaceRoot, ...options });
   }
 
-  function parseChatHistoryStoreData(data) {
-    if (!data || typeof data !== 'object') return null;
-    // Written by a newer release (#566): its sessions may carry what this
-    // build would drop on the next write, so it is not read at all.
-    if (isNewerChatHistoryVersion(data.version)) return null;
-    const sessionsIn = Array.isArray(data.sessions) ? data.sessions : [];
-    const sessions = sessionsIn
-      .map((x) => normalizeSessionForStore(x))
-      .filter(Boolean);
-
-    const activeByWorkspace = {};
-    if (data.activeByWorkspace && typeof data.activeByWorkspace === 'object') {
-      for (const [k, v] of Object.entries(data.activeByWorkspace)) {
-        if (typeof k === 'string' && k && typeof v === 'string' && v) {
-          activeByWorkspace[k] = v;
-        }
-      }
-    } else if (typeof data.activeChatId === 'string' && data.activeChatId) {
-      activeByWorkspace[NO_WORKSPACE_KEY] = data.activeChatId;
-    }
-
-    return {
-      version: CHAT_HISTORY_VERSION,
-      activeByWorkspace,
-      sessions,
-    };
-  }
-
-  function isNewerChatHistoryVersion(version) {
-    return Number.isFinite(version) && version > CHAT_HISTORY_VERSION;
-  }
-
-  async function loadChatHistoryStoreFromDisk() {
-    let raw;
-    try {
-      raw = await readFileWithRetry(fs, getChatHistoryPath(), { platform });
-    } catch (error) {
-      // Keine Datei (Erststart): leer starten, nichts zu retten.
-      if (error?.code === 'ENOENT') {
-        return { store: defaultChatHistoryStore(), wasEncrypted: false, unreadable: false };
-      }
-      // There is a file, it just could not be read (#473). Nothing to
-      // quarantine, since its content may be fine — but nothing to write
-      // back either.
-      return { store: defaultChatHistoryStore(), wasEncrypted: false, unreadable: false, readFailed: true };
-    }
-
-    // Ab hier existiert eine Datei. Laesst sie sich nicht interpretieren
-    // (kaputtes JSON, fremder safeStorage-Schluessel z. B. nach der
-    // Umbenennung der App), darf sie
-    // NICHT stillschweigend ueberschrieben werden: unreadable = true, der
-    // Aufrufer stellt sie in Quarantaene (quarantineUnreadableChatHistory).
-    let wasEncrypted = false;
-    try {
-      let data = JSON.parse(raw);
-      if (!data || typeof data !== 'object') {
-        return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
-      }
-      if (data.encrypted === true && typeof data.payload === 'string') {
-        wasEncrypted = true;
-        // Without encrypted storage the key is out of reach for this run, not
-        // wrong (#658) — a refusing keychain, a broken signature as in #657.
-        // The file is fine and the next start may read it: leave it in place
-        // and refuse writes, like a failed read.
-        if (!safeStorage.isEncryptionAvailable()) {
-          return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: false, readFailed: true };
-        }
-        const decrypted = decryptIfPossible(data.payload);
-        if (!decrypted) return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
-        data = JSON.parse(decrypted);
-      }
-      const store = parseChatHistoryStoreData(data);
-      if (!store) {
-        const setAsideAs = isNewerChatHistoryVersion(data?.version)
-          ? CHAT_HISTORY_SET_ASIDE_SUFFIXES.UNREADABLE
-          : CHAT_HISTORY_SET_ASIDE_SUFFIXES.UNDECRYPTABLE;
-        return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true, setAsideAs };
-      }
-      return { store, wasEncrypted, unreadable: false };
-    } catch {
-      return { store: defaultChatHistoryStore(), wasEncrypted, unreadable: true };
-    }
-  }
-
-  // Unlesbaren Verlauf beiseitelegen statt beim naechsten Write zu zerstoeren.
-  // Bewusst ohne withChatHistoryLock: die Handler halten den Lock bereits,
-  // wenn sie mit skipMigration lesen; ein verschachtelter Lock wuerde
-  // deadlocken. rename ist atomar, ein parallel lesender Zweiter scheitert
-  // harmlos mit ENOENT.
-  /**
-   * Returns false when the file is still where it was (#561) — the caller
-   * must then not hand out a store that could be written over it.
-   */
-  async function quarantineUnreadableChatHistory(suffix = CHAT_HISTORY_SET_ASIDE_SUFFIXES.UNDECRYPTABLE) {
-    const source = getChatHistoryPath();
-    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const target = `${source}.${suffix}-${stamp}`;
-    try {
-      await renameWithRetry(fs, source, target, { platform });
-      if (typeof log?.warn === 'function') {
-        log.warn(`[chat-history] Verlauf nicht lesbar, gesichert als ${target}`);
-      }
-      // Only the set-aside is reported here: a history that stays unreadable
-      // already has its own notice in the chat, at the moment a save is
-      // refused (#977).
-      reportStoreFile('set-aside', source, target);
-      return true;
-    } catch (err) {
-      if (err && err.code === 'ENOENT') return true;
-      if (typeof log?.warn === 'function') {
-        log.warn(`[chat-history] Verlauf nicht lesbar, Sicherung fehlgeschlagen: ${err?.message || err}`);
-      }
-      return false;
-    }
-  }
-
-  /** An empty store for an unreadable file — writable only once it is moved aside. */
-  async function storeAfterQuarantine(suffix) {
-    return (await quarantineUnreadableChatHistory(suffix)) ? defaultChatHistoryStore() : storeFromFailedRead();
-  }
-
-  /**
-   * Is a history moved aside still lying next to the live one (#565)? Its
-   * chats are not in the store, but their images may still be wanted — the
-   * copy is kept so that it can be recovered, images included.
-   */
-  async function hasSetAsideChatHistory() {
-    const prefixes = Object.values(CHAT_HISTORY_SET_ASIDE_SUFFIXES).map(
-      (suffix) => `${CHAT_HISTORY_FILENAME}.${suffix}-`
-    );
-    let names;
-    try {
-      names = await fs.readdir(app.getPath('userData'));
-    } catch {
-      // Not listable: assume there is one, so nothing is swept on a guess.
-      return true;
-    }
-    return names.some((name) => prefixes.some((prefix) => name.startsWith(prefix)));
-  }
-
-  async function migrateChatHistoryToEncryptedIfNeeded(store, wasEncrypted) {
-    if (safeStorage.isEncryptionAvailable() && !wasEncrypted) {
-      await writeChatHistoryStore(store);
-    }
-  }
-
-  /**
-   * An empty store handed out because the file could not be read (#473).
-   * Readers get it like any other, so the list simply shows nothing; only
-   * `writeChatHistoryStore` refuses it. The handlers read, change and write
-   * back the very same object, so this catches every write path at once —
-   * including readers that only display and never write.
-   */
-  const storesFromFailedReads = new WeakSet();
-
-  function storeFromFailedRead() {
-    const store = defaultChatHistoryStore();
-    storesFromFailedReads.add(store);
-    return store;
-  }
-
-  async function readChatHistoryStore({ skipMigration = false } = {}) {
-    const { store, wasEncrypted, unreadable, readFailed, setAsideAs } = await loadChatHistoryStoreFromDisk();
-    if (readFailed) return storeFromFailedRead();
-    if (unreadable) return storeAfterQuarantine(setAsideAs);
-    if (skipMigration) return store;
-    // Not while the key behind safeStorage is still on its way to the disk
-    // (#1060): the read would wait for it. The plain file stays as it is until
-    // a later read or the next save encrypts it.
-    if (safeStorage.isEncryptionAvailable() && !wasEncrypted && !safeStorageKey.wouldWait()) {
-      return withChatHistoryLock(async () => {
-        const fresh = await loadChatHistoryStoreFromDisk();
-        if (fresh.readFailed) return storeFromFailedRead();
-        if (fresh.unreadable) return storeAfterQuarantine(fresh.setAsideAs);
-        await migrateChatHistoryToEncryptedIfNeeded(fresh.store, fresh.wasEncrypted);
-        return fresh.store;
-      });
-    }
-    return store;
-  }
-
-  async function writeChatHistoryStore(store) {
-    if (storesFromFailedReads.has(store)) {
-      log?.warn?.('[chat-history] The history file could not be read; this save is skipped rather than written over it.');
-      throw Object.assign(
-        new Error('The chat history could not be read; it is not overwritten with an empty one.'),
-        { code: CHAT_HISTORY_UNREADABLE },
-      );
-    }
-    if (safeStorage.isEncryptionAvailable()) {
-      const payload = await encryptForDisk(JSON.stringify(store));
-      if (payload) {
-        await writeJsonAtomic(getChatHistoryPath(), { encrypted: true, payload });
-        return;
-      }
-    }
-    await writeJsonAtomic(getChatHistoryPath(), store);
-  }
+  // One file per chat and an index, held in memory (#985).
+  const chatHistory = createChatHistoryStore({
+    fs,
+    path,
+    safeStorage,
+    safeStorageKey,
+    userDataPath: () => app.getPath('userData'),
+    writeJsonAtomic,
+    encryptForDisk,
+    decryptIfPossible,
+    reportStoreFile,
+    normalizeWorkspaceRoot,
+    noWorkspaceKey: NO_WORKSPACE_KEY,
+    maxChatSessions: MAX_CHAT_SESSIONS,
+    log,
+    platform,
+  });
 
   async function persistLastFolder(folderPath) {
     const raw = typeof folderPath === 'string' ? folderPath.trim() : '';
@@ -1558,9 +1451,16 @@ function createStorageService({
     normalizeLoadedMessages,
     normalizeSessionForLoad,
     normalizeSessionForStore,
-    readChatHistoryStore,
-    writeChatHistoryStore,
-    hasSetAsideChatHistory,
+    normalizeSessionMetaForList,
+    listChatSessions: chatHistory.listSessions,
+    getChatSessionMeta: chatHistory.getSessionMeta,
+    getChatSession: chatHistory.getSession,
+    getActiveChatId: chatHistory.getActiveChatId,
+    saveChatSession: chatHistory.saveSession,
+    patchChatSession: chatHistory.patchSession,
+    deleteChatSession: chatHistory.deleteSession,
+    setActiveChatId: chatHistory.setActiveChatId,
+    hasSetAsideChatHistory: chatHistory.hasSetAsideChatHistory,
     storedChatMessagesChanged,
     withChatHistoryLock,
     persistLastFolder,

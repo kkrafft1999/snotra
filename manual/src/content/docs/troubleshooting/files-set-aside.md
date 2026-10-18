@@ -16,7 +16,7 @@ Nothing beyond the app. Showing the old file uses your file manager: Finder on m
 The notice says ***Your model settings were reset.***, ***The chat history starts empty.*** or a similar line, depending on the file. Below it you see the file's name and the full path of the copy Snotra kept, for example `llm-config.json.unreadable-2026-10-16T09-12-44-120Z`.
 
 1. Choose *Reveal in Finder* (*Show in Explorer* on Windows) in the notice to see the copy.
-2. Set up again what was reset: your models under *Settings › Models*, the web search key and the MCP servers under *Settings › Tool setup*. The view settings and the list of recent folders fill themselves again as you work.
+2. Set up again what was reset: your models under *Settings › Models*, the web search key and the MCP servers under *Settings › Tools › Setup*. The view settings and the list of recent folders fill themselves again as you work.
 3. Close the notice with ×. It does not come back for this file until something happens to the file again.
 
 Keep the copy until you are sure you do not need it. Snotra never deletes it.
@@ -25,7 +25,7 @@ Keep the copy until you are sure you do not need it. Snotra never deletes it.
 
 The file could not be understood. Its content was damaged — a crash while it was written, a sync tool, an edit by hand — or it was written by a newer version of Snotra than the one running now, for example after you went back to an older release. Snotra renames the file by adding `.unreadable-` and the time, then starts that part afresh. Every byte of the old file is still in the copy.
 
-For the chat history the copy is called `chat-history.json.unreadable-…`, or `chat-history.json.undecryptable-…` when it could not be decrypted with this system's key. See [Keychain questions and encrypted storage](../keychain-and-storage/) for that case.
+For the chat history the copy is the whole folder, `chat-history.unreadable-…`, or `chat-history.undecryptable-…` when it could not be decrypted with this system's key; see [Keychain questions and encrypted storage](../keychain-and-storage/) for that case. [since 1.25] When only one chat's file is damaged, only that file is put aside inside the folder, and the notice says ***One chat could not be read and is missing from the history.*** Your other chats stay. A history from before 1.25 is kept as `chat-history.json.unreadable-…` or `chat-history.json.undecryptable-…`.
 
 ## When changes are not saved
 

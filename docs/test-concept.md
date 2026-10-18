@@ -17,6 +17,7 @@ before a merge — and about the rule that keeps any speed-up honest:
 
 | Level | Where | What it is responsible for | What it leaves to another level |
 | --- | --- | --- | --- |
+| **Type check** | `npm run typecheck` (`tsc --checkJs --noEmit`), run by `npm test` before the suite | Core, ports, contracts and adapters against their JSDoc — see [`architecture.md`](./architecture.md#plain-js-checked-by-jsdoc) | Behaviour: it reads the code, it runs nothing |
 | **Unit and wiring** | `test/*.test.js`, `node --test` | Application core, adapters, IPC contracts, the boundary guards in [`architecture.md`](./architecture.md#automated-boundary-guards), renderer components against a `happy-dom` DOM | Real Chromium — layout, focus, sanitizing — and the process model of the running app |
 | **Real-system tests** (inside the unit suite) | e.g. `sandbox-isolation`, `sandbox-runners`, `shell-runner-service`, `workspace-watcher-real-fs`, `mcp-settings-handlers` | What only means something against the real thing: the Seatbelt/bubblewrap sandbox, file-system events, child processes, a real MCP server | Nothing — they guard security and data, so they stay in the gate |
 | **Electron E2E** | `e2e/*.test.mjs`, `node --test` + `playwright-core` | The running app against a fake model server: sanitizing with the real DOMPurify, layout and focus, restarts, approval flows | Look and feel |
@@ -207,7 +208,7 @@ entries than a listing shows.
 
 | Budget | What is measured |
 | --- | --- |
-| PERF-1 | Main process created → the renderer's `snotra:ready` mark, set once the folder and its chat are restored. One warm-up start (it also encrypts the seeded history), then the median of five. |
+| PERF-1 | Main process created → the renderer's `snotra:ready` mark, set once the folder and its chat are restored. One warm-up start (it also moves the seeded single-file history into the per-chat folder of #985 and encrypts it), then the median of five. |
 | PERF-2 | The worse of: the slowest key event while typing below the long chat (Event Timing), and the median of three switches to the long chat, from the click to the first paint with its last message. |
 | PERF-3 | The longest animation frame (`long-animation-frame`) while a 50 KB answer streams in and while the large folder opens. A deliberate 150 ms frame checks first that the observer reports at all; a window that draws nothing would otherwise pass for one that never stalls. |
 | PERF-4 | `app.getAppMetrics()`, working set summed over all processes, after 10 s idle with a chat open — after the start and again after the scenarios; the higher one counts. On macOS the working set includes shared pages, so it reads high. |

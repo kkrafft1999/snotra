@@ -198,6 +198,26 @@
         <div id="tree-filter-results" role="listbox" aria-label="Matching files" data-i18n-attr="aria-label:tree.filter.results" hidden></div>
         <div id="tree-filter-status" role="status" hidden></div>
         <div id="tree-container" role="tree" aria-label="Files" data-i18n-attr="aria-label:tree.label"></div>
+        <!-- The sidebar's foot (#1045): feedback and settings, each one click
+             away. Both are also in the menu (Help, and Settings… / Cmd+,),
+             which is what stays when the sidebar is hidden. -->
+        <div id="sidebar-footer" role="toolbar" aria-label="Feedback and settings" data-i18n-attr="aria-label:sidebar.footer">
+          <div class="icon-btn-row">
+            <button type="button" id="btn-sidebar-feedback" title="Send feedback…" aria-label="Send feedback…" aria-haspopup="dialog" data-i18n-attr="title:sidebar.feedback;aria-label:sidebar.feedback">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.875" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                <path d="M8 9h8"/>
+                <path d="M8 13h5"/>
+              </svg>
+            </button>
+            <button type="button" id="btn-sidebar-settings" title="Settings" aria-label="Settings" aria-haspopup="dialog" data-i18n-attr="title:sidebar.settings;aria-label:sidebar.settings">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.875" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+        </div>
       </aside>
 
       <div id="divider" class="pane-divider" role="separator" aria-orientation="vertical"
@@ -322,7 +342,10 @@
               <button type="button" id="chat-save-notice-link" class="chat-save-notice-link" data-manual-help="chat.saveNotice" data-i18n="chat.saveNotice.link">What can I do?</button></p>
           </div>
         </div>
-        <ol id="chat-messages" role="log" aria-label="Conversation" data-i18n-attr="aria-label:chat.log" aria-live="off" aria-busy="false"></ol>
+        <!-- The log role sits on a wrapper, the list role stays on the <ol>: role="log" on the <ol> itself replaces the list role and leaves the <li> children without a list (#1103). display: contents keeps the wrapper out of the layout. -->
+        <div id="chat-log" role="log" aria-label="Conversation" data-i18n-attr="aria-label:chat.log" aria-live="off" aria-busy="false">
+          <ol id="chat-messages"></ol>
+        </div>
         <!-- The list is redrawn as a whole; announcing it would read the conversation out again (#592). A turn's outcome is said here. -->
         <p id="chat-announcer" class="sr-only" role="status" aria-live="polite"></p>
         <div id="chat-hint" class="hidden"></div>
@@ -340,7 +363,7 @@
           <p id="chat-skill-suggestion" class="chat-skill-suggestion hidden" aria-live="polite"></p>
           <div class="chat-composer-bar" role="toolbar" aria-label="Composer tools" data-i18n-attr="aria-label:chat.composer.toolbar">
             <div class="chat-composer-bar-start">
-              <button type="button" id="btn-chat-mic" title="Voice input" aria-pressed="false" aria-label="Start voice input" data-i18n-attr="title:chat.mic.title;aria-label:chat.mic.label">
+              <button type="button" id="btn-chat-mic" title="Voice input — the recording goes to OpenAI" aria-pressed="false" aria-label="Start voice input" data-i18n-attr="title:chat.mic.title;aria-label:chat.mic.label">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                   <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
                   <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
@@ -432,7 +455,7 @@
                   </div>
                   <!-- The way to everything else Snotra may do here (#449). -->
                   <div class="chat-tool-mode-more">
-                    <button type="button" id="chat-tool-mode-security-link" class="chat-tool-mode-notice-link" data-i18n="chat.toolMode.securityLink">All permissions in Settings › Tools &amp; security</button>
+                    <button type="button" id="chat-tool-mode-security-link" class="chat-tool-mode-notice-link" data-i18n="chat.toolMode.securityLink">All permissions in Settings › Tools › Autonomy</button>
                   </div>
                 </div>
               </span>
@@ -573,12 +596,23 @@
             <span data-i18n="settings.nav.models">Models</span>
             <span class="settings-nav-item__desc" data-i18n="settings.nav.models.desc">API, connection, preferences</span>
           </button>
-          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-security" id="tab-settings-security" data-settings-panel="security">
-            <span data-i18n="settings.nav.security">Tools &amp; security</span>
-            <span class="settings-nav-item__desc" data-i18n="settings.nav.security.desc">What Snotra can and may do</span>
+          <!-- Navigation B of #1119: one group Tools, not clickable, with three
+               entries. The heading is for the eye; each entry carries the
+               group, hidden, at the front of its name. -->
+          <div class="settings-nav-group" id="settings-nav-group-tools" aria-hidden="true" data-i18n="settings.nav.group.tools">Tools</div>
+          <button type="button" class="settings-nav-item settings-nav-item--sub" role="tab" aria-selected="false" aria-controls="panel-settings-security" id="tab-settings-security" data-settings-panel="security" data-settings-group="tools">
+            <span class="visually-hidden" data-i18n="settings.nav.group.tools">Tools</span>
+            <span data-i18n="settings.nav.security">Autonomy</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.security.desc">How freely Snotra acts, and with which tools</span>
           </button>
-          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-tools" id="tab-settings-tools" data-settings-panel="tools">
-            <span data-i18n="settings.nav.tools">Tool setup</span>
+          <button type="button" class="settings-nav-item settings-nav-item--sub" role="tab" aria-selected="false" aria-controls="panel-settings-sandbox" id="tab-settings-sandbox" data-settings-panel="sandbox" data-settings-group="tools">
+            <span class="visually-hidden" data-i18n="settings.nav.group.tools">Tools</span>
+            <span data-i18n="settings.nav.sandbox">Security</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.sandbox.desc">Sandbox and what runs may reach</span>
+          </button>
+          <button type="button" class="settings-nav-item settings-nav-item--sub" role="tab" aria-selected="false" aria-controls="panel-settings-tools" id="tab-settings-tools" data-settings-panel="tools" data-settings-group="tools">
+            <span class="visually-hidden" data-i18n="settings.nav.group.tools">Tools</span>
+            <span data-i18n="settings.nav.tools">Setup</span>
             <span class="settings-nav-item__desc" data-i18n="settings.nav.tools.desc">Interpreter, keys, MCP servers</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-skills" id="tab-settings-skills" data-settings-panel="skills">
@@ -636,14 +670,15 @@
                 <div class="settings-note__body" data-i18n-html="settings.prices.note.body">
                   <p>
                     The table comes from LiteLLM and ships with every release. Snotra only fetches a newer one when you
-                    press &ldquo;Update prices&rdquo;. A price of your own always wins over the table &mdash; for a
+                    press &ldquo;Update prices&rdquo; &mdash; from raw.githubusercontent.com, where LiteLLM keeps it on
+                    GitHub. A price of your own always wins over the table &mdash; for a
                     discount, an Azure deployment or a model the table does not know.
                   </p>
                 </div>
               </details>
               <div class="model-prices__table">
                 <p id="model-prices-table" class="model-prices__table-line"></p>
-                <button type="button" id="btn-model-prices-update" class="btn-secondary" data-i18n="settings.prices.update">Update prices</button>
+                <button type="button" id="btn-model-prices-update" class="btn-secondary" title="Fetches the current table from raw.githubusercontent.com" data-i18n="settings.prices.update" data-i18n-attr="title:settings.prices.update.title">Update prices</button>
               </div>
               <p id="model-prices-status" class="modal-hint" role="status"></p>
               <ul id="model-prices-list" class="model-prices__list" aria-labelledby="heading-model-prices"></ul>
@@ -657,9 +692,8 @@
               <summary class="settings-note__summary"><span data-i18n="security.note.summary">Everything here takes effect immediately. Loosening is confirmed in the system dialog.</span></summary>
               <div class="settings-note__body" data-i18n-html="security.note.body">
                 <p>Main works the state out from the same rules that decide every tool call, so this page cannot show
-                  something different from what happens. Allowing something for good, deleting a block, switching the
-                  sandbox off, a program allowance and &ldquo;Auto&rdquo; as the default are confirmed in the system
-                  dialog; switching something off or taking it back needs no confirmation.</p>
+                  something different from what happens. Allowing something for good, deleting a block and
+                  &ldquo;Auto&rdquo; as the default are confirmed in the system dialog; switching something off or taking it back needs no confirmation.</p>
                 <p>Two tools are not listed because they are part of the basic equipment: <code>list_directory</code>
                   is the look into the open folder, <code>load_skill</code> fetches the instructions of a skill that is
                   switched on.</p>
@@ -762,7 +796,7 @@
                     reaches the network only for the domains the call names &mdash; you approve them on the card, except
                     in &ldquo;Auto&rdquo;; <code>pip</code> and <code>npm</code> installs get their registry automatically. It can still <strong>read</strong> your
                     other files, and tools that verify certificates through the macOS keychain (<code>gh</code>,
-                    <code>terraform</code>) cannot reach the network inside it &mdash; unless you give them a program allowance below. On Linux the sandbox needs the packages
+                    <code>terraform</code>) cannot reach the network inside it &mdash; unless you give them more room under <strong>Tools › Security</strong>. On Linux the sandbox needs the packages
                     <code>bubblewrap</code>, <code>socat</code> and <code>ripgrep</code>.
                   </p>
                   <p>
@@ -774,71 +808,6 @@
                   </p>
                 </div>
               </details>
-            </div>
-            <div class="settings-security-slot" id="settings-sandbox-card">
-              <div class="settings-help-heading">
-                <h4 class="settings-security-subhead" id="heading-workspace-sandbox"><span data-i18n="settings.sandbox.workspace.heading">Sandbox for this workspace</span> <code id="settings-sandbox-workspace-name" class="settings-rules-heading__root"></code></h4>
-                <button type="button" class="settings-help" data-manual-help="workspaceSandbox" aria-label="Help">?</button>
-              </div>
-              <details class="settings-note settings-note--tight">
-                <summary class="settings-note__summary">
-                  <span data-i18n-html="settings.sandbox.workspace.note.summary">Applies to <code>run_python</code> and <code>shell_execute</code>, in this folder only.</span>
-                </summary>
-                <div class="settings-note__body" data-i18n-html="settings.sandbox.workspace.note.body">
-                  <p>
-                    Switch it off only when the sandbox gets in the way of something legitimate here: writing outside
-                    the folder, <code>gh</code> or <code>terraform</code> without network, an older <code>pip</code>.
-                    When it is one program that needs more, a program allowance below is the narrower way.
-                    You confirm switching off in the system dialog. The setting is stored with your permissions, not in the
-                    folder, so a checked-out repository cannot switch it off for itself.
-                  </p>
-                </div>
-              </details>
-              <!-- The state at a glance (#543): shield, title and text say it, not the colour alone. -->
-              <div class="settings-sandbox-tile" id="settings-sandbox-tile" data-tone="on">
-                <svg class="settings-sandbox-tile__shield" width="28" height="28" viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M8 1.6 3.2 3.4v3.9c0 3 2 5.5 4.8 6.7 2.8-1.2 4.8-3.7 4.8-6.7V3.4z"/>
-                  <path class="settings-sandbox-tile__slash" d="M1.8 1.8 14.2 14.2"/>
-                </svg>
-                <div class="settings-sandbox-tile__text">
-                  <label for="input-workspace-sandbox" class="settings-sandbox-tile__title" id="settings-sandbox-tile-title">Sandbox active</label>
-                  <p class="settings-sandbox-tile__body" id="settings-sandbox-tile-body"></p>
-                  <p class="settings-sandbox-tile__note" id="settings-sandbox-tile-note"></p>
-                </div>
-                <span id="status-workspace-sandbox" class="settings-instant-status" role="status"></span>
-                <input type="checkbox" role="switch" class="ds-switch" id="input-workspace-sandbox" data-i18n-attr="aria-label:settings.sandbox.workspace.toggle" aria-label="Sandbox" aria-describedby="settings-sandbox-tile-body settings-sandbox-tile-note settings-sandbox-state" checked>
-              </div>
-              <p id="settings-sandbox-state" class="modal-hint error" role="status" hidden></p>
-            </div>
-            <div class="settings-security-slot" id="settings-allowances-card">
-              <div class="settings-help-heading">
-                <h4 class="settings-security-subhead" id="heading-program-allowances" data-i18n="settings.allowances.heading">Program allowances</h4>
-                <button type="button" class="settings-help" data-manual-help="programAllowances" aria-label="Help">?</button>
-              </div>
-              <details class="settings-note settings-note--tight">
-                <summary class="settings-note__summary">
-                  <span data-i18n="settings.allowances.note.summary">Extra rights inside the sandbox for programs you trust, in every workspace.</span>
-                </summary>
-                <div class="settings-note__body" data-i18n-html="settings.allowances.note.body">
-                  <p>
-                    An allowance applies only when a command runs the program on its own: no chaining, no pipes, no
-                    redirections. The program is recognised by its file, so a file of the same name in a project
-                    folder does not get it. You confirm every new or wider allowance in the system dialog; it is
-                    stored with your permissions, not in a folder.
-                  </p>
-                  <p>
-                    Programs written in Go (<code>gh</code>, <code>terraform</code>, many company tools) need the
-                    macOS certificate check to reach the network at all.
-                  </p>
-                </div>
-              </details>
-              <ul id="settings-allowance-list" class="allowance-list" aria-labelledby="heading-program-allowances"></ul>
-              <p id="settings-allowance-empty" class="settings-empty-hint" data-i18n="settings.allowances.empty">No program has an allowance.</p>
-              <div class="allowance-card__footer">
-                <button type="button" id="btn-add-program-allowance" class="btn-secondary" data-i18n="settings.allowances.add">Add program</button>
-                <span id="status-program-allowances" class="settings-instant-status" role="status"></span>
-              </div>
-              <p id="settings-allowance-error" class="modal-hint error hidden" role="alert"></p>
             </div>
             <div class="settings-security-slot" id="settings-sensitive-card">
               <div class="settings-help-heading">
@@ -902,14 +871,32 @@
             </div>
           </section>
 
+          <!-- Settings › Tools › Security (#1119): the workspaces on the left,
+               starting with All workspaces; the details of the chosen one on
+               the right. Drawn by ToolSecurityPanel.js. -->
+          <section class="settings-panel" id="panel-settings-sandbox" role="tabpanel" aria-labelledby="tab-settings-sandbox" hidden>
+            <div class="settings-help-heading">
+              <p class="settings-security-intro" data-i18n="toolSecurity.intro">How commands and Python runs are kept apart from the rest of your computer, and what they may reach beyond that.</p>
+            </div>
+            <p id="settings-sandbox-integrity" class="modal-warning hidden" role="alert"></p>
+            <p id="settings-sandbox-error" class="modal-hint error hidden" role="alert"></p>
+            <div class="settings-sandbox-split">
+              <nav class="settings-sandbox-nav" aria-label="Workspaces" data-i18n-attr="aria-label:toolSecurity.list.label">
+                <div id="settings-sandbox-list" class="settings-sandbox-list"></div>
+              </nav>
+              <div id="settings-sandbox-detail" class="settings-sandbox-detail"></div>
+            </div>
+            <p id="settings-sandbox-announcer" class="visually-hidden" role="status"></p>
+          </section>
+
           <section class="settings-panel" id="panel-settings-tools" role="tabpanel" aria-labelledby="tab-settings-tools" hidden>
-            <p class="settings-security-intro" data-i18n-html="settings.tools.intro">Settings for the tools that need them, and the MCP servers that bring more. Which tools the model may use, and when Snotra asks first, is on the <strong>Tools &amp; security</strong> page.</p>
+            <p class="settings-security-intro" data-i18n-html="settings.tools.intro">Settings for the tools that need them, and the MCP servers that bring more. Which tools the model may use, and when Snotra asks first, is under <strong>Autonomy</strong>, the sandbox under <strong>Security</strong>.</p>
             <div class="settings-tools-card" id="settings-python-interpreter-card">
               <div class="settings-help-heading">
                 <h3 class="settings-subsection-title" id="heading-python" data-i18n="settings.python.interpreter.heading">Python interpreter</h3>
                 <button type="button" class="settings-help" data-manual-help="python" aria-label="Help">?</button>
               </div>
-              <p class="modal-hint" data-i18n="settings.python.interpreter.where">Whether the model may run Python is switched under Tools &amp; security.</p>
+              <p class="modal-hint" data-i18n="settings.python.interpreter.where">Whether the model may run Python is switched under Tools › Autonomy.</p>
               <div class="modal-field-group">
                 <label for="input-python-interpreter" class="modal-field-label eyebrow-row" data-i18n="settings.python.interpreter.label">
                   Your own interpreter (optional)
@@ -1000,9 +987,9 @@
               <div class="settings-mcp-warning">
                 <span class="settings-mcp-warning__mark" aria-hidden="true">!</span>
                 <p data-i18n-html="settings.mcp.warning">
-                  <strong>An MCP server is somebody else&rsquo;s code, started on your machine.</strong>
-                  It runs with your rights and can do anything you could. Out of the box none is entered
-                  &mdash; nothing runs by itself. Only enter servers whose origin you know.
+                  <strong>An MCP server is somebody else&rsquo;s code.</strong> A local one is started on your
+                  machine and runs with your rights; a remote one receives whatever the model sends it. Out of
+                  the box none is entered &mdash; nothing runs by itself. Only enter servers whose origin you know.
                 </p>
               </div>
               <p id="settings-mcp-error" class="modal-warning hidden" role="alert"></p>
@@ -1183,12 +1170,20 @@
                     <input type="radio" class="ds-segmented__input" name="app-theme" value="dark">
                     <span data-i18n="settings.general.theme.dark">Dark</span>
                   </label>
+                  <label class="ds-segmented__option">
+                    <input type="radio" class="ds-segmented__input" name="app-theme" value="system">
+                    <span data-i18n="settings.general.theme.system">System</span>
+                  </label>
                 </div>
                 <span id="status-app-theme" class="settings-instant-status" role="status"></span>
               </div>
               <details class="settings-note settings-note--tight">
-                <summary class="settings-note__summary"><span data-i18n="settings.general.theme.note.summary">Light or dark interface &mdash; a button in the title bar up to v1.7.3.</span></summary>
+                <summary class="settings-note__summary"><span data-i18n="settings.general.theme.note.summary">Light, dark, or the same as your system.</span></summary>
                 <div class="settings-note__body" data-i18n-html="settings.general.theme.note.body">
+                  <p>
+                    <strong>System</strong> follows the light or dark setting of your operating system and changes with it,
+                    without a restart.
+                  </p>
                   <p>
                     Unlike the other settings, this choice stays <strong>on this device</strong>: it has to be settled
                     before the window is built, or the light interface would flash up briefly at every start.
@@ -1199,16 +1194,8 @@
             <div class="modal-field-group">
               <div class="modal-field-label eyebrow-row" id="label-app-locale" data-i18n="settings.general.locale.label">Interface language</div>
               <div class="settings-choice-row">
-                <div class="ds-segmented" id="choice-app-locale" role="radiogroup" aria-labelledby="label-app-locale">
-                  <label class="ds-segmented__option" lang="en">
-                    <input type="radio" class="ds-segmented__input" name="app-locale" value="en">
-                    <span data-i18n="settings.general.locale.en">English</span>
-                  </label>
-                  <label class="ds-segmented__option" lang="de">
-                    <input type="radio" class="ds-segmented__input" name="app-locale" value="de">
-                    <span data-i18n="settings.general.locale.de">Deutsch</span>
-                  </label>
-                </div>
+                <!-- One option per registered language, each in its own name — built by SettingsModal.js from the locale registry. -->
+                <div class="ds-segmented" id="choice-app-locale" role="radiogroup" aria-labelledby="label-app-locale"></div>
                 <span id="status-app-locale" class="settings-instant-status" role="status"></span>
               </div>
               <details class="settings-note settings-note--tight">
@@ -1351,28 +1338,67 @@
               <input type="text" id="mcp-field-label" class="modal-input" placeholder="GitHub" autocomplete="off">
             </div>
             <div class="modal-field-group">
-              <label for="mcp-field-command" class="modal-field-label" data-i18n="mcpDialog.command.label">Command</label>
-              <input type="text" id="mcp-field-command" class="modal-input modal-input--mono" placeholder="npx" autocomplete="off" spellcheck="false">
+              <div class="modal-field-label" id="label-mcp-transport" data-i18n="mcpDialog.transport.label">Connection</div>
+              <div class="ds-segmented mcp-transport" id="mcp-field-transport" role="radiogroup" aria-labelledby="label-mcp-transport">
+                <label class="ds-segmented__option">
+                  <input type="radio" class="ds-segmented__input" name="mcp-transport" value="stdio" checked>
+                  <span data-i18n="mcpDialog.transport.stdio">Local process (stdio)</span>
+                </label>
+                <label class="ds-segmented__option">
+                  <input type="radio" class="ds-segmented__input" name="mcp-transport" value="http">
+                  <span data-i18n="mcpDialog.transport.http">Remote (HTTP)</span>
+                </label>
+              </div>
             </div>
-            <div class="modal-field-group">
-              <label for="mcp-field-args" class="modal-field-label" data-i18n="mcpDialog.args.label">Arguments</label>
-              <input type="text" id="mcp-field-args" class="modal-input modal-input--mono" placeholder="-y @modelcontextprotocol/server-github" autocomplete="off" spellcheck="false">
-              <p class="modal-hint" data-i18n="mcpDialog.args.hint">Separated by spaces as on the command line; quotes hold things together.</p>
+            <div id="mcp-fields-http" class="mcp-transport-fields hidden">
+              <div class="modal-field-group">
+                <label for="mcp-field-url" class="modal-field-label" data-i18n="mcpDialog.url.label">Server URL</label>
+                <input type="url" id="mcp-field-url" class="modal-input modal-input--mono" placeholder="https://mcp.example.com/mcp" autocomplete="off" spellcheck="false" aria-describedby="mcp-url-hint">
+                <p class="modal-hint" id="mcp-url-hint" data-i18n-html="mcpDialog.url.hint">
+                  The Streamable HTTP endpoint, usually ending in <code lang="en">/mcp</code>. It has to use
+                  <code lang="en">https</code>, except on this computer (<code lang="en">localhost</code>).
+                </p>
+              </div>
+              <div class="modal-field-group">
+                <span class="modal-field-label" id="heading-mcp-headers" data-i18n="mcpDialog.headers.label">Headers</span>
+                <div id="mcp-header-list" class="mcp-env-list" role="group" aria-labelledby="heading-mcp-headers"></div>
+                <button type="button" id="btn-mcp-header-add" class="btn-secondary btn-compact" data-i18n="mcpDialog.headers.add">Add header</button>
+                <p class="modal-hint" id="mcp-header-hint" data-i18n-html="mcpDialog.headers.hint">
+                  For an API key or token, for example <code lang="en">Authorization</code> with
+                  <code lang="en">Bearer &lt;token&gt;</code>. Values are <strong>secret</strong> by default and are stored
+                  encrypted in the system keychain; once saved, a secret value is only replaced or deleted.
+                  Headers are only ever sent to this address.
+                </p>
+              </div>
             </div>
-            <div class="modal-field-group">
-              <label for="mcp-field-cwd" class="modal-field-label" data-i18n="mcpDialog.cwd.label">Working directory</label>
-              <input type="text" id="mcp-field-cwd" class="modal-input modal-input--mono" placeholder="(your home folder)" data-i18n-attr="placeholder:mcpDialog.cwd.placeholder" autocomplete="off" spellcheck="false">
+            <div id="mcp-fields-stdio" class="mcp-transport-fields">
+              <div class="modal-field-group">
+                <label for="mcp-field-command" class="modal-field-label" data-i18n="mcpDialog.command.label">Command</label>
+                <input type="text" id="mcp-field-command" class="modal-input modal-input--mono" placeholder="npx" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="modal-field-group">
+                <label for="mcp-field-args" class="modal-field-label" data-i18n="mcpDialog.args.label">Arguments</label>
+                <input type="text" id="mcp-field-args" class="modal-input modal-input--mono" placeholder="-y @modelcontextprotocol/server-github" autocomplete="off" spellcheck="false">
+                <p class="modal-hint" data-i18n="mcpDialog.args.hint">Separated by spaces as on the command line; quotes hold things together.</p>
+              </div>
+              <div class="modal-field-group">
+                <label for="mcp-field-cwd" class="modal-field-label" data-i18n="mcpDialog.cwd.label">Working directory</label>
+                <input type="text" id="mcp-field-cwd" class="modal-input modal-input--mono" placeholder="(your home folder)" data-i18n-attr="placeholder:mcpDialog.cwd.placeholder" autocomplete="off" spellcheck="false">
+              </div>
+              <div class="modal-field-group">
+                <span class="modal-field-label" id="heading-mcp-env" data-i18n="mcpDialog.env.label">Environment variables</span>
+                <div id="mcp-env-list" class="mcp-env-list" role="group" aria-labelledby="heading-mcp-env"></div>
+                <button type="button" id="btn-mcp-env-add" class="btn-secondary btn-compact" data-i18n="mcpDialog.env.add">Add variable</button>
+                <p class="modal-hint" id="mcp-env-hint" data-i18n-html="mcpDialog.env.hint">
+                  Values are <strong>secret</strong> by default and are stored encrypted in the system
+                  keychain. Once saved, a secret value is no longer shown &mdash; only replaced or deleted.
+                  To rename it or store it in plain text, enter the value again.
+                </p>
+              </div>
             </div>
-            <div class="modal-field-group">
-              <span class="modal-field-label" id="heading-mcp-env" data-i18n="mcpDialog.env.label">Environment variables</span>
-              <div id="mcp-env-list" class="mcp-env-list" role="group" aria-labelledby="heading-mcp-env"></div>
-              <button type="button" id="btn-mcp-env-add" class="btn-secondary btn-compact" data-i18n="mcpDialog.env.add">Add variable</button>
-              <p class="modal-hint" id="mcp-env-hint" data-i18n-html="mcpDialog.env.hint">
-                Values are <strong>secret</strong> by default and are stored encrypted in the system
-                keychain. Once saved, a secret value is no longer shown &mdash; only replaced or deleted.
-                To rename it or store it in plain text, enter the value again.
-              </p>
-            </div>
+            <!-- Filled only while a save would switch the server off (#341); a live
+                 region announces what is put into it, not what is unhidden. -->
+            <div id="mcp-endpoint-hint" class="mcp-endpoint-hint" role="status"></div>
             <p id="mcp-test-hint" class="modal-hint hidden" data-i18n="mcpDialog.test.unsaved">
               Test connection uses the saved configuration &mdash; save your changes first.
             </p>
@@ -1456,6 +1482,29 @@
               <label for="allowance-field-program" class="modal-field-label" data-i18n="allowanceDialog.program.label">Program</label>
               <input type="text" id="allowance-field-program" class="modal-input modal-input--mono" placeholder="gh" autocomplete="off" spellcheck="false" aria-describedby="allowance-program-status">
               <p id="allowance-program-status" class="modal-hint" aria-live="polite" data-i18n="allowanceDialog.program.hint">The name you type in the terminal, or a full path.</p>
+            </div>
+            <!-- Where the allowance applies (#1119): this workspace, or every one. -->
+            <div class="modal-field-group" id="allowance-scope-group">
+              <span class="modal-field-label" id="allowance-scope-label" data-i18n="allowanceDialog.scope.label">Applies to</span>
+              <div class="allowance-scope" role="radiogroup" aria-labelledby="allowance-scope-label">
+                <label class="allowance-scope__option">
+                  <input type="radio" name="allowance-scope" value="workspace" id="allowance-scope-workspace" aria-describedby="allowance-scope-workspace-desc">
+                  <span class="allowance-scope__title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/></svg>
+                    <span data-i18n="allowanceDialog.scope.workspace">This workspace</span>
+                    <code id="allowance-scope-root" class="allowance-scope__root"></code>
+                  </span>
+                  <span class="allowance-scope__desc" id="allowance-scope-workspace-desc"></span>
+                </label>
+                <label class="allowance-scope__option">
+                  <input type="radio" name="allowance-scope" value="global" id="allowance-scope-global" aria-describedby="allowance-scope-global-desc">
+                  <span class="allowance-scope__title">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20a15 15 0 0 1 0-20"/></svg>
+                    <span data-i18n="allowanceDialog.scope.all">All workspaces</span>
+                  </span>
+                  <span class="allowance-scope__desc" id="allowance-scope-global-desc" data-i18n="allowanceDialog.scope.allDesc">For every folder, also ones you open later. For tools you trust everywhere.</span>
+                </label>
+              </div>
             </div>
             <div class="modal-field-group">
               <label for="allowance-field-domains" class="modal-field-label" data-i18n="allowanceDialog.domains.label">Domains it may reach</label>
@@ -1781,6 +1830,93 @@
       </div>
       <footer class="modal-dialog__footer" id="modal-update-footer">
         <div class="modal-actions" id="modal-update-actions"></div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- The feedback form (#1045). FeedbackDialog runs it; main sends it. -->
+  <div id="modal-feedback" class="modal modal-feedback hidden" aria-hidden="true">
+    <div class="modal-backdrop" id="modal-feedback-backdrop"></div>
+    <div
+      class="modal-dialog feedback-dialog"
+      tabindex="-1"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-feedback-title"
+      aria-describedby="modal-feedback-intro">
+      <header class="modal-dialog__header">
+        <h2 id="modal-feedback-title" class="modal-dialog__title" data-i18n="feedback.title">Send feedback</h2>
+        <button type="button" id="modal-feedback-close" class="modal-dialog__close" aria-label="Close dialog" data-i18n-attr="aria-label:feedback.close">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
+          </svg>
+        </button>
+      </header>
+      <form id="feedback-form" class="modal-dialog__body feedback-dialog__body" novalidate>
+        <p id="modal-feedback-intro" class="feedback-dialog__intro" data-i18n="feedback.intro">Found a bug, have an idea, or like something? Tell us.</p>
+        <div class="feedback-dialog__field">
+          <div class="modal-field-label eyebrow-row" id="feedback-kind-label" data-i18n="feedback.kind.label">What is it about?</div>
+          <div class="ds-segmented feedback-dialog__kinds" id="feedback-kind" role="radiogroup" aria-labelledby="feedback-kind-label">
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="feedback-kind" value="bug">
+              <span data-i18n="feedback.kind.bug">Bug</span>
+            </label>
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="feedback-kind" value="idea" checked>
+              <span data-i18n="feedback.kind.idea">Idea</span>
+            </label>
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="feedback-kind" value="praise">
+              <span data-i18n="feedback.kind.praise">Praise</span>
+            </label>
+          </div>
+        </div>
+        <div class="feedback-dialog__field">
+          <label for="feedback-message" class="modal-field-label eyebrow-row" data-i18n="feedback.message.label">Message</label>
+          <textarea id="feedback-message" class="modal-input feedback-dialog__message" rows="6" spellcheck="true" aria-describedby="feedback-message-counter feedback-message-error"></textarea>
+          <div class="feedback-dialog__under">
+            <p id="feedback-message-error" class="modal-hint error feedback-dialog__field-error" hidden></p>
+            <p id="feedback-message-counter" class="modal-hint feedback-dialog__counter" hidden></p>
+          </div>
+        </div>
+        <div class="feedback-dialog__field">
+          <label for="feedback-email" class="modal-field-label eyebrow-row" data-i18n="feedback.email.label">E-mail (optional)</label>
+          <input type="email" id="feedback-email" class="modal-input" autocomplete="email" spellcheck="false" aria-describedby="feedback-email-hint feedback-email-error">
+          <p id="feedback-email-error" class="modal-hint error feedback-dialog__field-error" hidden></p>
+          <p id="feedback-email-hint" class="modal-hint" data-i18n="feedback.email.hint">Only so we can ask back. The address is never published.</p>
+        </div>
+        <div class="feedback-dialog__diagnostics">
+          <label class="modal-checkbox">
+            <input type="checkbox" id="feedback-diagnostics" checked aria-describedby="feedback-diagnostics-values feedback-diagnostics-privacy">
+            <span data-i18n="feedback.diagnostics.label">Include technical details</span>
+          </label>
+          <p id="feedback-diagnostics-values" class="feedback-dialog__diagnostics-values"></p>
+          <p id="feedback-diagnostics-privacy" class="feedback-dialog__diagnostics-privacy" data-i18n="feedback.diagnostics.privacy">Chat contents, file paths and keys are never sent.</p>
+        </div>
+        <p class="feedback-dialog__public">
+          <span data-i18n="feedback.public">Your message will be published as a public issue on GitHub.</span>
+          <a href="#" id="feedback-privacy-link" class="feedback-dialog__link" data-i18n="feedback.privacyLink">Privacy policy</a>
+        </p>
+        <div id="feedback-status" class="feedback-dialog__status" role="status" aria-live="polite"></div>
+        <div id="feedback-fallback" class="feedback-dialog__fallback" hidden>
+          <button type="button" id="feedback-copy" class="btn-secondary" data-i18n="feedback.fallback.copy">Copy text</button>
+          <button type="button" id="feedback-github" class="btn-secondary" data-i18n="feedback.fallback.github">Open on GitHub instead</button>
+        </div>
+      </form>
+      <div id="feedback-sent" class="modal-dialog__body feedback-dialog__sent" hidden>
+        <svg class="feedback-dialog__sent-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.875" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="10"/><path d="m8 12.5 2.8 2.8L16.5 9.5"/>
+        </svg>
+        <h3 id="feedback-sent-title" class="feedback-dialog__sent-title" data-i18n="feedback.sent.title">Thank you!</h3>
+        <p id="feedback-sent-body" class="feedback-dialog__sent-body"></p>
+      </div>
+      <footer class="modal-dialog__footer">
+        <div class="modal-actions">
+          <button type="button" id="feedback-cancel" class="btn-secondary" data-i18n="feedback.cancel">Cancel</button>
+          <button type="button" id="feedback-open-issue" class="btn-secondary" data-i18n="feedback.sent.open" hidden>Open issue</button>
+          <button type="submit" form="feedback-form" id="feedback-send" class="btn-primary" data-i18n="feedback.send">Send</button>
+          <button type="button" id="feedback-done" class="btn-primary" data-i18n="feedback.done" hidden>Done</button>
+        </div>
       </footer>
     </div>
   </div>

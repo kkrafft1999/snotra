@@ -66,6 +66,10 @@ function createChatSessionSettings({
   applyPreset,
   getDefaultPresetId,
   isPresetUsable = () => true,
+  // Writes the mode of the chat coming on screen into the policy store, as
+  // `(mode, { chatId })`. A result with `ok: false` means the store refused
+  // it — "Auto" without encrypted storage (#419), or never confirmed for this
+  // chat or its workspace (#980).
   applyMode,
   // Womit der Chat gerade liefe. Ohne die beiden wird stur angewandt — das ist
   // richtig, nur teurer.
@@ -135,20 +139,12 @@ function createChatSessionSettings({
   /**
    * Wert auch in die Verlaufsdatei schreiben, sofern der Chat dort schon steht.
    * Ein Chat ohne erste Nachricht hat noch keine Zeile — dessen Wert reist über
-   * `valuesFor` mit, wenn der Verlauf ihn zum ersten Mal speichert.
+   * `valuesFor` mit, wenn der Verlauf ihn zum ersten Mal speichert. Since #985
+   * it goes into the history's index alone; the chat's file stays as it is.
    */
   async function persist(chatId, patch) {
     try {
-      await chatHistoryStore.withChatHistoryLock(async () => {
-        const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-        const session = store.sessions.find((s) => s && s.id === chatId);
-        if (!session) return;
-        for (const [key, value] of Object.entries(patch)) {
-          if (value === undefined) delete session[key];
-          else session[key] = value;
-        }
-        await chatHistoryStore.writeChatHistoryStore(store);
-      });
+      await chatHistoryStore.withChatHistoryLock(() => chatHistoryStore.patchSession(chatId, patch));
     } catch (error) {
       // Ein nicht gespeicherter Merkwert darf den Wechsel nicht abbrechen:
       // Im Lauf gilt er trotzdem, nur der nächste Start kennt ihn dann nicht.
@@ -169,8 +165,7 @@ function createChatSessionSettings({
 
   async function readStoredValues(chatId) {
     try {
-      const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-      const session = store.sessions.find((s) => s && s.id === chatId);
+      const session = await chatHistoryStore.getSessionMeta(chatId);
       if (!session) return {};
       const out = {};
       const presetId = chatModelPresetIdForStore(session.modelPresetId);
@@ -212,6 +207,18 @@ function createChatSessionSettings({
   }
 
   /**
+   * A chat stored at "Auto" on a system that lost its encrypted storage
+   * (#419): the store refuses "Auto", and the chat runs at the default mode
+   * rather than at what the last chat left.
+   */
+  async function applyModeOrDefault(mode, chatId) {
+    const result = await applyMode(mode, { chatId });
+    if (result?.ok === false && mode !== DEFAULT_TOOL_PERMISSION_MODE) {
+      await applyMode(DEFAULT_TOOL_PERMISSION_MODE, { chatId });
+    }
+  }
+
+  /**
    * Chat wird zum aktiven: gespeichertes Modell und gespeicherten Modus
    * anwenden. Liefert, was danach gilt — die Oberfläche liest ihren Stand
    * anschließend ohnehin neu, der Rückgabewert macht es für Tests prüfbar.
@@ -246,7 +253,7 @@ function createChatSessionSettings({
     // chat on screen into the store; it discards nothing on its own (#320).
     // The mode goes first (#559): a model switch that fails must not leave
     // this chat running under the mode of the one before it.
-    if (mode !== activeMode) await applyMode(mode);
+    if (mode !== activeMode) await applyModeOrDefault(mode, chatId);
     if (presetId && presetId !== (await getActivePresetId())) await applyPreset(presetId);
     // Only the chat's *own* mode changing voids its cards and approvals — a
     // chat restored from "auto" to "smart", say (concept §7).
@@ -352,8 +359,7 @@ function createChatSessionSettings({
     if (local) return local;
     if (storedLevels.has(chatId)) return storedLevels.get(chatId);
     try {
-      const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-      const session = store.sessions.find((s) => s && s.id === chatId);
+      const session = await chatHistoryStore.getSessionMeta(chatId);
       // Not saved yet: nothing to remember, the first save may bring a level.
       if (!session) return null;
       // A chat from before #726 that has not been on screen since: the level
@@ -389,8 +395,7 @@ function createChatSessionSettings({
     }
     if (storedOverrides.has(chatId)) return storedOverrides.get(chatId);
     try {
-      const store = await chatHistoryStore.readChatHistoryStore({ skipMigration: true });
-      const session = store.sessions.find((s) => s && s.id === chatId);
+      const session = await chatHistoryStore.getSessionMeta(chatId);
       const overrides = normalizeChatConfigOverrides(session?.configOverrides);
       // Not saved yet: nothing to remember — the first save brings what the
       // card set through `valuesFor`.

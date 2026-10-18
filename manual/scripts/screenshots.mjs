@@ -16,6 +16,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { cp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -53,7 +54,8 @@ const { launchApp, makeTempDir, poll, prepareUserData } = await import('../../e2
 const { routeOpenAiImages } = await import('../../e2e/helpers/fake-images.mjs');
 const { startFakeRealtime, routeRealtime, feedMicrophone, speechLikeWav } = await import('../../e2e/helpers/fake-realtime.mjs');
 
-const LOCALES = ['en', 'de'];
+// The registered languages — a new catalogue is shot as well without a change here.
+const { LOCALES } = createRequire(import.meta.url)('../../src/shared/i18n/locales.js');
 const THEMES = ['light', 'dark'];
 
 /**
@@ -169,6 +171,16 @@ async function storeOpenAiKey(page, config) {
     providerPatches: { openai: { apiKey: 'sk-manual-placeholder' } },
   }), { rows: config.presets, active: config.activePresetId });
   if (!saved?.ok) throw new Error(`OpenAI key not stored: ${JSON.stringify(saved)}`);
+}
+
+/** Stores a placeholder Anthropic key the same way; nothing is sent to Anthropic. */
+async function storeAnthropicKey(page, config) {
+  const saved = await page.evaluate(({ rows, active }) => window.electronAPI.commitSettings({
+    presets: rows,
+    activePresetId: active,
+    providerPatches: { anthropic: { apiKey: 'sk-ant-manual-placeholder' } },
+  }), { rows: config.presets, active: config.activePresetId });
+  if (!saved?.ok) throw new Error(`Anthropic key not stored: ${JSON.stringify(saved)}`);
 }
 
 /**
@@ -480,15 +492,18 @@ const DEMO_MEMORY = {
 };
 
 /**
- * What the update dialog is told when a newer version exists: the notes of a
- * release as GitHub delivers them, a hand-written highlight and the generated
- * list. They stay English in both languages — that is what GitHub holds.
+ * What the update dialog is told when a newer version exists: the body of a
+ * release as GitHub delivers it — the section for the user in both languages
+ * (#1072) above the generated list, which the dialog leaves out.
  */
 const UPDATE_NOTES = [
-  '## Highlights',
-  '',
+  '<!-- snotra:notes en -->',
   '- **Back and forward in the preview.** Two arrows in the preview header step through the files it showed.',
   '- **Snotra tells you when an approval waits out of sight.** A system notification names the chat and what waits.',
+  '<!-- snotra:notes de -->',
+  '- **Vor und zurück in der Vorschau.** Zwei Pfeile im Kopf der Vorschau blättern durch die Dateien, die sie gezeigt hat.',
+  '- **Snotra sagt dir, wenn eine Freigabe außer Sicht wartet.** Eine Systembenachrichtigung nennt den Chat und was wartet.',
+  '<!-- snotra:notes end -->',
   '',
   "## What's Changed",
   '* Go back and forward through the files the preview showed (#822) by @kkrafft1999 in https://github.com/kkrafft1999/snotra/pull/824',
@@ -709,7 +724,58 @@ const MOTIFS = {
     },
   },
 
-  /** Settings › Tools & security for the demo project, shell commands on. */
+  /**
+   * Settings › Tools › Security (#1119): the demo project open with a program
+   * and two hosts of its own, a second folder with the sandbox off, a third
+   * one that is gone, and a program and a host for all workspaces.
+   */
+  'tool-security': {
+    prefs: { shellExecutionEnabled: true },
+    text: {
+      en: { other: 'invoice-tool', gone: 'old-project' },
+      de: { other: 'rechnungs-tool', gone: 'altes-projekt' },
+    },
+    async prepare({ userDataDir, workspace, locale }) {
+      const names = locale === 'de' ? ['rechnungs-tool', 'altes-projekt'] : ['invoice-tool', 'old-project'];
+      const others = names.map((name) => path.join(path.dirname(workspace), name));
+      for (const folder of others) {
+        await mkdir(folder, { recursive: true });
+        await writeFile(path.join(folder, 'README.md'), '# Example\n', 'utf8');
+      }
+      await writeFile(path.join(userDataDir, 'folder-history.json'), JSON.stringify({ paths: [workspace, ...others] }), 'utf8');
+    },
+    async setUp({ app, page, text, workspace }) {
+      // The system dialogs that confirm each allowance answer "yes".
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({ response: 0 });
+      });
+      const call = (name, ...args) => page.evaluate(([n, a]) => window.electronAPI[n](...a), [name, args]);
+      const openFolder = async (folder) => {
+        await call('activateFolder', folder);
+        await poll(async () => (await call('getSandboxOverview')).activeRoot === folder, { what: `${path.basename(folder)} open` });
+      };
+      const other = path.join(path.dirname(workspace), text.other);
+      const gone = path.join(path.dirname(workspace), text.gone);
+      await openFolder(other);
+      await call('setWorkspaceSandbox', false);
+      await openFolder(gone);
+      await call('addSandboxHosts', { hosts: ['pypi.org:443'], scope: 'workspace' });
+      await openFolder(workspace);
+      await rm(gone, { recursive: true, force: true });
+      await call('setProgramAllowance', { program: 'git', domains: ['github.com', 'api.github.com'], writePaths: [], trustd: false, scope: 'workspace' });
+      await call('setProgramAllowance', { program: 'curl', domains: ['registry.npmjs.org'], writePaths: [], trustd: false, scope: 'global' });
+      await call('addSandboxHosts', { hosts: ['huggingface.co:443', '*.pytorch.org'], scope: 'workspace' });
+      await call('addSandboxHosts', { hosts: ['gitlab.example.com:22'], scope: 'global' });
+      await openSettingsPanel(app, page, 'sandbox');
+      await poll(() => page.evaluate(() => document.querySelectorAll('.settings-sandbox-ws').length === 4
+        && document.querySelector('.settings-sandbox-ws[aria-current="true"]')?.dataset.tone === 'on'), { what: 'four entries, the open one chosen' });
+      // No focus ring on the tab the click left it on.
+      await page.evaluate(() => document.activeElement?.blur());
+      return clipAround(page, SETTINGS_PANEL, 0);
+    },
+  },
+
+  /** Settings › Tools › Autonomy for the demo project, shell commands on. */
   'tools-and-security': {
     prefs: { shellExecutionEnabled: true },
     async setUp({ app, page }) {
@@ -841,6 +907,37 @@ const MOTIFS = {
     },
   },
 
+  /**
+   * The same menu on a Claude model (#994): every provider shows the levels
+   * its chosen model takes.
+   */
+  'model-menu-claude': {
+    prefs: { chatPanelWidth: WIDE_CHAT },
+    configure(config) {
+      const local = config.presets[0];
+      local.model = 'qwen3:8b';
+      local.connection.displayName = 'Ollama';
+      config.presets.unshift(
+        { id: 'claude-opus-5-5', providerId: 'anthropic', model: 'claude-opus-5-5', menuVisible: true },
+        { id: 'claude-sonnet-4-6', providerId: 'anthropic', model: 'claude-sonnet-4-6', menuVisible: true },
+      );
+      config.activePresetId = 'claude-opus-5-5';
+      config.activeProvider = 'anthropic';
+    },
+    async setUp({ page, config }) {
+      await storeAnthropicKey(page, config);
+      // As for 'model-menu': the window learns about the key on a reload.
+      await page.reload();
+      await poll(() => page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length > 0),
+        { what: 'drawn tree after the reload' });
+      await poll(() => page.evaluate(() => /claude-opus-5-5/.test(document.getElementById('chat-model-pill-label')?.textContent ?? '')),
+        { what: 'pill on claude-opus-5-5' });
+      await page.click('#btn-chat-model-picker');
+      await poll(() => shown(page, 'chat-model-menu'), { what: 'model menu' });
+      return clipAround(page, ['#chat-model-menu', '#chat-input-row'], 16);
+    },
+  },
+
   /** An answer with its tool log opened: what Snotra read and changed. */
   'tool-log': {
     prefs: { chatPanelWidth: WIDE_CHAT },
@@ -928,7 +1025,14 @@ const MOTIFS = {
         const img = document.querySelector('[data-motif="answer"] img');
         return Boolean(img && img.complete && img.naturalWidth > 0);
       }), { what: 'image in the answer' });
-      await page.evaluate(() => document.querySelector('[data-motif="answer"]').scrollIntoView({ block: 'end' }));
+      // The answer is the last message: scrolled to the list's end, the gap
+      // below it stays clear of the composer. scrollIntoView() stops short when
+      // the list overflows by less than its bottom padding, and the clip then
+      // caught the top edge of the composer card (#1125).
+      await page.evaluate(() => {
+        const list = document.getElementById('chat-messages');
+        list.scrollTop = list.scrollHeight;
+      });
       return clipAround(page, '[data-motif="answer"]', 16);
     },
   },
@@ -1097,12 +1201,32 @@ const MOTIFS = {
     },
   },
 
-  /** Settings › General. */
+  /** Settings › General, with "System" picked as the appearance (#999), so that both themes show the same choice. */
   'settings-general': {
     async setUp({ app, page }) {
       await openSettingsPanel(app, page, 'general');
+      await page.click('#choice-app-theme input[value="system"] + span');
+      // The "Saved" next to the choice fades after a moment; the picture shows the choice, not the save.
+      await poll(() => page.evaluate(() => document.querySelector('#choice-app-theme input[value="system"]').checked
+        && !document.getElementById('status-app-theme').classList.contains('is-visible')),
+      { what: 'System picked, "Saved" faded', timeoutMs: 15000 });
       await page.mouse.move(0, 0);
       return clipAround(page, SETTINGS_PANEL, 0);
+    },
+  },
+
+  /** The feedback form (#1045), opened from the bar at the foot of the sidebar, a message typed. */
+  'feedback-form': {
+    async setUp({ page, locale }) {
+      await page.click('#btn-sidebar-feedback');
+      await poll(() => page.evaluate(() => document.getElementById('feedback-diagnostics-values').textContent.length > 0),
+        { what: 'feedback form with its diagnostics' });
+      await page.fill('#feedback-message', locale === 'de'
+        ? 'Ich hätte gern eine Möglichkeit, einen Chat als Markdown-Datei zu exportieren, um ihn im Team weiterzugeben.'
+        : 'I would like to export a chat as a Markdown file, so I can pass it on to my team.');
+      await page.mouse.move(0, 0);
+      await pause(200);
+      return clipAround(page, '#modal-feedback .feedback-dialog', 24);
     },
   },
 
@@ -1153,6 +1277,34 @@ const MOTIFS = {
           label: 'GitHub',
           command: 'npx',
           args: ['-y', '@modelcontextprotocol/server-github'],
+          enabled: false,
+        }],
+      }), 'utf8');
+    },
+    async setUp({ app, page }) {
+      await openSettingsPanel(app, page, 'tools');
+      await poll(() => page.evaluate(() => document.querySelectorAll('#settings-mcp-list .mcp-row').length > 0),
+        { what: 'MCP server row' });
+      await page.evaluate(() => document.querySelector('#settings-mcp-list .mcp-row .btn-compact').click());
+      await poll(() => shown(page, 'mcp-server-overlay'), { what: 'MCP server dialog' });
+      await pause(200);
+      await page.mouse.move(0, 0);
+      return clipAround(page, '#dialog-mcp-server', 24);
+    },
+  },
+
+  /** The dialog of a remote MCP server (#341): address and headers instead of a command. */
+  'mcp-server-remote': {
+    async prepare({ userDataDir }) {
+      // Never connected. The header is stored as a secret; the dialog only
+      // shows that one is there, so it is drawn without decrypting anything.
+      await writeFile(path.join(userDataDir, 'mcp-servers.json'), JSON.stringify({
+        servers: [{
+          id: 'wiki',
+          label: 'Wiki',
+          transport: 'http',
+          url: 'https://mcp.example.com/mcp',
+          headers: { Authorization: { enc: 'c3RvcmVk' } },
           enabled: false,
         }],
       }), 'utf8');

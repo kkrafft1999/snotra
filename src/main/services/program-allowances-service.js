@@ -32,7 +32,9 @@ const { quoteArgv } = require('./sandbox-service');
  * @param {object} deps.os
  * @param {string} [deps.platform]
  * @param {() => Promise<string>} [deps.readUserPath]  the PATH of the user's shell
- * @param {() => Promise<object[]>} [deps.readAllowances]  the stored allowances
+ * @param {(workspaceRoot: string|null) => Promise<object[]>} [deps.readAllowances]
+ *   the allowances that apply in a workspace: its own and the global ones,
+ *   added up per program (#1119)
  * @param {string[]} [deps.protectedRoots]  Snotra's own storage, never writable
  * @param {string[]} [deps.sensitivePaths]  what the sandbox keeps unreadable (`~` allowed)
  */
@@ -228,9 +230,9 @@ function createProgramAllowances({
    *      command: string, entry: object}
    *   | {skipped: {program: string, reason: string}}>}
    */
-  async function match({ command, cwd } = {}) {
+  async function match({ command, cwd, workspaceRoot = null } = {}) {
     if (platform === 'win32') return null;
-    const allowances = (await readAllowances().catch(() => []))
+    const allowances = (await readAllowances(workspaceRoot || null).catch(() => []))
       .map(normalizeProgramAllowance)
       .filter(Boolean);
     if (allowances.length === 0 || typeof command !== 'string') return null;

@@ -246,6 +246,52 @@ export function markdownToSafeHtml(raw, { breaks = true, keepRelativeLinks: keep
 }
 
 /**
+ * How much of a streaming chat answer is final (#998): the length of the
+ * leading blocks that no further text can change. They are rendered once; on
+ * every frame only the rest — the open block — goes through Markdown and the
+ * sanitizer again, so a frame costs what that block costs, not what the whole
+ * answer does.
+ *
+ * Rendered one after the other, the pieces have to come out exactly as the
+ * whole text would. A boundary therefore counts only where marked starts a
+ * new block after a blank line, and only once the first line of that block is
+ * complete: without the blank line marked may still draw the next lines into
+ * the paragraph above, and a half line like `2` may still turn into `2.`,
+ * an item that joins the list above. Everything else stays open.
+ *
+ * `null` means: render the whole answer, as before. That is the case for raw
+ * HTML — a tag left open in one block reaches into the next when the browser
+ * parses them together, so cut apart they would come out differently — and
+ * for a link definition, which turns `[x]` anywhere above it into a link.
+ * It is also the case where marked is not loaded (the DOM tests), or where its
+ * tokens do not add up to the text, such as a `\r\n` it normalises.
+ */
+export function closedMarkdownLength(raw, { breaks = true } = {}) {
+  const text = String(raw ?? '');
+  if (typeof marked === 'undefined' || typeof marked.lexer !== 'function') return null;
+  const tokens = marked.lexer(text, { breaks, gfm: true });
+  if (Object.keys(tokens.links ?? {}).length > 0) return null;
+  let hasHtml = false;
+  marked.walkTokens(tokens, (token) => {
+    if (token.type === 'html') hasHtml = true;
+  });
+  if (hasHtml) return null;
+  const starts = [];
+  let end = 0;
+  for (const token of tokens) {
+    starts.push(end);
+    end += token.raw.length;
+  }
+  if (end !== text.length) return null;
+  for (let i = tokens.length - 1; i > 0; i -= 1) {
+    if (tokens[i].type === 'space') continue;
+    const start = starts[i];
+    if (text.endsWith('\n\n', start) && text.includes('\n', start)) return start;
+  }
+  return 0;
+}
+
+/**
  * Sanitized HTML as a fragment in which no image has started loading (#402).
  *
  * The HTML is parsed inside a `<template>`, whose content belongs to an inert
