@@ -1,0 +1,462 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Snotra Agent — Settings › Remote access (UI mockup)</title>
+<!-- The app's own styles, so the panel looks exactly like Settings. Open this file in a browser from the repository. -->
+<link rel="stylesheet" href="../../src/renderer/styles/inter.css">
+<link rel="stylesheet" href="../../src/renderer/styles/tokens.css">
+<link rel="stylesheet" href="../../src/renderer/styles.css">
+<style>
+/* ---------- mockup chrome (not part of the design) ---------- */
+:root { --mk-qr-plate: #FFFFFF; --mk-qr-ink: #111111; --mk-qr-muted: #4A4A4A; } /* proposed token --ds-qr-plate: light in both themes */
+html, body { margin: 0; background: var(--ds-grey-bg); color: var(--text-primary); font-family: var(--font-ui); }
+html, body { height: auto !important; min-height: 100%; overflow: auto !important; display: block !important; }
+[hidden] { display: none !important; }
+.mk-toolbar { position: sticky; top: 0; z-index: 5000; display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center;
+  padding: 10px 20px; background: var(--ds-surface); border-bottom: 1px solid var(--ds-grey-divider); font-size: 12px; }
+.mk-group { display: flex; align-items: center; gap: 6px; }
+.mk-group > span { color: var(--ds-grey-strong); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; font-size: 10.5px; }
+.mk-seg { display: inline-flex; border: 1px solid var(--ds-grey-divider); border-radius: 999px; overflow: hidden; }
+.mk-seg button { font: inherit; font-size: 12px; padding: 5px 11px; border: 0; background: transparent; color: var(--text-primary); cursor: pointer; }
+.mk-seg button + button { border-left: 1px solid var(--ds-grey-divider); }
+.mk-seg button[aria-pressed='true'] { background: var(--ds-blue); color: var(--ds-white); }
+.mk-toolbar select { font: inherit; font-size: 12px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--ds-grey-divider); background: var(--ds-surface); color: var(--text-primary); }
+.mk-stage { position: relative; flex: none; width: 1120px; height: 900px; margin: 18px auto 0; border: 1px solid var(--ds-grey-divider); border-radius: 10px; overflow: hidden; background: var(--ds-chat-bg, var(--ds-grey-bg)); }
+.mk-stage .modal { position: absolute; }
+.mk-stage .modal-settings-root .modal-dialog.settings-dialog { height: 780px; max-height: 780px; }
+.mk-stage .add-model-overlay { position: absolute; }
+.mk-notes { width: 1120px; margin: 14px auto 40px; font-size: 13px; line-height: 1.55; color: var(--text-primary); }
+.mk-notes h3 { font-size: 13px; margin: 0 0 4px; }
+.mk-notes p { margin: 0 0 8px; max-width: 110ch; }
+.mk-notes .mk-rec { border-left: 3px solid var(--ds-blue); padding: 6px 12px; background: var(--ds-blue-soft); border-radius: 0 6px 6px 0; }
+.mk-caption { position: absolute; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--ds-grey-strong); background: var(--ds-surface);
+  border: 1px dashed var(--ds-grey-muted); border-radius: 999px; padding: 2px 10px; white-space: nowrap; z-index: 1300; }
+
+/* ---------- Remote access panel (design proposal) ---------- */
+.ra-card { border: 1px solid var(--ds-grey-divider); border-radius: var(--ds-radius-md); padding: 18px 20px; background: var(--bg-primary); margin-bottom: 14px; }
+.ra-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 34px 24px 30px; }
+.ra-empty__icon { width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: var(--ds-blue-soft); color: var(--ds-blue); margin-bottom: 14px; }
+.ra-empty__title { margin: 0 0 6px; font-size: var(--ds-font-size-lg); font-weight: 600; }
+.ra-empty__text { margin: 0 0 4px; font-size: var(--ds-font-size-base); color: var(--text-muted-strong); max-width: 46ch; line-height: 1.5; }
+.ra-empty__need { margin: 0 0 18px; font-size: var(--ds-font-size-md); color: var(--ds-grey-muted); }
+.ra-notice { display: flex; gap: 8px; align-items: flex-start; font-size: var(--ds-font-size-md); color: var(--text-muted-strong);
+  border: 1px solid var(--ds-grey-divider); border-radius: var(--ds-radius-md); padding: 9px 12px; margin-bottom: 14px; background: var(--ds-grey-bg); }
+.ra-notice svg { flex: none; margin-top: 1px; color: var(--ds-grey-muted); }
+
+.ra-flow__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.ra-flow__title { margin: 0; font-size: var(--ds-font-size-lg); font-weight: 600; }
+.ra-steps { display: flex; gap: 6px; list-style: none; margin: 0; padding: 0; font-size: var(--ds-font-size-sm); }
+.ra-steps li { display: flex; align-items: center; gap: 6px; color: var(--ds-grey-muted); }
+.ra-steps li + li::before { content: ''; width: 18px; height: 1px; background: var(--ds-grey-divider); margin-right: 2px; }
+.ra-steps .n { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-weight: 600; font-size: 11px;
+  border: 1px solid var(--ds-grey-divider); color: var(--ds-grey-strong); background: var(--bg-primary); }
+.ra-steps [aria-current='step'] { color: var(--text-primary); font-weight: 600; }
+.ra-steps [aria-current='step'] .n { background: var(--ds-blue); border-color: var(--ds-blue); color: var(--ds-white); }
+.ra-steps .is-done .n { border-color: var(--ds-blue); color: var(--ds-blue); }
+
+.ra-scan { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 26px; align-items: start; }
+.ra-qr { position: relative; width: 222px; height: 222px; border-radius: var(--ds-radius-md); background: var(--mk-qr-plate); border: 1px solid var(--ds-grey-divider); display: grid; place-items: center; }
+.ra-qr svg { display: block; }
+.ra-qr--expired svg { opacity: .08; }
+.ra-qr__over { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; }
+.ra-qr__over strong { display: block; font-size: var(--ds-font-size-base); color: var(--mk-qr-ink); }
+.ra-qr__over span { display: block; font-size: var(--ds-font-size-md); color: var(--mk-qr-muted); margin-top: 4px; }
+.ra-howto { margin: 0 0 16px; padding-left: 0; list-style: none; counter-reset: s; font-size: var(--ds-font-size-base); line-height: 1.5; }
+.ra-howto li { counter-increment: s; display: flex; gap: 10px; margin-bottom: 6px; }
+.ra-howto li::before { content: counter(s); flex: none; width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--ds-blue-border); color: var(--ds-blue-strong); font-size: 11px; font-weight: 600; display: grid; place-items: center; margin-top: 1px; }
+.ra-key__label { display: block; font-size: var(--ds-font-size-xs); font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ds-grey-muted); margin-bottom: 6px; }
+.ra-key { display: inline-block; font-family: var(--font-mono); font-size: 19px; letter-spacing: .06em; padding: 7px 12px; border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card); color: var(--text-primary); font-variant-numeric: tabular-nums; user-select: all; white-space: nowrap; }
+.ra-timer { margin-top: 16px; max-width: 320px; }
+.ra-timer__row { display: flex; justify-content: space-between; font-size: var(--ds-font-size-md); color: var(--text-muted-strong); margin-bottom: 6px; font-variant-numeric: tabular-nums; }
+.ra-timer__track { height: 4px; border-radius: 999px; background: var(--ds-grey-divider); overflow: hidden; }
+.ra-timer__fill { height: 100%; background: var(--ds-blue); border-radius: 999px; transition: width 1s linear; }
+.ra-wait { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: var(--ds-font-size-base); color: var(--text-primary); }
+.ra-dots { display: inline-flex; gap: 3px; }
+.ra-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--ds-blue); animation: ra-pulse 1.2s infinite ease-in-out; }
+.ra-dots i:nth-child(2) { animation-delay: .2s; } .ra-dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes ra-pulse { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .ra-dots i { animation: none; opacity: .7; } .ra-timer__fill { transition: none; } }
+.ra-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--ds-grey-divider); }
+
+.ra-confirm__lead { margin: 0 0 4px; font-size: var(--ds-font-size-base); font-weight: 600; }
+.ra-confirm__sub { margin: 0 0 16px; font-size: var(--ds-font-size-md); color: var(--text-muted-strong); }
+.ra-words { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; list-style: none; margin: 0 0 14px; padding: 0; max-width: 520px; }
+.ra-words li { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px; border: 1px solid var(--ds-blue-border); background: var(--ds-blue-soft); border-radius: var(--ds-radius-md); }
+.ra-words .i { font-size: 11px; font-weight: 600; color: var(--ds-blue-strong); font-variant-numeric: tabular-nums; }
+.ra-words .w { font-size: 17px; font-weight: 600; letter-spacing: .01em; }
+.ra-device-line { display: flex; align-items: center; gap: 8px; font-size: var(--ds-font-size-md); color: var(--text-muted-strong); }
+.ra-sys-hint { display: flex; gap: 8px; align-items: center; margin-top: 14px; font-size: var(--ds-font-size-md); color: var(--text-muted-strong); }
+
+.ra-device { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+.ra-device__icon { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--ds-blue-soft); color: var(--ds-blue); }
+.ra-device__name { margin: 0; font-size: var(--ds-font-size-lg); font-weight: 600; }
+.ra-status { display: flex; align-items: center; gap: 7px; margin-top: 3px; font-size: var(--ds-font-size-md); color: var(--text-muted-strong); }
+.ra-status__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.ra-status--on .ra-status__dot { background: var(--ds-blue); }
+.ra-status--on strong { color: var(--ds-blue-strong); font-weight: 600; }
+.ra-status--off .ra-status__dot { border: 1.5px solid var(--ds-grey-muted); }
+.ra-status--off strong { font-weight: 600; color: var(--text-primary); }
+.ra-meta { margin-top: 2px; font-size: var(--ds-font-size-sm); color: var(--ds-grey-muted); }
+.ra-device__actions { display: flex; gap: 8px; }
+.ra-rows { margin: 0; padding: 0; list-style: none; }
+.ra-rows li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 10px 0; border-top: 1px solid var(--ds-grey-divider); font-size: var(--ds-font-size-base); }
+.ra-rows li:first-child { border-top: 0; padding-top: 0; }
+.ra-rows .k { color: var(--text-primary); }
+.ra-rows .v { color: var(--text-muted-strong); font-size: var(--ds-font-size-md); text-align: right; }
+.ra-link { background: none; border: 0; padding: 0; font: inherit; color: var(--ds-blue-strong); font-weight: 500; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+.ra-ask { border: 1px solid var(--ds-grey-muted); border-radius: var(--ds-radius-md); padding: 16px 18px; background: var(--bg-primary); margin-bottom: 14px; }
+.ra-ask__title { margin: 0 0 6px; font-size: var(--ds-font-size-base); font-weight: 600; }
+.ra-ask__text { margin: 0; font-size: var(--ds-font-size-md); color: var(--text-muted-strong); line-height: 1.5; max-width: 62ch; }
+.ra-ask .ra-actions { border-top: 0; padding-top: 0; margin-top: 14px; }
+.ra-error { border: 1px solid var(--ds-error-border); background: var(--ds-error-bg); border-radius: var(--ds-radius-md); padding: 14px 16px; display: flex; gap: 10px; }
+.ra-error svg { flex: none; color: var(--ds-error); margin-top: 2px; }
+.ra-error__title { margin: 0 0 4px; font-weight: 600; color: var(--ds-error); font-size: var(--ds-font-size-base); }
+.ra-error__text { margin: 0; font-size: var(--ds-font-size-md); color: var(--text-primary); line-height: 1.5; }
+.ra-offline { display: flex; gap: 12px; align-items: flex-start; }
+.ra-offline svg { flex: none; color: var(--ds-grey-muted); }
+
+/* nested pairing dialog (variant B) */
+.modal-dialog.modal-dialog--nested.add-model-dialog.ra-nested { max-width: 720px; }
+.ra-nested .add-model-dialog__body { padding: 18px 22px 6px; }
+.ra-nested .ra-steps { margin-top: 6px; }
+.ra-nested footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--ds-grey-divider); background: var(--ds-grey-bg); }
+
+/* macOS system alert (mock of the native dialog, not themed by Snotra) */
+.mk-native-wrap { position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 1250; pointer-events: none; display: flex; align-items: flex-start; }
+.mk-native { pointer-events: auto; width: 272px; padding: 20px 16px 16px; border-radius: 14px; text-align: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', var(--font-ui); background: rgba(236,236,236,.97); color: #1d1d1f;
+  box-shadow: 0 0 0 .5px rgba(0,0,0,.25), 0 22px 60px rgba(0,0,0,.35); border-top-left-radius: 0; border-top-right-radius: 0; }
+[data-theme='dark'] .mk-native { background: rgba(44,44,46,.97); color: #f5f5f7; box-shadow: 0 0 0 .5px rgba(255,255,255,.18), 0 22px 60px rgba(0,0,0,.6); }
+.mk-native img { width: 60px; height: 60px; display: block; margin: 0 auto 10px; }
+.mk-native h4 { margin: 0 0 6px; font-size: 13px; font-weight: 700; line-height: 1.3; }
+.mk-native p { margin: 0 0 6px; font-size: 11px; line-height: 1.4; }
+.mk-native .words { font-weight: 700; }
+.mk-native .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.mk-native .btns span { padding: 5px 0; border-radius: 6px; font-size: 13px; background: rgba(0,0,0,.08); }
+[data-theme='dark'] .mk-native .btns span { background: rgba(255,255,255,.14); }
+.mk-native .btns .def { background: #0a7aff; color: #fff; }
+</style>
+</head>
+<body>
+<div class="mk-toolbar" role="toolbar" aria-label="Mockup controls">
+  <div class="mk-group"><span>State</span><select id="mk-state"></select></div>
+  <div class="mk-group"><span>Layout</span><div class="mk-seg" data-key="variant"><button data-v="A">A · in the panel (decided)</button><button data-v="B">B · own dialog</button></div></div>
+  <div class="mk-group"><span>Allow</span><div class="mk-seg" data-key="confirm"><button data-v="native">System dialog (decided)</button><button data-v="window">In the window</button></div></div>
+  <div class="mk-group"><span>Language</span><div class="mk-seg" data-key="lang"><button data-v="en">EN</button><button data-v="de">DE</button></div></div>
+  <div class="mk-group"><span>Theme</span><div class="mk-seg" data-key="theme"><button data-v="light">Light</button><button data-v="dark">Dark</button></div></div>
+</div>
+
+<div class="mk-stage" id="mk-stage">
+  <div class="modal modal-settings-root" id="modal-settings">
+    <div class="modal-backdrop"></div>
+    <div class="modal-dialog settings-dialog" role="dialog" aria-modal="true" aria-labelledby="modal-settings-title" aria-describedby="modal-settings-desc">
+      <header class="settings-dialog__header">
+        <div>
+          <h2 id="modal-settings-title" class="settings-dialog__title" data-t="settings">Settings</h2>
+          <div class="settings-help-heading">
+            <p id="modal-settings-desc" class="settings-dialog__subtitle"><span data-t="area">Section:</span> <span data-t="nav">Remote access</span></p>
+            <button type="button" class="settings-help" aria-label="Help">?</button>
+          </div>
+        </div>
+        <button type="button" class="settings-dialog__icon-close" aria-label="Close settings">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/></svg>
+        </button>
+      </header>
+      <div class="settings-dialog__body">
+        <nav class="settings-dialog__nav" role="tablist" aria-orientation="vertical" id="mk-nav"></nav>
+        <div class="settings-dialog__panel-wrap">
+          <section class="settings-panel settings-panel--active" role="tabpanel" aria-labelledby="tab-settings-remote" id="mk-panel"></section>
+        </div>
+      </div>
+      <div class="settings-dialog__hint-bar">
+        <details class="settings-note settings-note--bar">
+          <summary class="settings-note__summary"><span data-t="applyNow">Pairing and removing take effect at once — no Apply needed.</span></summary>
+        </details>
+      </div>
+      <footer class="settings-dialog__footer modal-dialog__footer">
+        <div class="settings-dialog__footer-row">
+          <div class="settings-version"><span>Version 1.25.0</span> <button type="button" class="settings-version-link" data-t="updates">Check for updates</button></div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" data-t="close">Close</button>
+            <button type="button" class="btn-primary" data-t="apply">Apply</button>
+          </div>
+        </div>
+      </footer>
+    </div>
+    <div class="add-model-overlay" id="mk-nested" hidden></div>
+  </div>
+  <div class="mk-native-wrap" id="mk-native" hidden></div>
+</div>
+
+<div class="mk-notes" id="mk-notes"></div>
+
+<script>
+const APP_ICON = '../../assets/icon/icon-macos.svg';
+const T = {
+  en: {
+    settings: 'Settings', area: 'Section:', nav: 'Remote access', navDesc: 'Your chats on your iPhone',
+    applyNow: 'Pairing and removing take effect at once — no Apply needed.', updates: 'Check for updates', close: 'Close', apply: 'Apply',
+    navItems: [['Models', 'API, connection, preferences'], ['Tools & security', 'What Snotra can and may do'], ['Tool setup', 'Interpreter, keys, MCP servers'], ['Skills', 'Ways of working for the model'], ['Memory', 'What Snotra keeps across chats'], null, ['General', 'Appearance, text, behaviour']],
+    intro: 'Follow your chats from your iPhone when you are away from this computer, write in them and answer approvals. The chats stay here; the phone only shows them, end-to-end encrypted through a relay that cannot read them.',
+    relaySum: 'What the relay can see — and what it can’t.',
+    relayBody: 'It sees that a connection exists, when each side is online, the size and time of each packet and both IP addresses — never what a chat says. Nothing connects and nothing goes to the relay until you pair a phone.',
+    emptyTitle: 'No phone paired', emptyText: 'Pair your iPhone once by scanning a code. Snotra connects one phone per computer.',
+    emptyNeed: 'You need the Snotra app on your iPhone.', pair: 'Pair a phone',
+    denied: 'You denied the phone. Nothing was connected.',
+    flowTitle: 'Pair a phone', stepScan: 'Scan', stepConfirm: 'Confirm', stepDone: 'Done',
+    howto: ['Open Snotra on your iPhone.', 'Tap <strong>Pair with desktop</strong>.', 'Scan the code — or type the key.'],
+    key: 'Key', validFor: 'Valid for', once: 'one use', waiting: 'Waiting for your phone', cancel: 'Cancel',
+    qrLabel: 'Pairing code to scan with the Snotra app',
+    confirmLead: 'Your phone wants to connect', confirmSub: 'Compare the six words. They must match exactly what your phone shows.',
+    asked: 'asked at 14:02', sysHint: 'Snotra asks you in a system dialog. Only a click there lets a phone in.', deny: 'Deny', allow: 'Allow',
+    nativeTitle: 'Allow “iPhone 17 Pro” to access Snotra?',
+    nativeText: 'Only allow it if your phone shows:', nativeMore: 'The phone can then read and write your chats in the workspaces you open for it.',
+    pairedEyebrow: 'Paired phone', connected: 'Connected', since: 'since 14:02', notConnected: 'Not connected', lastSeen: 'last seen 10 minutes ago',
+    pairedOn: 'Paired on 18 Oct 2026 · on this computer only', replace: 'Replace phone', remove: 'Remove phone',
+    seesEyebrow: 'What your phone can do',
+    rows: [['Workspaces it can see', '2 of 5 · <button type="button" class="ra-link">change under Tools &amp; security</button>'], ['Approvals', 'Allow once or Deny — everything else stays here'], ['While a chat runs', 'This computer stays awake as long as the phone is connected']],
+    replaceTitle: 'Pair a new phone?', replaceText: 'iPhone 17 Pro keeps its access until you allow the new phone, then loses it. Snotra connects one phone per computer.', replaceGo: 'Pair new phone',
+    removeTitle: 'Remove iPhone 17 Pro?', removeText: 'It loses access at once and deletes its keys the next time it opens. To use it again, pair it anew.',
+    expiredTitle: 'Code expired', expiredText: 'A code is valid for five minutes, and only once.', newCode: 'New code',
+    failedTitle: 'Pairing stopped', failedText: 'A device answered with keys that don’t belong to this code. Nothing was connected. If it was your phone, start again with a new code.', again: 'Start again',
+    relayTitle: 'Can’t reach the relay', relayText: 'Check your internet connection. Everything else in Snotra works as usual.', retry: 'Try again',
+    nativeCaption: 'macOS sheet on the window — drawn by the system, not by Snotra',
+  },
+  de: {
+    settings: 'Einstellungen', area: 'Bereich:', nav: 'Fernzugriff', navDesc: 'Deine Chats auf dem iPhone',
+    applyNow: 'Koppeln und Entfernen gelten sofort – ohne Übernehmen.', updates: 'Nach Updates suchen', close: 'Schließen', apply: 'Übernehmen',
+    navItems: [['Modelle', 'API, Anbindung, Präferenzen'], ['Tools & Sicherheit', 'Was Snotra kann und darf'], ['Tool-Einrichtung', 'Interpreter, Schlüssel, MCP‑Server'], ['Skills', 'Arbeitsweisen für das Sprachmodell'], ['Gedächtnis', 'Was Snotra über Chats hinweg behält'], null, ['Allgemein', 'Darstellung, Texte, Verhalten']],
+    intro: 'Verfolge deine Chats vom iPhone aus, wenn du nicht am Rechner bist, schreib darin weiter und beantworte Freigaben. Die Chats bleiben hier; das Handy zeigt sie nur an – Ende-zu-Ende-verschlüsselt über ein Relay, das sie nicht lesen kann.',
+    relaySum: 'Was das Relay sieht – und was nicht.',
+    relayBody: 'Es sieht, dass eine Verbindung besteht, wann welche Seite online ist, Größe und Zeitpunkt jedes Pakets und beide IP-Adressen – nie, was in einem Chat steht. Bevor du ein Handy koppelst, verbindet sich nichts und nichts geht ans Relay.',
+    emptyTitle: 'Kein Handy gekoppelt', emptyText: 'Koppel dein iPhone einmal, indem du einen Code scannst. Snotra verbindet ein Handy pro Computer.',
+    emptyNeed: 'Dafür brauchst du die Snotra-App auf dem iPhone.', pair: 'Handy koppeln',
+    denied: 'Du hast das Handy abgelehnt. Es wurde nichts verbunden.',
+    flowTitle: 'Handy koppeln', stepScan: 'Scannen', stepConfirm: 'Bestätigen', stepDone: 'Fertig',
+    howto: ['Öffne Snotra auf deinem iPhone.', 'Tippe auf <strong>Mit Desktop koppeln</strong>.', 'Scanne den Code – oder tippe den Schlüssel ein.'],
+    key: 'Schlüssel', validFor: 'Gültig noch', once: 'einmal nutzbar', waiting: 'Warte auf dein Handy', cancel: 'Abbrechen',
+    qrLabel: 'Kopplungscode zum Scannen mit der Snotra-App',
+    confirmLead: 'Dein Handy möchte sich verbinden', confirmSub: 'Vergleiche die sechs Wörter. Sie müssen genau mit denen auf deinem Handy übereinstimmen.',
+    asked: 'angefragt um 14:02', sysHint: 'Snotra fragt dich in einem Systemdialog. Nur ein Klick dort lässt ein Handy zu.', deny: 'Ablehnen', allow: 'Zulassen',
+    nativeTitle: '„iPhone 17 Pro“ Zugriff auf Snotra erlauben?',
+    nativeText: 'Erlaube es nur, wenn dein Handy zeigt:', nativeMore: 'Das Handy kann dann deine Chats in den Workspaces lesen und darin schreiben, die du dafür freigibst.',
+    pairedEyebrow: 'Gekoppeltes Handy', connected: 'Verbunden', since: 'seit 14:02', notConnected: 'Nicht verbunden', lastSeen: 'zuletzt vor 10 Minuten',
+    pairedOn: 'Gekoppelt am 18.10.2026 · nur mit diesem Computer', replace: 'Handy ersetzen', remove: 'Handy entfernen',
+    seesEyebrow: 'Was dein Handy darf',
+    rows: [['Sichtbare Workspaces', '2 von 5 · <button type="button" class="ra-link">ändern unter Tools &amp; Sicherheit</button>'], ['Freigaben', 'Einmal erlauben oder Ablehnen – alles andere bleibt hier'], ['Während ein Chat läuft', 'Dieser Computer bleibt wach, solange das Handy verbunden ist']],
+    replaceTitle: 'Neues Handy koppeln?', replaceText: 'iPhone 17 Pro behält den Zugriff, bis du das neue Handy zulässt, und verliert ihn dann. Snotra verbindet ein Handy pro Computer.', replaceGo: 'Neues Handy koppeln',
+    removeTitle: 'iPhone 17 Pro entfernen?', removeText: 'Es verliert sofort den Zugriff und löscht seine Schlüssel, sobald es das nächste Mal öffnet. Um es wieder zu nutzen, koppel es neu.',
+    expiredTitle: 'Code abgelaufen', expiredText: 'Ein Code gilt fünf Minuten und nur einmal.', newCode: 'Neuer Code',
+    failedTitle: 'Kopplung abgebrochen', failedText: 'Ein Gerät hat mit Schlüsseln geantwortet, die nicht zu diesem Code gehören. Es wurde nichts verbunden. War es dein Handy, starte noch einmal mit einem neuen Code.', again: 'Noch einmal',
+    relayTitle: 'Relay nicht erreichbar', relayText: 'Prüf deine Internetverbindung. Alles andere in Snotra funktioniert wie gewohnt.', retry: 'Erneut versuchen',
+    nativeCaption: 'macOS-Sheet am Fenster – vom System gezeichnet, nicht von Snotra',
+  },
+};
+const WORDS = ['amber', 'lantern', 'seven', 'orbit', 'velvet', 'quay'];
+const KEY = '7KQM-3XWD-P9TA-HV2N-RC6E';
+
+const STATES = [
+  ['empty', '1 · No phone paired'],
+  ['code', '2 · Code shown'],
+  ['confirm', '3 · Phone answered — confirm'],
+  ['connected', '4 · Paired, connected'],
+  ['offline', '5 · Paired, phone offline'],
+  ['replace', '6 · Replace phone?'],
+  ['remove', '7 · Remove phone?'],
+  ['expired', '8 · Code expired'],
+  ['failed', '9 · Pairing stopped (wrong MAC)'],
+  ['relay', '10 · Relay unreachable'],
+  ['denied', '11 · Denied'],
+];
+const NOTES = {
+  empty: ['Empty state', 'Centred text is allowed here (empty state). Until “Pair a phone” is clicked nothing connects and nothing goes to the relay (R7). “One phone per computer” is said here already, so that the question when replacing does not come as a surprise.'],
+  code: ['Pairing, step 1', 'The desktop has registered the channel and the pairing at the relay before the code appears (sequence, steps 5–9). The countdown runs live; at 0:00 the mockup switches to “Code expired”. No copy button next to the key: it is not meant to travel through other channels (R3). The QR plate stays light in dark mode, or the camera reads it less reliably — that needs a token of its own, --ds-qr-plate, with its contrast pair in test/token-contrast.test.js.'],
+  confirm: ['Pairing, step 2 — confirm in person', 'Allow is answered in a native sheet on the app window, through the confirmation port of #980 (sequence, steps 30–32); Deny is the default answer, so Return denies. A compromised renderer cannot click it. The panel shows the six words large for comparing, the sheet repeats them. The words come from one fixed list that belongs to the protocol and are never translated: a German desktop and an English iPhone show the same words. “In the window” was considered and not chosen — it would bypass the port.'],
+  connected: ['Paired', 'Status without green: a filled blue dot plus the word (R8; the token rule carries status by shape and text). “Remove phone” is black (destructive), “Replace phone” secondary. The rows below say what the phone may do; the per-workspace release itself stays under Tools & security.'],
+  offline: ['Paired, not connected', 'A hollow ring instead of the filled dot, plus “last seen …”. For the desktop this comes from the heartbeat (lastSeen), for the phone from onDisconnect.'],
+  replace: ['Replace — asked in the panel', 'The old phone keeps its access until the new one is allowed (sequence, step 33), so nothing is lost when the new pairing fails. No system dialog here: replacing loosens nothing; the loosening is the Allow for the new phone.'],
+  remove: ['Remove — asked in the panel', 'Removing only tightens, so a question in the window is enough. Black destructive button, no red.'],
+  expired: ['Code expired', 'The QR code fades instead of disappearing, so the place stays recognisable. “New code” is the main action; the relay has already deleted the pairing and the channel (sequence, steps 12–14).'],
+  failed: ['Wrong MAC', 'One of the few cases where red is allowed: a security event that has to warn actively. The text blames nobody (“a device”), since a mistyped key leads here as well.'],
+  relay: ['Relay unreachable', 'No red — it is an outage, not the user’s mistake, and Snotra itself keeps working. “Everything else works as usual” answers the worry that the app is broken.'],
+  denied: ['Denied', 'After Deny the panel returns to the empty state with a quiet line that nothing was connected. The channel on the relay is deleted.'],
+};
+
+const S = { state: 'code', variant: 'A', confirm: 'native', lang: 'en', theme: 'light' };
+const t = (k) => T[S.lang][k];
+
+const ICON = {
+  phone: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M10.5 18.5h3" stroke-linecap="round"/></svg>',
+  info: '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="6.25"/><path d="M8 7.2v3.6M8 5.1v.1" stroke-linecap="round"/></svg>',
+  alert: '<svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M10 2.8 18 17H2z" stroke-linejoin="round"/><path d="M10 8v4M10 14.4v.1" stroke-linecap="round"/></svg>',
+  cloud: '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M7 18h10a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.2 9.1 4.5 4.5 0 0 0 7 18z" stroke-linejoin="round"/><path d="M4 4l16 16" stroke-linecap="round"/></svg>',
+  shield: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 1.8 13 3.6v4.1c0 3-2.1 5.3-5 6.5-2.9-1.2-5-3.5-5-6.5V3.6z" stroke-linejoin="round"/></svg>',
+};
+
+// A QR-looking pattern: finder, timing and alignment patterns of a version-3 code, data modules from a seeded PRNG.
+function qrSvg() {
+  const n = 29, m = 6, q = 4, size = (n + 2 * q) * m;
+  let seed = 1107; const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const grid = Array.from({ length: n }, () => Array(n).fill(null));
+  const finder = (r0, c0) => { for (let r = -1; r <= 7; r++) for (let c = -1; c <= 7; c++) { const rr = r0 + r, cc = c0 + c; if (rr < 0 || cc < 0 || rr >= n || cc >= n) continue;
+    const inRing = r >= 0 && r <= 6 && c >= 0 && c <= 6 && (r === 0 || r === 6 || c === 0 || c === 6); const core = r >= 2 && r <= 4 && c >= 2 && c <= 4; grid[rr][cc] = inRing || core; } };
+  finder(0, 0); finder(0, n - 7); finder(n - 7, 0);
+  for (let i = 8; i < n - 8; i++) { grid[6][i] = i % 2 === 0; grid[i][6] = i % 2 === 0; }
+  for (let r = -2; r <= 2; r++) for (let c = -2; c <= 2; c++) grid[22 + r][22 + c] = Math.max(Math.abs(r), Math.abs(c)) !== 1;
+  let d = '';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) { const v = grid[r][c] === null ? rnd() > 0.52 : grid[r][c]; if (v) d += `M${(c + q) * m} ${(r + q) * m}h${m}v${m}h-${m}z`; }
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" role="img" aria-label="${t('qrLabel')}"><path fill="var(--mk-qr-ink)" d="${d}"/></svg>`;
+}
+
+function steps(current) {
+  const names = [t('stepScan'), t('stepConfirm'), t('stepDone')];
+  return `<ol class="ra-steps">${names.map((nm, i) => `<li${i === current ? ' aria-current="step"' : ''}${i < current ? ' class="is-done"' : ''}><span class="n">${i < current ? '✓' : i + 1}</span>${nm}</li>`).join('')}</ol>`;
+}
+
+let timer = null; let left = 292;
+function fmt(s) { return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; }
+
+function flowBody(kind) {
+  if (kind === 'code' || kind === 'expired') {
+    const expired = kind === 'expired';
+    return `<div class="ra-scan">
+      <div class="ra-qr${expired ? ' ra-qr--expired' : ''}">${qrSvg()}${expired ? `<div class="ra-qr__over"><div><strong>${t('expiredTitle')}</strong><span>${t('expiredText')}</span></div></div>` : ''}</div>
+      <div>
+        <ol class="ra-howto">${t('howto').map((h) => `<li><span>${h}</span></li>`).join('')}</ol>
+        <span class="ra-key__label">${t('key')}</span>
+        <span class="ra-key" lang="en" aria-label="${KEY.split('').join(' ')}">${expired ? '••••-••••-••••-••••-••••' : KEY}</span>
+        ${expired ? '' : `<div class="ra-timer"><div class="ra-timer__row"><span>${t('validFor')} <strong id="ra-left">${fmt(left)}</strong></span><span>${t('once')}</span></div>
+          <div class="ra-timer__track"><div class="ra-timer__fill" id="ra-fill" style="width:${(left / 300) * 100}%"></div></div></div>
+          <p class="ra-wait" role="status"><span class="ra-dots" aria-hidden="true"><i></i><i></i><i></i></span>${t('waiting')} …</p>`}
+      </div></div>`;
+  }
+  if (kind === 'confirm') {
+    return `<p class="ra-confirm__lead">${t('confirmLead')}</p>
+      <p class="ra-confirm__sub">${t('confirmSub')}</p>
+      <ol class="ra-words" lang="en">${WORDS.map((w, i) => `<li><span class="i">${i + 1}</span><span class="w">${w}</span></li>`).join('')}</ol>
+      <div class="ra-device-line">${ICON.phone}<span><strong>iPhone 17 Pro</strong> · ${t('asked')}</span></div>
+      ${S.confirm === 'native' ? `<p class="ra-sys-hint">${ICON.shield}${t('sysHint')}</p>` : ''}`;
+  }
+  if (kind === 'failed') {
+    return `<div class="ra-error" role="alert">${ICON.alert}<div><p class="ra-error__title">${t('failedTitle')}</p><p class="ra-error__text">${t('failedText')}</p></div></div>`;
+  }
+  if (kind === 'relay') {
+    return `<div class="ra-offline">${ICON.cloud}<div><p class="ra-ask__title">${t('relayTitle')}</p><p class="ra-ask__text">${t('relayText')}</p></div></div>`;
+  }
+  return '';
+}
+function flowButtons(kind) {
+  if (kind === 'code') return `<button type="button" class="btn-secondary">${t('cancel')}</button>`;
+  if (kind === 'expired') return `<button type="button" class="btn-secondary">${t('cancel')}</button><button type="button" class="btn-primary">${t('newCode')}</button>`;
+  if (kind === 'confirm') return S.confirm === 'window'
+    ? `<button type="button" class="btn-secondary">${t('deny')}</button><button type="button" class="btn-primary">${t('allow')}</button>`
+    : `<button type="button" class="btn-secondary">${t('cancel')}</button>`;
+  if (kind === 'failed') return `<button type="button" class="btn-secondary">${t('cancel')}</button><button type="button" class="btn-primary">${t('again')}</button>`;
+  if (kind === 'relay') return `<button type="button" class="btn-secondary">${t('cancel')}</button><button type="button" class="btn-primary">${t('retry')}</button>`;
+  return '';
+}
+const stepOf = { code: 0, expired: 0, relay: 0, failed: 1, confirm: 1 };
+
+function intro() {
+  return `<p class="settings-form-hint">${t('intro')}</p>
+    <details class="settings-note" style="margin-bottom:14px"><summary class="settings-note__summary"><span>${t('relaySum')}</span></summary>
+    <div class="settings-note__body"><p>${t('relayBody')}</p></div></details>`;
+}
+function emptyCard(notice) {
+  return `${notice ? `<div class="ra-notice" role="status">${ICON.info}<span>${notice}</span></div>` : ''}
+    <div class="ra-card ra-empty"><div class="ra-empty__icon">${ICON.phone}</div>
+    <h3 class="ra-empty__title">${t('emptyTitle')}</h3><p class="ra-empty__text">${t('emptyText')}</p>
+    <p class="ra-empty__need">${t('emptyNeed')}</p><button type="button" class="btn-primary">${t('pair')}</button></div>`;
+}
+function deviceCard(on, locked) {
+  return `<div class="modal-field-label eyebrow-row">${t('pairedEyebrow')}</div>
+    <div class="ra-card"><div class="ra-device"><div class="ra-device__icon">${ICON.phone}</div>
+      <div><p class="ra-device__name">iPhone 17 Pro</p>
+        <p class="ra-status ${on ? 'ra-status--on' : 'ra-status--off'}"><span class="ra-status__dot" aria-hidden="true"></span><strong>${on ? t('connected') : t('notConnected')}</strong> · ${on ? t('since') : t('lastSeen')}</p>
+        <p class="ra-meta">${t('pairedOn')}</p></div>
+      <div class="ra-device__actions"><button type="button" class="btn-secondary"${locked ? ' disabled' : ''}>${t('replace')}</button><button type="button" class="btn-destructive"${locked ? ' disabled' : ''}>${t('remove')}</button></div></div></div>
+    <div class="modal-field-label eyebrow-row">${t('seesEyebrow')}</div>
+    <div class="ra-card"><ul class="ra-rows">${t('rows').map(([k, v]) => `<li><span class="k">${k}</span><span class="v">${v}</span></li>`).join('')}</ul></div>`;
+}
+function ask(title, text, go, destructive) {
+  return `<div class="ra-ask" role="alertdialog" aria-labelledby="ra-ask-t" aria-describedby="ra-ask-d"><p class="ra-ask__title" id="ra-ask-t">${title}</p><p class="ra-ask__text" id="ra-ask-d">${text}</p>
+    <div class="ra-actions"><button type="button" class="btn-secondary">${t('cancel')}</button><button type="button" class="${destructive ? 'btn-destructive' : 'btn-primary'}">${go}</button></div></div>`;
+}
+
+function render() {
+  document.documentElement.lang = S.lang;
+  if (S.theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark'); else document.documentElement.removeAttribute('data-theme');
+  document.querySelectorAll('[data-t]').forEach((el) => { el.textContent = t(el.dataset.t); });
+  document.querySelectorAll('.mk-seg').forEach((seg) => seg.querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(S[seg.dataset.key] === b.dataset.v))));
+  document.getElementById('mk-state').value = S.state;
+
+  const nav = document.getElementById('mk-nav');
+  nav.innerHTML = t('navItems').map((it, i) => {
+    const sel = it === null; const [l, d] = sel ? [t('nav'), t('navDesc')] : it;
+    return `<button type="button" class="settings-nav-item" role="tab" aria-selected="${sel}" ${sel ? 'id="tab-settings-remote"' : ''}><span>${l}</span><span class="settings-nav-item__desc">${d}</span></button>`;
+  }).join('');
+
+  const flowKinds = ['code', 'confirm', 'expired', 'failed', 'relay'];
+  const isFlow = flowKinds.includes(S.state);
+  let panel = intro();
+  const nested = document.getElementById('mk-nested');
+  nested.hidden = true; nested.innerHTML = '';
+  if (isFlow && S.variant === 'A') {
+    panel += `<div class="ra-card"><div class="ra-flow__head"><h3 class="ra-flow__title">${t('flowTitle')}</h3>${steps(stepOf[S.state])}</div>
+      ${flowBody(S.state)}<div class="ra-actions">${flowButtons(S.state)}</div></div>`;
+  } else if (isFlow && S.variant === 'B') {
+    panel += emptyCard();
+    nested.hidden = false;
+    nested.innerHTML = `<div class="add-model-dialog modal-dialog modal-dialog--nested ra-nested" role="dialog" aria-modal="true" aria-labelledby="ra-nested-t">
+      <header class="add-model-dialog__header"><div><h2 class="add-model-dialog__title" id="ra-nested-t">${t('flowTitle')}</h2>${steps(stepOf[S.state])}</div>
+      <button type="button" class="settings-dialog__icon-close" aria-label="${t('close')}"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/></svg></button></header>
+      <div class="add-model-dialog__body modal-dialog__body">${flowBody(S.state)}<div style="height:16px"></div></div>
+      <footer>${flowButtons(S.state)}</footer></div>`;
+  } else if (S.state === 'empty') panel += emptyCard();
+  else if (S.state === 'denied') panel += emptyCard(t('denied'));
+  else if (S.state === 'connected') panel += deviceCard(true);
+  else if (S.state === 'offline') panel += deviceCard(false);
+  else if (S.state === 'replace') panel += ask(t('replaceTitle'), t('replaceText'), t('replaceGo'), false) + deviceCard(true, true);
+  else if (S.state === 'remove') panel += ask(t('removeTitle'), t('removeText'), t('remove'), true) + deviceCard(true, true);
+  document.getElementById('mk-panel').innerHTML = panel;
+
+  const nat = document.getElementById('mk-native');
+  if (S.state === 'confirm' && S.confirm === 'native') {
+    nat.hidden = false;
+    nat.innerHTML = `<div class="mk-native" role="alertdialog" aria-labelledby="mk-n-t"><img src="${APP_ICON}" alt=""><h4 id="mk-n-t">${t('nativeTitle')}</h4>
+      <p>${t('nativeText')}<br><span class="words" lang="en">${WORDS.join(' · ')}</span></p><p>${t('nativeMore')}</p>
+      <div class="btns"><span>${t('allow')}</span><span class="def">${t('deny')}</span></div></div>
+      <div class="mk-caption" style="position:absolute;left:calc(100% + 10px);transform:none;top:14px">${t('nativeCaption')}</div>`;
+  } else { nat.hidden = true; nat.innerHTML = ''; }
+
+  const [h, p] = NOTES[S.state];
+  const variantNote = isFlow ? `<p><strong>Layout ${S.variant}:</strong> ${S.variant === 'A' ? 'The pairing runs inside the panel and the navigation stays in view — calm, and no dialog on top of a dialog.' : 'Considered, not chosen: the pairing opens a dialog of its own over the settings, like “Add MCP server”. More focused, but a dialog on a dialog, and three layers once the system sheet appears.'}</p>` : '';
+  document.getElementById('mk-notes').innerHTML = `<h3>${h}</h3><p>${p}</p>${variantNote}
+    <p class="mk-rec"><strong>Decided on 2026-10-18:</strong> layout A, Allow in the system dialog through the confirmation port (#980), and a safety phrase from one fixed word list that is the same in every language. Sequence: <code>docs/remote-pairing-sequence.svg</code>.</p>`;
+
+  clearInterval(timer);
+  if (S.state === 'code') {
+    timer = setInterval(() => {
+      left -= 1;
+      if (left <= 0) { left = 292; S.state = 'expired'; render(); return; }
+      const l = document.getElementById('ra-left'); const f = document.getElementById('ra-fill');
+      if (l) l.textContent = fmt(left); if (f) f.style.width = `${(left / 300) * 100}%`;
+    }, 1000);
+  }
+  try { localStorage.setItem('ra-mockup', JSON.stringify(S)); } catch (e) { /* preview without storage */ }
+}
+
+try { Object.assign(S, JSON.parse(localStorage.getItem('ra-mockup') || '{}')); } catch (e) { /* ignore */ }
+const params = new URLSearchParams(location.search);
+for (const k of Object.keys(S)) if (params.get(k)) S[k] = params.get(k);
+document.getElementById('mk-state').innerHTML = STATES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+document.getElementById('mk-state').addEventListener('change', (e) => { S.state = e.target.value; left = 292; render(); });
+document.querySelectorAll('.mk-seg').forEach((seg) => seg.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return; S[seg.dataset.key] = b.dataset.v; render(); }));
+render();
+</script>
+</body>
+</html>

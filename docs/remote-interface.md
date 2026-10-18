@@ -725,3 +725,5 @@ by this record.
 - [`remote-pairing-sequence.svg`](./remote-pairing-sequence.svg) — pairing a
   phone and the relay channel step by step, from *Settings › Remote access* to
   *Remove phone* (agreed 2026-10-18).
+- [`ui-design/remote-access-mockup.html`](./ui-design/remote-access-mockup.html) —
+  the settings panel for it, every state, with the variant decided on 2026-10-18.
