@@ -32,7 +32,7 @@ Changes take effect when you click *Apply* at the bottom of the settings.
 | *OpenAI* | API key | Yes | GPT-5 and later, with images and reasoning levels. One key for all OpenAI entries. |
 | *Anthropic (Claude)* | API key | Yes [since 1.27] | One key for all Anthropic entries. Reasoning levels for the models that think — [which ones](../../chatting/model-and-reasoning/#which-models-have-levels). |
 | *Google (Gemini)* | API key | Yes, PNG, JPEG and WebP — no GIF [since 1.27] | One key for all Google entries. Reasoning levels from Gemini 2.5 on. |
-| *Ollama (local)* | Server URL | Not yet — Snotra does not pass them on ([#92](https://github.com/kkrafft1999/snotra/issues/92)) | Ollama's own interface, `http://localhost:11434` by default. Reasoning levels for gpt-oss, off and on for other thinking models. |
+| *Ollama (local)* | Server URL | Yes, with a model that understands images [since 1.27] | Ollama's own interface, `http://localhost:11434` by default. Reasoning levels for gpt-oss, off and on for other thinking models. |
 | *OpenAI-compatible* | Server URL, key optional | When *Allow image attachments* is on for the entry | Everything else with an OpenAI-shaped interface. Each entry has its own address, key and name. |
 
 ## Connect a server with an OpenAI-compatible interface

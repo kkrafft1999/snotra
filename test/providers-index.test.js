@@ -29,14 +29,13 @@ test('ollama exposes dispose as alias for destroyInsecureDispatcher', () => {
 });
 
 // Image attachments (#93): the flag says whether *our* adapter maps images,
-// not what the provider could take. It turns true for Ollama with #92;
-// Anthropic (#90) and Google (#91) are done.
+// not what the provider could take. Since #90–#92 every built-in one does.
 test('jeder Provider deklariert, ob er Bilder weiterreicht', () => {
   const expected = {
     openai: true,
     anthropic: true,
     google: true,
-    ollama: false,
+    ollama: true,
   };
   for (const [id, images] of Object.entries(expected)) {
     assert.equal(providers.getProvider(id).capabilities.images, images, id);

@@ -33,7 +33,7 @@ Whether an image goes along depends on the provider, not only on the model:
 - *OpenAI-compatible* — only when *Allow image attachments* is switched on for the entry under *Settings › Models*. Otherwise Snotra says that image attachments are switched off for this connection.
 - *Anthropic (Claude)* [since 1.27] — yes.
 - *Google (Gemini)* [since 1.27] — yes, as PNG, JPEG or WebP. Gemini does not take GIF; Snotra says so instead of pasting.
-- *Ollama* — not yet. Some Ollama models understand images, but Snotra cannot pass them on to Ollama yet ([#92](https://github.com/kkrafft1999/snotra/issues/92)). Snotra says so instead of pasting.
+- *Ollama* [since 1.27] — yes, when the model understands images, such as `gemma3`, `qwen2.5vl` or `llava`.
 
 The overview per provider is in [Models](../../customising/models/#the-providers).
 
@@ -62,6 +62,7 @@ Next to the send button, the input field shows the size of the last request in t
 
 - **The send button stays disabled.** No model is connected, or the connected one is missing its key: see [Connect a model](../../getting-started/connect-a-model/).
 - **Pasting an image does nothing but show a note.** The model of this chat does not take images. Switch to one that does — [Switch the model](../model-and-reasoning/) — or switch on *Allow image attachments* for an OpenAI-compatible server whose model understands images.
+- **An Ollama model does not react to the image.** Not every Ollama model understands images. `ollama show <model>` lists *vision* under *Capabilities* for the ones that do; switch to one of them — [Switch the model](../model-and-reasoning/).
 - **A GIF is refused while Gemini is active.** Gemini takes PNG, JPEG and WebP, but no GIF. Save the image as PNG, or switch the model. If the GIF was attached before you switched to Gemini, Snotra says so when you send; remove the image and send again.
 - ***Not sent*** next to the send button. Something went wrong inside Snotra before the message left. Your text and images are back in the input field; send them again. If it keeps happening, press `Cmd+Shift+D` / `Ctrl+Shift+D` right afterwards and attach the result to a report: [Find logs and report a problem](../../troubleshooting/logs-and-reports/).
 - ***No OpenAI key stored (voice input needs one).*** Dictation needs an OpenAI key, even when the chat runs on another provider. Without one the microphone does not even switch on.

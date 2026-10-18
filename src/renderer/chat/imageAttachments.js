@@ -30,8 +30,9 @@ export const INTAKE_REJECTIONS = Object.freeze({
   UNSUPPORTED_TYPE: 'unsupported-type',
   TOO_MANY: 'too-many',
   TOO_LARGE: 'too-large',
-  // Snotra has no image adapter for this provider yet (#92) — the model
-  // behind it may well take images, so the message must not blame it (#995).
+  // Snotra has no image adapter for this provider — none of the built-in ones
+  // since #92. The model behind it may well take images, so the message must
+  // not blame it (#995).
   PROVIDER_PASSES_NO_IMAGES: 'provider-passes-no-images',
   // The provider takes images, but not this format: Gemini takes no GIF (#91).
   PROVIDER_REFUSES_FORMAT: 'provider-refuses-format',
