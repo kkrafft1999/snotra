@@ -78,6 +78,23 @@ const shown = (page, id) => page.evaluate((key) => {
   return Boolean(el) && !el.classList.contains('hidden') && !el.hidden;
 }, id);
 
+/**
+ * Waits until the window has taken in what main sends after the first paint.
+ * Until then the markup carries its static stand-ins: the sidebar divider
+ * has no `aria-valuenow` before the widths arrive, and the permission pill
+ * keeps a generic name that does not contain its label yet. A slow runner
+ * met axe in between (macOS CI, 2026-10-17); that is a moment of the start,
+ * not the state a user works in.
+ */
+async function waitForSettledWindow(page) {
+  await poll(() => page.evaluate(() => {
+    const pill = document.getElementById('btn-chat-tool-mode');
+    const label = document.getElementById('chat-tool-mode-label')?.textContent.trim() ?? '';
+    return document.getElementById('divider').hasAttribute('aria-valuenow')
+      && Boolean(label) && (pill.getAttribute('aria-label') ?? '').includes(label);
+  }), { what: 'the window settled after start (divider width, permission pill)' });
+}
+
 async function openSettings(app, page) {
   await poll(async () => {
     if (await shown(page, 'modal-settings')) return true;
@@ -99,6 +116,7 @@ test('the welcome page and the help window pass axe, light and dark', { timeout:
   t.after(() => snotra.stop().catch(() => {}));
   const { app, page } = snotra;
   await poll(() => shown(page, 'welcome'), { what: 'welcome page' });
+  await waitForSettledWindow(page);
 
   const findings = [];
   await checkScreen(page, 'welcome', findings);
@@ -143,6 +161,7 @@ test('the workspace and every settings section pass axe, light and dark; System 
   await poll(() => page.evaluate(() => document.getElementById('chat-messages').textContent.includes('mid-May')
     && !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
   { what: 'the answer, finished' });
+  await waitForSettledWindow(page);
   await page.mouse.move(0, 0);
   await checkScreen(page, 'workspace', findings);
 
