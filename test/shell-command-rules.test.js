@@ -29,6 +29,8 @@ const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-too
 const { createTranslator } = require('../src/shared/i18n');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { createTestConfirmations } = require('./helpers/confirmations');
+const { CONFIRMATION_ACTIONS, permissionRuleSubject } = require('../src/application/permissions/user-confirmation');
 
 const ROOT = '/work/projekt';
 
@@ -265,9 +267,7 @@ function makeSender(id = 1) {
 async function setup(t, { dialogResponse = 0 } = {}) {
   const dir = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'snotra-cmd-rule-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
-  const toolPolicyStore = createToolPolicyStore({ app: { getPath: () => dir }, safeStorage: makeSafeStorage(), fs, path: nodePath, crypto, log: { warn() {} } });
-  const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });
-  const sessionGrants = createSessionGrants();
+  const getMainWindow = () => ({ isDestroyed: () => false });
   const dialogCalls = [];
   const dialog = {
     async showMessageBox(_win, options) {
@@ -275,14 +275,21 @@ async function setup(t, { dialogResponse = 0 } = {}) {
       return { response: typeof dialogResponse === 'function' ? dialogResponse(options) : dialogResponse };
     },
   };
+  const { confirmations, storeReceipts, confirmed } = createTestConfirmations({ dialog, getMainWindow });
+  const toolPolicyStore = createToolPolicyStore({
+    app: { getPath: () => dir }, safeStorage: makeSafeStorage(), fs, path: nodePath, crypto, log: { warn() {} },
+    confirmationReceipts: storeReceipts,
+  });
+  const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });
+  const sessionGrants = createSessionGrants();
   const ipcMain = createMockIpcMain();
   registerToolPermissionHandlers({
-    ipcMain, dialog, getMainWindow: () => ({ isDestroyed: () => false }),
+    ipcMain, dialog, confirmations, getMainWindow,
     toolPolicyStore, approvals, sessionGrants,
     getActiveWorkspaceRoot: () => ROOT, REQ, PUSH, getLocale: () => 'en',
   });
   const invoke = (channel, sender, payload) => ipcMain.handlers.get(channel)({ sender }, payload);
-  return { toolPolicyStore, approvals, sessionGrants, dialogCalls, invoke };
+  return { toolPolicyStore, approvals, sessionGrants, dialogCalls, invoke, confirmed };
 }
 
 function openCard(approvals, sender, overrides = {}) {
@@ -380,17 +387,20 @@ test('the adapter never turns "always" into more than once without a stored rule
 });
 
 test('the same command remembered twice is one rule', async (t) => {
-  const { toolPolicyStore } = await setup(t);
+  const { toolPolicyStore, confirmed } = await setup(t);
   const rule = request().commandRule;
-  const first = await toolPolicyStore.addRule(rule);
-  const second = await toolPolicyStore.addRule(rule);
+  const subject = permissionRuleSubject(normalizePermissionRule({ ...rule, id: 'x' }));
+  const first = await toolPolicyStore.addRule(rule, confirmed(CONFIRMATION_ACTIONS.ALLOW_RULE, subject));
+  const second = await toolPolicyStore.addRule(rule, confirmed(CONFIRMATION_ACTIONS.ALLOW_RULE, subject));
   assert.equal(second.ruleId, first.ruleId);
   assert.equal((await toolPolicyStore.read()).workspaceRules[ROOT].length, 1);
 });
 
 test('a failed signature drops remembered commands with every other allowance', async (t) => {
-  const { toolPolicyStore } = await setup(t);
-  await toolPolicyStore.addRule(request().commandRule);
+  const { toolPolicyStore, confirmed } = await setup(t);
+  const rule = request().commandRule;
+  const subject = permissionRuleSubject(normalizePermissionRule({ ...rule, id: 'x' }));
+  assert.equal((await toolPolicyStore.addRule(rule, confirmed(CONFIRMATION_ACTIONS.ALLOW_RULE, subject))).ok, true);
   const file = toolPolicyStore.getPolicyPath();
   const raw = JSON.parse(await fs.readFile(file, 'utf8'));
   raw.signature = '0'.repeat(64);

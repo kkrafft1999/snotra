@@ -30,7 +30,7 @@ const {
   IMAGE_BACKGROUNDS,
   IMAGE_EXTENSIONS_BY_FORMAT,
   IMAGE_GENERATION_LIMITS: LIMITS,
-} = require('../../application/ports/image-generation-port');
+} = require('../../shared/contracts/image-generation');
 const { imageDimensions } = require('../services/image-dimensions');
 
 const GENERATE_IMAGE_TOOL = 'generate_image';

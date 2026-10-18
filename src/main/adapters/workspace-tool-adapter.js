@@ -35,9 +35,39 @@ const BROAD_LISTING_TOOLS = new Set(['list_directory', 'list_directory_tree', 'f
 const DECODED_CONTENT_TOOLS = new Set(['extract_document_text']);
 
 /**
- * @param {Object} toolRegistry  workspace-tool-registry.js (not typed yet)
+ * A tool definition as the adapter reads it; the registry's definitions carry
+ * more (handler, schemas, descriptions) and the planner reads those.
+ *
+ * @typedef {{
+ *   name: string,
+ *   riskClass: string,
+ *   additionalRiskClasses?: string[],
+ *   requiresWorkspace?: boolean,
+ *   skillPaths?: boolean,
+ *   parameters?: object,
+ * } & Record<string, any>} ToolDefinition
+ *
+ * What the adapter takes from the registry (`workspace-tool-registry.js`): the
+ * five members it calls (#1098). Written from the consumer's side, like a port,
+ * because the registry module is outside the checked set. The two guards
+ * `typeof … === 'function'` below are for registry stubs in tests, which
+ * implement less than this.
+ *
+ * @typedef {Object} ToolRegistry
+ * @property {(options?: import('../../application/ports/tool-port').ToolListOptions) => Array} getTools
+ * @property {(options?: import('../../application/ports/tool-port').ToolListOptions) => string} buildSystemPrompt
+ * @property {(name: string) => ToolDefinition|null} getDefinition
+ * @property {(name: string, disabledNames?: string[]) => boolean} isSwitchedOff
+ * @property {(name: string, args: import('../../application/ports/tool-port').ToolArguments, context: object) => Promise<string>} execute
+ *
+ * @typedef {import('../tools/tool-call-planner').FsService} FsService
+ * @typedef {import('../tools/tool-call-planner').OutsideAccess} OutsideAccess
+ */
+
+/**
+ * @param {ToolRegistry} toolRegistry  workspace-tool-registry.js
  * @param {object} [deps]
- * @param {Object} [deps.fsService]  für Planung (Pfadauflösung) und Ausgabeprüfung
+ * @param {FsService} [deps.fsService]  für Planung (Pfadauflösung) und Ausgabeprüfung
  * @param {typeof import('fs/promises')} [deps.fs]
  * @param {typeof import('path')} [deps.path]
  * @param {string[]} [deps.protectedRoots]  harte Grenzen (Snotra-eigener Speicher)
@@ -52,12 +82,14 @@ const DECODED_CONTENT_TOOLS = new Set(['extract_document_text']);
  * @param {number} [deps.maxScanBytes]
  * @param {{ record: Function }} [deps.fileChangeRecorder]  keeps before/after of every write (#348)
  * @param {(options?: object) => Promise<void>} [deps.refreshDynamicTools]  the tools only known at run time (#107)
- * @param {Object} [deps.outsideAccess]  what a card may open outside the open folder (#792), see outside-access.js
+ * @param {OutsideAccess} [deps.outsideAccess]  what a card may open outside the open folder (#792)
  * @returns {import('../../application/ports/tool-port').ToolPort}
  */
 function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
   const {
-    fsService = null,
+    // No `= null` on the two typed services: a `null` default would make the
+    // local an `any` again, and the planner call below unchecked (#1098).
+    fsService,
     fs = null,
     path = null,
     protectedRoots = [],
@@ -71,7 +103,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     refreshDynamicTools = null,
     fileChangeRecorder = null,
     // What a card may open outside the open folder (#792, step 4).
-    outsideAccess = null,
+    outsideAccess,
   } = deps;
   const maxScanBytes = deps.maxScanBytes || 2 * 1024 * 1024;
   const planner =

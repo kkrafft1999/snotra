@@ -100,8 +100,8 @@ function describeTool(tool, serverLabel) {
  * @param {Object} [deps]
  * @param {import('../../application/ports/mcp-port').McpPort} [deps.mcpService]  aus mcp-service.js (Issue #106)
  * @returns {import('../../application/ports/mcp-port').McpPort & {
- *   describeSkippedTools: () => Array<{ serverId: string, name: string, reason: object }>,
- *   buildToolDefinitions: () => Promise<Array<object>>,
+ *   describeSkippedTools: () => Array<{ serverId: string, name: string, reason: import('../../shared/contracts/message').Message }>,
+ *   buildToolDefinitions: () => Promise<Array<import('./workspace-tool-adapter').ToolDefinition>>,
  * }}
  */
 function createMcpAdapter({ mcpService } = {}) {

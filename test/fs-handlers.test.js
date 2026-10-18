@@ -8,6 +8,12 @@ const { createFilesystemIpcAdapter } = require('../src/main/adapters/filesystem-
 const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+
+/** The dialog for notices, and the confirmation port over the same dialog (#980). */
+function withDialog(dialog) {
+  return { dialog, confirmations: createNativeConfirmationAdapter({ dialog }) };
+}
 
 async function createSymlinkOrSkip(t, target, linkPath, type) {
   try {
@@ -64,7 +70,7 @@ async function setup(t) {
     PUSH,
     fileContextMenu: { popup: (absPath, win, opts) => popups.push({ absPath, win, opts }) },
     getMainWindow: () => mainWindow,
-    dialog,
+    ...withDialog(dialog),
   });
   return {
     ipcMain,
@@ -567,7 +573,7 @@ test('FS_IMPORT_ITEMS: der Bestätigungsdialog folgt der Sprache (#292)', async 
     filesystem: createFilesystemIpcAdapter({ fsService, getActiveWorkspaceRoot: () => workspace }),
     REQ,
     // „Abbrechen“: der Dialog soll geprüft werden, nicht das Kopieren.
-    dialog: { showMessageBox: async (options) => { boxes.push(options); return { response: 1 }; } },
+    ...withDialog({ showMessageBox: async (options) => { boxes.push(options); return { response: 1 }; } }),
     getLocale: () => 'de',
   });
 
@@ -648,7 +654,7 @@ test('FS_IMPORT_ITEMS: Limitüberschreitung lehnt den ganzen Drop ab (#101)', as
     getActiveWorkspaceRoot: () => workspace,
     limits: { MAX_IMPORT_ENTRIES: 2, MAX_IMPORT_TOTAL_BYTES: 1024 },
   });
-  registerFsHandlers({ ipcMain, filesystem, REQ, dialog: { showMessageBox: async () => ({ response: 0 }) } });
+  registerFsHandlers({ ipcMain, filesystem, REQ, ...withDialog({ showMessageBox: async () => ({ response: 0 }) }) });
 
   const result = await ipcMain.invoke(REQ.FS_IMPORT_ITEMS, [path.join(outside, 'viele')], workspace);
 

@@ -182,14 +182,16 @@ test('das Erscheinungsbild wird unter „Allgemein“ gewählt, nicht in der Tit
   const groupAt = panel.indexOf('id="choice-app-theme"');
   assert.ok(groupAt > -1, 'die Auswahl liegt im Allgemein-Panel');
 
-  const group = panel.slice(groupAt, panel.indexOf('</div>', panel.indexOf('value="dark"')));
+  const group = panel.slice(groupAt, panel.indexOf('</div>', panel.indexOf('value="system"')));
   assert.match(group, /value="light"/);
   assert.match(group, /value="dark"/);
+  // Since #999 a third choice follows the operating system.
+  assert.match(group, /value="system"/);
 
   // Segment statt Auswahlliste (#297): eine Gruppe echter Radios, deren Name
   // fuer den Screenreader an der sichtbaren Ueberschrift haengt.
   assert.match(group, /role="radiogroup"/);
-  assert.equal(group.split('type="radio"').length - 1, 2);
+  assert.equal(group.split('type="radio"').length - 1, 3);
   assert.match(group, /aria-labelledby="label-app-theme"/);
   assert.match(panel.slice(0, groupAt), /id="label-app-theme"[^>]*>\s*Appearance/);
 });

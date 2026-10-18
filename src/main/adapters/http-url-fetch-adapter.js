@@ -21,7 +21,7 @@ const {
   URL_FETCH_ERROR_CODES,
   URL_FETCH_LIMITS,
   URL_FETCH_ALLOWED_CONTENT_TYPES,
-} = require('../../application/ports/url-fetch-port');
+} = require('../../shared/contracts/url-fetch');
 
 const USER_AGENT = 'SnotraAgent/1.0 (+https://github.com/kkrafft1999/snotra)';
 

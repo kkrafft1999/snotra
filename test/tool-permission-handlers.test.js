@@ -14,6 +14,8 @@ const { createToolApprovalAdapter } = require('../src/main/adapters/tool-approva
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { createTestConfirmations } = require('./helpers/confirmations');
+const { CONFIRMATION_ACTIONS } = require('../src/application/permissions/user-confirmation');
 
 function makeSafeStorage(available = true) {
   return {
@@ -43,7 +45,6 @@ async function setup(t, {
 } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-perm-ipc-'));
   t.after(() => fs.rm(dir, { recursive: true, force: true }));
-  const toolPolicyStore = createToolPolicyStore({ app: { getPath: () => dir }, safeStorage: makeSafeStorage(encryption), fs, path, crypto, log: { warn() {} } });
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });
   const sessionGrants = createSessionGrants();
   const dialogCalls = [];
@@ -58,11 +59,18 @@ async function setup(t, {
       return openDialogResult;
     },
   };
+  const getMainWindow = () => ({ isDestroyed: () => false });
+  const { confirmations, storeReceipts, confirmed } = createTestConfirmations({ dialog, getMainWindow });
+  const toolPolicyStore = createToolPolicyStore({
+    app: { getPath: () => dir }, safeStorage: makeSafeStorage(encryption), fs, path, crypto, log: { warn() {} },
+    confirmationReceipts: storeReceipts,
+  });
   const ipcMain = createMockIpcMain();
   registerToolPermissionHandlers({
     ipcMain,
     dialog,
-    getMainWindow: () => ({ isDestroyed: () => false }),
+    confirmations,
+    getMainWindow,
     toolPolicyStore,
     approvals,
     sessionGrants,
@@ -81,7 +89,7 @@ async function setup(t, {
   });
   // Handler direkt mit einem Event aufrufen, dessen sender das Fenster ist.
   const invoke = (channel, sender, payload) => ipcMain.handlers.get(channel)({ sender }, payload);
-  return { toolPolicyStore, approvals, sessionGrants, dialogCalls, openDialogCalls, invoke };
+  return { toolPolicyStore, approvals, sessionGrants, dialogCalls, openDialogCalls, invoke, confirmed };
 }
 
 test('Auto braucht die native Bestätigung; Abbruch im Dialog ändert nichts', async (t) => {
@@ -955,9 +963,11 @@ test('workspace host: the command gave up while the dialog was open — nothing 
 });
 
 test('workspace host: listed for the open folder, closed one by one without a dialog', async (t) => {
-  const { invoke, toolPolicyStore, dialogCalls } = await setup(t, { workspaceRoot: '/work/projekt' });
-  await toolPolicyStore.addWorkspaceHosts('/work/projekt', ['gitlab.example.com:22', 'pypi.org:443']);
-  await toolPolicyStore.addWorkspaceHosts('/work/other', ['other.example.com:443']);
+  const { invoke, toolPolicyStore, dialogCalls, confirmed } = await setup(t, { workspaceRoot: '/work/projekt' });
+  await toolPolicyStore.addWorkspaceHosts('/work/projekt', ['gitlab.example.com:22', 'pypi.org:443'],
+    confirmed(CONFIRMATION_ACTIONS.WORKSPACE_HOSTS, '/work/projekt'));
+  await toolPolicyStore.addWorkspaceHosts('/work/other', ['other.example.com:443'],
+    confirmed(CONFIRMATION_ACTIONS.WORKSPACE_HOSTS, '/work/other'));
   const sender = makeSender(3);
   assert.deepEqual((await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender)).workspaceHosts, ['gitlab.example.com:22', 'pypi.org:443']);
   const overview = await invoke(REQ.TOOL_PERMISSIONS_GET_SECURITY_OVERVIEW, sender);
