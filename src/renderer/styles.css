@@ -2149,12 +2149,15 @@ body {
 }
 
 .chat-model-pill-chevron {
-  display: none;
-}
-
-.chat-model-pill-chevron {
   flex-shrink: 0;
   opacity: 0.55;
+}
+
+/* A disabled pill opens nothing (#583), so it shows no chevron. Until #1125
+ * this rule had lost its selector to the #727 rule above and hid the chevron
+ * on every pill. */
+.chat-model-pill--btn:disabled .chat-model-pill-chevron {
+  display: none;
 }
 
 .chat-model-menu {
