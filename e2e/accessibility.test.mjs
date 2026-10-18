@@ -30,10 +30,6 @@ const THEMES = ['light', 'dark'];
  */
 const KNOWN = [
   {
-    rule: 'listitem', html: '<li class="chat-msg ',
-    issue: 'https://github.com/kkrafft1999/snotra/issues/1103',
-  },
-  {
     // A long folder name is cut in the middle to fit the sidebar
     // ("snotra-a…-LkeQPU"); the button's name carries it in full. axe reads
     // the cut text as a label of its own.

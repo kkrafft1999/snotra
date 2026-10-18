@@ -342,7 +342,10 @@
               <button type="button" id="chat-save-notice-link" class="chat-save-notice-link" data-manual-help="chat.saveNotice" data-i18n="chat.saveNotice.link">What can I do?</button></p>
           </div>
         </div>
-        <ol id="chat-messages" role="log" aria-label="Conversation" data-i18n-attr="aria-label:chat.log" aria-live="off" aria-busy="false"></ol>
+        <!-- The log role sits on a wrapper, the list role stays on the <ol>: role="log" on the <ol> itself replaces the list role and leaves the <li> children without a list (#1103). display: contents keeps the wrapper out of the layout. -->
+        <div id="chat-log" role="log" aria-label="Conversation" data-i18n-attr="aria-label:chat.log" aria-live="off" aria-busy="false">
+          <ol id="chat-messages"></ol>
+        </div>
         <!-- The list is redrawn as a whole; announcing it would read the conversation out again (#592). A turn's outcome is said here. -->
         <p id="chat-announcer" class="sr-only" role="status" aria-live="polite"></p>
         <div id="chat-hint" class="hidden"></div>

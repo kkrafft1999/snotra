@@ -102,7 +102,7 @@ try {
   model.queueAnswer({ text: 'Done.' });
   await sendChat(page, 'Hello');
   await poll(() => page.evaluate(() => document.getElementById('chat-messages').textContent.includes('Done.')
-    && document.getElementById('chat-messages').getAttribute('aria-busy') !== 'true'),
+    && document.getElementById('chat-log').getAttribute('aria-busy') !== 'true'),
     { what: 'finished chat run' });
   await wait(600);
 

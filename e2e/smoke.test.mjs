@@ -206,7 +206,7 @@ function lastAnswerLinks({ streaming = false } = {}) {
   const md = last?.querySelector(streaming ? '.chat-md-streaming' : '.chat-md');
   if (!md) return null;
   return {
-    busy: document.getElementById('chat-messages').getAttribute('aria-busy') === 'true',
+    busy: document.getElementById('chat-log').getAttribute('aria-busy') === 'true',
     links: [...md.querySelectorAll('a')].map((a) => ({
       text: a.textContent,
       href: a.getAttribute('href'),
@@ -924,7 +924,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     const list = document.getElementById('chat-messages');
     const shown = [...list.querySelectorAll('.chat-msg.user')]
       .some((bubble) => (bubble.textContent || '').includes(question));
-    if (!shown || list.getAttribute('aria-busy') === 'true') return null;
+    if (!shown || document.getElementById('chat-log').getAttribute('aria-busy') === 'true') return null;
     const bubbles = list.querySelectorAll('.chat-msg.assistant');
     return { text: bubbles[bubbles.length - 1]?.textContent ?? '' };
   }, { id: runningChatId, question: BACKGROUND_QUESTION }), { what: 'zurueck im ersten Chat' });
@@ -950,7 +950,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
           rel: a.getAttribute('rel'),
         }));
         return {
-          busy: document.getElementById('chat-messages').getAttribute('aria-busy') === 'true',
+          busy: document.getElementById('chat-log').getAttribute('aria-busy') === 'true',
           links,
           hasIframe: !!last.querySelector('iframe'),
           hasOnerror: !!last.querySelector('[onerror]'),
@@ -1196,7 +1196,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
         const last = bubbles[bubbles.length - 1];
         if (!last) return null;
         return {
-          busy: document.getElementById('chat-messages').getAttribute('aria-busy') === 'true',
+          busy: document.getElementById('chat-log').getAttribute('aria-busy') === 'true',
           geladen: [...last.querySelectorAll('img')].map((img) => ({
             alt: img.getAttribute('alt'),
             istDataUri: /^data:image\/(png|svg\+xml);base64,/.test(img.getAttribute('src') || ''),
@@ -1301,7 +1301,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
         const bubbles = document.querySelectorAll('#chat-messages .chat-msg.assistant');
         const last = bubbles[bubbles.length - 1];
         if (!last || !last.textContent.includes('Hier ist sie')) return null;
-        if (document.getElementById('chat-messages').getAttribute('aria-busy') === 'true') return null;
+        if (document.getElementById('chat-log').getAttribute('aria-busy') === 'true') return null;
         return {
           elemente: [...last.querySelectorAll('video, audio, source, track, picture')].map((el) => el.tagName),
           urlAttribute: [...last.querySelectorAll('[src]:not(img), [poster], [background], [srcset]')]
