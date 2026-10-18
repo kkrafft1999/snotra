@@ -109,6 +109,8 @@ const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
+const { createRemoteBridge } = require('./create-remote-bridge');
+const { registerRemoteHandlers } = require('../ipc/remote-handlers');
 
 function createApplication({
   app,
@@ -190,6 +192,11 @@ function createApplication({
    * the same list the window reads; without one a fresh list is made here.
    */
   notices: givenNotices = null,
+  /**
+   * The relay of the mobile remote (#1114). Without one, the Firebase relay of
+   * `src/main/remote/relay-endpoint.js`; tests hand in the in-memory relay.
+   */
+  remoteRelay = null,
 }) {
   // Every adapter below asks this `os` for the home folder (#707).
   const os = withHomeDir(baseOs);
@@ -898,6 +905,22 @@ function createApplication({
     homeDir: os.homedir(),
   });
 
+  // Pairing a phone as the mobile remote (#1114). Nothing of it runs before
+  // the user starts a pairing (R7); its Allow comes from the native dialog.
+  const remote = createRemoteBridge({
+    app,
+    safeStorage,
+    safeStorageKey,
+    fs,
+    path,
+    fetchImpl,
+    confirmations,
+    receipts: { redeem: confirmationReceipts.redeem },
+    getLocale: getAppLocale,
+    relay: remoteRelay,
+  });
+  registerRemoteHandlers({ ipcMain, pairing: remote.pairing, pushToWindow, REQ, PUSH });
+
   // A card granted for the session, a chat left, a rule changed: the settings
   // list of session approvals follows at once (#447).
   sessionGrants.onChange(notifyToolPermissionsChanged);
@@ -929,6 +952,8 @@ function createApplication({
     // with this process.
     shellRunnerService.disposeSync();
     pythonRunnerService.disposeSync();
+    // A pairing still running is cancelled at the relay (#1114).
+    remote.dispose();
     // The proxy servers live in this process and go with it; this only
     // tidies up what the runtime keeps on disk.
     void sandboxService.shutdown();

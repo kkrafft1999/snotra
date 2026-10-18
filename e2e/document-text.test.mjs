@@ -106,7 +106,7 @@ test('the model reads a PDF and a workbook through extract_document_text', { tim
     lines: [...document.querySelectorAll('.chat-tool-lines .chat-tool-line')]
       .map((line) => `${line.className}: ${line.querySelector('.chat-tool-line-text')?.textContent ?? line.textContent}`),
     summary: document.querySelector('.chat-tool-summary')?.textContent ?? null,
-    busy: document.getElementById('chat-messages')?.getAttribute('aria-busy') ?? null,
+    busy: document.getElementById('chat-log')?.getAttribute('aria-busy') ?? null,
     sendButton: document.getElementById('btn-chat-send')?.className ?? null,
     messages: [...document.querySelectorAll('#chat-messages > li')]
       .map((li) => `${li.className}: ${li.textContent.replace(/\s+/g, ' ').slice(0, 160)}`),

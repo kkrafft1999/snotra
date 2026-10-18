@@ -6,6 +6,9 @@
  *
  *   reasoning: { levels: [...], defaultLevel: 'medium', appliesTo: (model) => boolean }
  *
+ * `levels` and `defaultLevel` may also be functions of the model, for a
+ * provider whose models differ in the levels they take (#994).
+ *
  * A model that takes none gets no level, whatever the chat has stored — the
  * chat keeps it for the next model that does.
  */
@@ -23,9 +26,18 @@ function normalizeReasoningLevel(raw) {
 /** The levels `model` takes with this provider; empty when it takes none. */
 function reasoningLevelsFor(provider, model) {
   const reasoning = provider?.reasoning;
-  if (!reasoning || !Array.isArray(reasoning.levels)) return [];
+  if (!reasoning) return [];
   if (typeof reasoning.appliesTo === 'function' && !reasoning.appliesTo(model)) return [];
-  return reasoning.levels.filter((level) => normalizeReasoningLevel(level) === level);
+  const levels = typeof reasoning.levels === 'function' ? reasoning.levels(model) : reasoning.levels;
+  if (!Array.isArray(levels)) return [];
+  return levels.filter((level) => normalizeReasoningLevel(level) === level);
+}
+
+/** The level `model` runs with when the chat has chosen none. */
+function reasoningDefaultFor(provider, model) {
+  const raw = provider?.reasoning?.defaultLevel;
+  const level = typeof raw === 'function' ? raw(model) : raw;
+  return normalizeReasoningLevel(level) || DEFAULT_REASONING_LEVEL;
 }
 
 /**
@@ -43,6 +55,7 @@ function resolveReasoningLevel({ levels, own, defaultLevel }) {
 module.exports = {
   DEFAULT_REASONING_LEVEL,
   normalizeReasoningLevel,
+  reasoningDefaultFor,
   reasoningLevelsFor,
   resolveReasoningLevel,
 };

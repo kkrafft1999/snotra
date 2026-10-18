@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   DEFAULT_REASONING_LEVEL,
   normalizeReasoningLevel,
+  reasoningDefaultFor,
   reasoningLevelsFor,
   resolveReasoningLevel,
 } = require('../src/shared/contracts/reasoning');
@@ -23,12 +24,29 @@ test('a level is a short lower-case word', () => {
   }
 });
 
-test('OpenAI offers its levels for GPT-5 and newer only; other providers offer none', () => {
+test('OpenAI offers its levels for GPT-5 and newer only; a model that does not think offers none', () => {
   assert.deepEqual(reasoningLevelsFor(openai, 'gpt-5-mini'), ['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
   assert.deepEqual(reasoningLevelsFor(openai, 'gpt-4o-mini'), []);
   assert.deepEqual(reasoningLevelsFor(ollama, 'llama3.2'), []);
   assert.deepEqual(reasoningLevelsFor(null, 'gpt-5'), []);
   assert.equal(openai.reasoning.defaultLevel, DEFAULT_REASONING_LEVEL);
+});
+
+test('a provider can name levels and default per model (#994)', () => {
+  const provider = {
+    reasoning: {
+      levels: (model) => (model === 'big' ? ['low', 'high', 'Bad'] : ['none', 'on']),
+      defaultLevel: (model) => (model === 'big' ? 'high' : 'on'),
+      appliesTo: (model) => model !== 'none',
+    },
+  };
+  assert.deepEqual(reasoningLevelsFor(provider, 'big'), ['low', 'high']);
+  assert.deepEqual(reasoningLevelsFor(provider, 'small'), ['none', 'on']);
+  assert.deepEqual(reasoningLevelsFor(provider, 'none'), []);
+  assert.equal(reasoningDefaultFor(provider, 'big'), 'high');
+  assert.equal(reasoningDefaultFor(provider, 'small'), 'on');
+  assert.equal(reasoningDefaultFor(null, 'x'), DEFAULT_REASONING_LEVEL);
+  assert.equal(reasoningDefaultFor({ reasoning: { defaultLevel: 'NOPE' } }, 'x'), DEFAULT_REASONING_LEVEL);
 });
 
 test('the round runs with the chat\'s level, else the default (#726)', () => {

@@ -314,3 +314,224 @@ test('an assistant turn stopped before its first token is left out (#540)', () =
   ]);
   assert.equal(JSON.stringify(messages).includes('"text":""'), false, 'no empty text block');
 });
+
+// Reasoning levels (#994).
+
+const { reasoningLevelsFor, reasoningDefaultFor } = require('../src/shared/contracts/reasoning');
+
+function thinkingRound() {
+  return sseResponse([
+    sse('message_start', { message: { usage: { input_tokens: 10, output_tokens: 0 } } }),
+    sse('content_block_start', { index: 0, content_block: { type: 'thinking', thinking: '', signature: '' } }),
+    sse('content_block_delta', { index: 0, delta: { type: 'thinking_delta', thinking: 'Look first.' } }),
+    sse('content_block_delta', { index: 0, delta: { type: 'signature_delta', signature: 'sig-A' } }),
+    sse('content_block_stop', { index: 0 }),
+    sse('content_block_start', { index: 1, content_block: { type: 'redacted_thinking', data: 'opaque' } }),
+    sse('content_block_stop', { index: 1 }),
+    sse('content_block_start', { index: 2, content_block: { type: 'tool_use', id: 'tu_1', name: 'list_directory' } }),
+    sse('content_block_delta', { index: 2, delta: { type: 'input_json_delta', partial_json: '{}' } }),
+    sse('content_block_stop', { index: 2 }),
+    sse('message_delta', { delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 7 } }),
+    sse('message_stop', {}),
+  ]);
+}
+
+function endTurn() {
+  return sseResponse([
+    sse('content_block_start', { index: 0, content_block: { type: 'text' } }),
+    sse('content_block_delta', { index: 0, delta: { type: 'text_delta', text: 'Done.' } }),
+    sse('content_block_stop', { index: 0 }),
+    sse('message_delta', { delta: { stop_reason: 'end_turn' } }),
+    sse('message_stop', {}),
+  ]);
+}
+
+test('every Claude model that thinks offers the levels it takes (#994)', () => {
+  const all = ['low', 'medium', 'high', 'xhigh', 'max'];
+  assert.deepEqual(reasoningLevelsFor(anthropic, 'claude-opus-5-5'), all);
+  assert.deepEqual(reasoningLevelsFor(anthropic, 'claude-sonnet-5-5'), all);
+  assert.deepEqual(reasoningLevelsFor(anthropic, 'claude-haiku-5-5'), all);
+  assert.deepEqual(reasoningLevelsFor(anthropic, 'claude-fable-5-1'), all);
+  assert.deepEqual(reasoningLevelsFor(anthropic, 'claude-opus-4-7'), all);
+  // xhigh came with Opus 4.7.
+  assert.deepEqual(reasoningLevelsFor(anthropic, 'claude-opus-4-6'), ['low', 'medium', 'high', 'max']);
+  assert.deepEqual(reasoningLevelsFor(anthropic, 'claude-sonnet-4-6'), ['low', 'medium', 'high', 'max']);
+  // A thinking budget: three levels.
+  for (const model of ['claude-haiku-4-5-20251001', 'claude-sonnet-4-5', 'claude-sonnet-4-20250514', 'claude-opus-4-1', 'claude-3-7-sonnet-latest']) {
+    assert.deepEqual(reasoningLevelsFor(anthropic, model), ['low', 'medium', 'high'], model);
+  }
+  for (const model of ['claude-3-5-haiku-latest', 'claude-3-haiku-20240307', 'something-else', '']) {
+    assert.deepEqual(reasoningLevelsFor(anthropic, model), [], model);
+  }
+  assert.equal(reasoningDefaultFor(anthropic, 'claude-opus-5-5'), 'medium');
+});
+
+test('an adaptive model gets adaptive thinking, summarised, with the effort (#994)', async (t) => {
+  const calls = mockFetch(t, () => endTurn());
+  await anthropic.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'xhigh' },
+    model: 'claude-opus-5-5',
+    messages: [{ role: 'user', content: 'Hi' }],
+    callbacks: collectCallbacks().callbacks,
+  });
+  const body = JSON.parse(calls[0].options.body);
+  assert.deepEqual(body.thinking, { type: 'adaptive', display: 'summarized' });
+  assert.deepEqual(body.output_config, { effort: 'xhigh' });
+  assert.equal(body.max_tokens, 32768);
+});
+
+test('Opus and Sonnet 4.6 summarise by default and get no display field (#994)', async (t) => {
+  const calls = mockFetch(t, () => endTurn());
+  await anthropic.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'low' },
+    model: 'claude-sonnet-4-6',
+    messages: [{ role: 'user', content: 'Hi' }],
+    callbacks: collectCallbacks().callbacks,
+  });
+  const body = JSON.parse(calls[0].options.body);
+  assert.deepEqual(body.thinking, { type: 'adaptive' });
+  assert.deepEqual(body.output_config, { effort: 'low' });
+});
+
+test('an older model gets a thinking budget below max_tokens (#994)', async (t) => {
+  const calls = mockFetch(t, () => endTurn());
+  await anthropic.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'high' },
+    model: 'claude-haiku-4-5-20251001',
+    messages: [{ role: 'user', content: 'Hi' }],
+    callbacks: collectCallbacks().callbacks,
+  });
+  const body = JSON.parse(calls[0].options.body);
+  assert.deepEqual(body.thinking, { type: 'enabled', budget_tokens: 16384 });
+  assert.ok(body.max_tokens > body.thinking.budget_tokens);
+  assert.equal(body.output_config, undefined);
+});
+
+test('no level, or one the model does not take, sends no thinking at all (#994)', async (t) => {
+  const calls = mockFetch(t, () => endTurn());
+  for (const [model, reasoningEffort] of [
+    ['claude-opus-5-5', undefined],
+    ['claude-sonnet-4-6', 'xhigh'],
+    ['claude-3-5-haiku-latest', 'high'],
+  ]) {
+    await anthropic.streamChatRound({
+      config: { ...CONFIG, reasoningEffort },
+      model,
+      messages: [{ role: 'user', content: 'Hi' }],
+      callbacks: collectCallbacks().callbacks,
+    });
+  }
+  for (const call of calls) {
+    const body = JSON.parse(call.options.body);
+    assert.equal(body.thinking, undefined);
+    assert.equal(body.output_config, undefined);
+    assert.equal(body.max_tokens, 8192);
+  }
+});
+
+test('the thinking of a round travels with the turn and goes back unchanged (#994)', async (t) => {
+  let round = 0;
+  const calls = mockFetch(t, () => (round++ === 0 ? thinkingRound() : endTurn()));
+  const config = { ...CONFIG, reasoningEffort: 'high' };
+  const model = 'claude-opus-5-5';
+  const history = [
+    { role: 'user', content: 'Earlier question' },
+    {
+      role: 'assistant',
+      content: 'Earlier answer',
+      anthropicThinking: { model, blocks: [{ type: 'thinking', thinking: 'old', signature: 'sig-old' }] },
+    },
+    { role: 'user', content: 'What is here?' },
+  ];
+  const sink = collectCallbacks();
+  const first = await anthropic.streamChatRound({ config, model, messages: history, callbacks: sink.callbacks });
+
+  assert.deepEqual(sink.reasoningDeltas, ['Look first.']);
+  assert.deepEqual(first.message.anthropicThinking, {
+    model,
+    blocks: [
+      { type: 'thinking', thinking: 'Look first.', signature: 'sig-A' },
+      { type: 'redacted_thinking', data: 'opaque' },
+    ],
+  });
+
+  await anthropic.streamChatRound({
+    config,
+    model,
+    messages: [...history, first.message, { role: 'tool', tool_call_id: 'tu_1', content: '{"entries":[]}' }],
+    callbacks: collectCallbacks().callbacks,
+  });
+  const sent = JSON.parse(calls[1].options.body).messages;
+  // An earlier turn goes without its thinking …
+  assert.deepEqual(sent[1], { role: 'assistant', content: [{ type: 'text', text: 'Earlier answer' }] });
+  // … the running one with it, in front of the call.
+  assert.deepEqual(sent[3].content.map((b) => b.type), ['thinking', 'redacted_thinking', 'tool_use']);
+  assert.deepEqual(sent[3].content[0], { type: 'thinking', thinking: 'Look first.', signature: 'sig-A' });
+});
+
+test('thinking from another model stays behind (#994)', () => {
+  const { messages } = anthropic.translateMessagesToAnthropic([
+    { role: 'user', content: 'Hi' },
+    {
+      role: 'assistant',
+      content: null,
+      tool_calls: [{ id: 'tu_1', type: 'function', function: { name: 'x', arguments: '{}' } }],
+      anthropicThinking: { model: 'claude-opus-5-5', blocks: [{ type: 'thinking', thinking: 't', signature: 's' }] },
+    },
+    { role: 'tool', tool_call_id: 'tu_1', content: 'ok' },
+  ], { model: 'claude-sonnet-5-5' });
+  assert.deepEqual(messages[1].content.map((b) => b.type), ['tool_use']);
+});
+
+test('a turn whose thinking no longer fits its history goes out once more without it (#994)', async (t) => {
+  let round = 0;
+  const calls = mockFetch(t, () => {
+    round += 1;
+    if (round === 1) {
+      return sseResponse([JSON.stringify({
+        type: 'error',
+        error: {
+          type: 'invalid_request_error',
+          message: 'messages.1.content.0: Invalid `signature` in `thinking` block. The block is bound to a different conversation.',
+        },
+      })], { status: 400 });
+    }
+    return endTurn();
+  });
+  const model = 'claude-opus-5-5';
+  const res = await anthropic.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'medium' },
+    model,
+    messages: [
+      { role: 'user', content: 'Hi' },
+      {
+        role: 'assistant',
+        content: null,
+        tool_calls: [{ id: 'tu_1', type: 'function', function: { name: 'x', arguments: '{}' } }],
+        anthropicThinking: { model, blocks: [{ type: 'thinking', thinking: 't', signature: 's' }] },
+      },
+      { role: 'tool', tool_call_id: 'tu_1', content: '[output shortened]' },
+    ],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.equal(res.message.content, 'Done.');
+  assert.equal(calls.length, 2);
+  assert.deepEqual(JSON.parse(calls[0].options.body).messages[1].content.map((b) => b.type), ['thinking', 'tool_use']);
+  assert.deepEqual(JSON.parse(calls[1].options.body).messages[1].content.map((b) => b.type), ['tool_use']);
+});
+
+test('any other 400 is reported, not retried (#994)', async (t) => {
+  const calls = mockFetch(t, () => sseResponse([JSON.stringify({
+    type: 'error',
+    error: { type: 'invalid_request_error', message: 'max_tokens: too large' },
+  })], { status: 400 }));
+  const res = await anthropic.streamChatRound({
+    config: { ...CONFIG, reasoningEffort: 'medium' },
+    model: 'claude-opus-5-5',
+    messages: [{ role: 'user', content: 'Hi' }],
+    callbacks: collectCallbacks().callbacks,
+  });
+  assert.equal(res.error, 'max_tokens: too large');
+  assert.equal(res.code, '400');
+  assert.equal(calls.length, 1);
+});

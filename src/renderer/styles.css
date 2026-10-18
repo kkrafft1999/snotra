@@ -2127,8 +2127,10 @@ body {
   cursor: default;
 }
 
-.chat-model-pill--btn:disabled /* Model and level in the pill (#727): a long model name gives way, the level
- * never does — it is what the pill is looked at for. */
+/* Model and level in the pill (#727): a long model name gives way, the level
+ * never does — it is what the pill is looked at for. Until #994 a stray
+ * `:disabled` prefix limited this rule to the disabled pill, and the level was
+ * cut off with the name. */
 #chat-model-pill-label {
   display: inline-flex;
   min-width: 0;
@@ -2548,6 +2550,12 @@ body {
   font-size: var(--ds-font-size-sm);
 }
 
+/* Carries role="log" and aria-busy around the list (#1103); out of the layout,
+ * so #chat-messages stays the flex child and the scroll container. */
+#chat-log {
+  display: contents;
+}
+
 #chat-messages {
   flex: 1;
   overflow-y: auto;
@@ -2569,8 +2577,8 @@ body {
    * Auch beim Token-Streaming hinkt smooth hinterher und produziert Wackeln.
    * Sprung-Scroll ist hier das Standard-Verhalten in Chat-UIs (Slack,
    * iMessage, ChatGPT) und das, was die User-Erwartung trifft. */
-  /* Phase 2: jetzt <ol role="log"> — Default-Listenstil entfernen,
-     damit kein Bullet/Indent erscheint. */
+  /* Plain <ol> inside the log wrapper — drop the default list style,
+     so no bullet or indent appears. */
   list-style: none;
 }
 

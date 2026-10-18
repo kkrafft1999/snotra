@@ -176,6 +176,8 @@ export function initChatStream({
   onConfigChanged = () => {},
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
+  // The log role and aria-busy live on the wrapper around the list (#1103).
+  const chatLogEl = document.getElementById('chat-log');
   const chatInput = document.getElementById('chat-input');
   const btnChatSend = document.getElementById('btn-chat-send');
   const chatTokenUsageEl = document.getElementById('chat-token-usage');
@@ -441,7 +443,7 @@ export function initChatStream({
   function syncChatBusyState() {
     const last = appStore.chatMessages[appStore.chatMessages.length - 1];
     const busy = !!(last && last.role === 'assistant' && last.streaming);
-    chatMessagesEl.setAttribute('aria-busy', busy ? 'true' : 'false');
+    chatLogEl.setAttribute('aria-busy', busy ? 'true' : 'false');
     syncLiveDot();
   }
 

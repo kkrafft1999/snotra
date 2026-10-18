@@ -1056,6 +1056,12 @@ module.exports = {
   'skills.makeGlobal.error.noHome': 'Dein Benutzerordner wurde nicht gefunden.',
   'skills.makeGlobal.error.noDialog': 'Keine Bestätigung verfügbar.',
   'skills.makeGlobal.ok': 'OK',
+  // The native sheet that lets a phone in as the mobile remote (#1114).
+  'remote.pairing.confirm.message': 'Diesem Handy Zugriff auf Snotra erlauben?',
+  'remote.pairing.confirm.detail': 'Erlaube es nur, wenn dein Handy diese sechs Wörter zeigt:\n\n{words}\n\nDas Handy kann dann deine Chats in den Workspaces lesen und darin schreiben, die du dafür freigibst.',
+  'remote.pairing.confirm.replacing': 'Das bisher gekoppelte Handy verliert seinen Zugriff.',
+  'remote.pairing.confirm.allow': 'Zulassen',
+  'remote.pairing.confirm.deny': 'Ablehnen',
   'settings.skills.note.summary': 'Ein Skill ist eine <code lang="en">SKILL.md</code> mit Anweisungen, wie das Modell arbeiten soll — angehakte Skills stehen im System-Prompt.',
   'settings.skills.note.body': '<p><strong>System-Skills</strong> gehören zur App und sind voreingestellt aktiv. <strong>Ordner-Skills</strong> liest Snotra aus drei Orten: aus <code lang="en">.agents/skills</code> im geöffneten Ordner, global aus <code lang="en">~/.snotra/skills</code> — dem empfohlenen Ort — und weiterhin aus dem Alt-Ort <code lang="en">~/.agents/skills</code>. Bei gleichem Namen gewinnt der geöffnete Ordner, danach <code lang="en">~/.snotra/skills</code>. Verzeichnisse anderer Werkzeuge, etwa <code lang="en">.claude</code>, liest Snotra nicht. Ordner-Skills sind fremder Inhalt und werden nur nach ausdrücklicher Auswahl geladen.</p><p><code lang="en">~/.snotra</code> ist Snotras eigenes Benutzerverzeichnis — die Wurzel für Nutzerdaten, die Snotra gehören; <code lang="en">skills</code> ist ihr erster Bewohner. Snotra legt es nur an und verschiebt einen Skill nur dorthin, wenn du es willst: mit <strong>Global machen</strong> an einem Skill des offenen Ordners.</p>',
   'settings.skills.suggestion.label': 'Vorschläge im Chat',

@@ -27,11 +27,13 @@ function createNativeConfirmationAdapter({ dialog = null, getMainWindow = () => 
     return !!dialog && typeof dialog.showMessageBox === 'function';
   }
 
-  async function confirm({ action, subject = '', prompt }) {
+  async function confirm({ action, subject = '', prompt, signal = null }) {
     if (!canConfirm()) return { confirmed: false, reason: CONFIRMATION_REFUSALS.NO_PRESENCE };
+    if (signal?.aborted) return { confirmed: false, reason: CONFIRMATION_REFUSALS.DECLINED };
     // Cancel is the default and the Escape answer, whatever the caller built:
-    // Enter confirms nothing (#59).
-    const options = { ...prompt, defaultId: 1, cancelId: 1 };
+    // Enter confirms nothing (#59). An aborted `signal` closes the box as
+    // cancelled (#1114).
+    const options = { ...prompt, defaultId: 1, cancelId: 1, ...(signal ? { signal } : {}) };
     const win = getMainWindow();
     const result = win && !win.isDestroyed?.()
       ? await dialog.showMessageBox(win, options)

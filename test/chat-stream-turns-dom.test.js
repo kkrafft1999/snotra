@@ -365,7 +365,12 @@ test('a redraw announces nothing; a settled turn is announced once (#592)', asyn
   const { chat, list, sends, ask, emit } = env;
   const announcer = document.getElementById('chat-announcer');
 
-  assert.equal(list.getAttribute('aria-live'), 'off', 'the redrawn list is no live region');
+  const log = document.getElementById('chat-log');
+  assert.equal(log.getAttribute('role'), 'log');
+  assert.equal(log.getAttribute('aria-live'), 'off', 'the redrawn list is no live region');
+  assert.equal(list.parentElement, log, 'the log wraps the list (#1103)');
+  assert.equal(list.tagName, 'OL');
+  assert.equal(list.hasAttribute('role'), false, 'the list keeps its own role');
   assert.equal(announcer.getAttribute('aria-live'), 'polite');
 
   ask('Summarise.');
