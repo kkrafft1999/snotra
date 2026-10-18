@@ -882,7 +882,7 @@ module.exports = {
   'allowanceDialog.scope.all': 'All workspaces',
   'allowanceDialog.scope.allDesc': 'For every folder, also ones you open later. For tools you trust everywhere.',
   'permissions.globalHosts.error.tooMany': 'At most {max} hosts can be open in every workspace. Close one first.',
-  'permissions.hosts.error.invalid': 'This is not a host that can be kept open. Enter it with its port, such as api.example.com:443, or as *.example.com; shared domains such as github.io only host by host.',
+  'permissions.hosts.error.invalid': 'Snotra cannot keep this open. Write the host in one of the forms described here.',
   'permissions.hosts.error.notAdded': 'The host was not added.',
   'permissionDialog.allowance.intro.workspace': 'Whenever a command runs {path} on its own in workspace {root}:',
   'permissionDialog.globalHosts.title': 'Keep these hosts open in every workspace?',

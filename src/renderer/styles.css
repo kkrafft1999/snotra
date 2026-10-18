@@ -10751,11 +10751,11 @@ select.modal-input {
   margin-bottom: 14px;
 }
 
+/* Icon, name and "· open" stay on one line; a long path wraps inside it. */
 .settings-sandbox-head {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 10px;
+  align-items: flex-start;
+  gap: 10px;
 }
 
 .settings-sandbox-head__icon {
@@ -10770,15 +10770,22 @@ select.modal-input {
 }
 
 .settings-sandbox-head__title {
+  flex: 0 1 auto;
   min-width: 0;
   margin: 0;
+  padding-top: 2px;
   font-size: var(--ds-font-size-lg);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
+/* A folder's path breaks where it must: its end, the folder's own name, is
+   what tells two workspaces apart, so it is never cut off. */
 .settings-sandbox-head__title code {
-  font-size: var(--ds-font-size-base);
+  font-size: var(--ds-font-size-md);
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
 }
 
 .settings-sandbox-head__title:focus-visible {
@@ -10787,6 +10794,8 @@ select.modal-input {
 }
 
 .settings-sandbox-head__open {
+  flex: none;
+  padding-top: 5px;
   font-size: var(--ds-font-size-sm);
   color: var(--text-muted-strong);
 }
@@ -11014,6 +11023,12 @@ select.modal-input {
 
 .settings-sandbox-hostform__row {
   flex-wrap: wrap;
+}
+
+/* The field and its two buttons on one line, as long as the field keeps room for a host. */
+.settings-sandbox-hostform__row .modal-input {
+  width: auto;
+  flex: 1 1 220px;
 }
 
 /* Tools › Autonomy, row Execute: the one line that leads to Tools › Security.

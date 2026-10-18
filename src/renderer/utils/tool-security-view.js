@@ -141,7 +141,9 @@ export function describeSandboxTile(overview, ws, { autoLabel = '' } = {}) {
     };
   }
   if (ws.sandboxOff) {
-    const resting = (ws.programs?.length || 0) + (ws.hosts?.length || 0) > 0;
+    // What applies here rests as well — the workspace's own and what applies everywhere.
+    const global = globalOf(overview);
+    const resting = (ws.programs?.length || 0) + (ws.hosts?.length || 0) + global.programs.length + global.hosts.length > 0;
     return {
       tone: 'off',
       title: t('settings.sandbox.workspace.tile.off'),

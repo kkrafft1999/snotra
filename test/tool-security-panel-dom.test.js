@@ -320,7 +320,9 @@ test('hosts: added in a form under the list; a refusal is said at the field; Esc
   assert.equal(page.doc.activeElement, input());
   assert.equal(input().value, '*.github.io', 'what was typed stays');
   assert.equal(input().getAttribute('aria-invalid'), 'true');
-  assert.match(page.detail().querySelector('.settings-sandbox-hostform [role="alert"]').textContent, /shared domains such as github\.io only host by host/);
+  assert.equal(page.detail().querySelector('.settings-sandbox-hostform [role="alert"]').textContent, 'Snotra cannot keep this open. Write the host in one of the forms described here.');
+  // The forms themselves are the hint next to the field, which the field names.
+  assert.match(page.detail().querySelector('.settings-sandbox-hostform .modal-hint').textContent, /Shared domains such as github\.io only host by host\./);
   input().value = 'pypi.org:443';
   input().dispatchEvent(new page.dom.window.Event('input'));
   input().closest('form').dispatchEvent(new page.dom.window.Event('submit', { bubbles: true, cancelable: true }));

@@ -261,7 +261,8 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
       title: t('toolSecurity.programs'),
       count: own.length,
       hint: t('toolSecurity.programs.hint'),
-      resting,
+      // Only what is listed can rest.
+      resting: resting && own.length + inherited.length > 0,
       body,
       foot: [add, statusSlot(`programs:${scopeKey}`)],
     });
@@ -355,7 +356,7 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
       foot.push(add);
     }
     foot.push(statusSlot(`hosts:${scopeKey}`));
-    return block({ title: t(titleKey), count: own.length, hint: t(hintKey), resting, body, foot });
+    return block({ title: t(titleKey), count: own.length, hint: t(hintKey), resting: resting && own.length + inherited.length > 0, body, foot });
   }
 
   function resetRow({ titleText, descText, buttonText, action, focusKey, statusKey }) {

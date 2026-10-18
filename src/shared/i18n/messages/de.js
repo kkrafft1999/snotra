@@ -889,7 +889,7 @@ module.exports = {
   'allowanceDialog.scope.all': 'Alle Workspaces',
   'allowanceDialog.scope.allDesc': 'Für jeden Ordner, auch für später geöffnete. Für Tools, denen du überall traust.',
   'permissions.globalHosts.error.tooMany': 'Höchstens {max} Hosts können in allen Workspaces offen sein. Schließe erst einen.',
-  'permissions.hosts.error.invalid': 'Diesen Host kann Snotra nicht offen halten. Gib ihn mit Port an, etwa api.example.com:443, oder als *.example.com; geteilte Domains wie github.io nur Host für Host.',
+  'permissions.hosts.error.invalid': 'Das kann Snotra nicht offen halten. Schreib den Host in einer der hier beschriebenen Formen.',
   'permissions.hosts.error.notAdded': 'Der Host wurde nicht hinzugefügt.',
   'permissionDialog.allowance.intro.workspace': 'Immer wenn ein Befehl {path} allein startet, im Workspace {root}:',
   'permissionDialog.globalHosts.title': 'Diese Hosts in jedem Workspace offen halten?',
