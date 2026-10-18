@@ -42,6 +42,8 @@
  * @property {string} action  a CONFIRMATION_ACTIONS value
  * @property {string} [subject]  what the receipt is bound to: a chat, a root, a rule, a program
  * @property {ConfirmationPrompt} prompt
+ * @property {AbortSignal} [signal]  closes the prompt unanswered — it then confirms nothing — when what
+ *   it asks about ended while it was open: a pairing that expired or was cancelled (#1114)
  */
 
 /**

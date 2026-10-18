@@ -20,10 +20,13 @@ flow it details is drawn in [`remote-pairing-sequence.svg`](./remote-pairing-seq
 — step numbers below refer to that diagram. The two choices this part ran into
 were decided by the owner on 2026-10-18 ([§10](#10-decisions)).
 
-Nothing of it is built yet. The reference implementation that pins the bytes
-is [`scripts/remote-protocol-vectors.js`](../scripts/remote-protocol-vectors.js);
-the bridge (#1114) and the app implement the same functions on their own and
-prove them against the vectors ([§9](#9-test-vectors)).
+The desktop's half of part 1 is built (#1114, in `src/main/remote/` and
+`src/application/remote/`); the relay, the app and part 2 are not yet. The
+reference implementation that pins the bytes is
+[`scripts/remote-protocol-vectors.js`](../scripts/remote-protocol-vectors.js);
+the bridge and the app implement the same functions on their own and prove
+them against the vectors ([§9](#9-test-vectors)) — the bridge in
+`test/remote-pairing-protocol.test.js`.
 
 ## 1. Versions
 

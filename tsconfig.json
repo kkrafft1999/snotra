@@ -32,6 +32,7 @@
     "src/application/**/*.js",
     "src/main/ports/**/*.js",
     "src/main/adapters/**/*.js",
+    "src/main/remote/**/*.js",
     "src/shared/contracts/**/*.js",
     "types/**/*.d.ts"
   ]
