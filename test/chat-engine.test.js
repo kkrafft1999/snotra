@@ -1575,6 +1575,42 @@ test('engine lehnt Bild-Anhaenge ab, wenn der Anbieter keine Bilder kann', async
   assert.equal(calls.length, 0, 'ohne Bild-Faehigkeit darf kein Request rausgehen');
 });
 
+// #91: Gemini takes images, but no GIF. A GIF attached while another model was
+// active is refused at send time, with the formats that do work.
+test('the engine refuses an image format the provider does not take (#91)', async () => {
+  const GIF_1PX = 'R0lGODlhAQABAAAAACw=';
+  const PNG_1PX =
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const sendBundle = {
+    config: { apiKey: 'test' },
+    model: 'gemini-2.5-flash',
+    providerName: 'Google (Gemini)',
+    capabilities: { images: true, imageMediaTypes: ['image/png', 'image/jpeg', 'image/webp'] },
+  };
+  const send = (engine, attachments) => engine.send({
+    sessionId: 'renderer-1',
+    payload: { messages: [{ role: 'user', content: 'What is this?', attachments }] },
+    onEvent: () => {},
+  });
+
+  const refusing = makeEngine(null, { llm: makeLlmPort([assistantText('unreachable')], { sendBundle }) });
+  const result = await send(refusing.engine, [
+    { kind: 'image', mediaType: 'image/png', dataBase64: PNG_1PX },
+    { kind: 'image', mediaType: 'image/gif', dataBase64: GIF_1PX },
+  ]);
+  assert.equal(result.code, 'INVALID');
+  assert.equal(
+    errorText(result, 'en'),
+    'Google (Gemini) does not take GIF images, only PNG, JPEG, WebP. Remove the attachment or switch the model.',
+  );
+  assert.equal(refusing.calls.length, 0, 'nothing goes out with a format the provider refuses');
+
+  const passing = makeEngine(null, { llm: makeLlmPort([assistantText('A dot.')], { sendBundle }) });
+  const ok = await send(passing.engine, [{ kind: 'image', mediaType: 'image/png', dataBase64: PNG_1PX }]);
+  assert.equal(ok.content, 'A dot.');
+  assert.equal(passing.calls.length, 1);
+});
+
 test('engine laesst aeltere Bilder im Verlauf einen Textanbieter nicht blockieren', async () => {
   const PNG_1PX =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';

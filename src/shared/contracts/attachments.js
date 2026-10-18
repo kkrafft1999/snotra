@@ -202,6 +202,44 @@ function attachmentsCharCost(message) {
   return imageAttachmentsOf(message).length * IMAGE_ATTACHMENT_CHAR_COST;
 }
 
+/** How the formats are named in messages that list them (#91). */
+const IMAGE_ATTACHMENT_FORMAT_NAMES = Object.freeze({
+  'image/png': 'PNG',
+  'image/jpeg': 'JPEG',
+  'image/gif': 'GIF',
+  'image/webp': 'WebP',
+});
+
+/**
+ * The image formats a provider passes on (#91). A provider that takes fewer
+ * than all of IMAGE_ATTACHMENT_MEDIA_TYPES names them in
+ * `capabilities.imageMediaTypes` (Gemini takes no GIF); without the field it
+ * takes them all. The order is always that of IMAGE_ATTACHMENT_MEDIA_TYPES.
+ */
+function providerImageMediaTypes(capabilities) {
+  const own = capabilities?.imageMediaTypes;
+  if (!Array.isArray(own)) return [...IMAGE_ATTACHMENT_MEDIA_TYPES];
+  return IMAGE_ATTACHMENT_MEDIA_TYPES.filter((type) => own.includes(type));
+}
+
+/**
+ * The image part of a provider's capabilities as it travels on — to the chat
+ * engine and to the renderer. `imageMediaTypes` only goes along where the
+ * provider narrows the formats, so "no field" keeps meaning "all of them".
+ */
+function imageCapabilitiesOf(capabilities) {
+  /** @type {{ images: boolean, imageMediaTypes?: string[] }} */
+  const out = { images: capabilities?.images === true };
+  if (Array.isArray(capabilities?.imageMediaTypes)) out.imageMediaTypes = providerImageMediaTypes(capabilities);
+  return out;
+}
+
+/** "PNG, JPEG, WebP" — the formats by name, for a message. */
+function imageFormatNames(mediaTypes) {
+  const list = Array.isArray(mediaTypes) ? mediaTypes : [];
+  return list.map((type) => IMAGE_ATTACHMENT_FORMAT_NAMES[type] || String(type)).join(', ');
+}
+
 /** Data-URL zur Anzeige im Renderer bzw. fuer die OpenAI-Responses-API. */
 function toDataUrl(attachment) {
   if (!attachment?.mediaType || !attachment?.dataBase64) return '';
@@ -228,5 +266,9 @@ module.exports = {
   normalizeAttachments,
   imageAttachmentsOf,
   attachmentsCharCost,
+  IMAGE_ATTACHMENT_FORMAT_NAMES,
+  providerImageMediaTypes,
+  imageCapabilitiesOf,
+  imageFormatNames,
   toDataUrl,
 };

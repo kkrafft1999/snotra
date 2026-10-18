@@ -231,6 +231,10 @@ const {
   normalizeAttachments,
   imageAttachmentsOf,
   attachmentsCharCost,
+  IMAGE_ATTACHMENT_FORMAT_NAMES,
+  providerImageMediaTypes,
+  imageCapabilitiesOf,
+  imageFormatNames,
   toDataUrl,
 } = require('./attachments');
 const {
@@ -525,6 +529,10 @@ module.exports = {
   normalizeAttachments,
   imageAttachmentsOf,
   attachmentsCharCost,
+  IMAGE_ATTACHMENT_FORMAT_NAMES,
+  providerImageMediaTypes,
+  imageCapabilitiesOf,
+  imageFormatNames,
   toDataUrl,
   TOOL_PERMISSIONS_CONTRACT_VERSION,
   TOOL_RISK_CLASSES,

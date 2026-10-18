@@ -25,14 +25,15 @@ Auf eine bestimmte Datei verweist du mit `@`: [Auf eine Datei verweisen](../refe
 1. Kopier ein Bild in die Zwischenablage — einen Screenshot zum Beispiel (`Cmd+Ctrl+Shift+4` unter macOS, das Snipping Tool unter Windows).
 2. Klick ins Eingabefeld und füg es mit `Cmd+V` / `Strg+V` ein.
 
-Das Bild erscheint über der Eingabezeile, mit Vorschau, Größe und einem Knopf zum Entfernen. Du kannst es mit einer Frage oder für sich allein abschicken. PNG, JPEG, GIF und WebP gehen, bis zu vier Bilder pro Nachricht und je 5 MB; größere Bilder werden vor dem Senden verkleinert.
+Das Bild erscheint über der Eingabezeile, mit Vorschau, Größe und einem Knopf zum Entfernen. Du kannst es mit einer Frage oder für sich allein abschicken. PNG, JPEG, GIF und WebP gehen (Gemini nimmt kein GIF, siehe unten), bis zu vier Bilder pro Nachricht und je 5 MB; größere Bilder werden vor dem Senden verkleinert.
 
 Ob ein Bild mitgeht, hängt am Anbieter, nicht nur am Modell:
 
 - *OpenAI* — ja.
 - *OpenAI-kompatibel* — nur, wenn für den Eintrag unter *Einstellungen › Modelle* *Bild-Anhänge erlauben* eingeschaltet ist. Sonst sagt Snotra, dass für diese Verbindung Bild-Anhänge ausgeschaltet sind.
 - *Anthropic (Claude)* [seit 1.27] — ja.
-- *Google (Gemini)*, *Ollama (lokal)* — noch nicht. Gemini versteht Bilder, manche Ollama-Modelle auch, aber Snotra kann sie an diese Anbieter noch nicht weiterreichen ([#91](https://github.com/kkrafft1999/snotra/issues/91), [#92](https://github.com/kkrafft1999/snotra/issues/92)). Snotra sagt das, statt das Bild einzufügen.
+- *Google (Gemini)* [seit 1.27] — ja, als PNG, JPEG oder WebP. Gemini nimmt kein GIF; Snotra sagt das, statt das Bild einzufügen.
+- *Ollama (lokal)* — noch nicht. Manche Ollama-Modelle verstehen Bilder, aber Snotra kann sie an Ollama noch nicht weiterreichen ([#92](https://github.com/kkrafft1999/snotra/issues/92)). Snotra sagt das, statt das Bild einzufügen.
 
 Die Übersicht je Anbieter steht unter [Modelle](../../customising/models/#die-anbieter).
 
@@ -61,6 +62,7 @@ Neben dem Senden-Knopf zeigt das Eingabefeld die Größe der letzten Anfrage in 
 
 - **Der Senden-Knopf bleibt gesperrt.** Es ist kein Modell angebunden, oder dem angebundenen fehlt sein Schlüssel: siehe [Ein Modell anbinden](../../getting-started/connect-a-model/).
 - **Ein Bild einzufügen, zeigt nur einen Hinweis.** Das Modell dieses Chats nimmt keine Bilder. Wechsle zu einem, das es tut — [Das Modell wechseln](../model-and-reasoning/) —, oder schalte *Bild-Anhänge erlauben* für einen OpenAI-kompatiblen Server ein, dessen Modell Bilder versteht.
+- **Ein GIF wird abgelehnt, solange Gemini aktiv ist.** Gemini nimmt PNG, JPEG und WebP, aber kein GIF. Speichere das Bild als PNG oder wechsle das Modell. Hing das GIF schon an, bevor du zu Gemini gewechselt hast, sagt Snotra es beim Senden; entferne das Bild und schick die Nachricht noch einmal.
 - ***Nicht gesendet*** neben dem Senden-Knopf. In Snotra ist etwas schiefgegangen, bevor die Nachricht losging. Text und Bilder stehen wieder im Eingabefeld; schick sie noch einmal ab. Passiert das wiederholt, drück direkt danach `Cmd+Shift+D` / `Ctrl+Shift+D` und häng das Ergebnis an einen Bericht: [Logs finden und ein Problem melden](../../troubleshooting/logs-and-reports/).
 - ***Kein OpenAI-Key hinterlegt (die Spracheingabe braucht einen).*** Das Diktat braucht einen OpenAI-Schlüssel, auch wenn der Chat bei einem anderen Anbieter läuft. Ohne ihn geht das Mikrofon gar nicht erst an.
 - **Das Diktat zeigt beim Sprechen keinen Text, oder gar keinen.** Siehe [Wenn das Diktat nicht klappt](../../troubleshooting/voice-input/).

@@ -4,7 +4,7 @@ const { isAbortError, createChatAbortError } = require('../../shared/runtime/abo
 const { extractStringFromPartialJson } = require('../../shared/runtime/partial-json');
 const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
 const { mergeSessionCost } = require('../../shared/contracts/cost');
-const { normalizeAttachments, attachmentsCharCost } = require('../../shared/contracts/attachments');
+const { normalizeAttachments, attachmentsCharCost, providerImageMediaTypes, imageFormatNames } = require('../../shared/contracts/attachments');
 const { extractInvokedSkillNames } = require('../../shared/contracts/skill-invocation');
 const { LOAD_SKILL_TOOL, SKILL_SOURCES } = require('../../shared/contracts/skills');
 const {
@@ -683,15 +683,33 @@ function buildProviderLabel(target, sendBundle) {
  * nicht weiterreicht (Issue #93). Aeltere Bilder im Verlauf blockieren nicht:
  * Sie hatten ihren Zug, und ein Textmodell soll die Konversation fortsetzen
  * koennen.
+ *
+ * A provider that takes images but not every format (Gemini: no GIF) refuses
+ * the format here too (#91) — the composer only checks at paste time, and the
+ * model may have changed since.
  */
 function findUnsupportedAttachment(messages, sendBundle) {
-  if (sendBundle?.capabilities?.images === true) return null;
   const lastUser = [...messages].reverse().find((message) => message?.role === 'user');
-  if (normalizeAttachments(lastUser?.attachments).length === 0) return null;
+  const attachments = normalizeAttachments(lastUser?.attachments);
+  if (attachments.length === 0) return null;
+  const provider = sendBundle?.providerName
+    ? { provider: sendBundle.providerName }
+    : { providerKey: 'chat.error.provider.fallback' };
+  if (sendBundle?.capabilities?.images !== true) {
+    return createChatErrorResult({
+      error: createMessage('chat.error.noImages', provider),
+      code: CHAT_ERROR_CODES.INVALID,
+    });
+  }
+  const accepted = providerImageMediaTypes(sendBundle.capabilities);
+  const refused = attachments.find((attachment) => !accepted.includes(attachment.mediaType));
+  if (!refused) return null;
   return createChatErrorResult({
-    error: sendBundle?.providerName
-      ? createMessage('chat.error.noImages', { provider: sendBundle.providerName })
-      : createMessage('chat.error.noImages', { providerKey: 'chat.error.provider.fallback' }),
+    error: createMessage('chat.error.imageFormat', {
+      ...provider,
+      format: imageFormatNames([refused.mediaType]),
+      formats: imageFormatNames(accepted),
+    }),
     code: CHAT_ERROR_CODES.INVALID,
   });
 }

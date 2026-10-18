@@ -8,6 +8,7 @@ const {
   isMaxOutputTokens,
 } = require('../../shared/contracts/settings');
 const { createTranslator } = require('../../shared/i18n');
+const { imageCapabilitiesOf } = require('../../shared/contracts/attachments');
 
 function createSettingsPresentationService({ providerCatalog, defaultProviderId }) {
   function getProvider(id) {
@@ -86,9 +87,9 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       ? extended.displayName.trim()
       : builtInName;
     // Bild-Faehigkeit kann an der Konfiguration haengen statt am Adapter.
-    const capabilities = typeof provider?.capabilitiesFor === 'function'
-      ? { images: provider.capabilitiesFor(entry)?.images === true }
-      : { images: meta.capabilities?.images === true };
+    const capabilities = imageCapabilitiesOf(typeof provider?.capabilitiesFor === 'function'
+      ? provider.capabilitiesFor(entry)
+      : meta.capabilities);
 
     return {
       id: meta.id,

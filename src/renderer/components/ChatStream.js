@@ -148,6 +148,7 @@ export function initChatStream({
   activeProviderConfigured,
   activeProviderSupportsImages,
   activeImageLimit,
+  activeImageFormats,
   syncLiveDot,
   syncChatTitle,
   onWorkspaceFileWritten,
@@ -1984,12 +1985,23 @@ export function initChatStream({
     // both see the same free slots, and main would drop the extra (#589).
     const imagesSupported = activeProviderSupportsImages?.() === true;
     const limit = imagesSupported ? null : activeImageLimit?.();
-    const { accepted, rejections } = planAttachmentIntake(pendingAttachments.length + preparingImages, files, {
-      imagesSupported,
-      imagesLimitedBy: limit?.limitedBy,
-    });
+    // Which formats it takes, when it takes images at all (#91).
+    const formats = imagesSupported ? activeImageFormats?.() : null;
+    const { accepted, rejections, refusedMediaType } = planAttachmentIntake(
+      pendingAttachments.length + preparingImages,
+      files,
+      {
+        imagesSupported,
+        imagesLimitedBy: limit?.limitedBy,
+        ...(formats?.mediaTypes ? { imageMediaTypes: formats.mediaTypes } : {}),
+      },
+    );
     for (const reason of rejections) {
-      flashTokenUsageNote(rejectionMessage(reason, { provider: limit?.provider }));
+      flashTokenUsageNote(rejectionMessage(reason, {
+        provider: limit?.provider || formats?.provider || '',
+        refusedMediaType,
+        mediaTypes: formats?.mediaTypes,
+      }));
     }
     if (accepted.length === 0) return;
 

@@ -1,5 +1,6 @@
 const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
+const { imageAttachmentsOf } = require('../../shared/contracts/attachments');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const { iterSseEvents, describeFetchErrorMessage, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
@@ -178,6 +179,31 @@ function pushContent(contents, role, parts) {
   else contents.push({ role, parts });
 }
 
+/**
+ * The image formats Gemini takes, out of the four Snotra attaches: no GIF
+ * (https://ai.google.dev/gemini-api/docs/image-understanding, checked
+ * 2026-10-18). The composer refuses a GIF while Gemini is active (#91).
+ */
+const GEMINI_IMAGE_MEDIA_TYPES = Object.freeze(['image/png', 'image/jpeg', 'image/webp']);
+
+/**
+ * A user turn's parts: the images as inline data in front of the question, as
+ * Gemini's own examples order them, then the text. An image-only message gets
+ * no empty text part. A GIF from an earlier turn — sent while another model
+ * was active — is left out rather than failing the whole request (#91).
+ */
+function userPartsForGoogle(m) {
+  const text = typeof m.content === 'string' ? m.content : '';
+  const images = imageAttachmentsOf(m)
+    .filter((image) => GEMINI_IMAGE_MEDIA_TYPES.includes(image.mediaType.toLowerCase()));
+  if (images.length === 0) return [{ text }];
+  const parts = images.map((image) => ({
+    inlineData: { mimeType: image.mediaType.toLowerCase(), data: image.dataBase64 },
+  }));
+  if (text) parts.push({ text });
+  return parts;
+}
+
 function translateMessagesToGoogle(messages) {
   const toolNameById = buildToolCallNameMap(messages);
   let systemText = '';
@@ -189,7 +215,7 @@ function translateMessagesToGoogle(messages) {
       continue;
     }
     if (m.role === 'user') {
-      pushContent(contents, 'user', [{ text: typeof m.content === 'string' ? m.content : '' }]);
+      pushContent(contents, 'user', userPartsForGoogle(m));
       continue;
     }
     if (m.role === 'assistant') {
@@ -369,8 +395,8 @@ module.exports = {
   id: 'google',
   name: 'Google (Gemini)',
   fields: { apiKey: true },
-  // Auf true, sobald translateMessagesToGoogle Bilder abbildet (Issue #91).
-  capabilities: { images: false },
+  // translateMessagesToGoogle maps image attachments, GIF excepted (#91).
+  capabilities: { images: true, imageMediaTypes: GEMINI_IMAGE_MEDIA_TYPES },
   defaultModel: 'gemini-2.0-flash',
   // The levels depend on the model generation (#994); see reasoningLevelsOf.
   reasoning: {

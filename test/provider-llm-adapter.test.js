@@ -472,6 +472,24 @@ test('prepareSendBundle nimmt Anzeigenamen und Bild-Faehigkeit aus der Konfigura
   assert.deepEqual(plain.capabilities, { images: false });
 });
 
+test('prepareSendBundle passes on the image formats a provider narrows to (#91)', async () => {
+  const narrowing = {
+    ...COMPAT_PROVIDER,
+    id: 'narrow',
+    capabilitiesFor: undefined,
+    capabilities: { images: true, imageMediaTypes: ['image/webp', 'image/png', 'image/tiff'] },
+  };
+  const llm = createProviderLlmAdapter(
+    makeAdapterDeps({
+      providerRuntime: { getProvider: (id) => (id === 'narrow' ? narrowing : null) },
+      providerSecrets: { getEffectiveProviderConfig: async () => ({ baseUrl: 'http://localhost:1234/v1' }) },
+    })
+  );
+  const bundle = await llm.prepareSendBundle({ providerId: 'narrow', model: 'm' });
+  // In the contract's order, and nothing Snotra does not attach.
+  assert.deepEqual(bundle.capabilities, { images: true, imageMediaTypes: ['image/png', 'image/webp'] });
+});
+
 // ── Estimated cost per round (#949) ───────────────────────────────────────
 
 function usageProviders(usage) {
