@@ -5380,6 +5380,11 @@ select.modal-input {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* With the group Tools (#1119) the list is taller than a short window's
+     dialog: it scrolls on its own instead of running under the hint bar,
+     where the last sections could no longer be clicked. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 @media (max-width: 640px) {
