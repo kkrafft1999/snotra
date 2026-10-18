@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1580 3360" width="1580" height="3360" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1580 3346" width="1580" height="3346" role="img" aria-labelledby="title desc">
   <title id="title">Mobile remote — pairing a phone, and the channel through the relay</title>
-  <desc id="desc">Sequence diagram with seven lifelines: you at the desktop, the dialog Settings › Remote access, the remote bridge in the desktop's main process, the relay's Cloud Functions, the relay's Realtime Database, the iPhone app, and you with the phone. Phase 1, open a pairing: the desktop creates identity keys once and a 128-bit pairing secret that never leaves the machine, registers a channel and a five-minute one-use pairing at the relay, and only then shows the QR code with the typed key; without a claim in five minutes, or on Cancel, the pairing and the channel are deleted. Phase 2, scan and claim: the phone scans the code, creates its keys in the Secure Enclave, fetches the desktop's public keys, sends its own public keys with an HMAC over both under the pairing secret, and the relay links them to the channel, refusing any second key. Phase 3, confirm in person: the desktop checks the HMAC, both sides show the same six-word safety phrase, and only a click on Allow at the desktop completes the pairing; the relay sets the channel to paired. Phase 4, connect: on every start both sides get a token by a signed challenge, mark their presence, run an X25519 handshake through the database and derive session keys; from then on every message is an encrypted envelope in the other side's outbox, which the relay can carry but not read. Phase 5, end: Remove phone deletes the channel, and the phone deletes its keys. Proposed additions, not in the concept yet, are marked: closed outboxes until the channel is paired, a confirmation MAC from the desktop to the phone, and a heartbeat for the desktop's presence.</desc>
+  <desc id="desc">Sequence diagram with seven lifelines: you at the desktop, the dialog Settings › Remote access, the remote bridge in the desktop's main process, the relay's Cloud Functions, the relay's Realtime Database, the iPhone app, and you with the phone. Phase 1, open a pairing: the desktop creates identity keys once and a 128-bit pairing secret that never leaves the machine, registers a channel and a five-minute one-use pairing at the relay, and only then shows the QR code with the typed key; without a claim in five minutes, or on Cancel, the pairing and the channel are deleted. Phase 2, scan and claim: the phone scans the code, creates its keys in the Secure Enclave, fetches the desktop's public keys, sends its own public keys with an HMAC over both under the pairing secret, and the relay links them to the channel, refusing any second key. Phase 3, confirm in person: the desktop checks the HMAC, both sides show the same six-word safety phrase, and only a click on Allow at the desktop completes the pairing; the relay sets the channel to paired. Phase 4, connect: on every start both sides get a token by a signed challenge, mark their presence, run an X25519 handshake through the database and derive session keys; from then on every message is an encrypted envelope in the other side's outbox, which the relay can carry but not read. Phase 5, end: Remove phone deletes the channel, and the phone deletes its keys. Three points were added to the concept on 2026-10-18: the outboxes stay closed until the channel is paired, the desktop sends a confirmation MAC that the phone checks, and the desktop's presence is a heartbeat because REST streaming has no onDisconnect.</desc>
   <style>
       text { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
       .canvas { fill: #F9F9F9; }
@@ -54,26 +54,26 @@
       .legend-t { fill: #5C5C5C; font-size: 12px; }
       .stamp { fill: #8A8A8A; font-size: 11px; text-anchor: end; }
   </style>
-  <rect class="canvas" x="0" y="0" width="1580" height="3360"/>
+  <rect class="canvas" x="0" y="0" width="1580" height="3346"/>
   <text class="page-title" x="40" y="54">Mobile remote — pairing a phone, and the channel through the relay</text>
-  <text class="page-sub" x="40" y="82">What happens behind Settings › Remote access. Draft for discussion, built on the mobile remote concept (snotra-mobile, §4.2 and §5) and docs/remote-interface.md.</text>
+  <text class="page-sub" x="40" y="82">What happens behind Settings › Remote access. Agreed on 2026-10-18; it details the mobile remote concept (snotra-mobile, §4.2 and §5) and docs/remote-interface.md.</text>
   <rect class="group" x="206" y="122" width="468" height="94" rx="8"/>
   <text class="group-l" x="216" y="137">SNOTRA AGENT — DESKTOP</text>
   <rect class="group" x="686" y="122" width="468" height="94" rx="8"/>
   <text class="group-l" x="696" y="137">RELAY — FIREBASE, BLIND</text>
   <rect class="group" x="1166" y="122" width="228" height="94" rx="8"/>
   <text class="group-l" x="1176" y="137">SNOTRA-MOBILE</text>
-  <line class="life life-p" x1="90" y1="208" x2="90" y2="3184"/>
-  <line class="life" x1="320" y1="208" x2="320" y2="3184"/>
-  <line class="life" x1="560" y1="208" x2="560" y2="3184"/>
-  <line class="life" x1="800" y1="208" x2="800" y2="3184"/>
-  <line class="life" x1="1040" y1="208" x2="1040" y2="3184"/>
-  <line class="life" x1="1280" y1="208" x2="1280" y2="3184"/>
-  <line class="life life-p" x1="1490" y1="208" x2="1490" y2="3184"/>
+  <line class="life life-p" x1="90" y1="208" x2="90" y2="3170"/>
+  <line class="life" x1="320" y1="208" x2="320" y2="3170"/>
+  <line class="life" x1="560" y1="208" x2="560" y2="3170"/>
+  <line class="life" x1="800" y1="208" x2="800" y2="3170"/>
+  <line class="life" x1="1040" y1="208" x2="1040" y2="3170"/>
+  <line class="life" x1="1280" y1="208" x2="1280" y2="3170"/>
+  <line class="life life-p" x1="1490" y1="208" x2="1490" y2="3170"/>
   <rect class="frame" x="210" y="818" width="946" height="138" rx="4"/>
   <path class="frame-tag" d="M210 818 h42.879999999999995 v12 l-8 9 h-34.879999999999995 z"/>
-  <rect class="frame" x="450" y="2602" width="940" height="274" rx="4"/>
-  <path class="frame-tag" d="M450 2602 h49.839999999999996 v12 l-8 9 h-41.839999999999996 z"/>
+  <rect class="frame" x="450" y="2588" width="940" height="274" rx="4"/>
+  <path class="frame-tag" d="M450 2588 h49.839999999999996 v12 l-8 9 h-41.839999999999996 z"/>
   <rect class="hdr-p" x="20" y="146" width="140" height="62" rx="17"/>
   <text class="hdr-pn" x="90" y="172">You</text>
   <text class="hdr-ps" x="90" y="191">at the desktop</text>
@@ -203,9 +203,7 @@
   <polyline class="m-ret head-open" points="1270,1361 1278.5,1366 1270,1371"/>
   <rect class="label-bg" x="919.375" y="1345" width="265.75" height="15" rx="3"/>
   <text class="lbl" x="1052.25" y="1357" text-anchor="middle">token (claims: channel, role phone)</text>
-  <rect class="note note-prop" x="907.36" y="1374" width="265.28000000000003" height="40" rx="5"/>
-  <rect class="prop-pill" x="1098.64" y="1367" width="64" height="14" rx="7"/>
-  <text class="prop-tag" x="1130.64" y="1377.2" text-anchor="middle">PROPOSED</text>
+  <rect class="note" x="907.36" y="1374" width="265.28000000000003" height="40" rx="5"/>
   <text class="note-t" x="925.36" y="1392">Database rules: outboxes stay closed</text>
   <text class="note-t" x="925.36" y="1406">until status = paired</text>
   <line class="m-req" x1="1254" y1="1446" x2="1041.5" y2="1446"/>
@@ -260,139 +258,138 @@
   <rect class="label-bg" x="588" y="1915" width="258.5" height="43" rx="3"/>
   <text class="lbl" x="717.25" y="1927" text-anchor="middle">POST /channels/{channelId}/confirm</text>
   <text class="lbl-sub" x="717.25" y="1941" text-anchor="middle">signed by the desktop</text>
-  <text class="lbl-prop" x="717.25" y="1955" text-anchor="middle">+ MAC_D for the phone (proposed)</text>
+  <text class="lbl-sub" x="717.25" y="1955" text-anchor="middle">+ MAC_D for the phone</text>
   <line class="m-req" x1="826" y1="2010" x2="1038.5" y2="2010"/>
   <polygon class="head m-req-head" points="1038.5,2010 1029,2005 1029,2015"/>
   <rect class="label-bg" x="828" y="1975" width="243.99999999999997" height="29" rx="3"/>
   <text class="lbl" x="950" y="1987" text-anchor="middle">status = paired · delete pairing</text>
   <text class="lbl-sub" x="950" y="2001" text-anchor="middle">the link desktop ⇄ phone is complete</text>
-  <line class="m-evt" x1="1066" y1="2056" x2="1278.5" y2="2056"/>
-  <polygon class="head m-evt-head" points="1278.5,2056 1269,2051 1269,2061"/>
-  <rect class="label-bg" x="1111.875" y="2021" width="120.74999999999999" height="29" rx="3"/>
-  <text class="lbl" x="1172.25" y="2033" text-anchor="middle">status = paired</text>
-  <text class="lbl-prop" x="1172.25" y="2047" text-anchor="middle">+ MAC_D (proposed)</text>
-  <rect class="note" x="1150.6" y="2064" width="258.8" height="54" rx="5"/>
-  <text class="note-prop-t" x="1168.6" y="2082">Check MAC_D (proposed)</text>
-  <text class="note-t" x="1168.6" y="2096">Keep desktopKeys + channelId in the</text>
-  <text class="note-t" x="1168.6" y="2110">Keychain, this device only</text>
-  <line class="m-ret" x1="534" y1="2164" x2="321.5" y2="2164"/>
-  <polyline class="m-ret head-open" points="330,2159 321.5,2164 330,2169"/>
-  <rect class="label-bg" x="349.25" y="2129" width="157" height="29" rx="3"/>
-  <text class="lbl" x="427.75" y="2141" text-anchor="middle">Paired: ‹phone name›</text>
-  <text class="lbl-sub" x="427.75" y="2155" text-anchor="middle">Remove phone</text>
-  <line class="m-ret" x1="1306" y1="2150" x2="1488.5" y2="2150"/>
-  <polyline class="m-ret head-open" points="1480,2145 1488.5,2150 1480,2155"/>
-  <rect class="label-bg" x="1308" y="2129" width="200.5" height="15" rx="3"/>
-  <text class="lbl" x="1408.25" y="2141" text-anchor="middle">Paired with ‹desktop name›</text>
-  <rect class="phase" x="24" y="2180" width="1532" height="30" rx="4"/>
-  <text class="phase-n" x="44" y="2201">4</text>
-  <text class="phase-t" x="70" y="2201">Connect</text>
-  <text class="phase-s" x="1536" y="2201" text-anchor="end">every time the app opens — the relay carries ciphertext between exactly two keys</text>
-  <line class="m-req" x1="586" y1="2260" x2="798.5" y2="2260"/>
-  <polygon class="head m-req-head" points="798.5,2260 789,2255 789,2265"/>
-  <rect class="label-bg" x="595.625" y="2225" width="193.25" height="29" rx="3"/>
-  <text class="lbl" x="692.25" y="2237" text-anchor="middle">token by signed challenge</text>
-  <text class="lbl-sub" x="692.25" y="2251" text-anchor="middle">role desktop</text>
-  <line class="m-req" x1="1254" y1="2260" x2="801.5" y2="2260"/>
-  <polygon class="head m-req-head" points="801.5,2260 811,2255 811,2265"/>
-  <rect class="label-bg" x="959.68" y="2225" width="196.14000000000001" height="29" rx="3"/>
-  <text class="lbl" x="1057.75" y="2237" text-anchor="middle">token by signed challenge</text>
-  <text class="lbl-sub" x="1057.75" y="2251" text-anchor="middle">role phone · Secure Enclave key</text>
-  <line class="m-req" x1="586" y1="2306" x2="1038.5" y2="2306"/>
-  <polygon class="head m-req-head" points="1038.5,2306 1029,2301 1029,2311"/>
-  <rect class="label-bg" x="610.23" y="2271" width="404.04" height="29" rx="3"/>
-  <text class="lbl" x="812.25" y="2283" text-anchor="middle">presence/desktop · listen on to-desktop</text>
-  <text class="lbl-prop" x="812.25" y="2297" text-anchor="middle">heartbeat lastSeen — REST streaming has no onDisconnect (proposed)</text>
-  <line class="m-req" x1="1254" y1="2338" x2="1041.5" y2="2338"/>
-  <polygon class="head m-req-head" points="1041.5,2338 1051,2333 1051,2343"/>
-  <rect class="label-bg" x="877.5" y="2317" width="374.5" height="15" rx="3"/>
-  <text class="lbl" x="1064.75" y="2329" text-anchor="middle">presence/phone (onDisconnect) · listen on to-phone</text>
-  <line class="m-req" x1="1254" y1="2384" x2="1041.5" y2="2384"/>
-  <polygon class="head m-req-head" points="1041.5,2384 1051,2379 1051,2389"/>
-  <rect class="label-bg" x="1014.2799999999999" y="2349" width="237.72000000000003" height="29" rx="3"/>
-  <text class="lbl" x="1133.1399999999999" y="2361" text-anchor="middle">to-desktop: handshake 1</text>
-  <text class="lbl-sub" x="1133.1399999999999" y="2375" text-anchor="middle">ephemeral X25519 key, protocol version</text>
-  <line class="m-evt" x1="1014" y1="2416" x2="561.5" y2="2416"/>
-  <polygon class="head m-evt-head" points="561.5,2416 571,2411 571,2421"/>
-  <rect class="label-bg" x="741.875" y="2395" width="91.75" height="15" rx="3"/>
-  <text class="lbl" x="787.75" y="2407" text-anchor="middle">handshake 1</text>
-  <line class="m-req" x1="586" y1="2462" x2="1038.5" y2="2462"/>
-  <polygon class="head m-req-head" points="1038.5,2462 1029,2457 1029,2467"/>
-  <rect class="label-bg" x="730.125" y="2427" width="164.25" height="29" rx="3"/>
-  <text class="lbl" x="812.25" y="2439" text-anchor="middle">to-phone: handshake 2</text>
-  <text class="lbl-sub" x="812.25" y="2453" text-anchor="middle">ephemeral X25519 key</text>
-  <line class="m-evt" x1="1066" y1="2494" x2="1278.5" y2="2494"/>
-  <polygon class="head m-evt-head" points="1278.5,2494 1269,2489 1269,2499"/>
-  <rect class="label-bg" x="1126.375" y="2473" width="91.75" height="15" rx="3"/>
-  <text class="lbl" x="1172.25" y="2485" text-anchor="middle">handshake 2</text>
-  <rect class="note" x="424.12" y="2502" width="271.76" height="40" rx="5"/>
-  <text class="note-t" x="442.12" y="2520">Session keys: HKDF over static P-256,</text>
-  <text class="note-t" x="442.12" y="2534">ephemeral X25519 and the transcript</text>
-  <rect class="note" x="1144.12" y="2502" width="271.76" height="40" rx="5"/>
-  <text class="note-t" x="1162.12" y="2520">Session keys: HKDF over static P-256,</text>
-  <text class="note-t" x="1162.12" y="2534">ephemeral X25519 and the transcript</text>
-  <line class="m-req" x1="534" y1="2588" x2="321.5" y2="2588"/>
-  <polygon class="head m-req-head" points="321.5,2588 331,2583 331,2593"/>
-  <rect class="label-bg" x="276.46000000000004" y="2553" width="255.54000000000002" height="29" rx="3"/>
-  <text class="lbl" x="404.23" y="2565" text-anchor="middle">phone connected</text>
-  <text class="lbl-sub" x="404.23" y="2579" text-anchor="middle">indicator (R8) · connection of kind relay</text>
-  <line class="m-req" x1="1254" y1="2666" x2="1041.5" y2="2666"/>
-  <polygon class="head m-req-head" points="1041.5,2666 1051,2661 1051,2671"/>
-  <rect class="label-bg" x="971.75" y="2631" width="280.25" height="29" rx="3"/>
-  <text class="lbl" x="1111.875" y="2643" text-anchor="middle">to-desktop/{seq}: {nonce, ciphertext}</text>
-  <text class="lbl-sub" x="1111.875" y="2657" text-anchor="middle">message.send, approval.respond, …</text>
-  <line class="m-evt" x1="1014" y1="2712" x2="561.5" y2="2712"/>
-  <polygon class="head m-evt-head" points="561.5,2712 571,2707 571,2717"/>
-  <rect class="label-bg" x="624.34" y="2677" width="326.82" height="29" rx="3"/>
-  <text class="lbl" x="787.75" y="2689" text-anchor="middle">envelope</text>
-  <text class="lbl-sub" x="787.75" y="2703" text-anchor="middle">decrypt → conversation service · delete after reading</text>
-  <line class="m-req" x1="586" y1="2758" x2="1038.5" y2="2758"/>
-  <polygon class="head m-req-head" points="1038.5,2758 1029,2753 1029,2763"/>
-  <rect class="label-bg" x="675.5699999999999" y="2723" width="273.36" height="29" rx="3"/>
-  <text class="lbl" x="812.25" y="2735" text-anchor="middle">to-phone/{seq}: {nonce, ciphertext}</text>
-  <text class="lbl-sub" x="812.25" y="2749" text-anchor="middle">chat.delta every 150 ms, approval.request, …</text>
-  <line class="m-evt" x1="1066" y1="2804" x2="1278.5" y2="2804"/>
-  <polygon class="head m-evt-head" points="1278.5,2804 1269,2799 1269,2809"/>
-  <rect class="label-bg" x="1068" y="2769" width="231.78" height="29" rx="3"/>
-  <text class="lbl" x="1183.89" y="2781" text-anchor="middle">envelope</text>
-  <text class="lbl-sub" x="1183.89" y="2795" text-anchor="middle">decrypt → show · delete after reading</text>
-  <rect class="note" x="878.2" y="2812" width="323.6" height="54" rx="5"/>
-  <text class="note-t" x="896.2" y="2830">Sees: that the channel exists, online times,</text>
-  <text class="note-t" x="896.2" y="2844">size and time of each packet, IP addresses.</text>
-  <text class="note-t" x="896.2" y="2858">Never the content. Leftovers go after 10 min.</text>
-  <text class="frame-k" x="458" y="2617">loop</text>
-  <text class="frame-g" x="509.84" y="2617">[every protocol message, both ways — ChaCha20-Poly1305, counter nonce]</text>
-  <rect class="phase" x="24" y="2894" width="1532" height="30" rx="4"/>
-  <text class="phase-n" x="44" y="2915">5</text>
-  <text class="phase-t" x="70" y="2915">End</text>
-  <text class="phase-s" x="1536" y="2915" text-anchor="end">Remove phone at the desktop, or Disconnect on the phone</text>
-  <line class="m-req" x1="116" y1="2960" x2="318.5" y2="2960"/>
-  <polygon class="head m-req-head" points="318.5,2960 309,2955 309,2965"/>
-  <rect class="label-bg" x="167.75" y="2939" width="99" height="15" rx="3"/>
-  <text class="lbl" x="217.25" y="2951" text-anchor="middle">Remove phone</text>
-  <line class="m-req" x1="346" y1="2992" x2="558.5" y2="2992"/>
-  <polygon class="head m-req-head" points="558.5,2992 549,2987 549,2997"/>
-  <rect class="label-bg" x="399.125" y="2971" width="106.25" height="15" rx="3"/>
-  <text class="lbl" x="452.25" y="2983" text-anchor="middle">remote:unpair</text>
-  <line class="m-req" x1="586" y1="3038" x2="798.5" y2="3038"/>
-  <polygon class="head m-req-head" points="798.5,3038 789,3033 789,3043"/>
-  <rect class="label-bg" x="588" y="3003" width="215" height="29" rx="3"/>
-  <text class="lbl" x="695.5" y="3015" text-anchor="middle">DELETE /channels/{channelId}</text>
-  <text class="lbl-sub" x="695.5" y="3029" text-anchor="middle">signed by the desktop</text>
-  <line class="m-req" x1="826" y1="3084" x2="1038.5" y2="3084"/>
-  <polygon class="head m-req-head" points="1038.5,3084 1029,3079 1029,3089"/>
-  <rect class="label-bg" x="828" y="3049" width="213.96" height="29" rx="3"/>
-  <text class="lbl" x="934.98" y="3061" text-anchor="middle">delete the channel</text>
-  <text class="lbl-sub" x="934.98" y="3075" text-anchor="middle">its tokens are refused from now on</text>
-  <line class="m-evt" x1="1066" y1="3116" x2="1278.5" y2="3116"/>
-  <polygon class="head m-evt-head" points="1278.5,3116 1269,3111 1269,3121"/>
-  <rect class="label-bg" x="1122.75" y="3095" width="99" height="15" rx="3"/>
-  <text class="lbl" x="1172.25" y="3107" text-anchor="middle">channel gone</text>
-  <line class="m-ret" x1="1306" y1="3162" x2="1488.5" y2="3162"/>
-  <polyline class="m-ret head-open" points="1480,3157 1488.5,3162 1480,3167"/>
-  <rect class="label-bg" x="1308" y="3127" width="200.5" height="29" rx="3"/>
-  <text class="lbl" x="1408.25" y="3139" text-anchor="middle">“Removed from the desktop”</text>
-  <text class="lbl-sub" x="1408.25" y="3153" text-anchor="middle">keys deleted</text>
+  <line class="m-evt" x1="1066" y1="2042" x2="1278.5" y2="2042"/>
+  <polygon class="head m-evt-head" points="1278.5,2042 1269,2037 1269,2047"/>
+  <rect class="label-bg" x="1082.875" y="2021" width="178.75" height="15" rx="3"/>
+  <text class="lbl" x="1172.25" y="2033" text-anchor="middle">status = paired + MAC_D</text>
+  <rect class="note" x="1134.4" y="2050" width="291.20000000000005" height="54" rx="5"/>
+  <text class="note-t" x="1152.4" y="2068">Check MAC_D with pairingSecret · keep</text>
+  <text class="note-t" x="1152.4" y="2082">desktopKeys + channelId in the Keychain,</text>
+  <text class="note-t" x="1152.4" y="2096">this device only</text>
+  <line class="m-ret" x1="534" y1="2150" x2="321.5" y2="2150"/>
+  <polyline class="m-ret head-open" points="330,2145 321.5,2150 330,2155"/>
+  <rect class="label-bg" x="349.25" y="2115" width="157" height="29" rx="3"/>
+  <text class="lbl" x="427.75" y="2127" text-anchor="middle">Paired: ‹phone name›</text>
+  <text class="lbl-sub" x="427.75" y="2141" text-anchor="middle">Remove phone</text>
+  <line class="m-ret" x1="1306" y1="2136" x2="1488.5" y2="2136"/>
+  <polyline class="m-ret head-open" points="1480,2131 1488.5,2136 1480,2141"/>
+  <rect class="label-bg" x="1308" y="2115" width="200.5" height="15" rx="3"/>
+  <text class="lbl" x="1408.25" y="2127" text-anchor="middle">Paired with ‹desktop name›</text>
+  <rect class="phase" x="24" y="2166" width="1532" height="30" rx="4"/>
+  <text class="phase-n" x="44" y="2187">4</text>
+  <text class="phase-t" x="70" y="2187">Connect</text>
+  <text class="phase-s" x="1536" y="2187" text-anchor="end">every time the app opens — the relay carries ciphertext between exactly two keys</text>
+  <line class="m-req" x1="586" y1="2246" x2="798.5" y2="2246"/>
+  <polygon class="head m-req-head" points="798.5,2246 789,2241 789,2251"/>
+  <rect class="label-bg" x="595.625" y="2211" width="193.25" height="29" rx="3"/>
+  <text class="lbl" x="692.25" y="2223" text-anchor="middle">token by signed challenge</text>
+  <text class="lbl-sub" x="692.25" y="2237" text-anchor="middle">role desktop</text>
+  <line class="m-req" x1="1254" y1="2246" x2="801.5" y2="2246"/>
+  <polygon class="head m-req-head" points="801.5,2246 811,2241 811,2251"/>
+  <rect class="label-bg" x="959.68" y="2211" width="196.14000000000001" height="29" rx="3"/>
+  <text class="lbl" x="1057.75" y="2223" text-anchor="middle">token by signed challenge</text>
+  <text class="lbl-sub" x="1057.75" y="2237" text-anchor="middle">role phone · Secure Enclave key</text>
+  <line class="m-req" x1="586" y1="2292" x2="1038.5" y2="2292"/>
+  <polygon class="head m-req-head" points="1038.5,2292 1029,2287 1029,2297"/>
+  <rect class="label-bg" x="642.9" y="2257" width="338.70000000000005" height="29" rx="3"/>
+  <text class="lbl" x="812.25" y="2269" text-anchor="middle">presence/desktop · listen on to-desktop</text>
+  <text class="lbl-sub" x="812.25" y="2283" text-anchor="middle">heartbeat lastSeen — REST streaming has no onDisconnect</text>
+  <line class="m-req" x1="1254" y1="2324" x2="1041.5" y2="2324"/>
+  <polygon class="head m-req-head" points="1041.5,2324 1051,2319 1051,2329"/>
+  <rect class="label-bg" x="877.5" y="2303" width="374.5" height="15" rx="3"/>
+  <text class="lbl" x="1064.75" y="2315" text-anchor="middle">presence/phone (onDisconnect) · listen on to-phone</text>
+  <line class="m-req" x1="1254" y1="2370" x2="1041.5" y2="2370"/>
+  <polygon class="head m-req-head" points="1041.5,2370 1051,2365 1051,2375"/>
+  <rect class="label-bg" x="1014.2799999999999" y="2335" width="237.72000000000003" height="29" rx="3"/>
+  <text class="lbl" x="1133.1399999999999" y="2347" text-anchor="middle">to-desktop: handshake 1</text>
+  <text class="lbl-sub" x="1133.1399999999999" y="2361" text-anchor="middle">ephemeral X25519 key, protocol version</text>
+  <line class="m-evt" x1="1014" y1="2402" x2="561.5" y2="2402"/>
+  <polygon class="head m-evt-head" points="561.5,2402 571,2397 571,2407"/>
+  <rect class="label-bg" x="741.875" y="2381" width="91.75" height="15" rx="3"/>
+  <text class="lbl" x="787.75" y="2393" text-anchor="middle">handshake 1</text>
+  <line class="m-req" x1="586" y1="2448" x2="1038.5" y2="2448"/>
+  <polygon class="head m-req-head" points="1038.5,2448 1029,2443 1029,2453"/>
+  <rect class="label-bg" x="730.125" y="2413" width="164.25" height="29" rx="3"/>
+  <text class="lbl" x="812.25" y="2425" text-anchor="middle">to-phone: handshake 2</text>
+  <text class="lbl-sub" x="812.25" y="2439" text-anchor="middle">ephemeral X25519 key</text>
+  <line class="m-evt" x1="1066" y1="2480" x2="1278.5" y2="2480"/>
+  <polygon class="head m-evt-head" points="1278.5,2480 1269,2475 1269,2485"/>
+  <rect class="label-bg" x="1126.375" y="2459" width="91.75" height="15" rx="3"/>
+  <text class="lbl" x="1172.25" y="2471" text-anchor="middle">handshake 2</text>
+  <rect class="note" x="424.12" y="2488" width="271.76" height="40" rx="5"/>
+  <text class="note-t" x="442.12" y="2506">Session keys: HKDF over static P-256,</text>
+  <text class="note-t" x="442.12" y="2520">ephemeral X25519 and the transcript</text>
+  <rect class="note" x="1144.12" y="2488" width="271.76" height="40" rx="5"/>
+  <text class="note-t" x="1162.12" y="2506">Session keys: HKDF over static P-256,</text>
+  <text class="note-t" x="1162.12" y="2520">ephemeral X25519 and the transcript</text>
+  <line class="m-req" x1="534" y1="2574" x2="321.5" y2="2574"/>
+  <polygon class="head m-req-head" points="321.5,2574 331,2569 331,2579"/>
+  <rect class="label-bg" x="276.46000000000004" y="2539" width="255.54000000000002" height="29" rx="3"/>
+  <text class="lbl" x="404.23" y="2551" text-anchor="middle">phone connected</text>
+  <text class="lbl-sub" x="404.23" y="2565" text-anchor="middle">indicator (R8) · connection of kind relay</text>
+  <line class="m-req" x1="1254" y1="2652" x2="1041.5" y2="2652"/>
+  <polygon class="head m-req-head" points="1041.5,2652 1051,2647 1051,2657"/>
+  <rect class="label-bg" x="971.75" y="2617" width="280.25" height="29" rx="3"/>
+  <text class="lbl" x="1111.875" y="2629" text-anchor="middle">to-desktop/{seq}: {nonce, ciphertext}</text>
+  <text class="lbl-sub" x="1111.875" y="2643" text-anchor="middle">message.send, approval.respond, …</text>
+  <line class="m-evt" x1="1014" y1="2698" x2="561.5" y2="2698"/>
+  <polygon class="head m-evt-head" points="561.5,2698 571,2693 571,2703"/>
+  <rect class="label-bg" x="624.34" y="2663" width="326.82" height="29" rx="3"/>
+  <text class="lbl" x="787.75" y="2675" text-anchor="middle">envelope</text>
+  <text class="lbl-sub" x="787.75" y="2689" text-anchor="middle">decrypt → conversation service · delete after reading</text>
+  <line class="m-req" x1="586" y1="2744" x2="1038.5" y2="2744"/>
+  <polygon class="head m-req-head" points="1038.5,2744 1029,2739 1029,2749"/>
+  <rect class="label-bg" x="675.5699999999999" y="2709" width="273.36" height="29" rx="3"/>
+  <text class="lbl" x="812.25" y="2721" text-anchor="middle">to-phone/{seq}: {nonce, ciphertext}</text>
+  <text class="lbl-sub" x="812.25" y="2735" text-anchor="middle">chat.delta every 150 ms, approval.request, …</text>
+  <line class="m-evt" x1="1066" y1="2790" x2="1278.5" y2="2790"/>
+  <polygon class="head m-evt-head" points="1278.5,2790 1269,2785 1269,2795"/>
+  <rect class="label-bg" x="1068" y="2755" width="231.78" height="29" rx="3"/>
+  <text class="lbl" x="1183.89" y="2767" text-anchor="middle">envelope</text>
+  <text class="lbl-sub" x="1183.89" y="2781" text-anchor="middle">decrypt → show · delete after reading</text>
+  <rect class="note" x="878.2" y="2798" width="323.6" height="54" rx="5"/>
+  <text class="note-t" x="896.2" y="2816">Sees: that the channel exists, online times,</text>
+  <text class="note-t" x="896.2" y="2830">size and time of each packet, IP addresses.</text>
+  <text class="note-t" x="896.2" y="2844">Never the content. Leftovers go after 10 min.</text>
+  <text class="frame-k" x="458" y="2603">loop</text>
+  <text class="frame-g" x="509.84" y="2603">[every protocol message, both ways — ChaCha20-Poly1305, counter nonce]</text>
+  <rect class="phase" x="24" y="2880" width="1532" height="30" rx="4"/>
+  <text class="phase-n" x="44" y="2901">5</text>
+  <text class="phase-t" x="70" y="2901">End</text>
+  <text class="phase-s" x="1536" y="2901" text-anchor="end">Remove phone at the desktop, or Disconnect on the phone</text>
+  <line class="m-req" x1="116" y1="2946" x2="318.5" y2="2946"/>
+  <polygon class="head m-req-head" points="318.5,2946 309,2941 309,2951"/>
+  <rect class="label-bg" x="167.75" y="2925" width="99" height="15" rx="3"/>
+  <text class="lbl" x="217.25" y="2937" text-anchor="middle">Remove phone</text>
+  <line class="m-req" x1="346" y1="2978" x2="558.5" y2="2978"/>
+  <polygon class="head m-req-head" points="558.5,2978 549,2973 549,2983"/>
+  <rect class="label-bg" x="399.125" y="2957" width="106.25" height="15" rx="3"/>
+  <text class="lbl" x="452.25" y="2969" text-anchor="middle">remote:unpair</text>
+  <line class="m-req" x1="586" y1="3024" x2="798.5" y2="3024"/>
+  <polygon class="head m-req-head" points="798.5,3024 789,3019 789,3029"/>
+  <rect class="label-bg" x="588" y="2989" width="215" height="29" rx="3"/>
+  <text class="lbl" x="695.5" y="3001" text-anchor="middle">DELETE /channels/{channelId}</text>
+  <text class="lbl-sub" x="695.5" y="3015" text-anchor="middle">signed by the desktop</text>
+  <line class="m-req" x1="826" y1="3070" x2="1038.5" y2="3070"/>
+  <polygon class="head m-req-head" points="1038.5,3070 1029,3065 1029,3075"/>
+  <rect class="label-bg" x="828" y="3035" width="213.96" height="29" rx="3"/>
+  <text class="lbl" x="934.98" y="3047" text-anchor="middle">delete the channel</text>
+  <text class="lbl-sub" x="934.98" y="3061" text-anchor="middle">its tokens are refused from now on</text>
+  <line class="m-evt" x1="1066" y1="3102" x2="1278.5" y2="3102"/>
+  <polygon class="head m-evt-head" points="1278.5,3102 1269,3097 1269,3107"/>
+  <rect class="label-bg" x="1122.75" y="3081" width="99" height="15" rx="3"/>
+  <text class="lbl" x="1172.25" y="3093" text-anchor="middle">channel gone</text>
+  <line class="m-ret" x1="1306" y1="3148" x2="1488.5" y2="3148"/>
+  <polyline class="m-ret head-open" points="1480,3143 1488.5,3148 1480,3153"/>
+  <rect class="label-bg" x="1308" y="3113" width="200.5" height="29" rx="3"/>
+  <text class="lbl" x="1408.25" y="3125" text-anchor="middle">“Removed from the desktop”</text>
+  <text class="lbl-sub" x="1408.25" y="3139" text-anchor="middle">keys deleted</text>
   <circle class="badge " cx="106" cy="310" r="9.5"/>
   <text class="badge-n" x="106" y="313.8">1</text>
   <circle class="badge " cx="171.16" cy="338" r="9.5"/>
@@ -437,7 +434,7 @@
   <text class="badge-n" x="816" y="1337.8">21</text>
   <circle class="badge " cx="816" cy="1366" r="9.5"/>
   <text class="badge-n" x="816" y="1369.8">22</text>
-  <circle class="badge badge-prop" cx="907.36" cy="1394" r="9.5"/>
+  <circle class="badge " cx="907.36" cy="1394" r="9.5"/>
   <text class="badge-n" x="907.36" y="1397.8">23</text>
   <circle class="badge " cx="1264" cy="1446" r="9.5"/>
   <text class="badge-n" x="1264" y="1449.8">24</text>
@@ -465,84 +462,82 @@
   <text class="badge-n" x="576" y="1967.8">35</text>
   <circle class="badge " cx="816" cy="2010" r="9.5"/>
   <text class="badge-n" x="816" y="2013.8">36</text>
-  <circle class="badge " cx="1056" cy="2056" r="9.5"/>
-  <text class="badge-n" x="1056" y="2059.8">37</text>
-  <circle class="badge " cx="1150.6" cy="2091" r="9.5"/>
-  <text class="badge-n" x="1150.6" y="2094.8">38</text>
-  <circle class="badge " cx="544" cy="2164" r="9.5"/>
-  <text class="badge-n" x="544" y="2167.8">39</text>
-  <circle class="badge " cx="1296" cy="2150" r="9.5"/>
-  <text class="badge-n" x="1296" y="2153.8">40</text>
-  <circle class="badge " cx="576" cy="2260" r="9.5"/>
-  <text class="badge-n" x="576" y="2263.8">41</text>
-  <circle class="badge " cx="1264" cy="2260" r="9.5"/>
-  <text class="badge-n" x="1264" y="2263.8">42</text>
-  <circle class="badge " cx="576" cy="2306" r="9.5"/>
-  <text class="badge-n" x="576" y="2309.8">43</text>
-  <circle class="badge " cx="1264" cy="2338" r="9.5"/>
-  <text class="badge-n" x="1264" y="2341.8">44</text>
-  <circle class="badge " cx="1264" cy="2384" r="9.5"/>
-  <text class="badge-n" x="1264" y="2387.8">45</text>
-  <circle class="badge " cx="1024" cy="2416" r="9.5"/>
-  <text class="badge-n" x="1024" y="2419.8">46</text>
-  <circle class="badge " cx="576" cy="2462" r="9.5"/>
-  <text class="badge-n" x="576" y="2465.8">47</text>
-  <circle class="badge " cx="1056" cy="2494" r="9.5"/>
-  <text class="badge-n" x="1056" y="2497.8">48</text>
-  <circle class="badge " cx="424.12" cy="2522" r="9.5"/>
-  <text class="badge-n" x="424.12" y="2525.8">49</text>
-  <circle class="badge " cx="1144.12" cy="2522" r="9.5"/>
-  <text class="badge-n" x="1144.12" y="2525.8">50</text>
-  <circle class="badge " cx="544" cy="2588" r="9.5"/>
-  <text class="badge-n" x="544" y="2591.8">51</text>
-  <circle class="badge " cx="1264" cy="2666" r="9.5"/>
-  <text class="badge-n" x="1264" y="2669.8">52</text>
-  <circle class="badge " cx="1024" cy="2712" r="9.5"/>
-  <text class="badge-n" x="1024" y="2715.8">53</text>
-  <circle class="badge " cx="576" cy="2758" r="9.5"/>
-  <text class="badge-n" x="576" y="2761.8">54</text>
-  <circle class="badge " cx="1056" cy="2804" r="9.5"/>
-  <text class="badge-n" x="1056" y="2807.8">55</text>
-  <circle class="badge " cx="878.2" cy="2839" r="9.5"/>
-  <text class="badge-n" x="878.2" y="2842.8">56</text>
-  <circle class="badge " cx="106" cy="2960" r="9.5"/>
-  <text class="badge-n" x="106" y="2963.8">57</text>
-  <circle class="badge " cx="336" cy="2992" r="9.5"/>
-  <text class="badge-n" x="336" y="2995.8">58</text>
-  <circle class="badge " cx="576" cy="3038" r="9.5"/>
-  <text class="badge-n" x="576" y="3041.8">59</text>
-  <circle class="badge " cx="816" cy="3084" r="9.5"/>
-  <text class="badge-n" x="816" y="3087.8">60</text>
-  <circle class="badge " cx="1056" cy="3116" r="9.5"/>
-  <text class="badge-n" x="1056" y="3119.8">61</text>
-  <circle class="badge " cx="1296" cy="3162" r="9.5"/>
-  <text class="badge-n" x="1296" y="3165.8">62</text>
-  <rect class="hdr-p" x="20" y="3184" width="140" height="34" rx="17"/>
-  <text class="hdr-pn hdr-small" x="90" y="3206">You</text>
-  <rect class="hdr" x="214" y="3184" width="212" height="34" rx="6"/>
-  <text class="hdr-n hdr-small" x="320" y="3206">Settings › Remote access</text>
-  <rect class="hdr" x="454" y="3184" width="212" height="34" rx="6"/>
-  <text class="hdr-n hdr-small" x="560" y="3206">Remote bridge</text>
-  <rect class="hdr" x="694" y="3184" width="212" height="34" rx="6"/>
-  <text class="hdr-n hdr-small" x="800" y="3206">Relay Functions</text>
-  <rect class="hdr" x="934" y="3184" width="212" height="34" rx="6"/>
-  <text class="hdr-n hdr-small" x="1040" y="3206">Relay database</text>
-  <rect class="hdr" x="1174" y="3184" width="212" height="34" rx="6"/>
-  <text class="hdr-n hdr-small" x="1280" y="3206">Snotra mobile</text>
-  <rect class="hdr-p" x="1420" y="3184" width="140" height="34" rx="17"/>
-  <text class="hdr-pn hdr-small" x="1490" y="3206">You</text>
-  <text class="legend-h" x="40" y="3248">Legend</text>
-  <line class="m-req" x1="40" y1="3274" x2="90" y2="3274"/>
-  <polygon class="head m-req-head" points="90,3274 80,3269 80,3279"/>
-  <text class="legend-t" x="106" y="3278">request or write</text>
-  <line class="m-ret" x1="340" y1="3274" x2="390" y2="3274"/>
-  <polyline class="m-ret head-open" points="381,3269 390,3274 381,3279"/>
-  <text class="legend-t" x="406" y="3278">answer, or what a side shows</text>
-  <line class="m-evt" x1="640" y1="3274" x2="690" y2="3274"/>
-  <polygon class="head m-evt-head" points="690,3274 680,3269 680,3279"/>
-  <text class="legend-t" x="706" y="3278">stream event from the database</text>
-  <rect class="note note-prop" x="940" y="3264" width="56" height="20" rx="4"/>
-  <text class="legend-t" x="1006" y="3278">proposed — not in the concept yet</text>
-  <text class="legend-t" x="40" y="3308">Numbers are steps, top to bottom. R1, R8: ground rules of the mobile remote concept. #980: confirmation port with user presence. Keys: P-256 identity keys per side (sign, agree); desktopKeys and phoneKeys are their public halves.</text>
-  <text class="stamp" x="1540" y="3340">Created 2026-10-17 · Claude Opus 5.5 · Reasoning effort: xhigh</text>
+  <circle class="badge " cx="1056" cy="2042" r="9.5"/>
+  <text class="badge-n" x="1056" y="2045.8">37</text>
+  <circle class="badge " cx="1134.4" cy="2077" r="9.5"/>
+  <text class="badge-n" x="1134.4" y="2080.8">38</text>
+  <circle class="badge " cx="544" cy="2150" r="9.5"/>
+  <text class="badge-n" x="544" y="2153.8">39</text>
+  <circle class="badge " cx="1296" cy="2136" r="9.5"/>
+  <text class="badge-n" x="1296" y="2139.8">40</text>
+  <circle class="badge " cx="576" cy="2246" r="9.5"/>
+  <text class="badge-n" x="576" y="2249.8">41</text>
+  <circle class="badge " cx="1264" cy="2246" r="9.5"/>
+  <text class="badge-n" x="1264" y="2249.8">42</text>
+  <circle class="badge " cx="576" cy="2292" r="9.5"/>
+  <text class="badge-n" x="576" y="2295.8">43</text>
+  <circle class="badge " cx="1264" cy="2324" r="9.5"/>
+  <text class="badge-n" x="1264" y="2327.8">44</text>
+  <circle class="badge " cx="1264" cy="2370" r="9.5"/>
+  <text class="badge-n" x="1264" y="2373.8">45</text>
+  <circle class="badge " cx="1024" cy="2402" r="9.5"/>
+  <text class="badge-n" x="1024" y="2405.8">46</text>
+  <circle class="badge " cx="576" cy="2448" r="9.5"/>
+  <text class="badge-n" x="576" y="2451.8">47</text>
+  <circle class="badge " cx="1056" cy="2480" r="9.5"/>
+  <text class="badge-n" x="1056" y="2483.8">48</text>
+  <circle class="badge " cx="424.12" cy="2508" r="9.5"/>
+  <text class="badge-n" x="424.12" y="2511.8">49</text>
+  <circle class="badge " cx="1144.12" cy="2508" r="9.5"/>
+  <text class="badge-n" x="1144.12" y="2511.8">50</text>
+  <circle class="badge " cx="544" cy="2574" r="9.5"/>
+  <text class="badge-n" x="544" y="2577.8">51</text>
+  <circle class="badge " cx="1264" cy="2652" r="9.5"/>
+  <text class="badge-n" x="1264" y="2655.8">52</text>
+  <circle class="badge " cx="1024" cy="2698" r="9.5"/>
+  <text class="badge-n" x="1024" y="2701.8">53</text>
+  <circle class="badge " cx="576" cy="2744" r="9.5"/>
+  <text class="badge-n" x="576" y="2747.8">54</text>
+  <circle class="badge " cx="1056" cy="2790" r="9.5"/>
+  <text class="badge-n" x="1056" y="2793.8">55</text>
+  <circle class="badge " cx="878.2" cy="2825" r="9.5"/>
+  <text class="badge-n" x="878.2" y="2828.8">56</text>
+  <circle class="badge " cx="106" cy="2946" r="9.5"/>
+  <text class="badge-n" x="106" y="2949.8">57</text>
+  <circle class="badge " cx="336" cy="2978" r="9.5"/>
+  <text class="badge-n" x="336" y="2981.8">58</text>
+  <circle class="badge " cx="576" cy="3024" r="9.5"/>
+  <text class="badge-n" x="576" y="3027.8">59</text>
+  <circle class="badge " cx="816" cy="3070" r="9.5"/>
+  <text class="badge-n" x="816" y="3073.8">60</text>
+  <circle class="badge " cx="1056" cy="3102" r="9.5"/>
+  <text class="badge-n" x="1056" y="3105.8">61</text>
+  <circle class="badge " cx="1296" cy="3148" r="9.5"/>
+  <text class="badge-n" x="1296" y="3151.8">62</text>
+  <rect class="hdr-p" x="20" y="3170" width="140" height="34" rx="17"/>
+  <text class="hdr-pn hdr-small" x="90" y="3192">You</text>
+  <rect class="hdr" x="214" y="3170" width="212" height="34" rx="6"/>
+  <text class="hdr-n hdr-small" x="320" y="3192">Settings › Remote access</text>
+  <rect class="hdr" x="454" y="3170" width="212" height="34" rx="6"/>
+  <text class="hdr-n hdr-small" x="560" y="3192">Remote bridge</text>
+  <rect class="hdr" x="694" y="3170" width="212" height="34" rx="6"/>
+  <text class="hdr-n hdr-small" x="800" y="3192">Relay Functions</text>
+  <rect class="hdr" x="934" y="3170" width="212" height="34" rx="6"/>
+  <text class="hdr-n hdr-small" x="1040" y="3192">Relay database</text>
+  <rect class="hdr" x="1174" y="3170" width="212" height="34" rx="6"/>
+  <text class="hdr-n hdr-small" x="1280" y="3192">Snotra mobile</text>
+  <rect class="hdr-p" x="1420" y="3170" width="140" height="34" rx="17"/>
+  <text class="hdr-pn hdr-small" x="1490" y="3192">You</text>
+  <text class="legend-h" x="40" y="3234">Legend</text>
+  <line class="m-req" x1="40" y1="3260" x2="90" y2="3260"/>
+  <polygon class="head m-req-head" points="90,3260 80,3255 80,3265"/>
+  <text class="legend-t" x="106" y="3264">request or write</text>
+  <line class="m-ret" x1="340" y1="3260" x2="390" y2="3260"/>
+  <polyline class="m-ret head-open" points="381,3255 390,3260 381,3265"/>
+  <text class="legend-t" x="406" y="3264">answer, or what a side shows</text>
+  <line class="m-evt" x1="640" y1="3260" x2="690" y2="3260"/>
+  <polygon class="head m-evt-head" points="690,3260 680,3255 680,3265"/>
+  <text class="legend-t" x="706" y="3264">stream event from the database</text>
+  <text class="legend-t" x="40" y="3294">Numbers are steps, top to bottom. R1, R8: ground rules of the mobile remote concept. #980: confirmation port with user presence. Keys: P-256 identity keys per side (sign, agree); desktopKeys and phoneKeys are their public halves.</text>
+  <text class="stamp" x="1540" y="3326">Created 2026-10-18 · Claude Opus 5.5 · Reasoning effort: xhigh</text>
 </svg>
