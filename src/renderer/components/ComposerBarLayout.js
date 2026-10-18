@@ -10,10 +10,12 @@
 
 /**
  * Below this bar width the pills get their own row. Raised from 400 to 430
- * with the third pill (#773): mic, mode, skills, counter and send take about
- * 290 px, and below 430 a model name would keep less than 140 px.
+ * with the third pill (#773), and to 600 with the menu chevrons back on the
+ * pills (#1125): mic, mode, skills, cost, counter, send and the three chevrons
+ * take about 430 px in English and 460 px in German, and below 600 a model name
+ * would keep less than 140 px.
  */
-export const STACK_BAR_BELOW = 430;
+export const STACK_BAR_BELOW = 600;
 
 /**
  * Puts the pill group where a bar of `width` px has room for it.
