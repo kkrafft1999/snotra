@@ -45,13 +45,22 @@ const KNOWN = [
 const known = (violation) => KNOWN.some((k) => k.rule === violation.rule
   && (k.target ? violation.target.includes(k.target) : violation.html.startsWith(k.html)));
 
-/** Sets the theme the way ThemeManager.js does, and waits out the transitions. */
+/**
+ * Sets the theme the way ThemeManager.js does, and ends the colour transitions
+ * it starts. Buttons and segmented options fade their colours over 150 ms; a
+ * window the runner throttles or hides does not advance them, so after a fixed
+ * wait axe could still read the old theme's ink on the new ground (#1118).
+ * Finishing every running animation makes the check independent of time.
+ */
 async function useTheme(page, theme) {
-  await page.evaluate((value) => {
+  return page.evaluate((value) => {
     if (value === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
     else document.documentElement.removeAttribute('data-theme');
+    void document.body.offsetHeight; // style and layout up to date, so the transitions exist
+    const running = document.getAnimations();
+    for (const animation of running) animation.finish();
+    return running.length;
   }, theme);
-  await page.waitForTimeout(400);
 }
 
 /** Checks one screen in both themes and collects what it finds under `name`. */
