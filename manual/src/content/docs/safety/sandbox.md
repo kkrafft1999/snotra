@@ -1,6 +1,6 @@
 ---
 title: Run commands in the sandbox
-description: Let Snotra run shell commands and Python, see whether they run isolated, and give a single folder or program more room when it needs it.
+description: Let Snotra run shell commands and Python, see whether they run isolated, and set up the sandbox per workspace — a folder, a program or a host more room when it needs it.
 sidebar:
   order: 5
 ---
@@ -15,10 +15,30 @@ Snotra can run shell commands and Python code: `git status`, a build, a test run
 
 ## Switch on commands and Python
 
-1. Open *Settings › Tools & security* and open the row *Execute*.
+1. Open *Settings › Tools › Autonomy* and open the row *Execute*.
 2. Switch on *Allow shell commands*, *Allow Python execution*, or both.
 
-Commands run in your login shell on macOS and Linux (zsh, bash …), with the `PATH` from your shell profile, and in PowerShell or `cmd.exe` on Windows. Python is looked for automatically; to use a particular interpreter — a virtual environment with the packages you need, say — set it under *Settings › Tool setup*.
+Commands run in your login shell on macOS and Linux (zsh, bash …), with the `PATH` from your shell profile, and in PowerShell or `cmd.exe` on Windows. Python is looked for automatically; to use a particular interpreter — a virtual environment with the packages you need, say — set it under *Settings › Tools › Setup*.
+
+## Set up the sandbox
+
+[since 1.26] Everything about the sandbox is on one page: *Settings › Tools › Security*. The shield next to the folder name, the *Not isolated* link on a card and the box *The sandbox blocked …* under an answer lead there as well, with the open folder chosen.
+
+![Settings › Tools › Security: on the left the list — All workspaces with 1 program and 1 host, then the workspaces garden-planner (open, 1 program · 2 hosts), invoice-tool (Sandbox off, struck-through amber shield) and old-project (Folder missing). On the right garden-planner: the tile "Sandbox active" with its switch, below it "Programs with more room".](screenshots/tool-security.webp)
+
+**The list on the left** starts with *All workspaces*, followed by every folder that has a sandbox setting or an allowance of its own, and the open one, marked *open*. Each entry says how it stands, in shape and in words: a shield with what it allows beyond the sandbox (*1 program · 2 hosts*, or *Sandbox on · nothing extra*), the struck-through amber shield with *Sandbox off*, or *Folder missing* for a folder that is no longer there. A folder that is not open can be checked and changed all the same; a change applies the next time a run starts there.
+
+**A workspace** shows, from top to bottom:
+
+- the sandbox switch, as a tile that says whether runs there are isolated,
+- *Programs with more room*: its own, and those for all workspaces, marked *All workspaces*,
+- *Hosts kept open*: its own, and those for all workspaces, marked the same way,
+- *Reset sandbox for this workspace*,
+- for the open workspace only, *This session*: what cards allowed *For this session* in its chats.
+
+What applies everywhere is shown in every workspace, but changed only under *All workspaces*: the marker *All workspaces* next to it leads there. While the sandbox of a workspace is off, its allowances rest, and the page says so.
+
+**All workspaces** holds what is not tied to one folder: whether new workspaces start with the sandbox, the programs and hosts for every folder, what the sandbox always does on this computer, and *Reset the sandbox everywhere*. With no folder open, the page starts there.
 
 ## What the sandbox allows
 
@@ -32,11 +52,11 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 ## See whether a run is isolated
 
-**On the card.** A card for a command carries the badge *Isolated* or, in amber, *Not isolated* with the reason and a link to the sandbox setting. It also lists the shell, the working folder and the network access.
+**On the card.** A card for a command carries the badge *Isolated* or, in amber, *Not isolated* with the reason and a link to the sandbox setting on *Settings › Tools › Security*. It also lists the shell, the working folder and the network access.
 
 ![An approval card titled "Confirm execution" with the badge "Isolated": Snotra wants to run a command in zsh. Below it the shell, the working folder, network "No access", the reason and the mode, the note that the run writes only in the project folder and a temporary folder, the command node src/calendar.js, and the buttons "Allow once", "Always allow this command" and "Deny".](screenshots/shell-approval.webp)
 
-**Next to the folder name.** While commands or Python are switched on, a shield stands next to the name of the folder at the top of the sidebar: a plain shield while runs in this folder are isolated, a struck-through amber one while they are not. Click it to get to the sandbox setting.
+**Next to the folder name.** While commands or Python are switched on, a shield stands next to the name of the folder at the top of the sidebar: a plain shield while runs in this folder are isolated, a struck-through amber one while they are not. Click it to get to the sandbox switch of this folder on *Settings › Tools › Security*.
 
 ![The top left of the window: the shield next to the folder name garden-planner, above the file tree.](screenshots/sandbox-shield.webp)
 
@@ -44,7 +64,7 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 [since 1.18] Sometimes a command needs more than the sandbox allows: a build tool writes its cache under `~/Library/Caches`, a tool reads its login from `~/.config/gcloud`, `pip` wants a host the call did not name. The sandbox refuses it, and Snotra shows you what was refused instead of leaving the model to guess.
 
-**What you see.** Right under the tool steps of the answer, a box lists what was blocked — a write, a read of a protected location or a connection — with the path or host and why. The raw lines of the sandbox are folded away underneath. The box stays with the chat when you open it again later.
+**What you see.** Right under the tool steps of the answer, a box lists what was blocked — a write, a read of a protected location or a connection — with the path or host and why. The raw lines of the sandbox are folded away underneath. The box stays with the chat when you open it again later. [since 1.26] Its link *Sandbox settings for this workspace* opens *Settings › Tools › Security*.
 
 **Allow a write or a read.** For a write outside the project folder or a read of a protected location, a card appears right after the run — in every mode, *Auto* included:
 
@@ -53,7 +73,7 @@ What it does not do: it does not stop a run from *reading* your other files, and
 3. Under *How long*, choose *Only this run* or *For this session*.
 4. Click *Allow and run again*, or *Deny*. *Esc* denies as well.
 
-**What happens.** Allowed, the command runs a second time, from the start, with exactly that path opened; the sandbox stays on for everything else. Whatever the command already did the first time happens again. The box then says how the second run went. Allowed *for this session*, later commands and Python runs in the same chat get the path without asking; it is listed under *Settings › Tools & security* among the session allowances, where you can revoke it, and it ends with the chat, a change of mode or a restart. Denied or not answered, the command does not run again, and the model is told to tell you what was blocked instead of working around it.
+**What happens.** Allowed, the command runs a second time, from the start, with exactly that path opened; the sandbox stays on for everything else. Whatever the command already did the first time happens again. The box then says how the second run went. Allowed *for this session*, later commands and Python runs in the same chat get the path without asking; it is listed among the session allowances — under *Settings › Tools › Autonomy*, and with the folder under *Settings › Tools › Security*, *This session* — where you can revoke it, and it ends with the chat, a change of mode or a restart. Denied or not answered, the command does not run again, and the model is told to tell you what was blocked instead of working around it.
 
 **Allow a connection.** [since 1.18] When a command connects to a host outside the network domains of its call, the connection waits, and a card *Sandbox · connection waiting* appears while the command is still running — in every mode, *Auto* included:
 
@@ -64,7 +84,7 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 **What happens then.** Allowed, the connection goes through and the command simply carries on; nothing runs twice. Allowed *for this session*, later commands in the same chat reach the host without asking, listed among the session allowances like a path. Denied, the connection stays closed and the command fails on its own; it is not asked about any further host, and the model is told not to work around it. If the command gives up before you decide — `pip` does after 15 seconds — the card says *Stopped waiting*, and a second card after the run offers the host with *Allow and run again*.
 
-**Keep a host open for the folder.** [since 1.22] *For this workspace* is the answer for a server you work with every day. The operating system asks you to confirm it first, naming the host and the folder. From then on every command and Python run in this folder reaches the host — in every chat and every mode, also after a restart — and no card asks about it again; everything else stays inside the sandbox. The host is listed under [*Settings › Tools & security*](../tools-and-security/#revoke-an-allowance-or-reset) in the row *Execute*, where you can close it again; *Reset workspace rules* closes all of them. The choice is offered only for connections, not in *Always ask*, and only where Snotra can store it encrypted. Cancelling the system dialog leaves the card open.
+**Keep a host open for the folder.** [since 1.22] *For this workspace* is the answer for a server you work with every day. The operating system asks you to confirm it first, naming the host and the folder. From then on every command and Python run in this folder reaches the host — in every chat and every mode, also after a restart — and no card asks about it again; everything else stays inside the sandbox. The host is listed under *Settings › Tools › Security*, *Hosts kept open*, where you can close it again — see [Keep a host open](#keep-a-host-open); *Reset sandbox for this workspace* closes all of them. The choice is offered only for connections, not in *Always ask*, and only where Snotra can store it encrypted. Cancelling the system dialog leaves the card open.
 
 **Once you have answered.** [since 1.21] When the command is through, the card gives way to the box under the tool steps. If you answered everything it asked, the box folds to a single line — for example *The sandbox blocked 1 resource · denied · Command “cat ~/.aws/config” run* — and a click opens it: what was blocked and why, what you decided and what that opened, how the second run went, and the raw lines of the sandbox. A box with something nobody answered, or with a refusal on the second run, stays open. A card the command gave up on (*Stopped waiting*) stays as it is. The output of the first run, which the card showed, is not kept.
 
@@ -95,23 +115,51 @@ Only Git's SSH takes this route. `ssh` or `scp` called on their own still connec
 
 When the sandbox gets in the way of something legitimate in one project — writing to a sibling repository, a tool that needs the network, an older `pip` in a virtual environment:
 
-1. In *Settings › Tools & security*, open the row *Execute*.
-2. Under *Sandbox for this workspace*, switch it off.
-3. The operating system asks: *Run without sandbox in this workspace?* Confirm with *Run without sandbox*.
+1. Open *Settings › Tools › Security* and choose the folder in the list. The open folder is chosen already.
+2. Switch off the tile *Sandbox active*.
+3. The operating system asks: *Run without sandbox in this workspace?*, naming the folder. Confirm with *Run without sandbox*.
 
-It applies to that one folder only, never to all of them, and it is stored with your permissions, not in the folder. From then on every card in the folder says *Not isolated*, the model is told so as well, and in *Auto* the mode pill reads *Auto · not isolated*. *Reset workspace rules* switches the sandbox back on.
+It applies to that one folder only, never to all of them, and it is stored with your permissions, not in the folder. From then on every card in the folder says *Not isolated*, the model is told so as well, and in *Auto* the mode pill reads *Auto · not isolated*. The list shows the folder with the struck-through amber shield and *Sandbox off*. Switching it back on asks nothing; *Reset sandbox for this workspace* does it as well.
+
+## Start new folders without the sandbox
+
+[since 1.26] New workspaces start with the sandbox on. If you would rather decide for each folder yourself:
+
+1. Open *Settings › Tools › Security* and choose *All workspaces*.
+2. Under *New workspaces*, switch off *Sandbox on in new workspaces*.
+3. The operating system asks: *Start new workspaces without sandbox?* Confirm with *Start without sandbox*.
+
+Every folder you open for the first time from then on runs without the sandbox, and the shield next to its name says so. Folders Snotra already knows keep their setting — those you opened before, and those that have a sandbox setting. Switched back on, the default applies to new folders again; folders that started without the sandbox in the meantime keep that until you switch it on for them.
 
 ## Give one program more room
 
 Often it is a single program that needs more — a tool whose login has to be refreshed, or `gh` and `terraform` on macOS, which cannot reach the network inside the sandbox. Give that program an allowance instead of switching the sandbox off:
 
-1. In the row *Execute*, under *Program allowances*, click *Add program*.
+1. In *Settings › Tools › Security*, choose the folder — or *All workspaces* — and click *Add program* under *Programs with more room*.
 2. Under *Program*, enter its name as you type it in the terminal, or its full path. Snotra shows which file it found.
-3. Add the *Domains it may reach*, one per line, and under *Folders it may also write in* any folder it keeps its data in.
-4. On macOS, tick *Check certificates through macOS* for programs written in Go, such as `gh` and `terraform`. It weakens the isolation a little; the dialog says how.
-5. Click *Save* and confirm in the system dialog.
+3. [since 1.26] Under *Applies to*, keep *This workspace* — the usual choice — or choose *All workspaces* for a tool you trust in every folder. Without an open folder, only *All workspaces* is possible; from *All workspaces*, it is chosen already.
+4. Add the *Domains it may reach*, one per line, and under *Folders it may also write in* any folder it keeps its data in.
+5. On macOS, tick *Check certificates through macOS* for programs written in Go, such as `gh` and `terraform`. It weakens the isolation a little; the dialog says how.
+6. Click *Save* and confirm in the system dialog, which names the folder or says *in any workspace*.
 
-The allowance applies in every folder, but only when a command runs that program on its own — without chaining, pipes or redirection — and only to the very file you chose, not to a file of the same name in a project. The card names the allowance, or says why it does not apply.
+The allowance applies only when a command runs that program on its own — without chaining, pipes or redirection — and only to the very file you chose, not to a file of the same name in a project. The card names the allowance, or says why it does not apply. Where a program has an allowance for all workspaces and one for this workspace, they add up there: every domain and folder of either.
+
+Program allowances made before 1.26 apply in all workspaces, as they did; move one to a single workspace with *Edit* under *All workspaces* and *Applies to*.
+
+## Keep a host open
+
+A host every run in a folder needs — your Git server, a package mirror — can be kept open, so that no card asks about it:
+
+- **For one workspace** [since 1.22]: choose *For this workspace* on the connection card, see [Allow a connection](#when-the-sandbox-blocks-something). [since 1.26] Or, in *Settings › Tools › Security*, choose the folder and click *Add host* under *Hosts kept open*.
+- **For all workspaces** [since 1.26]: choose *All workspaces* and click *Add host* under *Hosts open everywhere*. Only this page offers it, never a card: opening a host for every folder is a decision for the settings, not for the middle of a run.
+
+Enter the host with its port, such as `api.example.com:443`, or as `*.example.com` for every host one level below. A domain that many unrelated sites share, such as `github.io`, is accepted host by host only. Click *Keep open* and confirm in the system dialog. The trash button next to a host closes it again, without a dialog.
+
+## Clean up
+
+- ***Reset sandbox for this workspace*** switches the sandbox of the chosen folder back on and removes its own programs and hosts. What applies in all workspaces stays. It asks nothing, since it only takes rights away.
+- ***Reset the sandbox everywhere***, under *All workspaces*, switches the sandbox back on in every workspace and for new ones, and removes every program and host allowance, those for all workspaces included. It asks in a system dialog first.
+- **A folder that is gone** stays in the list as *Folder missing* while settings for it are stored. Choose it and click *Remove settings*.
 
 ## If it doesn't work
 
@@ -129,4 +177,6 @@ The allowance applies in every folder, but only when a command runs that program
 - **Git over SSH: *Permission denied (publickey)*.** The key is not loaded in the ssh-agent, so SSH has nothing to sign in with. Load it with `ssh-add --apple-use-keychain ~/.ssh/<key>` and run the command again — see [Use Git over SSH](#use-git-over-ssh).
 - **Git over SSH: *Host key verification failed*.** The host is not in `~/.ssh/known_hosts` yet. Connect to it once from a terminal and accept its key.
 - **macOS: `gh`, `terraform` or another Go program cannot reach the network.** Give it a program allowance with *Check certificates through macOS*.
-- ***Sandbox for this workspace* cannot be switched off.** That needs the system's encrypted storage; where there is none, the setting stays on and says why.
+- **The sandbox of a workspace cannot be switched off.** That needs the system's encrypted storage; where there is none, the switch stays on and the tile says why. The same holds for programs, hosts and *Sandbox on in new workspaces*.
+- **Windows: *Settings › Tools › Security* has nothing to set up.** There is no sandbox on Windows yet, so there is nothing to widen; the page says so for every workspace.
+- **An allowance does not apply in one folder.** Its sandbox is off there — the allowances rest while it is, and the page marks them — or the allowance belongs to another workspace. Choose the folder in the list to see what applies there.

@@ -46,7 +46,7 @@ Anything else in the folder — `Cache`, `Local Storage` and the like — is the
 Almost none. Everything in them is set in the app, and the app writes the files itself, so a change made behind its back can be overwritten. One setting has no place in the app, and one file must stay as it is:
 
 - **`ui-preferences.json`** takes `historyCharLimit`, a number the settings do not show: the budget in characters for the chat history sent with each request (200,000 by default, 4,000 to 2,000,000). Older messages beyond it are left out, and large tool results of earlier rounds are cut short. Quit Snotra before you edit the file.
-- **`tool-policy.json`** is signed. Do not edit it: Snotra then falls back to *Smart* — or stays on *Always ask* — and drops your allowances; your blocks stay in force. Change permissions under *Settings › Tools & security* instead.
+- **`tool-policy.json`** is signed. Do not edit it: Snotra then falls back to *Smart* — or stays on *Always ask* — and drops your allowances; your blocks stay in force. Change permissions under *Settings › Tools › Autonomy* instead.
 
 To start from scratch, quit Snotra and move the folder somewhere else. Keys and chats are then gone from the app — keep a copy first.
 

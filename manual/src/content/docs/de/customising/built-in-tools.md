@@ -16,7 +16,7 @@ Snotra bringt eigene Tools zum Lesen, Ändern, Ausführen und Suchen mit. Die me
 | *Ausführen* | `shell_execute`, `run_python` | aus, bis du sie einschaltest |
 | *Externe Dienste* | `fetch_url`, `web_search` | `web_search` braucht einen Tavily-Schlüssel |
 
-Jedes Tool lässt sich einzeln unter *Einstellungen › Tools & Sicherheit* ausschalten, in der Zeile seiner Risikoklasse. Was die Klassen bedeuten, steht unter [Warum Snotra fragt, bevor es handelt](../../safety/why-snotra-asks/).
+Jedes Tool lässt sich einzeln unter *Einstellungen › Tools › Autonomie* ausschalten, in der Zeile seiner Risikoklasse. Was die Klassen bedeuten, steht unter [Warum Snotra fragt, bevor es handelt](../../safety/why-snotra-asks/).
 
 **Fragen zu Snotra selbst.** [seit 1.22] Fragst du, wie etwas in Snotra geht, wo eine Einstellung liegt oder warum etwas nicht klappt, schlägt das Modell in diesem Handbuch nach: Es sucht mit `search_manual`, liest die Seite mit `read_manual_page` – in der Sprache der App – und verlinkt die Seite, auf die es sich stützt; der Link öffnet sich im Hilfefenster. Beide lesen nur das Handbuch, das mit deiner Version ausgeliefert wird: keine deiner Dateien, nichts aus dem Internet, deshalb fragen sie nie vorher.
 
@@ -24,8 +24,8 @@ Jedes Tool lässt sich einzeln unter *Einstellungen › Tools & Sicherheit* auss
 
 `run_python` führt Python-Code aus, den das Modell schreibt — für Berechnungen, Daten und Diagramme.
 
-1. Schalte es unter *Einstellungen › Tools & Sicherheit › Ausführen › Python-Ausführung erlauben* ein. Lies vorher [Befehle in der Sandbox ausführen](../../safety/sandbox/).
-2. Snotra sucht Python 3 selbst. Willst du einen bestimmten Interpreter — eine virtuelle Umgebung mit `pandas` zum Beispiel —, trag seinen Pfad unter *Einstellungen › Tool-Einrichtung › Python-Interpreter* ein und klick auf *Übernehmen*.
+1. Schalte es unter *Einstellungen › Tools › Autonomie › Ausführen › Python-Ausführung erlauben* ein. Lies vorher [Befehle in der Sandbox ausführen](../../safety/sandbox/).
+2. Snotra sucht Python 3 selbst. Willst du einen bestimmten Interpreter — eine virtuelle Umgebung mit `pandas` zum Beispiel —, trag seinen Pfad unter *Einstellungen › Tools › Einrichtung › Python-Interpreter* ein und klick auf *Übernehmen*.
 
 Snotra installiert nie selbst Pakete; der Interpreter, den du wählst, entscheidet, welche das Modell hat.
 
@@ -34,17 +34,17 @@ Snotra installiert nie selbst Pakete; der Interpreter, den du wählst, entscheid
 `web_search` sucht über **Tavily** im Internet und liefert pro Treffer einen Titel, eine Adresse und einen kurzen Auszug.
 
 1. Hol dir einen Schlüssel auf [app.tavily.com](https://app.tavily.com); es gibt einen kostenlosen Tarif.
-2. Trag ihn unter *Einstellungen › Tool-Einrichtung › Websuche › Tavily-API-Schlüssel* ein und klick auf *Schlüssel speichern*.
+2. Trag ihn unter *Einstellungen › Tools › Einrichtung › Websuche › Tavily-API-Schlüssel* ein und klick auf *Schlüssel speichern*.
 
 Die Suchanfrage verlässt deinen Rechner, deshalb fragt Snotra in *Intelligent* vor jeder Suche. Um eine ganze Seite zu lesen, nimmt das Modell `fetch_url`, das keinen Schlüssel braucht.
 
 ## Bilderzeugung
 
-`generate_image` zeichnet mit deinem OpenAI-Schlüssel — siehe [Ein Bild erzeugen](../../chatting/generate-images/). Unter *Einstellungen › Tool-Einrichtung › Bilderzeugung* wählst du, welches Bildmodell von OpenAI zeichnet, und klickst dann auf *Übernehmen*.
+`generate_image` zeichnet mit deinem OpenAI-Schlüssel — siehe [Ein Bild erzeugen](../../chatting/generate-images/). Unter *Einstellungen › Tools › Einrichtung › Bilderzeugung* wählst du, welches Bildmodell von OpenAI zeichnet, und klickst dann auf *Übernehmen*.
 
 ## Wenn es nicht klappt
 
 - ***Kein Python 3 gefunden.*** Installier Python 3 oder trag den Pfad deines Interpreters ein. Die Zeile unter dem Feld sagt, wo Snotra gesucht hat.
 - ***Snotra konnte nicht nach Python suchen.*** Die Suche selbst ist fehlgeschlagen — ob Python installiert ist, sagt das nicht. Schließ die Einstellungen und öffne sie erneut; Snotra sucht dann neu.
 - **Das Modell sucht nicht im Web.** Ohne Tavily-Schlüssel wird `web_search` dem Modell gar nicht angeboten.
-- **Ein Tool wird nie benutzt.** Klick auf die Skills-Pille in der Chat-Leiste: Ein fehlendes Tool steht dort oben, mit dem Grund und einem Knopf zur Einstellung. Unter *Einstellungen › Tools & Sicherheit* steht seine Zeile auf *Aus* oder nennt das Tool als ausgeschaltet.
+- **Ein Tool wird nie benutzt.** Klick auf die Skills-Pille in der Chat-Leiste: Ein fehlendes Tool steht dort oben, mit dem Grund und einem Knopf zur Einstellung. Unter *Einstellungen › Tools › Autonomie* steht seine Zeile auf *Aus* oder nennt das Tool als ausgeschaltet.

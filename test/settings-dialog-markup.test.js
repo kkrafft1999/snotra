@@ -79,10 +79,11 @@ test('die Tool-Einstellungen haben eine Karte für Shell-Befehle mit Warnhinweis
   assert.equal(html.split('id="settings-shell-status"').length - 1, 1);
 
   // The card ends where the next slot of the Security page begins — sliced
-  // further, the assertions below would also pass on the sandbox card's text.
+  // further, the assertions below would also pass on another card's text.
+  // Since #1119 that is the sensitive patterns: the sandbox has a page of its own.
   const cardStart = html.indexOf('id="settings-shell-card"');
-  const cardEnd = html.lastIndexOf('<div', html.indexOf('id="settings-sandbox-card"'));
-  assert.ok(cardEnd > cardStart, 'the sandbox slot follows the shell card');
+  const cardEnd = html.lastIndexOf('<div', html.indexOf('id="settings-sensitive-card"'));
+  assert.ok(cardEnd > cardStart, 'the sensitive patterns follow the shell card');
   const card = html.slice(cardStart, cardEnd);
   assert.ok(!card.includes('class="settings-security-slot'), 'the slice holds one card only');
   assert.match(card, /settings-note--warning/, 'die Warnung ist als solche ausgezeichnet');

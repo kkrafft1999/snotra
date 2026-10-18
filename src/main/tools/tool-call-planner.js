@@ -237,11 +237,12 @@ function stableStringify(value) {
  *   isolation state for the card of the execution tools (#329)
  * @param {(workspaceRoot: string) => Promise<boolean>} [deps.isSandboxDisabled]
  *   whether the user switched the sandbox off for this workspace (#357)
- * @param {(request: {command: string, cwd: string}) => Promise<{ allowance?: object, command?: string,
- *   entry?: object, skipped?: string }|null>} [deps.matchProgramAllowance]
+ * @param {(request: {command: string, cwd: string, workspaceRoot: string}) => Promise<{ allowance?: object,
+ *   command?: string, entry?: object, skipped?: string }|null>} [deps.matchProgramAllowance]
  *   the program allowance a shell command gets, or why it does not (#408)
- * @param {() => Promise<object[]>} [deps.readProgramAllowances]
- *   the stored allowances, to notice a change between plan and run (#408)
+ * @param {(workspaceRoot: string) => Promise<object[]>} [deps.readProgramAllowances]
+ *   the allowances that apply in a workspace (#1119), to notice a change
+ *   between plan and run (#408)
  * @param {OutsideAccess} [deps.outsideAccess]  what a card may open outside the open folder (#792)
  */
 function createToolCallPlanner({
@@ -570,7 +571,7 @@ function createToolCallPlanner({
     const sandboxDisabled = await readSandboxDisabled(toolName, workspaceRoot);
     // So is a program allowance (#408): the card names it, and the run gets
     // exactly the rights the card named or none.
-    const allowance = await readProgramAllowance(toolName, args, shellCwd, sandboxDisabled);
+    const allowance = await readProgramAllowance(toolName, args, shellCwd, sandboxDisabled, workspaceRoot);
     const planKey = stableStringify({
       tool: toolName,
       args,
@@ -666,10 +667,10 @@ function createToolCallPlanner({
    * its program does not apply. None without a sandbox to widen, and none
    * when anything goes wrong on the way: a failed check never grants.
    */
-  async function readProgramAllowance(toolName, args, cwd, sandboxDisabled) {
+  async function readProgramAllowance(toolName, args, cwd, sandboxDisabled, workspaceRoot) {
     if (toolName !== 'shell_execute' || sandboxDisabled || typeof matchProgramAllowance !== 'function') return null;
     try {
-      return (await matchProgramAllowance({ command: args?.command, cwd })) || null;
+      return (await matchProgramAllowance({ command: args?.command, cwd, workspaceRoot })) || null;
     } catch {
       return null;
     }
@@ -702,7 +703,7 @@ function createToolCallPlanner({
       if (now !== (planned.sandbox.disabled === true)) {
         return { ok: false, error: 'The sandbox setting of this workspace changed after the call was planned.' };
       }
-      if (planned.sandbox.allowance && !(await allowanceUnchanged(planned.sandbox.allowance))) {
+      if (planned.sandbox.allowance && !(await allowanceUnchanged(planned.sandbox.allowance, planned.sandbox.root))) {
         return { ok: false, error: 'The program allowance for this command changed after the call was planned.' };
       }
     }
@@ -722,12 +723,15 @@ function createToolCallPlanner({
     return { ok: true };
   }
 
-  /** The stored entry an approved allowance came from is still the same (#408). */
-  async function allowanceUnchanged(granted) {
+  /**
+   * The entry an approved allowance came from is still the same (#408) — in
+   * the workspace it was planned for, global and own added up (#1119).
+   */
+  async function allowanceUnchanged(granted, workspaceRoot) {
     if (typeof readProgramAllowances !== 'function') return false;
     let entries;
     try {
-      entries = normalizeProgramAllowances(await readProgramAllowances());
+      entries = normalizeProgramAllowances(await readProgramAllowances(workspaceRoot || null));
     } catch {
       return false;
     }

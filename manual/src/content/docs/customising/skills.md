@@ -63,11 +63,11 @@ A suggestion is never switched on by itself.
 
 [since 1.20] In the chat bar, next to the model and the mode, a pill counts the skills that are on in this chat: *3 skills*, or *No skills*. Click it to see the whole picture:
 
-![The popover of the pill "3 skills": under Skills the three system skills on and sowing-advice from the folder off; under Tools run_python and shell_execute switched off with a "Switch on" button each, web_search and generate_image with "Set up", and "15 switched on" folded; below, links to Settings › Skills and Settings › Tools & security.](screenshots/chat-config.webp)
+![The popover of the pill "3 skills": under Skills the three system skills on and sowing-advice from the folder off; under Tools run_python and shell_execute switched off with a "Switch on" button each, web_search and generate_image with "Set up", and "15 switched on" folded; below, links to Settings › Skills and Settings › Tools › Autonomy.](screenshots/chat-config.webp)
 
 - **Skills** — every skill, those that are on first, each with where it comes from. A skill you called with `/name`, or switched on a card for this chat, is marked *this chat only*.
 - **Tools** — what is missing comes first, with the reason, such as *switched off* or *no search service key*. *Switch on* or *Set up* opens the setting that changes it. The tools that are on are summed up in one line; click it to see them by group.
-- The two links at the bottom open *Settings › Skills* and *Settings › Tools & security*.
+- The two links at the bottom open *Settings › Skills* and *Settings › Tools › Autonomy*.
 
 The pill only shows. What you switch on or off for good stays a choice in the settings.
 
@@ -94,13 +94,13 @@ The model can also suggest switching something off for a chat — when you asked
 
 ### What happens
 
-The change applies to this chat only. It stays when you open another chat and come back, and after a restart; a new chat starts with your settings again. The skills pill marks the change *this chat only*. To switch something on for good, use [*Settings › Tools & security*](../../safety/tools-and-security/) or [*Settings › Skills*](#switch-a-skill-on).
+The change applies to this chat only. It stays when you open another chat and come back, and after a restart; a new chat starts with your settings again. The skills pill marks the change *this chat only*. To switch something on for good, use [*Settings › Tools › Autonomy*](../../safety/tools-and-security/) or [*Settings › Skills*](#switch-a-skill-on).
 
 A tool switched on this way works like one switched on in the settings: in *Smart* mode it still asks before each call that needs it.
 
 ### If it doesn't work
 
-- **The model says a tool cannot be switched on from the chat.** It needs setting up first — a key, a program, or the switch for Python or shell commands under *Settings › Tools & security*. Those stay in the settings.
+- **The model says a tool cannot be switched on from the chat.** It needs setting up first — a key, a program, or the switch for Python or shell commands under *Settings › Tools › Autonomy*. Those stay in the settings.
 - **You declined by mistake.** Switch it on in the settings, or start a new chat and ask again.
 
 ## What happens

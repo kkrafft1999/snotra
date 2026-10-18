@@ -174,6 +174,14 @@ const REQUEST_CHANNELS = Object.freeze({
   TOOL_PERMISSIONS_REMOVE_PROGRAM_ALLOWANCE: 'toolPermissions:removeProgramAllowance',
   TOOL_PERMISSIONS_RESOLVE_PROGRAM: 'toolPermissions:resolveProgram',
   TOOL_PERMISSIONS_CHOOSE_ALLOWANCE_FOLDER: 'toolPermissions:chooseAllowanceFolder',
+  // Settings › Tools › Security (#1119): every workspace's sandbox, and what
+  // applies in every workspace.
+  TOOL_PERMISSIONS_GET_SANDBOX_OVERVIEW: 'toolPermissions:getSandboxOverview',
+  TOOL_PERMISSIONS_ADD_HOSTS: 'toolPermissions:addHosts',
+  TOOL_PERMISSIONS_REMOVE_GLOBAL_HOST: 'toolPermissions:removeGlobalHost',
+  TOOL_PERMISSIONS_SET_NEW_WORKSPACE_SANDBOX: 'toolPermissions:setNewWorkspaceSandbox',
+  TOOL_PERMISSIONS_RESET_WORKSPACE_SANDBOX: 'toolPermissions:resetWorkspaceSandbox',
+  TOOL_PERMISSIONS_RESET_SANDBOX_EVERYWHERE: 'toolPermissions:resetSandboxEverywhere',
   /** Renderer meldet sich als freigabefaehig an (Karten koennen angezeigt werden). */
   TOOL_APPROVAL_SUBSCRIBE: 'toolApproval:subscribe',
   /** Antwort auf eine Freigabe-Karte: nur requestId + Entscheidung. */

@@ -26,7 +26,7 @@ An MCP server is someone else's code. A local one runs on your computer with you
 
 ## Add a server
 
-1. Open *Settings › Tool setup* and click *Add server* under *MCP servers*.
+1. Open *Settings › Tools › Setup* and click *Add server* under *MCP servers*.
 2. Under *Connection*, choose *Local process (stdio)* or *Remote (HTTP)*, and fill in the form; the fields are explained below.
 3. Click *Save*, then *Test connection*. It connects once and shows the tools the server offers — or the error, with what the server sent along.
 
@@ -61,7 +61,7 @@ Imported servers start **switched off**. Snotra reads only what you paste, never
 
 ## What happens
 
-- The server's tools appear under *Settings › Tools & security*, in the row *External services*, grouped by server. Each one can be switched off on its own, and each group says how its server is doing: connected with its number of tools, not connected yet, switched off, or failed, with the reason.
+- The server's tools appear under *Settings › Tools › Autonomy*, in the row *External services*, grouped by server. Each one can be switched off on its own, and each group says how its server is doing: connected with its number of tools, not connected yet, switched off, or failed, with the reason.
 - In the chat, a tool shows where it comes from: `mcp__github__create_issue`. A tool of a remote server looks and behaves the same as one of a local server.
 - An MCP tool always counts as running a program **and** reaching an external service, so in *Smart* Snotra asks before every call. A server that marks a tool as destructive makes it stricter still: the tool then also counts as *Overwrite with no way back*.
 - A server is connected only when it is needed. It remembers the tools it reported last time, so you can switch one off before the model is ever offered it.

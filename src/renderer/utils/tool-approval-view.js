@@ -9,6 +9,7 @@
  * übersetzen nur in Wortlaut und Anzeige-Zustände.
  */
 import { describeAllowanceOnCard } from './program-allowance-view.js';
+import { settingsPageName } from './settings-pages.js';
 import contracts from '../generated/contracts.js';
 import { t, tMessage, tPlural } from '../i18n.js';
 
@@ -307,7 +308,7 @@ export function offersAlways(dto) {
  */
 export function alwaysActionHint(dto) {
   if (dto?.alwaysAllowed === true) {
-    return t('approval.alwaysHint.allowed', { page: t('settings.nav.security') });
+    return t('approval.alwaysHint.allowed', { page: settingsPageName('security') });
   }
   const key = ALWAYS_UNAVAILABLE_KEYS[dto?.alwaysUnavailableReason];
   return key ? t(key) : '';
@@ -659,7 +660,7 @@ export function describeApprovalOutcome({ response, invalidated, reason, aborted
       label: t('approval.outcome.always.label'),
       detail: t('approval.outcome.always.detail', {
         mode: modeLabel(TOOL_PERMISSION_MODES.SMART),
-        page: t('settings.nav.security'),
+        page: settingsPageName('security'),
       }),
     };
   }

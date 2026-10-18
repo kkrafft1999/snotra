@@ -26,10 +26,16 @@ const CONFIRMATION_ACTIONS = Object.freeze({
   REMOVE_SENSITIVE_PATTERNS: 'remove-sensitive-patterns',
   /** The sandbox off for a workspace (#357) — subject: the root. */
   SANDBOX_OFF: 'sandbox-off',
-  /** A program allowance that widens the sandbox (#408) — subject: the program path. */
+  /** A program allowance that widens the sandbox (#408) — subject: `programAllowanceSubject`. */
   PROGRAM_ALLOWANCE: 'program-allowance',
   /** Hosts kept open for a workspace (#946) — subject: the root. */
   WORKSPACE_HOSTS: 'workspace-hosts',
+  /** Hosts open in every workspace (#1119) — subject: the hosts, sorted, one per line. */
+  GLOBAL_HOSTS: 'global-hosts',
+  /** New workspaces start with the sandbox off (#1119) — subject: ''. */
+  NEW_WORKSPACE_SANDBOX_OFF: 'new-workspace-sandbox-off',
+  /** The sandbox reset in every workspace (#1119) — subject: ''. Only takes rights away; asked because it is broad. */
+  RESET_SANDBOX: 'reset-sandbox',
   /** A workspace's rules reset while blocks or "Always ask" go with them (#514) — subject: the root. */
   RESET_WORKSPACE: 'reset-workspace',
   /** Every rule reset — subject: ''. */
@@ -69,6 +75,23 @@ function permissionRuleSubject(rule) {
 /** @param {string[]} patterns */
 function removedPatternsSubject(patterns) {
   return [...patterns].sort().join('\n');
+}
+
+/**
+ * The subject of a program allowance (#408): its path — and, for one that
+ * applies in a single workspace only (#1119), that root on a second line, so
+ * a confirmation for one folder cannot be spent on every folder.
+ *
+ * @param {string} programPath
+ * @param {string|null} [root]  null: every workspace
+ */
+function programAllowanceSubject(programPath, root = null) {
+  return root ? `${programPath}\n${root}` : String(programPath);
+}
+
+/** @param {string[]} hosts */
+function globalHostsSubject(hosts) {
+  return [...hosts].sort().join('\n');
 }
 
 /**
@@ -125,6 +148,8 @@ module.exports = {
   NO_RECEIPTS,
   permissionRuleSubject,
   removedPatternsSubject,
+  programAllowanceSubject,
+  globalHostsSubject,
   createConfirmationReceipts,
   createRefusingConfirmation,
 };

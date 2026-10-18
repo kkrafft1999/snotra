@@ -5380,6 +5380,11 @@ select.modal-input {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* With the group Tools (#1119) the list is taller than a short window's
+     dialog: it scrolls on its own instead of running under the hint bar,
+     where the last sections could no longer be clicked. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 @media (max-width: 640px) {
@@ -5436,6 +5441,34 @@ select.modal-input {
 
 .settings-nav-item[aria-selected='true'] .settings-nav-item__desc {
   color: var(--text-muted-strong);
+}
+
+/* Navigation B of #1119: the group Tools, not clickable, with its three
+   entries indented under it. In the row the narrow dialog makes of the nav,
+   the group gives way to the entries, whose names carry it anyway. */
+.settings-nav-group {
+  margin: 10px 12px 2px;
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ds-grey-strong);
+}
+
+.settings-nav-item--sub {
+  margin-left: 12px;
+  width: calc(100% - 12px);
+}
+
+@media (max-width: 640px) {
+  .settings-nav-group {
+    display: none;
+  }
+
+  .settings-nav-item--sub {
+    margin-left: 0;
+    width: auto;
+  }
 }
 
 .settings-dialog__panel-wrap {
@@ -10597,6 +10630,606 @@ select.modal-input {
   .allowance-row__actions {
     justify-content: flex-end;
   }
+}
+
+/* ── Settings › Tools › Security (#1119) ─────────────────────────────────
+   Layout 2 of the decision of 2026-10-18: the workspaces on the left,
+   starting with All workspaces, each with its state in shape and words; the
+   details of the chosen one on the right. The list stays in view while the
+   details scroll. Below a panel of 640 px the list goes on top. */
+#panel-settings-sandbox {
+  container-type: inline-size;
+}
+
+.settings-sandbox-split {
+  display: grid;
+  grid-template-columns: minmax(180px, 232px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.settings-sandbox-nav {
+  position: sticky;
+  top: 0;
+  min-width: 0;
+}
+
+@container (max-width: 640px) {
+  .settings-sandbox-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .settings-sandbox-nav {
+    position: static;
+  }
+}
+
+.settings-sandbox-list__group {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-sandbox-list__label {
+  margin: 14px 2px 6px;
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ds-grey-strong);
+}
+
+/* A row that invites a choice: the inviting hover of the token rules. */
+.settings-sandbox-ws {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 1px 9px;
+  padding: 9px 10px;
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast), background var(--ds-motion-fast);
+}
+
+.settings-sandbox-ws:hover,
+.settings-sandbox-ws[aria-current='true'] {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.settings-sandbox-ws:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.settings-sandbox-ws__icon {
+  grid-row: span 2;
+  display: inline-flex;
+  padding-top: 1px;
+  color: var(--ds-blue);
+}
+
+.settings-sandbox-ws[data-tone='off'] .settings-sandbox-ws__icon {
+  color: var(--ds-warning);
+}
+
+.settings-sandbox-ws[data-tone='global'] .settings-sandbox-ws__icon,
+.settings-sandbox-ws[data-tone='missing'] .settings-sandbox-ws__icon {
+  color: var(--ds-grey-strong);
+}
+
+.settings-sandbox-ws__name {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 600;
+  font-size: var(--ds-font-size-md);
+}
+
+.settings-sandbox-ws__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-sandbox-ws__open {
+  flex: none;
+  font-weight: 400;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-ws__meta {
+  grid-column: 2;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-ws[data-tone='off'] .settings-sandbox-ws__meta {
+  color: var(--ds-warning);
+}
+
+.settings-sandbox-detail {
+  min-width: 0;
+}
+
+.settings-sandbox-card {
+  margin-bottom: 14px;
+}
+
+/* Icon, name and "· open" stay on one line; a long path wraps inside it. */
+.settings-sandbox-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.settings-sandbox-head__icon {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--ds-grey-bg);
+  color: var(--ds-grey-strong);
+}
+
+.settings-sandbox-head__title {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding-top: 2px;
+  font-size: var(--ds-font-size-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* A folder's path breaks where it must: its end, the folder's own name, is
+   what tells two workspaces apart, so it is never cut off. */
+.settings-sandbox-head__title code {
+  font-size: var(--ds-font-size-md);
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+.settings-sandbox-head__title:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.settings-sandbox-head__open {
+  flex: none;
+  padding-top: 5px;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-sub {
+  margin: 6px 0 14px 36px;
+  max-width: 70ch;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-card .settings-sandbox-tile {
+  margin-bottom: 0;
+}
+
+/* "Saved" next to the switch, also on the amber ground of a tile that is off. */
+.settings-sandbox-tile .settings-instant-status:not(.is-error) {
+  color: var(--ds-blue-strong);
+}
+
+.settings-sandbox-block {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.settings-sandbox-sub + .settings-sandbox-block {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.settings-sandbox-block__title {
+  margin: 0 0 2px;
+  font-size: var(--ds-font-size-base);
+  font-weight: 600;
+}
+
+.settings-sandbox-block__count {
+  margin-left: 6px;
+  font-weight: 400;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-block__hint,
+.settings-sandbox-rest {
+  margin: 0 0 8px;
+  max-width: 70ch;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.45;
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-block__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.settings-sandbox-block__foot .settings-instant-status {
+  margin-left: 0;
+}
+
+/* While the sandbox is off, its allowances rest. The words above them say
+   it; the dashed edge follows — not a fade, which would take the text below
+   its contrast. */
+.settings-sandbox-block--resting .allowance-row {
+  border-style: dashed;
+}
+
+.settings-sandbox-empty {
+  margin: 4px 0 0;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.settings-sandbox-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 40px;
+  padding: 4px 0;
+  border-top: 1px solid var(--ds-grey-divider);
+  font-size: var(--ds-font-size-md);
+}
+
+.settings-sandbox-line:first-child {
+  border-top: 0;
+}
+
+.settings-sandbox-line__host {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-sandbox-line--grant {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.settings-sandbox-line__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-sandbox-line__meta {
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+  white-space: nowrap;
+}
+
+/* "All workspaces" next to what applies here because it applies everywhere:
+   a small button that leads there. */
+.settings-sandbox-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 28px;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: var(--ds-font-size-sm);
+  font-weight: 500;
+  color: var(--text-muted-strong);
+  background: transparent;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color var(--ds-motion-fast), background var(--ds-motion-fast);
+}
+
+.settings-sandbox-chip:hover {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+  color: var(--ds-blue-strong);
+}
+
+.settings-sandbox-chip:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.settings-sandbox-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-bg);
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-detail > .settings-sandbox-notice:first-child {
+  margin-top: 0;
+}
+
+.settings-sandbox-notice svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--ds-grey-strong);
+}
+
+.settings-sandbox-notice strong {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--ds-font-size-base);
+  color: var(--text-primary);
+}
+
+.settings-sandbox-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 6px 16px;
+  margin: 0;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+}
+
+.settings-sandbox-facts dt {
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-facts dd {
+  margin: 0;
+}
+
+@container (max-width: 560px) {
+  .settings-sandbox-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .settings-sandbox-facts dd {
+    margin-bottom: 6px;
+  }
+
+  .settings-sandbox-line--grant {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .settings-sandbox-line--grant .settings-sandbox-line__meta {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}
+
+.settings-sandbox-card .settings-reset-row {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.settings-sandbox-hostform {
+  flex: 1 1 100%;
+}
+
+.settings-sandbox-hostform__row {
+  flex-wrap: wrap;
+}
+
+/* The field and its two buttons on one line, as long as the field keeps room for a host. */
+.settings-sandbox-hostform__row .modal-input {
+  width: auto;
+  flex: 1 1 220px;
+}
+
+/* Tools › Autonomy, row Execute: the one line that leads to Tools › Security.
+   An inviting row, like the list entries it leads to. */
+.settings-sandbox-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast), background var(--ds-motion-fast);
+}
+
+.settings-sandbox-link:hover {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.settings-sandbox-link:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.settings-sandbox-link__shield {
+  flex: none;
+  display: inline-flex;
+  color: var(--ds-blue);
+}
+
+.settings-sandbox-link[data-tone='off'] .settings-sandbox-link__shield,
+.settings-sandbox-link[data-tone='off'] .settings-sandbox-link__title {
+  color: var(--ds-warning);
+}
+
+.settings-sandbox-link[data-tone='neutral'] .settings-sandbox-link__shield {
+  color: var(--ds-grey-strong);
+}
+
+.settings-sandbox-link__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.settings-sandbox-link__title {
+  font-weight: 600;
+  font-size: var(--ds-font-size-base);
+}
+
+.settings-sandbox-link__body {
+  font-size: var(--ds-font-size-md);
+  line-height: 1.4;
+  color: var(--text-muted-strong);
+}
+
+.settings-sandbox-link__go {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: var(--ds-font-size-md);
+  font-weight: 500;
+  color: var(--ds-blue-strong);
+  white-space: nowrap;
+}
+
+/* The program dialog's "Applies to" (#1119): two radio rows, chosen one with
+   the blue edge and wash; the radio follows the token rule (16 px ring). */
+.allowance-scope {
+  display: grid;
+  gap: 8px;
+}
+
+.allowance-scope__option {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 2px 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--bg-primary);
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast), background var(--ds-motion-fast);
+}
+
+.allowance-scope__option:hover,
+.allowance-scope__option:has(input:checked) {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.allowance-scope__option:has(input:disabled) {
+  cursor: default;
+  border-color: var(--ds-grey-divider);
+  background: transparent;
+}
+
+.allowance-scope__option input {
+  grid-row: span 2;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  padding: 3px;
+  border: 1.5px solid var(--ds-grey-muted);
+  border-radius: 50%;
+  background: transparent;
+  background-clip: content-box;
+  appearance: none;
+  cursor: inherit;
+}
+
+.allowance-scope__option input:checked {
+  border-color: var(--ds-blue);
+  background-color: var(--ds-blue);
+}
+
+.allowance-scope__option input:disabled {
+  border-color: var(--ds-grey-divider);
+}
+
+.allowance-scope__option input:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.allowance-scope__title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+  font-size: var(--ds-font-size-md);
+  font-weight: 600;
+}
+
+.allowance-scope__option:has(input:disabled) .allowance-scope__title {
+  color: var(--text-muted-strong);
+}
+
+.allowance-scope__root {
+  min-width: 0;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.allowance-scope__desc {
+  grid-column: 2;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+/* The blocked-resource box leads to the sandbox of this folder (#1119). */
+.chat-sandbox-blocked-settings {
+  margin: 8px 0 0;
+}
+
+.chat-sandbox-blocked-settings-link {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--ds-blue);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.chat-sandbox-blocked-settings-link:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
 }
 
 /* The approval card names a program allowance, or why it stays off (#408). */

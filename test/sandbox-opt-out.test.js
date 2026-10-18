@@ -301,7 +301,7 @@ test('settings: the isolation line of each tool names the switched-off workspace
   const { describeSandboxStatus } = await loadRenderer('sandbox-status-view.js');
   const status = describeSandboxStatus({ isolated: true, status: 'isolated' }, true, { workspaceDisabled: true });
   assert.equal(status.isWarning, true);
-  assert.equal(status.text, 'Not isolated in this workspace: you switched the sandbox off below.');
+  assert.equal(status.text, 'Not isolated in this workspace: you switched the sandbox off under Tools › Security.');
   // Windows has nothing to switch off; its own reason stays.
   const windows = describeSandboxStatus({ isolated: false, status: 'unavailable', reason: 'platform' }, true, { workspaceDisabled: true });
   assert.match(windows.text, /Windows has no sandbox yet/);
@@ -309,84 +309,52 @@ test('settings: the isolation line of each tool names the switched-off workspace
   assert.equal(describeSandboxStatus({ isolated: true }, false, { workspaceDisabled: true }), null);
 });
 
-test('settings: the workspace switch — shown with tools off, hidden on Windows, no folder, on, off, unavailable', async () => {
-  const { describeWorkspaceSandbox } = await loadRenderer('sandbox-status-view.js');
-  const sandbox = { isolated: true, status: 'isolated' };
+test('settings: the sandbox tile of a workspace on Tools › Security — on, off, unavailable, Windows (#543, #1119)', async () => {
+  const { describeSandboxTile } = await loadRenderer('tool-security-view.js');
+  const overview = (patch = {}) => ({ platform: 'darwin', encryptionAvailable: true, sandbox: { isolated: true, status: 'isolated' }, ...patch });
+  const ws = (patch = {}) => ({ root: WORKSPACE, sandboxOff: false, programs: [], hosts: [], ...patch });
   const autoLabel = 'Auto';
 
-  // Shown while both tools are off as well (#449), hidden only on Windows.
-  assert.equal(describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE }, toolsOn: false, sandbox, autoLabel }).visible, true);
-  assert.equal(describeWorkspaceSandbox({
-    permissions: { workspaceRoot: WORKSPACE }, toolsOn: true, sandbox: { isolated: false, reason: 'platform' }, autoLabel,
-  }).visible, false);
+  // The tile names the state.
+  const on = describeSandboxTile(overview(), ws(), { autoLabel });
+  assert.deepEqual([on.checked, on.switchable, on.tone, on.title], [true, true, 'on', 'Sandbox active']);
+  assert.match(on.body, /^Runs write only in this folder and a temporary folder/);
+  // No card confirms the hosts in "Auto" (CR-B13-04).
+  assert.match(on.body, /You approve hosts on the card, except in “Auto”\.$/);
 
-  const none = describeWorkspaceSandbox({ permissions: { workspaceRoot: null }, toolsOn: true, sandbox, autoLabel });
-  assert.deepEqual(
-    { visible: none.visible, hasWorkspace: none.hasWorkspace, checked: none.checked, tone: none.tone },
-    { visible: true, hasWorkspace: false, checked: true, tone: 'neutral' },
-  );
-  assert.equal(none.body, 'Open a folder to decide for it.');
-
-  // The tile names the state (#543).
-  const on = describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE, workspaceSandboxDisabled: false }, toolsOn: true, sandbox, autoLabel });
-  assert.equal(on.checked, true);
-  assert.equal(on.rootLabel, WORKSPACE);
-  assert.equal(on.tone, 'on');
-  assert.equal(on.title, 'Sandbox active');
-  assert.match(on.body, /^Commands run isolated:/);
-  // No card confirms the domains in "Auto" (CR-B13-04).
-  assert.match(on.body, /only for the domains a call names — you approve them on the card, except in “Auto”\.$/);
-
-  const off = describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE, workspaceSandboxDisabled: true }, toolsOn: true, sandbox, autoLabel });
-  assert.equal(off.checked, false);
-  assert.equal(off.tone, 'off');
-  assert.equal(off.title, 'Sandbox off');
+  const off = describeSandboxTile(overview(), ws({ sandboxOff: true }), { autoLabel });
+  assert.deepEqual([off.checked, off.tone, off.title], [false, 'off', 'Sandbox off']);
   assert.match(off.body, /^Every run has your full rights:/);
   assert.match(off.body, /in “Auto” mode it runs without asking/);
+  assert.equal(off.note, '', 'nothing rests where nothing is allowed');
+  const resting = describeSandboxTile(overview(), ws({ sandboxOff: true, hosts: ['pypi.org:443'] }), { autoLabel });
+  assert.equal(resting.note, 'The allowances below rest until it is on again.');
 
   // Switched on, but the system cannot isolate: never "active".
   const broken = { isolated: false, status: 'unavailable', reason: 'dependencies', missing: ['bubblewrap'] };
-  const unavailable = describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE }, toolsOn: true, sandbox: broken, autoLabel });
-  assert.equal(unavailable.checked, true);
-  assert.equal(unavailable.tone, 'unavailable');
-  assert.equal(unavailable.title, 'Sandbox unavailable');
+  const unavailable = describeSandboxTile(overview({ sandbox: broken }), ws(), { autoLabel });
+  assert.deepEqual([unavailable.checked, unavailable.tone, unavailable.title], [true, 'unavailable', 'Sandbox unavailable']);
   assert.match(unavailable.body, /needs the packages bubblewrap/);
   // The user's own choice still outranks it.
-  assert.equal(describeWorkspaceSandbox({
-    permissions: { workspaceRoot: WORKSPACE, workspaceSandboxDisabled: true }, toolsOn: true, sandbox: broken, autoLabel,
-  }).tone, 'off');
+  assert.equal(describeSandboxTile(overview({ sandbox: broken }), ws({ sandboxOff: true }), { autoLabel }).tone, 'off');
   // Not checked yet, or no tool asked: the switch decides.
   for (const pending of [null, { isolated: false, status: 'unknown' }, { isolated: false, status: 'testing' }]) {
-    assert.equal(describeWorkspaceSandbox({ permissions: { workspaceRoot: WORKSPACE }, toolsOn: true, sandbox: pending, autoLabel }).tone, 'on');
+    assert.equal(describeSandboxTile(overview({ sandbox: pending }), ws(), { autoLabel }).tone, 'on');
   }
+
+  // Windows has no sandbox (#990): the tile says so and offers no switch.
+  const windows = describeSandboxTile(overview({ platform: 'win32', sandbox: null }), ws(), { autoLabel });
+  assert.deepEqual([windows.switchable, windows.tone, windows.title], [false, 'unavailable', 'No sandbox on Windows']);
+  assert.match(windows.body, /^Every command and Python run has your full rights/);
 });
 
-test('settings: without safeStorage "off" is not offered while on; an unreadable state is not "no folder" (CR-B14-09)', async () => {
-  const { describeWorkspaceSandbox } = await loadRenderer('sandbox-status-view.js');
-  const sandbox = { isolated: true, status: 'isolated' };
-  const autoLabel = 'Auto';
-  const view = (permissions, box = sandbox) => describeWorkspaceSandbox({ permissions, toolsOn: true, sandbox: box, autoLabel });
-
-  const blocked = view({ workspaceRoot: WORKSPACE, encryptionAvailable: false });
+test('settings: without safeStorage "off" is not offered while on (CR-B14-09)', async () => {
+  const { describeSandboxTile } = await loadRenderer('tool-security-view.js');
+  const overview = { platform: 'darwin', encryptionAvailable: false, sandbox: { isolated: true, status: 'isolated' } };
+  const blocked = describeSandboxTile(overview, { root: WORKSPACE, sandboxOff: false, programs: [], hosts: [] }, { autoLabel: 'Auto' });
   assert.deepEqual([blocked.checked, blocked.offBlocked, blocked.tone], [true, true, 'on']);
   assert.equal(blocked.note, 'It cannot be switched off here: this system offers no encrypted storage.');
-  // Also when the system cannot isolate: the switch is still on.
-  const broken = { isolated: false, status: 'unavailable', reason: 'dependencies', missing: ['bubblewrap'] };
-  assert.equal(view({ workspaceRoot: WORKSPACE, encryptionAvailable: false }, broken).offBlocked, true);
   // Off already: switching back on stays possible, and needs no reason.
-  const off = view({ workspaceRoot: WORKSPACE, encryptionAvailable: false, workspaceSandboxDisabled: true });
+  const off = describeSandboxTile(overview, { root: WORKSPACE, sandboxOff: true, programs: [], hosts: [] }, { autoLabel: 'Auto' });
   assert.deepEqual([off.checked, off.offBlocked, off.note], [false, false, '']);
-  // With safeStorage, or without a folder, nothing is blocked.
-  assert.equal(view({ workspaceRoot: WORKSPACE, encryptionAvailable: true }).offBlocked, false);
-  assert.equal(view({ workspaceRoot: null, encryptionAvailable: false }).offBlocked, false);
-
-  for (const unreadable of [null, undefined]) {
-    const unknown = view(unreadable);
-    assert.deepEqual(
-      { hasWorkspace: unknown.hasWorkspace, offBlocked: unknown.offBlocked, tone: unknown.tone, rootLabel: unknown.rootLabel },
-      { hasWorkspace: false, offBlocked: false, tone: 'neutral', rootLabel: '' },
-    );
-    assert.equal(unknown.title, 'Sandbox state unknown');
-    assert.equal(unknown.body, 'The permission state could not be read. Close the settings and open them again.');
-  }
 });

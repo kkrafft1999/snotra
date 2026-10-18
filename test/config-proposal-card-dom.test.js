@@ -104,7 +104,7 @@ test('a tool proposal: the catalogue\'s sentence, its risk, the reason folded aw
   assert.equal(text(why.querySelector('.chat-approval-card__why-text')), 'To read the page you linked.');
   const buttons = [...el.querySelectorAll('.chat-approval-card__actions button')];
   assert.deepEqual(buttons.map(text), ['Switch on', 'Decline']);
-  assert.match(text(el.querySelector('.chat-approval-card__status')), /New chats keep your settings — to keep it on: Settings › Tools & security\. Esc declines\./);
+  assert.match(text(el.querySelector('.chat-approval-card__status')), /New chats keep your settings — to keep it on: Settings › Tools › Autonomy\. Esc declines\./);
 
   buttons[0].click();
   await settle();

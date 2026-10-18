@@ -46,7 +46,7 @@ Alles andere im Ordner — `Cache`, `Local Storage` und Ähnliches — gehört d
 Fast keine. Alles darin stellst du in der App ein, und die App schreibt die Dateien selbst; eine Änderung hinter ihrem Rücken kann überschrieben werden. Eine Einstellung hat keinen Platz in der App, und eine Datei muss bleiben, wie sie ist:
 
 - **`ui-preferences.json`** nimmt `historyCharLimit` auf, eine Zahl, die die Einstellungen nicht zeigen: das Budget in Zeichen für den Chat-Verlauf, der mit jeder Anfrage geschickt wird (standardmäßig 200.000, 4.000 bis 2.000.000). Ältere Nachrichten darüber hinaus bleiben weg, und große Tool-Ergebnisse früherer Runden werden gekürzt. Beende Snotra, bevor du die Datei bearbeitest.
-- **`tool-policy.json`** ist signiert. Bearbeite sie nicht: Snotra fällt dann auf *Intelligent* zurück — oder bleibt bei *Immer fragen* — und verwirft deine Erlaubnisse; deine Sperren bleiben in Kraft. Ändere Berechtigungen stattdessen unter *Einstellungen › Tools & Sicherheit*.
+- **`tool-policy.json`** ist signiert. Bearbeite sie nicht: Snotra fällt dann auf *Intelligent* zurück — oder bleibt bei *Immer fragen* — und verwirft deine Erlaubnisse; deine Sperren bleiben in Kraft. Ändere Berechtigungen stattdessen unter *Einstellungen › Tools › Autonomie*.
 
 Um bei null anzufangen, beende Snotra und verschiebe den Ordner an eine andere Stelle. Schlüssel und Chats sind dann aus der App verschwunden — leg vorher eine Kopie an.
 

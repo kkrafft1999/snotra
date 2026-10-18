@@ -5,7 +5,7 @@
 //     workspace", which is chosen; the system dialog is answered by the
 //     script and its text logged; curl carries on;
 //  2. the same curl again: no card, the host is open for the workspace;
-//  3. Settings › Tools & security: the row "Execute" counts the host when
+//  3. Settings › Tools › Autonomy: the row "Execute" counts the host when
 //     closed and lists it when open; closing it there takes it away again.
 // Not a test — a look. Needs the network (www.example.com).
 //
@@ -122,7 +122,7 @@ try {
     [...document.querySelectorAll('#chat-messages .chat-msg.assistant')].at(-1).querySelectorAll('.chat-approval-card').length));
   console.log('second run reads:', lastToolResult().stdout, '·', lastToolResult().sandbox_connections ?? '(no connection asked)');
 
-  // 3. Settings › Tools & security.
+  // 3. Settings › Tools › Autonomy.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(1180, 1500));
   await app.evaluate(({ Menu }) => {
     for (const top of Menu.getApplicationMenu().items) {

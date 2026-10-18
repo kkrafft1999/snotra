@@ -923,7 +923,7 @@ test('geoeffnet startet der Dialog auf dem Modell-Tab', async (t) => {
   assert.equal(panelFor('models').hidden, false);
   assert.equal(document.getElementById('settings-panel-heading').textContent, 'Modelle');
   // Alle uebrigen Panels sind wirklich weg, nicht nur unsichtbar.
-  for (const key of ['security', 'tools', 'skills', 'general']) {
+  for (const key of ['security', 'sandbox', 'tools', 'skills', 'general']) {
     assert.equal(panelFor(key).hidden, true, `Panel ${key} muesste versteckt sein`);
   }
 });
@@ -933,8 +933,9 @@ test('ein Klick auf einen Tab schaltet Panel, aria-selected und Ueberschrift um'
   t.after(dom.cleanup);
 
   for (const [key, heading] of [
-    ['security', 'Tools & Sicherheit'],
-    ['tools', 'Tool-Einrichtung'],
+    ['security', 'Tools › Autonomie'],
+    ['sandbox', 'Tools › Sicherheit'],
+    ['tools', 'Tools › Einrichtung'],
     ['skills', 'Skills'],
     ['general', 'Allgemein'],
     ['models', 'Modelle'],

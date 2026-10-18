@@ -2,7 +2,7 @@
 
 /**
  * Program allowances (#408): extra rights inside the sandbox for one program
- * the user trusts, in every workspace.
+ * the user trusts — in one workspace or in every workspace (#1119).
  *
  * An allowance names the program by its file path and adds, for runs that
  * start exactly that file on its own:
@@ -104,6 +104,44 @@ function normalizeProgramAllowances(list) {
   return out;
 }
 
+/**
+ * Whether a global and a workspace allowance for the same program would,
+ * added up (#1119), hold more domains or folders than one allowance may. The
+ * store refuses such a pair rather than let a run get less than either of
+ * them names — a run never takes more than one allowance's worth.
+ */
+function combinationTooLarge(a, b) {
+  if (!a || !b || a.path !== b.path) return false;
+  const domains = new Set([...a.domains, ...b.domains]);
+  const folders = new Set([...a.writePaths, ...b.writePaths]);
+  return domains.size > PROGRAM_ALLOWANCE_LIMITS.MAX_DOMAINS || folders.size > PROGRAM_ALLOWANCE_LIMITS.MAX_WRITE_PATHS;
+}
+
+/**
+ * What applies in one workspace (#1119): the allowances for every workspace
+ * and the workspace's own, one entry per program. Where both name the same
+ * program they add up — every domain and folder of either, and the macOS
+ * certificate check when either has it.
+ */
+function combineProgramAllowances(globalList, workspaceList) {
+  const out = normalizeProgramAllowances(globalList).map((entry) => ({ ...entry }));
+  for (const own of normalizeProgramAllowances(workspaceList)) {
+    const index = out.findIndex((entry) => entry.path === own.path);
+    if (index < 0) {
+      out.push(own);
+      continue;
+    }
+    const base = out[index];
+    out[index] = normalizeProgramAllowance({
+      path: base.path,
+      domains: [...base.domains, ...own.domains],
+      writePaths: [...base.writePaths, ...own.writePaths],
+      trustd: base.trustd || own.trustd,
+    });
+  }
+  return out;
+}
+
 /** Whether an allowance grants anything at all. */
 function grantsSomething(entry) {
   return !!entry && (entry.domains.length > 0 || entry.writePaths.length > 0 || entry.trustd === true);
@@ -149,6 +187,8 @@ module.exports = {
   normalizeAllowancePath,
   normalizeProgramAllowance,
   normalizeProgramAllowances,
+  combineProgramAllowances,
+  combinationTooLarge,
   grantsSomething,
   parseDomainInput,
   isNarrowing,

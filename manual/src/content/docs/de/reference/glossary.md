@@ -65,7 +65,7 @@ Das Sprachmodell, das in einem Chat antwortet, angeboten von einem [Anbieter](#a
 
 Wie oft Snotra dich fragt: *Intelligent*, *Immer fragen* oder *Auto*. Er gehört zum Chat. Siehe [Einen Modus wählen](../../safety/choose-a-mode/).
 
-![Das Modus-Menü über dem Chat-Eingabefeld: Intelligent, Immer fragen und Auto, jeweils mit einer kurzen Beschreibung, „Immer fragen“ ausgewählt. Darunter das Kästchen „„Immer fragen“ auch für neue Chats in gartenplaner“ und der Link „Alle Berechtigungen unter Einstellungen › Tools & Sicherheit“.](screenshots/mode-menu.webp)
+![Das Modus-Menü über dem Chat-Eingabefeld: Intelligent, Immer fragen und Auto, jeweils mit einer kurzen Beschreibung, „Immer fragen“ ausgewählt. Darunter das Kästchen „„Immer fragen“ auch für neue Chats in gartenplaner“ und der Link „Alle Berechtigungen unter Einstellungen › Tools › Autonomie“.](screenshots/mode-menu.webp)
 
 ### Reasoning-Stufe
 

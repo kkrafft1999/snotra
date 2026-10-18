@@ -101,14 +101,22 @@ export function initToolPermissionState({ api, whenChatSettled = async () => {} 
     setSensitivePathPatterns: (patterns) => call('setSensitivePathPatterns', patterns),
     clearSessionGrants: () => call('clearToolSessionGrants'),
     revokeSessionGrant: (grantId) => call('revokeToolSessionGrant', grantId),
-    removeWorkspaceHost: (host) => call('removeWorkspaceToolHost', host),
+    // `root`: a workspace listed on Tools › Security (#1119); without it the open one.
+    removeWorkspaceHost: (host, root = null) => call('removeWorkspaceToolHost', host, root),
     resetWorkspaceRules: () => call('resetWorkspaceToolRules'),
     resetAll: () => call('resetAllToolPermissions'),
-    setWorkspaceSandbox: (enabled) => call('setWorkspaceSandbox', enabled),
+    setWorkspaceSandbox: (enabled, root = null) => call('setWorkspaceSandbox', enabled, root),
     setWorkspaceMode: (mode) => call('setWorkspaceMode', mode),
-    // Program allowances (#408); widening is confirmed natively by main.
+    // Program allowances (#408), for one workspace or every one (#1119);
+    // widening is confirmed natively by main.
     setProgramAllowance: (payload) => call('setProgramAllowance', payload),
-    removeProgramAllowance: (programPath) => call('removeProgramAllowance', programPath),
+    removeProgramAllowance: (programPath, scope) => call('removeProgramAllowance', programPath, scope),
+    // Tools › Security (#1119).
+    addHosts: (payload) => call('addSandboxHosts', payload),
+    removeGlobalHost: (host) => call('removeGlobalToolHost', host),
+    setNewWorkspaceSandbox: (enabled) => call('setNewWorkspaceSandbox', enabled),
+    resetWorkspaceSandbox: (root) => call('resetWorkspaceSandbox', root),
+    resetSandboxEverywhere: () => call('resetSandboxEverywhere'),
   };
 }
 

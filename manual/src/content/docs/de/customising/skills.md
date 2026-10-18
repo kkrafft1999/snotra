@@ -63,11 +63,11 @@ Ein Vorschlag wird nie von selbst eingeschaltet.
 
 [seit 1.20] In der Chat-Leiste, neben Modell und Modus, zählt eine Pille die Skills, die in diesem Chat eingeschaltet sind: *3 Skills* oder *Keine Skills*. Ein Klick darauf zeigt das ganze Bild:
 
-![Das Popover der Pille „3 Skills“: unter Skills die drei System-Skills an und aussaat-tipps aus dem Ordner aus; unter Tools run_python und shell_execute ausgeschaltet mit je einem Knopf „Einschalten“, web_search und generate_image mit „Einrichten“, darunter zugeklappt „15 eingeschaltet“; ganz unten Links zu Einstellungen › Skills und Einstellungen › Tools & Sicherheit.](screenshots/chat-config.webp)
+![Das Popover der Pille „3 Skills“: unter Skills die drei System-Skills an und aussaat-tipps aus dem Ordner aus; unter Tools run_python und shell_execute ausgeschaltet mit je einem Knopf „Einschalten“, web_search und generate_image mit „Einrichten“, darunter zugeklappt „15 eingeschaltet“; ganz unten Links zu Einstellungen › Skills und Einstellungen › Tools › Autonomie.](screenshots/chat-config.webp)
 
 - **Skills** – jeder Skill, die eingeschalteten zuerst, jeweils mit seiner Herkunft. Ein Skill, den du mit `/name` aufgerufen oder auf einer Karte für diesen Chat eingeschaltet hast, trägt die Marke *nur dieser Chat*.
 - **Tools** – was fehlt, steht oben, mit dem Grund, etwa *ausgeschaltet* oder *kein Suchdienst-Schlüssel*. *Einschalten* oder *Einrichten* öffnet die Einstellung, die das ändert. Die eingeschalteten Tools sind in einer Zeile zusammengefasst; ein Klick darauf zeigt sie nach Gruppen.
-- Die beiden Links unten öffnen *Einstellungen › Skills* und *Einstellungen › Tools & Sicherheit*.
+- Die beiden Links unten öffnen *Einstellungen › Skills* und *Einstellungen › Tools › Autonomie*.
 
 Die Pille zeigt nur an. Was du dauerhaft ein- oder ausschaltest, bleibt eine Entscheidung in den Einstellungen.
 
@@ -94,13 +94,13 @@ Das Modell kann auch vorschlagen, etwas für einen Chat auszuschalten – etwa w
 
 ### Was passiert
 
-Die Änderung gilt nur für diesen Chat. Sie bleibt, wenn du einen anderen Chat öffnest und zurückkommst, und auch nach einem Neustart; ein neuer Chat beginnt wieder mit deinen Einstellungen. Die Skills-Pille markiert die Änderung mit *nur dieser Chat*. Dauerhaft einschalten kannst du unter [*Einstellungen › Tools & Sicherheit*](../../safety/tools-and-security/) oder [*Einstellungen › Skills*](#einen-skill-einschalten).
+Die Änderung gilt nur für diesen Chat. Sie bleibt, wenn du einen anderen Chat öffnest und zurückkommst, und auch nach einem Neustart; ein neuer Chat beginnt wieder mit deinen Einstellungen. Die Skills-Pille markiert die Änderung mit *nur dieser Chat*. Dauerhaft einschalten kannst du unter [*Einstellungen › Tools › Autonomie*](../../safety/tools-and-security/) oder [*Einstellungen › Skills*](#einen-skill-einschalten).
 
 Ein so eingeschaltetes Tool verhält sich wie eines aus den Einstellungen: Im Modus *Intelligent* fragt es weiterhin vor jedem Aufruf, der eine Freigabe braucht.
 
 ### Wenn es nicht klappt
 
-- **Das Modell sagt, ein Tool lasse sich im Chat nicht einschalten.** Es muss erst eingerichtet werden – ein Schlüssel, ein Programm oder der Schalter für Python oder Shell-Befehle unter *Einstellungen › Tools & Sicherheit*. Das bleibt in den Einstellungen.
+- **Das Modell sagt, ein Tool lasse sich im Chat nicht einschalten.** Es muss erst eingerichtet werden – ein Schlüssel, ein Programm oder der Schalter für Python oder Shell-Befehle unter *Einstellungen › Tools › Autonomie*. Das bleibt in den Einstellungen.
 - **Du hast versehentlich abgelehnt.** Schalte es in den Einstellungen ein, oder beginne einen neuen Chat und frag noch einmal.
 
 ## Was dann passiert

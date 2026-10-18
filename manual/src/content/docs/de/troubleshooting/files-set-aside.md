@@ -16,7 +16,7 @@ Nichts außer der App. Um die alte Datei zu zeigen, nutzt Snotra deinen Dateiman
 Der Hinweis lautet ***Deine Modelleinstellungen wurden zurückgesetzt.***, ***Der Chatverlauf beginnt leer.*** oder ähnlich, je nach Datei. Darunter stehen der Name der Datei und der vollständige Pfad der Kopie, die Snotra aufbewahrt hat, zum Beispiel `llm-config.json.unreadable-2026-10-16T09-12-44-120Z`.
 
 1. Wähle im Hinweis *Im Finder anzeigen* (unter Windows *Im Explorer anzeigen*), um die Kopie zu sehen.
-2. Richte wieder ein, was zurückgesetzt wurde: deine Modelle unter *Einstellungen › Modelle*, den Schlüssel für die Websuche und die MCP-Server unter *Einstellungen › Tool-Einrichtung*. Die Ansichtseinstellungen und die Liste der zuletzt geöffneten Ordner füllen sich beim Arbeiten von selbst wieder.
+2. Richte wieder ein, was zurückgesetzt wurde: deine Modelle unter *Einstellungen › Modelle*, den Schlüssel für die Websuche und die MCP-Server unter *Einstellungen › Tools › Einrichtung*. Die Ansichtseinstellungen und die Liste der zuletzt geöffneten Ordner füllen sich beim Arbeiten von selbst wieder.
 3. Schließ den Hinweis mit ×. Für diese Datei kommt er erst wieder, wenn ihr erneut etwas passiert.
 
 Behalte die Kopie, bis du sicher bist, dass du sie nicht mehr brauchst. Snotra löscht sie nie.

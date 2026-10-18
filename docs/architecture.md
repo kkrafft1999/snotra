@@ -606,8 +606,10 @@ mode; both take their words from `describeModePill` and
 `describeFolderSandbox`.
 
 **Program allowances** ([#408](https://github.com/kkrafft1999/snotra/issues/408))
-widen the sandbox for one program in every workspace: domains, writable
-folders and, on macOS, the trust service (`enableWeakerNetworkIsolation`). The
+widen the sandbox for one program — in one workspace or, since
+[#1119](https://github.com/kkrafft1999/snotra/issues/1119), in every workspace:
+domains, writable folders and, on macOS, the trust service
+(`enableWeakerNetworkIsolation`). The
 entry format is shared (`shared/contracts/program-allowances.js`) and stored in
 the signed policy file. `main/services/program-allowances-service.js` resolves
 programs through the shell's PATH, checks folders against Snotra's storage and
@@ -619,8 +621,27 @@ the plan key) or `plan.sandbox.allowanceSkipped`, and re-checks the stored
 entry in `verifyTargets`. The `shell_execute` handler hands the plan's
 allowance to the runner; `planSpawn` passes folders and trustd to
 `sandbox.prepare`, whose `buildConfig` adds them. The settings list lives in
-`renderer/components/ProgramAllowancesSetting.js`; widening goes through a
+`renderer/components/ToolSecurityPanel.js`, the dialog in
+`renderer/components/ProgramAllowanceDialog.js`; widening goes through a
 native confirmation in `main/ipc/tool-permission-handlers.js`.
+
+**Scopes of the sandbox grants**
+([#1119](https://github.com/kkrafft1999/snotra/issues/1119)). The policy file
+holds the sandbox switch, the hosts kept open and the program allowances per
+workspace (`unsandboxedWorkspaces`, `workspaceHosts`,
+`workspaceProgramAllowances`), program allowances and hosts for every
+workspace (`programAllowances` — the list every allowance was in before, so an
+older file needs no rewrite — and `globalHosts`), and whether new workspaces
+start without the sandbox (`newWorkspaceSandboxOff`, with the folders that
+were there before in `knownWorkspaces`). A global and a workspace allowance
+for the same program add up in that workspace
+(`combineProgramAllowances`); the store refuses a pair that would hold more
+than one allowance's worth. `readProgramAllowances(root)` gives a run what
+applies in its workspace, `noteWorkspaceOpened` writes the sandbox off for a
+folder opened for the first time while that default is off. Settings ›
+Tools › Security (`ToolSecurityPanel`) reads `getSandboxOverview` and may
+change a workspace that is not open; main accepts only a root it already holds
+a sandbox setting for, or the open one.
 
 Both network tools are marked in the registry as `requiresWorkspace: false`
 (issue #96): the engine no longer builds the tool list wholesale only with an
@@ -1407,7 +1428,7 @@ These are the topics that did move out:
 | Own secrets (concept §5): which values a tool result must never carry | `services/own-secrets.js` |
 | Masking the status of an MCP server | `services/mcp-status-masking.js` |
 | The model's skill suggestion (`SKILLS_SUGGEST`) | `ipc/skill-suggestion-handlers.js` |
-| What Settings › Tools & security and the mode pill read | `services/security-page-data.js` |
+| What Settings › Tools › Autonomy, Tools › Security and the mode pill read | `services/security-page-data.js` |
 | Which skills and tools a chat has — the composer pill (`CHAT_GET_CONFIGURATION`) and the model's `get_configuration` (#773) | `services/chat-configuration-service.js`, `ipc/chat-configuration-handlers.js`; why a tool is not offered: `whyNotOffered` in `tools/workspace-tool-registry.js` |
 | The model's proposal to switch a skill or tool for one chat (`propose_config_change`, #774): checked in main, asked on a card (approval checkpoint `config`), kept in the chat's row | engine: `proposeConfigChange` / `refreshCapabilities` in `application/chat/chat-engine.js`, port `application/ports/config-proposal-port.js`; check: `prepareProposal` in `services/chat-configuration-service.js`; storage: `configOverridesFor` in `services/chat-session-settings.js`; arithmetic: `contracts/chat-configuration.js`; card: `renderer/utils/config-proposal-view.js` |
 | The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |
@@ -2668,7 +2689,7 @@ is the switch, not the placement.
 ### Baseline equipment of the tools
 
 Principle since [#180](https://github.com/kkrafft1999/snotra/issues/180): what is
-switched on in Settings › Tools & security goes to the model — and vice versa. Otherwise a schema costs
+switched on in Settings › Tools › Autonomy goes to the model — and vice versa. Otherwise a schema costs
 tokens in every round that nobody can deselect, because it does not appear in the
 list.
 
@@ -2940,7 +2961,7 @@ that does not exist once the interface was switchable, so since
 
 | Placeholder | Yields |
 | --- | --- |
-| `{menu:settings.tools}` | `Settings › Tool setup` / `Einstellungen › Tool-Einrichtung` — assembled from the navigation's own keys |
+| `{menu:settings.tools}` | `Settings › Tools › Setup` / `Einstellungen › Tools › Einrichtung` — assembled from the navigation's own keys |
 | `{label:permissions.mode.smart}` | `Smart` / `Intelligent` — one entry, quoted as it stands |
 
 A path is never written out as its own string. `test/ui-quotes.test.js` checks

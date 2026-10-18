@@ -1,6 +1,6 @@
 ---
 title: See and change what Snotra may do
-description: Settings › Tools & security shows, for the open folder, which tools Snotra has, when it asks, and where it may act — and lets you change it.
+description: Settings › Tools › Autonomy shows, for the open folder, which tools Snotra has, when it asks, and where it may act — and lets you change it.
 sidebar:
   order: 4
 ---
@@ -9,15 +9,17 @@ One page in the settings shows everything that decides a tool call in the open f
 
 ## Open the page
 
-Open the settings — *Snotra Agent › Settings…* on macOS, *View › Settings…* on Windows and Linux, or `Cmd+,` / `Ctrl+,` — and choose *Tools & security*. The link at the bottom of the mode menu in the chat leads there as well.
+Open the settings — *Snotra Agent › Settings…* on macOS, *View › Settings…* on Windows and Linux, or `Cmd+,` / `Ctrl+,` — and choose *Autonomy* under *Tools*. [since 1.26] Until 1.25 this page was called *Tools & security*. The link at the bottom of the mode menu in the chat leads there as well.
 
-![Settings › Tools & security for the folder garden-planner: at the top the default mode Smart and a summary — reads without asking, asks before changing a file, asks before every command (in the sandbox), asks before using the web or MCP. Below, the rows Read (Runs), Read sensitive data, Change and Overwrite with no way back (each Asks).](screenshots/tools-and-security.webp)
+The sandbox, the programs with more room and the hosts kept open have a page of their own next to it, *Settings › Tools › Security*: see [Run commands in the sandbox](../sandbox/#set-up-the-sandbox).
+
+![Settings › Tools › Autonomy for the folder garden-planner: at the top the default mode Smart and a summary — reads without asking, asks before changing a file, asks before every command (in the sandbox), asks before using the web or MCP. Below, the rows Read (Runs), Read sensitive data, Change and Overwrite with no way back (each Asks).](screenshots/tools-and-security.webp)
 
 ## What it shows
 
 - **At the top**, the folder it applies to, its *Default mode* and one sentence that sums up what Snotra does there. How the default mode works is on [Choose a mode](../choose-a-mode/#give-a-folder-a-default-mode).
 - **Six rows**, one per risk class — *Read*, *Read sensitive data*, *Change*, *Overwrite with no way back*, *Execute*, *External services*. Each says how many tools it has, why it behaves as it does, and whether its calls *Run*, *Ask* or are *Off*.
-- **An opened row** answers three questions: May Snotra do this (the tools, each with its switch)? Does it ask first (the mode, your allowances, remembered commands, session allowances)? And where or what exactly (the folders, the sensitive patterns, the sandbox, your blocks, what leaves your computer)?
+- **An opened row** answers three questions: May Snotra do this (the tools, each with its switch)? Does it ask first (the mode, your allowances, remembered commands, session allowances)? And where or what exactly (the folders, the sensitive patterns, your blocks, what leaves your computer)? [since 1.26] In the row *Execute*, the third question is one line with the state of the sandbox in the open folder — *Isolated in the sandbox* with how many programs and hosts have more room, or *Not isolated* in amber — and leads to *Settings › Tools › Security*.
 - **At the bottom**, the *Session allowances* still in force and the two ways to reset.
 
 Everything on this page takes effect at once. Anything that loosens protection is confirmed in a dialog of the operating system first.
@@ -46,9 +48,9 @@ The row *Read sensitive data* lists the built-in patterns — `.env*`, `*.pem`, 
 ## Revoke an allowance or reset
 
 - ***Session allowances*** lists every *Allow for this session* still in force, grouped by chat, with what it covers and when you gave it. Revoke them one by one or with *Revoke all*.
-- ***Connections kept open*** [since 1.22] are listed in the row *Execute*, under *What can a command reach?*: every host a connection card kept open *For this workspace*. The closed row counts them. The trash button next to a host closes it again, without a dialog — the next connection to it asks.
-- ***Reset workspace rules*** deletes the blocks and allowances of the open folder only, closes the connections kept open for it, switches its sandbox back on and sets its default mode back to *Smart*.
-- ***Reset all permissions*** deletes every rule, your own sensitive patterns, every program allowance and session allowance, switches the sandbox back on everywhere and restores *Smart*, also as the default of every folder. It always asks in a system dialog that lists the protection that goes.
+- ***Hosts kept open*** [since 1.22] — every host a connection card kept open *For this workspace* — are counted on the closed row *Execute*. [since 1.26] They are listed and closed on *Settings › Tools › Security*, with the programs that have more room: see [Run commands in the sandbox](../sandbox/#keep-a-host-open).
+- ***Reset workspace rules*** deletes the blocks and allowances of the open folder only, closes the hosts kept open for it, removes its own program allowances, switches its sandbox back on and sets its default mode back to *Smart*.
+- ***Reset all permissions*** deletes every rule, your own sensitive patterns, every program allowance, every host kept open and every session allowance, switches the sandbox back on everywhere — for new workspaces as well — and restores *Smart*, also as the default of every folder. It always asks in a system dialog that lists the protection that goes.
 
 ## If it doesn't work
 

@@ -7,8 +7,9 @@ import { invokeErrorDetail, invokeErrorMessage } from '../utils/invoke-error.js'
 import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
 import { normalizeAppearance } from './ThemeManager.js';
 import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
-import { initWorkspaceSandboxSetting } from './WorkspaceSandboxSetting.js';
-import { initProgramAllowancesSetting } from './ProgramAllowancesSetting.js';
+import { initProgramAllowanceDialog } from './ProgramAllowanceDialog.js';
+import { initToolSecurityPanel } from './ToolSecurityPanel.js';
+import { settingsPageName } from '../utils/settings-pages.js';
 import { initSecurityPanel } from './SecurityPanel.js';
 import { initSettingsHelp } from './SettingsHelp.js';
 import { initModelPricesSettings } from './ModelPricesSettings.js';
@@ -20,9 +21,10 @@ import { initModelPricesSettings } from './ModelPricesSettings.js';
  * promises a safety net that is not there.
  */
 // Security (#448) shows the state and carries one instant control, the
-// workspace default mode. MCP is no section of its own since #767: its
-// servers sit on Tool setup, whose hint names them.
-const IMMEDIATE_PANELS = new Set(['security', 'memory']);
+// workspace default mode; Tools › Security (#1119) applies everything at
+// once. MCP is no section of its own since #767: its servers sit on
+// Tool setup, whose hint names them.
+const IMMEDIATE_PANELS = new Set(['security', 'sandbox', 'memory']);
 
 /**
  * The hint in the footer depends on the section. Since issue #297 memory is
@@ -38,9 +40,10 @@ const APPLY_HINT_KEYS = {
   general: 'settings.applyHint.general',
 };
 
-// `security` is "Tools & security", `tools` is "Tool setup" with the MCP
-// servers (#767); the keys stayed so that links and ids did not move.
-const SETTINGS_NAV_KEYS = ['models', 'security', 'tools', 'skills', 'memory', 'general'];
+// `security` is Tools › Autonomy (once "Tools & security"), `sandbox` is
+// Tools › Security (#1119), `tools` is Tools › Setup with the MCP servers
+// (#767); the keys stayed so that links and ids did not move.
+const SETTINGS_NAV_KEYS = ['models', 'security', 'sandbox', 'tools', 'skills', 'memory', 'general'];
 
 /** Disclosure arrow of the skill rows (#98); turns by CSS. */
 const CHEVRON_ICON_HTML =
@@ -262,16 +265,20 @@ export function initSettingsModal(deps) {
   // isolation lines when the workspace switch changes (#357).
   let pythonSandboxState = null;
   let shellSandboxState = null;
-  const workspaceSandbox = initWorkspaceSandboxSetting({ toolPermissions, onChange: () => renderSandboxLines() });
-  // Program allowances (#408): only shell_execute runs a program by name.
-  const programAllowances = initProgramAllowancesSetting({ api, toolPermissions });
-  // Settings › Security (#448, #449): the state per risk class, computed by
-  // main, with every control that changes it.
+  // A workspace without sandbox says so in both isolation lines (#357).
+  toolPermissions?.subscribe?.(() => renderSandboxLines());
+  // Program allowances (#408), for one workspace or every one (#1119).
+  const programAllowanceDialog = initProgramAllowanceDialog({ api, toolPermissions });
+  // Settings › Tools › Security (#1119): the sandbox of every workspace.
+  const toolSecurityPanel = initToolSecurityPanel({ api, toolPermissions, allowanceDialog: programAllowanceDialog });
+  // Settings › Tools › Autonomy (#448, #449): the state per risk class,
+  // computed by main, with every control that changes it.
   const securityPanel = initSecurityPanel({
     api,
     toolPermissions,
     permissionsPanel: toolPermissionsPanel,
     onNavigate: navigateToSetting,
+    onOpenSandbox: () => openSandboxPage('sandbox'),
     onToggleTool: setToolEnabled,
   });
   // Umgebungsangaben im Systemprompt (Issue #138). Voreingestellt an — der
@@ -1689,16 +1696,14 @@ export function initSettingsModal(deps) {
 
   /** Both isolation lines; a workspace without sandbox says so in each (#357). */
   function renderSandboxLines() {
-    const workspaceDisabled = workspaceSandbox.isDisabledHere();
+    const workspaceDisabled = toolPermissions?.get?.()?.workspaceSandboxDisabled === true;
     setSandboxStatus(pythonSandboxEl, describeSandboxStatus(pythonSandboxState, pythonReady, { workspaceDisabled }));
     setSandboxStatus(shellSandboxEl, describeSandboxStatus(shellSandboxState, shellReady, { workspaceDisabled }));
   }
 
-  /** After a tool state arrived: isolation lines and the workspace switch. */
+  /** After a tool state arrived: the isolation lines. */
   function syncExecutionTools() {
     renderSandboxLines();
-    workspaceSandbox.update({ toolsOn: pythonReady || shellReady, sandbox: shellSandboxState || pythonSandboxState });
-    programAllowances.update({ shellOn: shellReady, sandbox: shellSandboxState });
   }
 
   /** Isolation line under a tool's status (#329); hidden when there is nothing to say. */
@@ -1819,6 +1824,32 @@ export function initSettingsModal(deps) {
     target.focus();
   }
 
+  /**
+   * "Tools › Security": an entry of the group Tools is named with the group
+   * (#1119), as the menu paths in the manual name it.
+   */
+  function settingsPanelHeading(panelKey) {
+    return settingsPageName(panelKey);
+  }
+
+  /**
+   * Tools › Security with the open workspace selected (#1119), from the line
+   * on Tools › Autonomy — and from the folder shield, the approval card and
+   * the blocked-resource box through `openSettingsModal`.
+   */
+  function openSandboxPage(target = 'sandbox') {
+    activateSettingsPanel('sandbox');
+    return toolSecurityPanel.reveal(target).catch(reportSandboxPageFailure);
+  }
+
+  /** The page could not be drawn; it says so where its error line sits. */
+  function reportSandboxPageFailure(error) {
+    const line = document.getElementById('settings-sandbox-error');
+    if (!line) return;
+    line.textContent = error?.message || t('settings.permissions.unreadable');
+    line.classList.remove('hidden');
+  }
+
   function activateSettingsPanel(panelKey) {
     document.querySelectorAll('.settings-panel').forEach((p) => {
       const on = p.id === `panel-settings-${panelKey}`;
@@ -1832,12 +1863,13 @@ export function initSettingsModal(deps) {
       tab.tabIndex = on ? 0 : -1;
     });
     activePanelKey = SETTINGS_NAV_KEYS.includes(panelKey) ? panelKey : 'models';
-    settingsPanelHeadingEl.textContent = t(`settings.nav.${activePanelKey}`);
+    settingsPanelHeadingEl.textContent = settingsPanelHeading(activePanelKey);
     panelHelpButton.dataset.manualHelp = `panel.${activePanelKey}`;
     settingsHelp.refresh();
     // A tool switched in Tools a moment ago changes the page: read it again
     // whenever it comes into view.
     if (activePanelKey === 'security' && !modalSettings.classList.contains('hidden')) void securityPanel.refresh();
+    if (activePanelKey === 'sandbox' && !modalSettings.classList.contains('hidden')) toolSecurityPanel.open().catch(reportSandboxPageFailure);
     if (activePanelKey === 'tools' && !modalSettings.classList.contains('hidden')) listImageModelsOnce();
     const applyHint = document.getElementById('settings-apply-hint');
     if (applyHint) {
@@ -2201,11 +2233,12 @@ export function initSettingsModal(deps) {
         if (jump.priceModel) void modelPricesSettings.refresh().then(() => modelPricesSettings.reveal(jump.priceModel));
         return;
       }
-      // From the approval card's "Sandbox setting" and "Program allowances"
-      // links, the mode pill and the folder shield (#357, #408, #449): the
-      // execute row of the Security page, opened on the control.
-      if (jump?.panel === 'security' && (jump.focus === 'sandbox' || jump.focus === 'allowances')) {
-        void securityPanel.reveal(jump.focus);
+      // From the approval card's "Sandbox setting" and "Programs with more
+      // room" links, the mode pill, the folder shield and the blocked-resource
+      // box (#357, #408, #449): Tools › Security, the open workspace selected,
+      // on the control (#1119).
+      if (jump?.panel === 'sandbox') {
+        openSandboxPage(jump.focus === 'programs' ? 'programs' : 'sandbox');
         return;
       }
       // Loading takes a moment; whoever is already working in the dialog
@@ -2243,9 +2276,8 @@ export function initSettingsModal(deps) {
     settingsReady = false;
     toolPermissionsPanel?.close?.();
     securityPanel.close();
+    toolSecurityPanel.close();
     mcpPanel?.close?.();
-    programAllowances.close();
-    workspaceSandbox.reset();
     closeChatModelMenu(false);
     stashPopupCredentialInputs();
     closeAddModelOverlay();

@@ -211,11 +211,12 @@ test('the security overview names no skill folder as a place to write (en/de)', 
     setLocale('en');
     assert.match(t('security.a.where.write'), /^In this folder\. Skill folders stay read-only: what a skill keeps goes into \.agents\/data/);
     assert.match(t('security.a.where.write.noWorkspace'), /^Nowhere: no folder is open, and skill folders are read-only\./);
-    assert.equal(t('security.a.where.execute.fact.write'), 'Writes only in this folder and a temporary folder');
+    // What a run may write is said on Tools › Security since #1119.
+    assert.match(t('toolSecurity.base.openText'), /^writing in the project folder and a temporary folder;/);
     setLocale('de');
     assert.match(t('security.a.where.write'), /^In diesem Ordner\. Skill-Ordner bleiben schreibgeschützt: Was ein Skill aufbewahrt, landet in \.agents\/data/);
     assert.match(t('security.a.where.write.noWorkspace'), /^Nirgends: Kein Ordner ist offen, und Skill-Ordner sind schreibgeschützt\./);
-    assert.equal(t('security.a.where.execute.fact.write'), 'Schreibt nur in diesem Ordner und einem temporären Ordner');
+    assert.match(t('toolSecurity.base.openText'), /^Schreiben im Projektordner und in einem temporären Ordner;/);
   } finally {
     setLocale('en');
   }

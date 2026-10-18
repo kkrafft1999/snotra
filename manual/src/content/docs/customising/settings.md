@@ -11,16 +11,19 @@ Everything you can set up in Snotra is in one place: the settings. They open ove
 
 *Snotra Agent › Settings…* on macOS, *View › Settings…* on Windows and Linux, or `Cmd+,` / `Ctrl+,`. [since 1.25] Or click the gear at the bottom of the sidebar, next to the [feedback](../../troubleshooting/send-feedback/) button. The menu and the shortcut stay when you hide the sidebar.
 
-## The six sections
+## The sections
 
 | Section | What it holds |
 | --- | --- |
 | *Models* | The models Snotra offers in the chat, with their access. See [Manage your models](../models/). |
-| *Tools & security* | What Snotra can and may do in the open folder. See [See and change what Snotra may do](../../safety/tools-and-security/). |
-| *Tool setup* | The Python interpreter, the web search key, the image model and the MCP servers. See [Set up the built-in tools](../built-in-tools/) and [Connect an MCP server](../mcp-servers/). |
+| *Tools › Autonomy* | How freely Snotra acts in the open folder, and with which tools. See [See and change what Snotra may do](../../safety/tools-and-security/). |
+| *Tools › Security* | [since 1.26] The sandbox of every workspace, and what commands and Python runs may reach beyond it. See [Run commands in the sandbox](../../safety/sandbox/#set-up-the-sandbox). |
+| *Tools › Setup* | The Python interpreter, the web search key, the image model and the MCP servers. See [Set up the built-in tools](../built-in-tools/) and [Connect an MCP server](../mcp-servers/). |
 | *Skills* | The skills the model works with. See [Use skills](../skills/). |
 | *Memory* | What Snotra remembers across chats. See [Let Snotra remember](../memory/). |
 | *General* | Instructions for every chat, the look, the language — see below. |
+
+[since 1.26] *Autonomy*, *Security* and *Setup* sit together under the heading *Tools*; the heading itself is not a section.
 
 [since 1.19] The `?` next to the name of the section at the top, and next to many headings inside a section, opens this manual at the page and section about it — in the window described in [The manual inside Snotra](../../#the-manual-inside-snotra).
 
@@ -29,8 +32,8 @@ Everything you can set up in Snotra is in one place: the settings. They open ove
 The line at the bottom of each section says it, because it differs:
 
 - *Models* and *Skills* take effect when you click *Apply*. *Close* without *Apply* leaves them as they were.
-- *Tools & security* and *Memory* take effect at once.
-- In *Tool setup*, a key is saved with its own button and an MCP server at once; the interpreter and the image model wait for *Apply*.
+- *Tools › Autonomy*, *Tools › Security* and *Memory* take effect at once.
+- In *Tools › Setup*, a key is saved with its own button and an MCP server at once; the interpreter and the image model wait for *Apply*.
 - In *General*, switches, the appearance and the language take effect at once; the text fields wait for *Apply*.
 
 ## The section General

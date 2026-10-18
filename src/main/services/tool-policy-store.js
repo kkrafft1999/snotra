@@ -22,8 +22,14 @@
  * so it follows the same rules: it needs `safeStorage` to be stored, and a
  * failed signature drops it — every workspace is isolated again.
  *
- * Program allowances (#408) widen the sandbox for one program in every
- * workspace — the same kind of loosening, so the same rules again.
+ * Program allowances (#408) widen the sandbox for one program — the same
+ * kind of loosening, so the same rules again. Since #1119 an allowance applies
+ * in one workspace (`workspaceProgramAllowances`) or in every workspace
+ * (`programAllowances`, the list every allowance was in before: a file
+ * written before #1119 needs no rewrite, its allowances simply stay global).
+ * Hosts can be kept open per workspace (#946) or in every workspace
+ * (`globalHosts`), and new workspaces can start with the sandbox off
+ * (`newWorkspaceSandboxOff`) — every one of them a loosening as well.
  *
  * The default mode per workspace (#413) is a map of canonical root → mode.
  * `smart` is the absence of an entry. `auto` loosens and follows the rules
@@ -54,12 +60,16 @@ const {
   NO_RECEIPTS,
   permissionRuleSubject,
   removedPatternsSubject,
+  programAllowanceSubject,
+  globalHostsSubject,
 } = require('../../application/permissions/user-confirmation');
 const {
   normalizeProgramAllowance,
   normalizeProgramAllowances,
   isNarrowing,
   PROGRAM_ALLOWANCE_LIMITS,
+  combineProgramAllowances,
+  combinationTooLarge,
 } = require('../../shared/contracts/program-allowances');
 
 const { readFileWithRetry } = require('./rename-with-retry');
@@ -73,6 +83,13 @@ const POLICY_FILE_VERSION = 1;
 const HMAC_KEY_BYTES = 32;
 /** Hosts one workspace may keep open for its runs (#946). */
 const MAX_WORKSPACE_HOSTS = 10;
+/** Hosts kept open in every workspace (#1119). */
+const MAX_GLOBAL_HOSTS = 10;
+/**
+ * Folders remembered as already there while new workspaces start without the
+ * sandbox (#1119), the most recent last.
+ */
+const MAX_KNOWN_WORKSPACES = 1000;
 /** Chats remembered as confirmed into "Auto" (#980) — as many as chat settings keep. */
 const MAX_AUTO_CHATS = 500;
 
@@ -109,9 +126,17 @@ function defaultPayload() {
     workspaceRules: {},
     sensitivePathPatterns: [],
     unsandboxedWorkspaces: [],
+    // Program allowances for every workspace (#408) — and, since #1119, per
+    // workspace: root → entries.
     programAllowances: [],
+    workspaceProgramAllowances: {},
     workspaceModes: {},
     workspaceHosts: {},
+    globalHosts: [],
+    // New workspaces start with the sandbox off (#1119); `knownWorkspaces` are
+    // the folders that were there before, which keep their setting.
+    newWorkspaceSandboxOff: false,
+    knownWorkspaces: [],
     autoChats: [],
     legacyWriteMigrated: false,
     updatedAt: 0,
@@ -149,6 +174,18 @@ function normalizeWorkspaceHosts(value) {
     if (typeof root !== 'string' || !root) continue;
     const hosts = grantedHosts(raw).slice(0, MAX_WORKSPACE_HOSTS);
     if (hosts.length > 0) out[root] = hosts;
+  }
+  return out;
+}
+
+/** Root → the program allowances of that workspace (#1119); a root without any is dropped. */
+function normalizeWorkspaceProgramAllowances(value) {
+  const out = {};
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
+  for (const [root, raw] of Object.entries(value)) {
+    if (typeof root !== 'string' || !root) continue;
+    const entries = normalizeProgramAllowances(raw);
+    if (entries.length > 0) out[root] = entries;
   }
   return out;
 }
@@ -336,8 +373,12 @@ function createToolPolicyStore({
     out.sensitivePathPatterns = normalizeSensitivePathPatterns(data.sensitivePathPatterns);
     out.unsandboxedWorkspaces = normalizeWorkspaceRoots(data.unsandboxedWorkspaces);
     out.programAllowances = normalizeProgramAllowances(data.programAllowances);
+    out.workspaceProgramAllowances = normalizeWorkspaceProgramAllowances(data.workspaceProgramAllowances);
     out.workspaceModes = normalizeWorkspaceModes(data.workspaceModes);
     out.workspaceHosts = normalizeWorkspaceHosts(data.workspaceHosts);
+    out.globalHosts = grantedHosts(data.globalHosts).slice(0, MAX_GLOBAL_HOSTS);
+    out.newWorkspaceSandboxOff = data.newWorkspaceSandboxOff === true;
+    out.knownWorkspaces = normalizeWorkspaceRoots(data.knownWorkspaces).slice(-MAX_KNOWN_WORKSPACES);
     out.autoChats = normalizeAutoChats(data.autoChats);
     out.legacyWriteMigrated = data.legacyWriteMigrated === true;
     out.updatedAt = Number.isFinite(data.updatedAt) ? data.updatedAt : 0;
@@ -362,9 +403,14 @@ function createToolPolicyStore({
     // is a program allowance (#408).
     out.unsandboxedWorkspaces = [];
     out.programAllowances = [];
-    // So is a host kept open for a workspace (#946), and a chat's confirmed
-    // "Auto" (#980).
+    out.workspaceProgramAllowances = {};
+    // So is a host kept open for a workspace (#946) or for every one, the
+    // sandbox off for new workspaces (#1119), and a chat's confirmed "Auto"
+    // (#980).
     out.workspaceHosts = {};
+    out.globalHosts = [];
+    out.newWorkspaceSandboxOff = false;
+    out.knownWorkspaces = [];
     out.autoChats = [];
     // "Auto" as a workspace default goes with them; "Always ask" only tightens
     // and stays, like a deny rule (#413).
@@ -462,8 +508,11 @@ function createToolPolicyStore({
       sensitivePathPatterns: payload.sensitivePathPatterns,
       unsandboxedWorkspaces: payload.unsandboxedWorkspaces,
       programAllowances: payload.programAllowances,
+      workspaceProgramAllowances: payload.workspaceProgramAllowances,
       workspaceModes: payload.workspaceModes,
       workspaceHosts: payload.workspaceHosts,
+      globalHosts: payload.globalHosts,
+      newWorkspaceSandboxOff: payload.newWorkspaceSandboxOff,
       policyVersion: policyVersionOf(payload, integrity),
       integrity,
       encryptionAvailable: encryptionAvailable(),
@@ -510,6 +559,8 @@ function createToolPolicyStore({
       const draft = normalizePayload(JSON.parse(JSON.stringify(base)));
       const result = await updater(draft, { encryptionAvailable: encryptionAvailable(), integrity: loaded.integrity });
       if (result && result.error) return { ok: false, error: result.error, ...snapshot(base, loaded.integrity) };
+      // Nothing to change after all: no new revision, nothing written.
+      if (result && result.unchanged) return { ok: true, unchanged: true, ...snapshot(base, loaded.integrity) };
       const next = normalizePayload(draft);
       next.revision = base.revision + 1;
       next.updatedAt = now();
@@ -670,11 +721,13 @@ function createToolPolicyStore({
       const others = draft.unsandboxedWorkspaces.filter((entry) => entry !== root);
       if (enabled === true) {
         draft.unsandboxedWorkspaces = others;
+        rememberWorkspace(draft, root);
         return null;
       }
       if (!enc) return { error: createMessage('permissions.error.sandboxOffNeedsEncryption') };
       if (!confirmedBy(confirmation, CONFIRMATION_ACTIONS.SANDBOX_OFF, root)) return notConfirmed();
       draft.unsandboxedWorkspaces = [...others, root];
+      rememberWorkspace(draft, root);
       return null;
     });
   }
@@ -719,52 +772,88 @@ function createToolPolicyStore({
     return state.workspaceModes[root] || DEFAULT_TOOL_PERMISSION_MODE;
   }
 
+  /** The allowances of one scope (#1119): a workspace's own, or those for every workspace (null). */
+  function allowanceList(draft, root) {
+    return root ? draft.workspaceProgramAllowances[root] || [] : draft.programAllowances;
+  }
+
+  function setAllowanceList(draft, root, list) {
+    if (!root) draft.programAllowances = list;
+    else if (list.length > 0) draft.workspaceProgramAllowances[root] = list;
+    else delete draft.workspaceProgramAllowances[root];
+  }
+
   /**
-   * Stores a program allowance (#408), replacing the entry of the same
-   * program or — when the dialog changed the program — the one it was opened
-   * for. Widening needs `safeStorage` and a receipt for the program (#980);
-   * only taking rights away works without.
+   * Stores a program allowance (#408) for one workspace (`root`) or for every
+   * workspace (`root` null, #1119), replacing the entry of the same program
+   * in that scope or — when the dialog changed the program or the scope — the
+   * one it was opened for (`replacePath` in `replaceRoot`). Widening needs
+   * `safeStorage` and a receipt for the program in its scope (#980); only
+   * taking rights away works without — and moving an allowance from every
+   * workspace to one of them takes rights away, the other way round does not.
    */
-  async function setProgramAllowance(rawEntry, { replacePath = null, confirmation = null } = {}) {
+  async function setProgramAllowance(rawEntry, { root = null, replacePath = null, replaceRoot = root, confirmation = null } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
       const entry = normalizeProgramAllowance(rawEntry);
       if (!entry) return { error: createMessage('permissions.allowance.error.invalid') };
-      const previous = draft.programAllowances.find((other) => other.path === (replacePath || entry.path))
-        || draft.programAllowances.find((other) => other.path === entry.path)
-        || null;
-      if (!enc && !isNarrowing(previous, entry)) {
+      if (root !== null && (typeof root !== 'string' || !root)) return { error: createMessage('permissions.error.noWorkspace') };
+      const fromRoot = replacePath && typeof replaceRoot === 'string' && replaceRoot ? replaceRoot : (replacePath ? null : root);
+      let previous = replacePath ? allowanceList(draft, fromRoot).find((other) => other.path === replacePath) || null : null;
+      let previousRoot = previous ? fromRoot : root;
+      if (!previous) previous = allowanceList(draft, root).find((other) => other.path === entry.path) || null;
+      if (!previous) previousRoot = root;
+      const narrowing = !!previous && isNarrowing(previous, entry) && (previousRoot === root || previousRoot === null);
+      if (!enc && !narrowing) {
         return { error: createMessage('permissions.allowance.error.needsEncryption') };
       }
-      if (!isNarrowing(previous, entry) && !confirmedBy(confirmation, CONFIRMATION_ACTIONS.PROGRAM_ALLOWANCE, entry.path)) {
+      if (!narrowing && !confirmedBy(confirmation, CONFIRMATION_ACTIONS.PROGRAM_ALLOWANCE, programAllowanceSubject(entry.path, root))) {
         return notConfirmed();
       }
-      if (!previous && draft.programAllowances.length >= PROGRAM_ALLOWANCE_LIMITS.MAX_ENTRIES) {
+      const inPlace = !!previous && previousRoot === root;
+      // Another entry for the same program in this scope gives way to this one.
+      const kept = allowanceList(draft, root).filter((other) => other === previous || other.path !== entry.path);
+      if (!inPlace && kept.length >= PROGRAM_ALLOWANCE_LIMITS.MAX_ENTRIES) {
         return { error: createMessage('permissions.allowance.error.tooMany', { max: PROGRAM_ALLOWANCE_LIMITS.MAX_ENTRIES }) };
       }
-      // An edited entry keeps its place in the list; a new one goes last.
-      const next = [];
-      for (const other of draft.programAllowances) {
-        if (other === previous) next.push(entry);
-        else if (other.path !== entry.path && other.path !== replacePath) next.push(other);
+      // Added up with the allowance of the other scope (#1119), it must stay
+      // one allowance's worth: a run never gets more, so it must not be cut.
+      const partners = root
+        ? [draft.programAllowances.find((other) => other.path === entry.path && other !== previous)]
+        : Object.values(draft.workspaceProgramAllowances).map((list) => list.find((other) => other.path === entry.path && other !== previous));
+      if (partners.some((other) => combinationTooLarge(entry, other))) {
+        return {
+          error: createMessage('permissions.allowance.error.combinedTooLarge', {
+            maxDomains: PROGRAM_ALLOWANCE_LIMITS.MAX_DOMAINS,
+            maxFolders: PROGRAM_ALLOWANCE_LIMITS.MAX_WRITE_PATHS,
+          }),
+        };
       }
-      if (!previous) next.push(entry);
-      draft.programAllowances = next;
+      if (previous && !inPlace) {
+        setAllowanceList(draft, previousRoot, allowanceList(draft, previousRoot).filter((other) => other !== previous));
+      }
+      // An edited entry keeps its place in the list; a new one goes last.
+      setAllowanceList(draft, root, inPlace ? kept.map((other) => (other === previous ? entry : other)) : [...kept, entry]);
       return null;
     });
   }
 
-  /** Takes a program allowance away (#408) — a tightening, never refused. */
-  async function removeProgramAllowance(programPath) {
+  /** Takes a program allowance away (#408) — a tightening, never refused. `root` null: every workspace. */
+  async function removeProgramAllowance(programPath, { root = null } = {}) {
     return update((draft) => {
-      draft.programAllowances = draft.programAllowances.filter((entry) => entry.path !== programPath);
+      setAllowanceList(draft, root || null, allowanceList(draft, root || null).filter((entry) => entry.path !== programPath));
       return null;
     });
   }
 
-  /** The stored allowances; a store that cannot be read has none (#408). */
-  async function readProgramAllowances() {
+  /**
+   * The allowances a run in `root` gets: those for every workspace and the
+   * workspace's own, added up per program (#1119). Without a root only the
+   * global ones. A store that cannot be read has none (#408).
+   */
+  async function readProgramAllowances(root = null) {
     const state = await read();
-    return Array.isArray(state.programAllowances) ? state.programAllowances : [];
+    const own = typeof root === 'string' && root ? state.workspaceProgramAllowances?.[root] : [];
+    return combineProgramAllowances(state.programAllowances, own);
   }
 
   /**
@@ -800,9 +889,150 @@ function createToolPolicyStore({
     });
   }
 
+  /**
+   * Keeps hosts open for every run in every workspace (#1119). Only the
+   * settings offer it, never a connection card, and only the forms a card
+   * would offer: `host:port` or one level of `*.` above a host, never a
+   * shared domain. A loosening: `safeStorage` and a receipt for exactly these
+   * hosts.
+   */
+  async function addGlobalHosts(rawHosts, { confirmation = null } = {}) {
+    return update((draft, { encryptionAvailable: enc }) => {
+      const hosts = grantedHosts(rawHosts);
+      if (hosts.length === 0) return { error: createMessage('permissions.workspaceHosts.error.invalid') };
+      if (!enc) return { error: createMessage('permissions.workspaceHosts.error.needsEncryption') };
+      if (!confirmedBy(confirmation, CONFIRMATION_ACTIONS.GLOBAL_HOSTS, globalHostsSubject(hosts))) return notConfirmed();
+      const next = [...draft.globalHosts, ...hosts.filter((host) => !draft.globalHosts.includes(host))];
+      if (next.length > MAX_GLOBAL_HOSTS) {
+        return { error: createMessage('permissions.globalHosts.error.tooMany', { max: MAX_GLOBAL_HOSTS }) };
+      }
+      draft.globalHosts = next;
+      return null;
+    });
+  }
+
+  /** Closes a host kept open everywhere (#1119) — a tightening, never refused. */
+  async function removeGlobalHost(host) {
+    return update((draft) => {
+      draft.globalHosts = draft.globalHosts.filter((entry) => entry !== host);
+      return null;
+    });
+  }
+
+  /** Every root the policy holds anything for. */
+  function rootsWithSettings(draft) {
+    return [
+      ...draft.unsandboxedWorkspaces,
+      ...Object.keys(draft.workspaceRules),
+      ...Object.keys(draft.workspaceModes),
+      ...Object.keys(draft.workspaceHosts),
+      ...Object.keys(draft.workspaceProgramAllowances),
+    ];
+  }
+
+  /**
+   * While new workspaces start without the sandbox (#1119), a folder whose
+   * sandbox setting was decided — by hand or by that default — is known, so
+   * it is not taken for a new one again.
+   */
+  function rememberWorkspace(draft, root) {
+    if (draft.newWorkspaceSandboxOff !== true || typeof root !== 'string' || !root) return;
+    draft.knownWorkspaces = [...draft.knownWorkspaces.filter((entry) => entry !== root), root].slice(-MAX_KNOWN_WORKSPACES);
+  }
+
+  function isKnownWorkspace(payload, root) {
+    return payload.knownWorkspaces.includes(root) || rootsWithSettings(payload).includes(root);
+  }
+
+  /**
+   * Whether folders opened for the first time start with the sandbox on
+   * (#1119). Off is a loosening: `safeStorage` and a receipt. Every folder
+   * there is at that moment — `knownRoots`, the folders Snotra has opened,
+   * and every folder the policy holds something for — keeps its setting.
+   * On again forgets that list; folders that started without the sandbox in
+   * the meantime keep their setting too.
+   */
+  async function setNewWorkspaceSandbox(enabled, { confirmation = null, knownRoots = [] } = {}) {
+    return update((draft, { encryptionAvailable: enc }) => {
+      if (enabled === true) {
+        if (!draft.newWorkspaceSandboxOff) return { unchanged: true };
+        draft.newWorkspaceSandboxOff = false;
+        draft.knownWorkspaces = [];
+        return null;
+      }
+      if (draft.newWorkspaceSandboxOff) return { unchanged: true };
+      if (!enc) return { error: createMessage('permissions.error.sandboxOffNeedsEncryption') };
+      if (!confirmedBy(confirmation, CONFIRMATION_ACTIONS.NEW_WORKSPACE_SANDBOX_OFF, '')) return notConfirmed();
+      draft.newWorkspaceSandboxOff = true;
+      draft.knownWorkspaces = normalizeWorkspaceRoots([
+        ...(Array.isArray(knownRoots) ? knownRoots : []),
+        ...rootsWithSettings(draft),
+      ]).slice(-MAX_KNOWN_WORKSPACES);
+      return null;
+    });
+  }
+
+  /**
+   * A folder was opened (#1119). While new workspaces start without the
+   * sandbox, a folder not known yet gets its sandbox switched off — written
+   * out, so it shows in the settings and keeps that setting when the default
+   * changes again. The default itself was confirmed and is signed; without
+   * `safeStorage` the folder simply stays isolated. Nothing is written for a
+   * folder that is known, or while the default is on.
+   */
+  async function noteWorkspaceOpened(root) {
+    if (typeof root !== 'string' || !root) return { ok: true, changed: false };
+    const loaded = await loadFromDisk();
+    if (!loaded.payload || loaded.payload.newWorkspaceSandboxOff !== true || isKnownWorkspace(loaded.payload, root)) {
+      return { ok: true, changed: false };
+    }
+    const result = await update((draft, { encryptionAvailable: enc }) => {
+      if (draft.newWorkspaceSandboxOff !== true || isKnownWorkspace(draft, root) || !enc) return { unchanged: true };
+      draft.unsandboxedWorkspaces = [...draft.unsandboxedWorkspaces.filter((entry) => entry !== root), root];
+      rememberWorkspace(draft, root);
+      return null;
+    });
+    return { ...result, changed: result.ok === true && result.unchanged !== true };
+  }
+
+  /**
+   * "Reset sandbox for this workspace" (#1119): the sandbox back on, its own
+   * programs and hosts gone. What applies in every workspace stays. Only
+   * takes rights away.
+   */
+  async function resetWorkspaceSandbox(root) {
+    return update((draft) => {
+      if (typeof root !== 'string' || !root) return { error: createMessage('permissions.error.noWorkspace') };
+      draft.unsandboxedWorkspaces = draft.unsandboxedWorkspaces.filter((entry) => entry !== root);
+      delete draft.workspaceProgramAllowances[root];
+      delete draft.workspaceHosts[root];
+      rememberWorkspace(draft, root);
+      return null;
+    });
+  }
+
+  /**
+   * "Reset the sandbox everywhere" (#1119): on in every workspace and in new
+   * ones, every program and host allowance gone, the global ones included.
+   * Only takes rights away, so it needs no receipt; the settings ask anyway,
+   * because it is broad.
+   */
+  async function resetSandboxEverywhere() {
+    return update((draft) => {
+      draft.unsandboxedWorkspaces = [];
+      draft.programAllowances = [];
+      draft.workspaceProgramAllowances = {};
+      draft.workspaceHosts = {};
+      draft.globalHosts = [];
+      draft.newWorkspaceSandboxOff = false;
+      draft.knownWorkspaces = [];
+      return null;
+    });
+  }
+
   // "Reset workspace rules" is the workspace's whole policy: the sandbox
-  // opt-out (#357), the default mode (#413) and the hosts kept open (#946)
-  // go with the rules. When blocks or "Always ask" go too, that is a loosening
+  // opt-out (#357), the default mode (#413), the hosts kept open (#946) and
+  // its own program allowances (#1119) go with the rules. When blocks or "Always ask" go too, that is a loosening
   // and needs a receipt for the root (#514, #980).
   async function resetWorkspaceRules(root, { confirmation = null } = {}) {
     return update((draft) => {
@@ -814,6 +1044,8 @@ function createToolPolicyStore({
         draft.unsandboxedWorkspaces = draft.unsandboxedWorkspaces.filter((entry) => entry !== root);
         delete draft.workspaceModes[root];
         delete draft.workspaceHosts[root];
+        delete draft.workspaceProgramAllowances[root];
+        rememberWorkspace(draft, root);
       }
       return null;
     });
@@ -830,8 +1062,12 @@ function createToolPolicyStore({
       draft.sensitivePathPatterns = [];
       draft.unsandboxedWorkspaces = [];
       draft.programAllowances = [];
+      draft.workspaceProgramAllowances = {};
       draft.workspaceModes = {};
       draft.workspaceHosts = {};
+      draft.globalHosts = [];
+      draft.newWorkspaceSandboxOff = false;
+      draft.knownWorkspaces = [];
       draft.autoChats = [];
       draft.legacyWriteMigrated = false;
       return null;
@@ -865,6 +1101,12 @@ function createToolPolicyStore({
     readProgramAllowances,
     addWorkspaceHosts,
     removeWorkspaceHost,
+    addGlobalHosts,
+    removeGlobalHost,
+    setNewWorkspaceSandbox,
+    noteWorkspaceOpened,
+    resetWorkspaceSandbox,
+    resetSandboxEverywhere,
     resetWorkspaceRules,
     resetAll,
     clearLegacyMigrationNotice,
@@ -878,5 +1120,6 @@ module.exports = {
   POLICY_FILE_VERSION,
   INTEGRITY,
   MAX_WORKSPACE_HOSTS,
+  MAX_GLOBAL_HOSTS,
   MAX_AUTO_CHATS,
 };
