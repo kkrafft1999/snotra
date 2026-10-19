@@ -23,6 +23,7 @@ const { createMessage, isMessage } = require('../../shared/contracts/message');
 const { normalizeChatConfigOverrides } = require('../../shared/contracts/chat-configuration');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
+const { isToolCategory } = require('../../shared/contracts/tool-categories');
 const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
 
 const TOOL_PERMISSION_MODE_VALUES = Object.freeze(Object.values(TOOL_PERMISSION_MODES));
@@ -163,11 +164,18 @@ function schemaViolationsForStore(raw) {
  * gruppierte Zusammenfassung ab (Issue #60). Ohne Tool-Namen bleibt es bei der
  * bisherigen reinen Zeichenkette, damit alte Verläufe unverändert durchgehen.
  */
-function toolTraceEntryForStore(entry) {
+function toolTraceEntryForStore(entry, toolCategoryOf = null) {
   const line = toolTraceEntryToString(entry);
   if (!line) return '';
   const tool = typeof entry?.tool === 'string' && entry.tool ? entry.tool : '';
   const skill = typeof entry?.skill === 'string' && entry.skill ? entry.skill : '';
+  // The tool's category (#1008). An entry stored before it carried one gets
+  // it from the descriptor on the way out, so its icon stays what it was.
+  let category = isToolCategory(entry?.category) ? entry.category : '';
+  if (!category && tool && typeof toolCategoryOf === 'function') {
+    const known = toolCategoryOf(tool);
+    if (isToolCategory(known)) category = known;
+  }
   const permission = permissionAuditForStore(entry?.permission);
   const round = Number.isInteger(entry?.round) && entry.round > 0 ? entry.round : 0;
   const schema = schemaViolationsForStore(entry?.schema);
@@ -183,6 +191,7 @@ function toolTraceEntryForStore(entry) {
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
+  if (category) out.category = category;
   if (permission) out.permission = permission;
   if (round) out.round = round;
   if (schema) out.schema = schema;
@@ -207,7 +216,7 @@ function fileChangesForStore(raw) {
 
 function sanitizeToolTraceForStore(raw) {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
-  const out = raw.map(toolTraceEntryForStore).filter((e) => e !== '');
+  const out = raw.map((entry) => toolTraceEntryForStore(entry)).filter((e) => e !== '');
   return out.length ? out : undefined;
 }
 
@@ -285,7 +294,11 @@ function normalizeTokenUsageForStore(raw) {
   return { prompt, completion, total };
 }
 
-function normalizeLoadedMessages(raw) {
+/**
+ * @param {Array} raw
+ * @param {(toolName: string) => (string|null)} [toolCategoryOf]  the descriptor's category (#1008)
+ */
+function normalizeLoadedMessages(raw, toolCategoryOf = null) {
   if (!Array.isArray(raw)) return [];
   return raw
     .map((m) => {
@@ -299,7 +312,7 @@ function normalizeLoadedMessages(raw) {
         return row;
       }
       const toolTrace = Array.isArray(m.toolTrace)
-        ? m.toolTrace.map(toolTraceEntryForStore).filter((e) => e !== '')
+        ? m.toolTrace.map((entry) => toolTraceEntryForStore(entry, toolCategoryOf)).filter((e) => e !== '')
         : [];
       const row = {
         role: 'assistant',
@@ -411,14 +424,18 @@ function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existing
   });
 }
 
-function normalizeSessionForLoad(sessionRow) {
+/**
+ * @param {object} sessionRow
+ * @param {{ toolCategoryOf?: (toolName: string) => (string|null) }} [options]
+ */
+function normalizeSessionForLoad(sessionRow, { toolCategoryOf = null } = {}) {
   if (!sessionRow || typeof sessionRow !== 'object') return null;
   return copyChatSettings(sessionRow, {
     id: sessionRow.id,
     workspaceRoot: sessionRow.workspaceRoot ?? null,
     title: typeof sessionRow.title === 'string' ? sessionRow.title : '',
     updatedAt: sessionRow.updatedAt,
-    messages: normalizeLoadedMessages(sessionRow.messages),
+    messages: normalizeLoadedMessages(sessionRow.messages, toolCategoryOf),
     tokenUsage: normalizeTokenUsageForStore(sessionRow.tokenUsage),
   });
 }

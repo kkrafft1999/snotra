@@ -42,6 +42,9 @@ function registerChatHistoryHandlers({
   getActiveWorkspaceRoot = () => null,
   isKnownWorkspaceRoot = async () => false,
   chatSessionSettings = NO_CHAT_SESSION_SETTINGS,
+  // A tool's category from its descriptor, for entries stored before they
+  // carried one (#1008).
+  toolCategoryOf = () => null,
   // Der Zeitstempel eines Chats entsteht seit Issue #245 hier, nicht im
   // Renderer. Einspeisbar, damit Tests eine Reihenfolge festlegen koennen.
   now = () => Date.now(),
@@ -111,7 +114,7 @@ function registerChatHistoryHandlers({
     const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
     const session = await chatHistoryStore.getSession(id);
     if (!session || !chatHistoryStore.sessionMatchesWorkspace(session, wsRoot)) return { session: null };
-    return { session: chatHistoryStore.normalizeSessionForLoad(session) };
+    return { session: chatHistoryStore.normalizeSessionForLoad(session, { toolCategoryOf }) };
   });
 
   ipcMain.handle(REQ.CHAT_HISTORY_UPSERT, async (_event, sessionRow) =>

@@ -30,6 +30,8 @@ const { SANDBOX_REASONS } = require('../services/sandbox-service');
 const { normalizeProgramAllowances } = require('../../shared/contracts/program-allowances');
 const { APP_LOCALES, createTranslator } = require('../../shared/i18n');
 const { isPathInside } = require('../../shared/runtime/path-inside');
+const { TOOL_EXECUTION_KINDS, normalizeToolPresentation } = require('../../shared/contracts/tool-presentation');
+const { TOOL_PREVIEW_KINDS } = require('./tool-descriptor');
 const { outsideRootsFrom, OUTSIDE_WORKSPACE } = require('../services/outside-access');
 
 /**
@@ -42,8 +44,8 @@ const { outsideRootsFrom, OUTSIDE_WORKSPACE } = require('../services/outside-acc
 const PREVIEW_MAX_CHARS = 200_000;
 /** Program arguments on the card; more would not be read anyway. */
 const PREVIEW_MAX_ARGV = 100;
-/** The tools that run a process and have a sandbox (#329). */
-const EXECUTION_TOOLS = new Set(['shell_execute', 'run_python']);
+/** The preview kinds of a tool that runs a process and reads standard input (#551). */
+const PROCESS_PREVIEWS = new Set([TOOL_PREVIEW_KINDS.CODE, TOOL_PREVIEW_KINDS.SHELL]);
 
 const RECOVERY_TRASH = 'trash';
 
@@ -58,18 +60,20 @@ function replacementText(t, edit, heading = '') {
   return `${head}\n${String(edit?.old_string ?? '')}\n+++ ${t('approval.preview.edit.new')}\n${String(edit?.new_string ?? '')}`;
 }
 
-function buildPreview(toolName, args, options = {}) {
+/**
+ * What the approval card shows of a call, by the preview kind the tool's
+ * descriptor names (#1008). Null for a tool without one.
+ */
+function buildPreview(previewKind, args, options = {}) {
   const t = createTranslator(options.locale);
-  let kind = 'text';
+  let kind = previewKind;
   let text = '';
   let extra = null;
-  if (toolName === 'write_file_text') {
+  if (previewKind === TOOL_PREVIEW_KINDS.TEXT) {
     text = typeof args?.content === 'string' ? args.content : '';
-  } else if (toolName === 'edit_file') {
-    kind = 'replace';
+  } else if (previewKind === TOOL_PREVIEW_KINDS.REPLACE) {
     text = replacementText(t, args);
-  } else if (toolName === 'apply_patch') {
-    kind = 'diff';
+  } else if (previewKind === TOOL_PREVIEW_KINDS.DIFF) {
     if (typeof args?.patch === 'string') {
       text = args.patch;
     } else if (Array.isArray(args?.edits)) {
@@ -77,18 +81,16 @@ function buildPreview(toolName, args, options = {}) {
         .map((edit, index) => replacementText(t, edit, `# ${t('approval.preview.edit.step', { n: index + 1 })}`))
         .join('\n\n');
     }
-  } else if (toolName === 'run_python') {
+  } else if (previewKind === TOOL_PREVIEW_KINDS.CODE) {
     // Ohne den Quelltext waere die Freigabe eine Blankounterschrift (Issue #86).
-    kind = 'code';
     text = typeof args?.code === 'string' ? args.code : '';
     if (options.isolation) extra = { isolation: options.isolation };
-  } else if (toolName === 'shell_execute') {
+  } else if (previewKind === TOOL_PREVIEW_KINDS.SHELL) {
     // The command alone is not what runs: `sh` with a script on stdin is a
     // program the card would never show (#551). Input and arguments follow
     // below, as blocks of their own.
     // Der Nutzer soll sehen, *was* laeuft und *womit* (Issue #102): Befehl,
     // erkannte Shell und Arbeitsordner gehoeren zusammen auf die Karte.
-    kind = 'shell';
     text = typeof args?.command === 'string' ? args.command : '';
     extra = {
       shell: typeof options.shellLabel === 'string' ? options.shellLabel : '',
@@ -96,16 +98,14 @@ function buildPreview(toolName, args, options = {}) {
       cwd: typeof options.cwd === 'string' ? options.cwd : '',
       ...(options.isolation ? { isolation: options.isolation } : {}),
     };
-  } else if (toolName === 'generate_image') {
+  } else if (previewKind === TOOL_PREVIEW_KINDS.PROMPT) {
     // What goes out is the prompt, and the prompt is what is paid for (#85).
-    kind = 'prompt';
     text = typeof args?.prompt === 'string' ? args.prompt : '';
-  } else if (toolName === 'remember') {
+  } else if (previewKind === TOOL_PREVIEW_KINDS.MEMORY) {
     // Der Nutzer entscheidet hier ueber einen Satz, der ab jetzt in *jeder*
     // Anfrage steht (Issue #166). Ohne den Satz und die Reichweite waere die
     // Freigabe eine Blankounterschrift — und ein Pfad steht nicht zur
     // Verfuegung, weil das Tool keinen bildet.
-    kind = 'memory';
     text = typeof args?.text === 'string' ? args.text : '';
     extra = { memoryScope: args?.scope === 'user' ? 'user' : 'workspace' };
   } else {
@@ -122,13 +122,13 @@ function buildPreview(toolName, args, options = {}) {
   // What a process reads besides its source (#551): standard input for both
   // execution tools, the arguments for Python. Masked and limited like the
   // text above, and counted in the same two flags.
-  if (EXECUTION_TOOLS.has(toolName) && typeof args?.stdin === 'string' && args.stdin.length > 0) {
+  if (PROCESS_PREVIEWS.has(previewKind) && typeof args?.stdin === 'string' && args.stdin.length > 0) {
     const stdin = previewText(args.stdin);
     preview.stdin = stdin.text;
     preview.truncated ||= stdin.truncated;
     preview.masked ||= stdin.masked;
   }
-  if (toolName === 'run_python' && Array.isArray(args?.argv) && args.argv.length > 0) {
+  if (previewKind === TOOL_PREVIEW_KINDS.CODE && Array.isArray(args?.argv) && args.argv.length > 0) {
     const entries = args.argv.map((entry) => previewText(String(entry ?? '')));
     preview.argv = entries.slice(0, PREVIEW_MAX_ARGV).map((entry) => entry.text);
     preview.truncated ||= entries.length > PREVIEW_MAX_ARGV || entries.some((entry) => entry.truncated);
@@ -386,7 +386,7 @@ function createToolCallPlanner({
     // was ohnehin nicht laufen darf.
     let shellCwd = '';
     let shellCommand = null;
-    if (toolName === 'shell_execute') {
+    if (definition.execution === TOOL_EXECUTION_KINDS.SHELL) {
       const guard = checkShellCommand(args?.command);
       if (guard.blocked) {
         return { tool: toolName, error: guard.reason, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...baseClasses], targets: [] };
@@ -568,10 +568,10 @@ function createToolCallPlanner({
     // A switched-off sandbox is part of what was approved (#357): the key
     // changes with it, so flipping the switch between card and run is caught
     // by the re-plan after the approval.
-    const sandboxDisabled = await readSandboxDisabled(toolName, workspaceRoot);
+    const sandboxDisabled = await readSandboxDisabled(definition.execution, workspaceRoot);
     // So is a program allowance (#408): the card names it, and the run gets
     // exactly the rights the card named or none.
-    const allowance = await readProgramAllowance(toolName, args, shellCwd, sandboxDisabled, workspaceRoot);
+    const allowance = await readProgramAllowance(definition.execution, args, shellCwd, sandboxDisabled, workspaceRoot);
     const planKey = stableStringify({
       tool: toolName,
       args,
@@ -583,11 +583,14 @@ function createToolCallPlanner({
     });
 
     const result = { tool: toolName, riskClasses, targets, planKey };
+    // What the card says about the tool comes from its descriptor (#1008):
+    // the renderer reads these fields and never the tool's name.
+    result.presentation = normalizeToolPresentation(definition);
     // Targets outside the open folder no card has opened yet (#792, step 4).
     if (targets.some((target) => target.outside)) result.outside = true;
     if (recovery) result.recovery = recovery;
     if (hardLimit) result.hardLimit = hardLimit;
-    if (EXECUTION_TOOLS.has(toolName)) {
+    if (definition.execution) {
       result.sandbox = { disabled: sandboxDisabled, root: workspaceRoot };
       if (allowance?.allowance) {
         result.sandbox.allowance = {
@@ -602,9 +605,9 @@ function createToolCallPlanner({
     if (shellCommand) result.shellCommand = shellCommand;
     // Isolation first: its detection waits for the shell detection (#111), so
     // the shell read afterwards is the detected one, not a startup placeholder.
-    const isolation = await describeIsolation(toolName, args, sandboxDisabled, allowance);
+    const isolation = await describeIsolation(definition.execution, args, sandboxDisabled, allowance);
     const shell = typeof describeShell === 'function' ? describeShell() : null;
-    const preview = buildPreview(toolName, args, {
+    const preview = buildPreview(definition.preview, args, {
       locale: context.locale,
       cwd: shellCwd,
       shellLabel: shell?.label || '',
@@ -613,10 +616,10 @@ function createToolCallPlanner({
     });
     // A program runs only when the card could show all of it (#551): an
     // approval of the first 200,000 characters is not one of the program.
-    if (preview?.truncated && EXECUTION_TOOLS.has(toolName)) {
+    if (preview?.truncated && definition.execution) {
       return {
         tool: toolName,
-        error: `The ${toolName === 'run_python' ? 'program' : 'command'} and its input are longer than the approval `
+        error: `The ${definition.execution === TOOL_EXECUTION_KINDS.PYTHON ? 'program' : 'command'} and its input are longer than the approval `
           + `card can show (${PREVIEW_MAX_CHARS.toLocaleString(APP_LOCALES.EN)} characters each). Write it to a file `
           + 'first, or split it.',
         reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS,
@@ -633,8 +636,8 @@ function createToolCallPlanner({
    * Asked at plan time so that the card tells the truth: detection runs once
    * per app start and is awaited here, never guessed.
    */
-  async function describeIsolation(toolName, args, sandboxDisabled = false, allowance = null) {
-    if (!EXECUTION_TOOLS.has(toolName)) return null;
+  async function describeIsolation(execution, args, sandboxDisabled = false, allowance = null) {
+    if (!execution) return null;
     // The user's choice comes before the detection: a run the user took out
     // of the sandbox says so, whatever the sandbox could do (#357).
     if (sandboxDisabled) return { isolated: false, reason: SANDBOX_REASONS.WORKSPACE, missing: [] };
@@ -642,7 +645,7 @@ function createToolCallPlanner({
     const sandbox = await describeSandbox();
     if (sandbox?.isolated === true) {
       const granted = allowance?.allowance || null;
-      const isolation = { isolated: true, domains: resolveRunDomains(toolName, args, granted) };
+      const isolation = { isolated: true, domains: resolveRunDomains(execution, args, granted) };
       if (granted) {
         isolation.allowance = {
           program: granted.program,
@@ -667,8 +670,8 @@ function createToolCallPlanner({
    * its program does not apply. None without a sandbox to widen, and none
    * when anything goes wrong on the way: a failed check never grants.
    */
-  async function readProgramAllowance(toolName, args, cwd, sandboxDisabled, workspaceRoot) {
-    if (toolName !== 'shell_execute' || sandboxDisabled || typeof matchProgramAllowance !== 'function') return null;
+  async function readProgramAllowance(execution, args, cwd, sandboxDisabled, workspaceRoot) {
+    if (execution !== TOOL_EXECUTION_KINDS.SHELL || sandboxDisabled || typeof matchProgramAllowance !== 'function') return null;
     try {
       return (await matchProgramAllowance({ command: args?.command, cwd, workspaceRoot })) || null;
     } catch {
@@ -680,8 +683,8 @@ function createToolCallPlanner({
    * Whether the sandbox is switched off for this workspace (#357). Only the
    * execution tools have one; a store that cannot be read keeps it on.
    */
-  async function readSandboxDisabled(toolName, workspaceRoot) {
-    if (!EXECUTION_TOOLS.has(toolName) || typeof isSandboxDisabled !== 'function' || !workspaceRoot) return false;
+  async function readSandboxDisabled(execution, workspaceRoot) {
+    if (!execution || typeof isSandboxDisabled !== 'function' || !workspaceRoot) return false;
     try {
       return (await isSandboxDisabled(workspaceRoot)) === true;
     } catch {

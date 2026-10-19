@@ -22,7 +22,7 @@ import { normalizeChanges } from './fileChanges.js';
 import { t, tPlural } from '../i18n.js';
 
 const {
-  toolCategoryForEntry, normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive, normalizeSandboxOutside,
+  toolCategoryForEntry, isToolCategory, normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive, normalizeSandboxOutside,
 } = contracts;
 
 /** Erledigt-Marke: nur noch für Screenreader — sichtbar tragen die Zeilen ein Symbol. */
@@ -447,6 +447,8 @@ export function toolTraceEntryForStore(entry) {
   const line = toolLineText(entry);
   const tool = typeof entry?.tool === 'string' ? entry.tool : '';
   const skill = typeof entry?.skill === 'string' ? entry.skill : '';
+  // The tool's own category, as main wrote it (#1008).
+  const category = isToolCategory(entry?.category) ? entry.category : '';
   // Das Audit ist bereits bereinigt (nur Entscheidung, Klassen, Status,
   // Pfade – keine Inhalte); der Main normalisiert es beim Speichern erneut.
   const permission = entry?.permission && typeof entry.permission === 'object' ? { ...entry.permission } : null;
@@ -459,6 +461,7 @@ export function toolTraceEntryForStore(entry) {
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
+  if (category) out.category = category;
   if (permission) out.permission = permission;
   if (changes) out.changes = changes;
   if (sandboxBlocked) out.sandboxBlocked = sandboxBlocked;

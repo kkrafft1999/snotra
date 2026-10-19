@@ -96,10 +96,10 @@ test('package installs bring their registries, other commands nothing', () => {
 
 test('the domains of a call: declared plus suggested for the shell, declared only for Python', () => {
   assert.deepEqual(
-    resolveNetworkDomains('shell_execute', { command: 'pip install x', network_domains: ['pypi.org', 'api.github.com'] }),
+    resolveNetworkDomains('shell', { command: 'pip install x', network_domains: ['pypi.org', 'api.github.com'] }),
     ['pypi.org', 'api.github.com', 'files.pythonhosted.org'],
   );
-  assert.deepEqual(resolveNetworkDomains('run_python', { code: 'pip install x' }), []);
+  assert.deepEqual(resolveNetworkDomains('python', { code: 'pip install x' }), []);
 });
 
 // ── Helpers ─────────────────────────────────────────────────────────────────

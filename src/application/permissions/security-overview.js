@@ -33,6 +33,7 @@ const {
   DEFAULT_SENSITIVE_DIRECTORY_NAMES,
 } = require('../../shared/runtime/sensitive-paths');
 const { matrixDecision, ruleNamesCall } = require('./tool-policy');
+const { isToolExternalService } = require('../../shared/contracts/tool-presentation');
 
 const SECURITY_ROW_STATUSES = Object.freeze({
   RUNS: 'runs',
@@ -82,6 +83,8 @@ function cleanTools(raw) {
         mayOverwrite: tool.mayOverwrite === true,
         mcpServer: typeof tool.mcpServer === 'string' && tool.mcpServer ? tool.mcpServer : null,
         mcpServerId: typeof tool.mcpServerId === 'string' && tool.mcpServerId ? tool.mcpServerId : null,
+        // The outside service a built-in tool talks to, from its descriptor (#1008).
+        externalService: isToolExternalService(tool.externalService) ? tool.externalService : null,
         // Why a tool is not offered matters for what the user does next:
         // switched off → switch it on; unavailable → set it up (a key, the
         // execution switch, a server).

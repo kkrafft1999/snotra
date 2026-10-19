@@ -206,6 +206,8 @@ function buildApprovalRequest({
   if (plan?.preview && typeof plan.preview.text === 'string') {
     request.preview = plan.preview;
   }
+  // Headline verb and warning, from the tool's descriptor (#1008).
+  if (plan?.presentation && typeof plan.presentation === 'object') request.presentation = plan.presentation;
   if (typeof chatId === 'string' && chatId) request.chatId = chatId;
   const offer = describeCommandRuleOffer({ tool, plan, classes, mode, checkpoint, workspaceRoot, encryptionAvailable });
   if (offer?.rule) {

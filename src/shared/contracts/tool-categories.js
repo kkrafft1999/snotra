@@ -3,13 +3,11 @@
  *
  * Die Anzeige gruppiert erledigte Tool-Schritte („4 Dateien gelesen ·
  * 2 Suchen“) und zeigt je Zeile ein Symbol. Beides braucht die Art des
- * Aufrufs, nicht nur den fertigen Anzeigetext — deshalb liegt die Zuordnung
- * hier in der Contract-Schicht: Main schreibt sie in den Verlauf, der
- * Renderer leitet daraus Text und Symbol ab.
+ * Aufrufs, nicht nur den fertigen Anzeigetext. Which category a tool has is
+ * part of its descriptor (#1008); main writes it on the trace entry, and the
+ * renderer only reads that field.
  */
 'use strict';
-
-const { LOAD_SKILL_TOOL } = require('./skills');
 
 const TOOL_CATEGORIES = Object.freeze({
   /** Zugriff auf Dateien eines eingeschalteten Skills („skill:<name>/…“, #61). */
@@ -41,55 +39,42 @@ const TOOL_CATEGORIES = Object.freeze({
   OTHER: 'other',
 });
 
-const TOOL_CATEGORY_BY_TOOL = Object.freeze({
-  // Nachladen einer Skill-Anleitung ist immer ein Skill-Schritt, auch wenn
-  // technisch eine Datei gelesen wird (Issue #173).
-  [LOAD_SKILL_TOOL]: TOOL_CATEGORIES.SKILL,
-  read_file_text: TOOL_CATEGORIES.READ,
-  read_file_lines: TOOL_CATEGORIES.READ,
-  outline_file: TOOL_CATEGORIES.READ,
-  extract_document_text: TOOL_CATEGORIES.READ,
-  search_in_files: TOOL_CATEGORIES.SEARCH,
-  find_files: TOOL_CATEGORIES.SEARCH,
-  list_directory: TOOL_CATEGORIES.LIST,
-  list_directory_tree: TOOL_CATEGORIES.LIST,
-  stat_path: TOOL_CATEGORIES.CHECK,
-  write_file_text: TOOL_CATEGORIES.WRITE,
-  edit_file: TOOL_CATEGORIES.WRITE,
-  apply_patch: TOOL_CATEGORIES.WRITE,
-  generate_image: TOOL_CATEGORIES.IMAGE,
-  run_python: TOOL_CATEGORIES.EXEC,
-  shell_execute: TOOL_CATEGORIES.EXEC,
-  // Merken ist ein Schreibvorgang wie jeder andere (Issue #166) — eine Datei
-  // entsteht oder waechst. Dass sie der App gehoert und nicht dem Projekt,
-  // aendert daran nichts; im Log soll es bei den Schreibschritten stehen.
-  remember: TOOL_CATEGORIES.WRITE,
-  search_manual: TOOL_CATEGORIES.MANUAL,
-  read_manual_page: TOOL_CATEGORIES.MANUAL,
-});
+const CATEGORY_VALUES = new Set(Object.values(TOOL_CATEGORIES));
 
-/** Kategorie eines Tools; unbekannte und fehlende Namen ergeben OTHER. */
-function toolCategory(toolName) {
-  if (typeof toolName !== 'string' || !toolName) return TOOL_CATEGORIES.OTHER;
-  return TOOL_CATEGORY_BY_TOOL[toolName] || TOOL_CATEGORIES.OTHER;
+function isToolCategory(value) {
+  return CATEGORY_VALUES.has(value);
 }
 
 /**
- * Kategorie eines Trace-Eintrags. Skill-Bezug geht vor der Tool-Art: dass eine
- * Datei aus einem Skill-Verzeichnis kommt, ist für den Nutzer wichtiger als die
- * Frage, mit welchem Lese-Tool sie geholt wurde.
+ * The category a trace entry is shown with, from the tool's own category (its
+ * descriptor, #1008) and the skill the call touched. Skill goes before the
+ * kind of tool: that a file came out of a skill folder matters more to the
+ * user than which read tool fetched it.
  */
-function toolCategoryForEntry(entry) {
-  const category = toolCategory(entry?.tool);
-  if (typeof entry?.skill === 'string' && entry.skill) {
+function entryToolCategory(toolCategory, skill) {
+  const category = isToolCategory(toolCategory) ? toolCategory : TOOL_CATEGORIES.OTHER;
+  if (typeof skill === 'string' && skill) {
     return category === TOOL_CATEGORIES.WRITE ? TOOL_CATEGORIES.SKILL_WRITE : TOOL_CATEGORIES.SKILL;
   }
   return category;
 }
 
+/**
+ * Category of a trace entry as the renderer shows it. `category` is the tool's
+ * own, written by main from the descriptor (#1008) on every new entry and
+ * filled in on entries loaded from before; the skill is combined with it here
+ * because the engine may learn it after the entry was made (#427). Without
+ * tool and skill an entry has none (sessions stored before #60).
+ */
+function toolCategoryForEntry(entry) {
+  if (!entry || typeof entry !== 'object') return null;
+  const named = (typeof entry.tool === 'string' && entry.tool) || (typeof entry.skill === 'string' && entry.skill);
+  return named ? entryToolCategory(entry.category, entry.skill) : null;
+}
+
 module.exports = {
   TOOL_CATEGORIES,
-  TOOL_CATEGORY_BY_TOOL,
-  toolCategory,
+  isToolCategory,
+  entryToolCategory,
   toolCategoryForEntry,
 };

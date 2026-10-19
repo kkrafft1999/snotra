@@ -6,7 +6,7 @@ const { createSessionGrants } = require('../src/application/permissions/session-
 const { createToolApprovalAdapter } = require('../src/main/adapters/tool-approval-adapter');
 const { createChatSessionSettings, CHAT_ACTIVATION } = require('../src/main/services/chat-session-settings');
 const { createChatApplication } = require('../src/main/composition/create-chat-application');
-const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
+const { formatLine: formatToolDisplayLine } = require('./helpers/tool-descriptors');
 
 /**
  * Runs per chat (#320). A run belongs to the chat it was started in: another

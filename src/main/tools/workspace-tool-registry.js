@@ -11,7 +11,23 @@ const {
   MAX_PROPOSAL_REASON_CHARS,
   TOOL_OFFER_REASONS,
   TOOL_SETUPS,
+  CONFIG_TOOL_GROUPS,
+  isConfigToolGroup,
 } = require('../../shared/contracts/chat-configuration');
+const { TOOL_CATEGORIES, isToolCategory } = require('../../shared/contracts/tool-categories');
+const {
+  TOOL_APPROVAL_VERBS,
+  TOOL_APPROVAL_WARNINGS,
+  TOOL_EXTERNAL_SERVICES,
+  TOOL_EXECUTION_KINDS,
+} = require('../../shared/contracts/tool-presentation');
+const { TOOL_LINE_TARGETS } = require('../../shared/presentation/tool-display');
+const {
+  TOOL_PREVIEW_KINDS,
+  TOOL_CONTENT_SCANS,
+  TOOL_FILE_EVENTS,
+  assertCompleteDescriptor,
+} = require('./tool-descriptor');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
 const {
   DEFAULT_SEARCH_RESULTS: DEFAULT_MANUAL_SEARCH_RESULTS,
@@ -26,9 +42,6 @@ const {
   isToolRiskClass,
   createPermissionDeniedToolResult,
 } = require('../../shared/contracts/tool-permissions');
-
-/** Tools whose setup lives under Settings › Tools rather than Security. */
-const CONFIGURED_UNDER_TOOLS = new Set(['web_search', 'generate_image']);
 
 function toAllowedNameSet(allowedNames) {
   if (allowedNames == null) return null;
@@ -105,6 +118,11 @@ function createToolRegistry(initialDefinitions = []) {
       ...definition,
       riskClass,
       additionalRiskClasses: extra,
+      // The descriptor's defaults (#1008). A built-in tool sets both and is
+      // held to it in `createWorkspaceToolRegistry`; an MCP tool is "other",
+      // and its group is its server.
+      category: isToolCategory(definition.category) ? definition.category : TOOL_CATEGORIES.OTHER,
+      configGroup: isConfigToolGroup(definition.configGroup) ? definition.configGroup : CONFIG_TOOL_GROUPS.OTHER,
       // Standard true: die Datei-Tools haben ohne Ordner keinen Bezugspunkt.
       // Tools ohne Ordnerbezug (Websuche) setzen false und werden dem Modell
       // auch ohne geoeffneten Projektordner angeboten (Issue #96).
@@ -283,6 +301,7 @@ function createToolRegistry(initialDefinitions = []) {
           mcpServer: definition.mcp
             ? String(definition.shortDescriptionParams?.server || definition.mcp.serverId || '')
             : null,
+          group: definition.mcp ? CONFIG_TOOL_GROUPS.MCP : definition.configGroup,
           reason,
           setup,
         };
@@ -319,6 +338,9 @@ function createToolRegistry(initialDefinitions = []) {
           description,
           shortDescription,
           riskClass: definition.riskClass,
+          // The process it starts (#1008): the settings find the tool behind
+          // their execution switch by it, without naming the tool.
+          ...(definition.execution ? { execution: definition.execution } : {}),
         };
       });
   }
@@ -344,6 +366,8 @@ function createToolRegistry(initialDefinitions = []) {
         riskClasses: [definition.riskClass, ...definition.additionalRiskClasses],
         available,
         mayOverwrite: definition.mayOverwrite === true,
+        // What it reaches outside, for "where it goes" on the page (#1008).
+        externalService: definition.externalService || null,
         mcpServer: definition.mcp
           ? String(definition.shortDescriptionParams?.server || definition.mcp.serverId || '')
           : null,
@@ -486,6 +510,11 @@ function createToolRegistry(initialDefinitions = []) {
     return parts.join('\n');
   }
 
+  /** Every definition, built-in first — for the descriptor test (#1008). */
+  function listDefinitions() {
+    return allDefinitions();
+  }
+
   /** Definition eines Tools (für Planer und Adapter); null bei unbekanntem Namen. */
   function getDefinition(name) {
     return definitions.get(name) || dynamic.get(name) || null;
@@ -517,7 +546,7 @@ function createToolRegistry(initialDefinitions = []) {
         // execution tools are switched on under Security (#449).
         error: fillUiQuotes(
           context.locale,
-          `Tool is not configured: ${name}. See "{menu:${CONFIGURED_UNDER_TOOLS.has(name) ? 'settings.tools' : 'settings.security'}}".`
+          `Tool is not configured: ${name}. See "{menu:${definition.setupPage === 'tools' ? 'settings.tools' : 'settings.security'}}".`
         ),
       });
     }
@@ -534,6 +563,7 @@ function createToolRegistry(initialDefinitions = []) {
     listCatalog,
     listRiskCatalog,
     describeOffers,
+    listDefinitions,
     getDefinition,
     isSwitchedOff,
     execute,
@@ -643,9 +673,14 @@ function createWorkspaceToolRegistry({
   /** Searches and reads the bundled user manual (#947), see manual-lookup.js. */
   manual = null,
 }) {
-  return createToolRegistry([
+  const builtIn = [
     {
       name: 'list_directory',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.LIST,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.listDirectory', target: TOOL_LINE_TARGETS.PATH },
+      broadListing: true,
       // Reaches skill folders too, and so works without an open folder (#429).
       skillPaths: true,
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -676,6 +711,10 @@ function createWorkspaceToolRegistry({
     },
     {
       name: LOAD_SKILL_TOOL,
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.SKILL,
+      configGroup: CONFIG_TOOL_GROUPS.OTHER,
+      display: { key: 'tools.line.loadSkill', target: TOOL_LINE_TARGETS.SKILL_NAME },
       riskClass: TOOL_RISK_CLASSES.READ,
       // Ein Skill-Verzeichnis liegt nicht im Projektordner — die Anleitung
       // eines eingeschalteten Skills ist auch ohne geöffneten Ordner lesbar
@@ -738,6 +777,12 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'read_file_text',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.READ,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.readFileText', target: TOOL_LINE_TARGETS.PATH },
+      contentScan: TOOL_CONTENT_SCANS.SOURCE,
+      fileEvents: TOOL_FILE_EVENTS.READ,
       // Reaches skill folders too, and so works without an open folder (#429).
       skillPaths: true,
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -766,6 +811,12 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'read_file_lines',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.READ,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.readFileLines', target: TOOL_LINE_TARGETS.LINE_RANGE },
+      contentScan: TOOL_CONTENT_SCANS.SOURCE,
+      fileEvents: TOOL_FILE_EVENTS.READ,
       // Reaches skill folders too, and so works without an open folder (#429).
       skillPaths: true,
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -820,6 +871,12 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'search_in_files',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.SEARCH,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.searchInFiles', target: TOOL_LINE_TARGETS.SEARCH_QUERY },
+      contentScan: TOOL_CONTENT_SCANS.OUTPUT,
+      broadListing: true,
       // Reaches skill folders too, and so works without an open folder (#429).
       skillPaths: true,
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -897,6 +954,11 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'find_files',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.SEARCH,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.findFiles', target: TOOL_LINE_TARGETS.FILE_PATTERN },
+      broadListing: true,
       // Reaches skill folders too, and so works without an open folder (#429).
       skillPaths: true,
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -942,6 +1004,10 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'stat_path',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.CHECK,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.statPath', target: TOOL_LINE_TARGETS.PATH },
       // Reaches skill folders too, and so works without an open folder (#429).
       skillPaths: true,
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -973,6 +1039,12 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'outline_file',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.READ,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.outlineFile', target: TOOL_LINE_TARGETS.PATH },
+      contentScan: TOOL_CONTENT_SCANS.SOURCE,
+      fileEvents: TOOL_FILE_EVENTS.READ,
       // Reaches skill folders too, and so works without an open folder (#429).
       skillPaths: true,
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -1010,6 +1082,12 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'extract_document_text',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.READ,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.extractDocumentText', target: TOOL_LINE_TARGETS.PATH },
+      contentScan: TOOL_CONTENT_SCANS.DECODED,
+      fileEvents: TOOL_FILE_EVENTS.READ,
       // Reaches skill folders too, and so works without an open folder (#429).
       skillPaths: true,
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -1066,6 +1144,11 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'list_directory_tree',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.LIST,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.listDirectoryTree', target: TOOL_LINE_TARGETS.PATH },
+      broadListing: true,
       // Reaches skill folders too, and so works without an open folder (#429).
       skillPaths: true,
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -1112,6 +1195,13 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'write_file_text',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.WRITE,
+      configGroup: CONFIG_TOOL_GROUPS.WRITE,
+      display: { key: 'tools.line.writeFileText', target: TOOL_LINE_TARGETS.WRITTEN_PATH },
+      preview: TOOL_PREVIEW_KINDS.TEXT,
+      approval: { warning: TOOL_APPROVAL_WARNINGS.OVERWRITE },
+      fileEvents: TOOL_FILE_EVENTS.WRITE_ARGS,
       // Overwriting a file without a copy in the trash is `delete` (planner);
       // the Security page lists this tool in that row as well (#448).
       mayOverwrite: true,
@@ -1141,6 +1231,12 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'edit_file',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.WRITE,
+      configGroup: CONFIG_TOOL_GROUPS.WRITE,
+      display: { key: 'tools.line.editFile', target: TOOL_LINE_TARGETS.WRITTEN_PATH },
+      preview: TOOL_PREVIEW_KINDS.REPLACE,
+      fileEvents: TOOL_FILE_EVENTS.WRITE,
       targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'write' }],
       descriptionKey: 'tools.desc.edit_file',
       // Die Eindeutigkeitsregel samt "inklusive Einrueckung und
@@ -1180,6 +1276,12 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'apply_patch',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.WRITE,
+      configGroup: CONFIG_TOOL_GROUPS.WRITE,
+      display: { key: 'tools.line.applyPatch', target: TOOL_LINE_TARGETS.WRITTEN_PATH },
+      preview: TOOL_PREVIEW_KINDS.DIFF,
+      fileEvents: TOOL_FILE_EVENTS.WRITE,
       targets: (args) =>
         fsService.listApplyPatchTargets(args).map((p) => ({ path: p, kind: 'file', access: 'write' })),
       descriptionKey: 'tools.desc.apply_patch',
@@ -1257,6 +1359,13 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'run_python',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.EXEC,
+      configGroup: CONFIG_TOOL_GROUPS.EXEC,
+      display: { key: 'tools.line.runPython', target: TOOL_LINE_TARGETS.CODE_LINES },
+      preview: TOOL_PREVIEW_KINDS.CODE,
+      approval: { warning: TOOL_APPROVAL_WARNINGS.PYTHON },
+      execution: TOOL_EXECUTION_KINDS.PYTHON,
       // Hoechste Stufe im Berechtigungskonzept: ausgefuehrter Code umgeht die
       // Workspace-Grenze grundsaetzlich, weil nicht Snotra die Dateizugriffe
       // macht, sondern der Interpreter. `execute` ist weder sitzungs- noch
@@ -1321,7 +1430,7 @@ function createWorkspaceToolRegistry({
           timeoutMs: args?.timeout_ms,
           cwd: workspaceRoot || undefined,
           workspaceRoot: workspaceRoot || undefined,
-          networkDomains: resolveNetworkDomains('run_python', args),
+          networkDomains: resolveNetworkDomains(TOOL_EXECUTION_KINDS.PYTHON, args),
           sandboxDisabled: sandboxDisabledByPlan(plan),
           sandboxGrants: sandboxGrants || null,
           onSandboxNetworkAsk: onSandboxNetworkAsk || null,
@@ -1352,6 +1461,13 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'shell_execute',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.EXEC,
+      configGroup: CONFIG_TOOL_GROUPS.EXEC,
+      display: { key: 'tools.line.shellExecute', target: TOOL_LINE_TARGETS.COMMAND },
+      preview: TOOL_PREVIEW_KINDS.SHELL,
+      approval: { verb: TOOL_APPROVAL_VERBS.SHELL, warning: TOOL_APPROVAL_WARNINGS.SHELL },
+      execution: TOOL_EXECUTION_KINDS.SHELL,
       // Wie run_python die hoechste Stufe — und die weitreichendere: ein
       // Shell-Befehl kann alles, was der angemeldete Nutzer kann, und kennt
       // keine Workspace-Grenze. `execute` ist weder sitzungs- noch dauerhaft
@@ -1439,7 +1555,7 @@ function createWorkspaceToolRegistry({
           timeoutMs: args?.timeout_ms,
           cwd: resolved.absPath,
           workspaceRoot: workspaceRoot || undefined,
-          networkDomains: resolveRunDomains('shell_execute', args, allowance),
+          networkDomains: resolveRunDomains(TOOL_EXECUTION_KINDS.SHELL, args, allowance),
           programAllowance: allowance ? { writePaths: allowance.writePaths, trustd: allowance.trustd === true } : null,
           sandboxDisabled: sandboxDisabledByPlan(plan),
           sandboxGrants: sandboxGrants || null,
@@ -1477,6 +1593,12 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'web_search',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.OTHER,
+      configGroup: CONFIG_TOOL_GROUPS.WEB,
+      display: { key: 'tools.line.webSearch', target: TOOL_LINE_TARGETS.QUERY },
+      externalService: TOOL_EXTERNAL_SERVICES.WEB_SEARCH,
+      setupPage: 'tools',
       // Erstes Tool, das den Rechner verlaesst: Klasse 'external'. Damit fragt
       // die Policy im Modus „Intelligent" vor jeder Suche nach (Issue #66) —
       // die Suchanfrage selbst ist der Inhalt, der nach draussen geht.
@@ -1539,6 +1661,11 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'fetch_url',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.OTHER,
+      configGroup: CONFIG_TOOL_GROUPS.WEB,
+      display: { key: 'tools.line.fetchUrl', target: TOOL_LINE_TARGETS.HOST },
+      externalService: TOOL_EXTERNAL_SERVICES.FETCH_URL,
       // Wie web_search eine Klasse 'external': der Abruf verlaesst den Rechner,
       // und der gelesene Text kommt von einem Fremden (Issue #95).
       riskClass: TOOL_RISK_CLASSES.EXTERNAL,
@@ -1591,6 +1718,11 @@ function createWorkspaceToolRegistry({
     createGenerateImageTool({ fsService, imageGeneration }),
     {
       name: 'remember',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.WRITE,
+      configGroup: CONFIG_TOOL_GROUPS.WRITE,
+      display: { key: 'tools.line.remember', target: TOOL_LINE_TARGETS.MEMORY_SCOPE },
+      preview: TOOL_PREVIEW_KINDS.MEMORY,
       // Schreibt eine Datei, also `write` — trotz kleiner Datenmenge. Die
       // Klasse entscheidet die Rueckfrage, und ein Gedaechtniseintrag geht mit
       // jeder kuenftigen Anfrage zum Anbieter: Das soll niemand uebersehen.
@@ -1678,6 +1810,10 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'search_manual',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.MANUAL,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.searchManual', target: TOOL_LINE_TARGETS.QUERY },
       // Reads the manual that ships with the app — no file of the user, no
       // network, nothing that changes: `read`, and so never a card (#947).
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -1726,6 +1862,10 @@ function createWorkspaceToolRegistry({
     },
     {
       name: 'read_manual_page',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.MANUAL,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.readManualPage', target: TOOL_LINE_TARGETS.MANUAL_PAGE },
       riskClass: TOOL_RISK_CLASSES.READ,
       requiresWorkspace: false,
       targets: () => [],
@@ -1765,6 +1905,10 @@ function createWorkspaceToolRegistry({
     },
     {
       name: GET_CONFIGURATION_TOOL,
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.OTHER,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.getConfiguration', target: TOOL_LINE_TARGETS.NONE },
       // Reads Snotra's own settings, no file and nothing outside: `read`
       // (#773). It changes nothing — switching stays with the user.
       riskClass: TOOL_RISK_CLASSES.READ,
@@ -1806,6 +1950,10 @@ function createWorkspaceToolRegistry({
     },
     {
       name: PROPOSE_CONFIG_CHANGE_TOOL,
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.OTHER,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.proposeConfig', target: TOOL_LINE_TARGETS.CONFIG_PROPOSAL },
       // The call itself changes nothing: it puts a card in front of the user,
       // and only the click switches — for this chat (#774). The card is the
       // approval, so the class is `read` and no second card asks first.
@@ -1843,7 +1991,10 @@ function createWorkspaceToolRegistry({
       // engine stands in between.
       handler: async () => JSON.stringify({ error: 'A change can only be proposed in a chat.' }),
     },
-  ]);
+  ];
+  // A built-in tool registers only with a complete descriptor (#1008): its
+  // category, line, preview and card all come from it, nowhere else.
+  return createToolRegistry(builtIn.map(assertCompleteDescriptor));
 }
 
 module.exports = {

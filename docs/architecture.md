@@ -145,7 +145,7 @@ code is.
 | **Shared runtime** | `src/shared/runtime/` | 18 small modules (~2k lines) without Electron: path and pattern checks, sensitive paths and content, URL safety, the shell command guard, partial JSON, hidden entries |
 | **Shared i18n** | `src/shared/i18n/` | The English and German catalogues and the translator, one copy for all three sides, see [Interface language](#interface-language) |
 | **Shared manual** | `src/shared/manual/` | Addressing and searching the pages of the user manual, for main and the manual window |
-| **Shared presentation** | `src/shared/presentation/` | `tool-display.js`: the lines of the tool log. For main adapters and tests; not imported by the core |
+| **Shared presentation** | `src/shared/presentation/` | `tool-display.js`: the lines of the tool log, by the key and target a tool's descriptor names. For main adapters and tests; not imported by the core |
 | **Shared files** | `src/shared/ipc-channels.js`, `src/shared/manual-channels.js`, `src/shared/limits.js` | Channel names of both windows and the limits that several sides need |
 | **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming and the prompt blocks for environment, memory and project instructions. Only through injected ports |
 | **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
@@ -155,7 +155,7 @@ code is.
 | **Remote bridge** | `src/main/remote/` | The adapters of the mobile remote (#1114): the protocol's bytes (`pairing-protocol.js`), the keys kept through `safeStorage`, the relay over Firebase's REST interfaces and in memory, the native sheet's wording. Type-checked like `adapters/` |
 | **Main ports** | `src/main/ports/` | 12 interface types for infrastructure (narrow surfaces, no leaks) |
 | **Providers** | `src/main/providers/` | Five provider modules and the two shared OpenAI transports behind `providers/index.js`, see [Provider adapters](#provider-adapters) |
-| **Tools** | `src/main/tools/` | The tool registry (definitions, handlers, risk classes; ~1.9k lines), the call planner (targets, plan key, sandbox plan) and argument conformance. Business rules, called through the tool adapter |
+| **Tools** | `src/main/tools/` | The tool registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, the call planner (targets, plan key, sandbox plan, preview) and argument conformance. Business rules, called through the tool adapter |
 | **Services** | `src/main/services/` | 76 modules (~22k lines) and by far the largest layer: storage, file system, sandbox, MCP, updates, skills, watchers, the signed policy store, outside access, program allowances, document text. Most of the backend's logic lives here |
 | **Composition root** | `src/main/composition/` | `createApplication()` builds services, adapters and engine and registers the IPC handlers — see [Composition root](#composition-root) |
 | **IPC** | `src/main/ipc/` | The handlers behind every channel, event push to the renderer, and `trusted-sender.js`, which refuses any sender that is not the app's own page. Mostly parse, validate and delegate; three of them hold logic ([#1006](https://github.com/kkrafft1999/snotra/issues/1006)) |
@@ -165,6 +165,48 @@ code is.
 
 Main imports the chat core from `src/application/chat/` directly; the former
 re-exports under `src/main/` are gone (#531).
+
+### One descriptor per tool
+
+Since [#1008](https://github.com/kkrafft1999/snotra/issues/1008) everything the
+app knows about a built-in tool sits on its registry definition, in
+`src/main/tools/workspace-tool-registry.js` or a module of its own such as
+`generate-image-tool.js`. Besides schema, texts, handler and risk class, the
+definition carries the tool's **descriptor**: its category in the log, its group
+in the composer indicator, its line (`display`: a catalogue key and a target
+kind), its preview kind on the card, the card's verb and warning, the process it
+starts, the outside service it talks to, where it is set up, and what the
+adapter does with its output. `src/main/tools/tool-descriptor.js` lists the
+fields and holds a built-in definition to them; a tool with an incomplete
+descriptor does not register. MCP tools get the defaults: category `other`, a
+line that names server and tool.
+
+Who reads what:
+
+| Reader | Reads | Instead of |
+| --- | --- | --- |
+| Registry | `configGroup`, `externalService`, `setupPage`, `execution` | a set of tool names per setup page |
+| Planner (`tool-call-planner.js`) | `preview`, `execution`, `approval` | an `if` per tool name in `buildPreview`, a set of execution tools |
+| Tool adapter (`workspace-tool-adapter.js`) | `category`, `display`, `contentScan`, `broadListing`, `fileEvents`, `mayOverwrite` | six sets of tool names |
+| Line formatter (`shared/presentation/tool-display.js`) | `display` | an `if` per tool name |
+| Renderer | DTO fields only | comparing tool names |
+
+The renderer never names a tool. It gets what it shows as fields of payloads it
+already receives (`src/shared/contracts/tool-presentation.js`): `category` on
+every trace entry and tool line, `presentation` (`verb`, `warning`) on the
+approval request, `externalService` on the tool rows of the Security page, and
+`execution` on the rows of the tool catalogue, by which the settings find the
+tool behind each execution switch. The skill a call touched is
+combined with the category only where the entry is shown, because the engine
+may learn it from the plan after the entry was made (#427). A chat stored
+before #1008 has trace entries without a category; main fills them in from the
+descriptor when the chat is loaded (`normalizeSessionForLoad` with
+`toolCategoryOf`), so their icons stay what they were.
+
+`test/tool-descriptor.test.js` fails on a built-in tool without a complete
+descriptor and on a tool name in a string literal anywhere in `src/renderer`.
+Adding a tool means one definition, its catalogue keys and its tests; a second
+front end reads the same DTO fields and needs no table of tool names.
 
 ## Ports
 
@@ -794,7 +836,8 @@ by the catalogue scan and by `workspace-tool-adapter.js`, which re-reads every
 `skill_check` to the tool result; and the system skill `snotra-skill-authoring`
 tells the model where and how to write. The log labels such a write as part of
 the skill (`shared/presentation/tool-display.js`) and counts it in a category
-of its own, `skill-write` (`shared/contracts/tool-categories.js`), so the
+of its own, `skill-write` (`entryToolCategory` in
+`shared/contracts/tool-categories.js`, from the descriptor's `write`), so the
 collapsed summary reads "1 skill file written" rather than hiding the skill
 behind "1 file written".
 
@@ -2538,6 +2581,7 @@ What a test holds, as of 2026-10-18:
 | `test/catch-discipline.test.js` | Every `catch` in `src/` rethrows, reports, logs or carries a comment why it may stay quiet; every `void call()` in the renderer has a `.catch`. Against a baseline that may only shrink, `test/catch-discipline-baseline.json`, per file and count; it also fails when the baseline lists more than the scan finds, so a fixed site comes off the list in the same change. A heuristic scanner, its limits are in the head of the test ([#1000](https://github.com/kkrafft1999/snotra/issues/1000)) |
 | `test/filesystem-port-typedef.test.js` | The `filesystem-port` typedef lists exactly the members of its adapter (#650) |
 | `test/remote-key-leak.test.js` | The mobile remote's private keys and relay tokens reach no log, IPC payload or diagnostics report; the pairing code reaches the window only while it is shown (#1114) |
+| `test/tool-descriptor.test.js` | Every built-in tool has a complete descriptor; no tool name in a string literal under `src/renderer` ([#1008](https://github.com/kkrafft1999/snotra/issues/1008), see [One descriptor per tool](#one-descriptor-per-tool)) |
 | `test/architecture-doc.test.js` | Every path this document names exists, the layer table names every directory under `src/`, the port lists match the two `ports/` folders ([#1009](https://github.com/kkrafft1999/snotra/issues/1009)) |
 | `test/contracts*.test.js` | Wire enums and settings DTOs at the IPC boundary |
 | `test/*-presentation.test.js`, `test/chat-history-normalization.test.js` | Normalised display data for settings and history |
@@ -2859,8 +2903,8 @@ handled). Word headings are marked with `#`, recognised by the built-in style
 
 **Checking for sensitive content** runs on the extracted text only. A scan of
 a PDF's or a DOCX's bytes would look at compressed data and find nothing, so
-`DECODED_CONTENT_TOOLS` in `workspace-tool-adapter.js` skips the whole-file
-scan that the text tools get. The window of `extract_document_text` is
+the tool's descriptor says `contentScan: 'decoded'`, and
+`workspace-tool-adapter.js` skips the whole-file scan that the text tools get. The window of `extract_document_text` is
 therefore what gets checked. A secret that falls on the boundary between two
 windows can pass unmarked, which is the price of not unpacking a document
 twice per call.

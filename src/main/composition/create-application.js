@@ -818,6 +818,7 @@ function createApplication({
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
     isKnownWorkspaceRoot: (folderPath) => workspaceActivation.isKnownFolder(folderPath),
     chatSessionSettings,
+    toolCategoryOf: (name) => toolRegistry.getDefinition(name)?.category || null,
   });
   registerUpdateHandlers({ ipcMain, updates, REQ, PUSH, getMainWindow });
   // The feedback form (#1045): sent from here, never from the window.

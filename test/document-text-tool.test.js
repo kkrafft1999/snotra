@@ -15,8 +15,8 @@ const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-too
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { createDocumentTextService } = require('../src/main/services/document-text-service');
 const { createDocumentTextExtractor, pdfjsDataUrl, DOCUMENT_TEXT_TIME_BUDGET_MS } = require('../src/main/services/document-text-worker');
-const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
-const { toolCategory } = require('../src/shared/contracts/tool-categories');
+const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 const { makeDocx, makeXlsx, p } = require('./helpers/ooxml-fixtures');
 const { removeTempDir } = require('./helpers/temp-dir');
 
@@ -51,7 +51,7 @@ test('the tool is offered with its extractor, as a read tool', async (t) => {
   assert.ok(tool, 'offered to the model');
   assert.deepEqual(tool.function.parameters.required, ['relative_path']);
   assert.equal(registry.getDefinition('extract_document_text').riskClass, 'read');
-  assert.equal(toolCategory('extract_document_text'), 'read');
+  assert.equal(descriptorOf('extract_document_text').category, 'read');
 });
 
 test('a document in the folder: text, size and the mark in the tree', async (t) => {

@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
 const { MEMORY_SCOPES, MEMORY_ORIGINS } = require('../src/shared/contracts/memory');
 const { TOOL_RISK_CLASSES } = require('../src/shared/contracts/tool-permissions');
-const { toolCategory, TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
+const { TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 const { validateArguments } = require('../src/main/tools/tool-call-planner');
 
 function makeFsServiceStub() {
@@ -51,7 +52,7 @@ test('mit Memory-Port steht remember als Schreib-Tool im Katalog', () => {
   assert.ok(entry);
   assert.equal(entry.riskClass, TOOL_RISK_CLASSES.WRITE);
   // Im Tool-Log gehoert es zu den Schreibschritten (Issue #166).
-  assert.equal(toolCategory('remember'), TOOL_CATEGORIES.WRITE);
+  assert.equal(descriptorOf('remember').category, TOOL_CATEGORIES.WRITE);
 });
 
 test('das Tool nimmt keinen Pfad entgegen — nur Ebene, Text und Herkunft', () => {

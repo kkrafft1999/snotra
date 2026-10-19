@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const { createChatEngine, CHAT_ENGINE_EVENTS } = require('../src/application/chat/chat-engine');
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
-const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
+const { formatLine: formatToolDisplayLine } = require('./helpers/tool-descriptors');
 
 const { translateMessage } = require('../src/shared/i18n');
 const { PERMISSION_DENIED_MESSAGE_KEYS } = require('../src/shared/contracts/tool-permissions');

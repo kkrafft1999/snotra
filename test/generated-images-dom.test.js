@@ -5,6 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom } = require('./helpers/dom.js');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 
 const PNG_B64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
@@ -20,10 +21,12 @@ async function withDom(fn) {
   }
 }
 
+/** Trace entries as main writes them: with the category of the tool's descriptor (#1008). */
 function trace(...entries) {
   return entries.map(([tool, relativePath, id]) => ({
     line: `${tool} ${relativePath}`,
     tool,
+    category: descriptorOf(tool).category,
     changes: [{ id, relativePath, status: 'binary', created: true, added: 0, removed: 0 }],
   }));
 }

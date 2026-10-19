@@ -7,6 +7,9 @@ const {
   createPermissionDeniedToolResult,
 } = require('../../shared/contracts/tool-permissions');
 const { formatToolDisplayLine } = require('../../shared/presentation/tool-display');
+const { TOOL_CATEGORIES } = require('../../shared/contracts/tool-categories');
+const { normalizeToolPresentation } = require('../../shared/contracts/tool-presentation');
+const { TOOL_CONTENT_SCANS, TOOL_FILE_EVENTS } = require('../tools/tool-descriptor');
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL, workspaceSkillOfPath } = require('../../shared/contracts/skills');
 const { checkSkillDocument } = require('../../shared/runtime/skill-frontmatter');
@@ -18,21 +21,12 @@ const { createToolCallPlanner } = require('../tools/tool-call-planner');
 const { measureArgumentConformance } = require('../tools/argument-conformance');
 const { readRegularFile } = require('../services/read-regular-file');
 
-/** Tools, deren Ausgabe Dateiinhalte enthalten kann und deshalb geprüft wird. */
-const CONTENT_READ_TOOLS = new Set([
-  'read_file_text',
-  'read_file_lines',
-  'outline_file',
-  'search_in_files',
-  'extract_document_text',
-]);
-/** Tools mit breiter Auflistung: sensible Einträge werden ausgelassen statt erfragt. */
-const BROAD_LISTING_TOOLS = new Set(['list_directory', 'list_directory_tree', 'find_files', 'search_in_files']);
-/**
- * Tools whose source file is compressed or binary (#42): a PDF or a DOCX says
- * nothing to a scan of its bytes, so only the extracted text is checked.
+/*
+ * What this adapter does with a call — check its output, leave sensitive
+ * entries out of a listing, report the files it read or wrote — is read from
+ * the tool's descriptor (#1008): `contentScan`, `broadListing`, `fileEvents`,
+ * `mayOverwrite`. See `src/main/tools/tool-descriptor.js`.
  */
-const DECODED_CONTENT_TOOLS = new Set(['extract_document_text']);
 
 /**
  * A tool definition as the adapter reads it; the registry's definitions carry
@@ -45,7 +39,15 @@ const DECODED_CONTENT_TOOLS = new Set(['extract_document_text']);
  *   requiresWorkspace?: boolean,
  *   skillPaths?: boolean,
  *   parameters?: object,
+ *   category?: string,
+ *   approval?: { verb?: string, warning?: string },
+ *   display?: { key: string, target: string },
+ *   contentScan?: string,
+ *   broadListing?: boolean,
+ *   fileEvents?: string,
+ *   mayOverwrite?: boolean,
  * } & Record<string, any>} ToolDefinition
+ *   with the descriptor fields this adapter reads (#1008, `tool-descriptor.js`)
  *
  * What the adapter takes from the registry (`workspace-tool-registry.js`): the
  * five members it calls (#1098). Written from the consumer's side, like a port,
@@ -106,6 +108,8 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     outsideAccess,
   } = deps;
   const maxScanBytes = deps.maxScanBytes || 2 * 1024 * 1024;
+  /** The tool's definition, which is also its descriptor (#1008); null when unknown. */
+  const definitionOf = (name) => (typeof toolRegistry.getDefinition === 'function' ? toolRegistry.getDefinition(name) : null);
   const planner =
     fsService && fs && path
       ? createToolCallPlanner({
@@ -135,7 +139,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     // Ganze Datei prüfen, nicht nur den Ausschnitt: Token-Muster dürfen
     // nicht durch Zeilen-/Byte-Fenster umgangen werden (Konzept §4).
     if (!fs || !plan || !Array.isArray(plan.targets)) return { sensitive: false, scannable: true };
-    if (!CONTENT_READ_TOOLS.has(name)) return { sensitive: false, scannable: true };
+    if (!definitionOf(name)?.contentScan) return { sensitive: false, scannable: true };
     for (const target of plan.targets) {
       if (target.kind !== 'file' || !target.exists || !target.absPath) continue;
       let read;
@@ -197,8 +201,13 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       return definition ? definition.skillPaths === true : false;
     },
     buildTraceEntry(toolName, args, extra = {}) {
+      const definition = definitionOf(toolName);
       /** @type {import('../../application/ports/tool-port').ToolTraceEntry} */
       const entry = { tool: toolName, args, ...extra };
+      // The tool's own category, for the icon and the group in the log (#1008).
+      // The skill is combined with it where the entry is shown: the engine may
+      // learn it only from the plan (#427).
+      entry.category = definition?.category || TOOL_CATEGORIES.OTHER;
       // Liest das Tool aus einem Skill-Verzeichnis (Issue #61), merkt sich der
       // Eintrag den Skill-Namen — daraus wird im Chat die Skill-Kategorie.
       // `load_skill` trägt den Namen im Argument statt im Pfad (Issue #173).
@@ -210,7 +219,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         if (skill) entry.skill = skill.name;
         // A write into a skill of the open folder is a skill step too (#160);
         // the category turns it into "skill file written".
-        const written = SKILL_FILE_TOOLS.has(toolName) ? workspaceSkillOfPath(args?.relative_path) : null;
+        const written = writesSkillFiles(definition) ? workspaceSkillOfPath(args?.relative_path) : null;
         if (written) entry.skill = written.name;
       }
       return entry;
@@ -223,7 +232,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       return definition ? measureArgumentConformance(definition, args) : null;
     },
     formatDisplayLine(entry, phase, locale) {
-      return formatToolDisplayLine(entry, phase, locale);
+      return formatToolDisplayLine(entry, phase, locale, definitionOf(entry?.tool)?.display || null);
     },
     /**
      * @param {string} name
@@ -246,6 +255,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
           riskClasses: [definition.riskClass, ...(definition.additionalRiskClasses || [])],
           targets: [],
           planKey: JSON.stringify([name, args]),
+          presentation: normalizeToolPresentation(definition),
         };
       }
       return planner.plan(definition, args, context);
@@ -271,6 +281,8 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         }
       }
       const riskClasses = Array.isArray(context.riskClasses) ? context.riskClasses : plan?.riskClasses || [];
+      const definition = definitionOf(name);
+      const contentScan = definition?.contentScan || null;
       // What the writing tools wrote, before and after (#348). Recorded only
       // once the call has come back without an error.
       const writes = [];
@@ -281,11 +293,11 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         // What a card opened outside the open folder (#792, step 4), checked
         // again and turned into the roots fs-service resolves against.
         outsideRoots: planner ? await planner.outsideRoots(context.outsideGrants) : [],
-        onWritten: WRITING_TOOLS.has(name) && fileChangeRecorder ? (written) => writes.push(written) : undefined,
+        onWritten: writesFiles(definition) && fileChangeRecorder ? (written) => writes.push(written) : undefined,
         onSandboxBlocked: (summary) => { sandboxBlocked = summary; },
-        sensitivity: BROAD_LISTING_TOOLS.has(name) ? buildSensitivity(context.sensitivePathPatterns || plan?.sensitivePathPatterns) : undefined,
+        sensitivity: definition?.broadListing === true ? buildSensitivity(context.sensitivePathPatterns || plan?.sensitivePathPatterns) : undefined,
         recovery:
-          OVERWRITING_TOOLS.has(name)
+          definition?.mayOverwrite === true
             ? {
                 trashItem: typeof trashItem === 'function' ? trashItem : null,
                 // Ohne Papierkorb wurde der Aufruf als `delete` freigegeben —
@@ -311,14 +323,14 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       // A SKILL.md written into the open folder is checked the way the
       // catalog will check it, so the model learns about a broken skill now
       // and not the user, later, as a greyed-out row (#160).
-      const skillChecks = await checkWrittenSkills(name, args, parsed, context);
+      const skillChecks = await checkWrittenSkills(definition, args, parsed, context);
       if (skillChecks.length) {
         parsed = { ...parsed, skill_check: skillChecks.length === 1 ? skillChecks[0] : skillChecks };
         output = JSON.stringify(parsed);
       }
 
       const fileChanges = recordFileChanges(writes, parsed);
-      const progressEvents = collectProgressEvents(name, args, output, fileChanges);
+      const progressEvents = collectProgressEvents(definition, args, output, fileChanges);
 
       // Harte Grenze: eigene Provider-Schlüssel dürfen die App nie verlassen,
       // auch nicht über eine vom Nutzer freigegebene Datei (Konzept §5).
@@ -349,15 +361,15 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
 
       // Zweite Prüfstelle (Konzept §4): Ausgabe und ganze Quelldatei prüfen.
       let sensitive = false;
-      if (CONTENT_READ_TOOLS.has(name) && !(parsed && parsed.error)) {
+      if (contentScan && !(parsed && parsed.error)) {
         const outputScan = scanSensitiveContent(output, { maxChars: maxScanBytes * 2 });
         if (outputScan.sensitive) sensitive = true;
         // The JSON escapes the quotes a key pattern looks for; the extracted
         // text is all there is to check for these tools, so check it unescaped.
-        if (!sensitive && DECODED_CONTENT_TOOLS.has(name) && typeof parsed?.content === 'string') {
+        if (!sensitive && contentScan === TOOL_CONTENT_SCANS.DECODED && typeof parsed?.content === 'string') {
           if (scanSensitiveContent(parsed.content, { maxChars: maxScanBytes * 2 }).sensitive) sensitive = true;
         }
-        if (!sensitive && !BROAD_LISTING_TOOLS.has(name) && !DECODED_CONTENT_TOOLS.has(name)) {
+        if (!sensitive && contentScan === TOOL_CONTENT_SCANS.SOURCE) {
           const fileScan = await scanTargetsForSensitiveContent(name, plan);
           if (!fileScan.scannable) {
             return {
@@ -385,14 +397,14 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
    * model reads: English, with the menu path in the user's language because
    * the model passes it on.
    */
-  async function checkWrittenSkills(toolName, args, parsed, context) {
-    if (!WRITING_TOOLS.has(toolName) || !fs || !path || !parsed || parsed.error) return [];
+  async function checkWrittenSkills(definition, args, parsed, context) {
+    if (!writesFiles(definition) || !fs || !path || !parsed || parsed.error) return [];
     const root = typeof context.workspaceRoot === 'string' && context.workspaceRoot.trim()
       ? path.resolve(context.workspaceRoot)
       : null;
     if (!root) return [];
     const checks = [];
-    for (const written of writtenRelativePaths(toolName, args, parsed)) {
+    for (const written of writtenRelativePaths(definition, args, parsed)) {
       if (parseSkillPath(written)) continue;
       const absPath = path.resolve(root, written);
       const rel = path.relative(root, absPath);
@@ -451,17 +463,15 @@ function describeSkillCheck(name, checked, locale) {
   };
 }
 
-/** Tools, die im Workspace schreiben und deren Ergebnis den Baum betrifft. */
-const WRITING_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch', 'generate_image']);
+/** Whether a tool writes files of the workspace, whose result the tree shows. */
+function writesFiles(definition) {
+  return definition?.fileEvents === TOOL_FILE_EVENTS.WRITE || definition?.fileEvents === TOOL_FILE_EVENTS.WRITE_ARGS;
+}
 
-/**
- * Tools that replace a whole file and keep a recovery copy of the old one in
- * the trash. The image tool joined `write_file_text` with #85.
- */
 /** The file tools a skill is written with (#160); an image stays an image. */
-const SKILL_FILE_TOOLS = new Set(['write_file_text', 'edit_file', 'apply_patch']);
-
-const OVERWRITING_TOOLS = new Set(['write_file_text', 'generate_image']);
+function writesSkillFiles(definition) {
+  return writesFiles(definition) && definition.category === TOOL_CATEGORIES.WRITE;
+}
 
 /**
  * Welche Dateien hat der Aufruf geschrieben? Bis Issue #158 wurde nur
@@ -472,9 +482,9 @@ const OVERWRITING_TOOLS = new Set(['write_file_text', 'generate_image']);
  * Diff-Modus kennt seine Pfade erst aus dem Patch, und ein Aufruf, der nichts
  * geschrieben hat, meldet so auch nichts.
  */
-function writtenRelativePaths(toolName, args, parsed) {
+function writtenRelativePaths(definition, args, parsed) {
   const paths = [];
-  if (toolName === 'write_file_text') {
+  if (definition?.fileEvents === TOOL_FILE_EVENTS.WRITE_ARGS) {
     // Der einzige Fall ohne Pfad im Ergebnis — er steht nur im Aufruf.
     const fromArgs = typeof args?.relative_path === 'string' ? args.relative_path.trim() : '';
     if (fromArgs) paths.push(fromArgs);
@@ -492,13 +502,6 @@ function writtenRelativePaths(toolName, args, parsed) {
 }
 
 /**
- * Tools that read one file of the workspace, for the marks in the tree (#347).
- * `search_in_files` is left out on purpose: a search is not a read, and what
- * the agent opens after it is marked by these anyway.
- */
-const FILE_READING_TOOLS = new Set(['read_file_text', 'read_file_lines', 'outline_file', 'extract_document_text']);
-
-/**
  * The workspace path a reading tool read, or null. A `skill:` path lies
  * outside the open folder (#429) and has no row in the tree.
  */
@@ -508,9 +511,15 @@ function readRelativePath(args) {
   return rel;
 }
 
-function collectProgressEvents(toolName, args, output, fileChanges = []) {
+/**
+ * The file events of a call (#158, #347). A read marks one file in the tree;
+ * a search is not a read (its descriptor has no `fileEvents`), and what the
+ * agent opens after it is marked anyway.
+ */
+function collectProgressEvents(definition, args, output, fileChanges = []) {
   const events = [];
-  if (!WRITING_TOOLS.has(toolName) && !FILE_READING_TOOLS.has(toolName)) return events;
+  const reads = definition?.fileEvents === TOOL_FILE_EVENTS.READ;
+  if (!writesFiles(definition) && !reads) return events;
   let parsed = null;
   try {
     parsed = JSON.parse(output);
@@ -518,12 +527,12 @@ function collectProgressEvents(toolName, args, output, fileChanges = []) {
     return events;
   }
   if (!parsed || typeof parsed !== 'object' || parsed.error) return events;
-  if (FILE_READING_TOOLS.has(toolName)) {
+  if (reads) {
     const relativePath = readRelativePath(args);
     if (relativePath) events.push(createWorkspaceFileReadEvent(relativePath));
     return events;
   }
-  for (const relativePath of new Set(writtenRelativePaths(toolName, args, parsed))) {
+  for (const relativePath of new Set(writtenRelativePaths(definition, args, parsed))) {
     const change = fileChanges.find((entry) => entry.relativePath === relativePath) || null;
     events.push(createWorkspaceFileWrittenEvent(relativePath, change));
   }
@@ -532,6 +541,4 @@ function collectProgressEvents(toolName, args, output, fileChanges = []) {
 
 module.exports = {
   createWorkspaceToolAdapter,
-  CONTENT_READ_TOOLS,
-  BROAD_LISTING_TOOLS,
 };

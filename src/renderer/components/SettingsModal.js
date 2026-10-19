@@ -64,6 +64,7 @@ const {
   SKILL_STATUS,
   DEFAULT_SKILL_SUGGESTION_MODE,
   isSkillSuggestionMode,
+  TOOL_EXECUTION_KINDS,
 } = contracts;
 
 /**
@@ -1517,6 +1518,11 @@ export function initSettingsModal(deps) {
     renderSkillList();
   }
 
+  /** The tool that starts this kind of process, as the catalogue says (#1008). */
+  function executionToolName(kind) {
+    return settingsToolCatalog.find((tool) => tool?.execution === kind)?.name || '';
+  }
+
   async function loadToolCatalog() {
     try {
       const result = typeof api.getToolCatalog === 'function' ? await api.getToolCatalog() : null;
@@ -2968,7 +2974,7 @@ export function initSettingsModal(deps) {
   const autoUpdateCheckSwitch = bindPrefSwitch(
     inputAutoUpdateCheck, 'status-auto-update-check', 'autoUpdateCheckEnabled'
   );
-  // Both decide whether run_python / shell_execute are offered; the status
+  // Both decide whether the execution tools are offered; the status
   // line and the tool list follow what main now reports.
   // The mode pill turns amber for "Auto" with an unisolated execution tool
   // (#357, amber since #396), so it has to hear about both switches too.
@@ -2977,14 +2983,16 @@ export function initSettingsModal(deps) {
   // also clears an old tick-off from the tool list, which no longer exists.
   const pythonSwitch = bindPrefSwitch(
     inputPythonEnabled, 'status-python-enabled', 'pythonExecutionEnabled', async (on) => {
-      if (on) await setToolEnabled('run_python', true);
+      const tool = executionToolName(TOOL_EXECUTION_KINDS.PYTHON);
+      if (on && tool) await setToolEnabled(tool, true);
       await loadPythonState();
       void toolPermissions?.refresh?.();
     }
   );
   const shellSwitch = bindPrefSwitch(
     inputShellEnabled, 'status-shell-enabled', 'shellExecutionEnabled', async (on) => {
-      if (on) await setToolEnabled('shell_execute', true);
+      const tool = executionToolName(TOOL_EXECUTION_KINDS.SHELL);
+      if (on && tool) await setToolEnabled(tool, true);
       await loadShellState();
       void toolPermissions?.refresh?.();
     }

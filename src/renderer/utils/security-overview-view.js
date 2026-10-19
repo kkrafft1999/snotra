@@ -4,6 +4,9 @@ import { describeSandboxStatus } from './sandbox-status-view.js';
 import { describeSandboxLink } from './tool-security-view.js';
 import { settingsPageName } from './settings-pages.js';
 import { describeConnection } from './mcp-connection-view.js';
+import contracts from '../generated/contracts.js';
+
+const { TOOL_EXTERNAL_SERVICES } = contracts;
 
 /**
  * Texts for Settings › Security (#448, #449). Main has decided every verdict —
@@ -359,13 +362,20 @@ function describeExecuteReach(overview) {
   };
 }
 
+function externalFact(service) {
+  if (service === TOOL_EXTERNAL_SERVICES.WEB_SEARCH) return t('security.a.where.external.webSearch');
+  if (service === TOOL_EXTERNAL_SERVICES.FETCH_URL) return t('security.a.where.external.fetchUrl');
+  if (service === TOOL_EXTERNAL_SERVICES.IMAGE_GENERATION) return t('security.a.where.external.generateImage');
+  return '';
+}
+
 function describeExternalReach(row) {
   const facts = [];
   for (const tool of row.tools.filter((entry) => entry.state === 'on' && !entry.blocked)) {
+    // Which service a tool reaches is part of its descriptor (#1008).
+    const known = tool.mcpServer ? '' : externalFact(tool.externalService);
     if (tool.mcpServer) facts.push(t('security.a.where.external.mcp', { server: tool.mcpServer, tool: tool.name }));
-    else if (tool.name === 'web_search') facts.push(t('security.a.where.external.webSearch'));
-    else if (tool.name === 'fetch_url') facts.push(t('security.a.where.external.fetchUrl'));
-    else if (tool.name === 'generate_image') facts.push(t('security.a.where.external.generateImage'));
+    else if (known) facts.push(known);
     else facts.push(t('security.a.where.external.other', { tool: tool.name }));
   }
   return [...new Set(facts)];

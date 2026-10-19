@@ -12,8 +12,9 @@
 import { t } from '../i18n.js';
 import { normalizeChanges } from './fileChanges.js';
 import { applyWorkspaceImages } from './workspaceImages.js';
+import contracts from '../generated/contracts.js';
 
-const IMAGE_TOOL = 'generate_image';
+const { TOOL_CATEGORIES } = contracts;
 
 const FORMAT_LABELS = Object.freeze({ png: 'PNG', jpg: 'JPEG', jpeg: 'JPEG', webp: 'WebP' });
 
@@ -35,7 +36,8 @@ function formatLabelOf(relativePath) {
 export function generatedImagesOf(toolTrace) {
   const images = new Map();
   for (const entry of Array.isArray(toolTrace) ? toolTrace : []) {
-    if (entry?.tool !== IMAGE_TOOL) continue;
+    // The image tool's entries, by the category main wrote from its descriptor (#1008).
+    if (entry?.category !== TOOL_CATEGORIES.IMAGE) continue;
     for (const change of normalizeChanges(entry.changes) || []) {
       const key = change.relativePath;
       if (!images.has(key)) images.set(key, { relativePath: key, changeIds: [] });

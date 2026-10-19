@@ -1401,6 +1401,8 @@ export function initChatStream({
     // daraus entstehen Symbol und gruppierte Zusammenfassung (#60).
     const tool = typeof payload?.tool === 'string' ? payload.tool : '';
     const skill = typeof payload?.skill === 'string' ? payload.skill : '';
+    // The tool's category comes from its descriptor in main (#1008).
+    const category = typeof payload?.category === 'string' ? payload.category : '';
     const permission =
       payload?.permission && typeof payload.permission === 'object' ? payload.permission : null;
     const changes = phase === 'done' ? normalizeChanges(payload?.changes) : undefined;
@@ -1411,7 +1413,7 @@ export function initChatStream({
     const sandboxLive = phase === 'done' ? payload?.sandboxLive : undefined;
     const sandboxOutside = phase === 'done' ? payload?.sandboxOutside : undefined;
     const entry = toolTraceEntryForStore({
-      line, tool, skill, permission, changes, sandboxBlocked, sandboxDecision, sandboxLive, sandboxOutside,
+      line, tool, skill, category, permission, changes, sandboxBlocked, sandboxDecision, sandboxLive, sandboxOutside,
     });
     if (phase === 'pending') {
       const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
@@ -1419,12 +1421,14 @@ export function initChatStream({
         existing.line = line;
         if (tool) existing.tool = tool;
         if (skill) existing.skill = skill;
+        if (category) existing.category = category;
       } else {
         last.pendingToolLines.push({
           callIndex,
           line,
           tool: tool || undefined,
           skill: skill || undefined,
+          category: category || undefined,
         });
       }
     } else if (phase === 'start') {
@@ -1438,8 +1442,8 @@ export function initChatStream({
       last.runningCallIndex = callIndex;
       delete last.permissionNote;
     } else if (phase === 'done') {
-      // Any finished step may have written an image — `run_python` and
-      // `shell_execute` do so without a `fileWritten` event (#590).
+      // Any finished step may have written an image — a program or a shell
+      // command does so without a `fileWritten` event (#590).
       clearWorkspaceImageCache();
       if (last.toolTrace.length > 0) last.toolTrace[last.toolTrace.length - 1] = entry;
       else last.toolTrace.push(entry);
@@ -1465,14 +1469,14 @@ export function initChatStream({
       wrap.appendChild(linesEl);
     }
 
-    const category = traceEntryCategory({ tool, skill });
+    const lineCategory = traceEntryCategory({ tool, skill, category });
     if (phase === 'pending') {
       // Vorläufige Zeile anlegen bzw. aktualisieren (z. B. sobald der Pfad bekannt ist).
       const row = findPendingToolLine(linesEl, callIndex);
       if (row) {
         setToolLineText(row, line);
-        setToolLineCategory(row, category);
-      } else appendToolLine(linesEl, buildToolLine(line, 'pending', callIndex, category));
+        setToolLineCategory(row, lineCategory);
+      } else appendToolLine(linesEl, buildToolLine(line, 'pending', callIndex, lineCategory));
     } else if (phase === 'done') {
       const runningRows = [...linesEl.querySelectorAll('.chat-tool-line--running')];
       const byIndex = Number.isInteger(callIndex)
@@ -1491,8 +1495,8 @@ export function initChatStream({
       });
       // Die passende vorläufige Zeile wird zur laufenden — sonst neue Zeile.
       const pendingRow = findPendingToolLine(linesEl, callIndex, true);
-      if (pendingRow) promoteToolLineToRunning(pendingRow, line, category);
-      else appendToolLine(linesEl, buildToolLine(line, 'running', callIndex, category));
+      if (pendingRow) promoteToolLineToRunning(pendingRow, line, lineCategory);
+      else appendToolLine(linesEl, buildToolLine(line, 'running', callIndex, lineCategory));
     }
 
     syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });

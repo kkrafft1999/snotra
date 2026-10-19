@@ -7,7 +7,6 @@
  */
 
 const { SKILL_SOURCES } = require('./skills');
-const { TOOL_CATEGORIES, toolCategory } = require('./tool-categories');
 
 /** The model's read-only view of the configuration. */
 const GET_CONFIGURATION_TOOL = 'get_configuration';
@@ -103,29 +102,9 @@ const CONFIG_TOOL_GROUPS = Object.freeze({
   OTHER: 'other',
 });
 
-const GROUP_BY_CATEGORY = Object.freeze({
-  [TOOL_CATEGORIES.READ]: CONFIG_TOOL_GROUPS.READ,
-  [TOOL_CATEGORIES.SEARCH]: CONFIG_TOOL_GROUPS.READ,
-  [TOOL_CATEGORIES.LIST]: CONFIG_TOOL_GROUPS.READ,
-  [TOOL_CATEGORIES.CHECK]: CONFIG_TOOL_GROUPS.READ,
-  [TOOL_CATEGORIES.MANUAL]: CONFIG_TOOL_GROUPS.READ,
-  [TOOL_CATEGORIES.WRITE]: CONFIG_TOOL_GROUPS.WRITE,
-  [TOOL_CATEGORIES.EXEC]: CONFIG_TOOL_GROUPS.EXEC,
-  [TOOL_CATEGORIES.IMAGE]: CONFIG_TOOL_GROUPS.IMAGE,
-});
-
-/** The tool log files these under "other"; here they are what they are. */
-const GROUP_BY_TOOL = Object.freeze({
-  web_search: CONFIG_TOOL_GROUPS.WEB,
-  fetch_url: CONFIG_TOOL_GROUPS.WEB,
-  [GET_CONFIGURATION_TOOL]: CONFIG_TOOL_GROUPS.READ,
-  [PROPOSE_CONFIG_CHANGE_TOOL]: CONFIG_TOOL_GROUPS.READ,
-});
-
-/** The group a tool is summed up in; an MCP tool goes by its server. */
-function toolConfigGroup(name, { mcpServer = null } = {}) {
-  if (mcpServer) return CONFIG_TOOL_GROUPS.MCP;
-  return GROUP_BY_TOOL[name] || GROUP_BY_CATEGORY[toolCategory(name)] || CONFIG_TOOL_GROUPS.OTHER;
+/** Whether a value is one of the groups; a descriptor names its own (#1008). */
+function isConfigToolGroup(value) {
+  return Object.values(CONFIG_TOOL_GROUPS).includes(value);
 }
 
 /** The three places a skill comes from, as the model is told. */
@@ -237,7 +216,7 @@ module.exports = {
   CONFIG_TOOL_GROUPS,
   SKILLS_PLACE,
   toolSettingsPlace,
-  toolConfigGroup,
+  isConfigToolGroup,
   skillOrigin,
   clipConfigDescription,
 };

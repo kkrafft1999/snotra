@@ -99,6 +99,8 @@ function makeStorage(overrides = {}) {
   };
 }
 
+const { descriptorOf, displayOf } = require('./helpers/tool-descriptors');
+
 const WRITE_TOOL_NAMES = new Set(['write_file_text', 'edit_file', 'apply_patch']);
 
 function makeToolRegistryStub(impl) {
@@ -126,6 +128,8 @@ function makeToolRegistryStub(impl) {
         riskClass: WRITE_TOOL_NAMES.has(name) ? 'write' : 'read',
         parameters: { type: 'object', properties: {} },
         targets: () => [],
+        // Line, category and file events come from the descriptor (#1008).
+        ...(displayOf(name) ? descriptorOf(name) : {}),
       };
     },
     async execute(toolName, args, context) {

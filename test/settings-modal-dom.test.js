@@ -1991,6 +1991,13 @@ test('two tool switches in quick succession both land (CR-B14-09, 7)', async (t)
       writes += 1;
       return structuredClone(store);
     },
+    // The switches find their tool in the catalogue, by what it runs (#1008).
+    getToolCatalog: async () => ({
+      tools: [
+        { name: 'run_python', shortDescription: '', riskClass: 'execute', execution: 'python' },
+        { name: 'shell_execute', shortDescription: '', riskClass: 'execute', execution: 'shell' },
+      ],
+    }),
   });
   t.after(dom.cleanup);
 
