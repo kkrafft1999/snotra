@@ -558,3 +558,16 @@ test('the settings decide from the masked list what the store decides from the f
   assert.equal((await settings.save(toggled)).ok, true);
   assert.notEqual(await settings.launchConfirmation({ ...toggled, args: ['other'] }), null);
 });
+
+test('an add with a taken identifier asks nothing; the store refuses it as taken (#1104)', async (t) => {
+  const { createMcpSettings } = require('../src/main/services/mcp-settings');
+  const { storage, allowed } = await makeGuardedStore(t);
+  assert.equal((await storage.saveMcpServer(GITHUB, allowed(GITHUB))).ok, true);
+  const settings = createMcpSettings({
+    mcpService: { setServers() {} }, mcpAdapter: {}, mcpConfigStore: storage, mcpSecrets: storage,
+    ownSecrets: { readMcpSecrets: async () => [] }, uiPrefsStore: storage,
+  });
+  const add = { ...GITHUB, command: 'node', create: true };
+  assert.equal(await settings.launchConfirmation(add), null);
+  assert.equal((await settings.save(add)).errors[0].key, 'mcp.error.idExists');
+});

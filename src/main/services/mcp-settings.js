@@ -66,7 +66,10 @@ function createMcpSettings({ mcpService, mcpAdapter, mcpConfigStore, mcpSecrets,
       if (!input || typeof input !== 'object') return null;
       const servers = await mcpConfigStore.readMcpServers();
       const id = typeof input.id === 'string' ? input.id.trim().toLowerCase() : '';
-      const listed = input.create === true ? null : servers.find((server) => server.id === id) || null;
+      const stored = servers.find((server) => server.id === id) || null;
+      // A taken identifier is refused by the store anyway — no prompt first.
+      if (input.create === true && stored) return null;
+      const listed = input.create === true ? null : stored;
       // An input without a transport keeps the stored one, as the store does.
       const withTransport = input.transport === undefined || input.transport === null
         ? { ...input, transport: listed?.transport }
