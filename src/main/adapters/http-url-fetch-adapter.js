@@ -104,12 +104,6 @@ async function readLimitedBody(response) {
 }
 
 /**
- * @param {Object} [deps]
- * @param {typeof fetch} [deps.fetchImpl]
- * @param {(hostname: string) => Promise<Array<{ address: string }>>} [deps.lookup]
- *   DNS-Aufloesung; in Tests ersetzt, damit kein Netz noetig ist.
- */
-/**
  * Which language version of a page to ask for (#338). Not a sentence we write,
  * but it decides the language of what the model reads and quotes: a site that
  * negotiates serves the user's language, so the header follows the interface.
@@ -182,6 +176,11 @@ function blockedAtConnect(error) {
 }
 
 /**
+ * @param {{
+ *   fetchImpl?: typeof fetchVia,
+ *   lookup?: (hostname: string) => Promise<Array<{ address: string }>>,
+ *   getLocale?: () => string,
+ * }} [deps]  `lookup` is the DNS resolution; tests replace it, so no network is needed
  * @returns {import('../../application/ports/url-fetch-port').UrlFetchPort}
  */
 function createHttpUrlFetchAdapter({ fetchImpl = fetchVia, lookup = null, getLocale = () => DEFAULT_LOCALE } = {}) {
