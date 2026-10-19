@@ -95,7 +95,13 @@ const LINE_VARIANTS = Object.freeze(['start', 'done', 'start.plain', 'done.plain
 
 const TARGET_VALUES = new Set(Object.values(TOOL_LINE_TARGETS));
 
-/** Whether a descriptor's `display` names a key and a known target. */
+/**
+ * Whether a descriptor's `display` names a key and a known target.
+ *
+ * @typedef {{ key: string, target: string }} ToolLineDisplay
+ * @param {any} display
+ * @returns {display is ToolLineDisplay}
+ */
 function isToolLineDisplay(display) {
   return !!display
     && typeof display === 'object'
@@ -211,6 +217,8 @@ function lineFor(t, base, isDone, params) {
 /**
  * The line of one call. `display` is the tool's descriptor entry; without one
  * the tool is an MCP tool or unknown, and the line names it as such.
+ *
+ * @param {ToolLineDisplay | null} [display]
  */
 function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOCALE, display = null) {
   const t = createTranslator(locale);

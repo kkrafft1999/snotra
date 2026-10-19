@@ -890,6 +890,14 @@ function createChatEngine({
     emit(onEvent, CHAT_ENGINE_EVENTS.PROGRESS, createPhaseEvent(phase));
   }
 
+  /**
+   * @param {Function | undefined} onEvent
+   * @param {Array<object>} toolTrace
+   * @param {string} [content]
+   * @param {ReturnType<typeof normalizeUsage> | null} [usage]
+   * @param {ReturnType<typeof normalizeUsage> | null} [contextUsage]
+   * @param {ReturnType<typeof createContextBreakdown> | null} [contextBreakdown]
+   */
   function returnCancelledChat(
     onEvent,
     toolTrace,
@@ -915,7 +923,7 @@ function createChatEngine({
    *
    * @param {Function} onEvent
    * @param {{ onToolCallPending?: Function }} [options]
-   * @returns {import('../ports/llm-port').LlmStreamCallbacks}
+   * @returns {import('../ports/llm-port').LlmStreamCallbacks & { reset: () => void }}
    */
   function makeStreamCallbacks(onEvent, { onToolCallPending } = {}) {
     let started = false;
@@ -1086,9 +1094,12 @@ function createChatEngine({
     // requestUsage: Summe ueber alle Runden (Verbrauch dieses Zugs).
     // contextUsage: Usage der letzten Runde — deren prompt ist die Groesse des
     // Kontextfensters, das zuletzt an das Modell ging (Anzeige im Composer).
+    /** @type {ReturnType<typeof normalizeUsage> | null} */
     let requestUsage = null;
+    /** @type {ReturnType<typeof normalizeUsage> | null} */
     let contextUsage = null;
     // Woraus sich der zuletzt gesendete Prompt zusammensetzt (Issue #174).
+    /** @type {ReturnType<typeof createContextBreakdown> | null} */
     let contextBreakdown = null;
     // Whether the await under way is the provider's: a throw there is a
     // network or provider error, anywhere else it is the app's own (#527).
@@ -1096,6 +1107,7 @@ function createChatEngine({
     // Read once per run, and only when something is embedded (#528). A failed
     // read leaves the embedded text out (the guard withholds it) and ends the
     // run before the next request, with a message that says why (#976).
+    /** @type {string[] | null} */
     let embeddedSecrets = null;
     let ownSecretsUnreadable = false;
     const readOwnSecretList = async () => {
@@ -1181,6 +1193,7 @@ function createChatEngine({
       // Verzeichnisse der eingeschalteten Skills sind zusätzliche Lesewurzeln
       // für die Lese-Tools (Issue #61); Schreib-Tools sehen sie nie (#548).
       let skillRoots = [];
+      /** @type {import('../ports/tool-port').ToolListOptions | null} */
       let toolOptions = null;
       let toolsPrompt = '';
       let availableToolDefs = [];
@@ -1523,7 +1536,7 @@ function createChatEngine({
 
       /**
        * @param {import('../ports/tool-port').ToolTraceEntry} entry
-       * @param {{ reason?: string, ruleId?: string, riskClasses?: string[], mode?: string,
+       * @param {{ reason?: string, ruleId?: string, riskClasses?: string[] | null, mode?: string,
        *   targets?: Array<string|{ path: string }>, message?: string }} denial
        */
       function permissionDenied(entry, { reason, ruleId, riskClasses, mode, targets, message }) {
@@ -1551,6 +1564,18 @@ function createChatEngine({
       /**
        * Freigabe-Karte anzeigen und auf die Entscheidung warten. Ohne
        * erreichbare Oberfläche verfällt die Anfrage sofort (fail-safe).
+       *
+       * What a sandbox card shows (#792): what the run printed, what the
+       * sandbox refused, and the entries the card may open.
+       * @typedef {{ before?: boolean, live?: boolean, command: string, run: object, output: unknown,
+       *   entries: Array<{ kind: string, [field: string]: any }>, others: unknown[], raw: unknown[],
+       *   [field: string]: any }} SandboxCardData
+       *
+       * @param {{ entry: import('../ports/tool-port').ToolTraceEntry, callIndex: number, toolName: string,
+       *   plan: import('../ports/tool-port').ToolPlan, verdict: { askClasses?: string[] },
+       *   policy: { mode: string, policyVersion?: string, encryptionAvailable?: boolean },
+       *   checkpoint: 'access'|'output'|'sandbox'|'config', sandbox?: SandboxCardData | null,
+       *   signal?: AbortSignal | null }} request
        */
       async function askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint, sandbox = null, signal = null }) {
         if (deniedPlanKeys.has(plan.planKey)) {
@@ -1691,6 +1716,8 @@ function createChatEngine({
        * chat. A proposal declined before is not shown again.
        */
       async function proposeConfigChange({ entry, callIndex, args, policy }) {
+        // `runToolCall` calls this only with a proposal port; narrowed here for the type check.
+        if (!configProposals) return { content: JSON.stringify({ error: 'Configuration changes are not available.' }) };
         const proposal = {
           kind: args?.kind,
           name: typeof args?.name === 'string' ? args.name.trim() : '',
@@ -2072,6 +2099,8 @@ function createChatEngine({
 
         const first = parseToolOutput(execution.output);
         const classes = normalizeRiskClasses(offered.map((e) => SANDBOX_KIND_CLASSES[e.kind]));
+        // The kinds are filtered to known ones above, so the list is valid; the check is for the type.
+        if (!classes) return { execution };
         const sandboxPlan = {
           ...plan,
           planKey: sandboxPlanKey(plan),
@@ -2183,11 +2212,13 @@ function createChatEngine({
           return proposeConfigChange({ entry, callIndex, args, policy });
         }
         let forcedClasses = [];
+        /** @type {string | null | undefined} */
         let lastPlanKey = null;
         const scopeKey = buildScopeKey(policy);
         // What a card before this call opened outside the open folder (#792,
         // step 4), and the call it approved.
         const callOutsideGrants = [];
+        /** @type {{ key: string, source: string | undefined } | null} */
         let outsideApproval = null;
         const outsideGrants = () => [...sessionOutsideGrants(scopeKey), ...callOutsideGrants];
 
@@ -2253,6 +2284,15 @@ function createChatEngine({
               reason: verdict.reason,
               ruleId: verdict.ruleId,
               riskClasses,
+              mode: policy.mode,
+              targets: plan.targets,
+            });
+          }
+          // `decideToolPolicy` denies a call without valid classes above; this
+          // narrows the list for everything that follows.
+          if (!riskClasses) {
+            return permissionDenied(entry, {
+              reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS,
               mode: policy.mode,
               targets: plan.targets,
             });
@@ -2404,11 +2444,16 @@ function createChatEngine({
             });
           }
 
+          /** @type {ReturnType<typeof createSensitiveMarker> | null} */
           let sensitiveMarker = null;
           if (execution?.sensitive && !riskClasses.includes(TOOL_RISK_CLASSES.READ_SENSITIVE)) {
             // Zweite Prüfstelle (Konzept §4): unerwartet sensibler Inhalt bleibt
             // im Puffer, bis die Policy ihn als read-sensitive freigibt.
             const escalated = normalizeRiskClasses([...riskClasses, TOOL_RISK_CLASSES.READ_SENSITIVE]);
+            // Built from valid classes, so never null; the check is for the type.
+            if (!escalated) {
+              return permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, mode: policy.mode, targets: plan.targets });
+            }
             const escalatedPlan = { ...plan, riskClasses: escalated, planKey: outputPlanKey(plan) };
             const escalatedGrant = sessionGrants.find({ scopeKey, tool: toolName, targets: plan.targets, riskClasses: escalated, providerKey });
             const outputVerdict = decideToolPolicy({

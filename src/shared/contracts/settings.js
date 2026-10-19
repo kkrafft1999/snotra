@@ -213,6 +213,7 @@ function extractPresetOptions(raw, provider) {
   for (const field of fields) {
     const key = field?.key;
     if (typeof key !== 'string' || !key.trim()) continue;
+    /** @type {string | null} */
     let value = null;
     if (typeof legacy[key] === 'string' && legacy[key].trim()) {
       value = legacy[key].trim();

@@ -29,18 +29,13 @@
  * What the old key encrypted is lost at that point anyway.
  */
 
+const { KEY_ALWAYS_DURABLE } = require('../../shared/contracts/safe-storage-key');
+
 const LOCAL_STATE_FILENAME = 'Local State';
 /** How often `Local State` is looked at while a write waits. */
 const KEY_POLL_MS = 250;
 /** Chromium writes after 10 s; twice that, counted from creation, is the cap. */
 const KEY_WAIT_CAP_MS = 20000;
-
-/** No wait anywhere: macOS, Linux, and the default for callers without one. */
-const KEY_ALWAYS_DURABLE = Object.freeze({
-  whenDurable: () => Promise.resolve(),
-  wouldWait: () => false,
-  releaseForQuit: () => {},
-});
 
 /**
  * @param {object} deps

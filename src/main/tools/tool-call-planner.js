@@ -45,6 +45,18 @@ const PREVIEW_MAX_CHARS = 200_000;
 /** Program arguments on the card; more would not be read anyway. */
 const PREVIEW_MAX_ARGV = 100;
 /** The preview kinds of a tool that runs a process and reads standard input (#551). */
+/**
+ * Whether `resolveToolPath` refused. A function, not a check of `error` at
+ * each caller: an empty message would not narrow the union.
+ *
+ * @param {ToolPathResolution} resolution
+ * @returns {resolution is ToolPathRefused}
+ */
+function isRefused(resolution) {
+  return 'error' in resolution && Boolean(resolution.error);
+}
+
+/** @type {Set<string | undefined>} */
 const PROCESS_PREVIEWS = new Set([TOOL_PREVIEW_KINDS.CODE, TOOL_PREVIEW_KINDS.SHELL]);
 
 const RECOVERY_TRASH = 'trash';
@@ -63,11 +75,18 @@ function replacementText(t, edit, heading = '') {
 /**
  * What the approval card shows of a call, by the preview kind the tool's
  * descriptor names (#1008). Null for a tool without one.
+ *
+ * @param {string|undefined} previewKind
+ * @param {import('../../application/ports/tool-port').ToolArguments} args
+ * @param {{ locale?: string, isolation?: object|null, shellLabel?: string, shellLogin?: boolean, cwd?: string }} [options]
+ * @returns {import('../../application/ports/tool-port').ToolPlan['preview'] | null}
  */
 function buildPreview(previewKind, args, options = {}) {
+  if (!previewKind) return null;
   const t = createTranslator(options.locale);
   let kind = previewKind;
   let text = '';
+  /** @type {Record<string, unknown> | null} */
   let extra = null;
   if (previewKind === TOOL_PREVIEW_KINDS.TEXT) {
     text = typeof args?.content === 'string' ? args.content : '';
@@ -112,6 +131,7 @@ function buildPreview(previewKind, args, options = {}) {
     return null;
   }
   const main = previewText(text);
+  /** @type {NonNullable<import('../../application/ports/tool-port').ToolPlan['preview']>} */
   const preview = {
     kind,
     text: main.text,
@@ -203,14 +223,19 @@ function stableStringify(value) {
  * misread result is caught. `fs-service.js` itself is outside the checked set
  * (#1098, section 5).
  *
- * @typedef {Object} ToolPathResolution
- * @property {string} [absPath]  the checked absolute path
- * @property {string} [root]  the root that was actually used
+ * @typedef {Object} ToolPathResolved
+ * @property {string} absPath  the checked absolute path
+ * @property {string} root  the root that was actually used
  * @property {string} [prefix]  prefix for relative paths made from it
  * @property {string|null} [skillName]
  * @property {boolean} [outside]  resolved through a root a card opened outside the folder (#792)
+ *
+ * @typedef {Object} ToolPathRefused
+ * @property {string} error
  * @property {string} [code]  `OUTSIDE_WORKSPACE` when only a card could open the path
- * @property {string} [error]
+ * @property {string} [absPath]  the path that was refused, with `OUTSIDE_WORKSPACE`
+ *
+ * @typedef {ToolPathResolved | ToolPathRefused} ToolPathResolution
  *
  * @typedef {Object} FsService
  * @property {(absPath: string) => Promise<string>} resolveExistingRealPath
@@ -223,6 +248,12 @@ function stableStringify(value) {
  * What a card may open outside the open folder (#792), from `outside-access.js`
  * — typed from its factory, which is already part of the checked program.
  * @typedef {ReturnType<typeof import('../services/outside-access').createOutsideAccess>} OutsideAccess
+ *
+ * What a program allowance match says (#408): the allowance a shell command
+ * gets, or why it does not.
+ * @typedef {{ allowance?: { program: string, writePaths?: string[], trustd?: boolean, [field: string]: any },
+ *   command?: string, entry?: object, skipped?: { program: string, reason: string } }} ProgramAllowanceMatch
+ * @typedef {(request: { command: string, cwd: string, workspaceRoot: string }) => Promise<ProgramAllowanceMatch | null>} ProgramAllowanceMatcher
  */
 
 /**
@@ -232,15 +263,14 @@ function stableStringify(value) {
  * @param {typeof import('path')} deps.path
  * @param {string[]} [deps.protectedRoots]  absolute Ordner, die für Tools hart gesperrt sind (userData)
  * @param {boolean} [deps.canTrash]  ob eine Wiederherstellungskopie in den Papierkorb möglich ist
- * @param {() => {label?: string, login?: boolean}} [deps.describeShell]  erkannte Shell für die Vorschau (#102)
- * @param {() => Promise<{isolated: boolean, reason?: string, missing?: string[]}>} [deps.describeSandbox]
+ * @param {(() => {label?: string, login?: boolean}) | null} [deps.describeShell]  erkannte Shell für die Vorschau (#102)
+ * @param {(() => Promise<{isolated: boolean, reason?: string, missing?: string[]}>) | null} [deps.describeSandbox]
  *   isolation state for the card of the execution tools (#329)
- * @param {(workspaceRoot: string) => Promise<boolean>} [deps.isSandboxDisabled]
+ * @param {((workspaceRoot: string) => Promise<boolean>) | null} [deps.isSandboxDisabled]
  *   whether the user switched the sandbox off for this workspace (#357)
- * @param {(request: {command: string, cwd: string, workspaceRoot: string}) => Promise<{ allowance?: object,
- *   command?: string, entry?: object, skipped?: string }|null>} [deps.matchProgramAllowance]
+ * @param {ProgramAllowanceMatcher | null} [deps.matchProgramAllowance]
  *   the program allowance a shell command gets, or why it does not (#408)
- * @param {(workspaceRoot: string) => Promise<object[]>} [deps.readProgramAllowances]
+ * @param {((workspaceRoot: string) => Promise<object[]>) | null} [deps.readProgramAllowances]
  *   the allowances that apply in a workspace (#1119), to notice a change
  *   between plan and run (#408)
  * @param {OutsideAccess} [deps.outsideAccess]  what a card may open outside the open folder (#792)
@@ -385,6 +415,7 @@ function createToolCallPlanner({
     // Freigabekarte erscheint — der Nutzer soll nichts bestaetigen muessen,
     // was ohnehin nicht laufen darf.
     let shellCwd = '';
+    /** @type {import('../../application/ports/tool-port').ToolPlan['shellCommand'] | null} */
     let shellCommand = null;
     if (definition.execution === TOOL_EXECUTION_KINDS.SHELL) {
       const guard = checkShellCommand(args?.command);
@@ -394,7 +425,7 @@ function createToolCallPlanner({
       const rawCwd = typeof args?.cwd === 'string' ? args.cwd.trim() : '';
       // The workspace only: a skill folder is not a place to run in (#548).
       const resolvedCwd = await fsService.resolveToolPath(workspaceRoot, rawCwd);
-      if (resolvedCwd.error) {
+      if (isRefused(resolvedCwd)) {
         return { tool: toolName, error: resolvedCwd.error, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...baseClasses], targets: [] };
       }
       shellCwd = resolvedCwd.absPath;
@@ -437,6 +468,7 @@ function createToolCallPlanner({
     const classes = new Set(baseClasses);
     for (const cls of context.forcedClasses || []) classes.add(cls);
     const targets = [];
+    /** @type {{ reason: string } | null} */
     let hardLimit = null;
     let recovery;
 
@@ -465,7 +497,7 @@ function createToolCallPlanner({
       // folder contains (#650) — fails here as a hard limit and names the
       // place a skill's data belongs to.
       const resolved = await fsService.resolveToolPath(workspaceRoot, rawPath, { skillRoots, outsideRoots, access });
-      if (resolved.error && resolved.code === OUTSIDE_WORKSPACE && resolved.absPath) {
+      if (isRefused(resolved) && resolved.code === OUTSIDE_WORKSPACE && resolved.absPath) {
         // Outside the open folder (#792, step 4): a card may offer it, in
         // every mode. What it may not offer stays a hard limit, and says so.
         const outside = await outsideTarget({ rawPath, absPath: resolved.absPath, access, descriptor, matcher });
@@ -488,7 +520,7 @@ function createToolCallPlanner({
         targets.push(outside);
         continue;
       }
-      if (resolved.error) {
+      if (isRefused(resolved)) {
         // Ausbruch aus der Wurzel oder unbekannter Skill: harte Grenze, kein
         // „ask“. Fehlender Arbeitsordner ebenso.
         return { tool: toolName, error: resolved.error, reason: PERMISSION_DENIAL_REASONS.HARD_LIMIT, riskClasses: [...classes], targets: [] };
@@ -636,6 +668,7 @@ function createToolCallPlanner({
    * Asked at plan time so that the card tells the truth: detection runs once
    * per app start and is awaited here, never guessed.
    */
+  /** @param {ProgramAllowanceMatch | null} [allowance] */
   async function describeIsolation(execution, args, sandboxDisabled = false, allowance = null) {
     if (!execution) return null;
     // The user's choice comes before the detection: a run the user took out
@@ -645,6 +678,7 @@ function createToolCallPlanner({
     const sandbox = await describeSandbox();
     if (sandbox?.isolated === true) {
       const granted = allowance?.allowance || null;
+      /** @type {{ isolated: boolean, domains: string[], allowance?: object, allowanceSkipped?: object }} */
       const isolation = { isolated: true, domains: resolveRunDomains(execution, args, granted) };
       if (granted) {
         isolation.allowance = {
@@ -670,6 +704,7 @@ function createToolCallPlanner({
    * its program does not apply. None without a sandbox to widen, and none
    * when anything goes wrong on the way: a failed check never grants.
    */
+  /** @returns {Promise<ProgramAllowanceMatch | null>} */
   async function readProgramAllowance(execution, args, cwd, sandboxDisabled, workspaceRoot) {
     if (execution !== TOOL_EXECUTION_KINDS.SHELL || sandboxDisabled || typeof matchProgramAllowance !== 'function') return null;
     try {

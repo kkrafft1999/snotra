@@ -90,6 +90,10 @@ function isIssueNumber(value) {
   return Number.isInteger(value) && value > 0;
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is string}
+ */
 function isReasonKey(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }

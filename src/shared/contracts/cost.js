@@ -110,7 +110,7 @@ const DATE_SUFFIX = /(?:-\d{4}-\d{2}-\d{2}|-\d{8}|@\d{8})$/;
  * in front of the provider's models — its `priceTable` trait (#996).
  *
  * @param {readonly string[]|undefined} keyPrefixes
- * @param {string} model
+ * @param {string|undefined} model
  */
 function priceKeyCandidates(keyPrefixes, model) {
   const raw = typeof model === 'string' ? model.trim().toLowerCase().replace(/^models\//, '') : '';
@@ -237,6 +237,7 @@ function normalizeCostEntry(raw) {
   const providerId = typeof raw.providerId === 'string' ? raw.providerId : '';
   if (!model && !providerId) return null;
   const tokens = addTokens(raw.tokens, null);
+  /** @type {Record<string, number> | null} */
   let usd = null;
   if (raw.usd && typeof raw.usd === 'object') {
     usd = {};
@@ -322,6 +323,7 @@ function summarizeSessionCost(raw) {
   const cost = normalizeSessionCost(raw);
   const tokens = emptyTokens();
   if (!cost) return { usd: null, complete: true, tokens, unpricedModels: [] };
+  /** @type {number | null} */
   let usd = null;
   const unpricedModels = [];
   for (const entry of cost.models) {

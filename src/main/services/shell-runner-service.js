@@ -179,9 +179,9 @@ function clampTimeout(raw) {
  * @param {typeof import('os')} deps.os
  * @param {string} [deps.platform]
  * @param {NodeJS.ProcessEnv} [deps.env]
- * @param {typeof import('fs/promises')} [deps.fs]  for the run's temp directory (#329)
- * @param {typeof import('path')} [deps.path]
- * @param {object} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
+ * @param {typeof import('fs/promises') | null} [deps.fs]  for the run's temp directory (#329)
+ * @param {typeof import('path') | null} [deps.path]
+ * @param {object | null} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
  * @returns {import('../../application/ports/shell-execution-port').ShellExecutionPort & {
  *   detect: () => Promise<ShellDescription>, disposeSync: () => void }}
  */
@@ -284,6 +284,7 @@ function createShellRunnerService({
   // dasselbe Versprechen — ohne diesen Merker startete bei jedem Klick eine
   // neue Login-Shell. An der Erkennung gibt es nichts zu aktualisieren: eine
   // Shell kommt zur Laufzeit weder dazu noch weg.
+  /** @type {Promise<ShellDescription> | null} */
   let detection = null;
   function detect() {
     if (!detection) detection = runDetection();
@@ -318,9 +319,12 @@ function createShellRunnerService({
     sandboxDisabled = false,
     abortSignal,
   } = {}) {
-    if (!detected.found) {
+    // Read once: `detected` is replaced as a whole by a later detection.
+    const { command: shellCommand, label } = detected;
+    if (!detected.found || !shellCommand) {
       return { error: 'No shell is available.' };
     }
+    const shellName = label ?? shellCommand;
     const line = typeof command === 'string' ? command : '';
     if (!line.trim()) return { error: 'No command was given.' };
     if (line.length > SHELL_EXECUTION_LIMITS.MAX_COMMAND_CHARS) {
@@ -346,8 +350,9 @@ function createShellRunnerService({
         return { error: `The run's temp directory could not be created: ${e?.message || e}` };
       }
     }
-    const removeRunTmp = () => (runTmp ? fs.rm(runTmp, { recursive: true, force: true }).catch(() => {}) : undefined);
+    const removeRunTmp = () => (runTmp && fs ? fs.rm(runTmp, { recursive: true, force: true }).catch(() => {}) : undefined);
     // What the command printed so far, for the card about a waiting connection.
+    /** @type {(() => { stdout: string, stderr: string }) | null} */
     let readOutput = null;
     let target;
     try {
@@ -356,7 +361,7 @@ function createShellRunnerService({
         disabled: sandboxDisabled === true,
         // PowerShell puts itself into a Job Object first, so that what the
         // command leaves in the background ends with it (#991).
-        argv: [detected.command, ...buildShellArgs(
+        argv: [shellCommand, ...buildShellArgs(
           detected.invocation,
           detected.invocation === INVOCATIONS.POWERSHELL ? withPowerShellJob(line) : line,
         )],
@@ -378,7 +383,7 @@ function createShellRunnerService({
       if (e?.name === 'AbortError') {
         return {
           stdout: '', stderr: '', exitCode: null, timedOut: false, aborted: true,
-          truncated: false, durationMs: Date.now() - startedAt, shell: detected.label,
+          truncated: false, durationMs: Date.now() - startedAt, shell: shellName,
         };
       }
       return { error: e?.message || 'The sandbox could not be prepared.' };
@@ -413,7 +418,7 @@ function createShellRunnerService({
         // cmd.exe cannot make a Job Object; the model hears so (#991).
         stderr: platform === 'win32' && detected.invocation === INVOCATIONS.CMD ? noteUncontained(stderr) : stderr,
         durationMs: Date.now() - startedAt,
-        shell: detected.label,
+        shell: shellName,
       };
       if (target.isolation) result.isolation = target.isolation;
       if (blocked) result.sandboxBlocked = blocked;

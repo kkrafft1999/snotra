@@ -16,8 +16,8 @@
  * @param {typeof import('path')} deps.path
  * @param {typeof import('os')} deps.os
  * @param {string} [deps.appName]
- * @param {() => string} [deps.getAppVersion]
- * @param {() => { found?: boolean, enabled?: boolean, label?: string }} [deps.describeShell]
+ * @param {(() => string)|null} [deps.getAppVersion]
+ * @param {(() => { found?: boolean, enabled?: boolean, label?: string })|null} [deps.describeShell]
  * @param {string} [deps.platform]
  * @param {() => Date} [deps.now]
  * @returns {import('../../application/ports/environment-port').EnvironmentPort}

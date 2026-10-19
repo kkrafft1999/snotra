@@ -103,9 +103,13 @@ function clean(text) {
  * section, the first one — the intro before any heading — with an empty
  * heading, a null anchor and depth 0. The anchor is the one the help window
  * gives that heading: `slugify` of its text, counted up for repeats.
+ *
+ * @typedef {{ heading: string, anchor: string | null, depth: number, tokens: any[] }} PageSection
  */
 function pageSections(markdown, { lexer, slugify }) {
+  /** @type {PageSection[]} */
   const sections = [];
+  /** @type {PageSection} */
   let current = { heading: '', anchor: null, depth: 0, tokens: [] };
   const seen = new Map();
   for (const token of lexer(markdown ?? '')) {
@@ -258,6 +262,7 @@ function searchManual(index, query, { limit = MAX_RESULTS } = {}) {
     }
     if (!complete) continue;
 
+    /** @type {{ section: { heading: string, anchor: string | null, [field: string]: any }, matched: number, score: number } | null} */
     let best = null;
     for (const section of page.sections) {
       const ranked = sectionScore(section, terms);

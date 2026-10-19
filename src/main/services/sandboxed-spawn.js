@@ -34,8 +34,8 @@ const PASSTHROUGH = Object.freeze({
  * @param {Object|null} [request.grants]     what the user allowed on a sandbox card (#792)
  * @param {string} [request.commandId]
  * @param {string} [request.commandText]
- * @param {Function} [request.onNetworkAsk]  asks about a waiting connection (#792)
- * @param {Function} [request.readOutput]    what the command printed so far, for that question
+ * @param {Function | null} [request.onNetworkAsk]  asks about a waiting connection (#792)
+ * @param {Function | null} [request.readOutput]    what the command printed so far, for that question
  * @param {AbortSignal} [request.abortSignal]
  * @returns {Promise<{command: string, args: string[], env: object,
  *   isolation: null|{isolated: boolean, domains?: string[], writePaths?: string[], trustd?: boolean,

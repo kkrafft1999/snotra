@@ -2483,7 +2483,9 @@ check the member names and miss every parameter and return shape.
 `src/application/` (the core and its ports), `src/main/ports/`,
 `src/main/adapters/`, `src/main/remote/` and `src/shared/contracts/`, and by
 name the two runner services that implement their port themselves,
-`shell-runner-service.js` and `python-runner-service.js`
+`shell-runner-service.js` and `python-runner-service.js`, and the three files
+the adapters lean on most, `tool-policy-store.js`, `atomic-write.js` and
+`workspace-tool-registry.js`
 ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)). Every file these import is
 checked as well — `checkJs` checks the whole program — which pulls in parts of
 `src/main/services/`, `src/main/tools/` and `src/shared/`. The rest of `src/`
@@ -2519,25 +2521,30 @@ generation, and the limits of the two execution ports — live in
 every port file and fails on any export.
 
 **Services that are not ports.** Where an adapter or the tool planner depends
-on a service that is not a port, it declares the members it calls itself, from
-its own side: `ToolRegistry` in `workspace-tool-adapter.js`, `FsService` in
-`tool-call-planner.js`. `OutsideAccess` is derived from its factory with
-`ReturnType<typeof …>`, since that module is part of the checked program anyway.
-A call the typedef does not allow fails the check. The registry and
-`fs-service.js` themselves are outside the checked set, so the typedefs are not
-compared with them; deriving them would pull both in and put about 70 findings
-in front of this step. The provider modules' `presentation` is typed as
+on a service that is not a port, it either derives the type from the service
+or declares the members it calls itself, from its own side. Derived with
+`ReturnType<typeof …>`, because the module is part of the checked program:
+`ToolRegistry` in `workspace-tool-adapter.js`, `ToolPolicyState` in
+`tool-policy-adapter.js` and `OutsideAccess` in `tool-call-planner.js`. A
+change in the registry or the store reaches every consumer at once, and a call
+the type does not allow fails the check. Written from the consumer's side:
+`FsService` in `tool-call-planner.js`. `fs-service.js` is outside the checked
+set, and deriving the type would pull the whole file in and put about 70
+findings in front of this step; the registry takes its `fsService` as `any`
+for the same reason. The provider modules' `presentation` is typed as
 `ProviderPresentation` in `provider-runtime-port.js`, the extras of
 `createMcpAdapter` as `Message` and `ToolDefinition`. A destructured service
-parameter takes no `= null` default — in a JS file that would make the local
-`any` again.
+parameter with a `= null` default says `| null` in its JSDoc — otherwise the
+compiler reads the local as `null` and rejects every use of it.
 
-**How strict.** `strict` is off, with `strictFunctionTypes`,
-`strictBindCallApply` and `noImplicitThis` on. That catches a port and its
-adapter disagreeing — a member, a shape, an argument count — and callbacks
-with the wrong parameters, without `noImplicitAny` turning every unannotated
-parameter into a finding or `strictNullChecks` every `null` default. Both are
-the next step ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
+**How strict.** `strict` is off, with `strictNullChecks`,
+`strictFunctionTypes`, `strictBindCallApply` and `noImplicitThis` on. That
+catches a port and its adapter disagreeing — a member, a shape, an argument
+count — and callbacks with the wrong parameters, and it keeps `null` and
+`undefined` out of places that declare a value. `noImplicitAny` is still off:
+turned on it reports about 1,900 places, most of them unannotated parameters
+in the files the checked set imports, a typing project of its own
+([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
 
 **Conventions** that came out of the first run:
 
@@ -2554,14 +2561,21 @@ the next step ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
 - An enum check, `Object.values(ENUM).includes(value)`, compiles because
   `types/array-includes.d.ts` lets `includes` take any value; the frozen enums
   keep their literal types.
-- Without `strictNullChecks` a truthiness check does not narrow a union:
-  after `if (outcome.error) return outcome;` the compiler still sees the
-  `{ error }` member. Narrow with `'error' in outcome` where the error member
-  is the only one with that key.
+- A truthiness check narrows a union only when the other member's property is
+  `undefined`, not when it is a string that may be empty: after
+  `if (resolved.error) return …` the compiler still sees a refusal with an
+  empty message. Narrow with `'error' in outcome` where the error member is the
+  only one with that key, or with a type guard where the check is a function
+  (`isRefused` in `tool-call-planner.js`). A variable that starts as `null`
+  gets its type in a `@type` line — `let flow = null;` alone is `null` for the
+  compiler, and everything assigned to it fails.
 - A constant the checked set needs from a large unchecked module moves to
   `src/shared/contracts/` rather than pulling that module in: the policy
   file's `TOOL_POLICY_INTEGRITY` lives in `tool-permissions.js`, and
-  `services/tool-policy-store.js` keeps it as `INTEGRITY` (#1098).
+  `services/tool-policy-store.js` keeps it as `INTEGRITY` (#1098);
+  `LIST_DIRECTORY_MAX_ENTRIES` (`list-directory.js`) and `KEY_ALWAYS_DURABLE`
+  (`safe-storage-key.js`) keep `fs-service.js` and
+  `safe-storage-key-durability.js` out of the program, which re-export them.
 - `tsc` 7 rejects a `#` or a dash right after a bracketed name in
   `@param {…} [name]` / `@property {…} [name]`; write the description after
   two spaces, as elsewhere.
@@ -2575,7 +2589,7 @@ What a test holds, as of 2026-10-18:
 | `test/application-layer-imports.test.js` | `src/application/` imports only `application/` + `shared/`, no package, no Node built-in |
 | `test/infrastructure-boundaries.test.js` | Storage without a provider-registry leak; store ports without decrypted secrets; MCP settings handlers never reach the decrypting port |
 | `test/adapter-port-shapes.test.js` | Port adapters expose only permitted methods |
-| `npm run typecheck` (`tsc`, run by `npm test`) | The core, the ports, the contracts, the adapters and the two runner services type-check against their JSDoc; every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
+| `npm run typecheck` (`tsc`, run by `npm test`) | The core, the ports, the contracts, the adapters, the two runner services, the policy store, the atomic writer and the tool registry type-check against their JSDoc, with `strictNullChecks`; every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
 | `test/port-conformance.test.js` | Every port has an implementation that names it, no port file exports a value, the type check is still in the gate (#1004, #1098) |
 | `test/composition-root-wiring.test.js` | `create-application.js` holds wiring only: no branch beyond "was this optional dependency handed in", no loop, comparison, `try`/`catch` or clock, at most 1,000 lines ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)) |
 | `test/catch-discipline.test.js` | Every `catch` in `src/` rethrows, reports, logs or carries a comment why it may stay quiet; every `void call()` in the renderer has a `.catch`. Against a baseline that may only shrink, `test/catch-discipline-baseline.json`, per file and count; it also fails when the baseline lists more than the scan finds, so a fixed site comes off the list in the same change. A heuristic scanner, its limits are in the head of the test ([#1000](https://github.com/kkrafft1999/snotra/issues/1000)) |

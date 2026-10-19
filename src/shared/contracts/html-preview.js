@@ -106,7 +106,7 @@ const HTML_PREVIEW_MIME_TYPES = Object.freeze({
 });
 
 function extensionOf(name) {
-  const base = String(name ?? '').split(/[\\/]/).pop();
+  const base = String(name ?? '').split(/[\\/]/).pop() ?? '';
   const dot = base.lastIndexOf('.');
   return dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
 }

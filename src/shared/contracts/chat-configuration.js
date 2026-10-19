@@ -84,10 +84,12 @@ const SKILLS_PLACE = Object.freeze({ menu: 'settings.skills', panel: 'skills', t
 /**
  * The settings page that changes a tool's state, or `null` when no setting
  * does — a missing folder is opened, not configured.
+ *
+ * @param {{ reason?: string | null, setup?: string | null }} [offer]
  */
 function toolSettingsPlace({ reason = null, setup = null } = {}) {
   if (reason === TOOL_OFFER_REASONS.SWITCHED_OFF) return SWITCHED_OFF_PLACE;
-  if (reason === TOOL_OFFER_REASONS.NOT_CONFIGURED) return SETUP_PLACES[setup] || null;
+  if (reason === TOOL_OFFER_REASONS.NOT_CONFIGURED) return (setup && SETUP_PLACES[setup]) || null;
   return null;
 }
 

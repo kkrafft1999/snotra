@@ -99,7 +99,7 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
     async load({ workspaceRoot = null } = {}) {
       const targets = chain(workspaceRoot);
       const results = await Promise.all(targets.map(readInstructionFile));
-      return results.filter(Boolean);
+      return results.filter((entry) => entry !== null);
     },
   };
 }

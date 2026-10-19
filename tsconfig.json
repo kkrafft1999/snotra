@@ -13,14 +13,17 @@
     "lib": ["es2024"],
     "types": ["node"],
     "skipLibCheck": true,
-    // Not `strict` as a whole: without `noImplicitAny` an unannotated
-    // parameter stays `any` instead of failing, and without
-    // `strictNullChecks` `null` passes where a value is declared. Both would
-    // flood the first round with findings that are not drift. What is on
-    // catches a port and its adapter disagreeing — a missing or extra
+    // Not `strict` as a whole: `noImplicitAny` is still off, so an
+    // unannotated parameter stays `any` instead of failing. Turned on, it
+    // reports about 1,900 places, most of them untyped parameters in files the
+    // included ones import, which is a typing project of its own (#1098).
+    // `strictNullChecks` is on: `null` and `undefined` are values of their
+    // own, and a truthiness check narrows a `{ error } | { ok }` union. What
+    // is on catches a port and its adapter disagreeing — a missing or extra
     // member, a wrong shape, a wrong argument count — and callbacks that
     // take the wrong parameters.
     "strict": false,
+    "strictNullChecks": true,
     "strictFunctionTypes": true,
     "strictBindCallApply": true,
     "noImplicitThis": true
@@ -36,6 +39,9 @@
     "src/shared/contracts/**/*.js",
     "src/main/services/shell-runner-service.js",
     "src/main/services/python-runner-service.js",
+    "src/main/services/tool-policy-store.js",
+    "src/main/services/atomic-write.js",
+    "src/main/tools/workspace-tool-registry.js",
     "types/**/*.d.ts"
   ]
 }

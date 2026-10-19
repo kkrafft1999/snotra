@@ -107,6 +107,10 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
     if (signal) imagesPerRun.set(signal, Math.max(0, countedImages(signal) - 1));
   }
 
+  /**
+   * @param {import('../../application/ports/tool-port').ToolArguments} args
+   * @param {import('../../application/ports/tool-port').ToolHandlerContext} [context]
+   */
   async function handler(args, { workspaceRoot, outsideRoots, abortSignal, recovery, onWritten } = {}) {
     if (!imageGeneration) {
       return JSON.stringify({ error: 'Image generation is not available in this installation.' });

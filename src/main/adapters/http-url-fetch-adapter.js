@@ -72,6 +72,7 @@ function discardBody(response) {
  * Grenze koennte eine einzige Adresse den Speicher fuellen — `content-length`
  * allein genuegt nicht, weil der Server ihn weglassen oder luegen darf.
  */
+/** @returns {Promise<{ tooLarge: true, buffer?: undefined } | { tooLarge?: undefined, buffer: Buffer }>} */
 async function readLimitedBody(response) {
   const declared = Number(response.headers?.get?.('content-length'));
   if (Number.isFinite(declared) && declared > URL_FETCH_LIMITS.MAX_BYTES) {
@@ -160,7 +161,7 @@ function createGuardedLookup(resolveHost) {
         },
         (error) => ({ error })
       )
-      .then((/** @type {{ error?: Error, list?: Array<{ address: string, family: number }> }} */ { error, list }) => {
+      .then((/** @type {{ error: Error, list?: undefined } | { error?: undefined, list: Array<{ address: string, family: number }> }} */ { error, list }) => {
         if (error) done(error);
         else if (opts.all) done(null, list);
         else done(null, list[0].address, list[0].family);
@@ -178,7 +179,7 @@ function blockedAtConnect(error) {
 /**
  * @param {{
  *   fetchImpl?: typeof fetchVia,
- *   lookup?: (hostname: string) => Promise<Array<{ address: string }>>,
+ *   lookup?: ((hostname: string) => Promise<Array<{ address: string }>>)|null,
  *   getLocale?: () => string,
  * }} [deps]  `lookup` is the DNS resolution; tests replace it, so no network is needed
  * @returns {import('../../application/ports/url-fetch-port').UrlFetchPort}
@@ -186,6 +187,7 @@ function blockedAtConnect(error) {
 function createHttpUrlFetchAdapter({ fetchImpl = fetchVia, lookup = null, getLocale = () => DEFAULT_LOCALE } = {}) {
   const resolveHost = lookup || ((hostname) => dns.lookup(hostname, { all: true, verbatim: true }));
   // Built on first use: a connection only to addresses that pass the check.
+  /** @type {InstanceType<typeof Agent>|null} */
   let dispatcher = null;
   const guardedDispatcher = () => {
     if (!dispatcher) dispatcher = new Agent({ connect: { lookup: createGuardedLookup(resolveHost) } });

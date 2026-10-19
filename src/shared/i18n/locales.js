@@ -57,7 +57,17 @@ const LOCALES = Object.freeze(CATALOGUES.map((entry) => entry.code));
 
 const MESSAGES = Object.freeze(Object.fromEntries(CATALOGUES.map((entry) => [entry.code, entry.messages])));
 
+/** @type {Map<string, (typeof CATALOGUES)[number]>} */
 const ENTRIES = new Map(CATALOGUES.map((entry) => [entry.code, entry]));
+
+/** @param {string} code */
+function entryOf(code) {
+  const entry = ENTRIES.get(code);
+  if (!entry) throw new Error(`The language "${code}" is not registered.`);
+  return entry;
+}
+
+const LEGACY_ENTRY = entryOf(LEGACY_LOCALE);
 
 /** `{ code, name, speechLanguage }` of every language, for lists and pickers. */
 const LOCALE_INFO = Object.freeze(
@@ -79,7 +89,7 @@ function localeName(locale) {
  * not registered gets the legacy one — a guess, but the one the app always made.
  */
 function speechLanguageFor(locale) {
-  return (ENTRIES.get(locale) ?? ENTRIES.get(LEGACY_LOCALE)).speechLanguage;
+  return (ENTRIES.get(locale) ?? LEGACY_ENTRY).speechLanguage;
 }
 
 /**

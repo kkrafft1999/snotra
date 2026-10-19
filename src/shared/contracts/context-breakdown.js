@@ -252,6 +252,9 @@ function createContextPart({
  * Block „Tool-Definitionen" bei OpenAI rund 80 % zu viel Gewicht, und Verlauf
  * und Skills entsprechend zu wenig.
  */
+/**
+ * @param {{ parts?: Array<object>, promptTokens?: number, tokenizerProfile?: string }} [input]
+ */
 function createContextBreakdown({ parts = [], promptTokens = 0, tokenizerProfile = '' } = {}) {
   const usable = (Array.isArray(parts) ? parts : [])
     .map((part) => createContextPart(part))

@@ -199,7 +199,7 @@ function checkSegment(tokens) {
  * Prueft eine Befehlszeile auf gesperrte Wirkungen.
  *
  * @param {string} command
- * @returns {{ blocked: boolean, reason?: string }}
+ * @returns {{ blocked: false, reason?: undefined } | { blocked: true, reason: string }}
  */
 function checkShellCommand(command) {
   if (typeof command !== 'string' || !command.trim()) return { blocked: false };

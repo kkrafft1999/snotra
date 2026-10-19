@@ -27,8 +27,13 @@ const FILE_NAME = 'remote-pairing.json';
 const FILE_VERSION = 1;
 
 const EMPTY = Object.freeze({ identity: null, phone: null });
-/** Where `safeStorage`'s key is on disk from the start: everywhere but a fresh Windows profile (#1060). */
+/**
+ * Where `safeStorage`'s key is on disk from the start: everywhere but a fresh Windows profile (#1060).
+ * @type {{ whenDurable: () => Promise<unknown> }}
+ */
 const KEY_ALWAYS_DURABLE = Object.freeze({ whenDurable: () => Promise.resolve() });
+
+/** @typedef {{ identity: any, phone: any }} StoredIdentity */
 
 function pointOf(jwk) {
   const x = protocol.fromB64u(jwk?.x, 32);
@@ -93,8 +98,9 @@ function createRemoteIdentityStore({
   log = console,
 }) {
   const file = path.join(dir, FILE_NAME);
-  /** @type {{ identity: any, phone: any } | null} */
+  /** @type {StoredIdentity | null} */
   let cache = null;
+  /** @type {Promise<StoredIdentity> | null} */
   let reading = null;
   // One change at a time: two pairings must not each create an identity.
   /** @type {Promise<unknown>} */
@@ -129,7 +135,7 @@ function createRemoteIdentityStore({
     try {
       const outer = JSON.parse(text);
       if (outer?.version !== FILE_VERSION || typeof outer.data !== 'string') throw new TypeError('format');
-      if (!isAvailable()) throw new TypeError('encryption unavailable');
+      if (!safeStorage || !isAvailable()) throw new TypeError('encryption unavailable');
       const inner = JSON.parse(safeStorage.decryptString(Buffer.from(outer.data, 'base64')));
       const sign = keyOf(inner?.identity?.sign);
       const agree = keyOf(inner?.identity?.agree);
@@ -152,7 +158,7 @@ function createRemoteIdentityStore({
   }
 
   async function write(next) {
-    if (!isAvailable()) throw new Error('remote pairing: encryption is not available');
+    if (!safeStorage || !isAvailable()) throw new Error('remote pairing: encryption is not available');
     // Ciphertext reaches the disk only once its key does (#1060).
     await safeStorageKey.whenDurable();
     const data = safeStorage.encryptString(serialized(next)).toString('base64');

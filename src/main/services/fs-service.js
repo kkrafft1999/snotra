@@ -19,6 +19,7 @@ const { createHash, randomBytes } = require('crypto');
 const { readRegularFile, NOT_A_REGULAR_FILE_ERROR } = require('./read-regular-file');
 const { renameWithRetry } = require('./rename-with-retry');
 const { OUTSIDE_WORKSPACE } = require('./outside-access');
+const { LIST_DIRECTORY_MAX_ENTRIES } = require('../../shared/contracts/list-directory');
 const {
   ITEM_FAILURE_REASONS,
   validateItemName,
@@ -114,8 +115,6 @@ const TREE_DEFAULT_MAX_DEPTH = 3;
 const TREE_MAX_DEPTH = 10;
 const TREE_DEFAULT_MAX_ENTRIES = 200;
 const TREE_MAX_ENTRIES = 1000;
-// Cut after filtering and sorting, so the model sees folders first and a stable first page.
-const LIST_DIRECTORY_MAX_ENTRIES = 1000;
 // The file tree shows more than the model gets, but not everything: a folder
 // with tens of thousands of entries would otherwise stall main, IPC and the DOM.
 const READ_DIRECTORY_MAX_ENTRIES = 2000;
