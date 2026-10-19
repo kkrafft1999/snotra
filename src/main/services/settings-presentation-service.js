@@ -8,7 +8,7 @@ const {
   isMaxOutputTokens,
 } = require('../../shared/contracts/settings');
 const { createTranslator } = require('../../shared/i18n');
-const { imageCapabilitiesOf } = require('../../shared/contracts/attachments');
+const { resolveProviderCapabilities } = require('../../shared/contracts/provider-capabilities');
 
 function createSettingsPresentationService({ providerCatalog, defaultProviderId }) {
   function getProvider(id) {
@@ -86,10 +86,9 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
     const name = typeof extended.displayName === 'string' && extended.displayName.trim()
       ? extended.displayName.trim()
       : builtInName;
-    // Bild-Faehigkeit kann an der Konfiguration haengen statt am Adapter.
-    const capabilities = imageCapabilitiesOf(typeof provider?.capabilitiesFor === 'function'
-      ? provider.capabilitiesFor(entry)
-      : meta.capabilities);
+    // Resolved against the provider's stored entry (#996): a capability can
+    // follow a connection setting rather than the adapter.
+    const capabilities = resolveProviderCapabilities(provider, entry);
 
     return {
       id: meta.id,
@@ -164,6 +163,12 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       ? buildPresetConnectionView(preset, provider, apiKeyDecryptable)
       : null;
     const connection = presetConnection || connectionOverrides?.[preset.providerId];
+    // What this entry can do (#996). With a connection of its own the entry
+    // decides — two entries of one provider can point at different servers —
+    // otherwise the provider does. The renderer reads it as it is.
+    const capabilities = presetConnection
+      ? resolveProviderCapabilities(provider, presetConnection)
+      : providerView.capabilities;
     const sublabel = formatPresetSublabelFromView(preset, providerView, connection, say);
     const name = presetConnection?.displayName?.trim()
       || providerView.builtInName
@@ -186,6 +191,7 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       configured: perPreset
         ? !!String(presetConnection.baseUrl || '').trim() && !presetConnection.keyUnreadable
         : providerView.configured,
+      capabilities,
       ...(presetConnection ? { connection: presetConnection } : {}),
       ...extractPresetOptionFields(preset, provider),
     };

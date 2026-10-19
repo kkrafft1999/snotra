@@ -199,14 +199,15 @@ function buildNoWorkspaceSystemPrompt({ toolsPrompt, skillFiles = false }) {
 }
 
 /**
- * The sentence for a round that was cut off (#538). An OpenAI-compatible entry
- * has its own output limit (#931), so there the sentence names that setting —
- * a server default that is too small is the likely cause.
+ * The sentence for a round that was cut off (#538). An entry with an output
+ * limit of its own (#931) is told to raise that setting — a server default
+ * that is too small is the likely cause. The provider's traits say whether it
+ * has one (#996).
  */
-function cutOffMessageKey(finishReason, assistantMessage, providerId) {
+function cutOffMessageKey(finishReason, assistantMessage, outputLimitSetting) {
   if (finishReason === FINISH_REASONS.CONTENT_FILTER) return 'chat.error.cutOff.contentFilter';
   if (finishReason === FINISH_REASONS.INCOMPLETE) return 'chat.error.cutOff.incomplete';
-  const suffix = providerId === 'openai-compatible' ? 'Setting' : '';
+  const suffix = outputLimitSetting === true ? 'Setting' : '';
   return Array.isArray(assistantMessage?.tool_calls) && assistantMessage.tool_calls.length > 0
     ? `chat.error.cutOff.lengthTool${suffix}`
     : `chat.error.cutOff.length${suffix}`;
@@ -1395,12 +1396,11 @@ function createChatEngine({
 
       const apiMessages = [];
       if (combinedSystem) apiMessages.push({ role: 'system', content: combinedSystem });
-      // Der Server hinter der ID entscheidet mit, ob das enge lokale Budget
-      // gilt (Issue #193) — dieselbe ID kann auf localhost oder ins Netz zeigen.
+      // Whether the narrow local budget applies, the provider's traits say;
+      // the server address already weighed in (#193, #996).
       const historyCharLimit = resolveHistoryCharLimit(
         uiPrefs,
-        target?.providerId,
-        sendBundle?.config?.baseUrl
+        sendBundle?.traits?.runsLocally === true
       );
       // Bild-Anhaenge (Issue #84) reisen als eigenes Feld mit, nicht im
       // Content — und werden hier normalisiert, weil der Payload aus dem
@@ -2523,11 +2523,9 @@ function createChatEngine({
           parts: roundContextParts,
           promptTokens: roundUsage ? roundUsage.prompt : 0,
           // Der Teiler Zeichen→Token gehoert dem Tokenizer am anderen Ende
-          // (Issue #178) — ohne den Anbieter schaetzt die Aufschluesselung
-          // gegen das falsche Modell. Die Server-URL entscheidet mit, weil ein
-          // generischer Anbieter mal lokal und mal entfernt steht (Issue #193).
-          providerId: target?.providerId,
-          baseUrl: sendBundle?.config?.baseUrl,
+          // (Issue #178). Which one that is, the provider's traits say — the
+          // server address already weighed in (#193, #996).
+          tokenizerProfile: sendBundle?.traits?.tokenizerProfile,
         });
 
         if (streamed.cancelled) {
@@ -2547,7 +2545,7 @@ function createChatEngine({
           // call cut off mid-argument would run with arguments it never
           // finished (#538).
           return failRun(
-            createMessage(cutOffMessageKey(streamed.finishReason, assistantMessage, target?.providerId)),
+            createMessage(cutOffMessageKey(streamed.finishReason, assistantMessage, sendBundle?.traits?.outputLimitSetting)),
             CHAT_ERROR_CODES.INCOMPLETE,
             { partial: true }
           );

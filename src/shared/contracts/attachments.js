@@ -213,25 +213,14 @@ const IMAGE_ATTACHMENT_FORMAT_NAMES = Object.freeze({
 /**
  * The image formats a provider passes on (#91). A provider that takes fewer
  * than all of IMAGE_ATTACHMENT_MEDIA_TYPES names them in
- * `capabilities.imageMediaTypes` (Gemini takes no GIF); without the field it
- * takes them all. The order is always that of IMAGE_ATTACHMENT_MEDIA_TYPES.
+ * `capabilities.imageMediaTypes` of its resolved capabilities
+ * (provider-capabilities.js; Gemini takes no GIF); without the field it takes
+ * them all. The order is always that of IMAGE_ATTACHMENT_MEDIA_TYPES.
  */
 function providerImageMediaTypes(capabilities) {
   const own = capabilities?.imageMediaTypes;
   if (!Array.isArray(own)) return [...IMAGE_ATTACHMENT_MEDIA_TYPES];
   return IMAGE_ATTACHMENT_MEDIA_TYPES.filter((type) => own.includes(type));
-}
-
-/**
- * The image part of a provider's capabilities as it travels on — to the chat
- * engine and to the renderer. `imageMediaTypes` only goes along where the
- * provider narrows the formats, so "no field" keeps meaning "all of them".
- */
-function imageCapabilitiesOf(capabilities) {
-  /** @type {{ images: boolean, imageMediaTypes?: string[] }} */
-  const out = { images: capabilities?.images === true };
-  if (Array.isArray(capabilities?.imageMediaTypes)) out.imageMediaTypes = providerImageMediaTypes(capabilities);
-  return out;
 }
 
 /** "PNG, JPEG, WebP" — the formats by name, for a message. */
@@ -268,7 +257,6 @@ module.exports = {
   attachmentsCharCost,
   IMAGE_ATTACHMENT_FORMAT_NAMES,
   providerImageMediaTypes,
-  imageCapabilitiesOf,
   imageFormatNames,
   toDataUrl,
 };

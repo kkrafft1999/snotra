@@ -2,10 +2,10 @@
 // Heuristik statt echter Tokenizer: 1 Token ≈ 4 Zeichen; das Budget wird
 // deshalb in Zeichen gefuehrt und ist ueber ui-preferences.json
 // (historyCharLimit) konfigurierbar. Ohne Einstellung haengt das Budget am
-// Anbieter: lokale Modelle bekommen weniger als Cloud-Anbieter.
+// Anbieter: lokale Modelle bekommen weniger als Cloud-Anbieter. Which models
+// run locally, the provider's traits say (#996) — this file knows no provider.
 
 const { attachmentsCharCost } = require('../../shared/contracts/attachments');
-const { isLocalEndpoint } = require('../../shared/contracts/provider-endpoint');
 // One source for the bounds: the settings validate against them, the engine
 // windows with them (#531).
 const {
@@ -21,7 +21,6 @@ const DEFAULT_HISTORY_CHAR_LIMIT = 200_000;
 // allein fuer das Fuellen des Standardbudgets). Fuer sie gilt deshalb ein
 // engeres Budget; eine ausdrueckliche Einstellung sticht es weiterhin.
 const DEFAULT_LOCAL_HISTORY_CHAR_LIMIT = 40_000;
-const LOCAL_PROVIDER_IDS = new Set(['ollama']);
 
 // Model channel, so English (#276, #532).
 const TOOL_OUTPUT_PLACEHOLDER = JSON.stringify({
@@ -29,27 +28,19 @@ const TOOL_OUTPUT_PLACEHOLDER = JSON.stringify({
 });
 
 /**
- * Lokal ist, wessen ID in der Liste steht **oder** wessen Server-URL auf diesen
- * Rechner zeigt (Issue #193). Die zweite Haelfte gibt es, seit ein Anbieter
- * dieselbe ID fuer localhost und fuer ein Gateway im Netz benutzt; sie greift
- * zusaetzlich und nimmt den bestehenden IDs nichts weg.
+ * `runsLocally` is the provider's trait for this connection
+ * (`resolveProviderTraits`): declared by the provider, or a server address on
+ * this machine (#193).
  */
-function isLocalProvider(providerId, baseUrl) {
-  if (typeof providerId === 'string' && LOCAL_PROVIDER_IDS.has(providerId.trim().toLowerCase())) {
-    return true;
-  }
-  return isLocalEndpoint(baseUrl);
-}
-
-function defaultHistoryCharLimit(providerId, baseUrl) {
-  return isLocalProvider(providerId, baseUrl)
+function defaultHistoryCharLimit(runsLocally) {
+  return runsLocally === true
     ? DEFAULT_LOCAL_HISTORY_CHAR_LIMIT
     : DEFAULT_HISTORY_CHAR_LIMIT;
 }
 
-function resolveHistoryCharLimit(uiPrefs, providerId, baseUrl) {
+function resolveHistoryCharLimit(uiPrefs, runsLocally) {
   return clampHistoryCharLimit(uiPrefs?.historyCharLimit)
-    ?? defaultHistoryCharLimit(providerId, baseUrl);
+    ?? defaultHistoryCharLimit(runsLocally);
 }
 
 function estimateMessageChars(message) {
@@ -216,12 +207,10 @@ module.exports = {
   CHARS_PER_TOKEN,
   DEFAULT_HISTORY_CHAR_LIMIT,
   DEFAULT_LOCAL_HISTORY_CHAR_LIMIT,
-  LOCAL_PROVIDER_IDS,
   HISTORY_CHAR_LIMIT_MIN,
   HISTORY_CHAR_LIMIT_MAX,
   TOOL_OUTPUT_PLACEHOLDER,
   clampHistoryCharLimit,
-  isLocalProvider,
   defaultHistoryCharLimit,
   resolveHistoryCharLimit,
   estimateMessageChars,

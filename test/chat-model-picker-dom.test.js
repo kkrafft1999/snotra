@@ -59,6 +59,7 @@ async function setup({ locale = 'en', state = llmState(), userAgent = null, setR
   return {
     dom,
     document,
+    picker,
     chosen,
     levels,
     pill: document.getElementById('btn-chat-model-picker'),
@@ -353,4 +354,55 @@ test('a press on a level gives the focus to its radio, so the menu stays open (#
   const hint = new dom.window.MouseEvent('mousedown', { bubbles: true, cancelable: true });
   document.getElementById('chat-reasoning-hint').dispatchEvent(hint);
   assert.equal(hint.defaultPrevented, true, 'a press on the text keeps the focus where it is');
+});
+
+// #996: the picker reads the capabilities main resolved for the entry, and
+// derives none of its own.
+test('the image capability comes from the active entry, as main resolved it', async () => {
+  const geminiCaps = { images: true, imageMediaTypes: ['image/png', 'image/jpeg', 'image/webp'], reasoningLevels: true };
+  const switchedOff = {
+    images: false,
+    reasoningLevels: false,
+    gaps: { images: { limitedBy: 'connection', reason: 'chat.image.error.connectionWithoutImages' } },
+  };
+  const state = {
+    ...llmState({
+      presets: [
+        entry('p1', 'gemini-2.5-pro', { providerId: 'google', capabilities: geminiCaps }),
+        entry('p2', 'qwen', { providerId: 'openai-compatible', capabilities: switchedOff, connection: { supportsImages: false } }),
+      ],
+    }),
+    chatTarget: { providerId: 'google', model: 'gemini-2.5-pro' },
+    providers: [
+      { id: 'google', name: 'Google (Gemini)', configured: true, capabilities: geminiCaps },
+      { id: 'openai-compatible', name: 'OpenAI-compatible', configured: true, capabilities: switchedOff },
+    ],
+  };
+  const { picker } = await setup({ state });
+  assert.equal(picker.activeProviderSupportsImages(), true);
+  assert.deepEqual(picker.activeImageFormats(), {
+    mediaTypes: ['image/png', 'image/jpeg', 'image/webp'],
+    provider: 'Google (Gemini)',
+  });
+
+  const { picker: compat } = await setup({
+    state: { ...state, activePresetId: 'p2', chatTarget: { providerId: 'openai-compatible', model: 'qwen' } },
+  });
+  assert.equal(compat.activeProviderSupportsImages(), false);
+  assert.equal(compat.activeImageLimit().limitedBy, 'connection');
+});
+
+test('a provider gap is the provider\'s, and an older state without capabilities takes no images', async () => {
+  const noImages = { images: false, reasoningLevels: true, gaps: { images: { limitedBy: 'provider', reason: 'x', issue: 1 } } };
+  const { picker } = await setup({
+    state: {
+      ...llmState({ presets: [entry('p1', 'm', { capabilities: noImages })] }),
+      providers: [{ id: 'openai', name: 'OpenAI', configured: true, capabilities: noImages }],
+    },
+  });
+  assert.equal(picker.activeProviderSupportsImages(), false);
+  assert.deepEqual(picker.activeImageLimit(), { limitedBy: 'provider', provider: 'OpenAI' });
+
+  const { picker: old } = await setup();
+  assert.equal(old.activeProviderSupportsImages(), false);
 });

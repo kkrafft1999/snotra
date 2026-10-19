@@ -103,9 +103,13 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
   assert.equal(openaiProvider.capabilities.images, true);
   assert.equal(ollamaProvider.capabilities.images, true);
   // …and which formats, where a provider takes fewer than all (#91).
-  assert.deepEqual(openaiProvider.capabilities, { images: true });
+  assert.deepEqual(openaiProvider.capabilities, { images: true, reasoningLevels: true });
   assert.deepEqual(dto.providers.find((p) => p.id === 'google').capabilities,
-    { images: true, imageMediaTypes: ['image/png', 'image/jpeg', 'image/webp'] });
+    { images: true, imageMediaTypes: ['image/png', 'image/jpeg', 'image/webp'], reasoningLevels: true });
+  // Every entry carries its own capabilities, so the renderer reads instead
+  // of deriving them (#996); without a connection of its own, the provider's.
+  assert.deepEqual(openaiPreset.capabilities, openaiProvider.capabilities);
+  assert.deepEqual(ollamaPreset.capabilities, ollamaProvider.capabilities);
 });
 
 test('buildPresetView respects connection draft overrides', () => {
@@ -252,6 +256,19 @@ test('API-Stil und Schalter der Zeile kommen mit ihren Voreinstellungen heraus',
   assert.equal(set.connection.apiStyle, 'full');
   assert.equal(set.connection.sendTools, false);
   assert.equal(set.connection.supportsImages, true);
+});
+
+test('an entry with a connection of its own carries the capabilities of that connection (#996)', () => {
+  const off = compatPresetView({ baseUrl: 'x' });
+  assert.equal(off.capabilities.images, false);
+  // The composer says it is the user's switch, not Snotra (#995).
+  assert.equal(off.capabilities.gaps.images.limitedBy, 'connection');
+  const on = compatPresetView({ baseUrl: 'x', supportsImages: true });
+  assert.equal(on.capabilities.images, true);
+  assert.equal(on.capabilities.gaps.images, undefined);
+  // The gap that is not the user's to close names its issue.
+  assert.equal(on.capabilities.reasoningLevels, false);
+  assert.equal(on.capabilities.gaps.reasoningLevels.issue, 1148);
 });
 
 test('Eintraege der uebrigen Anbieter tragen keine eigene Verbindung', () => {

@@ -396,7 +396,14 @@ module.exports = {
   name: 'Google (Gemini)',
   fields: { apiKey: true },
   // translateMessagesToGoogle maps image attachments, GIF excepted (#91).
-  capabilities: { images: true, imageMediaTypes: GEMINI_IMAGE_MEDIA_TYPES },
+  capabilities: {
+    images: { supported: true, mediaTypes: GEMINI_IMAGE_MEDIA_TYPES },
+    reasoningLevels: { supported: true },
+  },
+  // No tokenizer profile: Google's tokenizer was never measured (#178).
+  traits: {
+    priceTable: { litellmProviders: ['gemini'], keyPrefixes: ['gemini/'] },
+  },
   defaultModel: 'gemini-2.0-flash',
   // The levels depend on the model generation (#994); see reasoningLevelsOf.
   reasoning: {

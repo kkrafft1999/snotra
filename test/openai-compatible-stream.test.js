@@ -272,9 +272,10 @@ test('Bilder gehen nur bei supportsImages als image_url mit', async (t) => {
   ]);
 });
 
-test('capabilitiesFor folgt dem Schalter supportsImages', () => {
-  assert.deepEqual(compat.capabilitiesFor({}), { images: false });
-  assert.deepEqual(compat.capabilitiesFor({ supportsImages: true }), { images: true });
+test('images follow the supportsImages switch of the entry (#996)', () => {
+  const { resolveProviderCapabilities } = require('../src/shared/contracts/provider-capabilities');
+  assert.equal(resolveProviderCapabilities(compat, {}).images, false);
+  assert.equal(resolveProviderCapabilities(compat, { supportsImages: true }).images, true);
 });
 
 test('ein Verbindungsfehler wird zu NETWORK', async (t) => {

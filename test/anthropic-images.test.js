@@ -18,7 +18,7 @@ function translate(messages) {
 }
 
 test('the Anthropic adapter declares that it passes images (#90)', () => {
-  assert.equal(anthropic.capabilities.images, true);
+  assert.equal(anthropic.capabilities.images.supported, true);
 });
 
 test('text and image: the image block comes first, then the text', () => {

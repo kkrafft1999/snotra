@@ -18,8 +18,8 @@ const translate = (messages) => ollama.translateMessagesToOllama(messages);
 test.after(() => ollama.destroyInsecureDispatcher());
 
 test('the Ollama adapter passes images, in every format Snotra attaches (#92)', () => {
-  assert.equal(ollama.capabilities.images, true);
-  assert.equal(ollama.capabilities.imageMediaTypes, undefined);
+  assert.equal(ollama.capabilities.images.supported, true);
+  assert.equal(ollama.capabilities.images.mediaTypes, undefined);
 });
 
 test('text and image: the text stays the content, the image goes into images', () => {

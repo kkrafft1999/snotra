@@ -1726,12 +1726,14 @@ test('engine schlüsselt den Prompt nach Skills, Tools und Verlauf auf (#174)', 
 });
 
 test('engine schaetzt die Aufschlüsselung gegen den Tokenizer des Anbieters (#178)', async () => {
-  // Gleiche Bausteine, zwei Anbieter: nur das Gewicht der Tool-Zeile darf sich
-  // unterscheiden, die Gesamtzahl nicht.
-  async function toolShareFor(providerId) {
+  // Gleiche Bausteine, zwei Tokenizer: nur das Gewicht der Tool-Zeile darf sich
+  // unterscheiden, die Gesamtzahl nicht. The profile is the provider's trait
+  // in the send bundle (#996), not its ID.
+  async function toolShareFor(tokenizerProfile) {
     const { engine } = makeEngine(null, {
       llm: makeLlmPort([assistantText('ok', { usage: { prompt: 4000, completion: 20, total: 4020 } })], {
-        resolveResult: { providerId, model: 'm' },
+        resolveResult: { providerId: 'test', model: 'm' },
+        sendBundle: { config: {}, model: 'm', capabilities: { images: true }, traits: { tokenizerProfile } },
       }),
       tools: makeToolPort(undefined, {
         toolDefs: [
@@ -1750,8 +1752,8 @@ test('engine schaetzt die Aufschlüsselung gegen den Tokenizer des Anbieters (#1
     return result.contextBreakdown.parts.find((row) => row.id === 'tools:builtin').share;
   }
 
-  const lokal = await toolShareFor('ollama');
-  const openai = await toolShareFor('openai');
+  const lokal = await toolShareFor('local');
+  const openai = await toolShareFor('o200k');
   assert.ok(
     lokal > openai * 1.4,
     `Tool-Anteil lokal ${lokal} muss deutlich ueber OpenAI ${openai} liegen`
@@ -2036,14 +2038,15 @@ test('a cut-off round runs no tool call and keeps its text (#538)', async () => 
 });
 
 // #931: an OpenAI-compatible entry has its own output limit, and the
-// sentence points there.
+// sentence points there — the trait says so, not the provider ID (#996).
 test('a cut-off round of an OpenAI-compatible entry names the output limit setting (#931)', async () => {
-  const resolveResult = { providerId: 'openai-compatible', model: 'qwen' };
+  const resolveResult = { providerId: 'test', model: 'qwen' };
+  const sendBundle = { config: {}, model: 'qwen', capabilities: { images: false }, traits: { outputLimitSetting: true } };
   for (const [result, sentence] of [
     [assistantText('Half', { finishReason: 'length' }), /Max output tokens/],
     [{ ...assistantToolCall('c1', 'list_directory', {}), finishReason: 'length' }, /tool call.*Max output tokens/],
   ]) {
-    const { engine } = makeEngine([result], { llm: makeLlmPort([result], { resolveResult }) });
+    const { engine } = makeEngine([result], { llm: makeLlmPort([result], { resolveResult, sendBundle }) });
     const res = await engine.send({ sessionId: 'renderer-1', payload: { messages: [{ role: 'user', content: 'Hi' }] } });
     assert.equal(res.code, 'INCOMPLETE');
     assert.match(errorText(res, 'en'), sentence);
@@ -2112,7 +2115,11 @@ test('a local run stays inside the budget over several tool rounds (#169)', asyn
     results.push(assistantToolCall(`c${i}`, 'read_file_text', { relative_path: `f${i}.js` }));
   }
   results.push(assistantText('Done.'));
-  const llm = makeLlmPort(results, { resolveResult: { providerId: 'ollama', model: 'qwen' } });
+  const llm = makeLlmPort(results, {
+    resolveResult: { providerId: 'test', model: 'qwen' },
+    // A local model is the provider's trait (#996).
+    sendBundle: { config: {}, model: 'qwen', capabilities: { images: false }, traits: { runsLocally: true } },
+  });
   const { engine, calls } = makeEngine(null, {
     llm,
     tools: readFileToolPort(JSON.stringify({ text: 'C'.repeat(45_000) }), { description: 'd'.repeat(6000) }),

@@ -1,7 +1,5 @@
 'use strict';
 
-const { imageCapabilitiesOf } = require('../../shared/contracts/attachments');
-
 function toCatalogEntry(provider) {
   if (!provider) return null;
   return {
@@ -18,16 +16,12 @@ function toCatalogEntry(provider) {
     fields: provider.fields || {},
     presentation: provider.presentation,
     apiBase: provider.apiBase || '',
-    capabilities: imageCapabilitiesOf(provider.capabilities),
+    // The declaration (#996); the presentation resolves it against an entry.
+    capabilities: provider.capabilities || {},
     optionalApiKey: provider.optionalApiKey === true,
     connectionPerPreset: provider.connectionPerPreset === true,
     // The reasoning levels a chat can choose, and for which models (#725).
     ...(provider.reasoning ? { reasoning: provider.reasoning } : {}),
-    // Faehigkeiten, die an der gespeicherten Konfiguration haengen statt am
-    // Adapter (Issue #193) — die Praesentation ruft sie mit dem Eintrag auf.
-    ...(typeof provider.capabilitiesFor === 'function'
-      ? { capabilitiesFor: provider.capabilitiesFor }
-      : {}),
   };
 }
 

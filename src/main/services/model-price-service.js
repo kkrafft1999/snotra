@@ -23,13 +23,11 @@ const {
   trimLiteLlmPrices,
 } = require('../../shared/contracts/cost');
 const { writeFileAtomic } = require('./atomic-write');
+const { declaredProviderTraits } = require('../../shared/contracts/provider-capabilities');
 
 const PRICES_FILENAME = 'model-prices.json';
 const DOWNLOAD_TIMEOUT_MS = 30_000;
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]', '::1', '0.0.0.0']);
-
-/** Providers whose models always run on this machine. */
-const LOCAL_PROVIDERS = new Set(['ollama']);
 
 const UPDATE_ERROR_CODES = Object.freeze({
   NETWORK: 'network',
@@ -76,10 +74,14 @@ function createModelPriceService({
   app,
   fetchImpl = (...args) => fetch(...args),
   snapshot = require('../data/model-prices.json'),
+  // The capability register (#996): which models run locally, which LiteLLM
+  // providers and key prefixes a provider's prices are under.
+  providers = require('../providers'),
   now = () => new Date(),
   log = console,
 }) {
   const filePath = () => path.join(app.getPath('userData'), PRICES_FILENAME);
+  const traitsOf = (providerId) => declaredProviderTraits(providers.getProvider(providerId));
   let state = null;
   let writing = Promise.resolve();
 
@@ -130,10 +132,11 @@ function createModelPriceService({
     await load();
     const override = state.overrides[modelKey(model)];
     if (override) return { price: override, priceSource: PRICE_SOURCES.OVERRIDE };
-    if (LOCAL_PROVIDERS.has(providerId) || isLoopbackUrl(baseUrl)) {
+    const traits = traitsOf(providerId);
+    if (traits.runsLocally || isLoopbackUrl(baseUrl)) {
       return { price: null, priceSource: PRICE_SOURCES.LOCAL };
     }
-    const found = findModelPrice(activeTable().models, { providerId, model });
+    const found = findModelPrice(activeTable().models, { keyPrefixes: traits.priceTable.keyPrefixes, model });
     if (found) return { price: found.price, priceSource: PRICE_SOURCES.TABLE };
     return { price: null, priceSource: null };
   }
@@ -148,7 +151,10 @@ function createModelPriceService({
       if (!model) continue;
       const providerId = typeof entry.providerId === 'string' ? entry.providerId : '';
       const resolved = await resolve({ providerId, model, baseUrl: entry.baseUrl });
-      const tablePrice = findModelPrice(table.models, { providerId, model });
+      const tablePrice = findModelPrice(table.models, {
+        keyPrefixes: traitsOf(providerId).priceTable.keyPrefixes,
+        model,
+      });
       rows.push({
         providerId,
         model,
@@ -192,7 +198,7 @@ function createModelPriceService({
       const code = err instanceof SyntaxError ? UPDATE_ERROR_CODES.INVALID : UPDATE_ERROR_CODES.NETWORK;
       return { ok: false, code };
     }
-    const trimmed = trimLiteLlmPrices(json);
+    const trimmed = trimLiteLlmPrices(json, providers.litellmPriceProviders());
     if (!trimmed) return { ok: false, code: UPDATE_ERROR_CODES.INVALID };
     const previous = state.downloaded;
     state.downloaded = { date: now().toISOString().slice(0, 10), models: trimmed.models };

@@ -324,7 +324,16 @@ module.exports = {
   name: createMessage('provider.name.ollama'),
   fields: { baseUrl: true, insecureTls: true },
   // translateMessagesToOllama maps image attachments (#92).
-  capabilities: { images: true },
+  capabilities: {
+    images: { supported: true },
+    reasoningLevels: { supported: true },
+  },
+  // Local even behind a network address: the smaller history budget and the
+  // zero price hold for every Ollama server, not only one on localhost.
+  traits: {
+    runsLocally: true,
+    tokenizerProfile: 'local',
+  },
   defaultModel: 'llama3.2',
   // Levels for gpt-oss, off and on for the other thinking models (#994).
   reasoning: {
