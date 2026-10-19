@@ -28,7 +28,7 @@ An MCP server is someone else's code. A local one runs on your computer with you
 
 1. Open *Settings › Tools › Setup* and click *Add server* under *MCP servers*.
 2. Under *Connection*, choose *Local process (stdio)* or *Remote (HTTP)*, and fill in the form; the fields are explained below.
-3. Click *Save*. [since 1.28] For a local server, a dialog of your operating system asks *Allow Snotra to start this program?* and shows the command line, the working directory and the names of the environment variables — never their values. Choose *Allow program*; *Cancel* saves nothing.
+3. Click *Save*. [since 1.27.1] For a local server, a dialog of your operating system asks *Allow Snotra to start this program?* and shows the command line, the working directory and the names of the environment variables — never their values. Choose *Allow program*; *Cancel* saves nothing.
 4. Click *Test connection*. It connects once and shows the tools the server offers — or the error, with what the server sent along.
 
 ![The dialog of an MCP server: identifier github, display name GitHub, the connection choice set to "Local process (stdio)", command npx, arguments "-y @modelcontextprotocol/server-github", an empty working directory, the button "Add variable", and at the bottom "Remove server", "Test connection", "Cancel" and "Save".](screenshots/mcp-server.webp)
@@ -56,13 +56,13 @@ When you save a new *Server URL* — or switch a server between *Local process* 
 
 ## When Snotra asks again before saving
 
-[since 1.28] A local server asks again whenever what it starts changes: the command, an argument, the working directory or an environment variable — one added, one removed, or a new value. Switching the server on or off, a new display name and its tools never ask. A remote server never asks either: it starts nothing on your computer, and each of its tool calls is approved on a card.
+[since 1.27.1] A local server asks again whenever what it starts changes: the command, an argument, the working directory or an environment variable — one added, one removed, or a new value. Switching the server on or off, a new display name and its tools never ask. A remote server never asks either: it starts nothing on your computer, and each of its tool calls is approved on a card.
 
 ## Import from another app
 
 If you use MCP servers in Claude Desktop, Claude Code or Cursor already, click *Import* and paste their `mcpServers` block. Snotra shows what it recognised: each server with its start command or its address, the values it will keep secret, placeholders not filled in yet, and servers that would replace one you have. [since 1.25] Entries with a `url` are imported as remote servers, together with their `headers`; a value such as `${GITHUB_TOKEN}` counts as a placeholder, because Snotra does not fill it in. Entries that cannot work — an *HTTP+SSE* server, say — are listed with the reason. Untick what you do not want, then import.
 
-Imported servers start **switched off**. [since 1.28] Each local one still asks in the dialog of your operating system before it is saved, one after another; one you cancel is named after *Not imported*, with the reason. Snotra reads only what you paste, never another app's configuration files.
+Imported servers start **switched off**. [since 1.27.1] Each local one still asks in the dialog of your operating system before it is saved, one after another; one you cancel is named after *Not imported*, with the reason. Snotra reads only what you paste, never another app's configuration files.
 
 ## What happens
 

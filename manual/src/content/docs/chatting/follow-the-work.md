@@ -30,7 +30,7 @@ If a command or a Python run on macOS or Linux tried to reach something the sand
 
 ## When a result reads like instructions
 
-[since 1.28] Some text is written for the model rather than for you: a web page that says *ignore all previous instructions*, a file that poses as a message from Snotra, characters you cannot see. When a tool result contains something like that, a box *A tool result reads like instructions to the agent* appears under the tool log. It names the step, says what kind of text it found, and quotes it.
+[since 1.27.1] Some text is written for the model rather than for you: a web page that says *ignore all previous instructions*, a file that poses as a message from Snotra, characters you cannot see. When a tool result contains something like that, a box *A tool result reads like instructions to the agent* appears under the tool log. It names the step, says what kind of text it found, and quotes it.
 
 ![An answer whose tool log reads "1 file read". Below it a box: "A tool result reads like instructions to the agent · File notes/seed-catalogue.md read", the kind "Tells the agent to ignore what it was told" with the quoted sentence from the file, a note that what the agent may do has not changed, and the link "What this check does". Then the answer, which says it left the request in the file alone.](screenshots/injection-flag.webp)
 

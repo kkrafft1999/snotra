@@ -30,7 +30,7 @@ Wollte ein Befehl oder ein Python-Lauf unter macOS oder Linux an etwas, das die 
 
 ## Wenn sich ein Ergebnis wie Anweisungen liest
 
-[seit 1.28] Mancher Text ist für das Modell geschrieben, nicht für dich: eine Webseite, die sagt *ignoriere alle vorherigen Anweisungen*, eine Datei, die sich als Nachricht von Snotra ausgibt, Zeichen, die du nicht sehen kannst. Enthält ein Tool-Ergebnis so etwas, erscheint unter dem Tool-Protokoll ein Kasten *Ein Tool-Ergebnis liest sich wie Anweisungen an den Agenten*. Er nennt den Schritt, sagt, welche Art Text er gefunden hat, und zitiert ihn.
+[seit 1.27.1] Mancher Text ist für das Modell geschrieben, nicht für dich: eine Webseite, die sagt *ignoriere alle vorherigen Anweisungen*, eine Datei, die sich als Nachricht von Snotra ausgibt, Zeichen, die du nicht sehen kannst. Enthält ein Tool-Ergebnis so etwas, erscheint unter dem Tool-Protokoll ein Kasten *Ein Tool-Ergebnis liest sich wie Anweisungen an den Agenten*. Er nennt den Schritt, sagt, welche Art Text er gefunden hat, und zitiert ihn.
 
 ![Eine Antwort, deren Tool-Protokoll „1 Datei gelesen“ zeigt. Darunter ein Kasten: „Ein Tool-Ergebnis liest sich wie Anweisungen an den Agenten · Datei notizen/saatgut-katalog.md gelesen“, die Art „Fordert den Agenten auf, seine Vorgaben zu ignorieren“ mit dem zitierten Satz aus der Datei, ein Hinweis, dass sich an dem, was der Agent darf, nichts geändert hat, und der Link „Was diese Prüfung macht“. Danach die Antwort, die sagt, dass sie die Bitte in der Datei nicht befolgt hat.](screenshots/injection-flag.webp)
 
