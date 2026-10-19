@@ -3,7 +3,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createWindowPush } = require('../src/main/ipc/window-push');
+const { createWindowPush } = require('../src/main/electron/window-push');
 const { registerApprovalNotificationHandlers } = require('../src/main/ipc/approval-notification-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
@@ -15,16 +15,16 @@ function fakeWindow({ destroyed = false } = {}) {
 
 test('a push reaches the window, with an empty payload by default', () => {
   const win = fakeWindow();
-  const push = createWindowPush(() => win);
+  const { push } = createWindowPush(() => win);
   assert.equal(push('a:changed'), true);
   assert.equal(push('b:changed', { x: 1 }), true);
   assert.deepEqual(win.sent, [['a:changed', {}], ['b:changed', { x: 1 }]]);
 });
 
 test('without a window, or with a destroyed one, a push is dropped', () => {
-  assert.equal(createWindowPush(() => null)('a:changed'), false);
+  assert.equal(createWindowPush(() => null).push('a:changed'), false);
   const win = fakeWindow({ destroyed: true });
-  assert.equal(createWindowPush(() => win)('a:changed'), false);
+  assert.equal(createWindowPush(() => win).push('a:changed'), false);
   assert.deepEqual(win.sent, []);
 });
 

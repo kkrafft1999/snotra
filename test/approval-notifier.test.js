@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 
 const { createApprovalNotifier } = require('../src/main/services/approval-notifier');
+const { createSystemNotificationAdapter } = require('../src/main/electron/system-notification-adapter');
 
 function fakeNotification({ supported = true } = {}) {
   const shown = [];
@@ -47,8 +48,7 @@ function make({ enabled = true, supported = true, win = fakeWindow() } = {}) {
   const opened = [];
   const state = { enabled };
   const notifier = createApprovalNotifier({
-    Notification,
-    getMainWindow: () => win,
+    notifications: createSystemNotificationAdapter({ Notification, getMainWindow: () => win }),
     isEnabled: async () => (typeof state.enabled === 'function' ? state.enabled() : state.enabled),
     openChat: (chatId) => opened.push(chatId),
   });
@@ -99,4 +99,16 @@ test('a flood of cards does not flood the system', async () => {
   const { notifier, shown } = make();
   for (let i = 0; i < 60; i += 1) await notifier.show({ ...REQUEST, requestId: `r${i}` });
   assert.equal(shown.length, 50);
+});
+
+test('a host without notifications shows none (#983)', async () => {
+  const notifier = createApprovalNotifier({ notifications: null, isEnabled: () => true, openChat: () => {} });
+  assert.equal(await notifier.show(REQUEST), false);
+  const refusing = createApprovalNotifier({
+    notifications: { isSupported: () => true, show: () => { throw new Error('denied'); } },
+    isEnabled: () => true,
+    openChat: () => {},
+  });
+  assert.equal(await refusing.show(REQUEST), false);
+  assert.equal(refusing.openCount(), 0);
 });

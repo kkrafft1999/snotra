@@ -68,8 +68,8 @@ const mockProviders = {
 
 function makeStorage(tmpDir) {
   return createStorageService({
-    app: { getPath: () => tmpDir },
-    safeStorage: { isEncryptionAvailable: () => false },
+    userDataPath: tmpDir,
+    secretStore: { isEncryptionAvailable: () => false },
     fs,
     path,
     providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),
@@ -97,8 +97,8 @@ function makeEncryptedSafeStorage() {
 
 function makeStorageWithEncryption(tmpDir) {
   return createStorageService({
-    app: { getPath: () => tmpDir },
-    safeStorage: makeEncryptedSafeStorage(),
+    userDataPath: tmpDir,
+    secretStore: makeEncryptedSafeStorage(),
     fs,
     path,
     providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),
@@ -242,8 +242,8 @@ test('a first run starts in the system language when the app speaks it (#1013)',
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   t.after(() => removeTempDir(tmpDir));
   const withLocale = (locale) => createStorageService({
-    app: { getPath: () => tmpDir, getLocale: () => locale },
-    safeStorage: { isEncryptionAvailable: () => false },
+    userDataPath: tmpDir, getSystemLocale: () => locale,
+    secretStore: { isEncryptionAvailable: () => false },
     fs,
     path,
     providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),
@@ -310,8 +310,8 @@ function fsWithFailingRename(code, times) {
 
 function makeStorageWith(tmpDir, fsImpl, platform) {
   return createStorageService({
-    app: { getPath: () => tmpDir },
-    safeStorage: { isEncryptionAvailable: () => false },
+    userDataPath: tmpDir,
+    secretStore: { isEncryptionAvailable: () => false },
     fs: fsImpl,
     path,
     providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),
@@ -468,10 +468,10 @@ test('a chat history that cannot be read is shown empty but never written back (
 
     const { fs: flaky } = fsWithFailingRead('chat-history.json', 'EACCES');
     const storage = createStorageService({
-      app: { getPath: () => tmpDir },
+      userDataPath: tmpDir,
       // With encryption available, a plain file is taken into the folder —
       // which would write over what a failed read could not see.
-      safeStorage: makeEncryptedSafeStorage(),
+      secretStore: makeEncryptedSafeStorage(),
       fs: flaky,
       path,
       providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),
@@ -506,8 +506,8 @@ test('a folder history that cannot be read stays as it was when a folder opens (
 
     const { fs: flaky } = fsWithFailingRead('folder-history.json', 'EACCES');
     const storage = createStorageService({
-      app: { getPath: () => tmpDir },
-      safeStorage: { isEncryptionAvailable: () => false },
+      userDataPath: tmpDir,
+      secretStore: { isEncryptionAvailable: () => false },
       fs: flaky,
       path,
       providerCatalog: createMockProviderCatalog((id) => mockProviders.getProvider(id)),

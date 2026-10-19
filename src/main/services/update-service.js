@@ -155,8 +155,19 @@ function isNewerVersion(latest, current) {
 }
 
 /**
+ * What the update service asks of the running installation. Electron's `app`
+ * is one; a test hands in its own. Each getter may throw before the host is
+ * ready, and the service falls back then.
+ *
+ * @typedef {Object} Installation
+ * @property {() => string} getVersion
+ * @property {(name: 'temp' | 'userData' | 'exe') => string} getPath
+ * @property {boolean} [isPackaged]
+ */
+
+/**
  * @param {object} deps
- * @param {Pick<import('electron').App, 'getVersion' | 'getPath' | 'isPackaged'>} deps.app  Electron-app.
+ * @param {Installation} deps.installation  the running installation: its version and folders (#983)
  * @param {Pick<import('../ports/ui-prefs-store-port').UiPrefsStorePort, 'readUIPrefs' | 'updateUIPrefs'>} deps.storage
  *        storage-service (fuer ignoredUpdateVersion).
  * @param {string} [deps.repo]          "owner/name"; default kkrafft1999/snotra.
@@ -169,7 +180,7 @@ function isNewerVersion(latest, current) {
  * @param {() => number} [deps.now]     Clock in epoch ms, for tests.
  */
 function createUpdateService({
-  app,
+  installation,
   storage,
   repo = DEFAULT_REPO,
   fetchImpl,
@@ -186,7 +197,7 @@ function createUpdateService({
 
   function getTempDir() {
     try {
-      return app.getPath('temp');
+      return installation.getPath('temp');
     } catch {
       return require('os').tmpdir();
     }
@@ -202,7 +213,7 @@ function createUpdateService({
   function getHelperFiles() {
     let dir;
     try {
-      dir = app.getPath('userData');
+      dir = installation.getPath('userData');
     } catch {
       dir = getTempDir();
     }
@@ -222,13 +233,13 @@ function createUpdateService({
     if (runtime) return detectInstallTarget(runtime);
     let execPath = process.execPath;
     try {
-      execPath = app.getPath('exe');
+      execPath = installation.getPath('exe');
     } catch { /* Fallback bleibt process.execPath */ }
     return detectInstallTarget({
       platform: process.platform,
       execPath,
       env: process.env,
-      isPackaged: app?.isPackaged !== false,
+      isPackaged: installation?.isPackaged !== false,
     });
   }
 
@@ -246,7 +257,7 @@ function createUpdateService({
 
   function getCurrentVersion() {
     try {
-      return app.getVersion();
+      return installation.getVersion();
     } catch {
       return '0.0.0';
     }

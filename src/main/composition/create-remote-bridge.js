@@ -3,7 +3,7 @@
 /**
  * The remote bridge's pairing, put together (#1114): the core's decisions in
  * `src/application/remote/remote-pairing.js` with the adapters of
- * `src/main/remote/` — the relay, the keys kept through `safeStorage`, the
+ * `src/main/remote/` — the relay, the keys kept through the secret store, the
  * protocol's computations — and the desktop's user-confirmation adapter for
  * the *Allow* (#980).
  *
@@ -21,8 +21,8 @@ const { PRODUCTION_RELAY } = require('../remote/relay-endpoint');
 
 /**
  * @param {{
- *   app: Pick<import('electron').App, 'getPath'>,
- *   safeStorage: any,
+ *   userDataPath: string,
+ *   secretStore: import('../../application/ports/secret-store-port').SecretStorePort,
  *   safeStorageKey?: { whenDurable: () => Promise<unknown> },
  *   fs: typeof import('fs/promises'),
  *   path: typeof import('path'),
@@ -35,8 +35,8 @@ const { PRODUCTION_RELAY } = require('../remote/relay-endpoint');
  * }} deps  `relay` replaces the Firebase relay — the in-memory one in tests
  */
 function createRemoteBridge({
-  app,
-  safeStorage,
+  userDataPath,
+  secretStore,
   safeStorageKey,
   fs,
   path,
@@ -50,7 +50,7 @@ function createRemoteBridge({
   const pairing = createRemotePairing({
     relay: relay || createFirebaseRelayAdapter({ endpoint: PRODUCTION_RELAY, fetchImpl: fetchImpl || globalThis.fetch }),
     identity: createRemoteIdentityStore({
-      safeStorage, safeStorageKey, fs, path, dir: app.getPath('userData'), writeFileAtomic, log,
+      safeStorage: secretStore, safeStorageKey, fs, path, dir: userDataPath, writeFileAtomic, log,
     }),
     crypto: createRemotePairingCryptoAdapter(),
     confirmations,

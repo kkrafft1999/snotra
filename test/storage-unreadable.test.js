@@ -32,8 +32,8 @@ const safeStorage = {
 
 function makeStorage(dir, { fsImpl = fs, platform = 'linux' } = {}) {
   return createStorageService({
-    app: { getPath: () => dir },
-    safeStorage,
+    userDataPath: dir,
+    secretStore: safeStorage,
     fs: fsImpl,
     path,
     providerCatalog: createMockProviderCatalog((id) => PROVIDERS[id] || null),

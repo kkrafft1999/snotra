@@ -37,8 +37,8 @@ async function makeStore(t, { receipts = CONFIRM_ALL, available = true, dir: giv
   if (!given) t.after(() => removeTempDir(dir));
   const store = createToolPolicyStore({
     confirmationReceipts: receipts,
-    app: { getPath: () => dir },
-    safeStorage: makeSafeStorage(available),
+    userDataPath: dir,
+    secretStore: makeSafeStorage(available),
     fs,
     path,
     crypto,

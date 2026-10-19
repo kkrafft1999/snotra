@@ -34,8 +34,8 @@ function makeStorage(dir, { fsImpl = fs } = {}) {
   const events = [];
   const notices = createAppNotices({ log: { warn() {} } });
   const storage = createStorageService({
-    app: { getPath: () => dir },
-    safeStorage,
+    userDataPath: dir,
+    secretStore: safeStorage,
     fs: fsImpl,
     path,
     providerCatalog: createMockProviderCatalog((id) => PROVIDERS[id] || null),

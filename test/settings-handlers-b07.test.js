@@ -137,8 +137,8 @@ async function setup(t, { onShowHiddenFilesChanged = null } = {}) {
     listMeta: () => Object.values(PROVIDERS),
   });
   const storage = createStorageService({
-    app: { getPath: () => dir },
-    safeStorage,
+    userDataPath: dir,
+    secretStore: safeStorage,
     fs,
     path,
     providerCatalog,

@@ -152,6 +152,7 @@ code is.
 | **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content and the overview the Security page reads. No Electron, no file system; the heart of [`security-concept.md`](./security-concept.md) |
 | **Application ports** | `src/application/ports/` | 22 typedef files, the contracts between the core and main — see [Ports](#ports) |
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
+| **Electron adapters** | `src/main/electron/` | What talks to Electron's APIs below the shell (#983): the secret store over `safeStorage`, system notifications, the push to the window, the native confirmation, the application and file context menus, the HTML preview's views, diagnostics and the crash dialog. `test/electron-free-main.test.js` keeps these names out of `services/`, `tools/` and `adapters/` |
 | **Remote bridge** | `src/main/remote/` | The adapters of the mobile remote (#1114): the protocol's bytes (`pairing-protocol.js`), the keys kept through `safeStorage`, the relay over Firebase's REST interfaces and in memory, the native sheet's wording. Type-checked like `adapters/` |
 | **Main ports** | `src/main/ports/` | 12 interface types for infrastructure (narrow surfaces, no leaks) |
 | **Platforms** | `src/main/platforms/` | What each operating system and packaging variant can do, resolved once at start, see [Platform capabilities](#platform-capabilities) |
@@ -212,7 +213,7 @@ front end reads the same DTO fields and needs no table of tool names.
 ## Ports
 
 **Application ports** (`src/application/ports/`) — the contracts between the
-application layer and main. There are 22. Twelve are consumed by the chat
+application layer and main. There are 25. Twelve are consumed by the chat
 engine (`llm`, `tool`, `chat-preferences`, `workspace-path`, `skill`,
 `environment`, `project-instructions`, `memory`, `own-secrets`, `tool-policy`,
 `tool-approval`, `config-proposal`); the other six — `web-search`, `url-fetch`,
@@ -222,7 +223,10 @@ what main's tool registry calls and the core never sees
 `user-confirmation` is what main's IPC handlers ask before anything loosens
 ([#980](https://github.com/kkrafft1999/snotra/issues/980)); the three
 `remote-*` ports are what the pairing of the mobile remote decides over
-([#1114](https://github.com/kkrafft1999/snotra/issues/1114)). `memory`'s
+([#1114](https://github.com/kkrafft1999/snotra/issues/1114)); and `secret-store`,
+`notification` and `event-push` are what a host hands main's services instead
+of Electron — the keychain, the system's notifications, the push to the window
+([#983](https://github.com/kkrafft1999/snotra/issues/983)). `memory`'s
 `remember`/`forget`/`paths` serve the tools and the settings as well. The
 typedefs are checked: the engine takes its ports typed
 (`ChatEngineDependencies` in `chat/chat-engine.js`), and every adapter names
@@ -248,7 +252,7 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   protection (#980): "Auto", an allow rule, a block or a sensitive pattern
   taken away, the sandbox off, a program allowance, hosts kept for a
   workspace, a reset — and an import or a skill made global. Its guarantee is
-  **presence**: only `main/adapters/native-confirmation-adapter.js`, the native
+  **presence**: only `main/electron/native-confirmation-adapter.js`, the native
   message box over the window, can confirm; every other front end gets
   `createRefusingConfirmation` from `application/permissions/user-confirmation.js`
   and confirms nothing. A confirmation hands out a **receipt** — an object the
@@ -288,6 +292,23 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
 - `remote-pairing-crypto-port` — the pairing code, `MAC_P` and `MAC_D` and the
   safety phrase of `remote-protocol.md` part 1, computed by
   `main/remote/pairing-protocol.js` and proven against its test vectors
+- `secret-store-port` — the one root of every secret kept at rest (#983):
+  provider keys and the other own secrets, the chat history, the key that signs
+  the tool policy, the remote's keys. `services/storage-service.js`,
+  `services/chat-history-store.js` and `services/tool-policy-store.js` take it
+  as `secretStore`. On the desktop it is `safeStorage` behind
+  `requireRealEncryption` (`main/electron/safe-storage-backend.js`), which
+  refuses Linux's plain-text backend (#1012); a host without a keyring hands in
+  one that is never available, and the stores keep what they can without it
+- `notification-port` — a system notification shown and taken away (#983).
+  The rules — the switch, one per card, the limits — stay in
+  `services/approval-notifier.js`; `main/electron/system-notification-adapter.js`
+  shows Electron's and brings the window up on a click
+- `event-push-port` — an event main sends the front end unasked (#983): the
+  tree, the skills, an update, the permission state. `main/electron/window-push.js`
+  sends it to the app window and drops it while there is none. Its
+  `EventPushTarget` is one receiver — the window an approval card goes back to
+  (`main/adapters/tool-approval-adapter.js`); Electron's `webContents` is one
 - `chat-preferences-port` — UI prefs, system prompt, tool round limit
 - `workspace-path-port` — path helpers (e.g. `basename`)
 - `own-secrets-port` — the app's own secrets, compared against the text the
@@ -1093,7 +1114,7 @@ in it — the renderer only triggers it, see `docs/security-concept.md` §5.
 
 ### Context menu of the file tree
 
-`services/file-context-menu.js` builds the native menu (open, new file, new
+`electron/file-context-menu.js` builds the native menu (open, new file, new
 folder, reveal, information, rename, delete). The renderer only triggers it via `fs:showFileContextMenu`
 and sends nothing but the path; the handler checks it with the adapter's
 `resolveCheckedWorkspacePath()` (realpath-checked, not fs-service's lexical
@@ -1495,7 +1516,7 @@ These are the topics that did move out:
 | The switch in front of `run_python` and `shell_execute`: offered only when found and switched on, the sandbox self-test only when on, and what is missing (#773) | `services/execution-tool-settings.js` |
 | The remembered interface language and hidden-files switch the menus read synchronously; preferences that are on until switched off | `services/remembered-ui-prefs.js`, `services/ui-pref-switches.js` |
 | A folder switch that changed the root: approvals pruned, watchers moved, skill scans dropped | `onWorkspaceChanged` of `services/workspace-activation.js`; the reactions stay wiring |
-| A push to the window only while it exists; the approval notification channels | `ipc/window-push.js`, `ipc/approval-notification-handlers.js` |
+| A push to the window only while it exists; the approval notification channels | `electron/window-push.js`, `ipc/approval-notification-handlers.js` |
 | Where the bundled system skills are; the OS version for the feedback form | `bundledSystemSkillsDir` in `services/skills-service.js`, `osVersionReader` in `services/feedback-service.js` |
 | The estimated chat cost (#949): prices per model — override, local, table — and the price-table update, the only request it makes, on the user's click | service: `services/model-price-service.js` (snapshot `data/model-prices.json`, renewed by `scripts/update-model-prices.js`); a round priced in `adapters/provider-llm-adapter.js`, the turn summed in `application/chat/chat-engine.js`; arithmetic: `contracts/cost.js`; display: `renderer/components/CostPanel.js`, `renderer/components/ModelPricesSettings.js` |
 
@@ -1578,7 +1599,7 @@ with a warning, and on an orderly quit, which writes `Local State` after the
 writes it waits for (#679). `index.js` makes the watcher and hands it to
 `createApplication`; without one, as in the unit tests, nothing waits.
 
-The **menu bar** lives as a pure template in `services/application-menu.js`:
+The **menu bar** lives as a pure template in `electron/application-menu.js`:
 `createApplicationMenuTemplate()` receives platform, app name, `getMainWindow`,
 `shell` and the update check, and returns the menu structure.
 `Menu.buildFromTemplate()` stays in `index.js` — that way it is possible to check
@@ -1955,7 +1976,7 @@ type: a new view is one module and one line in the registry.
 | `renderer/file-views/zoom-tools.js` | Zoom steps and header icon buttons shared by the PDF and the image view ([#803](https://github.com/kkrafft1999/snotra/issues/803)) | both view tests |
 | `renderer/file-views/pdf-engine.js` | Loading the vendored pdf.js, its options, the BinaryDataFactory that asks the main process for data files | `e2e/smoke.test.mjs` |
 | `renderer/file-views/html-view.js` | `html`, `htm`: the page as it runs, in a view the main process lays over the stage; "Preview \| Source", Reload, Open in browser, the notice of what was blocked, a reason instead of an empty column ([#479](https://github.com/kkrafft1999/snotra/issues/479)) | `test/html-view-dom.test.js`, `e2e/html-preview.test.mjs`, `e2e/smoke.test.mjs` |
-| `main/services/html-preview-service.js` | The page's side: its `WebContentsView`, the in-memory session, the `snotra-html:` scheme, what the page may load and where its links lead | `test/html-preview-service.test.js`, `test/html-preview-isolation.test.js` |
+| `main/electron/html-preview-service.js` | The page's side: its `WebContentsView`, the in-memory session, the `snotra-html:` scheme, what the page may load and where its links lead | `test/html-preview-service.test.js`, `test/html-preview-isolation.test.js` |
 | `renderer/file-views/changes-view.js` | "Show changes": the diff of one or more writes to a file, its states and notes. Not in the registry — no file *is* a diff; the host mounts it on request and adds "Content \| Changes" to any file the conversation on screen changed ([#348](https://github.com/kkrafft1999/snotra/issues/348)) | `test/file-changes-dom.test.js`, `e2e/file-changes.test.mjs` |
 | `renderer/file-views/diff-model.js` | Main's runs to rows: three lines of context, the rest folded into gaps. DOM-free | `test/file-changes-dom.test.js` |
 
@@ -2689,6 +2710,7 @@ What a test holds, as of 2026-10-18:
 | `npm run typecheck` (`tsc`, run by `npm test`) | `src/application/`, `src/main/` and `src/shared/` type-check against their JSDoc, with `strictNullChecks` (the files on the `exclude` list in `tsconfig.json` apart); every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
 | `test/port-conformance.test.js` | Every port has an implementation that names it, no port file exports a value, the type check is still in the gate (#1004, #1098) |
 | `test/composition-root-wiring.test.js` | `create-application.js` holds wiring only: no branch beyond "was this optional dependency handed in", no loop, comparison, `try`/`catch` or clock, at most 1,000 lines ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)) |
+| `test/electron-free-main.test.js` | `src/main/services/`, `tools/` and `adapters/` name no Electron API — no `safeStorage`, `app.getPath`, `webContents`, `dialog`, `Notification`, … and no type from `electron`; what needs them lives in `src/main/electron/` ([#983](https://github.com/kkrafft1999/snotra/issues/983)) |
 | `test/catch-discipline.test.js` | Every `catch` in `src/` rethrows, reports, logs or carries a comment why it may stay quiet; every `void call()` in the renderer has a `.catch`. Against a baseline that may only shrink, `test/catch-discipline-baseline.json`, per file and count; it also fails when the baseline lists more than the scan finds, so a fixed site comes off the list in the same change. A heuristic scanner, its limits are in the head of the test ([#1000](https://github.com/kkrafft1999/snotra/issues/1000)) |
 | `test/filesystem-port-typedef.test.js` | The `filesystem-port` typedef lists exactly the members of its adapter (#650) |
 | `test/remote-key-leak.test.js` | The mobile remote's private keys and relay tokens reach no log, IPC payload or diagnostics report; the pairing code reaches the window only while it is shown (#1114) |

@@ -24,6 +24,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { codeOnly } = require('./helpers/code-only');
 
 const ROOT_FILE = path.join(__dirname, '..', 'src', 'main', 'composition', 'create-application.js');
 
@@ -40,39 +41,6 @@ const ALLOWED_CONDITIONS = new Set([
   'session && WebContentsView && shell',
   'shell',
 ]);
-
-/**
- * The source without comments, and with every string, template and regular
- * expression emptied — what is left is code. Line breaks are kept, so a
- * position still maps to its line.
- */
-function codeOnly(source) {
-  let out = '';
-  let i = 0;
-  // Whether a `/` here starts a regular expression rather than a division.
-  const regexAllowed = () => /(^|[=(,:;!&|?{}[\]]|\breturn)\s*$/.test(out);
-  while (i < source.length) {
-    const c = source[i];
-    const next = source[i + 1];
-    if (c === '/' && next === '/') {
-      while (i < source.length && source[i] !== '\n') i += 1;
-    } else if (c === '/' && next === '*') {
-      const end = source.indexOf('*/', i + 2);
-      const stop = end === -1 ? source.length : end + 2;
-      out += source.slice(i, stop).replace(/[^\n]/g, '');
-      i = stop;
-    } else if (c === '\'' || c === '"' || c === '`' || (c === '/' && regexAllowed())) {
-      let j = i + 1;
-      while (j < source.length && source[j] !== c) j += source[j] === '\\' ? 2 : 1;
-      out += c + source.slice(i + 1, j).replace(/[^\n]/g, '') + c;
-      i = j + 1;
-    } else {
-      out += c;
-      i += 1;
-    }
-  }
-  return out;
-}
 
 const lineOf = (code, index) => code.slice(0, index).split('\n').length;
 const squash = (text) => text.replace(/\s+/g, ' ').trim();

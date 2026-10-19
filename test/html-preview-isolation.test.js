@@ -45,7 +45,7 @@ test('a page of the preview is no sender main answers, and no renderer it trusts
 });
 
 test('the preview has no preload, and the scheme is handled in its own session only', () => {
-  const service = fs.readFileSync(path.join(SRC, 'main', 'services', 'html-preview-service.js'), 'utf8');
+  const service = fs.readFileSync(path.join(SRC, 'main', 'electron', 'html-preview-service.js'), 'utf8');
   assert.doesNotMatch(service, /preload\s*:/);
   assert.match(service, /session\.fromPartition\(HTML_PREVIEW_PARTITION\)/);
   assert.match(service, /ses\.protocol\.handle\(/);

@@ -37,15 +37,15 @@ const SAFE_CHAT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
 
 /**
  * @param {object} deps
- * @param {Pick<import('electron').App, 'getPath'>} deps.app
+ * @param {string} deps.userDataPath
  * @param {typeof import('fs/promises')} deps.fs
  * @param {typeof import('path')} deps.path
  * @param {{ warn?: (message: string) => void }|null} [deps.log]
  * @param {string} [deps.platform]
  */
-function createChatAttachmentStore({ app, fs, path, log = console, platform = process.platform }) {
+function createChatAttachmentStore({ userDataPath, fs, path, log = console, platform = process.platform }) {
   function rootDir() {
-    return path.join(app.getPath('userData'), ATTACHMENTS_DIRNAME);
+    return path.join(userDataPath, ATTACHMENTS_DIRNAME);
   }
 
   /**

@@ -332,8 +332,8 @@ function sameCommandRule(a, b) {
 
 /**
  * @param {{
- *   app: Pick<import('electron').App, 'getPath'>,
- *   safeStorage: Pick<import('electron').SafeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'>,
+ *   userDataPath: string,
+ *   secretStore: import('../../application/ports/secret-store-port').SecretStorePort,
  *   safeStorageKey?: import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability,
  *   fs: typeof import('fs/promises'),
  *   path: typeof import('path'),
@@ -345,8 +345,8 @@ function sameCommandRule(a, b) {
  * }} deps
  */
 function createToolPolicyStore({
-  app,
-  safeStorage,
+  userDataPath,
+  secretStore,
   /** When ciphertext may reach the disk (#1060); without it, at once. */
   safeStorageKey = KEY_ALWAYS_DURABLE,
   fs,
@@ -364,16 +364,16 @@ function createToolPolicyStore({
   let writeChain = Promise.resolve();
 
   function policyPath() {
-    return path.join(app.getPath('userData'), POLICY_FILENAME);
+    return path.join(userDataPath, POLICY_FILENAME);
   }
 
   function keyPath() {
-    return path.join(app.getPath('userData'), POLICY_KEY_FILENAME);
+    return path.join(userDataPath, POLICY_KEY_FILENAME);
   }
 
   function encryptionAvailable() {
     try {
-      return safeStorage.isEncryptionAvailable() === true;
+      return secretStore.isEncryptionAvailable() === true;
     } catch {
       return false;
     }
@@ -411,7 +411,7 @@ function createToolPolicyStore({
     await safeStorageKey.whenDurable();
     const key = crypto.randomBytes(HMAC_KEY_BYTES);
     try {
-      const encrypted = safeStorage.encryptString(key.toString('hex')).toString('base64');
+      const encrypted = secretStore.encryptString(key.toString('hex')).toString('base64');
       await fs.mkdir(path.dirname(keyPath()), { recursive: true });
       // Temp + rename (#1013): a key cut off halfway would leave a policy
       // that can never be verified again.
@@ -436,7 +436,7 @@ function createToolPolicyStore({
       return null;
     }
     try {
-      const decrypted = safeStorage.decryptString(Buffer.from(raw.trim(), 'base64'));
+      const decrypted = secretStore.decryptString(Buffer.from(raw.trim(), 'base64'));
       const key = Buffer.from(decrypted, 'hex');
       if (key.length === HMAC_KEY_BYTES) return key;
     } catch {

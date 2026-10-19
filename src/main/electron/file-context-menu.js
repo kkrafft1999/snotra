@@ -1,7 +1,7 @@
 'use strict';
 
 const path = require('path');
-const { createFileInfo, formatFields } = require('./file-info');
+const { createFileInfo, formatFields } = require('../services/file-info');
 const { createTranslator } = require('../../shared/i18n');
 
 /**
@@ -19,7 +19,7 @@ const { createTranslator } = require('../../shared/i18n');
 /**
  * @typedef {import('electron').BrowserWindow} BrowserWindow
  * @typedef {import('electron').MenuItemConstructorOptions} MenuItem
- * @typedef {import('./file-info').InfoField} InfoField
+ * @typedef {import('../services/file-info').InfoField} InfoField
  */
 
 /**
