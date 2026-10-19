@@ -32,8 +32,12 @@ function callTool(name, args) {
   };
 }
 
-/** A model that answers from a list; a function entry runs before it answers. */
-function fakeLlm(rounds) {
+/**
+ * A model that answers from a list; a function entry runs before it answers.
+ * A title request, made in the background after a turn, gets `titled` and
+ * leaves the list alone — given, unless the list is meant to answer it.
+ */
+function fakeLlm(rounds, { titled = null } = {}) {
   const seen = [];
   let index = 0;
   return {
@@ -44,6 +48,8 @@ function fakeLlm(rounds) {
       return { config: { apiKey: 'test' }, model: target.model, providerName: 'Test', capabilities: { images: true } };
     },
     async streamRound(params) {
+      const isTitle = String(params.messages?.[0]?.content || '').startsWith('You name conversations.');
+      if (isTitle && titled !== null) return text(titled);
       seen.push(params.messages);
       const round = rounds[Math.min(index, rounds.length - 1)];
       index += 1;
@@ -66,7 +72,7 @@ const tools = {
   execute: async () => ({ output: JSON.stringify({ entries: ['README.md'] }), progressEvents: [] }),
 };
 
-async function setup(t, rounds) {
+async function setup(t, rounds, { titled = null } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-turn-'));
   let conversation = null;
   t.after(async () => {
@@ -89,7 +95,7 @@ async function setup(t, rounds) {
     chatAttachments,
     getActiveWorkspaceRoot: () => WORKSPACE,
   });
-  const llm = fakeLlm(rounds);
+  const llm = fakeLlm(rounds, { titled });
   const engine = createChatEngine({
     llm,
     tools,
@@ -289,4 +295,49 @@ test('a turn whose saves failed is not lost: the next turn goes on from it and s
   assert.deepEqual((await chatHistory.load('flaky')).messages.map((m) => m.content), [
     'First question', 'First answer.', 'Second question', 'Second answer.',
   ]);
+});
+
+test('a question sent right after a stop goes on from the stopped turn, not from an older save', async (t) => {
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const model = modelReached();
+  const { chatHistory, conversation, turn } = await setup(t, [
+    async (params) => {
+      params.callbacks.onTextDelta('Half');
+      model.reached();
+      await gate;
+      return text('never seen');
+    },
+    text('Second answer.'),
+  ], { titled: 'Name' });
+  const first = turn('quick-again', { content: 'First' });
+  await model.promise;
+  conversation.stop(7, 'quick-again');
+  const second = turn('quick-again', { content: 'Second' });
+  release();
+  await Promise.all([first, second]);
+  await conversation.settled();
+  const stored = (await chatHistory.load('quick-again')).messages;
+  assert.deepEqual(stored.map((m) => [m.content, m.interrupted === true]), [
+    ['First', false], ['Half', false], ['Second', false], ['Second answer.', false],
+  ]);
+});
+
+test('a new turn in a chat whose turn still runs stops that one first', async (t) => {
+  const model = modelReached();
+  const { chatHistory, conversation, turn } = await setup(t, [
+    async (params) => {
+      params.callbacks.onTextDelta('Working');
+      model.reached();
+      await new Promise((resolve) => params.abortSignal?.addEventListener('abort', resolve, { once: true }));
+      return { cancelled: true, message: { role: 'assistant', content: '' } };
+    },
+    text('Replacement.'),
+  ], { titled: 'Name' });
+  const first = turn('replaced', { content: 'One' });
+  await model.promise;
+  const second = turn('replaced', { content: 'Two' });
+  await Promise.all([first, second]);
+  await conversation.settled();
+  assert.deepEqual((await chatHistory.load('replaced')).messages.map((m) => m.content), ['One', 'Working', 'Two', 'Replacement.']);
 });

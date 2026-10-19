@@ -77,6 +77,13 @@ function createConversationService({ engine, history, describeError = (error) =>
    * @type {Map<string, ChatMessage[]>}
    */
   const unsaved = new Map();
+  /**
+   * The latest turn of each chat, until it has saved for the last time: the
+   * next turn in the same chat waits for it.
+   *
+   * @type {Map<string, { turn: RunningTurn, sessionId: string|number, finished: Promise<unknown>, done: boolean }>}
+   */
+  const lastTurn = new Map();
   /** @type {Map<string, RunningTurn>} the turns under way, by front end and chat */
   const running = new Map();
   /** @param {string|number} sessionId @param {string} chatId */
@@ -137,13 +144,45 @@ function createConversationService({ engine, history, describeError = (error) =>
    *
    * @param {TurnInput} input
    */
-  async function runTurn({ sessionId, chatId, message, workspaceRoot = null, selectedPath = null, selectedIsDirectory = false, onEvent = () => {} }) {
+  async function runTurn(input) {
+    const { sessionId, chatId } = input;
     /** @type {RunningTurn} */
     const turn = { stopped: false, abandoned: false };
     const key = runKey(sessionId, chatId);
     // Known from the first moment: a stop pressed while the chat is still
     // being loaded must not be lost.
     running.set(key, turn);
+    const previous = lastTurn.get(chatId);
+    /** @type {() => void} */
+    let finish = () => {};
+    const finished = new Promise((resolve) => { finish = () => resolve(undefined); });
+    const mine = { turn, sessionId, finished, done: false };
+    lastTurn.set(chatId, mine);
+    try {
+      if (previous) {
+        // A new turn in the same chat replaces one still going, as the engine
+        // does: it is stopped and saved first, and this one goes on from what
+        // it left — not from an older copy on disk.
+        if (!previous.done) {
+          previous.turn.stopped = true;
+          engine.abort(previous.sessionId, chatId);
+        }
+        await previous.finished;
+      }
+      return await runOneTurn(input, turn, key);
+    } finally {
+      mine.done = true;
+      finish();
+      if (lastTurn.get(chatId) === mine) lastTurn.delete(chatId);
+    }
+  }
+
+  /**
+   * @param {TurnInput} input
+   * @param {RunningTurn} turn
+   * @param {string} key
+   */
+  async function runOneTurn({ sessionId, chatId, message, workspaceRoot = null, selectedPath = null, selectedIsDirectory = false, onEvent = () => {} }, turn, key) {
     const stored = await history.load(chatId);
     /** @type {ChatMessage} */
     const question = { role: 'user', content: typeof message?.content === 'string' ? message.content : '' };
