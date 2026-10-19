@@ -470,8 +470,18 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
   if (savedKnownHosts === null) await fs.rm(knownHosts, { force: true });
   else await fs.writeFile(knownHosts, savedKnownHosts);
   // Through the relay, and it fails at once: the run ends with ssh, no timeout.
-  const unknownHost = await run(lsRemote);
-  assert.notEqual(unknownHost.exitCode, null, `the run hung; ${said(unknownHost)}`);
+  // Should it hang, what was still alive after a while says where.
+  let snapshot = '';
+  const look = setTimeout(() => {
+    const ps = childProcess.spawnSync('sh', ['-c',
+      'ps -eo pid,ppid,stat,etimes,args --forest | grep -E "socat|ssh|git|cat|relay|bwrap|seccomp" | grep -v grep; '
+      + 'for p in $(pgrep -f "socat|ssh-relay|git-upload|ls-remote"); do echo "== $p"; ls -l /proc/$p/fd 2>&1 | tail -n +2; done'],
+    { encoding: 'utf8' });
+    snapshot = `${ps.stdout}${ps.stderr}`;
+  }, 15_000);
+  const unknownHost = await run(lsRemote, { timeoutMs: 30_000 });
+  clearTimeout(look);
+  assert.notEqual(unknownHost.exitCode, null, `the run hung; ${said(unknownHost)}\n${snapshot}`);
   assert.notEqual(unknownHost.exitCode, 0, said(unknownHost));
   assert.match(unknownHost.stderr, /Host key verification failed[^]*<sandbox_ssh>[^]*known_hosts/, said(unknownHost));
 });

@@ -60,16 +60,17 @@ dir=$(mktemp -d "${TMPDIR:-/tmp}/snotra-ssh.XXXXXX") || fail 'no temporary folde
 # the timeout while git still holds its end open: so socat closes git's
 # stdout then (`shut-close`; a pipe cannot be shut down half-way), and the
 # shell lets go of it before it waits. -t: after git's last byte, the
-# answer may still take its time.
+# answer may still take its time. The two never hold the run's stderr: should
+# git end this script first, they must not keep the run open.
 exec 3<&0
 {
   printf 'SNOTRA-SSH 1\n%s\n%s\n%s\n%s\n%s\n%s\n' "$dir" "$family" "$port" "$host" "$protocol" "$command"
   exec cat <&3
-} | socat -t 3600 STDIO,shut-close TCP:127.0.0.1:2222,retry=50,interval=0.1 &
+} 2>/dev/null | socat -t 3600 STDIO,shut-close TCP:127.0.0.1:2222,retry=50,interval=0.1 2>"$dir/relay" &
 exec >&- 3<&-
 wait
 
-cat "$dir/stderr" >&2 2>/dev/null
+cat "$dir/relay" "$dir/stderr" >&2 2>/dev/null
 status=$(cat "$dir/status" 2>/dev/null)
 rm -rf "$dir"
 case $status in
