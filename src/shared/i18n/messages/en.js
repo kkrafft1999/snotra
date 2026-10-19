@@ -1421,8 +1421,8 @@ module.exports = {
   'settingsDialog.python.detail.unisolated': 'The model can then have Snotra run Python code. There is no sandbox on this system: the code can read and write anywhere, reach the network and start programs. Outside “{mode}” you approve every script on a card; in “{mode}” it runs without asking. You can switch it off again under {place}.',
   'settingsDialog.mcpLaunch.title': 'Allow Snotra to start this program?',
   'settingsDialog.mcpLaunch.detail': 'The MCP server “{label}” starts this command on your computer:\n\n{command}{folder}{env}\n\nIt runs with your full rights, outside the sandbox, whenever the server is switched on or tested. Only allow programs you trust.',
-  'settingsDialog.mcpLaunch.folder': 'Folder: {cwd}',
-  'settingsDialog.mcpLaunch.env': 'Environment: {names}',
+  'settingsDialog.mcpLaunch.folder': 'Working directory: {cwd}',
+  'settingsDialog.mcpLaunch.env': 'Environment variables: {names}',
   'settingsDialog.mcpLaunch.confirm': 'Allow program',
   // ── Native confirmation dialogs of the permissions (#353) ────────────────
   'permissionDialog.cancel': 'Cancel',
