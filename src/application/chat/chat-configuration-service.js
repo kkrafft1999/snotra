@@ -111,14 +111,8 @@ function cleanNames(names) {
  * (#18), and a folder skill's description goes out cut and as data.
  */
 /**
- * The skill catalogue as the configuration reads it (#982, #1172); on the
- * desktop `src/main/services/skills-service.js`, which scans the folders.
- *
  * @typedef {import('../../shared/contracts/settings').UiPrefs} UiPrefs
- * @typedef {Object} SkillCatalog
- * @property {(options: { workspaceRoot?: string | null, activeSkills?: string[] | null,
- *   activeWorkspaceSkills?: Record<string, string[]> | null, locale?: string | null }) =>
- *   Promise<{ skills: Array<Omit<import('../../shared/contracts/skills').SkillSummary, 'builtin'>> }>} listCatalog
+ * @typedef {import('../skills/skill-catalog').SkillCatalog} SkillCatalog
  */
 
 /**

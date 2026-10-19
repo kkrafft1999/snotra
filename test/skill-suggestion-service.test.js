@@ -4,7 +4,7 @@ const {
   createSkillSuggestionService,
   MAX_QUERY_CHARS,
   NONE,
-} = require('../src/main/services/skill-suggestion-service');
+} = require('../src/application/skills/skill-suggestion-service');
 
 const KATALOG = [
   { name: 'jira-ticket-status', description: 'Status eines Jira-Tickets', status: 'available' },
