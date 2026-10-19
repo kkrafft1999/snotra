@@ -17,6 +17,9 @@ Snotra kann Shell-Befehle und Python-Code ausführen: `git status`, einen Build,
 
 1. Öffne *Einstellungen › Tools › Autonomie* und klapp die Zeile *Ausführen* auf.
 2. Schalte *Shell-Befehle erlauben* ein, *Python-Ausführung erlauben* oder beides.
+3. [seit 1.28] Ein Dialog deines Betriebssystems fragt *shell_execute einschalten?* oder *run_python einschalten?* und sagt, was das Tool dann darf — unter Windows, dass es keine Sandbox gibt. Wähl *Einschalten*. *Abbrechen* lässt den Schalter aus.
+
+Ausschalten fragt nie nach.
 
 Befehle laufen unter macOS und Linux in deiner Login-Shell (zsh, bash …), mit dem `PATH` aus deinem Shell-Profil, und unter Windows in PowerShell oder `cmd.exe`. Python sucht Snotra selbst; willst du einen bestimmten Interpreter — eine virtuelle Umgebung mit den Paketen, die du brauchst, zum Beispiel —, stellst du ihn unter *Einstellungen › Tools › Einrichtung* ein.
 

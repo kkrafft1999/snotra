@@ -41,6 +41,21 @@ const { writeFileAtomic } = require('./atomic-write');
 const { createChatHistoryStore } = require('./chat-history-store');
 const { NOTICE_STORES } = require('../../shared/contracts/notices');
 const { KEY_ALWAYS_DURABLE } = require('./safe-storage-key-durability');
+const { CONFIRMATION_ACTIONS, NO_RECEIPTS } = require('../../application/permissions/user-confirmation');
+const {
+  launchBeforeFromStored,
+  mcpLaunchNeedsConfirmation,
+  mcpLaunchSubject,
+} = require('./mcp-launch-confirmation');
+
+/**
+ * The preferences that switch an execution tool on, and what switching each
+ * on has to be confirmed as (#1104). Switching one off needs nothing.
+ */
+const EXECUTION_SWITCHES = Object.freeze({
+  shellExecutionEnabled: CONFIRMATION_ACTIONS.SHELL_EXECUTION,
+  pythonExecutionEnabled: CONFIRMATION_ACTIONS.PYTHON_EXECUTION,
+});
 
 function createStorageService({
   app,
@@ -56,6 +71,12 @@ function createStorageService({
   log = console,
   platform = process.platform,
   onStoreFileEvent = null,
+  /**
+   * Redeems the receipts of the user-confirmation port (#980, #1104): an
+   * execution tool switched on and a local MCP command stored need one.
+   * Without it, neither is taken.
+   */
+  confirmationReceipts = NO_RECEIPTS,
 }) {
   const LLM_CONFIG_FILENAME = 'llm-config.json';
   const LEGACY_OPENAI_CONFIG_FILENAME = 'openai-config.json';
@@ -1014,8 +1035,17 @@ function createStorageService({
    * the server off and forgets its tool catalogue (#341, concept §11): what
    * the user accepted from one endpoint never carries over to another. It
    * comes back on only after the user switched it on again.
+   *
+   * A local server whose command is new or changed — the command, its
+   * arguments, its folder or its environment — is stored only with a
+   * receipt of the user-confirmation port bound to exactly that launch
+   * (#1104): it would run with the user's rights, outside the sandbox and
+   * without a card, the moment it is switched on or tested.
+   *
+   * @param {object} input
+   * @param {{ confirmation?: object }} [options]
    */
-  async function saveMcpServer(input) {
+  async function saveMcpServer(input, { confirmation = null } = {}) {
     const precheck = validateMcpServerInput(input);
     // Only an input without a transport may still be completed from what is
     // stored under its identifier; anything else is refused as it is.
@@ -1036,6 +1066,10 @@ function createStorageService({
       // its switch (CR-B14-03). Decided here, under the lock, not by the form.
       if (create && previous) {
         return { ok: false, errors: [createMessage('mcp.error.idExists', { id: value.id })] };
+      }
+      if (mcpLaunchNeedsConfirmation(value, env, launchBeforeFromStored(previous))
+        && confirmationReceipts.redeem(confirmation, CONFIRMATION_ACTIONS.MCP_LAUNCH, mcpLaunchSubject(value, env)) !== true) {
+        return { ok: false, notConfirmed: true, errors: [createMessage('mcp.error.launchNotConfirmed')] };
       }
 
       const envProblems = secretProblems();
@@ -1236,7 +1270,15 @@ function createStorageService({
     await withFileLock(getUIPrefsPath(), () => writeJsonAtomic(getUIPrefsPath(), data));
   }
 
-  async function updateUIPrefs(updater) {
+  /**
+   * `confirmations` carries the receipts for execution tools switched on
+   * (#1104), keyed by preference. One switched on without a receipt for it
+   * stays off; the rest of the update is written.
+   *
+   * @param {(prefs: object) => object|Promise<object>} updater
+   * @param {{ confirmations?: Partial<Record<keyof typeof EXECUTION_SWITCHES, object>> }} [options]
+   */
+  async function updateUIPrefs(updater, { confirmations = {} } = {}) {
     return withFileLock(getUIPrefsPath(), async () => {
       // Not `readUIPrefs`: its defaults for an unreadable file would be
       // written back, and every other preference with them (#473). A file
@@ -1245,6 +1287,10 @@ function createStorageService({
       const current = data === null ? firstRunUiPrefs() : uiPrefsFromData(data);
       const updated = await updater({ ...current });
       const normalized = normalizeUiPrefs(updated);
+      for (const [key, action] of Object.entries(EXECUTION_SWITCHES)) {
+        if (normalized[key] !== true || current[key] === true) continue;
+        if (confirmationReceipts.redeem(confirmations?.[key], action, '') !== true) normalized[key] = false;
+      }
       await writeJsonAtomic(getUIPrefsPath(), normalized);
       return normalized;
     });

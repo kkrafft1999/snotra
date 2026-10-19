@@ -8,6 +8,7 @@ const { chatSessionFileName } = require('../src/main/services/chat-history-store
 const { LLM_CONFIG_VERSION } = require('../src/shared/contracts/settings');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
 const { removeTempDir } = require('./helpers/temp-dir');
+const { ACCEPT_EVERY_RECEIPT } = require('./helpers/confirmations');
 
 const mockProviders = {
   getProvider(id) {
@@ -75,6 +76,8 @@ function makeStorage(tmpDir) {
     maxChatSessions: 3,
     maxFolderHistory: 5,
     defaultProviderId: 'openai',
+    // What is checked here is the file, not the confirmation (#1104).
+    confirmationReceipts: ACCEPT_EVERY_RECEIPT,
   });
 }
 
@@ -102,6 +105,8 @@ function makeStorageWithEncryption(tmpDir) {
     maxChatSessions: 3,
     maxFolderHistory: 5,
     defaultProviderId: 'openai',
+    // What is checked here is the file, not the confirmation (#1104).
+    confirmationReceipts: ACCEPT_EVERY_RECEIPT,
   });
 }
 

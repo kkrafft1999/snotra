@@ -24,7 +24,7 @@ Each tool can be switched off on its own under *Settings › Tools › Autonomy*
 
 `run_python` runs Python code the model writes — for calculations, data and charts.
 
-1. Switch it on under *Settings › Tools › Autonomy › Execute › Allow Python execution*. Read [Run commands in the sandbox](../../safety/sandbox/) first.
+1. Switch it on under *Settings › Tools › Autonomy › Execute › Allow Python execution*, and confirm *Switch on* in the dialog that follows [since 1.28]. Read [Run commands in the sandbox](../../safety/sandbox/) first.
 2. Snotra looks for Python 3 by itself. To use a particular interpreter — a virtual environment with `pandas`, say — enter its path under *Settings › Tools › Setup › Python interpreter* and click *Apply*.
 
 Snotra never installs packages by itself; the interpreter you choose decides which ones the model has.

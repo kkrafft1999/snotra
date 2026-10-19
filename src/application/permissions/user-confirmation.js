@@ -46,6 +46,12 @@ const CONFIRMATION_ACTIONS = Object.freeze({
   SKILL_MAKE_GLOBAL: 'skill-make-global',
   /** A phone let in as the mobile remote, after comparing the six words (#1114) — subject: the channel id. */
   REMOTE_PAIRING: 'remote-pairing',
+  /** `shell_execute` switched on (#1104) — subject: ''. */
+  SHELL_EXECUTION: 'shell-execution',
+  /** `run_python` switched on (#1104) — subject: ''. */
+  PYTHON_EXECUTION: 'python-execution',
+  /** A local MCP server stored with a command that is new or changed (#1104) — subject: `mcpLaunchSubject`. */
+  MCP_LAUNCH: 'mcp-launch',
 });
 
 const CONFIRMATION_REFUSALS = Object.freeze({

@@ -54,9 +54,11 @@ specification must not contradict.
   ([security concept §5](./security-concept.md#5-hard-boundaries-and-prompt-injection);
   AR-05, [#980](https://github.com/kkrafft1999/snotra/issues/980)). A remote
   front end cannot see that dialog and must never be the one to answer it.
-  Some loosening has no dialog at all: `settings:setUIPrefs` switches shell
-  and Python execution on, `settings:saveMcpServer` stores and at once starts
-  any command, `settings:commitSettings` turns off TLS checks for an entry.
+  Some loosening had no dialog at all: `settings:setUIPrefs` switched shell
+  and Python execution on, `settings:saveMcpServer` stored any command to
+  start, `settings:commitSettings` turns off TLS checks for an entry. Since
+  #1104 the first two go through the confirmation port, and the third is
+  classified as not loosening (§7.6).
 - **The renderer owns the conversation** ([#981](https://github.com/kkrafft1999/snotra/issues/981)).
   It sends the whole history with every `chat:send`, which answers only when
   the run is over; it writes the chat back with `chatHistory:upsert`; it
@@ -471,11 +473,17 @@ reachable. The method table of the dispatcher is the first line; the one that
 holds is the confirmation port of #980, whose adapters for `local` and `relay`
 answer every request with *no* — the measure of SEC-6.
 
-The catalogue below found loosening that today needs no native dialog at all
-(the shell and Python switches, MCP servers, insecure TLS). None of it is on
-the remote surface, and #980 has to cover it before any remote kind could ever
-reach a settings write. Who confirms a loosening when there is no desktop at
-all is [O4](#11-open-decisions).
+The catalogue below found loosening that needed no native dialog at all
+(the shell and Python switches, MCP servers, insecure TLS). #1104 decided
+each ([security concept §5](./security-concept.md#5-hard-boundaries-and-prompt-injection)):
+switching `shell_execute` or `run_python` on and storing a local MCP command
+that is new or changed now go through the same port, and the stores refuse
+both without a receipt — so even a remote kind that reached a settings write
+could switch neither on. "Ignore TLS certificate" is classified as not
+loosening: an `http://` address needs no dialog either, and the flag gives
+the agent nothing. None of these channels is on the remote surface. Who
+confirms a loosening when there is no desktop at all is
+[O4](#11-open-decisions).
 
 ## 8. Catalogue
 
@@ -573,7 +581,7 @@ listed together where they share their class.
 | `toolPermissions:setMode`, `addRule`, `removeRule`, `setSensitivePaths`, `resetWorkspaceRules`, `resetAll`, `setWorkspaceSandbox`, `setWorkspaceMode`, `setProgramAllowance` | desktop, **never** remote | Loosening (§7.6) |
 | `toolPermissions:clearSessionGrants`, `revokeSessionGrant`, `removeWorkspaceHost`, `removeProgramAllowance` | desktop | They only tighten and could be offered later; nothing needs them first |
 | `toolPermissions:getState`, `getSecurityOverview`, `resolveProgram`, `chooseAllowanceFolder` | desktop | The settings page's view; a folder dialog |
-| `settings:setUIPrefs`, `settings:commitSettings`, `settings:saveMcpServer`, `settings:deleteMcpServer`, `settings:reloadMcpServers`, `settings:testMcpServer`, `settings:setWebSearchApiKey` | desktop, **never** remote | Secrets come in here, and several loosen without a dialog (§7.6) |
+| `settings:setUIPrefs`, `settings:commitSettings`, `settings:saveMcpServer`, `settings:deleteMcpServer`, `settings:reloadMcpServers`, `settings:testMcpServer`, `settings:setWebSearchApiKey` | desktop, **never** remote | Secrets come in here; the execution switches and a local MCP command are confirmed through the port (§7.6, #1104) |
 | `settings:getLLMState`, `setActivePreset`, `setReasoningEffort`, `listModels`, `cancelModels`, `getUIPrefs`, `getToolCatalog`, `getMcpCatalog`, `getWebSearchState`, `getImageGenerationState`, `listImageModels`, `cancelImageModels`, `getPythonState`, `getShellState`, `getSkillCatalog`, `reloadSkills`, `getMemory`, `forgetMemory`, `removeFolderFromHistory` | desktop | The settings window. Choosing a chat's model from a phone is [O6](#11-open-decisions); it needs the per-chat model of #981 first |
 | `skills:suggest` | desktop | A helper of the window's composer |
 | `skills:makeGlobal` | desktop | Native confirmation; writes a global skill folder (#980) |
