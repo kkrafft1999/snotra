@@ -106,7 +106,7 @@ export function initWorkspaceModeSetting({ toolPermissions }) {
     const current = state?.workspaceMode || 'smart';
     // Without safeStorage "Auto" cannot be stored; one that is stored stays
     // selectable, so that it can be seen and taken back.
-    const autoBlocked = state?.encryptionAvailable === false && current !== 'auto';
+    const autoBlocked = state?.platformCapabilities?.secureStorage === false && current !== 'auto';
     describeOptions(state, current);
     for (const input of group.querySelectorAll('input')) {
       if (!busy) input.checked = !!root && input.value === current;

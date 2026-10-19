@@ -316,7 +316,7 @@ test('settings: the isolation line of each tool names the switched-off workspace
 
 test('settings: the sandbox tile of a workspace on Tools › Security — on, off, unavailable, Windows (#543, #1119)', async () => {
   const { describeSandboxTile } = await loadRenderer('tool-security-view.js');
-  const overview = (patch = {}) => ({ platform: 'darwin', encryptionAvailable: true, sandbox: { isolated: true, status: 'isolated' }, ...patch });
+  const overview = (patch = {}) => ({ platform: 'darwin', platformCapabilities: { secureStorage: true }, sandbox: { isolated: true, status: 'isolated' }, ...patch });
   const ws = (patch = {}) => ({ root: WORKSPACE, sandboxOff: false, programs: [], hosts: [], ...patch });
   const autoLabel = 'Auto';
 
@@ -357,7 +357,7 @@ test('settings: the sandbox tile of a workspace on Tools › Security — on, of
 
 test('settings: without safeStorage "off" is not offered while on (CR-B14-09)', async () => {
   const { describeSandboxTile } = await loadRenderer('tool-security-view.js');
-  const overview = { platform: 'darwin', encryptionAvailable: false, sandbox: { isolated: true, status: 'isolated' } };
+  const overview = { platform: 'darwin', platformCapabilities: { secureStorage: false }, sandbox: { isolated: true, status: 'isolated' } };
   const blocked = describeSandboxTile(overview, { root: WORKSPACE, sandboxOff: false, programs: [], hosts: [] }, { autoLabel: 'Auto' });
   assert.deepEqual([blocked.checked, blocked.offBlocked, blocked.tone], [true, true, 'on']);
   assert.equal(blocked.note, 'It cannot be switched off here: this system offers no encrypted storage.');

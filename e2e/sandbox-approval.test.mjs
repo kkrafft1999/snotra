@@ -169,7 +169,7 @@ test('the sandbox asks after the run and while the command waits, also in Auto',
   const isolation = await poll(async () => {
     const state = await page.evaluate(() => window.electronAPI.getToolPermissionState());
     const described = state?.executionIsolation;
-    return described && !described.pending ? { ...described, encryptionAvailable: state.encryptionAvailable } : null;
+    return described && !described.pending ? { ...described, encryptionAvailable: state.platformCapabilities?.secureStorage === true } : null;
   }, { what: 'sandbox detection', timeoutMs: 60_000 });
   assert.ok(isolation.tools.includes('shell_execute'), `shell_execute is not offered: ${JSON.stringify(isolation)}`);
   if (isolation.unisolated) {
