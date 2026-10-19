@@ -2567,11 +2567,10 @@ undo the founding decision; a hand-written conformance test per port would
 check the member names and miss every parameter and return shape.
 
 **What is checked.** `tsconfig.json` includes `src/application/`, `src/main/`
-and `src/shared/` as a whole, with an `exclude` list of the few files that are
-not typed yet ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)): the
-composition root and `index.js`. Every file the included ones import is checked as well — `checkJs`
-checks the whole program. The tests, the renderer and the build scripts are
-outside.
+and `src/shared/` as a whole ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)),
+so a new file is covered the day it is written. Every file the included ones
+import is checked as well — `checkJs` checks the whole program. The tests,
+the renderer and the build scripts are outside.
 
 **How a port is held to its adapter.** Three things make the compiler compare
 them, and each is a line of JSDoc:
@@ -2616,15 +2615,14 @@ not allow fails the check. The provider modules' `presentation` is typed as
 parameter with a `= null` default says `| null` in its JSDoc — otherwise the
 compiler reads the local as `null` and rejects every use of it.
 
-**How strict.** `strict` is off, with `strictNullChecks`,
+**How strict.** `strict` is off, with `noImplicitAny`, `strictNullChecks`,
 `strictFunctionTypes`, `strictBindCallApply` and `noImplicitThis` on. That
 catches a port and its adapter disagreeing — a member, a shape, an argument
-count — and callbacks with the wrong parameters, and it keeps `null` and
-`undefined` out of places that declare a value. `noImplicitAny` is still off
-only while the last files — the sandbox service and the composition root — are
-annotated
-([#1098](https://github.com/kkrafft1999/snotra/issues/1098)); every other file
-already passes with it on.
+count — and callbacks with the wrong parameters, it keeps `null` and
+`undefined` out of places that declare a value, and it leaves no parameter
+without a type ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
+`useUnknownInCatchVariables` is the one strict flag left off: it would report
+about 200 `catch (e)` sites for little gain.
 
 **Conventions** that came out of the first run:
 
@@ -2659,6 +2657,20 @@ already passes with it on.
 - `tsc` 7 rejects a `#` or a dash right after a bracketed name in
   `@param {…} [name]` / `@property {…} [name]`; write the description after
   two spaces, as elsewhere.
+- A new file is typed as it is written: `@param` and `@returns` on every
+  function, a `@type` on a variable or an array that starts empty
+  (`let x = null;` and `const rows = [];` are `null` and `never[]` to the
+  compiler), and a callback parameter named in the JSDoc of the function that
+  takes it. Foreign data — parsed JSON, a provider's payload — is `unknown`,
+  narrowed with `isRecord` (`src/shared/runtime/is-record.js`) or a type
+  guard. `any` is for a value that cannot be typed, written as
+  `/** @type {any} */` or `[field: string]: any` with the reason beside it;
+  `@ts-ignore` and `@ts-nocheck` are not used.
+- A dependency bag that comes from the composition root is typed as a
+  typedef beside the function that takes it, from the consumer's side;
+  `createApplication`'s own options live in
+  `src/main/composition/application-options.js`, which holds types only and
+  keeps the root inside its line budget.
 
 ## Automated boundary guards
 

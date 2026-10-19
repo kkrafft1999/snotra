@@ -13,32 +13,31 @@
     "lib": ["es2024"],
     "types": ["node"],
     "skipLibCheck": true,
-    // Not `strict` as a whole: `noImplicitAny` is still off, because the last
-    // files — the sandbox service and the composition root — are not
-    // annotated yet (#1098). Every other file passes with it on.
+    // Not `strict` as a whole: `useUnknownInCatchVariables` would report about
+    // 200 `catch (e)` sites, and nothing is gained there that the checks below
+    // do not give. What is on (#1098):
+    // `noImplicitAny` is on: every parameter and every variable that starts
+    // empty has a type, in JSDoc or inferred; a value that truly cannot be
+    // typed says `any` on purpose, with a reason beside it.
     // `strictNullChecks` is on: `null` and `undefined` are values of their
     // own, and a truthiness check narrows a `{ error } | { ok }` union. What
     // is on catches a port and its adapter disagreeing — a missing or extra
     // member, a wrong shape, a wrong argument count — and callbacks that
     // take the wrong parameters.
     "strict": false,
+    "noImplicitAny": true,
     "strictNullChecks": true,
     "strictFunctionTypes": true,
     "strictBindCallApply": true,
     "noImplicitThis": true
   },
-  // `src/application`, `src/main` and `src/shared` as a whole, except the files
-  // listed under `exclude` while they are still untyped (#1098). Files an
-  // included one imports are checked too, since `checkJs` checks every file in
-  // the program, so `exclude` only keeps a file from being a root of its own.
+  // `src/application`, `src/main` and `src/shared` as a whole; the tests, the
+  // renderer and the build scripts are outside. Every file an included one
+  // imports is checked too, since `checkJs` checks the whole program.
   "include": [
     "src/application/**/*.js",
     "src/main/**/*.js",
     "src/shared/**/*.js",
     "types/**/*.d.ts"
-  ],
-  "exclude": [
-    "src/main/index.js",
-    "src/main/composition/create-application.js"
   ]
 }

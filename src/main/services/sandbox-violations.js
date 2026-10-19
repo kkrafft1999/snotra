@@ -67,7 +67,7 @@ const UNASKED_REASON = 'permission prompt failed';
  *   observed?: boolean }} Violation
  *
  * @typedef {{ kind: string, target: string, count: number, folder?: boolean, operations: string[],
- *   reason?: string }} ViolationEntry
+ *   reason?: string, allow?: string[] }} ViolationEntry
  *
  * @typedef {{ entries: ViolationEntry[], moreEntries: number, total: number, raw: string[] }} ViolationSummary
  */
