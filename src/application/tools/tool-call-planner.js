@@ -26,13 +26,13 @@ const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-p
 const { maskSensitiveContent } = require('../../shared/runtime/sensitive-content');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { resolveRunDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
-const { SANDBOX_REASONS } = require('../services/sandbox-service');
+const { SANDBOX_REASONS } = require('../../shared/contracts/sandbox-reasons');
 const { normalizeProgramAllowances } = require('../../shared/contracts/program-allowances');
 const { APP_LOCALES, createTranslator } = require('../../shared/i18n');
 const { isPathInside } = require('../../shared/runtime/path-inside');
 const { TOOL_EXECUTION_KINDS, normalizeToolPresentation } = require('../../shared/contracts/tool-presentation');
 const { TOOL_PREVIEW_KINDS } = require('./tool-descriptor');
-const { outsideRootsFrom, OUTSIDE_WORKSPACE } = require('../services/outside-access');
+const { outsideRootsFrom, OUTSIDE_WORKSPACE } = require('./outside-roots');
 
 /**
  * How much of a preview reaches the card (#551). "Show in full" on the card
@@ -260,18 +260,30 @@ function stableStringify(value) {
 }
 
 /**
- * What the planner takes from `fs-service.js`, typed from its factory so that
- * the two cannot drift apart (#1098).
- * @typedef {import('../services/fs-service').FsService} FsService
+ * What the planner asks of the file system service (#982): resolving a tool
+ * path against its root, and the real path of what exists of it. On the
+ * desktop `src/main/services/fs-service.js` is it; `tsc` checks it against
+ * this where the tool adapter hands it in.
+ * @typedef {{ access?: 'read' | 'write', skillRoots?: Array<{ name: string, dir: string }>,
+ *   outsideRoots?: Array<{ root: string, only: string | null, access: 'read' | 'write' }> }} ToolPathOptions
+ * @typedef {{ error: string, code?: string, absPath?: string, root?: undefined, prefix?: undefined,
+ *     skillName?: undefined, outside?: undefined }
+ *   | { error?: undefined, absPath: string, root: string, prefix: string, skillName: string | null,
+ *     outside?: true }} ToolPathResolution
+ * @typedef {Object} FsService
+ * @property {(workspaceRoot: string | null | undefined, relativePath: unknown, options?: ToolPathOptions) => Promise<ToolPathResolution>} resolveToolPath
+ * @property {(absPath: string) => Promise<string>} resolveExistingRealPath
  *
  * A tool path resolved against its root, or refused (#792): see `resolveToolPath`.
- * @typedef {Awaited<ReturnType<FsService['resolveToolPath']>>} ToolPathResolution
  * @typedef {Extract<ToolPathResolution, { error: string }>} ToolPathRefused
  * @typedef {Exclude<ToolPathResolution, ToolPathRefused>} ToolPathResolved
  *
- * What a card may open outside the open folder (#792), from `outside-access.js`
- * — typed from its factory, which is already part of the checked program.
- * @typedef {ReturnType<typeof import('../services/outside-access').createOutsideAccess>} OutsideAccess
+ * What a card may open outside the open folder (#792); on the desktop
+ * `src/main/services/outside-access.js`.
+ * @typedef {{ path: string, file: boolean, access: 'read' | 'write' }} OutsideOffer
+ * @typedef {Object} OutsideAccess
+ * @property {(target: { absPath: string, isDirectory: boolean, access: 'read' | 'write' }) => Promise<OutsideOffer[]>} offer
+ * @property {(grant: { path?: unknown, access?: unknown } | null | undefined, options?: { exact?: boolean }) => Promise<boolean>} isAllowed
  *
  * What a program allowance match says (#408): the allowance a shell command
  * gets, or why it does not.

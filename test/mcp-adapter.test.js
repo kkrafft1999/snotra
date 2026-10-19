@@ -315,7 +315,7 @@ test('der Plan trägt beide Mindestklassen, auch ohne Planer', async () => {
 });
 
 test('der echte Planer führt beide Mindestklassen zusammen', async () => {
-  const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
+  const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
   const registry = registryWithMcp(await definitionsOf(fakeService()));
   const planner = createToolCallPlanner({
     fsService: { resolveToolPath: async () => ({ error: 'kein Workspace' }) },

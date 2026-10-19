@@ -29,8 +29,9 @@
 
 const { isPathInside } = require('../../shared/runtime/path-inside');
 
-/** What fs-service reports for a tool path outside the open folder: a card may offer it. */
-const OUTSIDE_WORKSPACE = 'outside_workspace';
+// The roots a grant opens, and the refusal code a card may answer, are the
+// planner's rules (#982); they live next to it in the application layer.
+const { outsideRootsFrom, OUTSIDE_WORKSPACE } = require('../../application/tools/outside-roots');
 const { widerFolder } = require('./sandbox-violations');
 const { sensitiveReadPaths, isAlwaysUnwritable } = require('./sandbox-service');
 
@@ -148,32 +149,6 @@ function createOutsideAccess({
   }
 
   return { offer, isAllowed, expandHome: expand };
-}
-
-/**
- * The roots the file tools may use outside the open folder, from grants:
- * a folder grant is its folder, a file grant the file's folder with that one
- * name. Malformed entries are dropped.
- *
- * @returns {Array<{ root: string, only: string|null, access: 'read'|'write' }>}
- * @param {unknown} grants
- * @param {typeof import('path')} path
- */
-function outsideRootsFrom(grants, path) {
-  /** @type {Array<{ root: string, only: string|null, access: 'read'|'write' }>} */
-  const out = [];
-  /** @type {Array<{ path?: unknown, file?: unknown, access?: unknown } | null | undefined>} */
-  const list = Array.isArray(grants) ? grants : [];
-  for (const grant of list) {
-    if (!grant || typeof grant.path !== 'string' || !path.isAbsolute(grant.path)) continue;
-    const p = path.resolve(grant.path);
-    /** @type {'read'|'write'} */
-    const access = grant.access === 'write' ? 'write' : 'read';
-    out.push(grant.file === true
-      ? { root: path.dirname(p), only: path.basename(p), access }
-      : { root: p, only: null, access });
-  }
-  return out;
 }
 
 module.exports = { createOutsideAccess, outsideRootsFrom, OUTSIDE_WORKSPACE };

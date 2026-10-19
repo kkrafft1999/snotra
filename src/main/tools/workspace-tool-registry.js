@@ -27,7 +27,7 @@ const {
   TOOL_CONTENT_SCANS,
   TOOL_FILE_EVENTS,
   assertCompleteDescriptor,
-} = require('./tool-descriptor');
+} = require('../../application/tools/tool-descriptor');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
 const {
   DEFAULT_SEARCH_RESULTS: DEFAULT_MANUAL_SEARCH_RESULTS,
