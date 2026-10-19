@@ -189,6 +189,9 @@ function createProviderLlmAdapter({
     cacheKey,
   }) {
     const provider = providerRuntime.getProvider(target.providerId);
+    // `validateTarget` refuses an unknown provider before a round starts; this
+    // is for a caller that skipped it.
+    if (!provider) throw new Error(`Unknown provider "${target.providerId}".`);
     let config;
     let model;
     if (sendBundle) {

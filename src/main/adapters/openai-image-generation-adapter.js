@@ -327,7 +327,7 @@ function createOpenAiImageGenerationAdapter({
       const bytes = Buffer.from(b64, 'base64');
       const expected = IMAGE_MIME_BY_FORMAT[outputFormat];
       const mime = sniffImageMime(bytes.subarray(0, 64));
-      if (mime !== expected) {
+      if (!mime || mime !== expected) {
         return {
           ok: false,
           code: CODES.SERVICE,

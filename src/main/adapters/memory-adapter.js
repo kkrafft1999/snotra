@@ -34,6 +34,15 @@ const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { createEmbeddedTextFiles } = require('../services/embedded-text-file');
 
 /**
+ * @param {{
+ *   fs: typeof import('fs/promises'),
+ *   path: typeof import('path'),
+ *   os?: typeof import('os'),
+ *   maxChars?: number,
+ *   isSelfMemoryAllowed?: (() => boolean | Promise<boolean>) | null,
+ *   getLocale?: (() => string) | null,
+ *   platform?: string,
+ * }} deps
  * @returns {import('../../application/ports/memory-port').MemoryPort}
  */
 function createMemoryAdapter({
@@ -112,10 +121,10 @@ function createMemoryAdapter({
   return {
     /** Beide Ebenen in Lesereihenfolge; leere und fehlende fallen weg. */
     async load({ workspaceRoot = null } = {}) {
-      const targets = MEMORY_SCOPE_ORDER.map((scope) => ({
-        scope,
-        target: targetFor(scope, workspaceRoot),
-      })).filter(({ target }) => Boolean(target));
+      const targets = MEMORY_SCOPE_ORDER.flatMap((scope) => {
+        const target = targetFor(scope, workspaceRoot);
+        return target ? [{ scope, target }] : [];
+      });
       const results = await Promise.all(
         targets.map(async ({ scope, target }) => {
           // Fehlend, unlesbar, ein Verzeichnis, ein Symlink aus dem Ordner
@@ -125,7 +134,7 @@ function createMemoryAdapter({
           return { scope, file: target.file, text: read.text, truncated: read.truncated };
         })
       );
-      return results.filter(Boolean);
+      return results.filter((entry) => entry !== null);
     },
 
     /**

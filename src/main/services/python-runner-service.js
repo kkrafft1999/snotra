@@ -77,7 +77,7 @@ function normalizeArgv(raw) {
  * @param {string} [deps.platform]
  * @param {NodeJS.ProcessEnv} [deps.env]
  * @param {() => string} [deps.randomId]  names the run's temp folder
- * @param {object} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
+ * @param {object | null} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
  * @returns {import('../../application/ports/code-execution-port').CodeExecutionPort & {
  *   detect: () => Promise<CodeDescription>, disposeSync: () => void }}
  */
@@ -241,6 +241,7 @@ function createPythonRunnerService({
     // Isolation (#329): the script's temp directory doubles as the run's own
     // writable place next to the workspace.
     // What the script printed so far, for the card about a waiting connection.
+    /** @type {(() => { stdout: string, stderr: string }) | null} */
     let readOutput = null;
     let target;
     // -B: keine .pyc-Dateien neben dem Skript. -u: ungepuffert, sonst geht

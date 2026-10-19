@@ -18,13 +18,16 @@
 const { randomUUID } = require('crypto');
 const { renameWithRetry } = require('./rename-with-retry');
 
+/** The part of `fs/promises` that is used, so a test can hand in a wrapper of it. */
+/** @typedef {Pick<typeof import('fs/promises'), 'open' | 'unlink' | 'rename'>} AtomicWriteFs */
+
 /**
- * @param {object} fs                 `fs/promises` or a wrapper of it.
+ * @param {AtomicWriteFs} fs          `fs/promises` or a wrapper of it.
  * @param {string} targetPath         The file to replace.
  * @param {string|Buffer} data        Its new content.
  * @param {object} [options]
  * @param {number} [options.mode]     File mode of a newly created file.
- * @param {string} [options.encoding] For string data; `utf8` by default.
+ * @param {BufferEncoding} [options.encoding] For string data; `utf8` by default.
  * @param {string} [options.platform] For the rename retry; the running one by default.
  */
 async function writeFileAtomic(fs, targetPath, data, { mode, encoding = 'utf8', platform } = {}) {

@@ -215,6 +215,7 @@ function describeSecurityOverview(input = {}) {
     const running = offered.filter((tool) => !toolFullyBlocked(tool, riskClass, denyRules));
     const askFirst = matrixDecision(mode, riskClass) !== POLICY_DECISIONS.ALLOW;
     let status;
+    /** @type {string|null} */
     let offReason = null;
     if (offered.length === 0) {
       status = SECURITY_ROW_STATUSES.OFF;

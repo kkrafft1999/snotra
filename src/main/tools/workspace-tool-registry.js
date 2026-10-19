@@ -1,7 +1,7 @@
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { resolveNetworkDomains, resolveRunDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../services/sandbox-service');
-const { LIST_DIRECTORY_MAX_ENTRIES } = require('../services/fs-service');
+const { LIST_DIRECTORY_MAX_ENTRIES } = require('../../shared/contracts/list-directory');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const {
@@ -52,6 +52,17 @@ function toDisabledNameSet(disabledNames) {
   if (!Array.isArray(disabledNames) || disabledNames.length === 0) return null;
   return new Set(disabledNames);
 }
+
+/**
+ * A tool the registry holds: what a handler is called with is typed, the
+ * descriptor fields beside it are checked at run time by `tool-descriptor.js`.
+ *
+ * @typedef {{
+ *   name: string,
+ *   handler: (args: any, context: import('../../application/ports/tool-port').ToolHandlerContext) => unknown,
+ *   [field: string]: any,
+ * }} BuiltInTool
+ */
 
 function createToolRegistry(initialDefinitions = []) {
   const definitions = new Map();
@@ -239,6 +250,10 @@ function createToolRegistry(initialDefinitions = []) {
    * place that decides it: what the model gets (`getTools`) and what the
    * composer indicator and `get_configuration` report (#773) must not drift
    * apart, or the indicator would call a tool on that the model never sees.
+   *
+   * @param {{ name: string, [field: string]: any }} definition
+   * @param {{ allowedNames?: string[] | null, disabledNames?: string[] | null, workspaceOpen?: boolean,
+   *   skillNames?: string[] | null }} [options]
    */
   function whyNotOffered(definition, {
     allowedNames,
@@ -322,6 +337,7 @@ function createToolRegistry(initialDefinitions = []) {
    * Modell, also gibt es nichts zu entscheiden, und eine Zeile ohne Wahl waere
    * nur ein taubes Haekchen (#195). Sonst gilt Katalog = Schemas (#180).
    */
+  /** @param {{ locale?: string }} [options] */
   function listCatalog({ locale } = {}) {
     const t = createTranslator(locale);
     return allDefinitions()
@@ -350,6 +366,7 @@ function createToolRegistry(initialDefinitions = []) {
    * carry, whether it is offered at all (a key, a switch) and, for an MCP
    * tool, its server. Texts in the interface language, like `listCatalog`.
    */
+  /** @param {{ locale?: string }} [options] */
   function listRiskCatalog({ locale } = {}) {
     const byName = new Map(allDefinitions().map((definition) => [definition.name, definition]));
     return listCatalog({ locale }).map((entry) => {
@@ -594,6 +611,9 @@ const ALLOWANCE_SKIP_TEXT = Object.freeze({
  * Isolation state of a finished run, as the model reads it (#329), with the
  * program allowance of the approved plan (#408): which extra rights the run
  * had, or why the one for its program did not apply.
+ *
+ * @param {{ isolated?: boolean, domains?: string[], writePaths?: string[], trustd?: boolean, reason?: string } | null | undefined} isolation
+ * @param {import('../../application/ports/tool-port').ToolPlan['sandbox'] | null} [sandboxPlan]
  */
 function describeIsolationForModel(isolation, sandboxPlan = null) {
   if (!isolation) return null;
@@ -658,6 +678,28 @@ function sandboxDisabledByPlan(plan) {
  * angesehen. Seit #291 stehen beide zweisprachig im Katalog
  * (`tools.desc.<name>`, `tools.short.<name>`); hier bleiben nur die
  * Schluessel.
+ *
+ * `fsService` stays untyped here: `fs-service.js` is outside the checked
+ * program (#1098), and a typedef written from this side would have to list its
+ * twenty tool runners.
+ *
+ * @param {{
+ *   fsService: any,
+ *   webSearch?: import('../../application/ports/web-search-port').WebSearchPort | null,
+ *   pythonRunner?: (import('../../application/ports/code-execution-port').CodeExecutionPort
+ *     & { setupNeeded?: () => string | undefined }) | null,
+ *   urlFetch?: import('../../application/ports/url-fetch-port').UrlFetchPort | null,
+ *   shellRunner?: (import('../../application/ports/shell-execution-port').ShellExecutionPort
+ *     & { setupNeeded?: () => string | undefined }) | null,
+ *   memory?: import('../../application/ports/memory-port').MemoryPort | null,
+ *   documentText?: { runExtractDocumentTextTool: (args: import('../../application/ports/tool-port').ToolArguments,
+ *     workspaceRoot: string | null | undefined, options: object) => Promise<string> } | null,
+ *   imageGeneration?: import('../../application/ports/image-generation-port').ImageGenerationPort | null,
+ *   configuration?: { describeForModel: (input: { workspaceRoot?: string | null, chatSkillNames: string[],
+ *     overrides?: import('../../shared/contracts/chat-configuration').ChatConfigOverrides | null,
+ *     canPropose: boolean }) => Promise<unknown> } | null,
+ *   manual?: ReturnType<typeof import('../services/manual-lookup').createManualLookup> | null,
+ * }} deps
  */
 function createWorkspaceToolRegistry({
   fsService,
@@ -673,6 +715,7 @@ function createWorkspaceToolRegistry({
   /** Searches and reads the bundled user manual (#947), see manual-lookup.js. */
   manual = null,
 }) {
+  /** @type {BuiltInTool[]} */
   const builtIn = [
     {
       name: 'list_directory',
@@ -758,6 +801,7 @@ function createWorkspaceToolRegistry({
       // nicht daran — `runLoadSkillTool` loest den Namen ohnehin gegen die
       // eingeschalteten Skills auf, und `parameters` bleibt als Grundschema
       // ohne Anfragezustand stehen, damit die Argumentpruefung stabil bleibt.
+      /** @param {{ skillNames?: unknown }} [context] */
       parametersFor: ({ skillNames } = {}) => {
         const names = Array.isArray(skillNames) ? skillNames.filter((n) => typeof n === 'string' && n) : [];
         return {
@@ -1436,7 +1480,7 @@ function createWorkspaceToolRegistry({
           onSandboxNetworkAsk: onSandboxNetworkAsk || null,
           abortSignal,
         });
-        if (result?.error) return JSON.stringify({ error: result.error });
+        if ('error' in result) return JSON.stringify({ error: result.error });
         const out = {
           stdout: result.stdout,
           stderr: result.stderr,
@@ -1562,7 +1606,7 @@ function createWorkspaceToolRegistry({
           onSandboxNetworkAsk: onSandboxNetworkAsk || null,
           abortSignal,
         });
-        if (result?.error) {
+        if ('error' in result) {
           return JSON.stringify(result.blocked ? { error: result.error, blocked: true } : { error: result.error });
         }
         const out = {

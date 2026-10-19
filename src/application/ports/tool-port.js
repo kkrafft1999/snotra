@@ -16,7 +16,7 @@
  * @property {boolean} sensitive
  * @property {string} [sensitiveReason]
  * @property {string} [recovery]  z. B. 'trash', wenn eine Wiederherstellungskopie angelegt wird
- * @property {string} [skillName]  the skill the path belongs to, also when given absolutely (#427)
+ * @property {string|null} [skillName]  the skill the path belongs to, also when given absolutely (#427)
  * @property {string} [skillPath]  the path inside that skill's folder
  * @property {string} [absPath]  the resolved absolute path
  * @property {string} [root]  the folder the path resolved in: the open folder or a skill's
@@ -44,7 +44,9 @@
  * @property {string} [planKey]  stabiler Schlüssel aus Tool, Argumenten, Zielen und Versionen;
  *   absent on a plan that failed (`error`)
  * @property {string} [recovery]
- * @property {{ kind: string, text: string, truncated: boolean, masked: boolean }} [preview]
+ * @property {{ kind: string, text: string, truncated: boolean, masked: boolean,
+ *   isolation?: object, shell?: string, shellLogin?: boolean, cwd?: string, memoryScope?: string,
+ *   stdin?: string, argv?: string[] }} [preview]
  * @property {{ category: string, verb?: string, warning?: string }} [presentation]  how the approval
  *   card speaks of the tool, from its descriptor (#1008)
  * @property {{ reason: string }} [hardLimit]  verletzte harte Grenze → deny in jedem Modus
@@ -52,7 +54,9 @@
  * @property {{ command: string|null, cwd: string, networkDomains: string[], stdin: boolean }} [shellCommand]
  *   shell commands only: the call in the form a remembered command is compared in (#121);
  *   `command` is null when the command line cannot be remembered
- * @property {{ disabled: boolean, root: string, allowance?: object, allowanceSkipped?: string }} [sandbox]
+ * @property {{ disabled: boolean, root: string,
+ *   allowance?: { program: string, command: string, writePaths?: string[], trustd?: boolean, [field: string]: any },
+ *   allowanceSkipped?: { program: string, reason: string } }} [sandbox]
  *   the tools that run a process only: what the run is isolated with, as approved (#329, #357, #408)
  * @property {string} [error]  Plan nicht möglich (ungültige Argumente, Ausbruch, …)
  * @property {string} [reason]  PERMISSION_DENIAL_REASONS-Wert zu `error`
@@ -62,7 +66,7 @@
 
 /**
  * @typedef {Object} ToolPlanContext
- * @property {string} workspaceRoot
+ * @property {string|null} workspaceRoot  null while no folder is open
  * @property {Array<{name: string, dir: string}>} [skillRoots]
  * @property {string[]} [sensitivePathPatterns]  Nutzer-Muster zusätzlich zu den Standardmustern
  * @property {string[]} [forcedClasses]  Klassen, die eine Neubewertung erzwingt (z. B. 'delete')
@@ -72,7 +76,7 @@
 
 /**
  * @typedef {Object} ToolExecutionContext
- * @property {string} workspaceRoot
+ * @property {string|null} workspaceRoot  null while no folder is open
  * @property {Array<{name: string, dir: string}>} [skillRoots]
  * @property {string[]} [sensitivePathPatterns]  the user's patterns; the broad tools leave out
  *   hits under them as under the built-in ones (#525)
@@ -91,6 +95,20 @@
  * @property {OutsideGrant[]} [outsideGrants]  what cards opened outside the open folder (#792, step 4)
  * @property {import('../../shared/contracts/chat-configuration').ChatConfigOverrides|null} [configOverrides]
  *   what this chat switched on a card, for `get_configuration` (#774)
+ */
+
+/**
+ * What a tool handler gets next to its arguments: the call's context and what
+ * the adapter adds before it hands the call over (#1098). All of it is
+ * optional — a handler called directly, by a test or a stub, gets less.
+ *
+ * @typedef {Partial<ToolExecutionContext> & {
+ *   outsideRoots?: Array<{ root: string, only: string|null, access: 'read'|'write' }>,
+ *   sensitivity?: { isSensitivePath: (relPath: string) => boolean, isSensitiveLine: (text: string) => boolean },
+ *   recovery?: { trashItem: ((absPath: string) => Promise<void>) | null, allowUnrecoverable: boolean },
+ *   onWritten?: (written: object) => void,
+ *   onSandboxBlocked?: (summary: object | null) => void,
+ * }} ToolHandlerContext
  */
 
 /**

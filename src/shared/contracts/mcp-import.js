@@ -422,7 +422,7 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
     taken.add(id);
 
     const label = String(name).trim().slice(0, MCP_LIMITS.LABEL_MAX_CHARS) || id;
-    if (remote) {
+    if (remote && address) {
       candidates.push({
         sourceName: name,
         id,

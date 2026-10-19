@@ -45,7 +45,8 @@ class RemoteRelayError extends Error {
 
 /** The reason for an HTTP status; the status decides, a body cannot claim another. */
 function reasonForStatus(status) {
-  if (BY_STATUS.has(status)) return BY_STATUS.get(status);
+  const known = BY_STATUS.get(status);
+  if (known !== undefined) return known;
   return status >= 500 ? RELAY_REASONS.UNAVAILABLE : RELAY_REASONS.INVALID_RESPONSE;
 }
 

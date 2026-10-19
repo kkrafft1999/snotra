@@ -153,9 +153,15 @@ function createFirebaseRelayAdapter({
   /** every stream still followed */
   const streams = new Set();
 
-  function relayUrl(route) {
+  /** The endpoint, or `not-configured` when there is none. */
+  function requireEndpoint() {
     if (!endpoint) throw new RemoteRelayError(RELAY_REASONS.NOT_CONFIGURED);
-    return `${endpoint.relayUrl || `https://${endpoint.relayHost}/v1`}${route}`;
+    return endpoint;
+  }
+
+  function relayUrl(route) {
+    const { relayUrl: base, relayHost } = requireEndpoint();
+    return `${base || `https://${relayHost}/v1`}${route}`;
   }
 
   /**
@@ -199,8 +205,9 @@ function createFirebaseRelayAdapter({
     if (typeof customToken !== 'string' || !customToken || customToken.length > MAX_TOKEN_CHARS) {
       throw new RemoteRelayError(RELAY_REASONS.INVALID_RESPONSE);
     }
-    const base = endpoint.identityToolkitUrl || DEFAULT_IDENTITY_TOOLKIT_URL;
-    const answer = await call(`${base}/accounts:signInWithCustomToken?key=${encodeURIComponent(endpoint.apiKey)}`, {
+    const { identityToolkitUrl, apiKey } = requireEndpoint();
+    const base = identityToolkitUrl || DEFAULT_IDENTITY_TOOLKIT_URL;
+    const answer = await call(`${base}/accounts:signInWithCustomToken?key=${encodeURIComponent(apiKey)}`, {
       body: { token: customToken, returnSecureToken: true },
     });
     const idToken = answer?.idToken;
@@ -250,7 +257,7 @@ function createFirebaseRelayAdapter({
       throw new RemoteRelayError(RELAY_REASONS.INVALID_RESPONSE);
     }
     tokens.set(channelId, await signIn(answer.token));
-    return { channelId, pairingId: answer.pairingId, expiresAt: answer.expiresAt, relayHost: endpoint.relayHost };
+    return { channelId, pairingId: answer.pairingId, expiresAt: answer.expiresAt, relayHost: requireEndpoint().relayHost };
   }
 
   function watchChannel(channelId, { onRecord, onError }) {

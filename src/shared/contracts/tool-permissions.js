@@ -277,6 +277,10 @@ function normalizeApprovalResponse(raw) {
   return isApprovalResponse(raw) ? raw : null;
 }
 
+/**
+ * @param {any} value
+ * @returns {value is string}
+ */
 function isPermissionDenialReason(value) {
   return Object.values(PERMISSION_DENIAL_REASONS).includes(value);
 }
@@ -497,7 +501,7 @@ function normalizeSensitivePathPatterns(raw) {
  * (Konzept §6): kein erfundenes Tool-Ergebnis, sondern ein klar erkennbarer
  * Fehler mit Grund. Enthält nie Argumente oder Inhalte.
  *
- * @param {{ reason?: string, message?: string, ruleId?: string|null, riskClasses?: string[] }} [denial]
+ * @param {{ reason?: string, message?: string, ruleId?: string|null, riskClasses?: string[]|null }} [denial]
  * @returns {string}
  */
 function createPermissionDeniedToolResult({ reason, message, ruleId, riskClasses } = {}) {
@@ -873,7 +877,7 @@ function normalizeToolApprovalResponse(raw) {
  * @param {string} [decision.source]
  * @param {string} [decision.reason]
  * @param {string|null} [decision.ruleId]
- * @param {string[]} [decision.riskClasses]
+ * @param {string[]|null} [decision.riskClasses]
  * @param {string} [decision.mode]
  * @param {string} [decision.status]
  * @param {Array<string|{ path: string }>} [decision.targets]

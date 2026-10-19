@@ -86,7 +86,10 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
     return true;
   }
 
-  /** @type {import('../../application/ports/tool-approval-port').ToolApprovalPort['invalidateSession']} */
+  /**
+   * @param {string|number} sessionId
+   * @param {string} [reason]
+   */
   function invalidateSession(sessionId, reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
     for (const [requestId, entry] of [...pending.entries()]) {
       if (entry.sessionId === sessionId) settle(requestId, { invalidated: true, reason });
@@ -100,7 +103,8 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
 
   /**
    * Open requests of one chat only — its mode changed, or it was deleted (#320).
-   * @type {import('../../application/ports/tool-approval-port').ToolApprovalPort['invalidateChat']}
+   * @param {string|null} chatId
+   * @param {string} [reason]
    */
   function invalidateChat(chatId, reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
     const key = chatKey(chatId);
@@ -113,7 +117,8 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
    * Open requests of every chat except the given ones (#320). Those are the
    * visible chat and the chats still running in the background — a run that
    * waits for a card keeps waiting while the user looks at something else.
-   * @type {import('../../application/ports/tool-approval-port').ToolApprovalPort['invalidateExceptChats']}
+   * @param {Iterable<string|null>} chatIds
+   * @param {string} [reason]
    */
   function invalidateExceptChats(chatIds, reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
     const keep = new Set([...chatIds].map(chatKey));
@@ -191,7 +196,12 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
       // resource; anything else is the first offer of that resource.
       const offered = entry.request?.sandbox?.entries;
       const paths = Array.isArray(offered) && response !== APPROVAL_RESPONSES.DENY
-        ? { sandboxPaths: offered.map((e, i) => (e.allow.includes(sandboxPaths?.[i]) ? sandboxPaths[i] : e.allow[0])) }
+        ? {
+            sandboxPaths: offered.map((e, i) => {
+              const chosen = sandboxPaths?.[i];
+              return chosen !== undefined && e.allow.includes(chosen) ? chosen : e.allow[0];
+            }),
+          }
         : {};
       if (
         (response === APPROVAL_RESPONSES.ALLOW_SESSION && entry.request?.sessionAllowed !== true) ||

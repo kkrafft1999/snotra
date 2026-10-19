@@ -62,6 +62,7 @@ async function* iterStreamLines(reader, abortSignal, { maxLineChars = MAX_STREAM
 }
 
 async function* iterSseEvents(reader, abortSignal, { maxEventChars = MAX_STREAM_LINE_CHARS } = {}) {
+  /** @type {string | null} */
   let currentEvent = null;
   let dataLines = [];
   let dataChars = 0;

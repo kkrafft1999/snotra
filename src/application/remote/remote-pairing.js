@@ -38,6 +38,7 @@ const {
 /** How long a code is shown before it expires (protocol §5.3). */
 const PAIRING_TTL_MS = 5 * 60_000;
 
+/** @type {Set<string>} */
 const ACTIVE_STEPS = new Set([STATES.OPENING, STATES.CODE, STATES.CONFIRM]);
 const STATE_REASONS = new Set(Object.values(REASONS));
 
@@ -51,6 +52,30 @@ function reasonOf(error) {
 function isGone(error) {
   return error?.reason === 'not-found' || error?.reason === 'busy';
 }
+
+/**
+ * One pairing, from `start()` on: what is shown, what is held back until the
+ * phone answers, and whether it is over.
+ *
+ * @typedef {object} PairingAttempt
+ * @property {string} step  a REMOTE_PAIRING_STATES value
+ * @property {string|null} reason  a REMOTE_PAIRING_REASONS value, when it ended without *Allow*
+ * @property {boolean} done
+ * @property {boolean} claimed
+ * @property {boolean} finishing
+ * @property {string|null} channelId
+ * @property {string|null} pairingId
+ * @property {string|null} code  the secret, forgotten as soon as the pairing ends
+ * @property {string|null} display
+ * @property {string|null} qr
+ * @property {string[]|null} words
+ * @property {number|null} expiresAt
+ * @property {import('../ports/remote-relay-port').RemoteKeyBundle|null} desktopKeys
+ * @property {import('../ports/remote-relay-port').RemoteSigner|null} sign
+ * @property {unknown} timer
+ * @property {{ close: () => void }|null} watch
+ * @property {AbortController|null} sheet
+ */
 
 /**
  * @param {{
@@ -78,13 +103,19 @@ function createRemotePairing({
   clearTimer = (timer) => clearTimeout(/** @type {any} */ (timer)),
   log = console,
 }) {
-  /** The paired phone as kept: { channelId, keys, pairedAt } */
+  /**
+   * The paired phone as kept: { channelId, keys, pairedAt }
+   * @type {import('../ports/remote-identity-port').RemotePairedPhone | null}
+   */
   let phone = null;
+  /** @type {Promise<void> | null} */
   let phoneRead = null;
   /**
    * The pairing running or just ended. Each start makes a new one; every
    * asynchronous step checks that its pairing is still the current one, so a
    * late answer for a cancelled pairing changes nothing.
+   *
+   * @type {PairingAttempt | null}
    */
   let flow = null;
   const listeners = new Set();
@@ -103,8 +134,8 @@ function createRemotePairing({
       state: step,
       encryptionAvailable: identity.isAvailable(),
       phone: phone ? { pairedAt: phone.pairedAt, connected: false } : null,
-      code: step === STATES.CODE ? { display: flow.display, qr: flow.qr, expiresAt: flow.expiresAt } : null,
-      words: step === STATES.CONFIRM ? flow.words : null,
+      code: flow && step === STATES.CODE ? { display: flow.display, qr: flow.qr, expiresAt: flow.expiresAt } : null,
+      words: flow && step === STATES.CONFIRM ? flow.words : null,
       replacing: !!flow && ACTIVE_STEPS.has(step) && !!phone,
       reason: flow?.reason ?? null,
     });
@@ -140,7 +171,13 @@ function createRemotePairing({
     attempt.words = null;
   }
 
-  /** A pairing that ended without *Allow*: its state stays until the next start or cancel. */
+  /**
+   * A pairing that ended without *Allow*: its state stays until the next start or cancel.
+   *
+   * @param {PairingAttempt} attempt
+   * @param {string} step
+   * @param {string|null} [reason]
+   */
   function end(attempt, step, reason = null) {
     release(attempt);
     attempt.step = step;
@@ -296,6 +333,7 @@ function createRemotePairing({
     if (!stopFlow()) return normalizeRemotePairingResult({ ok: false, reason: REASONS.BUSY });
 
     // Registered before the first await, so that a cancel right after counts.
+    /** @type {PairingAttempt} */
     const attempt = {
       step: STATES.OPENING,
       reason: null,

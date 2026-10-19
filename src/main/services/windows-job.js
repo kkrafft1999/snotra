@@ -94,7 +94,7 @@ const LEADING_USING = /^(?:\s|#[^\r\n]*|<#[\s\S]*?#>|using[ \t]+(?:namespace|mod
  */
 function withPowerShellJob(script) {
   const text = String(script);
-  const head = /\busing\b/i.test(text) ? text.match(LEADING_USING)[0] : '';
+  const head = /\busing\b/i.test(text) ? (text.match(LEADING_USING)?.[0] ?? '') : '';
   return `${head}${head && !head.endsWith('\n') ? '\n' : ''}${POWERSHELL_JOB}\n${text.slice(head.length)}`;
 }
 

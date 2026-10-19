@@ -179,7 +179,7 @@ function sanitizeChatTitle(raw) {
  * @property {Array<object>} [toolTrace]  the tool steps of the turn
  * @property {object|null} [usage]        summed over every round of the turn
  * @property {object|null} [contextUsage] the last round's usage
- * @property {object} [contextBreakdown]  what the last context window was made of (#174)
+ * @property {object|null} [contextBreakdown]  what the last context window was made of (#174)
  */
 
 /**
@@ -233,7 +233,7 @@ function createCancelledChatResult({
  * übergeben wurden — Frühabbrüche (z. B. leere Nachricht) bleiben so bei der
  * schlanken Form { error, code }, wie sie der Renderer erwartet.
  *
- * @param {ChatResultParts & { error?: Message|string, code?: string, partial?: boolean }} [parts]
+ * @param {ChatResultParts & { error: Message|string, code?: string, partial?: boolean }} parts
  * @returns {ChatErrorResult}
  */
 function createChatErrorResult({
@@ -244,7 +244,7 @@ function createChatErrorResult({
   contextBreakdown,
   toolTrace,
   partial = false,
-} = {}) {
+}) {
   /** @type {ChatErrorResult} */
   const result = { error, code };
   // The answer streamed so far stays: the round was cut off, not refused (#538).

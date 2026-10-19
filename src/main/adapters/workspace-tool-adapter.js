@@ -49,18 +49,12 @@ const { readRegularFile } = require('../services/read-regular-file');
  * } & Record<string, any>} ToolDefinition
  *   with the descriptor fields this adapter reads (#1008, `tool-descriptor.js`)
  *
- * What the adapter takes from the registry (`workspace-tool-registry.js`): the
- * five members it calls (#1098). Written from the consumer's side, like a port,
- * because the registry module is outside the checked set. The two guards
+ * The registry (`workspace-tool-registry.js`), derived from its factory
+ * (#1098). The adapter calls five members; the two guards
  * `typeof … === 'function'` below are for registry stubs in tests, which
  * implement less than this.
  *
- * @typedef {Object} ToolRegistry
- * @property {(options?: import('../../application/ports/tool-port').ToolListOptions) => Array} getTools
- * @property {(options?: import('../../application/ports/tool-port').ToolListOptions) => string} buildSystemPrompt
- * @property {(name: string) => ToolDefinition|null} getDefinition
- * @property {(name: string, disabledNames?: string[]) => boolean} isSwitchedOff
- * @property {(name: string, args: import('../../application/ports/tool-port').ToolArguments, context: object) => Promise<string>} execute
+ * @typedef {ReturnType<typeof import('../tools/workspace-tool-registry').createWorkspaceToolRegistry>} ToolRegistry
  *
  * @typedef {import('../tools/tool-call-planner').FsService} FsService
  * @typedef {import('../tools/tool-call-planner').OutsideAccess} OutsideAccess
@@ -75,12 +69,12 @@ const { readRegularFile } = require('../services/read-regular-file');
  * @param {string[]} [deps.protectedRoots]  harte Grenzen (Snotra-eigener Speicher)
  * @param {(absPath: string) => Promise<void>} [deps.trashItem]  shell.trashItem für Wiederherstellungskopien
  * @param {() => Promise<string[]>} [deps.readOwnSecrets]  konfigurierte Provider-Schlüssel (nur zum Vergleich)
- * @param {() => {label?: string, login?: boolean}} [deps.describeShell]  erkannte Shell für die Freigabekarte (#102)
- * @param {() => Promise<{isolated: boolean, reason?: string, missing?: string[]}>} [deps.describeSandbox]
+ * @param {(() => {label?: string, login?: boolean}) | null} [deps.describeShell]  erkannte Shell für die Freigabekarte (#102)
+ * @param {(() => Promise<{isolated: boolean, reason?: string, missing?: string[]}>) | null} [deps.describeSandbox]
  *   isolation state for the card (#329)
- * @param {(workspaceRoot: string) => Promise<boolean>} [deps.isSandboxDisabled]  per-workspace opt-out (#357)
- * @param {(request: {command: string, cwd: string}) => Promise<object|null>} [deps.matchProgramAllowance]  (#408)
- * @param {() => Promise<object[]>} [deps.readProgramAllowances]  (#408)
+ * @param {((workspaceRoot: string) => Promise<boolean>) | null} [deps.isSandboxDisabled]  per-workspace opt-out (#357)
+ * @param {import('../tools/tool-call-planner').ProgramAllowanceMatcher | null} [deps.matchProgramAllowance]  (#408)
+ * @param {((workspaceRoot: string) => Promise<object[]>) | null} [deps.readProgramAllowances]  (#408)
  * @param {number} [deps.maxScanBytes]
  * @param {{ record: Function }} [deps.fileChangeRecorder]  keeps before/after of every write (#348)
  * @param {(options?: object) => Promise<void>} [deps.refreshDynamicTools]  the tools only known at run time (#107)
@@ -308,6 +302,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       };
       let output = await toolRegistry.execute(name, args, handlerContext);
 
+      /** @type {Record<string, any> | null} */
       let parsed = null;
       try {
         parsed = JSON.parse(output);
@@ -337,6 +332,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       // A list that cannot be read withholds the output as well: compared
       // against nothing, it would pass unchecked (#976).
       if (typeof readOwnSecrets === 'function' && context.ownSecretsCheck !== false) {
+        /** @type {string[] | null} */
         let secrets = null;
         try {
           secrets = await readOwnSecrets();
@@ -520,6 +516,7 @@ function collectProgressEvents(definition, args, output, fileChanges = []) {
   const events = [];
   const reads = definition?.fileEvents === TOOL_FILE_EVENTS.READ;
   if (!writesFiles(definition) && !reads) return events;
+  /** @type {Record<string, any> | null} */
   let parsed = null;
   try {
     parsed = JSON.parse(output);

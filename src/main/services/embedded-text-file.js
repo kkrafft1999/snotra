@@ -92,6 +92,7 @@ function createEmbeddedTextFiles({ fs, path, platform = process.platform }) {
    *
    * @returns {Promise<{ text: string, truncated: boolean } | null>}
    */
+  /** @param {{ file: string, root?: string|null, maxChars: number }} request */
   async function readForPrompt({ file, root = null, maxChars }) {
     let resolved;
     try {
@@ -132,6 +133,7 @@ function createEmbeddedTextFiles({ fs, path, platform = process.platform }) {
    *
    * @returns {Promise<string | null>}
    */
+  /** @param {{ file: string, root?: string|null }} request */
   async function readForUpdate({ file, root = null }) {
     const resolved = await resolveExisting(file, root);
     if (!resolved) return null;
@@ -155,7 +157,11 @@ function createEmbeddedTextFiles({ fs, path, platform = process.platform }) {
     }
   }
 
-  /** Replace the file's text atomically, refusing a target outside the root. */
+  /**
+   * Replace the file's text atomically, refusing a target outside the root.
+   *
+   * @param {{ file: string, root?: string|null, text: string }} request
+   */
   async function write({ file, root = null, text }) {
     const realRoot = await realRootOf(root);
     const existing = await resolveExisting(file, root);

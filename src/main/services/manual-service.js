@@ -25,14 +25,19 @@ function manualWebUrl(locale, slug = 'index', fragment = '') {
   return webUrl(normalizeManualLocale(locale), slug, fragment);
 }
 
+/** @typedef {{ locales: Record<string, { nav?: unknown, pages: Record<string, Record<string, any>> }> }} ManualIndex */
+
 function createManualService({ fs, path, bundleDir }) {
+  /** @type {ManualIndex | null} */
   let index = null;
 
   function loadIndex() {
     if (index) return index;
     const raw = fs.readFileSync(path.join(bundleDir, 'index.json'), 'utf8');
-    index = JSON.parse(raw);
-    return index;
+    /** @type {ManualIndex} */
+    const loaded = JSON.parse(raw);
+    index = loaded;
+    return loaded;
   }
 
   function localeIndex(locale) {

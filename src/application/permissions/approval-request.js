@@ -81,7 +81,7 @@ function describeApprovalReason({ mode, askClasses, providerLabel, recovery, che
  * seinen Werten (#290). Die Klassen reisen als Schluesselliste mit, damit auch
  * „Ändern" in der Sprache steht, in der die Karte gerade gelesen wird.
  *
- * @param {{ tool?: string, targets?: Array<{ path: string, skillName?: string, skillPath?: string }>, riskClasses?: string[] }} [input]
+ * @param {{ tool?: string, targets?: Array<{ path: string, skillName?: string|null, skillPath?: string }>, riskClasses?: string[] }} [input]
  */
 function describeSessionScope({ tool, targets, riskClasses } = {}) {
   const classKeys = (normalizeRiskClasses(riskClasses) || []).map((cls) => CLASS_KEYS[cls]).filter(Boolean);
@@ -137,11 +137,11 @@ function describeCommandRuleOffer({ tool, plan, classes, mode, checkpoint, works
  * wahr, wenn alle abgefragten Klassen sitzungsweise freigebbar sind und der
  * Modus Freigaben überhaupt berücksichtigt (nicht `ask-all`).
  *
- * @param {Object} [input]
- * @param {string} [input.tool]
+ * @param {Object} input
+ * @param {string} input.tool
  * @param {import('../ports/tool-port').ToolPlan} [input.plan]
  * @param {string[]} [input.askClasses]
- * @param {string} [input.mode]
+ * @param {string} input.mode
  * @param {string|null} [input.providerKey]
  * @param {string} [input.providerLabel]
  * @param {string|number} [input.policyVersion]
@@ -162,7 +162,7 @@ function buildApprovalRequest({
   checkpoint = 'access',
   workspaceRoot = null,
   encryptionAvailable,
-} = {}) {
+}) {
   const classes = normalizeRiskClasses(askClasses) || normalizeRiskClasses(plan?.riskClasses) || [];
   const sessionAllowed =
     mode !== TOOL_PERMISSION_MODES.ASK_ALL &&

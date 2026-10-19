@@ -41,6 +41,10 @@ const TOOL_CATEGORIES = Object.freeze({
 
 const CATEGORY_VALUES = new Set(Object.values(TOOL_CATEGORIES));
 
+/**
+ * @param {any} value
+ * @returns {value is string}
+ */
 function isToolCategory(value) {
   return CATEGORY_VALUES.has(value);
 }

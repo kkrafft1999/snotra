@@ -58,7 +58,7 @@ function parseScalar(raw) {
 
 /** Einrückung in Spalten; Tabs sind vorher durch Leerzeichen ersetzt. */
 function indentWidth(line) {
-  return /^ */.exec(line)[0].length;
+  return line.search(/[^ ]|$/);
 }
 
 /**
@@ -161,9 +161,12 @@ function parseFrontmatterLines(rawLines) {
   // plain object `__proto__:` would replace the prototype instead of being a
   // key, while `hasOwnProperty:` would shadow the method.
   const data = Object.create(null);
+  /** @type {string | null} */
   let currentKey = null;
+  /** @type {string[] | null} */
   let currentList = null;
   // Schlüssel eines Plain-Skalars, dessen Wert in Folgezeilen weitergeht.
+  /** @type {string | null} */
   let plainKey = null;
   let plainIndent = 0;
 

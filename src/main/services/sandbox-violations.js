@@ -285,7 +285,7 @@ function summarizeViolations(lines, { homeDir = '', isPermittedWrite } = {}) {
     return e;
   };
 
-  const writes = parsed.filter((p) => p?.kind === KINDS.WRITE);
+  const writes = parsed.filter((p) => p !== null).filter((p) => p.kind === KINDS.WRITE);
   const writeOps = new Map();
   for (const w of writes) {
     if (!writeOps.has(w.target)) writeOps.set(w.target, new Set());

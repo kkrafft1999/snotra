@@ -247,8 +247,10 @@ function missingPackages(errors) {
  * stream of same-set runs cannot starve a waiting one.
  */
 function createDomainGate() {
+  /** @type {string | null} */
   let activeKey = null;
   let active = 0;
+  /** @type {Array<{ key: string, grant: (release: () => void) => void }>} */
   const waiting = [];
 
   function makeRelease() {
@@ -285,7 +287,7 @@ function createDomainGate() {
         resolve(makeRelease());
         return;
       }
-      const entry = { key, grant: null };
+      const entry = { key, grant: (_release) => {} };
       const onAbort = () => {
         const index = waiting.indexOf(entry);
         if (index < 0) return;
@@ -332,6 +334,7 @@ function runDomains(allowedDomains, grants) {
 /** `pypi.org:443`, `*.pytorch.org` or `pypi.org` against one destination. */
 function matchesHostPattern(pattern, host, port) {
   const m = /^(.*?)(?::(\d+))?$/.exec(pattern);
+  if (!m) return false;
   if (m[2] !== undefined && Number(m[2]) !== port) return false;
   return m[1].startsWith('*.') ? host.endsWith(m[1].slice(1)) : host === m[1];
 }
@@ -389,6 +392,7 @@ function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = nu
     if (ended.signal.aborted) throw new Error('The command has ended.');
     const options = networkGrantOptions(host, port);
     if (options.length === 0) throw new Error('This destination cannot be allowed.');
+    /** @type {{ stdout?: string, stderr?: string } | null} */
     let output = null;
     try { output = readOutput?.() || null; } catch { output = null; }
     const request = {
@@ -402,6 +406,7 @@ function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = nu
       stderr: String(output?.stderr || ''),
     };
     // A handler that does not listen for the end must not hold the run.
+    if (typeof onNetworkAsk !== 'function') throw new Error('Nobody to ask.');
     const answer = await Promise.race([onNetworkAsk(request, { signal: ended.signal }), endedPromise]);
     if (answer?.outcome === 'allowed') {
       allowed.push(options.includes(answer.pattern) ? answer.pattern : options[0]);
@@ -494,8 +499,10 @@ function createSandboxService({
   sshProxyScript = path.join(__dirname, SSH_PROXY_SCRIPT),
 }) {
   let state = { status: 'unknown' };
+  /** @type {any} */
   let runtime = null;
   let pipLegacyCerts = false;
+  /** @type {ReturnType<typeof runDetection> | null} */
   let detection = null;
   const gate = createDomainGate();
   const exclusive = createMutex();
@@ -665,6 +672,9 @@ function createSandboxService({
    * The complete runtime configuration for one run. A program allowance
    * (#408) adds its folders to the writable ones and, on macOS only, opens
    * the trust service for certificate checks.
+   *
+   * @param {{ workspaceRoot?: string, runTmp?: string, allowedDomains?: string[], extraWritePaths?: string[],
+   *   weakerNetworkIsolation?: boolean, grants?: { writePaths?: string[], readPaths?: string[], hosts?: string[] } | null }} [request]
    */
   function buildConfig({
     workspaceRoot = '',
@@ -784,6 +794,8 @@ function createSandboxService({
     try {
       const attempt = async (command) => {
         const prepared = await prepare({ command, workspaceRoot: '', runTmp: allowed, allowedDomains: [], skipDetect: true });
+        // Only a run that skips the detection can come back unwrapped, and this one does.
+        if (!prepared) throw new Error('The self-test could not be wrapped.');
         try {
           return await spawnAndWait(prepared.command, prepared.args, {
             cwd: allowed,
@@ -891,12 +903,12 @@ function createSandboxService({
    * @param {string[]} [request.allowedDomains]
    * @param {string[]} [request.extraWritePaths]  a program allowance's folders (#408)
    * @param {boolean} [request.weakerNetworkIsolation]  a program allowance's trustd (#408)
-   * @param {{writePaths?: string[], readPaths?: string[], hosts?: string[]}} [request.grants]  allowed on a sandbox card (#792)
+   * @param {{writePaths?: string[], readPaths?: string[], hosts?: string[]} | null} [request.grants]  allowed on a sandbox card (#792)
    * @param {string} [request.commandId]
    * @param {string} [request.commandText]  what the user sees, for violations
-   * @param {(request: object, options: {signal: AbortSignal}) => Promise<object>} [request.onNetworkAsk]
+   * @param {((request: object, options: {signal: AbortSignal}) => Promise<object>) | null} [request.onNetworkAsk]
    *   asks the user about a connection while the command waits (#792); without it nobody is asked
-   * @param {() => {stdout: string, stderr: string}} [request.readOutput]  what the command printed so far
+   * @param {(() => {stdout: string, stderr: string}) | null} [request.readOutput]  what the command printed so far
    * @param {AbortSignal} [request.abortSignal]
    * @param {boolean} [request.skipDetect]  the self-test, which runs inside detection: skip it and the isolation check
    */
@@ -958,13 +970,13 @@ function createSandboxService({
     const live = createLiveRun({ key: commandKey, domains, onNetworkAsk, readOutput });
     liveRuns.set(commandKey, live);
     const collector = collectViolations(manager, commandId || inner);
-    const isPermittedWrite = collector ? await writeRules(config.filesystem) : undefined;
+    const isPermittedWrite = collector ? await writeRules(config.filesystem) : () => false;
     /** undefined until `blocked()` has looked; then the summary or null. */
     let summary;
     // Folders that already existed when `mkdir` was tried on them (Linux, see
     // summarizeViolations): looked up once, in `blocked()`.
     let existingFolders = new Set();
-    const summarize = () => summarizeViolations(collector.lines.filter((line) => !isExpectedSshRead(line)), {
+    const summarize = () => summarizeViolations((collector?.lines ?? []).filter((line) => !isExpectedSshRead(line)), {
       homeDir: os.homedir(),
       isPermittedWrite: (target, operation) => isPermittedWrite(target)
         || (/^mkdir/.test(operation || '') && existingFolders.has(target)),
@@ -1038,6 +1050,7 @@ function createSandboxService({
    * both spellings, as given and resolved — the Linux observer reports the
    * path the kernel saw.
    */
+  /** @param {{ allowWrite?: string[], denyWrite?: string[] }} rules */
   async function writeRules({ allowWrite = [], denyWrite = [] }) {
     const home = os.homedir();
     const spellings = async (list) => {
@@ -1158,6 +1171,7 @@ const MAX_COLLECTED_VIOLATIONS = 1000;
  * listen to; the run then falls back to the runtime's own annotation.
  */
 function collectViolations(manager, key) {
+  /** @type {{ subscribe: (listener: (list: any[]) => void) => () => void, getTotalCount: () => number } | null} */
   let store = null;
   try {
     store = manager.getSandboxViolationStore?.() || null;

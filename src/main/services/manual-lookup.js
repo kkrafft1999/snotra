@@ -42,6 +42,7 @@ function parsePageReference(reference) {
   let text = String(reference ?? '').trim();
   const address = parseManualAddress(text);
   if (address) return { slug: address.slug, anchor: address.fragment || null, locale: address.locale };
+  /** @type {string | null} */
   let anchor = null;
   const hash = text.indexOf('#');
   if (hash !== -1) {
@@ -116,13 +117,14 @@ function createManualLookup({ manual, loadLexer }) {
     return indexes.get(locale);
   }
 
+  /** @param {{ query?: unknown, locale?: unknown, limit?: unknown }} [request] */
   function search({ query, locale, limit } = {}) {
     const language = normalizeManualLocale(locale);
     const text = typeof query === 'string' ? query.trim() : '';
     if (text.length < MIN_QUERY_LENGTH) {
       return { error: `The query needs at least ${MIN_QUERY_LENGTH} characters.` };
     }
-    const count = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), MAX_SEARCH_RESULTS) : DEFAULT_SEARCH_RESULTS;
+    const count = typeof limit === 'number' && Number.isInteger(limit) ? Math.min(Math.max(limit, 1), MAX_SEARCH_RESULTS) : DEFAULT_SEARCH_RESULTS;
     const results = searchManual(indexFor(language), text, { limit: count }).map((hit) => ({
       slug: hit.slug,
       title: hit.title,
@@ -141,6 +143,7 @@ function createManualLookup({ manual, loadLexer }) {
     };
   }
 
+  /** @param {{ slug?: unknown, anchor?: unknown, locale?: unknown }} [request] */
   function read({ slug, anchor, locale } = {}) {
     const reference = parsePageReference(slug);
     const language = normalizeManualLocale(locale ?? reference.locale ?? undefined);
@@ -159,6 +162,7 @@ function createManualLookup({ manual, loadLexer }) {
     const headings = sections.filter((section) => section.anchor);
 
     let selected = sections;
+    /** @type {string | null} */
     let section = null;
     if (wanted) {
       const at = sections.findIndex((entry) => entry.anchor === wanted);
@@ -189,7 +193,7 @@ function createManualLookup({ manual, loadLexer }) {
       slug: reference.slug,
       title: page.title,
       description: page.description,
-      ...(section && { section, anchor: wanted }),
+      ...(section ? { section, anchor: wanted } : {}),
       url: manualWebUrl(language, reference.slug, section ? wanted : ''),
       markdown,
       // Only when the rest is missing: then the model can ask for a section.

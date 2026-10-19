@@ -8,10 +8,10 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 
 /**
- * What the policy store hands back, written from the consumer's side:
- * `tool-policy-store.js` is not in the checked program (#1098). `integrity`
- * is a plain string here, since the store also reports `unreadable`.
- * @typedef {Omit<import('../../application/ports/tool-policy-port').ToolPolicySnapshot, 'integrity'|'rulesVersion'> & { integrity: string }} ToolPolicyState
+ * What the policy store hands back, derived from the store itself (#1098).
+ * `integrity` is a plain string there, since the store also reports
+ * `unreadable`.
+ * @typedef {Awaited<ReturnType<ReturnType<typeof import('../services/tool-policy-store').createToolPolicyStore>['read']>>} ToolPolicyState
  */
 
 /**

@@ -24,10 +24,10 @@ function userMessageOf(err) {
 /**
  * @template T
  * @param {(signal: AbortSignal) => Promise<T>} operation
- * @param {{ timeoutMs?: number, signal?: AbortSignal }} [options]
+ * @param {{ timeoutMs: number, signal?: AbortSignal }} options
  * @returns {Promise<T>}
  */
-async function withRequestTimeout(operation, { timeoutMs, signal } = {}) {
+async function withRequestTimeout(operation, { timeoutMs, signal }) {
   const controller = new AbortController();
   const abort = () => controller.abort(
     abortReason('Request cancelled.', createMessage('provider.error.cancelled'))

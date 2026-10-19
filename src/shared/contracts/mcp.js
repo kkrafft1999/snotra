@@ -412,6 +412,7 @@ function validateMcpServerConfig(raw) {
   let args = [];
   let env = {};
   let cwd = '';
+  /** @type {{ url: string, headers: Object<string, string> } | null} */
   let endpoint = null;
   if (remote) {
     const { url, error } = normalizeMcpServerUrl(raw.url);

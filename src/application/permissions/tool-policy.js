@@ -229,7 +229,7 @@ function commandRuleCovers(rules, { toolName, riskClasses, shellCommand }) {
  * @param {Object} [input]
  * @param {string} [input.mode]
  * @param {string} [input.toolName]
- * @param {string[]} [input.riskClasses]  effektive Klassen des Aufrufs
+ * @param {string[]|null} [input.riskClasses]  effektive Klassen des Aufrufs; `null` for an invalid list, which is denied
  * @param {Array<{path: string}>} [input.targets]
  * @param {string|null} [input.root]  kanonische Workspace-Wurzel
  * @param {Array} [input.rules]  normalisierte Regeln (global + alle Workspaces)

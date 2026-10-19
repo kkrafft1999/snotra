@@ -122,6 +122,9 @@ function createMcpAdapter({ mcpService } = {}) {
   }
 
   async function callTool(call, options) {
+    if (!mcpService) {
+      return { content: [{ type: 'text', text: 'No MCP service is available.' }], isError: true };
+    }
     return mcpService.callTool(call, options);
   }
 

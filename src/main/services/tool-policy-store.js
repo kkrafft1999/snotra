@@ -76,7 +76,7 @@ const {
 const { readFileWithRetry } = require('./rename-with-retry');
 const { writeFileAtomic } = require('./atomic-write');
 const { grantedHosts } = require('./sandbox-violations');
-const { KEY_ALWAYS_DURABLE } = require('./safe-storage-key-durability');
+const { KEY_ALWAYS_DURABLE } = require('../../shared/contracts/safe-storage-key');
 
 const POLICY_FILENAME = 'tool-policy.json';
 const POLICY_KEY_FILENAME = 'tool-policy.key';
@@ -110,6 +110,30 @@ class PolicyKeyUnreadableError extends Error {
   }
 }
 
+/**
+ * What the policy file holds, after normalising.
+ *
+ * @typedef {ReturnType<typeof normalizePermissionRules>[number]} PermissionRule
+ * @typedef {object} PolicyPayload
+ * @property {number} revision
+ * @property {string} mode
+ * @property {PermissionRule[]} globalRules
+ * @property {Record<string, PermissionRule[]>} workspaceRules
+ * @property {string[]} sensitivePathPatterns
+ * @property {string[]} unsandboxedWorkspaces
+ * @property {ReturnType<typeof normalizeProgramAllowances>} programAllowances
+ * @property {ReturnType<typeof normalizeWorkspaceProgramAllowances>} workspaceProgramAllowances
+ * @property {ReturnType<typeof normalizeWorkspaceModes>} workspaceModes
+ * @property {ReturnType<typeof normalizeWorkspaceHosts>} workspaceHosts
+ * @property {string[]} globalHosts
+ * @property {boolean} newWorkspaceSandboxOff
+ * @property {string[]} knownWorkspaces
+ * @property {string[]} autoChats
+ * @property {boolean} legacyWriteMigrated
+ * @property {number} updatedAt
+ */
+
+/** @returns {PolicyPayload} */
 function defaultPayload() {
   return {
     revision: 0,
@@ -217,6 +241,24 @@ function sameCommandRule(a, b) {
   );
 }
 
+/**
+ * @param {{
+ *   app: { getPath: (name: string) => string },
+ *   safeStorage: {
+ *     isEncryptionAvailable: () => boolean,
+ *     encryptString: (text: string) => Buffer,
+ *     decryptString: (data: Buffer) => string,
+ *   },
+ *   safeStorageKey?: import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability,
+ *   fs: typeof import('fs/promises'),
+ *   path: typeof import('path'),
+ *   crypto: typeof import('crypto'),
+ *   uiPrefsPath?: string | null,
+ *   log?: { warn?: (...args: unknown[]) => void } | null,
+ *   now?: () => number,
+ *   confirmationReceipts?: { redeem: (receipt: unknown, action: string, subject?: string) => boolean },
+ * }} deps
+ */
 function createToolPolicyStore({
   app,
   safeStorage,
@@ -231,7 +273,9 @@ function createToolPolicyStore({
   /** Redeems the receipts of the user-confirmation port (#980); without it, no loosening. */
   confirmationReceipts = NO_RECEIPTS,
 }) {
+  /** @type {Promise<Buffer | null> | null} */
   let keyPromise = null;
+  /** @type {Promise<unknown>} */
   let writeChain = Promise.resolve();
 
   function policyPath() {
@@ -622,6 +666,7 @@ function createToolPolicyStore({
 
   /** Result carries `ruleId`: the new rule's, or that of the command rule it repeats (#121). */
   async function addRule(rawRule, { confirmation = null } = {}) {
+    /** @type {string | null} */
     let ruleId = null;
     const result = await update((draft, { encryptionAvailable: enc }) => {
       const id = typeof rawRule?.id === 'string' && rawRule.id.trim() ? rawRule.id.trim() : crypto.randomUUID();
@@ -984,7 +1029,7 @@ function createToolPolicyStore({
       rememberWorkspace(draft, root);
       return null;
     });
-    return { ...result, changed: result.ok === true && result.unchanged !== true };
+    return { ...result, changed: result.ok === true && !('unchanged' in result) };
   }
 
   /**

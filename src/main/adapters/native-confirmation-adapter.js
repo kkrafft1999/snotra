@@ -15,7 +15,7 @@ const { CONFIRMATION_REFUSALS, createConfirmationReceipts } = require('../../app
 
 /**
  * @param {{
- *   dialog?: { showMessageBox?: Function } | null,
+ *   dialog?: { showMessageBox: (...args: any[]) => Promise<{ response: number } | undefined> } | null,
  *   getMainWindow?: () => ({ isDestroyed?: () => boolean } | null),
  *   receipts?: { issue: (binding: { action: string, subject?: string }) => object },
  * }} deps  `receipts` is the registry the policy store redeems from; without
@@ -27,8 +27,9 @@ function createNativeConfirmationAdapter({ dialog = null, getMainWindow = () => 
     return !!dialog && typeof dialog.showMessageBox === 'function';
   }
 
-  async function confirm({ action, subject = '', prompt, signal = null }) {
-    if (!canConfirm()) return { confirmed: false, reason: CONFIRMATION_REFUSALS.NO_PRESENCE };
+  /** @param {import('../../application/ports/user-confirmation-port').ConfirmationRequest} request */
+  async function confirm({ action, subject = '', prompt, signal }) {
+    if (!dialog || !canConfirm()) return { confirmed: false, reason: CONFIRMATION_REFUSALS.NO_PRESENCE };
     if (signal?.aborted) return { confirmed: false, reason: CONFIRMATION_REFUSALS.DECLINED };
     // Cancel is the default and the Escape answer, whatever the caller built:
     // Enter confirms nothing (#59). An aborted `signal` closes the box as

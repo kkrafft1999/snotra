@@ -75,6 +75,7 @@ function webpDimensions(buf) {
  */
 function imageDimensions(buf, mime) {
   if (!Buffer.isBuffer(buf)) return null;
+  /** @type {{ width: number, height: number } | null} */
   let size = null;
   try {
     if (mime === 'image/png') size = pngDimensions(buf);
