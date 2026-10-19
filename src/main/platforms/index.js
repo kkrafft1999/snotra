@@ -61,11 +61,8 @@ const PLATFORM_DECLARATIONS = Object.freeze({
   }),
   [PLATFORMS.LINUX]: Object.freeze({
     [PLATFORM_CAPABILITIES.EXECUTION_SANDBOX]: { supported: true },
-    [PLATFORM_CAPABILITIES.SANDBOX_GIT_SSH]: {
-      supported: false,
-      reason: 'platform.gap.sandboxGitSsh',
-      issue: 1155,
-    },
+    // Through a relay outside the seccomp filter (#1155).
+    [PLATFORM_CAPABILITIES.SANDBOX_GIT_SSH]: { supported: true },
     [PLATFORM_CAPABILITIES.SELF_UPDATE]: { supported: true },
     [PLATFORM_CAPABILITIES.SECURE_STORAGE]: SECURE_STORAGE,
   }),

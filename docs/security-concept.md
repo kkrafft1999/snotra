@@ -1408,6 +1408,45 @@ domains, so a card for a host that is already kept is not shown.
 - **Not covered.** Direct `ssh`, `scp` or `psql` connections: only what goes
   through the proxy — HTTP(S) and Git over SSH — can be named per host.
 
+### Revision: Git over SSH in the Linux sandbox (#1155)
+
+On macOS the sandbox opens the ssh-agent's socket to a run, so git's SSH can
+sign in while the private key files in `~/.ssh` stay unreadable (#932). Linux
+cannot do the same: the runtime's seccomp filter refuses every Unix socket
+inside a run, and it cannot tell one socket path from another — opening it
+for the agent would mean switching it off for all of them, the Docker socket,
+X11 and the D-Bus session bus (with the keyring behind it) included.
+
+Snotra therefore keeps the filter and moves ssh out of it, not the run.
+A third patch of the runtime (`scripts/patch-sandbox-runtime.js`) starts one
+more relay in the inner script, before `apply-seccomp`, where the runtime's
+own proxy relays start — and only for a run whose environment names the
+launcher. Git's SSH command in the run (`ssh-relay-client.sh`) sends git's
+request over the run's own loopback to it; the launcher (`ssh-relay.sh`)
+checks it and runs ssh with the agent, through the runtime's proxy.
+
+- **What the launcher accepts.** One request: a host and a port, an address
+  family, `GIT_PROTOCOL`, and one of `git-upload-pack`, `git-receive-pack`,
+  `git-upload-archive` as the command for the remote side. No ssh option, no
+  local command, nothing that reaches a shell as code; the host may not start
+  with `-`. Programs are looked up only on the absolute entries of `PATH`,
+  from `/`, so nothing the run put in its folder is started. A launcher inside
+  a folder the run may write — a checkout of Snotra opened as the workspace —
+  is not used.
+- **What stays as it was.** The launcher runs inside bubblewrap: the same
+  mounts, so the private key files are as unreadable for it as for the run;
+  the same network namespace, so the proxy and the run's allowed hosts apply.
+  Errors and the exit status come back through a folder in the run's
+  temporary directory that the run could write anyway.
+- **The remaining risk.** As on macOS, a run can have the agent sign in to
+  any host it may reach — for git's three commands only, where macOS gives it
+  the agent outright. It cannot read or copy a key. Each run of Snotra's
+  patched runtime carries one more process outside the filter, and one more
+  patch to check on a runtime update; the patch test fails when its anchor
+  moves.
+- **Not covered.** `ssh` and `scp` called on their own: they run under the
+  filter and cannot reach the agent on Linux.
+
 ### Revision: the history without encrypted storage
 
 Section 4 said the provider-bound mark of a sensitive read is stored "with the

@@ -21,6 +21,7 @@ const {
   annotateBlockedTrustd,
   annotateSsh,
   sshEnvExports,
+  sshRelayExports,
   sshReadPaths,
   SANDBOX_REASONS,
 } = require('../src/main/services/sandbox-service');
@@ -465,13 +466,83 @@ test('on macOS a run gets the ssh-agent and what SSH needs from ~/.ssh, never th
   assert.equal('allowUnixSockets' in noAgent.calls.updateConfig.at(-1).network, false);
 });
 
-test('Linux keeps ~/.ssh closed and opens no socket: the runtime\'s own SSH route works there', posixOnly, async () => {
-  const { service, calls } = makeService({ deps: { env: { SSH_AUTH_SOCK: '/run/user/1000/ssh-agent' }, existsSync: () => true } });
+test('on Linux git\'s SSH goes through the relay outside the seccomp filter, never the key files (#1155)', posixOnly, async () => {
+  const relayDir = '/opt/Snotra/resources/app.asar/src/main/services';
+  const unpacked = relayDir.replace('app.asar/', 'app.asar.unpacked/');
+  const present = new Set([`${unpacked}/ssh-relay.sh`, `${unpacked}/ssh-relay-client.sh`]);
+  const deps = {
+    env: { SSH_AUTH_SOCK: '/run/user/1000/ssh-agent' },
+    existsSync: (p) => present.has(p),
+    sshRelayScript: `${relayDir}/ssh-relay.sh`,
+    sshRelayClientScript: `${relayDir}/ssh-relay-client.sh`,
+  };
+  const { service, calls } = makeService({ deps });
+  await service.detect();
+  const prepared = await service.prepare({ command: 'git fetch', workspaceRoot: '/home/u/app', runTmp: '/tmp/r' });
+  const config = calls.updateConfig.at(-1);
+  // Linux ignores the list, and the run itself never gets the socket.
+  assert.equal('allowUnixSockets' in config.network, false);
+  assert.deepEqual(config.filesystem.allowRead, sshReadPaths(os.homedir()));
+  assert.ok(config.filesystem.denyRead.includes('~/.ssh'), 'the folder itself stays closed');
+  assert.equal(prepared.args[1], `export TMPDIR=/tmp/r; ${sshRelayExports(`${unpacked}/ssh-relay-client.sh`)}; git fetch`);
+  assert.equal(prepared.env.SNOTRA_SSH_RELAY, `${unpacked}/ssh-relay.sh`, 'the patched runtime starts the relay');
+  prepared.release();
+
+  // Without an agent nothing could sign in through it: the runtime's route stays.
+  const noAgent = makeService({ deps: { ...deps, env: {} } });
+  await noAgent.service.detect();
+  const plain = await noAgent.service.prepare({ command: 'git fetch', runTmp: '/tmp/r' });
+  assert.equal(plain.args[1], 'export TMPDIR=/tmp/r; git fetch');
+  assert.equal('SNOTRA_SSH_RELAY' in plain.env, false);
+  // known_hosts stays readable, so the failure is the missing agent's.
+  assert.deepEqual(noAgent.calls.updateConfig.at(-1).filesystem.allowRead, sshReadPaths(os.homedir()));
+  plain.release();
+});
+
+test('the relay\'s launcher is never one the run could rewrite', posixOnly, async () => {
+  const checkout = '/home/u/snotra';
+  const deps = {
+    env: { SSH_AUTH_SOCK: '/run/user/1000/ssh-agent' },
+    existsSync: () => true,
+    sshRelayScript: `${checkout}/src/main/services/ssh-relay.sh`,
+    sshRelayClientScript: `${checkout}/src/main/services/ssh-relay-client.sh`,
+  };
+  const { service } = makeService({ deps });
+  await service.detect();
+  const inside = await service.prepare({ command: 'git fetch', workspaceRoot: checkout, runTmp: '/tmp/r' });
+  assert.equal('SNOTRA_SSH_RELAY' in inside.env, false);
+  assert.doesNotMatch(inside.args[1], /GIT_SSH_COMMAND/);
+  inside.release();
+  const elsewhere = await service.prepare({ command: 'git fetch', workspaceRoot: '/home/u/app', runTmp: '/tmp/r' });
+  assert.equal(elsewhere.env.SNOTRA_SSH_RELAY, `${checkout}/src/main/services/ssh-relay.sh`);
+  elsewhere.release();
+});
+
+test('an agent socket inside a protected folder stays visible for the relay, the folder does not', posixOnly, async () => {
+  const socket = path.join(os.homedir(), '.ssh', 'agent.sock');
+  const { service, calls } = makeService({ deps: { env: { SSH_AUTH_SOCK: socket }, existsSync: () => true } });
+  await service.detect();
+  (await service.prepare({ command: 'git fetch', runTmp: '/tmp/r' })).release();
+  const { filesystem } = calls.updateConfig.at(-1);
+  assert.deepEqual(filesystem.allowRead, [...sshReadPaths(os.homedir()), socket]);
+  assert.ok(filesystem.denyRead.includes('~/.ssh'));
+});
+
+test('the Linux SSH notes speak of Linux', () => {
+  const denied = 'git@gitlab.example.com: Permission denied (publickey).';
+  const linux = annotateSsh(denied, { tunnel: true, agent: true, platform: 'linux' });
+  assert.match(linux, /<sandbox_ssh>[^]*not loaded in the agent[^]*ssh-add ~\/\.ssh\/<key>[^]*Only git signs in/);
+  assert.doesNotMatch(linux, /apple-use-keychain|UseKeychain/);
+  assert.match(annotateSsh(denied, { tunnel: true, agent: false, platform: 'linux' }), /SSH_AUTH_SOCK is not set/);
+  assert.match(annotateSsh('Host key verification failed.', { tunnel: true, agent: true, platform: 'linux' }),
+    /known_hosts[^]*terminal/);
+});
+
+test('a Linux run annotates SSH failures', posixOnly, async () => {
+  const { service } = makeService({ deps: { env: { SSH_AUTH_SOCK: '/run/user/1000/ssh-agent' }, existsSync: () => true } });
   await service.detect();
   const prepared = await service.prepare({ command: 'git fetch', runTmp: '/tmp/r' });
-  assert.equal('allowUnixSockets' in calls.updateConfig.at(-1).network, false);
-  assert.equal('allowRead' in calls.updateConfig.at(-1).filesystem, false);
-  assert.doesNotMatch(prepared.args[1], /GIT_SSH_COMMAND/);
+  assert.match(prepared.annotate('Host key verification failed.'), /<sandbox_ssh>/);
   prepared.release();
 });
 

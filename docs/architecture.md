@@ -1784,7 +1784,7 @@ fact. `reason` is a message key the UI can show.
 | Capability | macOS | Windows | Linux | Linux package |
 | --- | --- | --- | --- | --- |
 | `executionSandbox` — shell and Python run isolated (#329) | yes | no — [#990](https://github.com/kkrafft1999/snotra/issues/990) | yes | yes |
-| `sandboxGitSsh` — Git over SSH signs in inside the sandbox (#932) | yes | no — #990 | no — [#1155](https://github.com/kkrafft1999/snotra/issues/1155) | no — #1155 |
+| `sandboxGitSsh` — Git over SSH signs in inside the sandbox (#932, #1155) | yes | no — #990 | yes | yes |
 | `selfUpdate` — the app replaces itself (#353) | yes | yes | yes | no, permanent: the package manager owns it |
 | `secureStorage` — keys, Auto and allow rules (#1012) | at start | at start | at start | at start |
 

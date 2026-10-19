@@ -188,6 +188,32 @@ function sshEnvExports(scriptPath) {
 }
 
 /**
+ * Git over SSH on Linux (#1155). The runtime's seccomp filter refuses every
+ * Unix socket inside a run, so ssh there cannot reach the ssh-agent. Git's
+ * SSH command hands the request to a relay instead, which the patched
+ * runtime starts before the filter (scripts/patch-sandbox-runtime.js); its
+ * launcher checks the request and runs ssh with the agent. Shell scripts,
+ * because /bin/sh and socat are all a Linux sandbox has for certain.
+ */
+const SSH_RELAY_SCRIPT = 'ssh-relay.sh';
+const SSH_RELAY_CLIENT_SCRIPT = 'ssh-relay-client.sh';
+
+/**
+ * Git's SSH command for a sandboxed run on Linux: the relay's client. Its
+ * path travels in its own variable, as in `sshEnvExports()`; the variant
+ * tells git to pass the port and GIT_PROTOCOL the way OpenSSH takes them.
+ * `exec`, because git runs the command through `sh -c`, and a shell left
+ * waiting there would hold git's input open after the relay has closed —
+ * a failed sign-in would hang.
+ *
+ * @param {string} clientPath
+ */
+function sshRelayExports(clientPath) {
+  return `export SNOTRA_SSH_CLIENT=${quoteArgv([clientPath])} GIT_SSH_VARIANT=ssh `
+    + `GIT_SSH_COMMAND=${quoteArgv(['exec /bin/sh "$SNOTRA_SSH_CLIENT"'])}`;
+}
+
+/**
  * POSIX single-quoting, so an argv survives the trip through `sh -c`.
  *
  * @param {unknown[]} argv
@@ -540,6 +566,8 @@ function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = nu
  * @param {number} [deps.violationSettleMs]  how long a finished run waits for late violations
  * @param {string[]} [deps.protectedWritePaths]  folders a run may never write (#548, #650)
  * @param {string} [deps.sshProxyScript]  the SSH tunnel helper (#932)
+ * @param {string} [deps.sshRelayScript]  the SSH relay's launcher, Linux (#1155)
+ * @param {string} [deps.sshRelayClientScript]  git's SSH command for the relay, Linux (#1155)
  */
 function createSandboxService({
   platform = process.platform,
@@ -565,6 +593,9 @@ function createSandboxService({
   protectedWritePaths = [],
   /** The SSH tunnel helper (#932); unpacked next to app.asar in a build, see package.json. */
   sshProxyScript = path.join(__dirname, SSH_PROXY_SCRIPT),
+  /** The SSH relay (#1155); unpacked next to app.asar in a build, like the tunnel helper. */
+  sshRelayScript = path.join(__dirname, SSH_RELAY_SCRIPT),
+  sshRelayClientScript = path.join(__dirname, SSH_RELAY_CLIENT_SCRIPT),
 }) {
   /** @type {{ status: string, reason?: string, platform?: string, missing?: string[], detail?: string }} */
   let state = { status: 'unknown' };
@@ -634,11 +665,28 @@ function createSandboxService({
   }
 
   /**
+   * The SSH relay's two scripts, or null where it does not apply: off Linux,
+   * or without an agent — then nothing could sign in through it, and git's
+   * SSH takes the runtime's own route, which fails the same way and gets the
+   * same note (#1155).
+   *
+   * @returns {{ launcher: string, client: string } | null}
+   */
+  function sshRelay() {
+    if (platform !== 'linux' || !agentSocket()) return null;
+    const launcher = unpackedPath(sshRelayScript, existsSync);
+    const client = unpackedPath(sshRelayClientScript, existsSync);
+    return existsSync(launcher) && existsSync(client) ? { launcher, client } : null;
+  }
+
+  /**
    * ssh tries its key files before it asks the agent, and the sandbox refuses
    * them every time (#932). That is the design, not something to offer on a
    * card: the private keys stay closed, the agent signs, and a failed sign-in
    * is explained by `annotateSsh()`. Only ssh's own reads inside `~/.ssh`;
-   * any other program reaching for them still shows up.
+   * any other program reaching for them still shows up. Seatbelt's lines
+   * only: on Linux the kernel reports writes, not reads, and the relay's ssh
+   * runs outside the observed filter (#1155).
    */
   /** @param {string} line */
   function isExpectedSshRead(line) {
@@ -793,14 +841,25 @@ function createSandboxService({
       .filter((p) => allowWrite.some((dir) => isPathInside(path, dir, p)))
       .filter((p) => !extras.some((extra) => isPathInside(path, p, extra)));
     // Git over SSH (#932): the agent signs, ssh reads only what is no secret.
+    // macOS opens the agent's socket to the run; on Linux only the relay
+    // outside the seccomp filter can use it (#1155), and it needs the socket
+    // visible where a protected folder would hide it.
     const socket = agentSocket();
-    const allowRead = [...grantedReads, ...(platform === 'darwin' ? sshReadPaths(os.homedir()) : [])];
+    const relay = sshRelay();
+    const deniedReads = sensitiveReadPaths({ platform, userDataPath }).map((p) => path.resolve(expandHome(p)));
+    const hiddenSocket = relay && socket && deniedReads.some((denied) => isPathInside(path, denied, socket)) ? [socket] : [];
+    const allowRead = [
+      ...grantedReads,
+      // Without an agent too: an unknown host is then not what SSH reports.
+      ...(platformSupports(platform, PLATFORM_CAPABILITIES.SANDBOX_GIT_SSH) ? sshReadPaths(os.homedir()) : []),
+      ...hiddenSocket,
+    ];
     return {
       // Hosts a sandbox card opened (#792) join the domains the call named.
       network: {
         allowedDomains: runDomains(allowedDomains, grants),
         deniedDomains: [],
-        ...(socket ? { allowUnixSockets: [socket] } : {}),
+        ...(socket && platform === 'darwin' ? { allowUnixSockets: [socket] } : {}),
       },
       filesystem: {
         denyRead: sensitiveReadPaths({ platform, userDataPath }),
@@ -819,8 +878,9 @@ function createSandboxService({
    * see `prepare()`.
    *
    * @param {string} [runTmp]
+   * @param {string} [relayLauncher]  the SSH relay's launcher on Linux (#1155)
    */
-  function runEnv(runTmp = '') {
+  function runEnv(runTmp = '', relayLauncher = '') {
     /** @type {Record<string, string>} */
     const extra = {
       PIP_CACHE_DIR: path.join(runTmp, 'cache', 'pip'),
@@ -828,6 +888,8 @@ function createSandboxService({
       XDG_CACHE_HOME: path.join(runTmp, 'cache'),
     };
     if (pipLegacyCerts) extra.PIP_USE_DEPRECATED = 'legacy-certs';
+    // Read by the patched runtime's inner script, before the run starts (#1155).
+    if (relayLauncher) extra.SNOTRA_SSH_RELAY = relayLauncher;
     return extra;
   }
 
@@ -1048,11 +1110,18 @@ function createSandboxService({
     // (and Claude Code) shares and Snotra keeps closed. The run's temp dir
     // takes its place — assigned inside, after the runtime's assignment.
     // GIT_SSH_COMMAND the same way: the runtime's route cannot authenticate
-    // to its own proxy on macOS (#932).
+    // to its own proxy on macOS (#932), nor reach the agent on Linux (#1155).
     const ssh = sshTunnel();
+    // The launcher runs outside the seccomp filter: never one the run could
+    // have rewritten, as a checkout of Snotra opened as the workspace could.
+    const candidate = sshRelay();
+    const relay = candidate && !config.filesystem.allowWrite.some((dir) => isPathInside(path, dir, candidate.launcher))
+      ? candidate
+      : null;
     const inner = [
       ...(runTmp ? [`export TMPDIR=${quoteArgv([runTmp])}`] : []),
       ...(ssh ? [sshEnvExports(ssh)] : []),
+      ...(relay ? [sshRelayExports(relay.client)] : []),
       command,
     ].join('; ');
     /** @type {string} */
@@ -1094,7 +1163,7 @@ function createSandboxService({
     return {
       command: '/bin/sh',
       args: ['-c', wrapped],
-      env: runEnv(runTmp),
+      env: runEnv(runTmp, relay?.launcher),
       domains,
       // What a program allowance added (#408), as the run actually got it.
       writePaths: config.filesystem.allowWrite.filter((p) => p !== workspaceRoot && p !== runTmp),
@@ -1148,8 +1217,9 @@ function createSandboxService({
           } catch { /* keep stderr as it is */ }
         }
         text = annotateUnreachableProxy(text, proxyPort);
+        if (platform === 'linux') return annotateSsh(text, { tunnel: true, agent: Boolean(agentSocket()), platform });
         if (platform !== 'darwin') return text;
-        text = annotateSsh(text, { tunnel: Boolean(ssh), agent: Boolean(agentSocket()) });
+        text = annotateSsh(text, { tunnel: Boolean(ssh), agent: Boolean(agentSocket()), platform });
         return trustd ? text : annotateBlockedTrustd(text);
       },
     };
@@ -1380,16 +1450,17 @@ function annotateBlockedTrustd(stderr) {
 }
 
 /**
- * What an SSH failure inside the macOS sandbox means (#932). ssh's own words
+ * What an SSH failure inside the sandbox means (#932, #1155). ssh's own words
  * point at the wrong place — a proxy password, a broken key — while the cause
  * is what the sandbox lets through: no key files, only the agent; no prompt
- * to accept an unknown host; no tunnel without Perl. Only these three
+ * to accept an unknown host; no tunnel without Perl (macOS). Only these three
  * messages get a note, and each only once.
  *
  * @param {string} stderr
- * @param {{tunnel: boolean, agent: boolean}} state  whether the run had the tunnel helper and the agent socket
+ * @param {{tunnel: boolean, agent: boolean, platform?: string}} state  whether the run had the
+ *   tunnel helper and the agent socket, and where it ran (`darwin` unless named)
  */
-function annotateSsh(stderr, { tunnel, agent }) {
+function annotateSsh(stderr, { tunnel, agent, platform = 'darwin' }) {
   const text = String(stderr ?? '');
   if (text.includes('<sandbox_ssh>')) return text;
   let note = '';
@@ -1402,8 +1473,13 @@ function annotateSsh(stderr, { tunnel, agent }) {
       + (agent
         ? 'If the same command works in a terminal, the key is probably not loaded in the agent. '
         : 'No ssh-agent was found for this run (SSH_AUTH_SOCK is not set). ')
-      + 'Tell the user to load it with `ssh-add --apple-use-keychain ~/.ssh/<key>`, or to add '
-      + '`AddKeysToAgent yes` and `UseKeychain yes` to ~/.ssh/config, then try again.';
+      + (platform === 'linux'
+        ? 'Tell the user to load the key with `ssh-add ~/.ssh/<key>` in a session whose ssh-agent Snotra '
+          + 'was started from, or to add `AddKeysToAgent yes` to ~/.ssh/config, then try again. Only git '
+          + 'signs in through the agent here: `ssh` or `scp` called on their own cannot reach it inside the '
+          + 'sandbox on Linux.'
+        : 'Tell the user to load it with `ssh-add --apple-use-keychain ~/.ssh/<key>`, or to add '
+          + '`AddKeysToAgent yes` and `UseKeychain yes` to ~/.ssh/config, then try again.');
   } else if (/Host key verification failed/.test(text)) {
     note = 'The host is not in ~/.ssh/known_hosts, and inside the sandbox SSH can neither ask whether to '
       + 'trust it nor add it. Tell the user to connect to it once from a terminal, then try again.';
@@ -1417,6 +1493,7 @@ module.exports = {
   annotateBlockedTrustd,
   annotateSsh,
   sshEnvExports,
+  sshRelayExports,
   sshReadPaths,
   createDomainGate,
   createLiveRun,

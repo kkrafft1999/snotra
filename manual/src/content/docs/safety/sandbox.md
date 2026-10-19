@@ -95,12 +95,14 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 ## Use Git over SSH
 
-[since 1.21.1] On macOS, `git fetch`, `git pull`, `git push` and `git ls-remote` reach an SSH remote such as `git@gitlab.example.com:team/app.git` from inside the sandbox. Snotra sends Git's SSH connection through the sandbox's proxy, so it follows the same rules as any other connection, and the sandbox stays on.
+[since 1.21.1] `git fetch`, `git pull`, `git push` and `git ls-remote` reach an SSH remote such as `git@gitlab.example.com:team/app.git` from inside the sandbox — on macOS, and [since 1.28] on Linux. Snotra sends Git's SSH connection through the sandbox's proxy, so it follows the same rules as any other connection, and the sandbox stays on.
 
 ### What you need
 
 - **The host in `~/.ssh/known_hosts`.** Inside the sandbox SSH cannot ask whether to trust a new host. Connect to it once from a terminal — `ssh -T git@gitlab.example.com` — and accept its key.
-- **Your key in the ssh-agent.** The sandbox keeps your private key files closed; SSH signs in through the agent instead. Load the key once with `ssh-add --apple-use-keychain ~/.ssh/<key>`, or add `AddKeysToAgent yes` and `UseKeychain yes` to `~/.ssh/config` so that SSH loads it the next time you use it in a terminal.
+- **Your key in the ssh-agent.** The sandbox keeps your private key files closed; SSH signs in through the agent instead.
+  - On macOS, load the key once with `ssh-add --apple-use-keychain ~/.ssh/<key>`, or add `AddKeysToAgent yes` and `UseKeychain yes` to `~/.ssh/config` so that SSH loads it the next time you use it in a terminal.
+  - On Linux, Snotra uses the agent of the session it was started from — the one `SSH_AUTH_SOCK` names, which most desktops start for you. Load the key with `ssh-add ~/.ssh/<key>`, or add `AddKeysToAgent yes` to `~/.ssh/config`.
 
 To check both, run `ssh-keygen -F gitlab.example.com`: it prints the host's key if the host is in `known_hosts`. `ssh-add -l` lists the keys the agent holds; if it prints *The agent has no identities*, load the key first.
 
@@ -114,7 +116,9 @@ To check both, run `ssh-keygen -F gitlab.example.com`: it prints the host's key 
 
 Git reaches the host through the proxy. SSH may read `known_hosts`, `config` and the public keys (`*.pub`) in `~/.ssh`, and talk to the ssh-agent; the private keys stay closed, and SSH's attempts to read them are not shown as blocked. A command in the sandbox can use the agent to sign in to the hosts the run may reach, but it cannot read or copy a key. `git push` writes to the remote and is a command you approve like any other.
 
-Only Git's SSH takes this route. `ssh` or `scp` called on their own still connect directly, which the sandbox cannot open for a single host. On Linux, Git over SSH cannot sign in inside the sandbox yet: use the HTTPS address of the repository, or switch the sandbox off for the folder.
+On Linux the sandbox blocks every local socket, the agent's included, so SSH does not run inside the run there: Git hands its connection to a helper that Snotra starts next to the run, still inside the sandbox. The helper accepts Git's own commands only, for one host at a time, and runs SSH with the agent. Your key files are as closed to it as to the run.
+
+Only Git's SSH takes this route. `ssh` or `scp` called on their own still connect directly, which the sandbox cannot open for a single host; on Linux they cannot reach the agent either.
 
 ## Switch the sandbox off for one folder
 
@@ -179,7 +183,7 @@ Enter the host with its port, such as `api.example.com:443`, or as `*.example.co
   ```
 
   It lasts until the next reboot; to keep it, put the same setting into a file under `/etc/sysctl.d/`. An AppArmor profile that grants user namespaces to `bwrap` works as well. Restart Snotra afterwards.
-- **Git over SSH: *Permission denied (publickey)*.** The key is not loaded in the ssh-agent, so SSH has nothing to sign in with. Load it with `ssh-add --apple-use-keychain ~/.ssh/<key>` and run the command again — see [Use Git over SSH](#use-git-over-ssh).
+- **Git over SSH: *Permission denied (publickey)*.** The key is not loaded in the ssh-agent, so SSH has nothing to sign in with. Load it — `ssh-add --apple-use-keychain ~/.ssh/<key>` on macOS, `ssh-add ~/.ssh/<key>` on Linux — and run the command again; see [Use Git over SSH](#use-git-over-ssh). On Linux, if `ssh-add -l` works in your terminal but Snotra still finds no agent, start Snotra from a session that has `SSH_AUTH_SOCK` set.
 - **Git over SSH: *Host key verification failed*.** The host is not in `~/.ssh/known_hosts` yet. Connect to it once from a terminal and accept its key.
 - **macOS: `gh`, `terraform` or another Go program cannot reach the network.** Give it a program allowance with *Check certificates through macOS*.
 - **The sandbox of a workspace cannot be switched off.** That needs the system's encrypted storage; where there is none, the switch stays on and the tile says why. The same holds for programs, hosts and *Sandbox on in new workspaces*.
