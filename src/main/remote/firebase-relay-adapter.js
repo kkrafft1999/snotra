@@ -69,6 +69,22 @@ function isRecord(value) {
 }
 
 /**
+ * A node of the Realtime Database for its REST interface: `<path>.json` with
+ * the ID token as `auth`. The database's own query stays — the emulator names
+ * its instance as `?ns=<instance>`, and the path goes before it.
+ *
+ * @param {string} databaseUrl
+ * @param {string} nodePath  without leading or trailing `/`
+ * @param {string} idToken
+ */
+function databaseNodeUrl(databaseUrl, nodePath, idToken) {
+  const url = new URL(databaseUrl);
+  url.pathname = `${url.pathname.replace(/\/+$/, '')}/${nodePath}.json`;
+  url.searchParams.set('auth', idToken);
+  return url.href;
+}
+
+/**
  * @param {number} ms
  * @param {AbortSignal} [signal]
  * @returns {Promise<void>}
@@ -336,7 +352,7 @@ function createFirebaseRelayAdapter({
      */
     async function connect(onLive) {
       if (!endpoint) throw new RemoteRelayError(RELAY_REASONS.NOT_CONFIGURED);
-      const url = `${endpoint.databaseUrl}/channels/${channelId}/meta.json?auth=${encodeURIComponent(tokenFor(channelId))}`;
+      const url = databaseNodeUrl(endpoint.databaseUrl, `channels/${channelId}/meta`, tokenFor(channelId));
       const response = await fetchImpl(url, { headers: { Accept: 'text/event-stream' }, signal: controller.signal });
       if (!response.ok || !response.body) {
         throw new RemoteRelayError(reasonForStatus(response.status), { status: response.status });
@@ -453,4 +469,4 @@ function createFirebaseRelayAdapter({
   return { openPairing, watchChannel, confirmPairing, cancelPairing, deleteChannel, close };
 }
 
-module.exports = { createFirebaseRelayAdapter, applyAt, channelRecordOf, STREAM_ATTEMPTS };
+module.exports = { createFirebaseRelayAdapter, applyAt, channelRecordOf, databaseNodeUrl, STREAM_ATTEMPTS };
