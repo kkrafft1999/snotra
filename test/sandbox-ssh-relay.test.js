@@ -472,7 +472,7 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
   assert.notEqual(pythonFromRun.exitCode, 0, said(pythonFromRun));
   assert.equal(dockerReached, false, 'nothing in the run reached the socket');
   // And the relay runs git's commands only.
-  const other = await run(`/bin/sh "$SNOTRA_SSH_CLIENT" -p ${port} ${user}@${host} 'touch /tmp/snotra-relay-pwned'`);
+  const other = await run(`/bin/sh -x "$SNOTRA_SSH_CLIENT" -p ${port} ${user}@${host} 'touch /tmp/snotra-relay-pwned'`);
   assert.equal(other.exitCode, 255, said(other));
   assert.match(other.stderr, /only git commands are relayed/, said(other));
   assert.equal(existsSync('/tmp/snotra-relay-pwned'), false);
