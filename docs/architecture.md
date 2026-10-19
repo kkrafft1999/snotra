@@ -2425,8 +2425,9 @@ the next step ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
   `{object}`: it accepts anything, and `{object}` would forbid reading the
   very properties it checks. `{Object}` means a dependency that has no type
   yet; it reads as `any` and is a known gap, not a statement. In the covered
-  set the services of the tool path no longer carry it (#1098); what remains
-  are the generic `deps` bags of the adapter factories.
+  set it is gone from the adapter factories too (#1098): each `deps` bag is
+  typed, and a collaborator outside the checked program (`chatSessionSettings`,
+  the tool policy store) is written as a typedef from the adapter's side.
 - A destructured parameter with a `= {}` default needs its optional fields
   marked optional — a sanitizer with `Partial<…>` of the port's request —
   since the compiler checks the default against the declared type.
