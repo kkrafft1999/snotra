@@ -69,25 +69,45 @@ const GIT_VALUE_OPTIONS = new Set(['-c', '-C', '--git-dir', '--work-tree', '--na
 /**
  * Zerlegt eine Befehlszeile grob in die einzeln laufenden Teile — also auch
  * an Subshells und Befehlsersetzungen (`(…)`, `$(…)`, Backticks).
+ *
+ * @param {unknown} command
+ * @returns {string[]}
  */
 function splitSegments(command) {
   return String(command).split(/&&|\|\||[\n;|&()`]/);
 }
 
-/** Programmname ohne Pfad und ohne Windows-Endung, klein geschrieben. */
+/**
+ * Programmname ohne Pfad und ohne Windows-Endung, klein geschrieben.
+ *
+ * @param {string} token
+ * @returns {string}
+ */
 function baseName(token) {
   const withoutPath = token.split(/[\\/]/).pop() || '';
   return withoutPath.replace(/\.(exe|cmd|bat|com|ps1)$/i, '').toLowerCase();
 }
 
-/** Anfuehrungszeichen stoeren die Auswertung der Flags, nicht ihren Sinn. */
+/**
+ * Anfuehrungszeichen stoeren die Auswertung der Flags, nicht ihren Sinn.
+ *
+ * @param {string} token
+ * @returns {string}
+ */
 function unquote(token) {
   return token.replace(/^['"]|['"]$/g, '');
 }
 
-/** Kurzflags einer POSIX-Zeile zu einem Buchstabensatz zusammenziehen. */
+/**
+ * Kurzflags einer POSIX-Zeile zu einem Buchstabensatz zusammenziehen.
+ *
+ * @param {string[]} tokens
+ * @returns {{ short: Set<string>, long: Set<string> }}
+ */
 function posixFlags(tokens) {
+  /** @type {Set<string>} */
   const short = new Set();
+  /** @type {Set<string>} */
   const long = new Set();
   for (const token of tokens) {
     if (token.startsWith('--')) {
@@ -104,6 +124,11 @@ function posixFlags(tokens) {
  * `null` when it is something else. PowerShell accepts any unambiguous
  * prefix (`-Rec`, `-r`; `-fo`, since `-f` would also be `-Filter`), any case,
  * and an explicit value (`-Force:$true`).
+ *
+ * @param {string} arg
+ * @param {string} name
+ * @param {number} minLength
+ * @returns {boolean|null}
  */
 function powerShellSwitch(arg, name, minLength) {
   const match = /^-([a-z]+)(?::\$?(true|false))?$/i.exec(arg);
@@ -113,11 +138,18 @@ function powerShellSwitch(arg, name, minLength) {
   return match[2]?.toLowerCase() !== 'false';
 }
 
+/**
+ * @param {string} name
+ * @param {string[]} args
+ * @returns {string|null}
+ */
 function checkRemove(name, args) {
   if (CMD_TREE_DELETE.has(name) && args.some((arg) => /^\/s$/i.test(arg))) {
     return BLOCK_REASONS.RECURSIVE_DELETE;
   }
+  /** @param {string} arg */
   const recurse = (arg) => powerShellSwitch(arg, 'recurse', 1);
+  /** @param {string} arg */
   const force = (arg) => powerShellSwitch(arg, 'force', 2);
   // `-Force` is a switch, not the letters F, o, r, c, e.
   const flags = posixFlags(args.filter((arg) => recurse(arg) === null && force(arg) === null));
@@ -127,6 +159,10 @@ function checkRemove(name, args) {
   return recursive && forced ? BLOCK_REASONS.RECURSIVE_DELETE : null;
 }
 
+/**
+ * @param {string[]} args
+ * @returns {string|null}
+ */
 function checkGit(args) {
   // `git -C repo push --force`: options in front of the subcommand, some of
   // them with a value, are not the subcommand (CR-B03-03).
@@ -148,7 +184,12 @@ function checkGit(args) {
   return null;
 }
 
-/** The command that starts at `rest[0]`. */
+/**
+ * The command that starts at `rest[0]`.
+ *
+ * @param {string[]} rest
+ * @returns {string|null}
+ */
 function checkCommand(rest) {
   if (rest.length === 0) return null;
   const name = baseName(rest[0]);
@@ -167,6 +208,10 @@ function checkCommand(rest) {
   return null;
 }
 
+/**
+ * @param {string[]} tokens
+ * @returns {string|null}
+ */
 function checkSegment(tokens) {
   // Fuehrende Variablenzuweisungen, Schluesselwoerter und Wrapper
   // ueberspringen: `sudo rm -rf /`, `FOO=1 rm -rf /` und `then rm -rf /` sind

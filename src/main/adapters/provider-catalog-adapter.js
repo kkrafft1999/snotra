@@ -1,5 +1,9 @@
 'use strict';
 
+/**
+ * @param {import('../ports/provider-runtime-port').ProviderAdapter | null} provider
+ * @returns {import('../ports/provider-catalog-port').ProviderCatalogEntry | null}
+ */
 function toCatalogEntry(provider) {
   if (!provider) return null;
   return {
@@ -10,7 +14,7 @@ function toCatalogEntry(provider) {
     defaultInsecureTls: provider.defaultInsecureTls === true,
     // Voreinstellungen der Felder aus Issue #193; ohne sie faende
     // `getEffectiveProviderConfig` hinter dem Katalog-Adapter keinen Default.
-    defaultApiStyle: provider.defaultApiStyle || '',
+    defaultApiStyle: provider.defaultApiStyle,
     defaultSupportsImages: provider.defaultSupportsImages === true,
     defaultSendTools: provider.defaultSendTools !== false,
     fields: provider.fields || {},
@@ -26,6 +30,7 @@ function toCatalogEntry(provider) {
 }
 
 /**
+ * @param {Pick<typeof import('../providers'), 'getProvider' | 'listProviderMeta' | 'disposeAll'>} providersModule
  * @returns {import('../ports/provider-runtime-port').ProviderRuntimePort}
  */
 function createProviderRuntimeAdapter(providersModule) {
@@ -43,6 +48,7 @@ function createProviderRuntimeAdapter(providersModule) {
 }
 
 /**
+ * @param {import('../ports/provider-runtime-port').ProviderRuntimePort} providerRuntime
  * @returns {import('../ports/provider-catalog-port').ProviderCatalogPort}
  */
 function createProviderCatalogAdapter(providerRuntime) {

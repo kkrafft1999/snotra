@@ -12,13 +12,19 @@
 
 const fs = require('fs');
 
+/** @type {typeof fs} */
 const rawFs = (() => {
-  try { return require('original-fs'); } catch { return fs; }
+  // A variable specifier on purpose: `original-fs` exists only inside
+  // Electron, and the type-check configuration does not load its typings.
+  const electronFs = 'original-fs';
+  try { return require(electronFs); } catch { return fs; }
 })();
 
 /**
  * Removes a folder and everything in it, archives included. A folder that is
  * not there is not an error.
+ *
+ * @param {string} dir
  */
 function removeTree(dir) {
   return rawFs.promises.rm(dir, { recursive: true, force: true });

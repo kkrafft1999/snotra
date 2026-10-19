@@ -42,7 +42,7 @@
  * @property {{writePaths?: string[], trustd?: boolean}|null} [programAllowance]  a program
  *   allowance's folders and trustd (#408); its domains are part of `networkDomains`
  * @property {Object|null} [sandboxGrants]  what the user allowed on a sandbox card (#792)
- * @property {Function|null} [onSandboxNetworkAsk]  asks about a connection while the command waits (#792)
+ * @property {((request: { target: string, allow: string[] }, options?: { signal?: AbortSignal }) => Promise<{ outcome: string, pattern?: string }>)|null} [onSandboxNetworkAsk]  asks about a connection while the command waits (#792)
  * @property {boolean} [sandboxDisabled]  the sandbox is switched off for this workspace (#357)
  * @property {AbortSignal} [abortSignal]
  *

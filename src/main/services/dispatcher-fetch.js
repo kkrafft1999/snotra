@@ -15,8 +15,26 @@
  */
 const undici = require('undici');
 
+/**
+ * What the callers send. Spelled out instead of `RequestInit`: the runtime's
+ * `fetch` and the package's come with their own, incompatible `RequestInit`
+ * and `BodyInit` types, and a request body here is always text.
+ *
+ * @typedef {Object} FetchViaOptions
+ * @property {string} [method]
+ * @property {Record<string, string>} [headers]
+ * @property {string} [body]
+ * @property {AbortSignal} [signal]
+ * @property {'follow'|'manual'|'error'} [redirect]
+ * @property {import('undici').Dispatcher} [dispatcher]
+ *
+ * @param {string|URL} url
+ * @param {FetchViaOptions} [options]
+ * @returns {Promise<Response>}
+ */
 function fetchVia(url, options = {}) {
-  return options?.dispatcher ? undici.fetch(url, options) : globalThis.fetch(url, options);
+  const { dispatcher, ...init } = options;
+  return dispatcher ? undici.fetch(url, { ...init, dispatcher }) : globalThis.fetch(url, init);
 }
 
 module.exports = { fetchVia };

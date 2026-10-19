@@ -16,8 +16,20 @@
 const { parseQualifiedMcpToolName } = require('../contracts/mcp');
 const { parseSkillPath } = require('../runtime/skill-path');
 const { workspaceSkillOfPath } = require('../contracts/skills');
+const { isRecord } = require('../runtime/is-record');
 const { DEFAULT_LOCALE, createTranslator } = require('../i18n');
 
+/**
+ * @typedef {import('../../application/ports/tool-port').ToolTraceEntry} ToolTraceEntry
+ * @typedef {import('../../application/ports/tool-port').ToolArguments} ToolArguments
+ * @typedef {(key: string, params?: Record<string, unknown>) => string} Translate
+ */
+
+/**
+ * @param {unknown} value
+ * @param {number} [max]
+ * @returns {string}
+ */
 function truncateToolLabel(value, max = 48) {
   const text = String(value ?? '');
   if (text.length <= max) return text;
@@ -28,6 +40,10 @@ function truncateToolLabel(value, max = 48) {
  * Path label of a tool line. A skill path (`skill:name/rest`, issue #61) is
  * resolved into something readable, so that the chat still shows a read came
  * out of a skill directory rather than out of the project folder.
+ *
+ * @param {unknown} relativePath
+ * @param {Translate} t
+ * @returns {string|null}
  */
 function formatRelativePathForLabel(relativePath, t) {
   const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
@@ -45,9 +61,13 @@ function formatRelativePathForLabel(relativePath, t) {
  * Path label of a writing tool. A file of a skill in the open folder
  * (`.agents/skills/<name>/…`) reads as part of that skill, so writing a skill
  * shows up as such in the log rather than as one more file (#160).
+ *
+ * @param {unknown} relativePath
+ * @param {Translate} t
+ * @returns {string|null}
  */
 function formatWrittenPathForLabel(relativePath, t) {
-  const skill = workspaceSkillOfPath(relativePath);
+  const skill = typeof relativePath === 'string' ? workspaceSkillOfPath(relativePath) : null;
   if (skill) {
     return t('tools.path.skillFile', { path: truncateToolLabel(skill.file), name: truncateToolLabel(skill.name, 24) });
   }
@@ -93,18 +113,18 @@ const TOOL_LINE_TARGETS = Object.freeze({
 /** The four suffixes below a line key whose target can be missing. */
 const LINE_VARIANTS = Object.freeze(['start', 'done', 'start.plain', 'done.plain']);
 
+/** @type {Set<unknown>} */
 const TARGET_VALUES = new Set(Object.values(TOOL_LINE_TARGETS));
 
 /**
  * Whether a descriptor's `display` names a key and a known target.
  *
  * @typedef {{ key: string, target: string }} ToolLineDisplay
- * @param {any} display
+ * @param {unknown} display
  * @returns {display is ToolLineDisplay}
  */
 function isToolLineDisplay(display) {
-  return !!display
-    && typeof display === 'object'
+  return isRecord(display)
     && typeof display.key === 'string'
     && /^tools\.line\.[\w.]+$/.test(display.key)
     && TARGET_VALUES.has(display.target);
@@ -114,6 +134,9 @@ function isToolLineDisplay(display) {
  * The catalogue keys a display needs — for the key test, which cannot see
  * keys that are put together (#293). A proposal's keys are written out in
  * `proposalLine` and seen by the text scan.
+ *
+ * @param {unknown} display
+ * @returns {string[]}
  */
 function lineKeysOf(display) {
   if (!isToolLineDisplay(display) || display.target === TOOL_LINE_TARGETS.CONFIG_PROPOSAL) return [];
@@ -121,20 +144,28 @@ function lineKeysOf(display) {
   return LINE_VARIANTS.map((variant) => `${display.key}.${variant}`);
 }
 
+/**
+ * @param {ToolArguments|null|undefined} args
+ * @param {string} name
+ * @returns {string}
+ */
 function trimmedArg(args, name) {
-  return typeof args?.[name] === 'string' ? args[name].trim() : '';
+  const value = args?.[name];
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 /**
  * The placeholders of a line per target. Each returns the values the
  * sentence with a target needs; all of them empty means the plain sentence.
+ *
+ * @type {Readonly<Record<string, (args: ToolArguments|null|undefined, t: Translate) => Record<string, unknown>>>}
  */
 const TARGET_PARAMS = Object.freeze({
   [TOOL_LINE_TARGETS.PATH]: (args, t) => ({ path: formatRelativePathForLabel(args?.relative_path, t) }),
   [TOOL_LINE_TARGETS.WRITTEN_PATH]: (args, t) => ({ path: formatWrittenPathForLabel(args?.relative_path, t) }),
   [TOOL_LINE_TARGETS.LINE_RANGE]: (args, t) => {
-    const start = Number.isFinite(args?.start_line) ? Math.floor(args.start_line) : null;
-    const end = Number.isFinite(args?.end_line) ? Math.floor(args.end_line) : null;
+    const start = Number.isFinite(args?.start_line) ? Math.floor(args?.start_line) : null;
+    const end = Number.isFinite(args?.end_line) ? Math.floor(args?.end_line) : null;
     let range = '';
     if (start !== null && end !== null) range = t('tools.line.readFileLines.range', { start, end });
     else if (start !== null) range = t('tools.line.readFileLines.rangeFrom', { start });
@@ -207,6 +238,12 @@ const TARGET_PARAMS = Object.freeze({
  * target is missing. Which of the two applies is all the callers decide — the
  * wording is entirely in the catalogue, so that German word order is never
  * assembled out of English parts (#290).
+ *
+ * @param {Translate} t
+ * @param {string} base
+ * @param {boolean} isDone
+ * @param {Record<string, unknown>} [params]
+ * @returns {string}
  */
 function lineFor(t, base, isDone, params) {
   const phase = isDone ? 'done' : 'start';
@@ -218,7 +255,12 @@ function lineFor(t, base, isDone, params) {
  * The line of one call. `display` is the tool's descriptor entry; without one
  * the tool is an MCP tool or unknown, and the line names it as such.
  *
+ * @param {unknown} toolName
+ * @param {ToolArguments|null|undefined} args
+ * @param {string} [phase]
+ * @param {unknown} [locale]
  * @param {ToolLineDisplay | null} [display]
+ * @returns {string}
  */
 function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOCALE, display = null) {
   const t = createTranslator(locale);
@@ -243,10 +285,15 @@ function summarizeToolCall(toolName, args, phase = 'start', locale = DEFAULT_LOC
  * Addition from the permission audit (issue #66): a denial or a pending
  * approval should be recognisable in the chat without the renderer having to
  * interpret the decision itself.
+ *
+ * @param {ToolTraceEntry|null|undefined} entry
+ * @param {string} phase
+ * @param {Translate} t
+ * @returns {string}
  */
 function permissionSuffix(entry, phase, t) {
   const permission = entry?.permission;
-  if (!permission || typeof permission !== 'object') return '';
+  if (!isRecord(permission)) return '';
   if (phase === 'done' && permission.status === 'denied') {
     return permission.reason === 'user_denied'
       ? t('tools.line.suffix.denied')
@@ -266,6 +313,11 @@ function permissionSuffix(entry, phase, t) {
  * A proposal's line (#774) says what was proposed and, once done, how it
  * ended — the engine records the outcome on the entry. A refused proposal
  * drops the name: it may be one the catalogue does not know.
+ *
+ * @param {ToolTraceEntry|null|undefined} entry
+ * @param {string} phase
+ * @param {Translate} t
+ * @returns {string}
  */
 function proposalLine(entry, phase, t) {
   const args = entry?.args || {};
@@ -293,9 +345,9 @@ function proposalLine(entry, phase, t) {
 }
 
 /**
- * @param {Object} entry  a tool trace entry
+ * @param {ToolTraceEntry|string} entry  a tool trace entry
  * @param {string} [phase]
- * @param {string} [locale]
+ * @param {unknown} [locale]
  * @param {{ key: string, target: string }|null} [display]  the tool's descriptor entry
  * @returns {string}
  */

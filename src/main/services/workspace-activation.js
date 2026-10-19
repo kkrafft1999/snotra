@@ -18,6 +18,15 @@
  * `onWorkspaceChanged` hears of an activation that changed the root, with the
  * new one — opening the folder that is already open is no change, and the
  * approvals, watchers and caches tied to it stay (concept §7).
+ *
+ * @param {object} deps
+ * @param {Pick<typeof import('fs').promises, 'stat'>} deps.fs
+ * @param {Pick<typeof import('path'), 'resolve'>} deps.path
+ * @param {Pick<import('../ports/workspace-folder-store-port').WorkspaceFolderStorePort, 'getValidatedFolderHistory' | 'getValidatedLastFolder' | 'persistLastFolder'>} deps.workspaceFolderStore
+ * @param {(folderPath: string | null) => void} deps.setActiveWorkspaceRoot
+ * @param {() => string | null} [deps.getActiveWorkspaceRoot]
+ * @param {((root: string | null) => void) | null} [deps.onWorkspaceChanged]
+ * @param {Pick<Console, 'warn'>} [deps.log]
  */
 function createWorkspaceActivation({
   fs,
@@ -28,12 +37,19 @@ function createWorkspaceActivation({
   onWorkspaceChanged = null,
   log = console,
 }) {
+  /**
+   * @param {unknown} folderPath
+   * @returns {string | null}
+   */
   function resolveCandidate(folderPath) {
     const raw = typeof folderPath === 'string' ? folderPath.trim() : '';
     if (!raw) return null;
     return path.resolve(raw);
   }
 
+  /**
+   * @param {string} absPath
+   */
   async function isExistingDirectory(absPath) {
     try {
       const st = await fs.stat(absPath);
@@ -59,6 +75,9 @@ function createWorkspaceActivation({
     return known;
   }
 
+  /**
+   * @param {string | null} resolved
+   */
   async function activate(resolved) {
     if (!resolved || !(await isExistingDirectory(resolved))) return null;
     // Remembering the folder is a convenience; opening it goes on when that
@@ -75,10 +94,16 @@ function createWorkspaceActivation({
     return resolved;
   }
 
+  /**
+   * @param {unknown} folderPath
+   */
   async function activateChosenFolder(folderPath) {
     return activate(resolveCandidate(folderPath));
   }
 
+  /**
+   * @param {unknown} folderPath
+   */
   async function activateKnownFolder(folderPath) {
     const resolved = resolveCandidate(folderPath);
     if (!resolved) return null;
@@ -91,6 +116,8 @@ function createWorkspaceActivation({
    * Chat-Verlauf braucht das, um eine Konversation beim Ordnerwechsel beim
    * *alten* Ordner zu belassen (Issue #131), ohne dafuer einen beliebigen
    * Renderer-Pfad zu uebernehmen.
+   *
+   * @param {unknown} folderPath
    */
   async function isKnownFolder(folderPath) {
     const resolved = resolveCandidate(folderPath);

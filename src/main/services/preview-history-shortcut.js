@@ -12,23 +12,42 @@
  * on other layouts. The View menu only shows the accelerators.
  */
 
+/**
+ * The part of Electron's `Input` the shortcut looks at.
+ * @typedef {{ type?: string, code?: string, shift?: boolean, alt?: boolean, meta?: boolean, control?: boolean, isAutoRepeat?: boolean }} KeyInput
+ */
+
+/** @typedef {'back' | 'forward'} HistoryDirection */
+
+/** @type {{ darwin: Record<string, HistoryDirection>, other: Record<string, HistoryDirection> }} */
 const KEYS = {
   darwin: { BracketLeft: 'back', BracketRight: 'forward' },
   other: { ArrowLeft: 'back', ArrowRight: 'forward' },
 };
 
-/** 'back', 'forward' or null. */
+/**
+ * 'back', 'forward' or null.
+ *
+ * @param {KeyInput | null | undefined} input
+ * @param {string} [platform]
+ * @returns {HistoryDirection | null}
+ */
 function matchPreviewHistoryShortcut(input, platform = process.platform) {
   if (!input || input.type !== 'keyDown' || input.shift === true) return null;
   if (platform === 'darwin') {
     if (input.meta !== true || input.control === true || input.alt === true) return null;
-    return KEYS.darwin[input.code] ?? null;
+    return KEYS.darwin[input.code ?? ''] ?? null;
   }
   if (input.alt !== true || input.control === true || input.meta === true) return null;
-  return KEYS.other[input.code] ?? null;
+  return KEYS.other[input.code ?? ''] ?? null;
 }
 
-/** A `before-input-event` listener that calls `onStep('back' | 'forward')`. */
+/**
+ * A `before-input-event` listener that calls `onStep('back' | 'forward')`.
+ *
+ * @param {{ platform?: string, onStep: (direction: HistoryDirection) => void }} options
+ * @returns {(event: { preventDefault: () => void }, input: KeyInput) => void}
+ */
 function createPreviewHistoryShortcutHandler({ platform = process.platform, onStep }) {
   return (event, input) => {
     const direction = matchPreviewHistoryShortcut(input, platform);

@@ -5,6 +5,11 @@ const MAX_DESCRIBED_MODELS = 200;
 /**
  * Prices for the estimated chat cost (#949). The renderer names models and
  * prices only; where the table comes from is main's business.
+ *
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {ReturnType<typeof import('../services/model-price-service').createModelPriceService>} deps.modelPrices
+ * @param {Record<string, string>} deps.REQ
  */
 function registerModelPriceHandlers({ ipcMain, modelPrices, REQ }) {
   ipcMain.handle(REQ.MODEL_PRICES_DESCRIBE, async (_event, models) => {

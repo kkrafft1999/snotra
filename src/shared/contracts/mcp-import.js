@@ -34,6 +34,37 @@ const {
 } = require('./mcp');
 const { createMessage } = require('./message');
 
+/** @typedef {import('./message').Message} Message */
+
+/**
+ * One `env` variable or header of a candidate, as the preview shows it.
+ * @typedef {Object} McpImportEntry
+ * @property {string} key
+ * @property {string} value
+ * @property {boolean} secret
+ *
+ * One server of the pasted block, read and checked, not yet saved.
+ * @typedef {Object} McpImportCandidate
+ * @property {string} sourceName  the name as the block spelled it
+ * @property {string} id
+ * @property {string} label
+ * @property {string} transport   an MCP_TRANSPORTS value
+ * @property {string} command
+ * @property {string[]} args
+ * @property {McpImportEntry[]} env
+ * @property {McpImportEntry[]} headers  remote servers only, empty otherwise
+ * @property {string} [url]       remote servers only
+ * @property {string|null} cwd
+ * @property {boolean} conflict   the id is taken; saving replaces that server
+ * @property {Message[]} notes
+ *
+ * @typedef {Object} McpImportResult
+ * @property {boolean} ok
+ * @property {McpImportCandidate[]} candidates
+ * @property {Array<{ name: string, reason: Message }>} skipped
+ * @property {Message[]} errors
+ */
+
 /** Wie viele Einträge ein einzelner Block liefern darf. */
 const MCP_IMPORT_MAX_SERVERS = 50;
 
@@ -85,6 +116,8 @@ const EXPANSION_PATTERN = /\$\{[^}]*\}/;
  * auf Zeichenketten. Ein naives `replace(/\/\/.*$/gm, '')` würde jede URL in
  * einem Wert zerstören (`"https://…"`), und genau solche Werte stehen in
  * MCP-Konfigurationen.
+ *
+ * @param {string} text
  */
 function stripJsonComments(text) {
   let out = '';
@@ -126,6 +159,8 @@ function stripJsonComments(text) {
 /**
  * Entfernt Kommas vor `}` und `]`. Ebenfalls zeichenkettenbewusst — ein Komma
  * in einem Argument (`"--flag=a,b"`) darf nicht angefasst werden.
+ *
+ * @param {string} text
  */
 function stripTrailingCommas(text) {
   let out = '';
@@ -155,7 +190,10 @@ function stripTrailingCommas(text) {
   return out;
 }
 
-/** Markdown-Zäune abstreifen — es wird aus Dokumentationen kopiert. */
+/**
+ * Markdown-Zäune abstreifen — es wird aus Dokumentationen kopiert.
+ * @param {string} text
+ */
 function stripCodeFence(text) {
   const trimmed = text.trim();
   if (!trimmed.startsWith('```')) return trimmed;
@@ -169,6 +207,8 @@ function stripCodeFence(text) {
  * Leitet aus dem Namen im Block eine gültige Kennung ab. Der Name darf alles
  * sein („Atlassian Jira"), die Kennung nicht: Sie taucht im Tool-Namensraum
  * auf (`mcp__<id>__<tool>`) und in der Konfiguration.
+ *
+ * @param {unknown} name
  */
 function toServerId(name) {
   const lower = String(name || '').trim().toLowerCase();
@@ -181,7 +221,11 @@ function toServerId(name) {
   return isValidMcpServerId(mapped) ? mapped : '';
 }
 
-/** Macht eine Kennung eindeutig, ohne die Länge zu sprengen. */
+/**
+ * Macht eine Kennung eindeutig, ohne die Länge zu sprengen.
+ * @param {string} base
+ * @param {Set<string>} taken
+ */
 function uniqueId(base, taken) {
   if (!taken.has(base)) return base;
   for (let n = 2; n < 100; n += 1) {
@@ -195,6 +239,9 @@ function uniqueId(base, taken) {
 /**
  * Sieht dieser Wert nach einem Geheimnis aus? A header name is read with its
  * hyphens as underscores, so `X-API-Key` counts like `X_API_KEY`.
+ *
+ * @param {string} key
+ * @param {string} value
  */
 function looksSecret(key, value) {
   if (SECRET_KEY_PATTERN.test(key.replace(/-/g, '_'))) return true;
@@ -205,12 +252,28 @@ function looksSecret(key, value) {
  * `env` eines Eintrags auf unsere Form bringen. Zahlen und Wahrheitswerte
  * werden zu Text statt verworfen — sie kommen in echten Konfigurationen vor
  * (`"PORT": 8080`) und sind für einen Kindprozess ohnehin nur Zeichen.
+ *
+ * @param {unknown} raw
+ * @param {Message[]} notes
  */
 function readEnv(raw, notes) {
   return readSecretMap(raw, notes, ENV_IMPORT);
 }
 
-/** `env` of a local server: what may be read, and what is said about it. */
+/**
+ * What differs between the two maps: their limits and the words of their notes.
+ * @typedef {Object} SecretMapImport
+ * @property {number} maxEntries
+ * @property {number} valueMaxChars
+ * @property {string} notObject
+ * @property {string} truncated
+ * @property {(key: string) => Message|null} skip  a note when the entry is left out
+ */
+
+/**
+ * `env` of a local server: what may be read, and what is said about it.
+ * @type {SecretMapImport}
+ */
 const ENV_IMPORT = Object.freeze({
   maxEntries: MCP_LIMITS.MAX_ENV_ENTRIES,
   valueMaxChars: MCP_LIMITS.ENV_VALUE_MAX_CHARS,
@@ -224,6 +287,8 @@ const ENV_IMPORT = Object.freeze({
  * `env`: secret-looking values are flagged, placeholders named. A header the
  * transport sets itself is left out with a note — the server would get it
  * anyway.
+ *
+ * @type {SecretMapImport}
  */
 const HEADER_IMPORT = Object.freeze({
   maxEntries: MCP_LIMITS.MAX_HEADERS,
@@ -233,7 +298,14 @@ const HEADER_IMPORT = Object.freeze({
   skip: (key) => (isReservedMcpHeaderName(key) ? createMessage('mcpImport.note.headerReserved', { name: key }) : null),
 });
 
+/**
+ * @param {unknown} raw
+ * @param {Message[]} notes
+ * @param {SecretMapImport} kind
+ * @returns {McpImportEntry[]}
+ */
 function readSecretMap(raw, notes, kind) {
+  /** @type {McpImportEntry[]} */
   const entries = [];
   if (raw === undefined || raw === null) return entries;
   if (typeof raw !== 'object' || Array.isArray(raw)) {
@@ -250,6 +322,7 @@ function readSecretMap(raw, notes, kind) {
       notes.push(skipped);
       continue;
     }
+    /** @type {string} */
     let text;
     if (typeof value === 'string') text = value;
     else if (typeof value === 'number' || typeof value === 'boolean') text = String(value);
@@ -270,13 +343,19 @@ function readSecretMap(raw, notes, kind) {
   return entries;
 }
 
-/** Args einlesen; Nicht-Strings fallen weg, statt den Eintrag zu verwerfen. */
+/**
+ * Args einlesen; Nicht-Strings fallen weg, statt den Eintrag zu verwerfen.
+ * @param {unknown} raw
+ * @param {Message[]} notes
+ * @returns {string[]}
+ */
 function readArgs(raw, notes) {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) {
     notes.push(createMessage('mcpImport.note.argsNotList'));
     return [];
   }
+  /** @type {string[]} */
   const out = [];
   for (const value of raw) {
     if (out.length >= MCP_LIMITS.MAX_ARGS) {
@@ -294,6 +373,9 @@ function readArgs(raw, notes) {
  * Which transport an entry asks for: `stdio`, `http`, or a skip reason for
  * one we do not speak. Without a type, a `url` and no `command` is remote —
  * Cursor's way of writing it.
+ *
+ * @param {Record<string, unknown>} entry
+ * @returns {{ skip: Message, transport?: undefined } | { transport: string, skip?: undefined }}
  */
 function transportOfEntry(entry) {
   const declared = String(entry.type || entry.transport || '').trim().toLowerCase();
@@ -320,13 +402,14 @@ function transportOfEntry(entry) {
  * @param {string} raw Der eingefügte Text.
  * @param {{ existingIds?: string[] }} [options] Bereits vergebene Kennungen;
  *   sie erzeugen keinen Fehler, sondern den Hinweis, dass überschrieben würde.
- * @returns {{ ok: boolean, candidates: object[],
- *   skipped: Array<{name: string, reason: {key: string, params?: object}}>,
- *   errors: Array<{key: string, params?: object}> }}
+ * @returns {McpImportResult}
  */
 function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
+  /** @type {Message[]} */
   const errors = [];
+  /** @type {McpImportResult['skipped']} */
   const skipped = [];
+  /** @type {McpImportCandidate[]} */
   const candidates = [];
 
   if (typeof raw !== 'string' || !raw.trim()) {
@@ -364,6 +447,7 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
 
   const existing = new Set(existingIds.filter((id) => typeof id === 'string'));
   const taken = new Set(existing);
+  /** @type {Set<string>} */
   const replacing = new Set();
 
   for (const name of names) {
@@ -397,6 +481,7 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
       continue;
     }
 
+    /** @type {Message[]} */
     const notes = [];
     const baseId = toServerId(name);
     if (!baseId) {
@@ -474,8 +559,11 @@ function parseMcpServersBlock(raw, { existingIds = [] } = {}) {
  * Importierte Server sind **aus**: Der Import ist ein Abtipp-Ersatz, keine
  * Freigabe. Wer einen Server einschaltet, soll das bewusst tun — er startet
  * einen Prozess und bringt Tools ins Modell.
+ *
+ * @param {Partial<McpImportCandidate> | null | undefined} candidate
  */
 function toMcpServerInput(candidate) {
+  /** @param {McpImportEntry[] | undefined} entries */
   const toSpecs = (entries) => Object.fromEntries((entries || [])
     .map((entry) => [entry.key, { value: entry.value, secret: entry.secret !== false }]));
   if (candidate?.transport === MCP_TRANSPORTS.HTTP) {

@@ -12,6 +12,14 @@ const { DEFAULT_LOCALE, createTranslator } = require('../../shared/i18n');
  * running among it, and the user should know that before going on.
  *
  * `clean-exit` is a page that ended because the window closed; nothing to say.
+ *
+ * @param {object} deps
+ * @param {Pick<import('electron').Dialog, 'showMessageBox'>} deps.dialog
+ * @param {import('electron').BrowserWindow|null} deps.window
+ * @param {Pick<import('electron').App, 'quit'>|null} [deps.app]
+ * @param {string} [deps.appName]
+ * @param {() => string|undefined} [deps.getLocale]
+ * @param {{ error?: (...args: unknown[]) => void }|null} [deps.log]
  */
 function createRendererCrashHandler({
   dialog,
@@ -23,6 +31,10 @@ function createRendererCrashHandler({
 }) {
   let asking = false;
 
+  /**
+   * @param {unknown} _event
+   * @param {{ reason?: string, exitCode?: number }} [details]  Electron's `render-process-gone` details
+   */
   return async (_event, details = {}) => {
     const reason = String(details?.reason ?? 'unknown');
     if (reason === 'clean-exit') return;

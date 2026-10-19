@@ -37,6 +37,8 @@ const { checkShellCommand } = require('../../shared/runtime/shell-command-guard'
 const { planSpawn } = require('./sandboxed-spawn');
 const { createMessage } = require('../../shared/contracts/message');
 
+/** @typedef {import('./sandboxed-spawn').SandboxForSpawn} SandboxForSpawn */
+
 /** Marker der Erkennung: die Shell muss ihn tatsaechlich ausgeben. */
 const PROBE_MARKER = 'snotra-shell-ok';
 /** Praefix der Zeile, in der die POSIX-Erkennung den PATH mitliefert (#111). */
@@ -53,6 +55,9 @@ const PROBE_COMMAND_POSIX = `echo ${PROBE_MARKER}; echo "${PATH_MARKER}$PATH"`;
  * Liest Marker und PATH aus der Ausgabe der Erkennung. Ein Profil darf
  * schwatzen (MOTD, Versionshinweise, Prompt-Vorlauf), deshalb zeilenweise und
  * die letzte PATH-Zeile — vorangehende Ausgabe ist Rauschen.
+ *
+ * @param {unknown} text
+ * @returns {{ marker: boolean, path: string }}
  */
 function parseProbeOutput(text) {
   const out = { marker: false, path: '' };
@@ -95,6 +100,10 @@ const INVOCATIONS = Object.freeze({
  * `-EncodedCommand` (Base64/UTF-16LE) an PowerShell: die Anfuehrungszeichen
  * eines `-Command`-Aufrufs ueberleben die Kommandozeilen-Zerlegung von Node
  * und PowerShell nicht zuverlaessig, `git commit -m "…"` waere sonst kaputt.
+ *
+ * @param {string|undefined} invocation  one of INVOCATIONS
+ * @param {unknown} command
+ * @returns {string[]}
  */
 function buildShellArgs(invocation, command) {
   if (invocation === INVOCATIONS.POWERSHELL) {
@@ -107,7 +116,12 @@ function buildShellArgs(invocation, command) {
   return ['-c', String(command)];
 }
 
-/** Anzeigename einer Shell: Programmname ohne Pfad und ohne Endung. */
+/**
+ * Anzeigename einer Shell: Programmname ohne Pfad und ohne Endung.
+ *
+ * @param {unknown} command
+ * @returns {string}
+ */
 function shellLabel(command) {
   const base = String(command).split(/[\\/]/).pop() || String(command);
   return base.replace(/\.exe$/i, '');
@@ -125,9 +139,16 @@ function shellLabel(command) {
  * bleibt. Klappt `-ilc` nicht (exotisches Profil, `sh` ohne `-i`), folgt die
  * reine Login-Shell und zuletzt die gewoehnliche — lieber ein knapper PATH
  * als gar keine Shell.
+ *
+ * @typedef {{ command: string, label: string, attempts: Array<{ probe: string, run: string }> }} ShellCandidate
+ *
+ * @param {string} platform
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {ShellCandidate[]}
  */
 function shellCandidates(platform, env = {}) {
   if (platform === 'win32') {
+    /** @param {string} invocation */
     const win = (invocation) => [{ probe: invocation, run: invocation }];
     return [
       { command: 'pwsh.exe', label: 'PowerShell 7', attempts: win(INVOCATIONS.POWERSHELL) },
@@ -139,7 +160,9 @@ function shellCandidates(platform, env = {}) {
     ? ['/bin/zsh', '/bin/bash', '/bin/sh']
     : ['/bin/bash', '/bin/sh'];
   const fromEnv = typeof env.SHELL === 'string' ? env.SHELL.trim() : '';
+  /** @type {Set<string>} */
   const seen = new Set();
+  /** @type {ShellCandidate[]} */
   const out = [];
   for (const command of [fromEnv, ...fallbacks]) {
     if (!command || seen.has(command)) continue;
@@ -157,13 +180,22 @@ function shellCandidates(platform, env = {}) {
   return out;
 }
 
-/** Erkennungsbefehl einer Aufrufform: nur POSIX liefert den PATH mit (#111). */
+/**
+ * Erkennungsbefehl einer Aufrufform: nur POSIX liefert den PATH mit (#111).
+ *
+ * @param {string} invocation
+ * @returns {string}
+ */
 function probeCommandFor(invocation) {
   return invocation === INVOCATIONS.POWERSHELL || invocation === INVOCATIONS.CMD
     ? PROBE_COMMAND
     : PROBE_COMMAND_POSIX;
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {number}
+ */
 function clampTimeout(raw) {
   const value = Number(raw);
   if (!Number.isFinite(value)) return SHELL_EXECUTION_LIMITS.DEFAULT_TIMEOUT_MS;
@@ -181,7 +213,7 @@ function clampTimeout(raw) {
  * @param {NodeJS.ProcessEnv} [deps.env]
  * @param {typeof import('fs/promises') | null} [deps.fs]  for the run's temp directory (#329)
  * @param {typeof import('path') | null} [deps.path]
- * @param {object | null} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
+ * @param {SandboxForSpawn | null} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
  * @returns {import('../../application/ports/shell-execution-port').ShellExecutionPort & {
  *   detect: () => Promise<ShellDescription>, disposeSync: () => void }}
  */
@@ -202,6 +234,11 @@ function createShellRunnerService({
   /** @type {ShellDescription} */
   let detected = { found: false, error: createMessage('runner.error.notChecked') };
 
+  /**
+   * @param {string} command
+   * @param {string} invocation
+   * @returns {Promise<{ ok: true, path: string } | { ok: false, error: string | import('../../shared/contracts/message').Message }>}
+   */
   function probe(command, invocation) {
     return new Promise((resolve) => {
       let child;
@@ -245,6 +282,7 @@ function createShellRunnerService({
    * probiert wird — lieber ein knapper PATH als gar keine Shell.
    */
   async function runDetection() {
+    /** @type {string | import('../../shared/contracts/message').Message} */
     let firstError = '';
     for (const candidate of shellCandidates(platform, env)) {
       for (const attempt of candidate.attempts) {

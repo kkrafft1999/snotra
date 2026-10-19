@@ -32,7 +32,11 @@ const MIN_SECRET_LENGTH = 8;
  */
 const SCHEME_AND_TOKEN = /^[A-Za-z][A-Za-z0-9_-]*\s+(\S+)$/;
 
-/** The forms a secret can turn up in: the full value, and the bare token after a scheme. */
+/**
+ * The forms a secret can turn up in: the full value, and the bare token after a scheme.
+ * @param {unknown} value
+ * @returns {string[]}
+ */
 function secretForms(value) {
   if (typeof value !== 'string') return [];
   const full = value.trim();
@@ -50,8 +54,12 @@ function secretForms(value) {
  * third; the characters at both ends also carry bits of whatever stands next
  * to the value and are left off. What remains of an 8-character value is 10
  * characters long, so no form falls under the minimum length.
+ *
+ * @param {Buffer} bytes
+ * @returns {string[]}
  */
 function base64Slices(bytes) {
+  /** @type {string[]} */
   const out = [];
   for (let offset = 0; offset < 3; offset += 1) {
     const encoded = Buffer.concat([Buffer.alloc(offset), bytes]).toString('base64');
@@ -73,9 +81,13 @@ function base64Slices(bytes) {
  * encryption, a hex dump with offsets or spaces), mixed-case hex, a value
  * split into pieces, and what a value decodes to — the user name and
  * password inside a `Basic` token are not secrets of their own.
+ *
+ * @param {string} form
+ * @returns {string[]}
  */
 function encodedForms(form) {
   const bytes = Buffer.from(form, 'utf8');
+  /** @type {Set<string>} */
   const out = new Set();
   for (const slice of base64Slices(bytes)) {
     out.add(slice);
@@ -96,8 +108,12 @@ function encodedForms(form) {
  * Values of "Name: value" lines. The **value** is the secret, not the header
  * name: `X-Tenant` is no secret, what it carries can be one. Very short values
  * stay out, or an `X-Env: dev` would mask every "dev" in every tool output.
+ *
+ * @param {unknown} raw
+ * @returns {string[]}
  */
 function extraHeaderSecretValues(raw) {
+  /** @type {string[]} */
   const out = [];
   for (const line of String(raw ?? '').split(/\r?\n/)) {
     const sep = line.indexOf(':');
@@ -107,8 +123,13 @@ function extraHeaderSecretValues(raw) {
   return out;
 }
 
-/** Every form of every value, verbatim and encoded, once each. */
+/**
+ * Every form of every value, verbatim and encoded, once each.
+ * @param {Iterable<unknown>} values
+ * @returns {string[]}
+ */
 function expandSecrets(values) {
+  /** @type {Set<string>} */
   const out = new Set();
   for (const value of values) {
     for (const form of secretForms(value)) {
@@ -122,6 +143,15 @@ function expandSecrets(values) {
 /**
  * Reads the own secrets from the stores. Only for comparing — the result is
  * never logged and never leaves the main process.
+ *
+ * The stores are typed from this side: what is read of each.
+ *
+ * @param {Object} deps
+ * @param {{ readLLMConfig: () => Promise<{ providers?: Record<string, unknown>,
+ *   presets?: Array<{ id?: string, providerId: string, connection?: unknown } | null> }> }} deps.llmConfigStore
+ * @param {import('../ports/provider-secrets-port').ProviderSecretsPort} deps.providerSecrets
+ * @param {{ getMcpSecretValues: () => Promise<string[]> }} deps.mcpSecrets
+ * @param {{ getWebSearchApiKey: () => Promise<string|null> }} deps.webSearchStore
  */
 function createOwnSecrets({ llmConfigStore, providerSecrets, mcpSecrets, webSearchStore }) {
   /** The MCP secrets alone, in all their forms — for masking a server's status. */
@@ -131,7 +161,9 @@ function createOwnSecrets({ llmConfigStore, providerSecrets, mcpSecrets, webSear
 
   async function readOwnSecrets() {
     const config = await llmConfigStore.readLLMConfig();
+    /** @type {string[]} */
     const values = [];
+    /** @param {import('../ports/provider-secrets-port').EffectiveProviderConfig|null} effective */
     const add = (effective) => {
       if (effective?.apiKey) values.push(effective.apiKey);
       // On a gateway the extra headers carry the token (#193) and must not

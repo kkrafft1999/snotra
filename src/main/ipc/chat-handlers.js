@@ -1,6 +1,16 @@
 const { CHAT_ENGINE_EVENTS } = require('../../application/chat/chat-engine');
 const { sanitizeChatId, createRunEndEvent } = require('../../shared/contracts/chat');
 
+/**
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {Pick<ReturnType<typeof import('../../application/chat/chat-engine').createChatEngine>,
+ *   'send' | 'abort' | 'generateTitle'>} deps.chatEngine
+ * @param {Record<string, string>} deps.REQ
+ * @param {Record<string, string>} deps.PUSH
+ * @param {() => string|null} [deps.getActiveWorkspaceRoot]
+ * @param {Pick<ReturnType<typeof import('../services/file-change-recorder').createFileChangeRecorder>, 'describe'>|null} [deps.fileChangeRecorder]
+ */
 function registerChatHandlers({
   ipcMain,
   chatEngine,
@@ -11,6 +21,7 @@ function registerChatHandlers({
 }) {
   const engine = chatEngine;
 
+  /** @type {Record<string, string>} */
   const eventChannels = {
     [CHAT_ENGINE_EVENTS.DELTA]: PUSH.CHAT_DELTA,
     [CHAT_ENGINE_EVENTS.TOOL_LINE]: PUSH.CHAT_TOOL_LINE,
@@ -20,8 +31,13 @@ function registerChatHandlers({
   // Every event names its chat and its run (#320): a window can now have
   // several runs going, and the renderer routes each event to the chat it
   // belongs to — also when that chat is not on screen.
+  /**
+   * @param {import('electron').WebContents} webContents
+   * @param {{ type?: string, payload?: unknown }} event
+   * @param {{ chatId: string|null, runId: string|null }} route
+   */
   const forwardEvent = (webContents, event, route) => {
-    const channel = eventChannels[event?.type];
+    const channel = event?.type ? eventChannels[event.type] : undefined;
     if (!channel || !webContents || webContents.isDestroyed() || typeof webContents.send !== 'function') return;
     const payload = event.payload && typeof event.payload === 'object' ? event.payload : {};
     webContents.send(channel, { ...payload, ...route });
@@ -32,7 +48,9 @@ function registerChatHandlers({
   // and the reloaded page cannot pick them up again. Their runs stop. The
   // turn up to its last finished step is already saved, marked as cut off.
   // Watched from a window's first send on, once per window.
+  /** @type {WeakSet<import('electron').WebContents>} */
   const watched = new WeakSet();
+  /** @param {import('electron').WebContents} webContents */
   const watchSender = (webContents) => {
     if (!webContents || watched.has(webContents) || typeof webContents.on !== 'function') return;
     watched.add(webContents);
@@ -57,7 +75,7 @@ function registerChatHandlers({
   // lines, never a path it could choose itself (#348).
   ipcMain.handle(REQ.CHAT_FILE_CHANGES, async (_event, payload) => {
     if (!fileChangeRecorder) return { ok: false, reason: 'unknown' };
-    const ids = Array.isArray(payload?.ids) ? payload.ids.filter((id) => typeof id === 'string') : [];
+    const ids = Array.isArray(payload?.ids) ? payload.ids.filter((/** @type {unknown} */ id) => typeof id === 'string') : [];
     return fileChangeRecorder.describe(ids);
   });
 
@@ -88,7 +106,7 @@ function registerChatHandlers({
           selectedIsDirectory: payload?.selectedIsDirectory === true,
           chatId,
         },
-        onEvent: (engineEvent) => forwardEvent(event.sender, engineEvent, route),
+        onEvent: (/** @type {{ type?: string, payload?: unknown }} */ engineEvent) => forwardEvent(event.sender, engineEvent, route),
       });
     } finally {
       // The reply to this invoke and the events above take different paths
@@ -100,6 +118,10 @@ function registerChatHandlers({
   });
 }
 
+/**
+ * @param {unknown} raw
+ * @param {number} maxLength
+ */
 function sanitizeRouteId(raw, maxLength) {
   return typeof raw === 'string' && raw ? raw.slice(0, maxLength) : null;
 }

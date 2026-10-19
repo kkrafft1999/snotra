@@ -34,6 +34,18 @@
  * dieselben Werte benutzen.
  */
 
+const { isRecord } = require('../runtime/is-record');
+
+/** @typedef {typeof PROJECT_INSTRUCTION_SOURCES[keyof typeof PROJECT_INSTRUCTION_SOURCES]} ProjectInstructionSource */
+
+/**
+ * @typedef {Object} NormalizedProjectInstructionFile
+ * @property {ProjectInstructionSource} source
+ * @property {string} text
+ * @property {boolean} truncated
+ * @property {'masked'|'withheld'} [guard]  what the secret protection did to it (#528)
+ */
+
 const PROJECT_INSTRUCTIONS_FILE = 'AGENTS.md';
 
 const PROJECT_INSTRUCTION_SOURCES = Object.freeze({
@@ -42,7 +54,11 @@ const PROJECT_INSTRUCTION_SOURCES = Object.freeze({
   USER_AGENTS: 'user-agents',
 });
 
-/** Lesereihenfolge, gleich der Quellenliste für Skills (#251). */
+/**
+ * Lesereihenfolge, gleich der Quellenliste für Skills (#251).
+ *
+ * @type {readonly ProjectInstructionSource[]}
+ */
 const PROJECT_INSTRUCTION_SOURCE_ORDER = Object.freeze([
   PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS,
   PROJECT_INSTRUCTION_SOURCES.USER_SNOTRA,
@@ -53,6 +69,8 @@ const PROJECT_INSTRUCTION_SOURCE_ORDER = Object.freeze([
  * Überschrift im Prompt und Zeile in der Kontext-Aufschlüsselung (#174).
  * `~/.snotra` ist der Standardort und heißt deshalb schlicht „global";
  * `~/.agents` wird weiter gelesen, trägt aber den Zusatz (#251).
+ *
+ * @type {Readonly<Record<string, string>>}
  */
 const PROJECT_INSTRUCTION_SOURCE_LABEL_KEYS = Object.freeze({
   [PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS]: 'context.part.agents.workspace',
@@ -64,6 +82,8 @@ const PROJECT_INSTRUCTION_SOURCE_LABEL_KEYS = Object.freeze({
  * Dieselben Quellen als Zwischenueberschrift **im System-Prompt** — englisch,
  * weil sie dort beim Modell landen (Issue #276). Die Tabelle darueber bleibt
  * die der Oberflaeche: sie beschriftet die Kontext-Aufschluesselung.
+ *
+ * @type {Readonly<Record<string, string>>}
  */
 const PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS = Object.freeze({
   [PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS]: 'AGENTS.md (project)',
@@ -75,6 +95,8 @@ const PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS = Object.freeze({
  * Kurzform des Pfads für die Anzeige. Bewusst ohne aufgelöstes Home und ohne
  * Ordnernamen: Der absolute Pfad enthält den Benutzernamen, und diese Zeichen
  * gehen mit dem Prompt an den Anbieter (siehe `environmentInfoEnabled`, #138).
+ *
+ * @type {Readonly<Record<string, string>>}
  */
 const PROJECT_INSTRUCTION_SOURCE_PATHS = Object.freeze({
   // Relative to the open folder; `<folder>/` comes from the catalogue (#353).
@@ -91,8 +113,12 @@ const PROJECT_INSTRUCTION_SOURCE_PATHS = Object.freeze({
  */
 const MAX_PROJECT_INSTRUCTION_CHARS = 20000;
 
+/**
+ * @param {unknown} value
+ * @returns {value is ProjectInstructionSource}
+ */
 function isProjectInstructionSource(value) {
-  return PROJECT_INSTRUCTION_SOURCE_ORDER.includes(value);
+  return PROJECT_INSTRUCTION_SOURCE_ORDER.some((source) => source === value);
 }
 
 /**
@@ -100,14 +126,16 @@ function isProjectInstructionSource(value) {
  * Leeres, Unbekanntes und Kaputtes fällt hier weg — der Prompt bekommt sonst
  * eine Überschrift ohne Text darunter.
  *
- * @returns {{source: string, text: string, truncated: boolean}|null}
+ * @param {unknown} raw
+ * @returns {NormalizedProjectInstructionFile|null}
  */
 function normalizeProjectInstructionFile(raw) {
-  const data = raw && typeof raw === 'object' ? raw : null;
-  if (!data) return null;
+  if (!isRecord(raw)) return null;
+  const data = raw;
   if (!isProjectInstructionSource(data.source)) return null;
   const text = typeof data.text === 'string' ? data.text.trim() : '';
   if (!text) return null;
+  /** @type {NormalizedProjectInstructionFile} */
   const file = { source: data.source, text, truncated: data.truncated === true };
   // What the secret protection did to it (#528), for the context breakdown.
   if (data.guard === 'masked' || data.guard === 'withheld') file.guard = data.guard;
@@ -118,15 +146,25 @@ function normalizeProjectInstructionFile(raw) {
  * Mehrere Dateien normalisieren und in die Lesereihenfolge bringen. Doppelte
  * Quellen kommen nicht vor — der Adapter liest jede Stufe einmal —, ein
  * zweiter Eintrag derselben Quelle wird deshalb verworfen statt verdoppelt.
+ *
+ * @param {unknown} raw
+ * @returns {NormalizedProjectInstructionFile[]}
  */
 function normalizeProjectInstructionFiles(raw) {
   const list = Array.isArray(raw) ? raw : [];
+  /** @type {Map<string, NormalizedProjectInstructionFile>} */
   const bySource = new Map();
   for (const entry of list) {
     const file = normalizeProjectInstructionFile(entry);
     if (file && !bySource.has(file.source)) bySource.set(file.source, file);
   }
-  return PROJECT_INSTRUCTION_SOURCE_ORDER.map((source) => bySource.get(source)).filter(Boolean);
+  /** @type {NormalizedProjectInstructionFile[]} */
+  const ordered = [];
+  for (const source of PROJECT_INSTRUCTION_SOURCE_ORDER) {
+    const file = bySource.get(source);
+    if (file) ordered.push(file);
+  }
+  return ordered;
 }
 
 module.exports = {

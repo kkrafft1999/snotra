@@ -12,7 +12,27 @@ const { readRegularFile, NOT_A_REGULAR_FILE_ERROR } = require('./read-regular-fi
 /** 50 MB, as for the PDF view (#346): a scanned contract of a few hundred pages stays below it. */
 const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024;
 
+/**
+ * @typedef {{ skillRoots?: Array<{ name: string, dir: string }>,
+ *   outsideRoots?: Array<{ root: string, only: string|null, access: 'read'|'write' }>,
+ *   abortSignal?: AbortSignal }} DocumentTextToolOptions
+ */
+
+/**
+ * @param {object} deps
+ * @param {typeof import('fs/promises')} deps.fs
+ * @param {{ resolveToolPath: (workspaceRoot: string|null|undefined, relativePath: string,
+ *   options: DocumentTextToolOptions) => Promise<{ absPath?: string, error?: string }> }} deps.fsService
+ * @param {ReturnType<typeof import('./document-text-worker').createDocumentTextExtractor>} deps.extractor
+ * @param {number} [deps.maxBytes]
+ */
 function createDocumentTextService({ fs, fsService, extractor, maxBytes = MAX_DOCUMENT_BYTES }) {
+  /**
+   * @param {import('../../application/ports/tool-port').ToolArguments} args
+   * @param {string|null|undefined} workspaceRoot
+   * @param {DocumentTextToolOptions} [options]
+   * @returns {Promise<string>}
+   */
   async function runExtractDocumentTextTool(args, workspaceRoot, options = {}) {
     const rel = typeof args?.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) return JSON.stringify({ error: 'relative_path is required.' });
@@ -26,12 +46,12 @@ function createDocumentTextService({ fs, fsService, extractor, maxBytes = MAX_DO
       skillRoots: options.skillRoots,
       outsideRoots: options.outsideRoots,
     });
-    if (error) return JSON.stringify({ error });
+    if (error || !absPath) return JSON.stringify({ error });
     let read;
     try {
       read = await readRegularFile(fs, absPath, { maxBytes });
     } catch (e) {
-      return JSON.stringify({ error: e.message });
+      return JSON.stringify({ error: e instanceof Error ? e.message : String(e) });
     }
     if (read.notFile) {
       return JSON.stringify({ error: read.stats.isDirectory() ? 'Path is a folder, not a file.' : NOT_A_REGULAR_FILE_ERROR });
@@ -39,6 +59,8 @@ function createDocumentTextService({ fs, fsService, extractor, maxBytes = MAX_DO
     if (read.tooLarge) {
       return JSON.stringify({ error: `File too large (>${maxBytes} bytes) to extract its text.` });
     }
+    // `readRegularFile` answers a buffer or one of the two flags; nothing else gets here.
+    if (!read.buffer) return JSON.stringify({ error: NOT_A_REGULAR_FILE_ERROR });
 
     const result = await extractor.extract(read.buffer, {
       pages: typeof args.pages === 'number' ? String(args.pages) : args.pages,

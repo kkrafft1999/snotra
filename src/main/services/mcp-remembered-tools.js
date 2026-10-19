@@ -19,10 +19,16 @@ const { createTranslator } = require('../../shared/i18n');
  *
  * A server that is switched off offers nothing, so its remembered tools are
  * listed as not available — the same as a tool without its key.
+ *
+ * @param {Object} [input]
+ * @param {Array<{ id: string, label?: string, enabled?: boolean, knownTools?: string[] }>} [input.servers]  the saved servers
+ * @param {Array<{ name?: string }>} [input.present]  the tools the registry already has
+ * @param {unknown} [input.locale]
  */
 function describeRememberedMcpTools({ servers, present, locale } = {}) {
   const t = createTranslator(locale);
   const known = new Set((Array.isArray(present) ? present : []).map((tool) => tool?.name));
+  /** @type {Array<{ name: string, shortDescription: string, riskClasses: string[], available: boolean, mayOverwrite: boolean, mcpServer: string, mcpServerId: string }>} */
   const out = [];
   for (const server of Array.isArray(servers) ? servers : []) {
     if (!server || typeof server.id !== 'string' || !server.id) continue;

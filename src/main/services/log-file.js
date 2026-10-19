@@ -26,7 +26,11 @@ const DEFAULT_MAX_BYTES = 1024 * 1024;
 const FILE_NAME = 'main.log';
 const OLD_FILE_NAME = 'main.old.log';
 
-/** `util.format` gives an Error its stack and an object its shape, as `console` does. */
+/**
+ * `util.format` gives an Error its stack and an object its shape, as `console` does.
+ *
+ * @param {unknown[]} args
+ */
 function formatArgs(args) {
   try {
     return util.format(...args);
@@ -35,7 +39,13 @@ function formatArgs(args) {
   }
 }
 
-/** One line per entry: continuation lines of a stack are indented under it. */
+/**
+ * One line per entry: continuation lines of a stack are indented under it.
+ *
+ * @param {string} time
+ * @param {string} level
+ * @param {unknown} text
+ */
 function formatLine(time, level, text) {
   const body = String(text).replace(/\r\n?/g, '\n').replace(/\n/g, '\n    ');
   return `${time} ${level.toUpperCase().padEnd(5)} ${body}\n`;
@@ -48,6 +58,7 @@ function formatLine(time, level, text) {
 function createLogFile({ fs, path, dir, maxBytes = DEFAULT_MAX_BYTES, now = () => new Date() }) {
   const filePath = path.join(dir, FILE_NAME);
   const oldFilePath = path.join(dir, OLD_FILE_NAME);
+  /** @type {number|null} */
   let size = null;
   let broken = false;
 
@@ -70,7 +81,12 @@ function createLogFile({ fs, path, dir, maxBytes = DEFAULT_MAX_BYTES, now = () =
     size = 0;
   }
 
-  /** Appends one entry; `level` is `info`, `warn` or `error`. */
+  /**
+   * Appends one entry; `level` is `info`, `warn` or `error`.
+   *
+   * @param {string} level
+   * @param {unknown[]} args
+   */
   function write(level, ...args) {
     if (broken) return;
     const line = formatLine(now().toISOString(), level, formatArgs(args));
@@ -86,7 +102,9 @@ function createLogFile({ fs, path, dir, maxBytes = DEFAULT_MAX_BYTES, now = () =
   }
 
   /** The last `count` lines across both files, oldest first — for the diagnostics. */
+  /** @param {number} count */
   function tail(count) {
+    /** @type {string[]} */
     const lines = [];
     for (const file of [oldFilePath, filePath]) {
       try {
@@ -107,10 +125,13 @@ function createLogFile({ fs, path, dir, maxBytes = DEFAULT_MAX_BYTES, now = () =
  * through an injected `log = console` — reaches the file without a change,
  * and so do the renderer's errors that renderer-console.js forwards.
  * Returns the function that puts `console` back.
+ *
+ * @param {{ warn: (...args: unknown[]) => void, error: (...args: unknown[]) => void }} target  `console`, or a stand-in for it
+ * @param {{ write: (level: string, ...args: unknown[]) => void }} logFile
  */
 function teeConsole(target, logFile) {
   const originals = { warn: target.warn, error: target.error };
-  for (const level of Object.keys(originals)) {
+  for (const level of /** @type {const} */ (['warn', 'error'])) {
     const original = originals[level];
     target[level] = (...args) => {
       logFile.write(level, ...args);

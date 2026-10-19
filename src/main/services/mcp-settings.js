@@ -21,15 +21,29 @@ const {
 } = require('./mcp-launch-confirmation');
 const { createMessage } = require('../../shared/contracts/message');
 
+/** @typedef {import('../../shared/contracts/mcp').McpServerView} McpServerView */
+/** @typedef {import('../../shared/contracts/message').Message} Message */
+
+/**
+ * The saved servers, as the settings read and write them (`storage-service`):
+ * without any secret on the way out.
+ *
+ * @typedef {Object} McpConfigStore
+ * @property {() => Promise<McpServerView[]>} readMcpServers
+ * @property {(input: Record<string, unknown>, options?: { confirmation?: object }) => Promise<{ ok: boolean, errors: Message[], endpointChanged?: boolean, notConfirmed?: boolean }>} saveMcpServer
+ * @property {(id: string) => Promise<{ ok: boolean, errors: Message[] }>} deleteMcpServer
+ * @property {() => Promise<unknown>} clearMcpServerDisabledTools
+ */
+
 /**
  * @param {Object} deps
- * @param {{ setServers: Function, connect: Function, describeConnections: Function }} deps.mcpService
- * @param {{ describeSkippedTools: Function }} deps.mcpAdapter
- * @param {Object} deps.mcpConfigStore   the saved servers, without their secrets
- * @param {{ getMcpServersForRuntime: () => Promise<Object[]> }} deps.mcpSecrets
+ * @param {import('./mcp-service').McpService} deps.mcpService
+ * @param {{ describeSkippedTools: () => Array<{ serverId: string, name: string, reason: Message }> }} deps.mcpAdapter
+ * @param {McpConfigStore} deps.mcpConfigStore   the saved servers, without their secrets
+ * @param {{ getMcpServersForRuntime: () => Promise<import('../../shared/contracts/mcp').McpServerConfig[]> }} deps.mcpSecrets
  * @param {{ readMcpSecrets: () => Promise<string[]> }} deps.ownSecrets
- * @param {Object} deps.uiPrefsStore     for the one-time move of deselected tools (#449)
- * @param {Console} [deps.log]
+ * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore  for the one-time move of deselected tools (#449)
+ * @param {Pick<Console, 'warn'>} [deps.log]
  */
 function createMcpSettings({ mcpService, mcpAdapter, mcpConfigStore, mcpSecrets, ownSecrets, uiPrefsStore, log = console }) {
   let loadFailed = false;
@@ -62,6 +76,7 @@ function createMcpSettings({ mcpService, mcpAdapter, mcpConfigStore, mcpSecrets,
      * or the subject to confirm and what the prompt names. Decided from the
      * stored list; the store decides again under its lock.
      */
+    /** @param {Record<string, unknown>} input */
     async launchConfirmation(input) {
       if (!input || typeof input !== 'object') return null;
       const servers = await mcpConfigStore.readMcpServers();
@@ -75,7 +90,7 @@ function createMcpSettings({ mcpService, mcpAdapter, mcpConfigStore, mcpSecrets,
         ? { ...input, transport: listed?.transport }
         : input;
       const { ok, value, env } = validateMcpServerInput(withTransport);
-      if (!ok || !mcpLaunchNeedsConfirmation(value, env, launchBeforeFromListed(listed))) return null;
+      if (!ok || !value || !mcpLaunchNeedsConfirmation(value, env, launchBeforeFromListed(listed))) return null;
       return {
         subject: mcpLaunchSubject(value, env),
         server: {
@@ -87,9 +102,15 @@ function createMcpSettings({ mcpService, mcpAdapter, mcpConfigStore, mcpSecrets,
         },
       };
     },
+    /**
+     * @param {Record<string, unknown>} input
+     * @param {{ confirmation?: object }} [options]
+     */
     save: (input, options) => mcpConfigStore.saveMcpServer(input, options),
+    /** @param {string} id */
     remove: (id) => mcpConfigStore.deleteMcpServer(id),
     reload,
+    /** @param {string} id */
     async test(id) {
       // The *saved* server is tested, not a configuration sent along with the
       // request: otherwise the window would have to send secrets.

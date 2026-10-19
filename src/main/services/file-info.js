@@ -25,7 +25,27 @@ const { createTranslator, translate, translatePlural } = require('../../shared/i
 
 const DEFAULT_APP_TIMEOUT_MS = 1500;
 
-/** „unbekannt“ bzw. „unknown“ — das Wort, mit dem hier jeder Fehlschlag endet. */
+/**
+ * The part of `child_process.execFile` the resolver uses.
+ * @typedef {(
+ *   command: string,
+ *   args: string[],
+ *   options: object,
+ *   callback: (error: Error | null, stdout: string | Buffer) => void,
+ * ) => unknown} ExecFileFn
+ */
+
+/** @typedef {Pick<typeof import('fs').promises, 'readFile'>} DesktopFileSystem */
+
+/** @typedef {{ resolve: (absPath: string, options?: { fs?: DesktopFileSystem }) => Promise<string | null> }} DefaultAppResolver */
+
+/** @typedef {[label: string, value: string]} InfoField */
+
+/**
+ * „unbekannt“ bzw. „unknown“ — das Wort, mit dem hier jeder Fehlschlag endet.
+ *
+ * @param {string} locale
+ */
 function unknown(locale) {
   return translate(locale, 'fileInfo.unknown');
 }
@@ -36,6 +56,9 @@ function unknown(locale) {
  * Von Hand statt über `Intl.NumberFormat`: Die Ausgabe soll nicht an der
  * ICU-Ausstattung der jeweiligen Node-Version hängen (#123). Das Trennzeichen
  * kommt deshalb aus dem Katalog, nicht aus der Laufzeit.
+ *
+ * @param {number} value
+ * @param {string} locale
  */
 function groupDigits(value, locale) {
   const separator = translate(locale, 'format.group');
@@ -51,6 +74,9 @@ function groupDigits(value, locale) {
 /**
  * Lesbar **und** exakt: „1,4 MB (1.468.006 Bytes)“. Unter 1 KB wäre die
  * Klammer eine Wiederholung, deshalb dort nur die Byte-Zahl.
+ *
+ * @param {number} bytes
+ * @param {string} locale
  */
 function formatSize(bytes, locale) {
   if (!Number.isFinite(bytes) || bytes < 0) return unknown(locale);
@@ -59,6 +85,9 @@ function formatSize(bytes, locale) {
   return `${formatBytes(bytes, locale)} (${exact})`;
 }
 
+/**
+ * @param {number} n
+ */
 function pad2(n) {
   return String(n).padStart(2, '0');
 }
@@ -76,6 +105,9 @@ function pad2(n) {
  *
  * `birthtime` ist unter Linux/ext4 oft 0 bzw. die Epoche; solche Werte gelten
  * als unbekannt, statt als „01.01.1970“ zu erscheinen.
+ *
+ * @param {Date | number | string | null | undefined} value
+ * @param {string} locale
  */
 function formatTimestamp(value, locale) {
   if (value === null || value === undefined) return unknown(locale);
@@ -90,7 +122,11 @@ function formatTimestamp(value, locale) {
   return `${day}, ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
-/** Endung ohne Punkt, kleingeschrieben; '' für Dotfiles und Namen ohne Endung. */
+/**
+ * Endung ohne Punkt, kleingeschrieben; '' für Dotfiles und Namen ohne Endung.
+ *
+ * @param {string} absPath
+ */
 function extensionOf(absPath) {
   const ext = nodePath.extname(nodePath.basename(absPath));
   return ext.startsWith('.') ? ext.slice(1).toLowerCase() : '';
@@ -111,6 +147,8 @@ function extensionOf(absPath) {
  * localized name — "Vorschau" on a German Mac — where the bundle's file name
  * (`lastPathComponent`) is always "Preview.app". It may carry the ".app",
  * depending on the Finder setting for extensions; `onMacOs` strips it.
+ *
+ * @param {string} absPath
  */
 function macDefaultAppScript(absPath) {
   // JSON.stringify liefert ein gültiges JS-String-Literal samt Escaping.
@@ -119,7 +157,11 @@ function macDefaultAppScript(absPath) {
     + " u ? ObjC.unwrap($.NSFileManager.defaultManager.displayNameAtPath(u.path)) : ''";
 }
 
-/** Windows-CI-Falle: PowerShell und `xdg-mime` liefern CRLF. */
+/**
+ * Windows-CI-Falle: PowerShell und `xdg-mime` liefern CRLF.
+ *
+ * @param {unknown} stdout
+ */
 function firstLine(stdout) {
   return String(stdout ?? '').replace(/\r\n/g, '\n').split('\n').map((l) => l.trim()).find(Boolean) || '';
 }
@@ -142,6 +184,15 @@ const LINUX_DESKTOP_DIRS = [
 /**
  * Ermittelt das Standardprogramm für eine Datei — je Plattform ein kurzer
  * Kindprozess mit Timeout. Liefert `null`, sobald irgendetwas nicht klappt.
+ *
+ * @param {object} [options]
+ * @param {string} [options.platform]
+ * @param {ExecFileFn} [options.execFile]
+ * @param {NodeJS.ProcessEnv} [options.env]
+ * @param {(() => string) | null} [options.homedir]
+ * @param {number} [options.timeoutMs]
+ * @param {Pick<Console, 'warn'>} [options.logger]
+ * @returns {DefaultAppResolver}
  */
 function createDefaultAppResolver({
   platform = process.platform,
@@ -151,10 +202,16 @@ function createDefaultAppResolver({
   timeoutMs = DEFAULT_APP_TIMEOUT_MS,
   logger = console,
 } = {}) {
+  /**
+   * @param {string} command
+   * @param {string[]} args
+   * @param {object} [options]
+   * @returns {Promise<string | null>}
+   */
   function run(command, args, options = {}) {
     return new Promise((resolve) => {
       let settled = false;
-      const done = (value) => {
+      const done = (/** @type {string | null} */ value) => {
         if (settled) return;
         settled = true;
         resolve(value);
@@ -168,7 +225,7 @@ function createDefaultAppResolver({
           command,
           args,
           { timeout: timeoutMs, windowsHide: true, maxBuffer: 256 * 1024, ...options },
-          (err, stdout) => {
+          (/** @type {Error | null} */ err, /** @type {string | Buffer} */ stdout) => {
             clearTimeout(timer);
             done(err ? null : firstLine(stdout));
           },
@@ -181,12 +238,18 @@ function createDefaultAppResolver({
     });
   }
 
+  /**
+   * @param {string} absPath
+   */
   async function onMacOs(absPath) {
     const name = await run('osascript', ['-l', 'JavaScript', '-e', macDefaultAppScript(absPath)]);
     if (!name) return null;
     return name.replace(/\.app$/i, '') || null;
   }
 
+  /**
+   * @param {string} absPath
+   */
   async function onWindows(absPath) {
     const ext = nodePath.extname(absPath);
     if (!ext) return null;
@@ -201,6 +264,10 @@ function createDefaultAppResolver({
     return exe || null;
   }
 
+  /**
+   * @param {string} absPath
+   * @param {{ fs?: DesktopFileSystem }} deps
+   */
   async function onLinux(absPath, { fs }) {
     const mime = await run('xdg-mime', ['query', 'filetype', absPath]);
     if (!mime) return null;
@@ -213,6 +280,9 @@ function createDefaultAppResolver({
       ...(home ? [nodePath.posix.join(home, '.local', 'share', 'applications')] : []),
       ...LINUX_DESKTOP_DIRS,
     ];
+    // Without a file system there is no desktop entry to read: the id is the answer.
+    const fallbackName = desktopId.replace(/\.desktop$/i, '') || null;
+    if (!fs) return fallbackName;
     for (const dir of dirs) {
       try {
         // eslint-disable-next-line no-await-in-loop -- die Liste ist drei Einträge lang
@@ -223,9 +293,14 @@ function createDefaultAppResolver({
         // Nächstes Verzeichnis; ein fehlender .desktop-Eintrag ist kein Fehler.
       }
     }
-    return desktopId.replace(/\.desktop$/i, '') || null;
+    return fallbackName;
   }
 
+  /**
+   * @param {string} absPath
+   * @param {{ fs?: DesktopFileSystem }} [options]
+   * @returns {Promise<string | null>}
+   */
   async function resolve(absPath, { fs } = {}) {
     try {
       if (platform === 'darwin') return await onMacOs(absPath);
@@ -244,6 +319,16 @@ function createDefaultAppResolver({
  * Setzt die Felder des Dialogs zusammen. `fs` ist die Promise-API
  * (`require('fs').promises`) und wird injiziert, damit der Test ohne echtes
  * Dateisystem auskommt.
+ *
+ * @param {object} [options]
+ * @param {Pick<typeof import('fs').promises, 'readdir' | 'readlink' | 'lstat' | 'stat' | 'readFile'>} [options.fs]
+ * @param {string} [options.platform]
+ * @param {ExecFileFn} [options.execFile]
+ * @param {NodeJS.ProcessEnv} [options.env]
+ * @param {(() => string) | null} [options.homedir]
+ * @param {number} [options.timeoutMs]
+ * @param {Pick<Console, 'warn'>} [options.logger]
+ * @param {DefaultAppResolver | null} [options.defaultAppResolver]
  */
 function createFileInfo({
   fs = require('fs').promises,
@@ -258,6 +343,9 @@ function createFileInfo({
   const resolver = defaultAppResolver
     || createDefaultAppResolver({ platform, execFile, env, homedir, timeoutMs, logger });
 
+  /**
+   * @param {string} absPath
+   */
   async function countEntries(absPath) {
     try {
       const entries = await fs.readdir(absPath);
@@ -267,6 +355,9 @@ function createFileInfo({
     }
   }
 
+  /**
+   * @param {string} absPath
+   */
   async function symlinkTarget(absPath) {
     try {
       return await fs.readlink(absPath);
@@ -288,6 +379,7 @@ function createFileInfo({
    */
   async function describe(absPath, { isDirectory = false, locale } = {}) {
     const t = createTranslator(locale);
+    /** @type {import('fs').Stats | null} */
     let link = null;
     try {
       link = await fs.lstat(absPath);
@@ -325,6 +417,7 @@ function createFileInfo({
         : t(`fileInfo.type.symlink.plain.${kind}`);
     }
 
+    /** @type {InfoField[]} */
     const details = [];
     // The short form under the name: the size alone, or the entry count.
     let summary = '';
@@ -350,6 +443,7 @@ function createFileInfo({
       details.push([t('fileInfo.field.openWith'), app || unknown(t.locale)]);
     }
 
+    /** @type {InfoField[]} */
     const fields = [
       [t('fileInfo.field.name'), name],
       [t('fileInfo.field.path'), absPath],
@@ -375,6 +469,8 @@ function createFileInfo({
  * Feldliste → Detailtext des Dialogs. Eine Zeile je Feld, ohne Einrückung:
  * native Dialoge setzen proportional, ausgerichtete Spalten gäbe es hier
  * ohnehin nicht, sie würden nur als unregelmäßige Lücken auffallen.
+ *
+ * @param {InfoField[]} fields
  */
 function formatFields(fields) {
   return fields.map(([label, value]) => `${label}: ${value}`).join('\n');

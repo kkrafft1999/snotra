@@ -35,6 +35,8 @@ const NONE = 'KEINER';
  * Die Provider rufen diese Rückmeldungen beim Streamen **ungeprüft** auf — ein
  * leeres Objekt reicht also nicht, das endet in einem TypeError mitten im
  * Lauf. Hier interessiert nur die fertige Antwort, deshalb tun sie nichts.
+ *
+ * @returns {import('../../application/ports/llm-port').LlmStreamCallbacks}
  */
 function stilleCallbacks() {
   const nichts = () => {};
@@ -48,6 +50,9 @@ function stilleCallbacks() {
   };
 }
 
+/**
+ * @param {Array<{ name: string, description?: string }>} skills
+ */
 function buildPrompt(skills) {
   const liste = skills
     .slice(0, MAX_SKILLS_IN_PROMPT)
@@ -66,6 +71,13 @@ function buildPrompt(skills) {
   );
 }
 
+/**
+ * @param {object} deps
+ * @param {Pick<import('../../application/ports/llm-port').LlmPort, 'resolveChatTarget' | 'streamRound'>} deps.llm
+ * @param {Pick<ReturnType<typeof import('./skills-service').createSkillsService>, 'listCatalog'>} deps.skillCatalog
+ * @param {() => string|null} [deps.getActiveWorkspaceRoot]
+ * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort|null} [deps.uiPrefsStore]
+ */
 function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoot, uiPrefsStore }) {
   if (!llm || !skillCatalog) {
     throw new TypeError('createSkillSuggestionService benötigt llm und skillCatalog.');
@@ -73,6 +85,7 @@ function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoo
 
   async function verfuegbareSkills() {
     const workspaceRoot = typeof getActiveWorkspaceRoot === 'function' ? getActiveWorkspaceRoot() : null;
+    /** @type {Partial<import('../ports/ui-prefs-store-port').UiPrefs>} */
     const prefs = uiPrefsStore ? await uiPrefsStore.readUIPrefs() : {};
     const { skills } = await skillCatalog.listCatalog({
       workspaceRoot: typeof workspaceRoot === 'string' && workspaceRoot.trim() ? workspaceRoot : null,
@@ -88,9 +101,10 @@ function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoo
 
   /**
    * @param {string} text Die bisherige Chat-Eingabe des Nutzers.
+   * @param {{ abortSignal?: AbortSignal }} [options]
    * @returns {Promise<{ name: string } | null>}
    */
-  async function suggest(text, { abortSignal = null } = {}) {
+  async function suggest(text, { abortSignal = new AbortController().signal } = {}) {
     // The request sits right before the "/", so a long draft keeps its end
     // rather than its beginning (#586).
     const frage = String(text || '').trim().slice(-MAX_QUERY_CHARS);
@@ -102,7 +116,7 @@ function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoo
     // Bei einem unbekannten Provider liefert der Port ein Fehler-Ergebnis
     // statt eines Ziels — das ist wahrheitsgemäß kein Vorschlag.
     const target = await llm.resolveChatTarget();
-    if (!target || target.error) return null;
+    if (!target || 'error' in target) return null;
 
     const result = await llm.streamRound({
       target,

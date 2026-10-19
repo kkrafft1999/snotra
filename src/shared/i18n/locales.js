@@ -28,6 +28,14 @@ const en = require('./messages/en');
  *   (ISO 639-1, as OpenAI's transcription endpoints take it).
  * - `messages`: the catalogue.
  */
+/**
+ * A catalogue as the lookups see it: a flat `key → string` map, whatever keys
+ * the two literals below happen to have today.
+ *
+ * @typedef {Readonly<Record<string, string>>} Catalogue
+ */
+
+/** @type {ReadonlyArray<Readonly<{ code: string, name: string, speechLanguage: string, messages: Catalogue }>>} */
 const CATALOGUES = Object.freeze([
   Object.freeze({ code: APP_LOCALES.EN, name: 'English', speechLanguage: 'en', messages: en }),
   Object.freeze({ code: APP_LOCALES.DE, name: 'Deutsch', speechLanguage: 'de', messages: de }),
@@ -55,6 +63,7 @@ const LEGACY_LOCALE = APP_LOCALES.DE;
 /** Every supported language, in the order they are offered. */
 const LOCALES = Object.freeze(CATALOGUES.map((entry) => entry.code));
 
+/** @type {Readonly<Record<string, Catalogue>>} */
 const MESSAGES = Object.freeze(Object.fromEntries(CATALOGUES.map((entry) => [entry.code, entry.messages])));
 
 /** @type {Map<string, (typeof CATALOGUES)[number]>} */
@@ -74,12 +83,21 @@ const LOCALE_INFO = Object.freeze(
   CATALOGUES.map(({ code, name, speechLanguage }) => Object.freeze({ code, name, speechLanguage }))
 );
 
-/** Is this the code of a registered language? Exact — no case folding, no region. */
+/**
+ * Is this the code of a registered language? Exact — no case folding, no region.
+ *
+ * @param {unknown} value
+ * @returns {value is string}
+ */
 function isLocale(value) {
-  return ENTRIES.has(value);
+  return typeof value === 'string' && ENTRIES.has(value);
 }
 
-/** The language in its own words, or the code itself for one that is not registered. */
+/**
+ * The language in its own words, or the code itself for one that is not registered.
+ *
+ * @param {string} locale
+ */
 function localeName(locale) {
   return ENTRIES.get(locale)?.name ?? String(locale);
 }
@@ -87,6 +105,8 @@ function localeName(locale) {
 /**
  * The language voice input asks the speech recognition for. A language that is
  * not registered gets the legacy one — a guess, but the one the app always made.
+ *
+ * @param {string} locale
  */
 function speechLanguageFor(locale) {
   return (ENTRIES.get(locale) ?? LEGACY_ENTRY).speechLanguage;
@@ -95,6 +115,8 @@ function speechLanguageFor(locale) {
 /**
  * Does a language code, as voice input receives it from a caller, name a
  * language speech recognition is known to handle?
+ *
+ * @param {unknown} value
  */
 function isSpeechLanguage(value) {
   return CATALOGUES.some((entry) => entry.speechLanguage === value);
@@ -104,6 +126,8 @@ function isSpeechLanguage(value) {
  * Address prefix of a language's pages in the web manual: the root of the site
  * is written in the default language and carries none, every other language
  * lives under `<code>/` — `de/` for German.
+ *
+ * @param {string} locale
  */
 function manualPathPrefix(locale) {
   return isLocale(locale) && locale !== DEFAULT_LOCALE ? `${locale}/` : '';
@@ -114,6 +138,9 @@ function manualPathPrefix(locale) {
  * names and the rest. `locale` is null for the root language, which has no
  * segment — `de/safety/sandbox` → `{ locale: 'de', rest: 'safety/sandbox' }`,
  * `safety/sandbox` → `{ locale: null, rest: 'safety/sandbox' }`.
+ *
+ * @param {string} path
+ * @returns {{ locale: string|null, rest: string }}
  */
 function splitManualLocale(path) {
   const slash = path.indexOf('/');

@@ -41,6 +41,8 @@ const PROVIDER_CAPABILITIES = Object.freeze({
  * `supported` of a capability that the entry's own connection decides: the
  * capability follows the boolean connection setting named in `setting`
  * (*Supports images* on an OpenAI-compatible entry).
+ *
+ * @type {'per-connection'}
  */
 const PER_CONNECTION = 'per-connection';
 
@@ -86,8 +88,12 @@ const DEFAULT_TRAITS = Object.freeze({
  * @property {Object<string, boolean>} [fields]
  */
 
+/**
+ * @param {unknown} value
+ * @returns {value is number}
+ */
 function isIssueNumber(value) {
-  return Number.isInteger(value) && value > 0;
+  return typeof value === 'number' && Number.isInteger(value) && value > 0;
 }
 
 /**
@@ -107,6 +113,7 @@ function isReasonKey(value) {
  * @param {{ knownReasonKeys?: Set<string> }} [options]
  */
 function declarationProblems(provider, { knownReasonKeys } = {}) {
+  /** @type {string[]} */
   const problems = [];
   const declared = provider?.capabilities;
   if (!declared || typeof declared !== 'object') return ['declares no capabilities'];
@@ -151,17 +158,30 @@ function declarationProblems(provider, { knownReasonKeys } = {}) {
 /**
  * One capability resolved against an entry's configuration:
  * `{ supported: boolean, gap?: { limitedBy, reason, issue? } }`.
+ *
+ * @param {CapabilityDeclaration|undefined} entry
+ * @param {Object<string, unknown>} [config]
+ * @returns {{ supported: boolean, gap?: { limitedBy: string, reason: string, issue?: number } }}
  */
 function resolveCapability(entry, config) {
   if (entry?.supported === true) return { supported: true };
   if (entry?.supported === PER_CONNECTION) {
-    if (config?.[entry.setting] === true) return { supported: true };
+    if (typeof entry.setting === 'string' && config?.[entry.setting] === true) return { supported: true };
     return { supported: false, gap: { limitedBy: CAPABILITY_LIMITS.CONNECTION, reason: entry.reason || '' } };
   }
+  /** @type {{ limitedBy: string, reason: string, issue?: number }} */
   const gap = { limitedBy: CAPABILITY_LIMITS.PROVIDER, reason: entry?.reason || '' };
   if (isIssueNumber(entry?.issue)) gap.issue = entry.issue;
   return { supported: false, gap };
 }
+
+/**
+ * @typedef {Object} ProviderCapabilities
+ * @property {boolean} images
+ * @property {string[]} [imageMediaTypes]
+ * @property {boolean} reasoningLevels
+ * @property {Object<string, { limitedBy: string, reason: string, issue?: number }>} [gaps]
+ */
 
 /**
  * The capability DTO of a provider for one entry's configuration — what the
@@ -172,14 +192,14 @@ function resolveCapability(entry, config) {
  *
  * @param {DeclaringProvider|null|undefined} provider
  * @param {Object<string, unknown>} [config]
- * @returns {{ images: boolean, imageMediaTypes?: string[], reasoningLevels: boolean,
- *   gaps?: Object<string, { limitedBy: string, reason: string, issue?: number }> }}
+ * @returns {ProviderCapabilities}
  */
 function resolveProviderCapabilities(provider, config) {
   /** @type {Object<string, CapabilityDeclaration>} */
   const declared = provider?.capabilities || {};
-  /** @type {any} */
-  const out = {};
+  /** @type {ProviderCapabilities} */
+  const out = { images: false, reasoningLevels: false };
+  /** @type {Object<string, { limitedBy: string, reason: string, issue?: number }>} */
   const gaps = {};
   for (const name of Object.values(PROVIDER_CAPABILITIES)) {
     const { supported, gap } = resolveCapability(declared[name], config);
@@ -194,6 +214,7 @@ function resolveProviderCapabilities(provider, config) {
   return out;
 }
 
+/** @param {unknown} value */
 function stringList(value) {
   return Array.isArray(value) ? value.filter((v) => typeof v === 'string' && v) : [];
 }

@@ -14,14 +14,30 @@
 
 const { posix: path } = require('path');
 
+/**
+ * An opened archive, as `zip-reader.js` hands it out.
+ *
+ * @typedef {ReturnType<typeof import('./zip-reader').openZip>} Zip
+ *
+ * The callbacks `scanXml` calls; each is optional. `attrs` is the raw text of the tag's attributes.
+ * @typedef {{
+ *   open?: (name: string, attrs: string, selfClosing: boolean) => void,
+ *   close?: (name: string) => void,
+ *   text?: (chars: string) => void,
+ * }} XmlHandlers
+ */
+
 const ENTITY = /&(?:#(\d+)|#x([0-9a-fA-F]+)|(lt|gt|amp|quot|apos));/g;
+/** @type {Record<string, string>} */
 const NAMED_ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
 
+/** @param {string} text */
 function decodeXml(text) {
   if (!text.includes('&')) return text;
+  /** @param {string} match @param {string|undefined} dec @param {string|undefined} hex @param {string|undefined} name */
   return text.replace(ENTITY, (match, dec, hex, name) => {
     if (name) return NAMED_ENTITIES[name];
-    const code = dec ? Number(dec) : parseInt(hex, 16);
+    const code = dec ? Number(dec) : parseInt(hex ?? '', 16);
     return Number.isFinite(code) && code <= 0x10ffff ? String.fromCodePoint(code) : match;
   });
 }
@@ -34,6 +50,9 @@ const TOKEN =
  * Walks `xml` once. `open(name, attrs, selfClosing)`, `close(name)` and
  * `text(decoded)` are called in document order; a self-closing element only
  * gets `open`.
+ *
+ * @param {string} xml
+ * @param {XmlHandlers} handlers
  */
 function scanXml(xml, { open, close, text }) {
   TOKEN.lastIndex = 0;
@@ -51,16 +70,28 @@ function scanXml(xml, { open, close, text }) {
   }
 }
 
-/** The value of one attribute in the raw attribute text of a tag. */
+/**
+ * The value of one attribute in the raw attribute text of a tag.
+ *
+ * @param {string|undefined} attrs
+ * @param {string} name
+ * @returns {string|null}
+ */
 function attr(attrs, name) {
   const match = new RegExp(`(?:^|\\s)${name.replace(/[.:]/g, '\\$&')}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(attrs || '');
   return match ? decodeXml(match[1] ?? match[2]) : null;
 }
 
-/** Relationship id → part path, for the `_rels` file of `partPath`. */
+/**
+ * Relationship id → part path, for the `_rels` file of `partPath`.
+ *
+ * @param {Zip} zip
+ * @param {string} partPath
+ */
 function readRelationships(zip, partPath) {
   const relsPath = path.join(path.dirname(partPath), '_rels', `${path.basename(partPath)}.rels`);
   const xml = zip.readText(relsPath);
+  /** @type {Map<string, { target: string, type: string }>} */
   const targets = new Map();
   if (!xml) return targets;
   scanXml(xml, {
@@ -78,7 +109,11 @@ function readRelationships(zip, partPath) {
   return targets;
 }
 
-/** `dc:title` from the document properties, when the author set one. */
+/**
+ * `dc:title` from the document properties, when the author set one.
+ *
+ * @param {Zip} zip
+ */
 function readCoreTitle(zip) {
   const xml = zip.readText('docProps/core.xml');
   if (!xml) return null;
@@ -105,9 +140,14 @@ function readCoreTitle(zip) {
 function createFallbackGuard() {
   let depth = 0;
   return {
+    /**
+     * @param {string} name
+     * @param {boolean} selfClosing
+     */
     open(name, selfClosing) {
       if (name === 'mc:Fallback' && !selfClosing) depth += 1;
     },
+    /** @param {string} name */
     close(name) {
       if (name === 'mc:Fallback' && depth > 0) depth -= 1;
     },
@@ -122,11 +162,15 @@ function createFallbackGuard() {
 /**
  * Style id → heading level. The ids are localised (a German Word writes
  * "berschrift1"), the names of the built-in styles are not ("heading 1").
+ *
+ * @param {Zip} zip
  */
 function readHeadingStyles(zip) {
+  /** @type {Map<string, number>} */
   const levels = new Map();
   const xml = zip.readText('word/styles.xml');
   if (!xml) return levels;
+  /** @type {string|null} */
   let styleId = null;
   scanXml(xml, {
     open(name, attrs, selfClosing) {
@@ -149,20 +193,27 @@ function readHeadingStyles(zip) {
   return levels;
 }
 
+/** @param {Zip} zip */
 function extractDocx(zip) {
   const xml = zip.readText('word/document.xml');
   if (xml === null) throw new Error('The document has no main part (word/document.xml).');
   const headingStyles = readHeadingStyles(zip);
   const fallback = createFallbackGuard();
+  /** @type {string[]} */
   const blocks = [];
+  /** @type {{ text: string, level: number, list: boolean }|null} */
   let paragraph = null;
   let inText = false;
   let tableDepth = 0;
+  /** @type {string[]|null} */
   let row = null;
+  /** @type {string[]|null} */
   let cell = null;
+  /** @type {string[]|null} */
   let tableRows = null;
 
   function finishParagraph() {
+    if (!paragraph) return;
     const text = paragraph.text.replace(/[ \t]+$/gm, '').trim();
     const { level, list } = paragraph;
     paragraph = null;
@@ -184,7 +235,7 @@ function extractDocx(zip) {
           if (!selfClosing && !paragraph) paragraph = { text: '', level: 0, list: false };
           break;
         case 'w:pStyle':
-          if (paragraph) paragraph.level = headingStyles.get(attr(attrs, 'w:val')) || paragraph.level;
+          if (paragraph) paragraph.level = headingStyles.get(attr(attrs, 'w:val') ?? '') || paragraph.level;
           break;
         case 'w:outlineLvl': {
           const level = Number(attr(attrs, 'w:val'));
@@ -241,7 +292,7 @@ function extractDocx(zip) {
           break;
         case 'w:tr':
           if (tableDepth === 1 && row !== null) {
-            if (row.some(Boolean)) tableRows.push(row.join(' | '));
+            if (tableRows && row.some(Boolean)) tableRows.push(row.join(' | '));
             row = null;
           }
           break;
@@ -267,12 +318,14 @@ function extractDocx(zip) {
 
 // ── XLSX ────────────────────────────────────────────────────────────────────
 
+/** @param {string} letters */
 function columnToNumber(letters) {
   let n = 0;
   for (const ch of letters) n = n * 26 + (ch.charCodeAt(0) - 64);
   return n;
 }
 
+/** @param {number} n */
 function numberToColumn(n) {
   let letters = '';
   for (let rest = n; rest > 0; rest = Math.floor((rest - 1) / 26)) {
@@ -284,6 +337,11 @@ function numberToColumn(n) {
 /**
  * "A1:F200", "B:D", "5:40", "C7" — the parts left out are open. Returns
  * `{ minCol, maxCol, minRow, maxRow }` or `{ error }`.
+ *
+ * @typedef {{ minCol: number, maxCol: number, minRow: number, maxRow: number }} CellBounds
+ *
+ * @param {unknown} raw
+ * @returns {CellBounds | { error: string }}
  */
 function parseCellRange(raw) {
   const text = String(raw).trim().toUpperCase().replace(/\$/g, '');
@@ -313,6 +371,9 @@ const BUILTIN_TIME_ONLY = new Set([18, 19, 20, 21, 45, 46, 47]);
  * Is a custom format code a date or a time? Quoted text, escaped characters,
  * `[colours]`/`[$-407]` and the `_x`/`*x` padding do not count. An `m` alone
  * is a month ("mmm yyyy"); next to `h` or `s` it is a minute.
+ *
+ * @param {string} code
+ * @returns {'date'|'time'|null}
  */
 function classifyFormatCode(code) {
   const bare = code.replace(/"[^"]*"|\\.|[_*].|\[[^\]]*\]/g, '').toLowerCase();
@@ -322,11 +383,17 @@ function classifyFormatCode(code) {
   return null;
 }
 
-/** Style index (the `s` of a cell) → 'date' | 'time' | null. */
+/**
+ * Style index (the `s` of a cell) → 'date' | 'time' | null.
+ *
+ * @param {Zip} zip
+ */
 function readDateStyles(zip) {
   const xml = zip.readText('xl/styles.xml');
+  /** @type {Array<'date'|'time'|null>} */
   const kinds = [];
   if (!xml) return kinds;
+  /** @type {Map<number, 'date'|'time'|null>} */
   const custom = new Map();
   let inCellXfs = false;
   scanXml(xml, {
@@ -337,7 +404,7 @@ function readDateStyles(zip) {
         inCellXfs = true;
       } else if (inCellXfs && name === 'xf') {
         const id = Number(attr(attrs, 'numFmtId') || 0);
-        let kind = custom.has(id) ? custom.get(id) : null;
+        let kind = custom.get(id) ?? null;
         if (!custom.has(id) && BUILTIN_DATE_FORMATS.has(id)) kind = BUILTIN_TIME_ONLY.has(id) ? 'time' : 'date';
         kinds.push(kind);
       }
@@ -349,11 +416,18 @@ function readDateStyles(zip) {
   return kinds;
 }
 
+/** @param {number} n */
 function pad(n) {
   return String(n).padStart(2, '0');
 }
 
-/** An Excel serial number as ISO 8601, in the 1900 or the 1904 date system. */
+/**
+ * An Excel serial number as ISO 8601, in the 1900 or the 1904 date system.
+ *
+ * @param {number} serial
+ * @param {'date'|'time'} kind
+ * @param {boolean} date1904
+ */
 function formatSerialDate(serial, kind, date1904) {
   if (!Number.isFinite(serial)) return null;
   const ms = Math.round(serial * 86400000);
@@ -366,10 +440,16 @@ function formatSerialDate(serial, kind, date1904) {
   return ms % 86400000 === 0 ? day : `${day} ${time}`;
 }
 
+/**
+ * @param {Zip} zip
+ * @param {string|null} target
+ */
 function readSharedStrings(zip, target) {
   const xml = target ? zip.readText(target) : zip.readText('xl/sharedStrings.xml');
+  /** @type {string[]} */
   const strings = [];
   if (!xml) return strings;
+  /** @type {string|null} */
   let current = null;
   let inText = false;
   let phonetic = 0;
@@ -388,20 +468,26 @@ function readSharedStrings(zip, target) {
       }
     },
     text(chars) {
-      if (inText) current += chars;
+      if (inText && current !== null) current += chars;
     },
   });
   return strings;
 }
 
-/** One cell value on one line: tabs and line breaks would break the row. */
+/**
+ * One cell value on one line: tabs and line breaks would break the row.
+ *
+ * @param {string} value
+ */
 function flattenCell(value) {
   return value.replace(/\r\n?|\n/g, ' ⏎ ').replace(/\t/g, ' ');
 }
 
+/** @param {Zip} zip */
 function readWorkbook(zip) {
   const xml = zip.readText('xl/workbook.xml');
   if (xml === null) throw new Error('The workbook has no main part (xl/workbook.xml).');
+  /** @type {Array<{ name: string, relId: string|null, state: string, part?: string|null }>} */
   const sheets = [];
   let date1904 = false;
   scanXml(xml, {
@@ -415,7 +501,7 @@ function readWorkbook(zip) {
     },
   });
   const rels = readRelationships(zip, 'xl/workbook.xml');
-  for (const sheet of sheets) sheet.part = rels.get(sheet.relId)?.target || null;
+  for (const sheet of sheets) sheet.part = rels.get(sheet.relId ?? '')?.target || null;
   const sharedStringsRel = [...rels.values()].find((rel) => rel.type.endsWith('/sharedStrings'));
   return { sheets, date1904, sharedStringsPart: sharedStringsRel?.target || null };
 }
@@ -423,6 +509,9 @@ function readWorkbook(zip) {
 /**
  * The workbook's sheet list, and the text of one sheet within `range`.
  * `sheetName` defaults to the first visible sheet.
+ *
+ * @param {Zip} zip
+ * @param {{ sheet?: unknown, range?: unknown }} [options]
  */
 function extractXlsx(zip, { sheet: sheetName, range } = {}) {
   const workbook = readWorkbook(zip);
@@ -442,21 +531,26 @@ function extractXlsx(zip, { sheet: sheetName, range } = {}) {
     chosen = sheets.find((entry) => entry.state === 'visible') || sheets[0];
   }
 
+  /** @type {CellBounds} */
   let bounds = { minCol: 1, maxCol: Infinity, minRow: 1, maxRow: Infinity };
   if (range !== undefined && range !== null && String(range).trim()) {
-    bounds = parseCellRange(range);
-    if (bounds.error) return { error: bounds.error };
+    const parsed = parseCellRange(range);
+    if ('error' in parsed) return { error: parsed.error };
+    bounds = parsed;
   }
 
-  const xml = zip.readText(chosen.part);
+  const xml = zip.readText(chosen.part ?? '');
   if (xml === null) throw new Error(`The part of sheet "${chosen.name}" is missing.`);
   const shared = readSharedStrings(zip, workbook.sharedStringsPart);
   const dateStyles = readDateStyles(zip);
 
+  /** @type {string|null} */
   let dimension = null;
+  /** @type {Map<number, Map<number, string>>} */
   const rows = new Map();
   let usedMinCol = Infinity;
   let usedMaxCol = 0;
+  /** @type {{ type: string, style: number, value: string, inline: string }|null} */
   let cell = null;
   let rowNumber = 0;
   let inValue = false;
@@ -494,8 +588,12 @@ function extractXlsx(zip, { sheet: sheetName, range } = {}) {
           && rowNumber >= bounds.minRow && rowNumber <= bounds.maxRow;
         const value = inRange ? cellText(cell) : '';
         if (value !== '') {
-          if (!rows.has(rowNumber)) rows.set(rowNumber, new Map());
-          rows.get(rowNumber).set(column, flattenCell(value));
+          let cells = rows.get(rowNumber);
+          if (!cells) {
+            cells = new Map();
+            rows.set(rowNumber, cells);
+          }
+          cells.set(column, flattenCell(value));
           usedMinCol = Math.min(usedMinCol, column);
           usedMaxCol = Math.max(usedMaxCol, column);
         }
@@ -503,11 +601,12 @@ function extractXlsx(zip, { sheet: sheetName, range } = {}) {
       }
     },
     text(chars) {
-      if (inValue) cell.value += chars;
-      else if (inInlineText) cell.inline += chars;
+      if (inValue && cell) cell.value += chars;
+      else if (inInlineText && cell) cell.inline += chars;
     },
   });
 
+  /** @param {{ type: string, style: number, value: string, inline: string }} cell */
   function cellText({ type, style, value, inline }) {
     switch (type) {
       case 's': {
@@ -529,17 +628,20 @@ function extractXlsx(zip, { sheet: sheetName, range } = {}) {
     }
   }
 
+  /** @type {string[]} */
   const lines = [];
   if (rows.size) {
+    /** @type {number[]} */
     const columns = [];
     for (let col = usedMinCol; col <= usedMaxCol; col += 1) columns.push(col);
     lines.push(['row', ...columns.map(numberToColumn)].join('\t'));
     for (const number of [...rows.keys()].sort((a, b) => a - b)) {
       const cells = rows.get(number);
-      lines.push([String(number), ...columns.map((col) => cells.get(col) ?? '')].join('\t').replace(/\t+$/, ''));
+      lines.push([String(number), ...columns.map((col) => cells?.get(col) ?? '')].join('\t').replace(/\t+$/, ''));
     }
   }
 
+  /** @type {{ format: 'xlsx', title: string|null, sheets: Array<{ name: string, hidden?: boolean }>, sheet: string, text: string, dimension?: string }} */
   const result = {
     format: 'xlsx',
     title: readCoreTitle(zip),
@@ -553,10 +655,16 @@ function extractXlsx(zip, { sheet: sheetName, range } = {}) {
 
 // ── PPTX ────────────────────────────────────────────────────────────────────
 
-/** The paragraphs of one DrawingML part (a slide or its notes). */
+/**
+ * The paragraphs of one DrawingML part (a slide or its notes).
+ *
+ * @param {string} xml
+ */
 function drawingParagraphs(xml) {
+  /** @type {string[]} */
   const paragraphs = [];
   const fallback = createFallbackGuard();
+  /** @type {string|null} */
   let current = null;
   let inText = false;
   scanXml(xml, {
@@ -585,19 +693,29 @@ function drawingParagraphs(xml) {
   return paragraphs;
 }
 
-/** The slides in presentation order, each readable on demand. */
+/**
+ * The slides in presentation order, each readable on demand.
+ *
+ * @param {Zip} zip
+ */
 function extractPptx(zip) {
   const xml = zip.readText('ppt/presentation.xml');
   if (xml === null) throw new Error('The presentation has no main part (ppt/presentation.xml).');
+  /** @type {string[]} */
   const ids = [];
   scanXml(xml, {
     open(name, attrs) {
-      if (name === 'p:sldId') ids.push(attr(attrs, 'r:id'));
+      const id = name === 'p:sldId' ? attr(attrs, 'r:id') : null;
+      if (id) ids.push(id);
     },
   });
   const rels = readRelationships(zip, 'ppt/presentation.xml');
-  const parts = ids.map((id) => rels.get(id)?.target).filter((target) => target && zip.has(target));
+  const parts = ids.flatMap((id) => {
+    const target = rels.get(id)?.target;
+    return target && zip.has(target) ? [target] : [];
+  });
 
+  /** @param {number} number */
   function readSlide(number) {
     const part = parts[number - 1];
     const body = drawingParagraphs(zip.readText(part) || '');
@@ -613,11 +731,17 @@ function extractPptx(zip) {
     format: 'pptx',
     title: readCoreTitle(zip),
     unitCount: parts.length,
+    /** @param {number} number */
     readUnit: async (number) => readSlide(number),
   };
 }
 
-/** Which Office format an opened archive is, from the parts it contains. */
+/**
+ * Which Office format an opened archive is, from the parts it contains.
+ *
+ * @param {Zip} zip
+ * @returns {'docx'|'xlsx'|'pptx'|null}
+ */
 function detectOfficeFormat(zip) {
   if (zip.has('word/document.xml')) return 'docx';
   if (zip.has('xl/workbook.xml')) return 'xlsx';

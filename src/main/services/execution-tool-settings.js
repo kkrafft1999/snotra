@@ -17,11 +17,15 @@
  */
 
 /**
+ * @template TRequest
+ * @template TResult
+ * @template {object} TDescription
  * @param {Object} deps
- * @param {{ isAvailable: Function, describe: Function, detect: Function, run: Function }} deps.runnerService
- * @param {{ describe: Function, detect: Function }} deps.sandboxService
- * @param {() => Promise<Object>} deps.readUIPrefs
- * @param {string} deps.enabledPref     the preference that holds the switch
+ * @param {{ isAvailable(): boolean, describe(): TDescription, detect(): Promise<unknown>,
+ *   run(request: TRequest): Promise<TResult> }} deps.runnerService
+ * @param {{ describe(): object, detect(): Promise<unknown> }} deps.sandboxService
+ * @param {() => Promise<import('../../shared/contracts/settings').UiPrefs>} deps.readUIPrefs
+ * @param {'pythonExecutionEnabled'|'shellExecutionEnabled'} deps.enabledPref     the preference that holds the switch
  * @param {string} deps.setup           what is missing with the switch on: the runtime
  * @param {string} deps.switchSetup     what is missing with the switch off: the switch (#773)
  */
@@ -45,7 +49,9 @@ function createExecutionToolSettings({ runnerService, sandboxService, readUIPref
 
   const runner = {
     isAvailable: () => enabled && runnerService.isAvailable(),
+    describe: () => runnerService.describe(),
     setupNeeded: () => (enabled ? setup : switchSetup),
+    /** @param {TRequest} request */
     run: (request) => runnerService.run(request),
   };
 
@@ -56,10 +62,13 @@ function createExecutionToolSettings({ runnerService, sandboxService, readUIPref
  * The interpreter `run_python` would use decides whether pip needs its
  * certifi fallback inside the sandbox (decision 2b on #329). Without one the
  * check asks `python3`.
+ *
+ * @param {{ describe(): { found: boolean, command?: string } }} pythonRunnerService
+ * @returns {string}
  */
 function pythonCommandForSandbox(pythonRunnerService) {
   const python = pythonRunnerService.describe();
-  return python.found ? python.command : 'python3';
+  return (python.found && python.command) || 'python3';
 }
 
 module.exports = {

@@ -10,6 +10,8 @@
  * is refused. `mailto:` is strict on top: it needs an address and carries no
  * line break, not even percent-encoded — otherwise `%0A` could smuggle a second
  * header (Bcc, …) into the prepared mail.
+ *
+ * @param {unknown} url
  */
 function isOpenableUrl(url) {
   if (typeof url !== 'string' || !url.trim()) return false;

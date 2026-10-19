@@ -62,9 +62,41 @@ const PROCESS_PREVIEWS = new Set([TOOL_PREVIEW_KINDS.CODE, TOOL_PREVIEW_KINDS.SH
 const RECOVERY_TRASH = 'trash';
 
 /**
+ * The slice of a tool definition's JSON schema the argument check reads.
+ * @typedef {{ properties?: Record<string, { type?: unknown, enum?: unknown[] }>, required?: string[] }} ArgumentSchema
+ */
+
+/**
+ * One path a call touches, as the tool's `targets` names it.
+ * @typedef {{ path?: unknown, kind?: string, access?: string, overwrite?: boolean }} TargetDescriptor
+ */
+
+/**
+ * What the planner reads of a tool definition. The descriptor fields beside
+ * these are checked by `tool-descriptor.js` when the tool registers.
+ * @typedef {{
+ *   name?: string,
+ *   riskClass: string,
+ *   additionalRiskClasses?: string[],
+ *   parameters?: ArgumentSchema,
+ *   execution?: string,
+ *   preview?: string,
+ *   pathlessWrite?: boolean,
+ *   category?: string,
+ *   approval?: { verb?: string, warning?: string },
+ *   targets: (args: import('../../application/ports/tool-port').ToolArguments) => TargetDescriptor[] | { error: string },
+ *   [field: string]: any,
+ * }} PlannedTool
+ */
+
+/**
  * One replacement as the card shows it. The markers are words the user reads,
  * so they follow the interface language (#555), not the language the code
  * happened to be written in.
+ *
+ * @param {ReturnType<typeof createTranslator>} t
+ * @param {{ replace_all?: unknown, old_string?: unknown, new_string?: unknown } | null | undefined} edit
+ * @param {string} [heading]
  */
 function replacementText(t, edit, heading = '') {
   const all = edit?.replace_all === true ? ` (${t('approval.preview.edit.all')})` : '';
@@ -157,6 +189,9 @@ function buildPreview(previewKind, args, options = {}) {
   return preview;
 }
 
+/**
+ * @param {string} raw
+ */
 function previewText(raw) {
   const masked = maskSensitiveContent(raw);
   const truncated = masked.length > PREVIEW_MAX_CHARS;
@@ -179,6 +214,10 @@ function previewText(raw) {
  * one of the allowed values otherwise — `remember` took any origin for
  * "requested" — and the message names the values, so the model corrects
  * itself in one round.
+ *
+ * @param {{ parameters?: ArgumentSchema }} definition
+ * @param {import('../../application/ports/tool-port').ToolArguments | null | undefined} args
+ * @returns {string | null}  what is wrong with the arguments, or null
  */
 function validateArguments(definition, args) {
   const schema = definition.parameters || {};
@@ -209,41 +248,26 @@ function validateArguments(definition, args) {
   return null;
 }
 
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
 function stableStringify(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
   const keys = Object.keys(value).sort();
-  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+  return `{${keys.map((key) => `${JSON.stringify(key)}:${stableStringify(Reflect.get(value, key))}`).join(',')}}`;
 }
 
 /**
- * What the planner takes from `fs-service.js`: the two path operations it calls
- * (#1098). Written from the consumer's side, like a port — a method the planner
- * starts to call has to be added here, which is where a wrong argument or a
- * misread result is caught. `fs-service.js` itself is outside the checked set
- * (#1098, section 5).
+ * What the planner takes from `fs-service.js`, typed from its factory so that
+ * the two cannot drift apart (#1098).
+ * @typedef {import('../services/fs-service').FsService} FsService
  *
- * @typedef {Object} ToolPathResolved
- * @property {string} absPath  the checked absolute path
- * @property {string} root  the root that was actually used
- * @property {string} [prefix]  prefix for relative paths made from it
- * @property {string|null} [skillName]
- * @property {boolean} [outside]  resolved through a root a card opened outside the folder (#792)
- *
- * @typedef {Object} ToolPathRefused
- * @property {string} error
- * @property {string} [code]  `OUTSIDE_WORKSPACE` when only a card could open the path
- * @property {string} [absPath]  the path that was refused, with `OUTSIDE_WORKSPACE`
- *
- * @typedef {ToolPathResolved | ToolPathRefused} ToolPathResolution
- *
- * @typedef {Object} FsService
- * @property {(absPath: string) => Promise<string>} resolveExistingRealPath
- * @property {(workspaceRoot: string|null, relativePath: string, options?: {
- *   skillRoots?: Array<{name: string, dir: string}>,
- *   outsideRoots?: Array<{root: string, only: string|null, access: 'read'|'write'}>,
- *   access?: 'read'|'write',
- * }) => Promise<ToolPathResolution>} resolveToolPath
+ * A tool path resolved against its root, or refused (#792): see `resolveToolPath`.
+ * @typedef {Awaited<ReturnType<FsService['resolveToolPath']>>} ToolPathResolution
+ * @typedef {Extract<ToolPathResolution, { error: string }>} ToolPathRefused
+ * @typedef {Exclude<ToolPathResolution, ToolPathRefused>} ToolPathResolved
  *
  * What a card may open outside the open folder (#792), from `outside-access.js`
  * — typed from its factory, which is already part of the checked program.
@@ -251,8 +275,9 @@ function stableStringify(value) {
  *
  * What a program allowance match says (#408): the allowance a shell command
  * gets, or why it does not.
- * @typedef {{ allowance?: { program: string, writePaths?: string[], trustd?: boolean, [field: string]: any },
- *   command?: string, entry?: object, skipped?: { program: string, reason: string } }} ProgramAllowanceMatch
+ * @typedef {{ allowance: { path: string, program: string, writePaths?: string[], trustd?: boolean, [field: string]: any },
+ *     command: string, entry: object, skipped?: undefined }
+ *   | { skipped: { program: string, reason: string }, allowance?: undefined, command?: undefined, entry?: undefined }} ProgramAllowanceMatch
  * @typedef {(request: { command: string, cwd: string, workspaceRoot: string }) => Promise<ProgramAllowanceMatch | null>} ProgramAllowanceMatcher
  */
 
@@ -270,7 +295,7 @@ function stableStringify(value) {
  *   whether the user switched the sandbox off for this workspace (#357)
  * @param {ProgramAllowanceMatcher | null} [deps.matchProgramAllowance]
  *   the program allowance a shell command gets, or why it does not (#408)
- * @param {((workspaceRoot: string) => Promise<object[]>) | null} [deps.readProgramAllowances]
+ * @param {((workspaceRoot: string | null) => Promise<object[]>) | null} [deps.readProgramAllowances]
  *   the allowances that apply in a workspace (#1119), to notice a change
  *   between plan and run (#408)
  * @param {OutsideAccess} [deps.outsideAccess]  what a card may open outside the open folder (#792)
@@ -306,10 +331,17 @@ function createToolCallPlanner({
     }
   }
 
+  /**
+   * @param {string} root
+   * @param {string} candidate
+   */
   function containsPath(root, candidate) {
     return isPathInside(path, root, candidate);
   }
 
+  /**
+   * @param {string} absPath
+   */
   function isProtected(absPath) {
     for (const root of protectedReal) {
       if (containsPath(root, absPath)) return true;
@@ -317,6 +349,9 @@ function createToolCallPlanner({
     return false;
   }
 
+  /**
+   * @param {string} absPath
+   */
   async function statTarget(absPath) {
     try {
       const st = await fs.stat(absPath);
@@ -335,9 +370,12 @@ function createToolCallPlanner({
    * The grants outside the open folder a call may use (#792, step 4): those
    * the engine passed — from a card for this call or for the session — that
    * may still be opened, as the roots fs-service resolves against.
+   *
+   * @param {import('../../application/ports/tool-port').OutsideGrant[] | undefined} grants
    */
   async function usableOutsideRoots(grants) {
     if (!outsideAccess || !Array.isArray(grants) || grants.length === 0) return [];
+    /** @type {import('../../application/ports/tool-port').OutsideGrant[]} */
     const usable = [];
     for (const grant of grants) {
       if (await outsideAccess.isAllowed(grant, { exact: true })) usable.push(grant);
@@ -348,6 +386,9 @@ function createToolCallPlanner({
   /**
    * A target outside the open folder no card has opened yet (#792, step 4),
    * with what a card may offer for it — or null when nothing may be offered.
+   *
+   * @param {{ rawPath: string, absPath: string, access: 'read' | 'write', descriptor: TargetDescriptor, matcher: ReturnType<typeof createSensitivePathMatcher> }} target
+   * @returns {Promise<import('../../application/ports/tool-port').ToolPlanTarget | null>}
    */
   async function outsideTarget({ rawPath, absPath, access, descriptor, matcher }) {
     if (!outsideAccess) return null;
@@ -379,13 +420,15 @@ function createToolCallPlanner({
       sensitive: !!hit,
       ...(hit ? { sensitiveReason: hit.pattern } : {}),
       absPath,
-      root: null,
       skillName: null,
       outside: { offers },
     };
   }
 
   /**
+   * @param {PlannedTool | null | undefined} definition
+   * @param {import('../../application/ports/tool-port').ToolArguments} args
+   * @param {Partial<import('../../application/ports/tool-port').ToolPlanContext>} [context]
    * @returns {Promise<import('../../application/ports/tool-port').ToolPlan>}
    */
   async function plan(definition, args, context = {}) {
@@ -452,7 +495,7 @@ function createToolCallPlanner({
     } catch (error) {
       return { tool: toolName, error: error?.message || 'Could not determine the targets.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
-    if (descriptors && descriptors.error) {
+    if (descriptors && !Array.isArray(descriptors) && descriptors.error) {
       return { tool: toolName, error: descriptors.error, reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
     const isWriteTool = baseClass === TOOL_RISK_CLASSES.WRITE || baseClass === TOOL_RISK_CLASSES.DELETE;
@@ -461,17 +504,24 @@ function createToolCallPlanner({
     // Pfad aus den Argumenten bilden: Beim Gedaechtnis (#166) waehlt das Modell
     // nur die Ebene, und wohin die zeigt, entscheidet allein der Memory-Port.
     // Da gibt es nichts zu pruefen, weil es nichts zu beeinflussen gibt.
-    if (isWriteTool && descriptors.length === 0 && definition.pathlessWrite !== true) {
+    const descriptorList = Array.isArray(descriptors) ? descriptors : [];
+    if (isWriteTool && descriptorList.length === 0 && definition.pathlessWrite !== true) {
       return { tool: toolName, error: 'No target path given.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses: [...baseClasses], targets: [] };
     }
 
     const classes = new Set(baseClasses);
     for (const cls of context.forcedClasses || []) classes.add(cls);
+    /** @type {import('../../application/ports/tool-port').ToolPlanTarget[]} */
     const targets = [];
     /** @type {{ reason: string } | null} */
     let hardLimit = null;
+    /** @type {string | undefined} */
     let recovery;
 
+    /**
+     * @param {import('../../application/ports/tool-port').ToolPlanTarget} target
+     * @param {TargetDescriptor} descriptor
+     */
     function applyOverwrite(target, descriptor) {
       if (descriptor.overwrite !== true || !target.exists || target.kind !== 'file') return;
       // Vollständiges Überschreiben: nur mit Wiederherstellungskopie
@@ -485,7 +535,7 @@ function createToolCallPlanner({
       }
     }
 
-    for (const descriptor of descriptors) {
+    for (const descriptor of descriptorList) {
       const rawPath = typeof descriptor.path === 'string' ? descriptor.path : '';
       const access = descriptor.access === 'write' ? 'write' : 'read';
       if (rawPath.trim() === '' && descriptor.kind !== 'tree') {
@@ -614,6 +664,7 @@ function createToolCallPlanner({
       ...(allowance?.allowance ? { allowance: allowance.allowance } : {}),
     });
 
+    /** @type {import('../../application/ports/tool-port').ToolPlan} */
     const result = { tool: toolName, riskClasses, targets, planKey };
     // What the card says about the tool comes from its descriptor (#1008):
     // the renderer reads these fields and never the tool's name.
@@ -668,7 +719,13 @@ function createToolCallPlanner({
    * Asked at plan time so that the card tells the truth: detection runs once
    * per app start and is awaited here, never guessed.
    */
-  /** @param {ProgramAllowanceMatch | null} [allowance] */
+  /**
+   * @param {ProgramAllowanceMatch | null} [allowance]
+   *
+   * @param {string | undefined} execution
+   * @param {import('../../application/ports/tool-port').ToolArguments} args
+   * @param {boolean} [sandboxDisabled]
+   */
   async function describeIsolation(execution, args, sandboxDisabled = false, allowance = null) {
     if (!execution) return null;
     // The user's choice comes before the detection: a run the user took out
@@ -704,7 +761,15 @@ function createToolCallPlanner({
    * its program does not apply. None without a sandbox to widen, and none
    * when anything goes wrong on the way: a failed check never grants.
    */
-  /** @returns {Promise<ProgramAllowanceMatch | null>} */
+  /**
+   * @returns {Promise<ProgramAllowanceMatch | null>}
+   *
+   * @param {string | undefined} execution
+   * @param {import('../../application/ports/tool-port').ToolArguments} args
+   * @param {string} cwd
+   * @param {boolean} sandboxDisabled
+   * @param {string} workspaceRoot
+   */
   async function readProgramAllowance(execution, args, cwd, sandboxDisabled, workspaceRoot) {
     if (execution !== TOOL_EXECUTION_KINDS.SHELL || sandboxDisabled || typeof matchProgramAllowance !== 'function') return null;
     try {
@@ -717,6 +782,9 @@ function createToolCallPlanner({
   /**
    * Whether the sandbox is switched off for this workspace (#357). Only the
    * execution tools have one; a store that cannot be read keeps it on.
+   *
+   * @param {string | undefined} execution
+   * @param {string} workspaceRoot
    */
   async function readSandboxDisabled(execution, workspaceRoot) {
     if (!execution || typeof isSandboxDisabled !== 'function' || !workspaceRoot) return false;
@@ -734,6 +802,8 @@ function createToolCallPlanner({
    *
    * The same holds for the sandbox switch (#357): in "Auto" no card sits
    * between plan and run, so this is the last place a change is noticed.
+   *
+   * @param {import('../../application/ports/tool-port').ToolPlan | null | undefined} planned
    */
   async function verifyTargets(planned) {
     if (planned?.sandbox && typeof planned.sandbox === 'object') {
@@ -747,7 +817,7 @@ function createToolCallPlanner({
     }
     if (!planned || !Array.isArray(planned.targets)) return { ok: true };
     for (const target of planned.targets) {
-      if (target.kind === 'tree') continue;
+      if (target.kind === 'tree' || !target.absPath) continue;
       let stat;
       try {
         stat = await statTarget(target.absPath);
@@ -764,6 +834,9 @@ function createToolCallPlanner({
   /**
    * The entry an approved allowance came from is still the same (#408) — in
    * the workspace it was planned for, global and own added up (#1119).
+   *
+   * @param {NonNullable<NonNullable<import('../../application/ports/tool-port').ToolPlan['sandbox']>['allowance']>} granted
+   * @param {string} workspaceRoot
    */
   async function allowanceUnchanged(granted, workspaceRoot) {
     if (typeof readProgramAllowances !== 'function') return false;

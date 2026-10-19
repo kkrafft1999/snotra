@@ -16,14 +16,33 @@
 
 const DEFAULT_REASONING_LEVEL = 'medium';
 
-/** A level as the history and the IPC take it: a short lower-case word. */
+/**
+ * What a provider declares about reasoning — the part of `ProviderAdapter`
+ * this file reads.
+ *
+ * @typedef {Object} ReasoningDeclaration
+ * @property {readonly string[] | ((model: string) => readonly string[])} [levels]
+ * @property {string | ((model: string) => string)} [defaultLevel]
+ * @property {(model: string) => boolean} [appliesTo]
+ */
+
+/**
+ * A level as the history and the IPC take it: a short lower-case word.
+ * @param {unknown} raw
+ * @returns {string | undefined}
+ */
 function normalizeReasoningLevel(raw) {
   if (typeof raw !== 'string') return undefined;
   const level = raw.trim();
   return /^[a-z]{1,16}$/.test(level) ? level : undefined;
 }
 
-/** The levels `model` takes with this provider; empty when it takes none. */
+/**
+ * The levels `model` takes with this provider; empty when it takes none.
+ * @param {{ reasoning?: ReasoningDeclaration } | null | undefined} provider
+ * @param {string} model
+ * @returns {string[]}
+ */
 function reasoningLevelsFor(provider, model) {
   const reasoning = provider?.reasoning;
   if (!reasoning) return [];
@@ -33,7 +52,12 @@ function reasoningLevelsFor(provider, model) {
   return levels.filter((level) => normalizeReasoningLevel(level) === level);
 }
 
-/** The level `model` runs with when the chat has chosen none. */
+/**
+ * The level `model` runs with when the chat has chosen none.
+ * @param {{ reasoning?: ReasoningDeclaration } | null | undefined} provider
+ * @param {string} model
+ * @returns {string}
+ */
 function reasoningDefaultFor(provider, model) {
   const raw = provider?.reasoning?.defaultLevel;
   const level = typeof raw === 'function' ? raw(model) : raw;
@@ -44,6 +68,9 @@ function reasoningDefaultFor(provider, model) {
  * The level a round runs with: the chat's own, else the provider's default —
  * the first that the model takes. Entries carry none since #726. `undefined`
  * when the model takes no level.
+ *
+ * @param {{ levels: readonly string[] | null | undefined, own?: unknown, defaultLevel?: unknown }} params
+ * @returns {string | undefined}
  */
 function resolveReasoningLevel({ levels, own, defaultLevel }) {
   if (!Array.isArray(levels) || levels.length === 0) return undefined;

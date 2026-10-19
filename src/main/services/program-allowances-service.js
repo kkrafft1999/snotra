@@ -23,18 +23,24 @@ const {
 } = require('../../shared/contracts/program-allowances');
 const { parseSimpleCommand } = require('../../shared/runtime/simple-command');
 const { createMessage } = require('../../shared/contracts/message');
+const { isRecord } = require('../../shared/runtime/is-record');
 const { quoteArgv } = require('./sandbox-service');
 const { PLATFORM_CAPABILITIES } = require('../../shared/contracts/platform-capabilities');
 const { platformSupports } = require('../platforms');
 
 /**
- * @param {object} deps
- * @param {object} deps.fs      fs/promises
- * @param {object} deps.path
- * @param {object} deps.os
+ * @typedef {import('../../shared/contracts/program-allowances').ProgramAllowance} ProgramAllowance
+ * @typedef {import('../../shared/contracts/message').Message} Message
+ */
+
+/**
+ * @param {Object} deps
+ * @param {typeof import('fs/promises')} deps.fs
+ * @param {typeof import('path')} deps.path
+ * @param {typeof import('os')} deps.os
  * @param {string} [deps.platform]
  * @param {() => Promise<string>} [deps.readUserPath]  the PATH of the user's shell
- * @param {(workspaceRoot: string|null) => Promise<object[]>} [deps.readAllowances]
+ * @param {(workspaceRoot: string|null) => Promise<unknown[]>} [deps.readAllowances]
  *   the allowances that apply in a workspace: its own and the global ones,
  *   added up per program (#1119)
  * @param {string[]} [deps.protectedRoots]  Snotra's own storage, never writable
@@ -53,11 +59,13 @@ function createProgramAllowances({
   const X_OK = fs?.constants?.X_OK ?? 1;
   const home = os.homedir();
 
+  /** @param {string} value */
   function expandHome(value) {
     if (value === '~') return home;
     return value.startsWith('~/') ? path.join(home, value.slice(2)) : value;
   }
 
+  /** @param {string} target */
   async function realpathOrNull(target) {
     try {
       return await fs.realpath(target);
@@ -66,6 +74,7 @@ function createProgramAllowances({
     }
   }
 
+  /** @param {string} target */
   async function isExecutableFile(target) {
     try {
       const stat = await fs.stat(target);
@@ -82,6 +91,10 @@ function createProgramAllowances({
    * with a slash is a path (relative to `cwd`), a bare name is looked up in
    * the PATH — relative PATH entries included, so a `.` in it finds the
    * project's file first and the comparison fails, as it should.
+   *
+   * @param {unknown} word
+   * @param {string|null|undefined} cwd
+   * @returns {Promise<string|null>}
    */
   async function locate(word, cwd) {
     if (typeof word !== 'string' || !word || word.includes('\0')) return null;
@@ -103,7 +116,8 @@ function createProgramAllowances({
    * What the settings dialog typed as "program": a bare name, `~/…` or an
    * absolute path. A relative path has no folder to be relative to here.
    *
-   * @returns {Promise<{ok: true, path: string, name: string}|{ok: false, error: object}>}
+   * @param {unknown} text
+   * @returns {Promise<{ok: true, path: string, name: string}|{ok: false, error: Message}>}
    */
   async function resolveProgram(text) {
     const value = typeof text === 'string' ? text.trim() : '';
@@ -122,6 +136,10 @@ function createProgramAllowances({
     return { ok: true, path: normalized, name: programName(normalized) };
   }
 
+  /**
+   * @param {string} root
+   * @param {string} candidate
+   */
   function contains(root, candidate) {
     const rel = path.relative(root, candidate);
     return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
@@ -133,12 +151,14 @@ function createProgramAllowances({
    * it, Snotra's own storage, and every place the sandbox keeps unreadable —
    * or a folder around one of those.
    *
-   * @returns {Promise<{ok: true, path: string}|{ok: false, error: object}>}
+   * @param {unknown} raw
+   * @returns {Promise<{ok: true, path: string}|{ok: false, error: Message}>}
    */
   async function validateWritePath(raw) {
     const text = typeof raw === 'string' ? raw.trim() : '';
     const absolute = normalizeAllowancePath(expandHome(text));
     if (!absolute) return { ok: false, error: createMessage('permissions.allowance.error.folderInvalid', { folder: text.slice(0, 200) }) };
+    /** @type {import('fs').Stats|null} */
     let stat;
     try {
       stat = await fs.stat(absolute);
@@ -176,10 +196,12 @@ function createProgramAllowances({
    * the machine: program resolved, every domain a host name, every folder
    * allowed. trustd only exists on macOS.
    *
-   * @returns {Promise<{ok: true, entry: object}|{ok: false, error: object}>}
+   * @param {unknown} raw
+   * @returns {Promise<{ok: true, entry: ProgramAllowance}|{ok: false, error: Message}>}
    */
   async function prepareEntry(raw) {
-    const data = raw && typeof raw === 'object' ? raw : {};
+    /** @type {Record<string, unknown>} */
+    const data = isRecord(raw) ? raw : {};
     const program = await resolveProgram(data.program);
     if (!program.ok) return program;
     const domainText = Array.isArray(data.domains) ? data.domains.filter((d) => typeof d === 'string').join('\n') : '';
@@ -194,6 +216,7 @@ function createProgramAllowances({
     if (folders.length > PROGRAM_ALLOWANCE_LIMITS.MAX_WRITE_PATHS) {
       return { ok: false, error: createMessage('permissions.allowance.error.tooManyFolders', { max: PROGRAM_ALLOWANCE_LIMITS.MAX_WRITE_PATHS }) };
     }
+    /** @type {string[]} */
     const writePaths = [];
     for (const folder of folders) {
       const checked = await validateWritePath(folder);
@@ -213,8 +236,14 @@ function createProgramAllowances({
     return { ok: true, entry };
   }
 
-  /** Program names an unreadable line mentions, for saying why nothing applies. */
+  /**
+   * Program names an unreadable line mentions, for saying why nothing applies.
+   *
+   * @param {string} command
+   * @param {ProgramAllowance[]} allowances
+   */
   function mentionedPrograms(command, allowances) {
+    /** @type {Set<string>} */
     const names = new Set();
     for (const token of String(command).split(/[\s;&|<>()`$"'=\\]+/)) {
       const name = programName(token);
@@ -227,9 +256,10 @@ function createProgramAllowances({
    * The allowance a shell_execute call gets, or why the one naming its
    * program does not apply, or null when no allowance is concerned.
    *
+   * @param {{ command?: unknown, cwd?: string|null, workspaceRoot?: string|null }} [params]
    * @returns {Promise<null
    *   | {allowance: {path: string, program: string, domains: string[], writePaths: string[], trustd: boolean},
-   *      command: string, entry: object}
+   *      command: string, entry: ProgramAllowance}
    *   | {skipped: {program: string, reason: string}}>}
    */
   async function match({ command, cwd, workspaceRoot = null } = {}) {
@@ -237,7 +267,7 @@ function createProgramAllowances({
     if (!platformSupports(platform, PLATFORM_CAPABILITIES.EXECUTION_SANDBOX)) return null;
     const allowances = (await readAllowances(workspaceRoot || null).catch(() => []))
       .map(normalizeProgramAllowance)
-      .filter(Boolean);
+      .filter((entry) => entry !== null);
     if (allowances.length === 0 || typeof command !== 'string') return null;
 
     const parsed = parseSimpleCommand(command);

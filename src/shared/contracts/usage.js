@@ -8,12 +8,40 @@
  */
 'use strict';
 
+const { isRecord } = require('../runtime/is-record');
+
+/**
+ * What one provider reported, in that provider's own field names — OpenAI,
+ * Anthropic, Google and Ollama each spell it differently, and a usage that
+ * was normalized before comes back through here as well.
+ *
+ * @typedef {Record<string, any>} RawUsage  // any: provider JSON, read field by field below
+ */
+
+/**
+ * Tokens of one round or, summed, of a turn. `cached` is the part of `prompt`
+ * read from the cache; `cacheWrite` and `reasoning` are left out at 0.
+ *
+ * @typedef {Object} Usage
+ * @property {number} prompt
+ * @property {number} completion
+ * @property {number} total
+ * @property {number} cached
+ * @property {number} [cacheWrite]
+ * @property {number} [reasoning]
+ */
+
+/**
+ * @param {unknown} value
+ * @returns {number}
+ */
 function toUsageNumber(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.round(n);
 }
 
+/** @returns {Usage} */
 function createEmptyUsage() {
   return { prompt: 0, completion: 0, total: 0, cached: 0 };
 }
@@ -38,6 +66,8 @@ function createEmptyUsage() {
  * dieselbe ist: `prompt` ist der **ganze** Prompt dieser Runde, `cached` der
  * davon aus dem Cache gelesene Teil. Damit gilt immer `cached <= prompt`, und
  * die Anzeige braucht den Anbieter nicht zu kennen.
+ *
+ * @param {RawUsage} raw
  */
 function readCachedPromptTokens(raw) {
   return toUsageNumber(
@@ -54,6 +84,8 @@ function readCachedPromptTokens(raw) {
  * Anteile, die Anthropic **neben** `input_tokens` fuehrt und die deshalb zum
  * Prompt addiert werden muessen. Die Schluessel gibt es nur dort; bei allen
  * anderen Anbietern (und bei einem bereits normalisierten Objekt) ist das 0.
+ *
+ * @param {RawUsage} raw
  */
 function readSeparateCacheTokens(raw) {
   return (
@@ -65,6 +97,8 @@ function readSeparateCacheTokens(raw) {
  * Tokens written to the prompt cache in this round (#949). Only Anthropic
  * reports them, next to `input_tokens`; they are part of `prompt` already
  * (readSeparateCacheTokens) and are priced differently from plain input.
+ *
+ * @param {RawUsage} raw
  */
 function readCacheWriteTokens(raw) {
   return toUsageNumber(raw.cacheWrite ?? raw.cache_creation_input_tokens);
@@ -76,6 +110,8 @@ function readCacheWriteTokens(raw) {
  * (`output_tokens_details` / `completion_tokens_details`); Google reports
  * `thoughtsTokenCount` **next to** `candidatesTokenCount` instead, so there
  * they are added to `completion` — see readSeparateReasoningTokens.
+ *
+ * @param {RawUsage} raw
  */
 function readReasoningTokens(raw) {
   return toUsageNumber(
@@ -86,7 +122,11 @@ function readReasoningTokens(raw) {
   );
 }
 
-/** Google's thinking, billed as output but not counted in it (#949). */
+/**
+ * Google's thinking, billed as output but not counted in it (#949).
+ *
+ * @param {RawUsage} raw
+ */
 function readSeparateReasoningTokens(raw) {
   return toUsageNumber(raw.thoughtsTokenCount);
 }
@@ -98,9 +138,12 @@ function readSeparateReasoningTokens(raw) {
  * at 0, so the shape the token display knows stays the same. Liefert null, wenn keine Zahlen
  * vorhanden sind (so kann der Aufrufer "keine Usage" von "0 Tokens"
  * unterscheiden).
+ *
+ * @param {unknown} raw
+ * @returns {Usage|null}
  */
 function normalizeUsage(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   const prompt =
     toUsageNumber(
       raw.prompt
@@ -127,6 +170,7 @@ function normalizeUsage(raw) {
     total = prompt + completion;
   }
   if (prompt === 0 && completion === 0 && total === 0) return null;
+  /** @type {Usage} */
   const usage = { prompt, completion, total, cached };
   // Same guard as for `cached`: a part never outgrows the whole.
   const cacheWrite = Math.min(readCacheWriteTokens(raw), prompt - cached);
@@ -139,12 +183,21 @@ function normalizeUsage(raw) {
 /**
  * Wie normalizeUsage, liefert aber immer ein Objekt ({0,0,0} statt null) —
  * praktisch für die Anzeige, die keinen Nullwert darstellen muss.
+ *
+ * @param {unknown} raw
+ * @returns {Usage}
  */
 function coerceUsage(raw) {
   return normalizeUsage(raw) || createEmptyUsage();
 }
 
-/** Summiert zwei Usage-Objekte runden-übergreifend. */
+/**
+ * Summiert zwei Usage-Objekte runden-übergreifend.
+ *
+ * @param {Usage|null|undefined} base
+ * @param {unknown} addition
+ * @returns {Usage|null}
+ */
 function mergeUsage(base, addition) {
   const next = normalizeUsage(addition);
   if (!next) return base ? { ...base } : null;
@@ -153,6 +206,7 @@ function mergeUsage(base, addition) {
   const completion = base.completion + next.completion;
   const total = base.total + (next.total > 0 ? next.total : next.prompt + next.completion);
   const cached = toUsageNumber(base.cached) + next.cached;
+  /** @type {Usage} */
   const merged = { prompt, completion, total, cached };
   const cacheWrite = toUsageNumber(base.cacheWrite) + toUsageNumber(next.cacheWrite);
   const reasoning = toUsageNumber(base.reasoning) + toUsageNumber(next.reasoning);

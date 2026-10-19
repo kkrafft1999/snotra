@@ -35,6 +35,9 @@ function createEnvironmentAdapter({
   /**
    * Git ja/nein ohne `git`-Aufruf: `.git` ist im Normalfall ein Verzeichnis,
    * in einem Worktree oder Submodul eine Datei mit `gitdir:`. Beides zaehlt.
+   *
+   * @param {string|null|undefined} root
+   * @returns {Promise<boolean|null>}
    */
   async function isGitRepository(root) {
     if (!root) return null;

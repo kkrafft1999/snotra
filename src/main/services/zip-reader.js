@@ -27,12 +27,14 @@ const METHOD_STORED = 0;
 const METHOD_DEFLATE = 8;
 
 class ZipFormatError extends Error {
+  /** @param {string} message */
   constructor(message) {
     super(message);
     this.name = 'ZipFormatError';
   }
 }
 
+/** @param {Buffer} buf */
 function findEndOfCentralDirectory(buf) {
   const stop = Math.max(0, buf.length - EOCD_SEARCH_BYTES);
   for (let at = buf.length - EOCD_MIN_BYTES; at >= stop; at -= 1) {
@@ -45,6 +47,9 @@ function findEndOfCentralDirectory(buf) {
  * Opens `buf` as a ZIP archive. `maxEntryBytes` bounds what one entry may
  * inflate to and `maxTotalBytes` what all reads together may — the guard
  * against an archive that is small on disk and enormous once unpacked.
+ *
+ * @param {Buffer} buf
+ * @param {{ maxEntryBytes: number, maxTotalBytes: number }} limits
  */
 function openZip(buf, { maxEntryBytes, maxTotalBytes }) {
   if (!Buffer.isBuffer(buf) || buf.length < EOCD_MIN_BYTES) throw new ZipFormatError('Not a ZIP archive.');
@@ -58,6 +63,7 @@ function openZip(buf, { maxEntryBytes, maxTotalBytes }) {
   }
   if (dirOffset + dirSize > eocd) throw new ZipFormatError('Damaged ZIP archive.');
 
+  /** @type {Map<string, { flags: number, method: number, compressedSize: number, size: number, localOffset: number }>} */
   const entries = new Map();
   let at = dirOffset;
   for (let i = 0; i < count; i += 1) {
@@ -81,6 +87,7 @@ function openZip(buf, { maxEntryBytes, maxTotalBytes }) {
 
   let inflatedTotal = 0;
 
+  /** @param {string} name */
   function readEntry(name) {
     const entry = entries.get(name);
     if (!entry) return null;
@@ -95,6 +102,7 @@ function openZip(buf, { maxEntryBytes, maxTotalBytes }) {
     const remaining = maxTotalBytes - inflatedTotal;
     const limit = Math.min(maxEntryBytes, remaining);
     if (entry.size > limit) throw new ZipFormatError('The document unpacks to more than the limit allows.');
+    /** @type {Buffer} */
     let data;
     if (entry.method === METHOD_STORED) {
       data = buf.subarray(start, end);
@@ -103,7 +111,7 @@ function openZip(buf, { maxEntryBytes, maxTotalBytes }) {
         // The declared size can lie; the output limit is what holds.
         data = zlib.inflateRawSync(buf.subarray(start, end), { maxOutputLength: Math.max(1, limit) });
       } catch (error) {
-        if (error && error.code === 'ERR_BUFFER_TOO_LARGE') {
+        if (error instanceof Error && 'code' in error && error.code === 'ERR_BUFFER_TOO_LARGE') {
           throw new ZipFormatError('The document unpacks to more than the limit allows.');
         }
         throw new ZipFormatError('Damaged ZIP archive.');
@@ -116,9 +124,14 @@ function openZip(buf, { maxEntryBytes, maxTotalBytes }) {
   }
 
   return {
+    /** @param {string} name */
     has: (name) => entries.has(name),
     names: () => [...entries.keys()],
-    /** The entry as UTF-8 text without a byte order mark, or null when it is missing. */
+    /**
+     * The entry as UTF-8 text without a byte order mark, or null when it is missing.
+     *
+     * @param {string} name
+     */
     readText(name) {
       const data = readEntry(name);
       return data === null ? null : data.toString('utf8').replace(/^﻿/, '');

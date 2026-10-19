@@ -20,6 +20,25 @@ const nodeCrypto = require('node:crypto');
 const protocol = require('./pairing-protocol');
 const { RELAY_REASONS, RemoteRelayError } = require('./relay-error');
 
+/**
+ * @typedef {import('../../application/ports/remote-relay-port').RemoteKeyBundle} RemoteKeyBundle
+ * @typedef {import('../../application/ports/remote-relay-port').RemoteSigner} RemoteSigner
+ * @typedef {import('../../application/ports/remote-relay-port').RemoteChannelRecord} RemoteChannelRecord
+ *
+ * What the relay keeps of a channel.
+ * @typedef {Object} ChannelRecord
+ * @property {RemoteKeyBundle} desktopKeys
+ * @property {RemoteKeyBundle|null} phoneKeys
+ * @property {string|null} macP
+ * @property {string|null} macD
+ * @property {'open'|'pending'|'paired'} status
+ * @property {number} createdAt
+ *
+ * @typedef {{ channelId: string, expiresAt: number, claimed: boolean }} PairingRecord
+ *
+ * @typedef {{ onRecord: (record: RemoteChannelRecord|null) => void, onError: (error: Error) => void }} WatchHandlers
+ */
+
 const CHALLENGE_TTL_MS = 60_000;
 const PAIRING_TTL_MS = 5 * 60_000;
 
@@ -61,25 +80,53 @@ function createInMemoryRelayAdapter({
   now = () => Date.now(),
   randomBytes = nodeCrypto.randomBytes,
 } = {}) {
-  /** challenge (base64url) → expiresAt */
+  /**
+   * challenge (base64url) → expiresAt
+   *
+   * @type {Map<string, number>}
+   */
   const challenges = new Map();
-  /** pairingId → { channelId, expiresAt, claimed } */
+  /**
+   * pairingId → { channelId, expiresAt, claimed }
+   *
+   * @type {Map<string, PairingRecord>}
+   */
   const pairings = new Map();
-  /** channelId → { desktopKeys, phoneKeys, macP, macD, status, createdAt } */
+  /**
+   * channelId → { desktopKeys, phoneKeys, macP, macD, status, createdAt }
+   *
+   * @type {Map<string, ChannelRecord>}
+   */
   const channels = new Map();
-  /** channels the desktop holds a token for */
+  /**
+   * channels the desktop holds a token for
+   *
+   * @type {Set<string>}
+   */
   const desktopTokens = new Set();
-  /** channelId → Set of watch handlers */
+  /**
+   * channelId → Set of watch handlers
+   *
+   * @type {Map<string, Set<WatchHandlers>>}
+   */
   const watchers = new Map();
+  /** @type {string[]} */
   const calls = [];
   let reachable = true;
 
+  /**
+   * @param {string} name
+   */
   function reach(name) {
     calls.push(name);
     if (!reachable) throw new RemoteRelayError(RELAY_REASONS.NETWORK);
     sweep();
   }
 
+  /**
+   * @param {string} reason
+   * @returns {never}
+   */
   function fail(reason) {
     throw new RemoteRelayError(reason);
   }
@@ -91,6 +138,9 @@ function createInMemoryRelayAdapter({
     return challenge;
   }
 
+  /**
+   * @param {string} challenge
+   */
   function takeChallenge(challenge) {
     const expiresAt = challenges.get(challenge);
     challenges.delete(challenge);
@@ -98,19 +148,33 @@ function createInMemoryRelayAdapter({
     return protocol.fromB64u(challenge);
   }
 
+  /**
+   * @param {string} point
+   * @param {Uint8Array} message
+   * @param {RemoteSigner} sign
+   */
   function prove(point, message, sign) {
     const signature = Buffer.from(sign(message));
     if (!protocol.verifySignature(point, message, signature)) fail(RELAY_REASONS.REFUSED);
   }
 
-  /** What the desktop reads of the channel (§5.10), or null when it is gone. */
+  /**
+   * What the desktop reads of the channel (§5.10), or null when it is gone.
+   *
+   * @param {string} channelId
+   * @returns {RemoteChannelRecord|null}
+   */
   function desktopView(channelId) {
     const channel = channels.get(channelId);
     if (!channel) return null;
     return { status: channel.status, phoneKeys: channel.phoneKeys ? { ...channel.phoneKeys } : null, macP: channel.macP };
   }
 
-  /** Streams deliver later, never inside the call that changed the record — as over the network. */
+  /**
+   * Streams deliver later, never inside the call that changed the record — as over the network.
+   *
+   * @param {string} channelId
+   */
   function notify(channelId) {
     const handlers = watchers.get(channelId);
     if (!handlers) return;
@@ -118,6 +182,9 @@ function createInMemoryRelayAdapter({
     for (const handler of handlers) queueMicrotask(() => handler.onRecord(record));
   }
 
+  /**
+   * @param {string} channelId
+   */
   function dropChannel(channelId) {
     if (!channels.delete(channelId)) return;
     for (const [pairingId, pairing] of pairings) if (pairing.channelId === channelId) pairings.delete(pairingId);
@@ -143,10 +210,14 @@ function createInMemoryRelayAdapter({
     }
   }
 
+  /**
+   * @param {string} channelId
+   */
   function requireDesktop(channelId) {
     if (!desktopTokens.has(channelId)) fail(RELAY_REASONS.UNAUTHORIZED);
   }
 
+  /** @param {{ desktopKeys: RemoteKeyBundle, sign: RemoteSigner }} input */
   async function openPairing({ desktopKeys, sign }) {
     reach('openPairing');
     const challenge = takeChallenge(issueChallenge());
@@ -168,8 +239,13 @@ function createInMemoryRelayAdapter({
     return { channelId, pairingId, expiresAt, relayHost };
   }
 
+  /**
+   * @param {string} channelId
+   * @param {WatchHandlers} handlers
+   */
   function watchChannel(channelId, handlers) {
     let closed = false;
+    /** @type {WatchHandlers} */
     const entry = {
       onRecord: (record) => { if (!closed) handlers.onRecord(record); },
       onError: (error) => { if (!closed) handlers.onError(error); },
@@ -185,13 +261,21 @@ function createInMemoryRelayAdapter({
       queueMicrotask(() => entry.onError(error));
       return { close };
     }
-    if (!watchers.has(channelId)) watchers.set(channelId, new Set());
-    watchers.get(channelId).add(entry);
+    let handlersOfChannel = watchers.get(channelId);
+    if (!handlersOfChannel) {
+      handlersOfChannel = new Set();
+      watchers.set(channelId, handlersOfChannel);
+    }
+    handlersOfChannel.add(entry);
     const record = desktopView(channelId);
     queueMicrotask(() => entry.onRecord(record));
     return { close };
   }
 
+  /**
+   * @param {string} channelId
+   * @param {string} macD
+   */
   async function confirmPairing(channelId, macD) {
     reach('confirmPairing');
     requireDesktop(channelId);
@@ -205,6 +289,10 @@ function createInMemoryRelayAdapter({
     notify(channelId);
   }
 
+  /**
+   * @param {string} channelId
+   * @param {string} pairingId
+   */
   async function cancelPairing(channelId, pairingId) {
     reach('cancelPairing');
     requireDesktop(channelId);
@@ -214,6 +302,10 @@ function createInMemoryRelayAdapter({
     desktopTokens.delete(channelId);
   }
 
+  /**
+   * @param {string} channelId
+   * @param {{ sign: RemoteSigner }} options
+   */
   async function deleteChannel(channelId, { sign }) {
     reach('deleteChannel');
     const channel = channels.get(channelId);
@@ -241,6 +333,7 @@ function createInMemoryRelayAdapter({
       const pairing = pairings.get(pairingId);
       if (!pairing || pairing.claimed) fail(RELAY_REASONS.NOT_FOUND);
       const channel = channels.get(pairing.channelId);
+      if (!channel) fail(RELAY_REASONS.NOT_FOUND);
       return { channelId: pairing.channelId, desktopKeys: { ...channel.desktopKeys }, expiresAt: pairing.expiresAt };
     },
     async claim(pairingId, { phoneKeys, macP, sign }) {
@@ -275,7 +368,10 @@ function createInMemoryRelayAdapter({
   const inspect = {
     channelIds: () => [...channels.keys()],
     pairingIds: () => [...pairings.keys()],
-    record: (channelId) => (channels.has(channelId) ? structuredClone(channels.get(channelId)) : null),
+    record: (channelId) => {
+      const channel = channels.get(channelId);
+      return channel ? structuredClone(channel) : null;
+    },
     calls: () => [...calls],
     setReachable: (value) => { reachable = value === true; },
     sweep,

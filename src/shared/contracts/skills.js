@@ -20,6 +20,23 @@
 'use strict';
 
 const { createMessage, isMessage } = require('./message');
+const { isRecord } = require('../runtime/is-record');
+
+/** @typedef {typeof SKILL_SOURCES[keyof typeof SKILL_SOURCES]} SkillSource */
+/** @typedef {typeof SKILL_STATUS[keyof typeof SKILL_STATUS]} SkillStatus */
+
+/**
+ * A catalogue entry for the settings, as it travels over IPC.
+ *
+ * @typedef {Object} SkillSummary
+ * @property {string} name
+ * @property {string} description
+ * @property {SkillSource} source
+ * @property {SkillStatus} status
+ * @property {string} path  absolute path of the skill folder; informative for system skills
+ * @property {string|import('./message').Message} detail  why it is `invalid` or `shadowed`; a descriptor since #353
+ * @property {boolean} builtin  system skills cannot be replaced by folder skills
+ */
 
 /**
  * Name des Tools, mit dem das Modell die Anleitung eines eingeschalteten
@@ -91,6 +108,8 @@ const SKILL_SOURCES = Object.freeze({
 /**
  * Der Workspace bleibt die stärkste Ordner-Quelle; unter den globalen gewinnt
  * der neue Standardort vor dem Alt-Ort (entschieden am 2026-09-21, #251).
+ *
+ * @type {readonly SkillSource[]}
  */
 const SKILL_SOURCE_ORDER = Object.freeze([
   SKILL_SOURCES.SYSTEM,
@@ -102,6 +121,8 @@ const SKILL_SOURCE_ORDER = Object.freeze([
 /**
  * Headings of the source groups in the settings, as catalogue keys (#353):
  * they are words, and the settings are read in either language.
+ *
+ * @type {Readonly<Record<string, string>>}
  */
 const SKILL_SOURCE_LABEL_KEYS = Object.freeze({
   [SKILL_SOURCES.SYSTEM]: 'skills.source.system',
@@ -124,17 +145,27 @@ const SKILL_STATUS = Object.freeze({
 /** Obergrenze für den in den Systemprompt übernommenen Body eines Skills. */
 const MAX_SKILL_BODY_CHARS = 20000;
 
+/**
+ * @param {unknown} value
+ * @returns {value is SkillSource}
+ */
 function isSkillSource(value) {
-  return SKILL_SOURCE_ORDER.includes(value);
+  return SKILL_SOURCE_ORDER.some((source) => source === value);
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is SkillStatus}
+ */
 function isSkillStatus(value) {
-  return Object.values(SKILL_STATUS).includes(value);
+  return Object.values(SKILL_STATUS).some((status) => status === value);
 }
 
 /**
  * Skill-Namen müssen zum Verzeichnisnamen passen (agentskills.io) — daher
  * dieselbe konservative Zeichenmenge wie bei den Verzeichnissen.
+ *
+ * @param {unknown} value
  */
 function isValidSkillName(value) {
   return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value);
@@ -144,6 +175,7 @@ function isValidSkillName(value) {
  * Liste eingeschalteter Skills aus den UI-Prefs säubern.
  * @returns {string[] | null} `null`, wenn kein Array übergeben wurde (Feld
  *   also nie gesetzt war) — die Voreinstellung entscheidet dann.
+ * @param {unknown} raw
  */
 function normalizeActiveSkills(raw) {
   if (!Array.isArray(raw)) return null;
@@ -170,9 +202,11 @@ const MAX_WORKSPACE_SKILL_ROOTS = 500;
  * the same name would inherit the user's choice.
  *
  * @returns {Record<string, string[]> | null} `null` when nothing is stored
+ * @param {unknown} raw
  */
 function normalizeActiveWorkspaceSkills(raw) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  if (!isRecord(raw) || Array.isArray(raw)) return null;
+  /** @type {Record<string, string[]>} */
   const out = {};
   let count = 0;
   for (const [root, names] of Object.entries(raw)) {
@@ -187,14 +221,23 @@ function normalizeActiveWorkspaceSkills(raw) {
   return count > 0 ? out : null;
 }
 
+/**
+ * @param {unknown} value
+ * @returns {string|import('./message').Message}
+ */
 function normalizeSkillDetail(value) {
   if (isMessage(value)) return createMessage(value.key, value.params);
   return typeof value === 'string' ? value : '';
 }
 
-/** Ein Katalog-Eintrag für die Einstellungen (IPC-DTO). */
+/**
+ * Ein Katalog-Eintrag für die Einstellungen (IPC-DTO).
+ *
+ * @param {unknown} raw
+ * @returns {SkillSummary|null}
+ */
 function normalizeSkillSummary(raw) {
-  const data = raw && typeof raw === 'object' ? raw : {};
+  const data = isRecord(raw) ? raw : {};
   const name = typeof data.name === 'string' ? data.name.trim() : '';
   if (!name) return null;
   const source = isSkillSource(data.source) ? data.source : SKILL_SOURCES.USER_AGENTS;
@@ -216,11 +259,20 @@ function normalizeSkillSummary(raw) {
   };
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {{ skills: SkillSummary[] }}
+ */
 function normalizeSkillCatalog(raw) {
-  const data = raw && typeof raw === 'object' ? raw : {};
-  const skills = Array.isArray(data.skills)
-    ? data.skills.map((row) => normalizeSkillSummary(row)).filter(Boolean)
-    : [];
+  const data = isRecord(raw) ? raw : {};
+  /** @type {SkillSummary[]} */
+  const skills = [];
+  if (Array.isArray(data.skills)) {
+    for (const row of data.skills) {
+      const summary = normalizeSkillSummary(row);
+      if (summary) skills.push(summary);
+    }
+  }
   return { skills };
 }
 

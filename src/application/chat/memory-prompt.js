@@ -37,6 +37,8 @@ const TRUNCATION_NOTE = `… [truncated to ${MAX_MEMORY_CHARS} characters]`;
  * themselves; the folder's lives in the opened folder, where a teammate or a
  * cloned repository can have put it, so it is introduced by where it comes
  * from — like an AGENTS.md, and not as the user's own words.
+ *
+ * @type {Readonly<Record<string, string>>}
  */
 const MEMORY_INTROS = Object.freeze({
   [MEMORY_SCOPES.USER]:
@@ -91,12 +93,20 @@ function buildMemoryBlock(files, scope) {
   return { text, parts };
 }
 
-/** The user's memory (`~/.snotra/memory.md`) — right behind the base prompt. */
+/**
+ * The user's memory (`~/.snotra/memory.md`) — right behind the base prompt.
+ *
+ * @param {Array<{scope: string, text: string, truncated?: boolean, guard?: string}>} files
+ */
 function buildUserMemorySystemPrompt(files) {
   return buildMemoryBlock(files, MEMORY_SCOPES.USER);
 }
 
-/** The folder's memory (`<folder>/.agents/memory.md`) — with the folder's instructions (#529). */
+/**
+ * The folder's memory (`<folder>/.agents/memory.md`) — with the folder's instructions (#529).
+ *
+ * @param {Array<{scope: string, text: string, truncated?: boolean, guard?: string}>} files
+ */
 function buildFolderMemorySystemPrompt(files) {
   return buildMemoryBlock(files, MEMORY_SCOPES.WORKSPACE);
 }

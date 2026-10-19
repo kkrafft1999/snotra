@@ -20,7 +20,7 @@ const {
 /**
  * @param {Object} deps
  * @param {() => Promise<string|null>} deps.readApiKey  the decrypted OpenAI key
- * @param {() => Promise<Object>} deps.readUIPrefs
+ * @param {() => Promise<{ imageModel?: unknown }>} deps.readUIPrefs
  * @param {typeof fetch} [deps.fetchImpl]  left out in the app: the adapter looks fetch up per call
  */
 function createImageGenerationSettings({ readApiKey, readUIPrefs, fetchImpl }) {
@@ -57,6 +57,7 @@ function createImageGenerationSettings({ readApiKey, readUIPrefs, fetchImpl }) {
       chosenModel = isImageModel(prefs?.imageModel) ? prefs.imageModel.trim() : '';
       return describe();
     },
+    /** @param {{ signal?: AbortSignal }} [options] */
     listModels: (options) => adapter.listModels(options),
   };
 }

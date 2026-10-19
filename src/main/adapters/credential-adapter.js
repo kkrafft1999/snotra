@@ -1,6 +1,8 @@
 'use strict';
 
 /**
+ * @param {Object} deps
+ * @param {import('../ports/provider-secrets-port').ProviderSecretsPort} deps.providerSecrets
  * @returns {import('../ports/credential-port').CredentialPort}
  */
 function createCredentialAdapter({ providerSecrets }) {

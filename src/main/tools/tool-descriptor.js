@@ -32,6 +32,12 @@
  * and get the defaults (`other`, a line naming server and tool).
  */
 
+/**
+ * A tool definition as a bag of fields: each one is checked here before it is
+ * trusted, so the values stay `any` until `descriptorProblems` has looked.
+ * @typedef {{ name?: string, [field: string]: any }} ToolDefinitionFields
+ */
+
 const { isToolCategory } = require('../../shared/contracts/tool-categories');
 const { isConfigToolGroup } = require('../../shared/contracts/chat-configuration');
 const {
@@ -80,24 +86,29 @@ const TOOL_FILE_EVENTS = Object.freeze({
   WRITE_ARGS: 'write-args',
 });
 
+/** @type {Set<unknown>} */
 const SETUP_PAGES = new Set(['tools', 'security']);
 
-const isOneOf = (table) => (value) => Object.values(table).includes(value);
+const isOneOf = (/** @type {Record<string, unknown>} */ table) => (/** @type {unknown} */ value) =>
+  Object.values(table).includes(value);
 const OPTIONAL_FIELDS = Object.freeze({
   preview: isOneOf(TOOL_PREVIEW_KINDS),
   execution: isOneOf(TOOL_EXECUTION_KINDS),
   externalService: isToolExternalService,
-  setupPage: (value) => SETUP_PAGES.has(value),
+  setupPage: (/** @type {unknown} */ value) => SETUP_PAGES.has(value),
   contentScan: isOneOf(TOOL_CONTENT_SCANS),
-  broadListing: (value) => value === true,
+  broadListing: (/** @type {unknown} */ value) => value === true,
   fileEvents: isOneOf(TOOL_FILE_EVENTS),
 });
 
 /**
  * What is missing or wrong in a built-in tool's descriptor, as a list of
  * field names; empty when it is complete.
+ *
+ * @param {ToolDefinitionFields | null | undefined} definition
  */
 function descriptorProblems(definition) {
+  /** @type {string[]} */
   const problems = [];
   // Set on purpose, `other` included: the configuration tools have no
   // category of their own in the log (#773).
@@ -117,7 +128,13 @@ function descriptorProblems(definition) {
   return problems;
 }
 
-/** Throws unless a built-in tool's descriptor is complete (#1008). */
+/**
+ * Throws unless a built-in tool's descriptor is complete (#1008).
+ *
+ * @template {ToolDefinitionFields} T
+ * @param {T} definition
+ * @returns {T}
+ */
 function assertCompleteDescriptor(definition) {
   const problems = descriptorProblems(definition);
   if (problems.length > 0) {

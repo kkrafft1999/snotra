@@ -21,6 +21,47 @@ const {
 const { menuPath } = require('../../shared/i18n/ui-quotes');
 const { describeRememberedMcpTools } = require('./mcp-remembered-tools');
 
+/**
+ * One skill as the indicator and the model's `get_configuration` list it.
+ *
+ * @typedef {Object} ConfigSkillRow
+ * @property {string} name
+ * @property {string} description
+ * @property {string} source
+ * @property {string} state  a CONFIG_SKILL_STATES value
+ * @property {boolean} chatOnly  differs from the settings, in this chat only
+ * @property {true} [chatCard]  switched on a card rather than called with "/name" (#774)
+ */
+
+/**
+ * @typedef {Object} ConfigToolRow
+ * @property {string} name
+ * @property {string|null} mcpServer
+ * @property {string} group  a CONFIG_TOOL_GROUPS value, or a descriptor's own (#1008)
+ * @property {boolean} on
+ * @property {string|null} reason  a TOOL_OFFER_REASONS value; null when the tool is offered
+ * @property {string|null} setup  a TOOL_SETUPS value; null when nothing is missing
+ * @property {true} [chatOnly]  on or off by a card in this chat (#774)
+ */
+
+/**
+ * @typedef {Object} ChatConfiguration
+ * @property {boolean} workspaceOpen
+ * @property {ConfigSkillRow[]} skills
+ * @property {ConfigToolRow[]} tools
+ * @property {string} [locale]  the interface language, which the settings pages are quoted in
+ */
+
+/**
+ * What `describe` is asked about.
+ *
+ * @typedef {Object} DescribeInput
+ * @property {string|null} [workspaceRoot]  the chat's folder
+ * @property {string[]} [chatSkillNames]  skills on in this chat beyond the
+ *   settings — today those invoked with `/name` (#124)
+ * @property {unknown} [overrides]  what the chat switched on a card (#774)
+ */
+
 /** At most this many names of skills invoked in a chat are taken from the renderer. */
 const MAX_CHAT_SKILL_NAMES = 50;
 
@@ -28,7 +69,7 @@ const MAX_CHAT_SKILL_NAMES = 50;
  * Why a tool is off, in the words the model reads (#276: English). The
  * popover says the same in the interface language (`chat.config.reason.*`).
  */
-const MODEL_REASON_BY_SETUP = Object.freeze({
+const MODEL_REASON_BY_SETUP = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
   [TOOL_SETUPS.PYTHON_SWITCH]: 'Python execution is switched off',
   [TOOL_SETUPS.PYTHON]: 'no Python interpreter was found',
   [TOOL_SETUPS.SHELL_SWITCH]: 'shell commands are switched off',
@@ -36,16 +77,23 @@ const MODEL_REASON_BY_SETUP = Object.freeze({
   [TOOL_SETUPS.WEB_SEARCH]: 'no web search key is set up',
   [TOOL_SETUPS.IMAGE_GENERATION]: 'no image model is set up',
   [TOOL_SETUPS.MCP]: 'its MCP server is switched off',
-});
+}));
 
+/**
+ * @param {Pick<ConfigToolRow, 'reason' | 'setup'>} tool
+ */
 function modelReason(tool) {
   if (tool.reason === TOOL_OFFER_REASONS.SWITCHED_OFF) return 'switched off by the user';
   if (tool.reason === TOOL_OFFER_REASONS.NOT_CONFIGURED) {
-    return MODEL_REASON_BY_SETUP[tool.setup] || 'not available in this installation';
+    return (tool.setup && MODEL_REASON_BY_SETUP[tool.setup]) || 'not available in this installation';
   }
   return 'not available';
 }
 
+/**
+ * @param {unknown} names
+ * @returns {string[]}
+ */
 function cleanNames(names) {
   if (!Array.isArray(names)) return [];
   return names
@@ -62,7 +110,19 @@ function cleanNames(names) {
  * and source; the instructions of a skill that is off stay where they are
  * (#18), and a folder skill's description goes out cut and as data.
  */
+/**
+ * @param {object} deps
+ * @param {Pick<ReturnType<typeof import('./skills-service').createSkillsService>, 'listCatalog'>} deps.skills
+ * @param {Pick<ReturnType<typeof import('../tools/workspace-tool-registry').createToolRegistry>,
+ *   'describeOffers' | 'listRiskCatalog'>} deps.toolRegistry
+ * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore
+ * @param {{ readMcpServers?: () => Promise<Array<{ id: string, label?: string, enabled?: boolean, knownTools?: string[] }>> }|null} [deps.mcpConfigStore]
+ */
 function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mcpConfigStore = null }) {
+  /**
+   * @param {Partial<import('../ports/ui-prefs-store-port').UiPrefs>} prefs
+   * @param {string|null} workspaceRoot
+   */
   async function readCatalog(prefs, workspaceRoot) {
     if (!skills || typeof skills.listCatalog !== 'function') return [];
     try {
@@ -83,9 +143,14 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
   /**
    * MCP tools of servers that have not run since the start (#464). Without
    * them a chat would show no MCP tool before its first message.
+   *
+   * @param {Array<{ name?: string }>} present
+   * @param {Set<string>} disabled
+   * @param {string} [locale]
    */
   async function rememberedMcpTools(present, disabled, locale) {
     if (!mcpConfigStore || typeof mcpConfigStore.readMcpServers !== 'function') return [];
+    /** @type {Awaited<ReturnType<NonNullable<typeof mcpConfigStore.readMcpServers>>>} */
     let servers = [];
     try {
       servers = await mcpConfigStore.readMcpServers();
@@ -93,6 +158,7 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
       return [];
     }
     return describeRememberedMcpTools({ servers, present, locale }).map((tool) => {
+      /** @type {string | null} */
       let reason = null;
       if (disabled.has(tool.name)) reason = TOOL_OFFER_REASONS.SWITCHED_OFF;
       else if (!tool.available) reason = TOOL_OFFER_REASONS.NOT_CONFIGURED;
@@ -106,12 +172,11 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
   }
 
   /**
-   * @param {object} input
-   * @param {string|null} input.workspaceRoot  the chat's folder
-   * @param {string[]} [input.chatSkillNames]  skills on in this chat beyond the
-   *   settings — today those invoked with `/name` (#124)
+   * @param {DescribeInput} [input]
+   * @returns {Promise<ChatConfiguration>}
    */
   async function describe({ workspaceRoot = null, chatSkillNames = [], overrides = null } = {}) {
+    /** @type {Partial<import('../ports/ui-prefs-store-port').UiPrefs>} */
     const prefs = (await uiPrefsStore.readUIPrefs()) || {};
     const locale = prefs.appLocale;
     const root = typeof workspaceRoot === 'string' && workspaceRoot.trim() ? workspaceRoot : null;
@@ -126,12 +191,14 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
     const catalog = await readCatalog(prefs, root);
     // A shadowed skill is the same name as one listed already; showing it
     // twice would make one of the two lines a lie.
+    /** @type {ConfigSkillRow[]} */
     const skillsOut = catalog
       .filter((skill) => skill && skill.status !== SKILL_STATUS.SHADOWED)
       .map((skill) => {
         const chatOn = skill.status === SKILL_STATUS.AVAILABLE && inChat.has(skill.name);
         const chatOff = skill.status === SKILL_STATUS.ACTIVE && skillsOffInChat.has(skill.name);
         const chatOnly = chatOn || chatOff;
+        /** @type {string} */
         let state = CONFIG_SKILL_STATES.OFF;
         if ((skill.status === SKILL_STATUS.ACTIVE && !chatOff) || chatOn) state = CONFIG_SKILL_STATES.ON;
         else if (skill.status === SKILL_STATUS.INVALID) state = CONFIG_SKILL_STATES.INVALID;
@@ -155,6 +222,7 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
       skillNames: skillsOut.filter((skill) => skill.state === CONFIG_SKILL_STATES.ON).map((skill) => skill.name),
     });
     const remembered = await rememberedMcpTools(offers, new Set(disabledNames), locale);
+    /** @type {ConfigToolRow[]} */
     const tools = [...offers, ...remembered]
       // An allowlist is no setting, and `load_skill` is essential and left out
       // already; neither is anything the user could change.
@@ -163,7 +231,7 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
         name: tool.name,
         mcpServer: tool.mcpServer || null,
         // The descriptor names the group (#1008); an MCP tool goes by its server.
-        group: tool.mcpServer ? CONFIG_TOOL_GROUPS.MCP : tool.group || CONFIG_TOOL_GROUPS.OTHER,
+        group: tool.mcpServer ? CONFIG_TOOL_GROUPS.MCP : ('group' in tool && tool.group) || CONFIG_TOOL_GROUPS.OTHER,
         on: tool.reason === null,
         reason: tool.reason,
         setup: tool.setup,
@@ -180,12 +248,16 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
    * The same as `describe`, worded for the model (#773). Settings pages are
    * quoted in the interface language, so the answer names what the user
    * sees on screen (#294).
+   *
+   * @param {DescribeInput & { canPropose?: boolean }} [input]
    */
   async function describeForModel({ canPropose = false, ...input } = {}) {
     const config = await describe(input);
-    const quote = (place) => (place ? menuPath(config.locale, place.menu) : null);
+    const quote = (/** @type {import('../../shared/contracts/chat-configuration').SettingsPlace|null} */ place) => (
+      place ? menuPath(config.locale ?? '', place.menu) : null
+    );
     const offTools = config.tools.filter((tool) => !tool.on);
-    const chatState = (on) => (on ? 'on for this chat only' : 'off for this chat only');
+    const chatState = (/** @type {boolean} */ on) => (on ? 'on for this chat only' : 'off for this chat only');
     return {
       folder_open: config.workspaceOpen,
       skills: config.skills.map((skill) => ({
@@ -228,22 +300,30 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
    * user. What passes is what the card shows — the catalogue's description
    * and risk, not the model's words.
    *
+   * @param {{
+   *   workspaceRoot?: string|null,
+   *   chatSkillNames?: string[],
+   *   overrides?: unknown,
+   *   proposal?: { kind?: unknown, name?: unknown, enable?: unknown, reason?: unknown },
+   * }} [input]
    * @returns {Promise<{ error: string } | { declined: true } | { card: object }>}
    */
   async function prepareProposal({ workspaceRoot = null, chatSkillNames = [], overrides = null, proposal } = {}) {
-    const kind = proposal?.kind;
+    const kind = Object.values(CONFIG_PROPOSAL_KINDS).find((known) => known === proposal?.kind);
     const name = typeof proposal?.name === 'string' ? proposal.name.trim() : '';
     const enable = proposal?.enable;
-    if (!Object.values(CONFIG_PROPOSAL_KINDS).includes(kind) || !name || typeof enable !== 'boolean') {
+    if (!kind || !name || typeof enable !== 'boolean') {
       return { error: 'A proposal needs "kind" (skill or tool), "name" and "enable" (true or false).' };
     }
     const chatOverrides = normalizeChatConfigOverrides(overrides);
     if ((chatOverrides?.declined || []).includes(proposalKey({ kind, name, enable }))) return { declined: true };
-    const reason = typeof proposal.reason === 'string'
+    const reason = typeof proposal?.reason === 'string'
       ? proposal.reason.replace(/\s+/g, ' ').trim().slice(0, MAX_PROPOSAL_REASON_CHARS)
       : '';
     const config = await describe({ workspaceRoot, chatSkillNames, overrides: chatOverrides });
-    const settingsPage = (place) => menuPath(config.locale, place.menu);
+    const settingsPage = (/** @type {import('../../shared/contracts/chat-configuration').SettingsPlace} */ place) => (
+      menuPath(config.locale ?? '', place.menu)
+    );
 
     if (kind === CONFIG_PROPOSAL_KINDS.SKILL) {
       const skill = config.skills.find((entry) => entry.name === name);
@@ -290,7 +370,7 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
         // a language change on the card; an MCP tool's is its server's text.
         ...(tool.mcpServer ? { descriptionIsData: true, mcpServer: tool.mcpServer } : { descriptionKey: `tools.short.${name}` }),
         riskClasses: Array.isArray(risk?.riskClasses) ? risk.riskClasses : [],
-        settingsMenu: toolSettingsPlace({ reason: TOOL_OFFER_REASONS.SWITCHED_OFF }).menu,
+        settingsMenu: toolSettingsPlace({ reason: TOOL_OFFER_REASONS.SWITCHED_OFF })?.menu,
       },
     };
   }

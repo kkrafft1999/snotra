@@ -35,6 +35,12 @@ const { widerFolder } = require('./sandbox-violations');
 const { sensitiveReadPaths, isAlwaysUnwritable } = require('./sandbox-service');
 
 /**
+ * What a card may offer, and what is checked again wherever it is used: a
+ * folder grant is its folder, a file grant that one file.
+ * @typedef {{ path: string, file: boolean, access: 'read'|'write' }} OutsideGrant
+ */
+
+/**
  * @param {object} deps
  * @param {typeof import('path')} deps.path
  * @param {string} deps.homeDir
@@ -52,18 +58,22 @@ function createOutsideAccess({
   realPath = async (p) => p,
 }) {
   const home = path.resolve(homeDir);
-  const expand = (p) => (p === '~' ? home : p.startsWith('~/') ? path.join(home, p.slice(2)) : p);
+  const expand = (/** @type {string} */ p) => (p === '~' ? home : p.startsWith('~/') ? path.join(home, p.slice(2)) : p);
   const own = typeof userDataPath === 'string' && userDataPath ? [path.resolve(userDataPath)] : [];
   const credentials = sensitiveReadPaths({ platform, userDataPath: '' }).map((p) => path.resolve(expand(p)));
   const skills = (Array.isArray(globalSkillRoots) ? globalSkillRoots : [])
     .filter((p) => typeof p === 'string' && p)
     .map((p) => path.resolve(p));
 
-  const inside = (root, candidate) => isPathInside(path, root, candidate);
-  const around = (a, b) => inside(a, b) || inside(b, a);
+  const inside = (/** @type {string} */ root, /** @type {string} */ candidate) => isPathInside(path, root, candidate);
+  const around = (/** @type {string} */ a, /** @type {string} */ b) => inside(a, b) || inside(b, a);
   /** Strictly inside: `root` contains `candidate` and is not it. */
-  const below = (root, candidate) => inside(root, candidate) && path.resolve(root) !== path.resolve(candidate);
+  const below = (/** @type {string} */ root, /** @type {string} */ candidate) => inside(root, candidate) && path.resolve(root) !== path.resolve(candidate);
 
+  /**
+   * @param {string} p
+   * @returns {Promise<string[]>}
+   */
   async function spellings(p) {
     const out = [path.resolve(p)];
     try {
@@ -75,7 +85,12 @@ function createOutsideAccess({
     return out;
   }
 
-  /** What one spelling of what a grant opens may be, for reading or writing. */
+  /**
+   * What one spelling of what a grant opens may be, for reading or writing.
+   *
+   * @param {string} p
+   * @param {{ access: 'read'|'write', exact: boolean }} mode
+   */
   function spellingAllowed(p, { access, exact }) {
     if (!path.isAbsolute(p)) return false;
     if (p === path.parse(p).root || inside(p, home)) return false;
@@ -92,7 +107,12 @@ function createOutsideAccess({
     return true;
   }
 
-  /** Whether a grant may open what it names — checked again wherever a grant is used. */
+  /**
+   * Whether a grant may open what it names — checked again wherever a grant is used.
+   *
+   * @param {{ path?: unknown, access?: unknown } | null | undefined} grant
+   * @param {{ exact?: boolean }} [options]
+   */
   async function isAllowed(grant, { exact = true } = {}) {
     if (!grant || typeof grant.path !== 'string' || !path.isAbsolute(grant.path)) return false;
     const access = grant.access === 'write' ? 'write' : 'read';
@@ -112,7 +132,9 @@ function createOutsideAccess({
    */
   async function offer({ absPath, isDirectory, access }) {
     const p = path.resolve(absPath);
+    /** @type {'read'|'write'} */
     const mode = access === 'write' ? 'write' : 'read';
+    /** @type {OutsideGrant[]} */
     const out = [];
     const exact = { path: p, file: !isDirectory, access: mode };
     if (await isAllowed(exact, { exact: true })) out.push(exact);
@@ -134,12 +156,18 @@ function createOutsideAccess({
  * name. Malformed entries are dropped.
  *
  * @returns {Array<{ root: string, only: string|null, access: 'read'|'write' }>}
+ * @param {unknown} grants
+ * @param {typeof import('path')} path
  */
 function outsideRootsFrom(grants, path) {
+  /** @type {Array<{ root: string, only: string|null, access: 'read'|'write' }>} */
   const out = [];
-  for (const grant of Array.isArray(grants) ? grants : []) {
+  /** @type {Array<{ path?: unknown, file?: unknown, access?: unknown } | null | undefined>} */
+  const list = Array.isArray(grants) ? grants : [];
+  for (const grant of list) {
     if (!grant || typeof grant.path !== 'string' || !path.isAbsolute(grant.path)) continue;
     const p = path.resolve(grant.path);
+    /** @type {'read'|'write'} */
     const access = grant.access === 'write' ? 'write' : 'read';
     out.push(grant.file === true
       ? { root: path.dirname(p), only: path.basename(p), access }

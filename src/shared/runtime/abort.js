@@ -1,5 +1,6 @@
 'use strict';
 
+/** @param {{ name?: unknown, code?: unknown } | null | undefined} err */
 function isAbortError(err) {
   return err?.name === 'AbortError' || err?.code === 'ABORT_ERR';
 }
@@ -10,6 +11,7 @@ function createChatAbortError(message = 'Chat abgebrochen.') {
   return err;
 }
 
+/** @param {AbortSignal | null | undefined} [abortSignal] */
 function abortIfRequested(abortSignal) {
   if (!abortSignal?.aborted) return;
   const reason = abortSignal.reason;
@@ -19,6 +21,11 @@ function abortIfRequested(abortSignal) {
   throw err;
 }
 
+/**
+ * @param {{ cancel?: (reason?: unknown) => Promise<unknown> } | null | undefined} reader
+ * @param {AbortSignal | null | undefined} abortSignal
+ * @returns {() => void} Removes the listener again.
+ */
 function bindAbortSignalToReader(reader, abortSignal) {
   if (!abortSignal || !reader) return () => {};
   const cancelReader = () => {
@@ -34,6 +41,10 @@ function bindAbortSignalToReader(reader, abortSignal) {
   return () => abortSignal.removeEventListener('abort', cancelReader);
 }
 
+/**
+ * @param {number} ms
+ * @param {AbortSignal | null | undefined} [abortSignal]
+ */
 async function sleepAbortable(ms, abortSignal) {
   abortIfRequested(abortSignal);
   await new Promise((resolve, reject) => {

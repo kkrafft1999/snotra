@@ -7,16 +7,24 @@
  * narrowed here to what the service expects, nothing more is passed through.
  */
 
+/** @param {unknown} value */
 function idOf(value) {
   return typeof value === 'string' && /^[a-f0-9]{8,64}$/.test(value) ? value : '';
 }
 
+/** @param {unknown} value */
 function boundsOf(value) {
   if (!value || typeof value !== 'object') return null;
-  const { x, y, width, height } = value;
+  const { x, y, width, height } = /** @type {Record<string, unknown>} */ (value);
   return { x, y, width, height };
 }
 
+/**
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {ReturnType<typeof import('../services/html-preview-service').createHtmlPreviewService>} deps.htmlPreview
+ * @param {Record<string, string>} deps.REQ
+ */
 function registerHtmlPreviewHandlers({ ipcMain, htmlPreview, REQ }) {
   ipcMain.handle(REQ.HTML_PREVIEW_OPEN, async (_event, filePath, options) =>
     htmlPreview.open(filePath, { fragment: typeof options?.fragment === 'string' ? options.fragment : '' }));

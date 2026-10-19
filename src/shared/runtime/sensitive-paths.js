@@ -35,6 +35,7 @@ const DEFAULT_SENSITIVE_NAME_PATTERNS = Object.freeze([
 /** Verzeichnisse mit Zugangsdaten — treffen den Ordner selbst und alles darunter. */
 const DEFAULT_SENSITIVE_DIRECTORY_NAMES = Object.freeze(['.ssh', '.aws', '.gnupg', '.kube']);
 
+/** @param {string} pattern */
 function compileNamePattern(pattern) {
   return compilePathPattern(pattern, { caseInsensitive: true });
 }
@@ -43,6 +44,7 @@ function compileNamePattern(pattern) {
  * Zerlegt einen Tool-Pfad in vergleichbare Segmente. Ein Skill-Präfix
  * (`skill:<name>/rest`) wird abgestreift, der Skill-Name selbst ist kein
  * Dateiname und wird nicht geprüft.
+ * @param {unknown} rawPath
  */
 function splitSegments(rawPath) {
   const text = typeof rawPath === 'string' ? rawPath.trim() : '';
@@ -57,6 +59,8 @@ function splitSegments(rawPath) {
  * Nutzer-Mustern (Konzept §4, Zeile „Private Projektdaten“). Nutzer-Muster
  * folgen der `*`/`**`-Semantik aus path-pattern.js und gelten relativ zur
  * jeweiligen Wurzel; ein Muster wie `personal/**` trifft auch den Ordner selbst.
+ *
+ * @param {{ userPatterns?: unknown[] }} [options]
  */
 function createSensitivePathMatcher({ userPatterns = [] } = {}) {
   const nameMatchers = DEFAULT_SENSITIVE_NAME_PATTERNS.map((pattern) => ({
@@ -65,10 +69,14 @@ function createSensitivePathMatcher({ userPatterns = [] } = {}) {
   }));
   const directoryNames = new Set(DEFAULT_SENSITIVE_DIRECTORY_NAMES.map((name) => name.toLowerCase()));
   const userRegexes = (Array.isArray(userPatterns) ? userPatterns : [])
-    .filter((pattern) => typeof pattern === 'string' && pattern.trim())
+    .filter(
+      /** @param {unknown} pattern @returns {pattern is string} */
+      (pattern) => typeof pattern === 'string' && pattern.trim() !== '',
+    )
     .map((pattern) => ({ pattern, compiled: compilePathPattern(pattern, { caseInsensitive: true }) }));
 
   /**
+   * @param {unknown} rawPath
    * @returns {{ sensitive: boolean, pattern?: string, source?: 'name'|'directory'|'user' }}
    */
   function classifyPath(rawPath) {
@@ -98,6 +106,7 @@ function createSensitivePathMatcher({ userPatterns = [] } = {}) {
     return { sensitive: false };
   }
 
+  /** @param {unknown} rawPath */
   function isSensitivePath(rawPath) {
     return classifyPath(rawPath).sensitive;
   }

@@ -40,12 +40,16 @@ const {
 } = require('../../shared/contracts/image-generation');
 const { imageDimensions } = require('../services/image-dimensions');
 
+/** @typedef {import('../../application/ports/image-generation-port').ImageGenerationOk} ImageGenerationOk */
+/** @typedef {import('../../application/ports/tool-port').ToolArguments} ToolArguments */
+
 const GENERATE_IMAGE_TOOL = 'generate_image';
 
 /** How long a drawn image waits for a second approval after its write failed. */
 const HELD_IMAGE_TTL_MS = 15 * 60 * 1000;
 const MAX_HELD_IMAGES = 4;
 
+/** @param {unknown} relativePath */
 function formatForPath(relativePath) {
   const ext = path.extname(String(relativePath || '')).toLowerCase();
   for (const [format, extensions] of Object.entries(IMAGE_EXTENSIONS_BY_FORMAT)) {
@@ -58,7 +62,7 @@ const SUPPORTED_EXTENSIONS = Object.values(IMAGE_EXTENSIONS_BY_FORMAT).flat();
 
 /**
  * @param {Object} deps
- * @param {Object} deps.fsService  with `writeBinaryFileForTool`
+ * @param {Pick<import('../services/fs-service').FsService, 'writeBinaryFileForTool'>} deps.fsService
  * @param {import('../../application/ports/image-generation-port').ImageGenerationPort|null} deps.imageGeneration
  * @param {() => number} [deps.now]
  */
@@ -68,6 +72,7 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
    * turn starts, so the signal names the run without the engine handing out
    * an id for it; the entry goes when the run is collected.
    */
+  /** @type {WeakMap<AbortSignal, number>} */
   const imagesPerRun = new WeakMap();
 
   /**
@@ -77,12 +82,15 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
    * a new one. Keyed by the full set of arguments: a different request draws
    * afresh.
    */
+  /** @type {Map<string, { image: ImageGenerationOk, at: number }>} */
   const heldImages = new Map();
 
+  /** @param {{ prompt: string, relative_path: string, size: string, quality: string, background: string }} args */
   function heldKey(args) {
     return JSON.stringify([args.prompt, args.relative_path, args.size, args.quality, args.background]);
   }
 
+  /** @param {string} key */
   function takeHeldImage(key) {
     const held = heldImages.get(key);
     heldImages.delete(key);
@@ -90,25 +98,35 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
     return held.image;
   }
 
+  /**
+   * @param {string} key
+   * @param {ImageGenerationOk} image
+   */
   function holdImage(key, image) {
     heldImages.set(key, { image, at: now() });
-    while (heldImages.size > MAX_HELD_IMAGES) heldImages.delete(heldImages.keys().next().value);
+    for (const oldest of heldImages.keys()) {
+      if (heldImages.size <= MAX_HELD_IMAGES) break;
+      heldImages.delete(oldest);
+    }
   }
 
+  /** @param {AbortSignal|undefined} signal */
   function countedImages(signal) {
     return signal ? imagesPerRun.get(signal) || 0 : 0;
   }
 
+  /** @param {AbortSignal|undefined} signal */
   function countImage(signal) {
     if (signal) imagesPerRun.set(signal, countedImages(signal) + 1);
   }
 
+  /** @param {AbortSignal|undefined} signal */
   function uncountImage(signal) {
     if (signal) imagesPerRun.set(signal, Math.max(0, countedImages(signal) - 1));
   }
 
   /**
-   * @param {import('../../application/ports/tool-port').ToolArguments} args
+   * @param {ToolArguments} args
    * @param {import('../../application/ports/tool-port').ToolHandlerContext} [context]
    */
   async function handler(args, { workspaceRoot, outsideRoots, abortSignal, recovery, onWritten } = {}) {
@@ -143,7 +161,7 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
       }
       // Counted before the call: a timeout may already have been billed.
       countImage(abortSignal);
-      image = await imageGeneration.generate({
+      const generated = await imageGeneration.generate({
         prompt: request.prompt,
         size: request.size,
         quality: request.quality,
@@ -151,21 +169,23 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
         background: request.background,
         abortSignal,
       });
-      if (!image?.ok) {
+      if (!generated?.ok) {
         // A request that never reached the service costs nothing.
-        if (image?.code === IMAGE_GENERATION_ERROR_CODES.INVALID_REQUEST
-          || image?.code === IMAGE_GENERATION_ERROR_CODES.NO_API_KEY) {
+        if (generated?.code === IMAGE_GENERATION_ERROR_CODES.INVALID_REQUEST
+          || generated?.code === IMAGE_GENERATION_ERROR_CODES.NO_API_KEY) {
           uncountImage(abortSignal);
         }
-        return JSON.stringify({ error: image?.error || 'The image could not be generated.', code: image?.code });
+        return JSON.stringify({ error: generated?.error || 'The image could not be generated.', code: generated?.code });
       }
+      image = generated;
     }
 
     const written = await fsService.writeBinaryFileForTool(rel, image.bytes, workspaceRoot, { outsideRoots, recovery, onWritten });
-    if (written.error) {
+    if (written.error !== undefined) {
       if (written.code === 'recovery_failed') holdImage(key, image);
       return JSON.stringify(written);
     }
+    /** @type {Record<string, unknown>} */
     const out = {
       relative_path: written.relative_path,
       created: written.created,
@@ -205,6 +225,7 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
     additionalRiskClasses: [TOOL_RISK_CLASSES.EXTERNAL],
     // Replacing an image keeps a copy in the trash, like write_file_text.
     mayOverwrite: true,
+    /** @param {ToolArguments} args */
     targets: (args) => [{ path: args.relative_path, kind: 'file', access: 'write', overwrite: true }],
     isAvailable: () => imageGeneration?.isConfigured() === true,
     setup: TOOL_SETUPS.IMAGE_GENERATION,

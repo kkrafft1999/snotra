@@ -73,6 +73,10 @@ const STEM_SCORE = 0.8;
  */
 const SUGGESTION_THRESHOLD = 0.3;
 
+/**
+ * @param {unknown} text
+ * @returns {string[]}
+ */
 function tokenize(text) {
   return String(text || '')
     .toLowerCase()
@@ -84,6 +88,9 @@ function tokenize(text) {
  * Wie stark decken sich zwei Wörter? Deutsche Beugung und Komposita machen
  * aus „Protokoll" schnell „Protokolle" oder „Meeting-Protokolle“; ein
  * gemeinsamer Wortanfang fängt das billig ab, ohne Stemming-Bibliothek.
+ *
+ * @param {string} a
+ * @param {string} b
  */
 function tokenOverlap(a, b) {
   if (a === b) return 1;
@@ -114,7 +121,11 @@ function createSkillSuggester(skills) {
     for (const word of entry.words) occurrences.set(word, (occurrences.get(word) || 0) + 1);
   }
 
-  /** Seltene Wörter wiegen schwer, allgegenwärtige fast nichts (IDF). */
+  /**
+   * Seltene Wörter wiegen schwer, allgegenwärtige fast nichts (IDF).
+   *
+   * @param {string} word
+   */
   function weightOf(word) {
     const seen = occurrences.get(word) || 0;
     return Math.log((documentCount + 1) / (seen + 0.5));

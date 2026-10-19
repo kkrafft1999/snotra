@@ -31,7 +31,14 @@ const { pythonJobArgs } = require('./windows-job');
 const { planSpawn } = require('./sandboxed-spawn');
 const { createMessage } = require('../../shared/contracts/message');
 
-/** Kandidaten in der Reihenfolge, in der wir sie ausprobieren. */
+/** @typedef {import('./sandboxed-spawn').SandboxForSpawn} SandboxForSpawn */
+
+/**
+ * Kandidaten in der Reihenfolge, in der wir sie ausprobieren.
+ *
+ * @param {string} platform
+ * @returns {Array<{ command: string, args: string[] }>}
+ */
 function interpreterCandidates(platform) {
   if (platform === 'win32') {
     return [
@@ -46,6 +53,10 @@ function interpreterCandidates(platform) {
   ];
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {number}
+ */
 function clampTimeout(raw) {
   const value = Number(raw);
   if (!Number.isFinite(value)) return PYTHON_EXECUTION_LIMITS.DEFAULT_TIMEOUT_MS;
@@ -55,8 +66,13 @@ function clampTimeout(raw) {
   );
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
 function normalizeArgv(raw) {
   if (!Array.isArray(raw)) return [];
+  /** @type {string[]} */
   const out = [];
   for (const value of raw) {
     if (out.length >= PYTHON_EXECUTION_LIMITS.MAX_ARGV) break;
@@ -77,7 +93,7 @@ function normalizeArgv(raw) {
  * @param {string} [deps.platform]
  * @param {NodeJS.ProcessEnv} [deps.env]
  * @param {() => string} [deps.randomId]  names the run's temp folder
- * @param {object | null} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
+ * @param {SandboxForSpawn | null} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
  * @returns {import('../../application/ports/code-execution-port').CodeExecutionPort & {
  *   detect: () => Promise<CodeDescription>, disposeSync: () => void }}
  */
@@ -115,6 +131,11 @@ function createPythonRunnerService({
     return { ...env, ...(shellPath ? { PATH: shellPath } : {}), ...extra };
   }
 
+  /**
+   * @param {string} command
+   * @param {string[]} args
+   * @returns {Promise<{ ok: true, version: string } | { ok: false, error: string | import('../../shared/contracts/message').Message }>}
+   */
   function probe(command, args) {
     return new Promise((resolve) => {
       let child;
@@ -213,7 +234,9 @@ function createPythonRunnerService({
     sandboxDisabled = false,
     abortSignal,
   } = {}) {
-    if (!detected.found) {
+    // Read once: `detected` is replaced as a whole by a later detection.
+    const { command: interpreter, args: interpreterArgs = [] } = detected;
+    if (!detected.found || !interpreter) {
       return { error: 'No Python 3 interpreter is available.' };
     }
     const source = typeof code === 'string' ? code : '';
@@ -257,8 +280,8 @@ function createPythonRunnerService({
         // runs this one inside it, so that what the script leaves in the
         // background ends with it (#991).
         argv: [
-          detected.command,
-          ...(detected.args || []),
+          interpreter,
+          ...interpreterArgs,
           ...(platform === 'win32' ? pythonJobArgs(pythonArgs) : pythonArgs),
         ],
         workspaceRoot,

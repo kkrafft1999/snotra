@@ -13,6 +13,30 @@ const { PRODUCT_NAMES } = require('../app-identity');
 const { PLATFORM_CAPABILITIES, PLATFORM_VARIANTS } = require('../../shared/contracts/platform-capabilities');
 const { declaredPlatformCapability } = require('../platforms');
 
+/**
+ * Where an installation sits, by the kind of package it came from.
+ *
+ * @typedef {import('../../shared/contracts/message').Message} Message
+ *
+ * @typedef {{ kind: 'macos-bundle', appBundlePath: string }
+ *   | { kind: 'windows-dir', installDir: string }
+ *   | { kind: 'linux-dir', installDir: string }
+ *   | { kind: 'linux-package', installDir: string }
+ *   | { kind: 'linux-appimage', appImagePath: string }} SwappableLocation
+ *
+ * The running installation, and whether it may replace itself; `reason` says
+ * why not, as a message the update dialog words.
+ *
+ * @typedef {{ canSelfUpdate: boolean, reason?: Message }
+ *   & (SwappableLocation
+ *     | { kind: 'dev' | 'unsupported' }
+ *     | { kind: 'macos-read-only', appBundlePath: string })} InstallTarget
+ *
+ * The release asset an installation downloads; `digest` is `sha256:<hex>` or ''.
+ *
+ * @typedef {{ name: string, url: string, size: number, digest: string }} ReleaseAsset
+ */
+
 /** Verzeichnisse, in die nur root schreibt — dort liegt eine Paketinstallation. */
 const LINUX_SYSTEM_PREFIXES = ['/opt/', '/usr/', '/snap/'];
 
@@ -38,7 +62,11 @@ const MAC_READ_ONLY_BUNDLE = new RegExp(
   `^/Volumes/(?:${PRODUCT_NAMES.join('|')})(?: \\d+)?/[^/]+\\.app$|/AppTranslocation/`,
 );
 
-/** A release asset's SHA-256 as GitHub lists it (`sha256:<hex>`), or ''. */
+/**
+ * A release asset's SHA-256 as GitHub lists it (`sha256:<hex>`), or ''.
+ *
+ * @param {unknown} digest
+ */
 function assetDigest(digest) {
   return typeof digest === 'string' && /^sha256:[0-9a-f]{64}$/i.test(digest)
     ? digest.toLowerCase()
@@ -49,6 +77,8 @@ function assetDigest(digest) {
  * Pfad des .app-Bundles aus dem Pfad der ausfuehrbaren Datei.
  * `/Applications/Snotra Agent.app/Contents/MacOS/Snotra Agent` → `/Applications/Snotra Agent.app`
  * Liefert '' , wenn der Pfad nicht so aufgebaut ist (z. B. `npm start`).
+ *
+ * @param {unknown} execPath
  */
 function macAppBundlePath(execPath) {
   if (typeof execPath !== 'string') return '';
@@ -58,6 +88,7 @@ function macAppBundlePath(execPath) {
   return execPath.slice(0, idx + '.app'.length);
 }
 
+/** @param {unknown} dir */
 function isLinuxSystemPath(dir) {
   const normalized = `${String(dir).replace(/\/+$/, '')}/`;
   return LINUX_SYSTEM_PREFIXES.some((prefix) => normalized.startsWith(prefix));
@@ -67,11 +98,10 @@ function isLinuxSystemPath(dir) {
  * An installation of a platform (and packaging variant) whose layout allows a
  * swap: whether it may replace itself is the platform register's to say.
  *
- * @template {{ kind: string }} T
- * @param {T} target
+ * @param {SwappableLocation} target
  * @param {string} platform
  * @param {string|null} [variant]
- * @returns {T & { canSelfUpdate: boolean, reason?: { key: string } }}
+ * @returns {InstallTarget}
  */
 function byRegister(target, platform, variant = null) {
   const declared = declaredPlatformCapability(platform, PLATFORM_CAPABILITIES.SELF_UPDATE, variant);
@@ -85,12 +115,11 @@ function byRegister(target, platform, variant = null) {
  * @param {object} ctx
  * @param {string} ctx.platform    process.platform
  * @param {string} ctx.execPath    process.execPath (bzw. app.getPath('exe'))
- * @param {object} [ctx.env]       process.env (nur APPIMAGE wird gelesen)
+ * @param {{ APPIMAGE?: unknown }} [ctx.env]  process.env (nur APPIMAGE wird gelesen)
  * @param {boolean} [ctx.isPackaged] app.isPackaged
- * @returns {{kind: string, canSelfUpdate: boolean, reason?: {key: string},
- *            appBundlePath?: string, installDir?: string, appImagePath?: string}}
+ * @returns {InstallTarget}
  */
-function detectInstallTarget({ platform, execPath, env = {}, isPackaged = true } = {}) {
+function detectInstallTarget({ platform, execPath, env = {}, isPackaged = true }) {
   if (!isPackaged) {
     return { kind: 'dev', canSelfUpdate: false, reason: REASONS.dev };
   }
@@ -134,7 +163,11 @@ function detectInstallTarget({ platform, execPath, env = {}, isPackaged = true }
   return { kind: 'unsupported', canSelfUpdate: false, reason: REASONS.platform };
 }
 
-/** Endung und Architektur-Kennung, die zur Installationsart passen. */
+/**
+ * Endung und Architektur-Kennung, die zur Installationsart passen.
+ *
+ * @type {Readonly<Record<string, { suffix: string, arch: Record<string, string> }>>}
+ */
 const ASSET_RULES = Object.freeze({
   'macos-bundle': { suffix: '.dmg', arch: { arm64: 'arm64', x64: 'arm64' } },
   'windows-dir': { suffix: '.zip', arch: { x64: 'x64', arm64: 'x64' } },
@@ -148,11 +181,12 @@ const ASSET_RULES = Object.freeze({
  * Verweis zur Release-Seite zurueck, statt irgendetwas Falsches zu laden.
  *
  * @param {object} args
- * @param {Array} args.assets   `assets` aus der GitHub-Release-Antwort
+ * @param {unknown} args.assets `assets` aus der GitHub-Release-Antwort
  * @param {string} args.kind    Ergebnis von detectInstallTarget().kind
  * @param {string} [args.arch]  process.arch
+ * @returns {ReleaseAsset|null}
  */
-function pickReleaseAsset({ assets, kind, arch = 'x64' } = {}) {
+function pickReleaseAsset({ assets, kind, arch = 'x64' }) {
   const rule = ASSET_RULES[kind];
   if (!rule || !Array.isArray(assets)) return null;
 

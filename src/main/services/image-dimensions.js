@@ -9,21 +9,30 @@
  * gives null, and the result simply goes without dimensions.
  */
 
+/**
+ * @param {Buffer} buf
+ * @param {number} offset
+ */
 function readUInt24LE(buf, offset) {
   return buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16);
 }
 
+/** @param {Buffer} buf */
 function pngDimensions(buf) {
   // Signature (8), IHDR length (4), "IHDR" (4), width (4), height (4).
   if (buf.length < 24 || buf.toString('ascii', 12, 16) !== 'IHDR') return null;
   return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
 }
 
-/** Start-of-frame markers that carry the size; C4, C8 and CC are not frames. */
+/**
+ * Start-of-frame markers that carry the size; C4, C8 and CC are not frames.
+ * @param {number} marker
+ */
 function isStartOfFrame(marker) {
   return marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
 }
 
+/** @param {Buffer} buf */
 function jpegDimensions(buf) {
   let offset = 2;
   while (offset + 4 <= buf.length) {
@@ -49,6 +58,7 @@ function jpegDimensions(buf) {
   return null;
 }
 
+/** @param {Buffer} buf */
 function webpDimensions(buf) {
   if (buf.length < 30) return null;
   const chunk = buf.toString('ascii', 12, 16);

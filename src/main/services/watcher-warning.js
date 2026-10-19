@@ -15,7 +15,7 @@ const WATCHER_WARNING_INTERVAL_MS = 60_000;
  * @param {{ warn: Function }} [options.log]
  * @param {() => number} [options.now]
  * @param {number} [options.intervalMs]
- * @returns {(error: Error|null|undefined, dir: string) => void}  the watcher's `onError`
+ * @returns {(error: (Error & { code?: string })|null|undefined, dir: string) => void}  the watcher's `onError`
  */
 function createWatcherWarning(label, { log = console, now = Date.now, intervalMs = WATCHER_WARNING_INTERVAL_MS } = {}) {
   let lastWarnedAt = -Infinity;

@@ -17,23 +17,33 @@ const FINISH_REASONS = Object.freeze({
   INCOMPLETE: 'incomplete',
 });
 
+/** @typedef {(typeof FINISH_REASONS)[keyof typeof FINISH_REASONS]} FinishReason */
+
+/** @type {Set<string>} */
 const CUT_OFF_REASONS = new Set([
   FINISH_REASONS.LENGTH,
   FINISH_REASONS.CONTENT_FILTER,
   FINISH_REASONS.INCOMPLETE,
 ]);
 
-/** true when the round did not end on its own: its text and tool calls are partial. */
+/**
+ * true when the round did not end on its own: its text and tool calls are partial.
+ * @param {unknown} finishReason
+ * @returns {finishReason is FinishReason}
+ */
 function isCutOff(finishReason) {
-  return CUT_OFF_REASONS.has(finishReason);
+  return typeof finishReason === 'string' && CUT_OFF_REASONS.has(finishReason);
 }
 
 /**
  * The finish reason of a round that streamed to its end. `cutOff` wins over
  * tool calls — a call that was cut off mid-argument must not run.
+ *
+ * @param {{ cutOff?: string | null, toolCalls?: boolean }} [state]
+ * @returns {FinishReason}
  */
 function finishReasonOf({ cutOff = null, toolCalls = false } = {}) {
-  if (cutOff && CUT_OFF_REASONS.has(cutOff)) return cutOff;
+  if (isCutOff(cutOff)) return cutOff;
   return toolCalls ? FINISH_REASONS.TOOL_CALLS : FINISH_REASONS.STOP;
 }
 

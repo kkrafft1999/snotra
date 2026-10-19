@@ -58,8 +58,11 @@ protocol.registerSchemesAsPrivileged([HTML_PREVIEW_SCHEME_PRIVILEGES, APP_SCHEME
 
 const DEFAULT_PROVIDER = 'openai';
 
+/** @type {ReturnType<typeof createApplication>|null} */
 let application = null;
+/** @type {ReturnType<typeof createManualWindowController>|null} */
 let manualWindow = null;
+/** @type {ReturnType<typeof createSafeStorageKeyDurability>|null} */
 let safeStorageKey = null;
 
 // One instance per userData folder (#507). A second launch brings the first
@@ -75,6 +78,7 @@ if (isPrimaryInstance) start();
 
 // Off macOS the app ends with its last window. The help window must not be
 // that window: without the app window there is no way back to it (#790).
+/** @param {import('electron').BrowserWindow|null|undefined} window */
 function watchMainWindow(window) {
   window?.once('closed', () => {
     if (process.platform !== 'darwin') manualWindow?.close();
@@ -162,7 +166,7 @@ function start() {
         getMainWindow,
         shell,
         PUSH,
-        onCheckForUpdates: () => { void application.runUpdateCheck({ silent: false }); },
+        onCheckForUpdates: () => { void application?.runUpdateCheck({ silent: false }); },
         locale: application?.getAppLocale?.(),
         showHiddenFiles: application?.getShowHiddenFiles?.(),
         onOpenManual: () => { manualWindow?.open(); },
@@ -179,6 +183,7 @@ function start() {
     // A checkbox, unlike a label, can change in place (#436). Electron ticks it
     // itself on a click; this follows every other way of switching — the button
     // in the tree, the shortcut, the stored value at start-up.
+    /** @param {unknown} showHiddenFiles */
     function syncHiddenFilesMenuItem(showHiddenFiles) {
       const item = Menu.getApplicationMenu()?.getMenuItemById(MENU_ITEM_IDS.SHOW_HIDDEN_FILES);
       if (item) item.checked = showHiddenFiles === true;
@@ -192,7 +197,7 @@ function start() {
       bundleDir: path.join(__dirname, '..', 'manual'),
     });
 
-    application = createApplication({
+    const created = createApplication({
       app,
       manual,
       // Every handler checks who is calling (#509).
@@ -227,6 +232,7 @@ function start() {
       onShowHiddenFilesChanged: syncHiddenFilesMenuItem,
       notices,
     });
+    application = created;
     registerDiagnosticsHandlers({ ipcMain: guardIpcMain(ipcMain), REQ, reporter: errorReporter, diagnostics });
 
     // The help window with the manual that ships with the app (#790). It reads
@@ -246,7 +252,7 @@ function start() {
     registerManualOpenHandler({
       ipcMain: guardIpcMain(ipcMain),
       REQ,
-      open: (target) => manualWindow.open(target),
+      open: (target) => manualWindow?.open(target),
       hasPage: (slug) => !manual.isAvailable()
         || Object.hasOwn(manual.getIndex(application?.getAppLocale?.()).pages, slug),
     });
@@ -265,16 +271,16 @@ function start() {
 
     // This version is up: an update helper waiting for it may now delete the
     // previous one (#1003).
-    void application.confirmUpdateStarted().catch(() => {});
+    void created.confirmUpdateStarted().catch(() => {});
 
     // Interpreter suchen und den Stand der Tool-Einstellungen uebernehmen
     // (Issues #63, #86). Bewusst nicht abgewartet: das Fenster soll nicht auf
     // eine Versionsabfrage warten, und vor der ersten Modellantwort ist es
     // laengst durch.
-    void application.initToolRuntimes();
+    void created.initToolRuntimes();
 
     // Verzoegerter Auto-Check, damit der Start nicht auf das Netzwerk wartet.
-    setTimeout(() => { void application.runUpdateCheck({ silent: true }); }, 4000);
+    setTimeout(() => { void created.runUpdateCheck({ silent: true }); }, 4000);
 
     app.on('activate', () => {
       if (!getMainWindow()) {

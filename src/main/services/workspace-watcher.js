@@ -48,12 +48,18 @@ const IGNORED_CONTENT_DIRS = new Set(['node_modules', '.git']);
  * listing hides `.GIT` as it hides `.git`, so its content has to be noise to
  * the watcher too, or a tree nobody sees would keep reporting — and on Linux
  * draw a watch on every folder in it.
+ *
+ * @param {string} name
  */
 function isIgnoredContentDir(name) {
   return IGNORED_CONTENT_DIRS.has(name.toLowerCase());
 }
 
-/** `.git` in whatever case — see `isIgnoredContentDir`. */
+/**
+ * `.git` in whatever case — see `isIgnoredContentDir`.
+ *
+ * @param {string} name
+ */
 function isGitDir(name) {
   return name.toLowerCase() === '.git';
 }
@@ -66,12 +72,20 @@ function isGitDir(name) {
  */
 const GIT_SIGNAL_FILES = new Set(['HEAD', 'index', 'ORIG_HEAD']);
 
-/** Zerlegt einen von `fs.watch` gemeldeten Pfad — je nach Plattform `/` oder `\`. */
+/**
+ * Zerlegt einen von `fs.watch` gemeldeten Pfad — je nach Plattform `/` oder `\`.
+ *
+ * @param {unknown} relativePath
+ */
 function segmentsOf(relativePath) {
   return String(relativePath).split(/[\\/]/).filter(Boolean);
 }
 
-/** Ein Git-Signal — `.git/HEAD` und Verwandte, sonst nichts. */
+/**
+ * Ein Git-Signal — `.git/HEAD` und Verwandte, sonst nichts.
+ *
+ * @param {unknown} relativePath
+ */
 function isGitSignal(relativePath) {
   const segments = segmentsOf(relativePath);
   return segments.length === 2 && isGitDir(segments[0]) && GIT_SIGNAL_FILES.has(segments[1]);
@@ -85,6 +99,8 @@ function isGitSignal(relativePath) {
  * - an entry the listing never shows (`.git`, `.DS_Store`, `Thumbs.db`, …),
  *   wherever it sits (#650). Nothing beyond that: an editor's `notes.md~` or
  *   `.notes.md.swp` is listed in the tree, so its removal has to reach it.
+ *
+ * @param {unknown} relativePath
  */
 function isIgnoredWorkspacePath(relativePath) {
   if (typeof relativePath !== 'string' || !relativePath) return false;
@@ -102,6 +118,9 @@ function isIgnoredWorkspacePath(relativePath) {
  * keeps the watches out of the same folders in the first place, so a
  * `node_modules/` of 20,000 files costs none. `.git` at the root is watched
  * on its own, without its subfolders: the signal files sit right in it.
+ *
+ * @param {string} relativeDir
+ * @returns {'recursive' | 'flat' | 'skip'}
  */
 function workspaceFolderPolicy(relativeDir) {
   const segments = segmentsOf(relativeDir);
@@ -110,11 +129,10 @@ function workspaceFolderPolicy(relativeDir) {
 }
 
 /**
- * @param {object} options
- * @param {Function} options.watch `fs.watch`.
- * @param {object} options.path Pfad-Modul.
- * @param {Function} [options.realpath] `fs.realpathSync.native` — siehe unten.
- * @param {Function} options.onChange Meldung mit `{ directories, complete }`.
+ * @param {Omit<import('./directory-watcher').DirectoryWatcherOptions, 'resolveTargets' | 'ignores' | 'folderPolicy' | 'changedDirectoryFor'>
+ *   & { realpath?: ((path: string) => string) | null }} options
+ *   `watch` is `fs.watch`, `path` the path module, `realpath` is
+ *   `fs.realpathSync.native` — see below. `onChange` gets `{ directories, complete }`.
  */
 function createWorkspaceWatcher({ watch, path, onChange, realpath = null, ...watcherOptions }) {
   if (typeof watch !== 'function') throw new TypeError('createWorkspaceWatcher benötigt watch.');
@@ -126,6 +144,7 @@ function createWorkspaceWatcher({ watch, path, onChange, realpath = null, ...wat
    * `fs.watch` bekommt (siehe `watchablePath`). Gemeldet wird immer in dieser
    * Schreibweise, sonst fände der Renderer seine Ordner nicht wieder.
    */
+  /** @type {string | null} */
   let angezeigterRoot = null;
 
   /**
@@ -135,6 +154,8 @@ function createWorkspaceWatcher({ watch, path, onChange, realpath = null, ...wat
    * reißt den ganzen Prozess mit, kein Fehler, den man fangen könnte
    * (nachgemessen 2026-09-19 im Windows-CI). Beobachtet wird deshalb die
    * aufgelöste Form; gemeldet weiterhin die angezeigte.
+   *
+   * @param {string} root
    */
   function watchablePath(root) {
     if (typeof realpath !== 'function') return root;

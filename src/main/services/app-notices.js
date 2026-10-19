@@ -12,11 +12,20 @@ const { NOTICE_KINDS, normalizeNotice } = require('../../shared/contracts/notice
  * cause is gone is withdrawn, so the window does not keep a stale warning.
  *
  * Listeners get `{ type: 'posted', notice }` or `{ type: 'withdrawn', id }`.
+ *
+ * @typedef {NonNullable<ReturnType<typeof normalizeNotice>>} Notice
+ * @typedef {{ type: 'posted', notice: Notice }|{ type: 'withdrawn', id: string }} NoticeEvent
+ *
+ * @param {object} [options]
+ * @param {{ warn?: (message: string) => void }|null} [options.log]
  */
 function createAppNotices({ log = console } = {}) {
+  /** @type {Map<string, Notice>} */
   const notices = new Map();
+  /** @type {Set<(event: NoticeEvent) => void>} */
   const listeners = new Set();
 
+  /** @param {NoticeEvent} event */
   function emit(event) {
     for (const listener of listeners) {
       try {
@@ -27,6 +36,7 @@ function createAppNotices({ log = console } = {}) {
     }
   }
 
+  /** @param {unknown} input  A notice as the contract describes it; anything that does not fit is dropped. */
   function post(input) {
     const notice = normalizeNotice(input);
     if (!notice) {
@@ -39,6 +49,7 @@ function createAppNotices({ log = console } = {}) {
     return notice;
   }
 
+  /** @param {string} id */
   function withdraw(id) {
     if (!notices.delete(id)) return false;
     emit({ type: 'withdrawn', id });
@@ -50,14 +61,17 @@ function createAppNotices({ log = console } = {}) {
   }
 
   /** The user closed it: gone for this start, nothing to tell the window. */
+  /** @param {string} id */
   function dismiss(id) {
     return notices.delete(id);
   }
 
+  /** @param {string} id */
   function get(id) {
     return notices.get(id) || null;
   }
 
+  /** @param {(event: NoticeEvent) => void} listener */
   function subscribe(listener) {
     listeners.add(listener);
     return () => listeners.delete(listener);
@@ -71,6 +85,9 @@ function createAppNotices({ log = console } = {}) {
  * a notice: one per file, the set-aside naming its copy, the unsaved file
  * naming itself. A file that is saved again takes its warning back; a
  * set-aside stays, because the copy is still there to be found.
+ *
+ * @param {Pick<ReturnType<typeof createAppNotices>, 'post' | 'get' | 'withdraw'>} notices
+ * @param {{ type: string, store: string, file: string, path?: string, keptAs?: string|null }|null|undefined} event
  */
 function postStoreFileEvent(notices, event) {
   if (!event || typeof event !== 'object') return;

@@ -33,6 +33,7 @@ const APP_SCHEME_PRIVILEGES = Object.freeze({
   privileges: { standard: true, secure: true, codeCache: true },
 });
 
+/** @type {Readonly<Record<string, string>>} */
 const MIME_TYPES = Object.freeze({
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -54,15 +55,21 @@ const MIME_TYPES = Object.freeze({
   '.wasm': 'application/wasm',
 });
 
+/** @param {string} filePath */
 function appMimeType(filePath) {
   return MIME_TYPES[nodePath.extname(filePath).toLowerCase()] ?? 'application/octet-stream';
 }
 
-/** The URL of a file in `src/renderer/`, given relative to it with `/`. */
+/**
+ * The URL of a file in `src/renderer/`, given relative to it with `/`.
+ *
+ * @param {string} relativePath
+ */
 function appUrl(relativePath) {
   return `${APP_ORIGIN}/${relativePath}`;
 }
 
+/** @param {string} segment */
 function safeDecode(segment) {
   try {
     return decodeURIComponent(segment);
@@ -74,6 +81,10 @@ function safeDecode(segment) {
 /**
  * The file a URL of the scheme names, or null: another scheme or host, an
  * encoded separator, a dot segment, anything that would leave `root`.
+ *
+ * @param {string} rawUrl
+ * @param {string} [root]
+ * @returns {string|null}
  */
 function resolveAppPath(rawUrl, root = RENDERER_ROOT) {
   let url;
@@ -83,11 +94,15 @@ function resolveAppPath(rawUrl, root = RENDERER_ROOT) {
     return null;
   }
   if (url.protocol !== `${APP_SCHEME}:` || url.host !== APP_HOST) return null;
-  const segments = url.pathname.split('/').slice(1).map(safeDecode);
-  if (segments.length === 0) return null;
-  for (const segment of segments) {
+  const parts = url.pathname.split('/').slice(1);
+  if (parts.length === 0) return null;
+  /** @type {string[]} */
+  const segments = [];
+  for (const part of parts) {
+    const segment = safeDecode(part);
     if (segment === null || segment === '' || segment === '.' || segment === '..') return null;
     if (/[\\/\0]/.test(segment)) return null;
+    segments.push(segment);
   }
   const resolvedRoot = nodePath.resolve(root);
   const absPath = nodePath.resolve(resolvedRoot, ...segments);
@@ -95,8 +110,13 @@ function resolveAppPath(rawUrl, root = RENDERER_ROOT) {
   return absPath;
 }
 
-/** `(request) → Response` for `protocol.handle`. */
+/**
+ * `(request) → Response` for `protocol.handle`.
+ *
+ * @param {{ root?: string, readFile?: (path: string) => Promise<Buffer> }} [options]
+ */
 function createAppProtocolHandler({ root = RENDERER_ROOT, readFile = require('fs/promises').readFile } = {}) {
+  /** @param {Request} request */
   return async function serveAppFile(request) {
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405 });
     const absPath = resolveAppPath(request.url, root);
@@ -117,7 +137,12 @@ function createAppProtocolHandler({ root = RENDERER_ROOT, readFile = require('fs
   };
 }
 
-/** Serves the scheme in the default session; once the app is ready. */
+/**
+ * Serves the scheme in the default session; once the app is ready.
+ *
+ * @param {Pick<import('electron').Protocol, 'handle'>} protocol
+ * @param {Parameters<typeof createAppProtocolHandler>[0]} [options]
+ */
 function registerAppProtocol(protocol, options) {
   protocol.handle(APP_SCHEME, createAppProtocolHandler(options));
 }

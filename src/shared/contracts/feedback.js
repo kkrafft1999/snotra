@@ -21,28 +21,54 @@ const FEEDBACK_REPO_URL = 'https://github.com/kkrafft1999/snotra';
 /** Section 7 of the privacy policy, the one about the feedback form. */
 const FEEDBACK_PRIVACY_URL = 'https://snotra-ai.dev/datenschutz.html#feedback';
 
+/**
+ * The four diagnostic values of the form; each is empty or absent when not shown.
+ *
+ * @typedef {{ appVersion?: string, os?: string, arch?: string, provider?: string }} FeedbackDiagnostics
+ */
+
+/**
+ * @param {unknown} kind
+ * @returns {kind is 'bug'|'idea'|'praise'}
+ */
 function isFeedbackKind(kind) {
   return FEEDBACK_KINDS.includes(kind);
 }
 
-/** Length as a person counts it: an emoji is one character, not two. */
+/**
+ * Length as a person counts it: an emoji is one character, not two.
+ *
+ * @param {unknown} text
+ */
 function feedbackLength(text) {
   return [...String(text ?? '').trim()].length;
 }
 
-/** The endpoint's own check; an empty address counts as none. */
+/**
+ * The endpoint's own check; an empty address counts as none.
+ *
+ * @param {unknown} email
+ */
 function isFeedbackEmail(email) {
   const value = String(email ?? '').trim();
   return value.length <= FEEDBACK_EMAIL_MAX && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-/** "Snotra 1.25.0 · macOS 15.1 · arm64 · openai" — what the form shows. */
+/**
+ * "Snotra 1.25.0 · macOS 15.1 · arm64 · openai" — what the form shows.
+ *
+ * @param {FeedbackDiagnostics|null|undefined} diagnostics
+ */
 function formatFeedbackDiagnostics(diagnostics) {
   if (!diagnostics || typeof diagnostics !== 'object') return '';
   const { appVersion, os, arch, provider } = diagnostics;
   return [appVersion && `Snotra ${appVersion}`, os, arch, provider].filter(Boolean).join(' · ');
 }
 
+/**
+ * @param {string} text
+ * @param {number} max
+ */
 function clip(text, max) {
   const chars = [...text];
   return chars.length > max ? `${chars.slice(0, max).join('').trimEnd()}\n\n[…]` : text;
@@ -56,7 +82,7 @@ function clip(text, max) {
  * the address stays short enough for every browser; the form's *Copy text*
  * button has the whole of it.
  *
- * @param {{ kind?: string, message?: string, diagnostics?: { appVersion?: string }|null }} [input]
+ * @param {{ kind?: string, message?: string, diagnostics?: FeedbackDiagnostics|null }} [input]
  */
 function buildFeedbackIssueUrl({ kind, message, diagnostics } = {}) {
   const text = clip(String(message ?? '').trim(), FEEDBACK_PREFILL_MAX);

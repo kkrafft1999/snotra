@@ -29,6 +29,10 @@ const INVOCATION_LEAD_IN = /[\s(["'`„‚«‹]/;
 // weil der Schrägstrich hinter „usr“ nicht mehr zum Namen gehört.
 const NAME_CHAR = /[A-Za-z0-9._-]/;
 
+/**
+ * @param {string} text
+ * @param {number} index
+ */
 function isLeadIn(text, index) {
   return index === 0 || INVOCATION_LEAD_IN.test(text[index - 1]);
 }
@@ -37,10 +41,12 @@ function isLeadIn(text, index) {
  * Sucht den noch offenen `/`-Aufruf unmittelbar vor der Cursorposition.
  * Ein Zeichen, das nicht in einen Skill-Namen gehört, beendet ihn (dann null).
  * @returns {{ start: number, query: string } | null} start = Index des „/“
+ * @param {unknown} text
+ * @param {number} [caret]
  */
 function findSkillQuery(text, caret) {
   if (typeof text !== 'string') return null;
-  const pos = Math.max(0, Math.min(Number.isFinite(caret) ? caret : text.length, text.length));
+  const pos = Math.max(0, Math.min(typeof caret === 'number' && Number.isFinite(caret) ? caret : text.length, text.length));
   const before = text.slice(0, pos);
   const slash = before.lastIndexOf('/');
   if (slash < 0) return null;
@@ -58,6 +64,7 @@ function findSkillQuery(text, caret) {
  * ein Skill dieses Namens existiert und aufrufbar ist, entscheidet die
  * Registry.
  * @returns {string[]}
+ * @param {unknown} text
  */
 function extractInvokedSkillNames(text) {
   if (typeof text !== 'string' || !text) return [];
@@ -79,6 +86,10 @@ function extractInvokedSkillNames(text) {
   return names;
 }
 
+/**
+ * @param {string} needle
+ * @param {string} haystack
+ */
 function isSubsequence(needle, haystack) {
   let i = 0;
   for (let j = 0; j < haystack.length && i < needle.length; j += 1) {
@@ -99,6 +110,9 @@ const MIN_DESCRIPTION_QUERY_LENGTH = 3;
  *
  * Nur Wortanfänge, nicht irgendein Teilstück: „/rel“ soll `release` finden,
  * aber nicht jeden Skill, in dessen Beschreibung „korrelieren“ steht.
+ *
+ * @param {string} description
+ * @param {string} query
  */
 function matchesDescription(description, query) {
   if (query.length < MIN_DESCRIPTION_QUERY_LENGTH) return false;
@@ -115,6 +129,9 @@ function matchesDescription(description, query) {
  * Bewertet einen Skill gegen die (kleingeschriebene) Anfrage; null = kein
  * Treffer. Der Name wiegt schwerer als die Beschreibung: Wer tippt, meint in
  * aller Regel den Namen — die Beschreibung hilft nur beim Wiederfinden.
+ *
+ * @param {{ name?: string, description?: string }} skill
+ * @param {string} query
  */
 function scoreSkill(skill, query) {
   const name = String(skill.name || '').toLowerCase();
@@ -129,6 +146,12 @@ function scoreSkill(skill, query) {
 /**
  * Filtert und sortiert die Skills zur Anfrage. Ohne Anfrage bleibt die
  * gelieferte Reihenfolge erhalten (Quellpriorität).
+ *
+ * @template {{ name: string }} T
+ * @param {T[]} skills
+ * @param {unknown} query
+ * @param {number} [limit]
+ * @returns {T[]}
  */
 function filterSkillCandidates(skills, query, limit = 8) {
   const list = Array.isArray(skills) ? skills : [];
@@ -155,6 +178,10 @@ function filterSkillCandidates(skills, query, limit = 8) {
 /**
  * Ersetzt den offenen Aufruf (von start bis caret) durch „/name “.
  * @returns {{ text: string, caret: number }}
+ * @param {unknown} text
+ * @param {number} start
+ * @param {number} caret
+ * @param {{ name?: string }|null|undefined} skill
  */
 function applySkillInvocation(text, start, caret, skill) {
   const source = typeof text === 'string' ? text : '';

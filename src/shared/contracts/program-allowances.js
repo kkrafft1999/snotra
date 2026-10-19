@@ -20,6 +20,15 @@
  */
 
 const { normalizeDomains } = require('../runtime/sandbox-domains');
+const { isRecord } = require('../runtime/is-record');
+
+/**
+ * @typedef {Object} ProgramAllowance
+ * @property {string} path
+ * @property {string[]} domains
+ * @property {string[]} writePaths
+ * @property {boolean} trustd
+ */
 
 const PROGRAM_ALLOWANCE_LIMITS = Object.freeze({
   MAX_ENTRIES: 20,
@@ -39,7 +48,12 @@ const PROGRAM_ALLOWANCE_SKIP_REASONS = Object.freeze({
   OTHER_FILE: 'otherFile',
 });
 
-/** File name of a program path, whichever separator it uses. */
+/**
+ * File name of a program path, whichever separator it uses.
+ *
+ * @param {unknown} filePath
+ * @returns {string}
+ */
 function programName(filePath) {
   if (typeof filePath !== 'string') return '';
   return filePath.split(/[\\/]/).pop() || '';
@@ -49,6 +63,9 @@ function programName(filePath) {
  * An absolute POSIX path in plain form: no empty or dot segments, no trailing
  * slash. Null for anything else. Windows has no sandbox, so there is nothing
  * to allow there.
+ *
+ * @param {unknown} value
+ * @returns {string|null}
  */
 function normalizeAllowancePath(value) {
   if (typeof value !== 'string') return null;
@@ -60,13 +77,22 @@ function normalizeAllowancePath(value) {
   return `/${segments.join('/')}`;
 }
 
+/**
+ * @param {unknown} value
+ * @returns {string[]}
+ */
 function normalizeAllowanceDomains(value) {
   return [...normalizeDomains(Array.isArray(value) ? value : [])]
     .slice(0, PROGRAM_ALLOWANCE_LIMITS.MAX_DOMAINS)
     .sort();
 }
 
+/**
+ * @param {unknown} value
+ * @returns {string[]}
+ */
 function normalizeWritePaths(value) {
+  /** @type {string[]} */
   const out = [];
   for (const entry of Array.isArray(value) ? value : []) {
     const normalized = normalizeAllowancePath(entry);
@@ -78,10 +104,11 @@ function normalizeWritePaths(value) {
 }
 
 /**
- * @returns {{path: string, domains: string[], writePaths: string[], trustd: boolean}|null}
+ * @param {unknown} raw
+ * @returns {ProgramAllowance|null}
  */
 function normalizeProgramAllowance(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   const path = normalizeAllowancePath(raw.path);
   if (!path || path === '/' || !programName(path)) return null;
   return {
@@ -92,8 +119,14 @@ function normalizeProgramAllowance(raw) {
   };
 }
 
-/** Each program once, in the order given, at most MAX_ENTRIES. */
+/**
+ * Each program once, in the order given, at most MAX_ENTRIES.
+ *
+ * @param {unknown} list
+ * @returns {ProgramAllowance[]}
+ */
 function normalizeProgramAllowances(list) {
+  /** @type {ProgramAllowance[]} */
   const out = [];
   for (const raw of Array.isArray(list) ? list : []) {
     const entry = normalizeProgramAllowance(raw);
@@ -109,6 +142,10 @@ function normalizeProgramAllowances(list) {
  * added up (#1119), hold more domains or folders than one allowance may. The
  * store refuses such a pair rather than let a run get less than either of
  * them names — a run never takes more than one allowance's worth.
+ *
+ * @param {ProgramAllowance|null|undefined} a
+ * @param {ProgramAllowance|null|undefined} b
+ * @returns {boolean}
  */
 function combinationTooLarge(a, b) {
   if (!a || !b || a.path !== b.path) return false;
@@ -122,6 +159,10 @@ function combinationTooLarge(a, b) {
  * and the workspace's own, one entry per program. Where both name the same
  * program they add up — every domain and folder of either, and the macOS
  * certificate check when either has it.
+ *
+ * @param {unknown} globalList
+ * @param {unknown} workspaceList
+ * @returns {ProgramAllowance[]}
  */
 function combineProgramAllowances(globalList, workspaceList) {
   const out = normalizeProgramAllowances(globalList).map((entry) => ({ ...entry }));
@@ -132,17 +173,23 @@ function combineProgramAllowances(globalList, workspaceList) {
       continue;
     }
     const base = out[index];
+    // Both inputs are normalized, so the sum is too; `base` only satisfies the type.
     out[index] = normalizeProgramAllowance({
       path: base.path,
       domains: [...base.domains, ...own.domains],
       writePaths: [...base.writePaths, ...own.writePaths],
       trustd: base.trustd || own.trustd,
-    });
+    }) ?? base;
   }
   return out;
 }
 
-/** Whether an allowance grants anything at all. */
+/**
+ * Whether an allowance grants anything at all.
+ *
+ * @param {ProgramAllowance|null|undefined} entry
+ * @returns {boolean}
+ */
 function grantsSomething(entry) {
   return !!entry && (entry.domains.length > 0 || entry.writePaths.length > 0 || entry.trustd === true);
 }
@@ -151,10 +198,15 @@ function grantsSomething(entry) {
  * The domain field of the dialog: host names separated by line breaks,
  * spaces or commas. `invalid` keeps what was typed and is not a host name, so
  * the dialog can say which entry it refuses instead of dropping it quietly.
+ *
+ * @param {unknown} text
+ * @returns {{ domains: string[], invalid: string[], tooMany: boolean }}
  */
 function parseDomainInput(text) {
   const raw = typeof text === 'string' ? text.slice(0, PROGRAM_ALLOWANCE_LIMITS.MAX_INPUT_CHARS) : '';
+  /** @type {string[]} */
   const domains = [];
+  /** @type {string[]} */
   const invalid = [];
   for (const token of raw.split(/[\s,;]+/)) {
     if (!token) continue;
@@ -172,6 +224,10 @@ function parseDomainInput(text) {
  * Whether `next` only takes rights away from `previous`: same program, no new
  * domain, no new folder, trustd not newly on. Such a change needs no
  * confirmation — like switching the sandbox back on.
+ *
+ * @param {ProgramAllowance|null|undefined} previous
+ * @param {ProgramAllowance|null|undefined} next
+ * @returns {boolean}
  */
 function isNarrowing(previous, next) {
   if (!previous || !next || previous.path !== next.path) return false;

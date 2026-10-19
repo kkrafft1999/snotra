@@ -33,7 +33,7 @@ const {
   DEFAULT_SEARCH_RESULTS: DEFAULT_MANUAL_SEARCH_RESULTS,
   MAX_SEARCH_RESULTS: MAX_MANUAL_SEARCH_RESULTS,
 } = require('../services/manual-lookup');
-const { LOCALES, createTranslator } = require('../../shared/i18n');
+const { LOCALES, createTranslator, normalizeLocale } = require('../../shared/i18n');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { createGenerateImageTool } = require('./generate-image-tool');
 const {
@@ -43,11 +43,17 @@ const {
   createPermissionDeniedToolResult,
 } = require('../../shared/contracts/tool-permissions');
 
+/**
+ * @param {string[] | null | undefined} allowedNames
+ */
 function toAllowedNameSet(allowedNames) {
   if (allowedNames == null) return null;
   return new Set(allowedNames);
 }
 
+/**
+ * @param {string[] | null | undefined} disabledNames
+ */
 function toDisabledNameSet(disabledNames) {
   if (!Array.isArray(disabledNames) || disabledNames.length === 0) return null;
   return new Set(disabledNames);
@@ -60,10 +66,19 @@ function toDisabledNameSet(disabledNames) {
  * @typedef {{
  *   name: string,
  *   handler: (args: any, context: import('../../application/ports/tool-port').ToolHandlerContext) => unknown,
+ *   targets?: (args: import('../../application/ports/tool-port').ToolArguments) =>
+ *     Array<{ path: unknown, kind: string, access: string, overwrite?: boolean }> | { error: string },
  *   [field: string]: any,
  * }} BuiltInTool
+ *
+ * Which tools the model is offered, and with what (#773).
+ * @typedef {{ allowedNames?: string[] | null, disabledNames?: string[] | null, workspaceOpen?: boolean,
+ *   skillNames?: string[] | null }} OfferOptions
  */
 
+/**
+ * @param {BuiltInTool[]} [initialDefinitions]
+ */
 function createToolRegistry(initialDefinitions = []) {
   const definitions = new Map();
   // Zur Laufzeit wechselnde Tools — heute die der MCP-Server (Issue #107).
@@ -89,6 +104,8 @@ function createToolRegistry(initialDefinitions = []) {
    *    englisch (#276). Gesetzt schlaegt er `description` in `getTools()` —
    *    und ohne festen `description`-String ist er Pflicht, sonst ginge an das
    *    Modell gar nichts mehr.
+   *
+   * @param {BuiltInTool} definition
    */
   function normalizeDefinition(definition) {
     const {
@@ -170,12 +187,18 @@ function createToolRegistry(initialDefinitions = []) {
     };
   }
 
+  /**
+   * @param {BuiltInTool} definition
+   */
   function normalizeSetup(definition) {
     if (typeof definition.setup === 'function') return definition.setup;
     if (typeof definition.setup === 'string' && definition.setup) return () => definition.setup;
     return () => (definition.mcp ? TOOL_SETUPS.MCP : null);
   }
 
+  /**
+   * @param {BuiltInTool} definition
+   */
   function register(definition) {
     const normalized = normalizeDefinition(definition);
     if (definitions.has(normalized.name)) {
@@ -188,6 +211,8 @@ function createToolRegistry(initialDefinitions = []) {
    * Ersetzt die dynamischen Tools vollstaendig. Ein Name, den es schon fest
    * gibt, wird uebergangen — der Namensraum (`mcp__…`) schliesst das zwar aus,
    * aber ein eingebautes Tool darf nie von aussen ueberschrieben werden.
+   *
+   * @param {BuiltInTool[]} list
    */
   function setDynamicDefinitions(list) {
     const next = new Map();
@@ -231,12 +256,19 @@ function createToolRegistry(initialDefinitions = []) {
   //
   // That holds in every place that asks — what the model is offered, what the
   // policy decides, what `execute` lets through — so they all ask here (#552).
+  /**
+   * @param {string} name
+   * @param {string[] | null | undefined} disabledNames
+   */
   function isSwitchedOff(name, disabledNames) {
     const disabled = toDisabledNameSet(disabledNames);
     if (!disabled || !disabled.has(name)) return false;
     return getDefinition(name)?.essential !== true;
   }
 
+  /**
+   * @param {{ [field: string]: any }} definition
+   */
   function isConfigured(definition) {
     try {
       return definition.isAvailable() === true;
@@ -252,8 +284,7 @@ function createToolRegistry(initialDefinitions = []) {
    * apart, or the indicator would call a tool on that the model never sees.
    *
    * @param {{ name: string, [field: string]: any }} definition
-   * @param {{ allowedNames?: string[] | null, disabledNames?: string[] | null, workspaceOpen?: boolean,
-   *   skillNames?: string[] | null }} [options]
+   * @param {OfferOptions} [options]
    */
   function whyNotOffered(definition, {
     allowedNames,
@@ -289,6 +320,9 @@ function createToolRegistry(initialDefinitions = []) {
     return null;
   }
 
+  /**
+   * @param {OfferOptions} [options]
+   */
   function getAvailableDefinitions(options = {}) {
     return allDefinitions().filter((definition) => whyNotOffered(definition, options) === null);
   }
@@ -297,6 +331,8 @@ function createToolRegistry(initialDefinitions = []) {
    * Every tool the user can switch, with whether the model is offered it and
    * why not (#773). The essential tools are left out, as in the settings:
    * they are not a choice (#195).
+   *
+   * @param {OfferOptions} [options]
    */
   function describeOffers(options = {}) {
     return allDefinitions()
@@ -404,6 +440,8 @@ function createToolRegistry(initialDefinitions = []) {
    * bleibt es bei `description`. Getrimmt geprueft, damit ein versehentlich
    * leer gelassenes Feld nicht stillschweigend eine leere Beschreibung
    * hinausschickt.
+   *
+   * @param {OfferOptions} [options]
    */
   function getTools(options = {}) {
     return getAvailableDefinitions(options).map((definition) => ({
@@ -428,6 +466,9 @@ function createToolRegistry(initialDefinitions = []) {
   /** Namen einer Liste als Aufzaehlung: „a, b und c". */
   // Verbindet mit „and": die Namen stehen im Konventionsblock, und der geht an
   // das Modell, nicht auf den Bildschirm (Issue #276).
+  /**
+   * @param {string[]} names
+   */
   function joinNames(names) {
     if (names.length <= 1) return names.join('');
     return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
@@ -457,6 +498,8 @@ function createToolRegistry(initialDefinitions = []) {
    *     und damit schlimmer als die Doppelung, die er ersetzt. Die Saetze
    *     werden deshalb aus den tatsaechlich sichtbaren Tools gebaut und
    *     nennen sie beim Namen; ein abgewaehltes Tool taucht nicht auf.
+   *
+   * @param {OfferOptions} [options]
    */
   function buildSystemPrompt(options = {}) {
     const available = getAvailableDefinitions(options);
@@ -532,11 +575,20 @@ function createToolRegistry(initialDefinitions = []) {
     return allDefinitions();
   }
 
-  /** Definition eines Tools (für Planer und Adapter); null bei unbekanntem Namen. */
+  /**
+   * Definition eines Tools (für Planer und Adapter); null bei unbekanntem Namen.
+   *
+   * @param {string} name
+   */
   function getDefinition(name) {
     return definitions.get(name) || dynamic.get(name) || null;
   }
 
+  /**
+   * @param {string} name
+   * @param {import('../../application/ports/tool-port').ToolArguments | null | undefined} args
+   * @param {import('../../application/ports/tool-port').ToolHandlerContext & { allowedNames?: string[] | null }} [context]
+   */
   async function execute(name, args, context = {}) {
     const definition = getDefinition(name);
     if (!definition) {
@@ -554,7 +606,7 @@ function createToolRegistry(initialDefinitions = []) {
     if (isSwitchedOff(name, context.disabledNames)) {
       return JSON.stringify({
         // English sentence, quoted page in the interface language (#294/#276).
-        error: fillUiQuotes(context.locale, `Tool is switched off: ${name}. The user can enable it under "{menu:settings.security}".`),
+        error: fillUiQuotes(normalizeLocale(context.locale), `Tool is switched off: ${name}. The user can enable it under "{menu:settings.security}".`),
       });
     }
     if (definition.isAvailable() !== true) {
@@ -562,7 +614,7 @@ function createToolRegistry(initialDefinitions = []) {
         // The search key and the image model are set up under Tools; the
         // execution tools are switched on under Security (#449).
         error: fillUiQuotes(
-          context.locale,
+          normalizeLocale(context.locale),
           `Tool is not configured: ${name}. See "{menu:${definition.setupPage === 'tools' ? 'settings.tools' : 'settings.security'}}".`
         ),
       });
@@ -601,6 +653,7 @@ const NETWORK_DOMAINS_PARAMETER = Object.freeze({
 });
 
 /** Why a program allowance stayed off, as the model reads it (#408). */
+/** @type {Readonly<Record<string, string>>} */
 const ALLOWANCE_SKIP_TEXT = Object.freeze({
   compound: 'the command does more than run the program: no chaining, pipes, redirections or variables in front',
   expansion: 'the command uses $ or backticks, so what runs is only known after the shell expanded it',
@@ -618,6 +671,7 @@ const ALLOWANCE_SKIP_TEXT = Object.freeze({
 function describeIsolationForModel(isolation, sandboxPlan = null) {
   if (!isolation) return null;
   if (isolation.isolated) {
+    /** @type {Record<string, unknown>} */
     const out = { isolated: true, network_domains: Array.isArray(isolation.domains) ? isolation.domains : [] };
     const granted = sandboxPlan?.allowance;
     const skipped = sandboxPlan?.allowanceSkipped;
@@ -643,6 +697,8 @@ function describeIsolationForModel(isolation, sandboxPlan = null) {
 /**
  * Whether the approved plan runs without sandbox (#357). Only the planner
  * decides that — a call without a plan stays isolated.
+ *
+ * @param {import('../../application/ports/tool-port').ToolPlan | null | undefined} plan
  */
 function sandboxDisabledByPlan(plan) {
   return plan?.sandbox?.disabled === true;
@@ -679,12 +735,8 @@ function sandboxDisabledByPlan(plan) {
  * (`tools.desc.<name>`, `tools.short.<name>`); hier bleiben nur die
  * Schluessel.
  *
- * `fsService` stays untyped here: `fs-service.js` is outside the checked
- * program (#1098), and a typedef written from this side would have to list its
- * twenty tool runners.
- *
  * @param {{
- *   fsService: any,
+ *   fsService: import('../services/fs-service').FsService,
  *   webSearch?: import('../../application/ports/web-search-port').WebSearchPort | null,
  *   pythonRunner?: (import('../../application/ports/code-execution-port').CodeExecutionPort
  *     & { setupNeeded?: () => string | undefined }) | null,
@@ -1326,8 +1378,12 @@ function createWorkspaceToolRegistry({
       display: { key: 'tools.line.applyPatch', target: TOOL_LINE_TARGETS.WRITTEN_PATH },
       preview: TOOL_PREVIEW_KINDS.DIFF,
       fileEvents: TOOL_FILE_EVENTS.WRITE,
-      targets: (args) =>
-        fsService.listApplyPatchTargets(args).map((p) => ({ path: p, kind: 'file', access: 'write' })),
+      // A patch that cannot be read comes back as `{ error }`, which the planner
+      // turns into the refusal; mapping over it would end in a TypeError.
+      targets: (args) => {
+        const targets = fsService.listApplyPatchTargets(args);
+        return Array.isArray(targets) ? targets.map((p) => ({ path: p, kind: 'file', access: 'write' })) : targets;
+      },
       descriptionKey: 'tools.desc.apply_patch',
       // Ohne die Atomaritaets- und Rollback-Prosa (Issue #184): Sie aendert
       // die Wahl des Tools nicht und nicht die Form des Aufrufs. Was das
@@ -1481,6 +1537,7 @@ function createWorkspaceToolRegistry({
           abortSignal,
         });
         if ('error' in result) return JSON.stringify({ error: result.error });
+        /** @type {Record<string, unknown>} */
         const out = {
           stdout: result.stdout,
           stderr: result.stderr,
@@ -1609,6 +1666,7 @@ function createWorkspaceToolRegistry({
         if ('error' in result) {
           return JSON.stringify(result.blocked ? { error: result.error, blocked: true } : { error: result.error });
         }
+        /** @type {Record<string, unknown>} */
         const out = {
           stdout: result.stdout,
           stderr: result.stderr,
@@ -1694,10 +1752,11 @@ function createWorkspaceToolRegistry({
         if (!result?.ok) {
           // Die Meldung geht ans Modell und ist englisch (#276); eine darin
           // zitierte Einstellungsseite folgt der Oberflaeche (#294).
-          return JSON.stringify({ error: fillUiQuotes(locale, result?.error || 'The search failed.') });
+          return JSON.stringify({ error: fillUiQuotes(normalizeLocale(locale), result?.error || 'The search failed.') });
         }
         // Keine Treffer ist ein gueltiges Ergebnis, kein Fehler — das Modell
         // soll die Anfrage umformulieren duerfen, statt abzubrechen.
+        /** @type {Record<string, unknown>} */
         const out = { query: result.query, count: result.results.length, results: result.results };
         if (result.answer) out.answer = result.answer;
         return JSON.stringify(out);
@@ -1753,6 +1812,7 @@ function createWorkspaceToolRegistry({
         if (!result?.ok) {
           return JSON.stringify({ error: result?.error || 'The page could not be read.' });
         }
+        /** @type {Record<string, unknown>} */
         const out = { url: result.url, text: result.text };
         if (result.title) out.title = result.title;
         if (result.truncated) out.truncated = true;

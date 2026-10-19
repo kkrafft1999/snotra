@@ -14,7 +14,7 @@
  *   onUpdate?: (update: { turns: TranscriptTurn[], settledBytes: number }) => void,
  *   onError?: (error: string|object) => void,
  * }) => LiveTranscription} openLiveTranscription
- * @property {(audioBuffer: Buffer|ArrayBuffer, options?: { language?: string }) => Promise<{ text?: string, error?: string }>} transcribeAudio
+ * @property {(audioBuffer: Buffer|ArrayBuffer, options?: { language?: string, signal?: AbortSignal, timeoutMs?: number }) => Promise<{ text?: string, error?: string | { key: string, params?: object } }>} transcribeAudio
  *   one recording in one piece (Whisper) — the fallback when live fails
  */
 

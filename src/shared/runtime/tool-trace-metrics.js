@@ -16,24 +16,38 @@
 
 const { PERMISSION_DENIAL_REASONS } = require('../contracts/tool-permissions');
 
+/** @type {readonly ('unknownProperties'|'nonInteger'|'invalidItems')[]} */
 const VIOLATION_KINDS = Object.freeze(['unknownProperties', 'nonInteger', 'invalidItems']);
 
+/**
+ * The part of a trace entry this module reads; the history stores more.
+ *
+ * @typedef {Object} TraceEntryEvidence
+ * @property {number} [round]
+ * @property {{ reason?: string }} [permission]
+ * @property {Partial<Record<'unknownProperties'|'nonInteger'|'invalidItems', unknown[]>>} [schema]
+ */
+
+/**
+ * @typedef {Object} ToolTraceSummary
+ * @property {number} calls
+ * @property {number|null} rounds  the number of tool rounds, null when no entry records one (histories from before #187)
+ * @property {number} invalidArgumentDenials
+ * @property {number} callsWithSchemaViolations
+ * @property {{ unknownProperties: number, nonInteger: number, invalidItems: number }} schemaViolations
+ */
+
+/** @returns {ToolTraceSummary['schemaViolations']} */
 function emptyViolationCounts() {
   return { unknownProperties: 0, nonInteger: 0, invalidItems: 0 };
 }
 
 /**
- * @param {Array<string|object>} toolTrace  the trace of one assistant turn
- * @returns {{
- *   calls: number,
- *   rounds: number|null,
- *   invalidArgumentDenials: number,
- *   callsWithSchemaViolations: number,
- *   schemaViolations: { unknownProperties: number, nonInteger: number, invalidItems: number },
- * }}  `rounds` is the number of tool rounds, null when no entry records one
- *   (histories from before #187)
+ * @param {Array<string|TraceEntryEvidence>} toolTrace  the trace of one assistant turn
+ * @returns {ToolTraceSummary}
  */
 function summarizeToolTrace(toolTrace) {
+  /** @type {ToolTraceSummary} */
   const summary = {
     calls: 0,
     rounds: null,
@@ -42,6 +56,7 @@ function summarizeToolTrace(toolTrace) {
     schemaViolations: emptyViolationCounts(),
   };
   if (!Array.isArray(toolTrace)) return summary;
+  /** @type {Set<number>} */
   const rounds = new Set();
   for (const entry of toolTrace) {
     if (typeof entry === 'string') {
@@ -50,7 +65,7 @@ function summarizeToolTrace(toolTrace) {
     }
     if (!entry || typeof entry !== 'object') continue;
     summary.calls += 1;
-    if (Number.isInteger(entry.round) && entry.round > 0) rounds.add(entry.round);
+    if (typeof entry.round === 'number' && Number.isInteger(entry.round) && entry.round > 0) rounds.add(entry.round);
     if (entry.permission?.reason === PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS) {
       summary.invalidArgumentDenials += 1;
     }
@@ -71,15 +86,16 @@ function summarizeToolTrace(toolTrace) {
 /**
  * Sums the assistant turns of a conversation.
  *
- * @param {Array<{ role?: string, toolTrace?: Array }>} messages  stored or live chat messages
- * @returns {{ turns: Array<ReturnType<typeof summarizeToolTrace>>, total: object }}
+ * @param {Array<{ role?: string, toolTrace?: Array<string|TraceEntryEvidence> }>} messages  stored or live chat messages
+ * @returns {{ turns: ToolTraceSummary[], total: ToolTraceSummary }}
  *   one summary per assistant turn that called a tool, plus their sum;
  *   `total.rounds` adds up the turns that record rounds
  */
 function summarizeConversation(messages) {
   const turns = (Array.isArray(messages) ? messages : [])
     .filter((m) => m?.role === 'assistant' && Array.isArray(m.toolTrace) && m.toolTrace.length > 0)
-    .map((m) => summarizeToolTrace(m.toolTrace));
+    .map((m) => summarizeToolTrace(m.toolTrace ?? []));
+  /** @type {ToolTraceSummary} */
   const total = {
     calls: 0,
     rounds: null,

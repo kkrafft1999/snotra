@@ -21,6 +21,9 @@ const FRONTMATTER_FENCE = /^---[ \t]*\r?$|^---[ \t]*$/;
 /** `>`/`|`, optional mit Einrückungs- (`2`) und Chomping-Indikator (`-`/`+`). */
 const BLOCK_SCALAR_HEADER = /^([|>])(\d*)([-+]?)$/;
 
+/**
+ * @param {string} value
+ */
 function stripQuotes(value) {
   const trimmed = value.trim();
   if (trimmed.length >= 2) {
@@ -33,6 +36,9 @@ function stripQuotes(value) {
   return trimmed;
 }
 
+/**
+ * @param {string} value
+ */
 function stripComment(value) {
   // Nur unquotierte Kommentare entfernen — `description: "a # b"` bleibt heil.
   const trimmed = value.trim();
@@ -41,6 +47,9 @@ function stripComment(value) {
   return hashAt === -1 ? trimmed : trimmed.slice(0, hashAt).trim();
 }
 
+/**
+ * @param {string} value
+ */
 function parseInlineList(value) {
   const inner = value.slice(1, -1).trim();
   if (!inner) return [];
@@ -50,13 +59,21 @@ function parseInlineList(value) {
     .filter((part) => part.length > 0);
 }
 
+/**
+ * @param {string} raw
+ * @returns {string | string[]}
+ */
 function parseScalar(raw) {
   const value = stripComment(raw);
   if (value.startsWith('[') && value.endsWith(']')) return parseInlineList(value);
   return stripQuotes(value);
 }
 
-/** Einrückung in Spalten; Tabs sind vorher durch Leerzeichen ersetzt. */
+/**
+ * Einrückung in Spalten; Tabs sind vorher durch Leerzeichen ersetzt.
+ *
+ * @param {string} line
+ */
 function indentWidth(line) {
   return line.search(/[^ ]|$/);
 }
@@ -67,6 +84,10 @@ function indentWidth(line) {
  * ungefaltet), `|` behält jeden Umbruch; Leerzeilen werden in beiden Fällen zu
  * Umbrüchen. Das Chomping steuert das Ende: `-` ohne, `+` mit allen,
  * ohne Indikator mit genau einem abschließenden Umbruch.
+ *
+ * @param {string[]} contentLines
+ * @param {string} style  `|` or `>`
+ * @param {string} chomping  `-`, `+` or empty
  */
 function joinBlockLines(contentLines, style, chomping) {
   let text = '';
@@ -103,12 +124,17 @@ function joinBlockLines(contentLines, style, chomping) {
 /**
  * Liest den eingerückten Block eines Block-Skalars ab `start`.
  *
+ * @param {string[]} lines
+ * @param {number} start
+ * @param {number} keyIndent
+ * @param {RegExpExecArray} header  the match of `BLOCK_SCALAR_HEADER`
  * @returns {{ value: string, next: number }} Wert und Index der ersten Zeile,
  *   die nicht mehr zum Block gehört.
  */
 function readBlockScalar(lines, start, keyIndent, header) {
   const [, style, explicitIndent, chomping] = header;
   let blockIndent = explicitIndent ? keyIndent + Number(explicitIndent) : -1;
+  /** @type {string[]} */
   const content = [];
   let index = start;
 
@@ -130,6 +156,10 @@ function readBlockScalar(lines, start, keyIndent, header) {
   return { value: joinBlockLines(content, style, chomping), next: index };
 }
 
+/**
+ * @param {unknown} text
+ * @returns {{ frontmatterLines: string[], body: string }|null}
+ */
 function splitFrontmatter(text) {
   const source = typeof text === 'string' ? text : '';
   const lines = source.split(/\r?\n/);
@@ -155,11 +185,16 @@ function splitFrontmatter(text) {
   };
 }
 
+/**
+ * @param {string[]} rawLines
+ * @returns {Record<string, string | string[]>}
+ */
 function parseFrontmatterLines(rawLines) {
   const lines = rawLines.map((rawLine) => rawLine.replace(/\t/g, '  '));
   // Without a prototype (#579): any `.md` file can name its keys, and in a
   // plain object `__proto__:` would replace the prototype instead of being a
   // key, while `hasOwnProperty:` would shadow the method.
+  /** @type {Record<string, string | string[]>} */
   const data = Object.create(null);
   /** @type {string | null} */
   let currentKey = null;
@@ -179,7 +214,7 @@ function parseFrontmatterLines(rawLines) {
   // Verschachtelte Schlüssel (eingerückt) landen bewusst flach im Objekt;
   // sie werden nicht ausgewertet, sollen den Parser aber nicht stören und
   // dürfen einen gleichnamigen Schlüssel der obersten Ebene nicht überschreiben.
-  const assign = (key, indented, value) => {
+  const assign = (/** @type {string} */ key, /** @type {boolean} */ indented, /** @type {string | string[]} */ value) => {
     if (!indented || data[key] === undefined) data[key] = value;
   };
 

@@ -18,6 +18,22 @@
 
 const PLAIN_TEXT_BACKENDS = new Set(['basic_text']);
 
+/**
+ * The part of Electron's `safeStorage` the stores use, and the one question
+ * this wrapper asks of it.
+ *
+ * @typedef {Object} SafeStorageLike
+ * @property {() => boolean} isEncryptionAvailable
+ * @property {(plainText: string) => Buffer} encryptString
+ * @property {() => string} getSelectedStorageBackend
+ */
+
+/**
+ * @template {SafeStorageLike} T
+ * @param {T | null | undefined} safeStorage
+ * @param {{ platform?: string }} [options]
+ * @returns {T | null | undefined}
+ */
 function requireRealEncryption(safeStorage, { platform = process.platform } = {}) {
   if (platform !== 'linux' || !safeStorage) return safeStorage;
 
@@ -32,6 +48,7 @@ function requireRealEncryption(safeStorage, { platform = process.platform } = {}
 
   const guarded = {
     isEncryptionAvailable: () => !usesPlainText() && safeStorage.isEncryptionAvailable(),
+    /** @param {string} plainText */
     encryptString: (plainText) => {
       if (usesPlainText()) throw new Error('Encryption is not available: the basic_text backend stores in plain text.');
       return safeStorage.encryptString(plainText);
@@ -40,8 +57,8 @@ function requireRealEncryption(safeStorage, { platform = process.platform } = {}
 
   return new Proxy(safeStorage, {
     get(target, prop) {
-      if (Object.hasOwn(guarded, prop)) return guarded[prop];
-      const value = target[prop];
+      if (Object.hasOwn(guarded, prop)) return Reflect.get(guarded, prop);
+      const value = Reflect.get(target, prop);
       return typeof value === 'function' ? value.bind(target) : value;
     },
   });

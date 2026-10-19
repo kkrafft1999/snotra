@@ -69,6 +69,7 @@ const HTML_PREVIEW_BLOCK_REASONS = Object.freeze({
  * so the common ones are spelled out; everything else is octet-stream and
  * `nosniff` keeps it that way.
  */
+/** @type {Readonly<Record<string, string>>} */
 const HTML_PREVIEW_MIME_TYPES = Object.freeze({
   html: 'text/html; charset=utf-8',
   htm: 'text/html; charset=utf-8',
@@ -105,17 +106,23 @@ const HTML_PREVIEW_MIME_TYPES = Object.freeze({
   pdf: 'application/pdf',
 });
 
+/** @param {unknown} name */
 function extensionOf(name) {
   const base = String(name ?? '').split(/[\\/]/).pop() ?? '';
   const dot = base.lastIndexOf('.');
   return dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
 }
 
-/** Is this a file the HTML view takes? By name, as the registry decides. */
+/**
+ * Is this a file the HTML view takes? By name, as the registry decides.
+ *
+ * @param {unknown} name
+ */
 function isHtmlFileName(name) {
   return HTML_FILE_EXTENSIONS.includes(extensionOf(name));
 }
 
+/** @param {unknown} name */
 function htmlPreviewMimeType(name) {
   return HTML_PREVIEW_MIME_TYPES[extensionOf(name)] ?? 'application/octet-stream';
 }
@@ -127,6 +134,9 @@ function htmlPreviewMimeType(name) {
  * and fragment split off while still encoded — or null for anything else. The
  * path is not resolved here: the renderer puts a relative one under the open
  * folder, and the tree refuses what lies outside it.
+ *
+ * @param {unknown} href
+ * @returns {{ path: string, fragment: string }|null}
  */
 function htmlLinkTargetOf(href) {
   let raw = typeof href === 'string' ? href.trim() : '';

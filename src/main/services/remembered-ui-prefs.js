@@ -15,9 +15,9 @@ const { DEFAULT_LOCALE, normalizeLocale } = require('../../shared/i18n');
 
 /**
  * @param {Object} deps
- * @param {{ readUIPrefs: () => Promise<Object> }} deps.uiPrefsStore
- * @param {(locale: string) => void} [deps.onAppLocaleChanged]
- * @param {(show: boolean) => void} [deps.onShowHiddenFilesChanged]
+ * @param {Pick<import('../ports/ui-prefs-store-port').UiPrefsStorePort, 'readUIPrefs'>} deps.uiPrefsStore
+ * @param {((locale: string) => void)|null} [deps.onAppLocaleChanged]
+ * @param {((show: boolean) => void)|null} [deps.onShowHiddenFilesChanged]
  */
 function createRememberedUiPrefs({ uiPrefsStore, onAppLocaleChanged = null, onShowHiddenFilesChanged = null }) {
   let appLocale = DEFAULT_LOCALE;
@@ -25,11 +25,13 @@ function createRememberedUiPrefs({ uiPrefsStore, onAppLocaleChanged = null, onSh
   let showHiddenFilesSet = false;
 
   /** A language change takes effect at once: the caller rebuilds the menu, since Electron cannot rename an item. */
+  /** @param {unknown} next */
   function setAppLocale(next) {
     appLocale = normalizeLocale(next);
     onAppLocaleChanged?.(appLocale);
   }
 
+  /** @param {unknown} next */
   function setShowHiddenFiles(next) {
     showHiddenFilesSet = true;
     showHiddenFiles = next === true;

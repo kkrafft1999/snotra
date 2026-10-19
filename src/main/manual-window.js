@@ -21,7 +21,18 @@ const projectRoot = path.join(__dirname, '..', '..');
 const WINDOW_BACKGROUND = '#FFFCF5';
 const SHOW_FALLBACK_MS = 3000;
 
-/** Only the top frame of the help page may call the manual channels. */
+/**
+ * A page and section as the help window is asked for them.
+ *
+ * @typedef {{ slug?: unknown, fragment?: unknown }} ManualTarget
+ * @typedef {{ slug: string, fragment: string }} CleanTarget
+ */
+
+/**
+ * Only the top frame of the help page may call the manual channels.
+ *
+ * @param {{ senderFrame?: { parent?: unknown, url: string }|null }|null|undefined} event
+ */
 function isManualIpcSender(event) {
   let frame;
   try {
@@ -33,7 +44,11 @@ function isManualIpcSender(event) {
   return isManualRendererUrl(frame.url);
 }
 
-/** Links of the manual that leave it: https only, nothing the OS would run. */
+/**
+ * Links of the manual that leave it: https only, nothing the OS would run.
+ *
+ * @param {unknown} url
+ */
 function isManualExternalUrl(url) {
   if (typeof url !== 'string') return false;
   try {
@@ -46,6 +61,10 @@ function isManualExternalUrl(url) {
 /**
  * Cmd/Ctrl with +, − or 0 zooms the page text, as in the preview. Matched
  * before the menu sees the key, which would otherwise zoom the whole window.
+ *
+ * @param {{ type?: string, alt?: boolean, meta?: boolean, control?: boolean, key?: string }|null|undefined} input
+ * @param {string} [platform]
+ * @returns {'in'|'out'|'reset'|null}
  */
 function matchManualZoomShortcut(input, platform = process.platform) {
   if (!input || input.type !== 'keyDown' || input.alt === true) return null;
@@ -58,12 +77,28 @@ function matchManualZoomShortcut(input, platform = process.platform) {
   return null;
 }
 
+/**
+ * @param {ManualTarget|null|undefined} target
+ * @returns {CleanTarget}
+ */
 function cleanTarget(target) {
   const slug = typeof target?.slug === 'string' && target.slug ? target.slug : 'index';
   const fragment = typeof target?.fragment === 'string' ? target.fragment : '';
   return { slug, fragment };
 }
 
+/**
+ * @param {object} deps
+ * @param {typeof import('electron').BrowserWindow} deps.BrowserWindow
+ * @param {Pick<import('electron').IpcMain, 'handle' | 'on'>} deps.ipcMain
+ * @param {Pick<import('electron').Shell, 'openExternal'>} deps.shell
+ * @param {Pick<import('electron').App, 'getVersion'>} deps.app
+ * @param {Pick<ReturnType<typeof import('./services/manual-service').createManualService>,
+ *   'isAvailable' | 'getIndex' | 'getPage' | 'getAllPages' | 'getScreenshot'>} deps.manual
+ * @param {() => unknown} deps.getLocale
+ * @param {string} [deps.platform]
+ * @param {{ warn?: (message: string) => void, error?: (...args: unknown[]) => void }} [deps.log]
+ */
 function createManualWindowController({
   BrowserWindow,
   ipcMain,
@@ -74,6 +109,7 @@ function createManualWindowController({
   platform = process.platform,
   log = console,
 }) {
+  /** @type {import('electron').BrowserWindow|null} */
   let window = null;
 
   const guarded = guardIpcMain(ipcMain, { isTrustedSender: isManualIpcSender, log });
@@ -92,10 +128,15 @@ function createManualWindowController({
     return true;
   });
 
+  /**
+   * @param {string} channel
+   * @param {unknown} payload
+   */
   function send(channel, payload) {
     if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
   }
 
+  /** @param {ManualTarget} [target] */
   function create(target) {
     const created = new BrowserWindow({
       width: 1180,
@@ -161,6 +202,8 @@ function createManualWindowController({
   /**
    * Opens the manual on a page — the overview unless `target` names one. With
    * no bundled manual, the web version opens in the browser instead.
+   *
+   * @param {ManualTarget} [target]
    */
   function open(target) {
     const clean = cleanTarget(target);
@@ -181,8 +224,10 @@ function createManualWindowController({
   return {
     open,
     getWindow: () => (window && !window.isDestroyed() ? window : null),
+    /** @param {unknown} candidate */
     isManualWindow: (candidate) => Boolean(candidate) && candidate === window,
     /** The View menu's Back and Forward, when the help window has the focus. */
+    /** @param {string} direction */
     stepHistory: (direction) => send(PUSH.HISTORY, direction),
     onLocaleChanged: () => send(PUSH.LOCALE, normalizeManualLocale(getLocale())),
     close: () => {
@@ -194,7 +239,12 @@ function createManualWindowController({
 const HELP_SLUG = /^[a-z0-9-]+(?:\/[a-z0-9-]+)*$/;
 const HELP_FRAGMENT = /^[\p{L}\p{N}_-]{0,120}$/u;
 
-/** A page and section the app window may ask for: the shape a heading slug has, nothing else. */
+/**
+ * A page and section the app window may ask for: the shape a heading slug has, nothing else.
+ *
+ * @param {ManualTarget|null|undefined} target
+ * @returns {CleanTarget|null}
+ */
 function cleanHelpTarget(target) {
   if (!target || typeof target !== 'object') return null;
   const { slug, fragment = '' } = target;
@@ -206,6 +256,12 @@ function cleanHelpTarget(target) {
 /**
  * The help links next to the settings (#848): the app window asks for a page
  * and section, and the help window opens there — or turns to it.
+ *
+ * @param {object} deps
+ * @param {import('./ipc/trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {Record<string, string>} deps.REQ
+ * @param {(target: CleanTarget) => unknown} deps.open
+ * @param {(slug: string) => boolean} [deps.hasPage]
  */
 function registerManualOpenHandler({ ipcMain, REQ, open, hasPage = () => true }) {
   ipcMain.handle(REQ.MANUAL_OPEN, (_event, target) => {

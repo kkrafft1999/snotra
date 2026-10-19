@@ -31,7 +31,7 @@
  * @property {string} [workspaceRoot]
  * @property {string[]} [networkDomains]
  * @property {Object|null} [sandboxGrants]  what the user allowed on a sandbox card (#792)
- * @property {Function|null} [onSandboxNetworkAsk]  asks about a connection while the script waits (#792)
+ * @property {((request: { target: string, allow: string[] }, options?: { signal?: AbortSignal }) => Promise<{ outcome: string, pattern?: string }>)|null} [onSandboxNetworkAsk]  asks about a connection while the script waits (#792)
  * @property {boolean} [sandboxDisabled]  the sandbox is switched off for this workspace (#357)
  * @property {AbortSignal} [abortSignal]
  *

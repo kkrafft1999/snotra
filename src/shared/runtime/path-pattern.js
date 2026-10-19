@@ -17,7 +17,10 @@
  */
 'use strict';
 
-/** Bringt einen Pfad in die Vergleichsform: `/`-Trenner, ohne `./`, ohne Rand-Slashes. */
+/**
+ * Bringt einen Pfad in die Vergleichsform: `/`-Trenner, ohne `./`, ohne Rand-Slashes.
+ * @param {unknown} rawPath
+ */
 function normalizePathForMatch(rawPath) {
   const text = typeof rawPath === 'string' ? rawPath.trim() : '';
   let normalized = text.replace(/\\/g, '/').replace(/\/{2,}/g, '/');
@@ -35,6 +38,9 @@ function normalizePathForMatch(rawPath) {
  * 40-character name took 19 s, on the main process and for every path a
  * listing classifies. This is the iterative last-star match instead: at most
  * segment length × pattern length steps, whatever the pattern.
+ *
+ * @param {string} pattern
+ * @param {string} text
  */
 function matchSegment(pattern, text) {
   let p = 0;
@@ -65,6 +71,9 @@ function matchSegment(pattern, text) {
  * Whether the path segments match the pattern segments, `**` standing for
  * zero or more whole segments. Dynamic programming over the two segment
  * lists, so a pattern with many `**` stays linear in each.
+ *
+ * @param {string[]} patternSegments
+ * @param {string[]} pathSegments
  */
 function matchSegments(patternSegments, pathSegments) {
   const rows = patternSegments.length;
@@ -95,18 +104,20 @@ function matchSegments(patternSegments, pathSegments) {
  * Compiles a pattern into a matcher. `caseInsensitive` is meant for the
  * sensitivity patterns (concept §4); rule patterns compare exactly.
  *
- * @returns {{ test: (normalizedPath: string) => boolean, anchored: boolean, matchesSelf: boolean }}
+ * @param {unknown} rawPattern
+ * @param {{ caseInsensitive?: boolean }} [options]
+ * @returns {{ test: (normalizedPath: unknown) => boolean, anchored: boolean, matchesSelf: boolean }}
  *   `test` takes a path already in the form `normalizePathForMatch` gives.
  */
 function compilePathPattern(rawPattern, { caseInsensitive = false } = {}) {
-  const fold = (text) => (caseInsensitive ? text.toLowerCase() : text);
+  const fold = (/** @type {string} */ text) => (caseInsensitive ? text.toLowerCase() : text);
   const pattern = normalizePathForMatch(rawPattern);
   if (!pattern || pattern === '**') {
     return { test: () => true, anchored: false, matchesSelf: true };
   }
   const anchored = pattern.includes('/');
   const segments = fold(pattern).split('/');
-  const test = (normalizedPath) => {
+  const test = (/** @type {unknown} */ normalizedPath) => {
     // An empty path is one empty segment, as it was for the regular expression.
     const pathSegments = fold(typeof normalizedPath === 'string' ? normalizedPath : '').split('/');
     // A pattern without `/` names a file or folder anywhere (like .gitignore):
@@ -117,7 +128,12 @@ function compilePathPattern(rawPattern, { caseInsensitive = false } = {}) {
   return { test, anchored, matchesSelf: pattern.endsWith('/**') };
 }
 
-/** true, wenn der Pfad auf das Muster passt. */
+/**
+ * true, wenn der Pfad auf das Muster passt.
+ * @param {unknown} rawPattern
+ * @param {unknown} rawPath
+ * @param {{ caseInsensitive?: boolean }} [options]
+ */
 function matchesPathPattern(rawPattern, rawPath, options) {
   const compiled = compilePathPattern(rawPattern, options);
   return compiled.test(normalizePathForMatch(rawPath));

@@ -24,6 +24,8 @@ const {
   containsOwnSecret,
 } = require('../../shared/runtime/sensitive-content');
 
+/** @typedef {typeof EMBEDDED_TEXT_GUARDS[keyof typeof EMBEDDED_TEXT_GUARDS]} EmbeddedTextGuard */
+
 const EMBEDDED_TEXT_GUARDS = Object.freeze({
   MASKED: 'masked',
   WITHHELD: 'withheld',
@@ -38,10 +40,10 @@ const WITHHELD_EMBEDDED_TEXT =
   + 'or it could not be checked for one. Do not guess what it says.]';
 
 /**
- * @param {string} text
+ * @param {unknown} text
  * @param {string[]|null} ownSecrets  the app's own secrets, compared verbatim;
  *   anything but a list means they could not be read, and the text is left out (#976)
- * @returns {{ text: string, guard: string|null }}
+ * @returns {{ text: string, guard: EmbeddedTextGuard|null }}
  */
 function guardEmbeddedText(text, ownSecrets) {
   if (typeof text !== 'string' || !text) return { text: typeof text === 'string' ? text : '', guard: null };
@@ -54,14 +56,27 @@ function guardEmbeddedText(text, ownSecrets) {
   return { text, guard: null };
 }
 
-/** The stronger of two guards: withheld over masked over none. */
+/**
+ * The stronger of two guards: withheld over masked over none.
+ *
+ * @param {EmbeddedTextGuard|null} a
+ * @param {EmbeddedTextGuard|null} b
+ * @returns {EmbeddedTextGuard|null}
+ */
 function strongerGuard(a, b) {
   if (a === EMBEDDED_TEXT_GUARDS.WITHHELD || b === EMBEDDED_TEXT_GUARDS.WITHHELD) return EMBEDDED_TEXT_GUARDS.WITHHELD;
   if (a === EMBEDDED_TEXT_GUARDS.MASKED || b === EMBEDDED_TEXT_GUARDS.MASKED) return EMBEDDED_TEXT_GUARDS.MASKED;
   return null;
 }
 
-/** Files from the project-instructions or memory port, each with its text guarded. */
+/**
+ * Files from the project-instructions or memory port, each with its text guarded.
+ *
+ * @template {{ text?: unknown }} F
+ * @param {F[]} files
+ * @param {string[]|null} ownSecrets
+ * @returns {Array<F & { guard?: EmbeddedTextGuard }>}
+ */
 function guardEmbeddedFiles(files, ownSecrets) {
   if (!Array.isArray(files)) return [];
   return files.map((file) => {
@@ -74,6 +89,11 @@ function guardEmbeddedFiles(files, ownSecrets) {
 /**
  * The switched-on skills with body and description guarded. A skill whose
  * text was left out keeps its name, so the catalogue still lists it.
+ *
+ * @template {{ body?: unknown, description?: unknown }} S
+ * @param {S[]} skills
+ * @param {string[]|null} ownSecrets
+ * @returns {Array<S & { guard?: EmbeddedTextGuard }>}
  */
 function guardEmbeddedSkills(skills, ownSecrets) {
   if (!Array.isArray(skills)) return [];

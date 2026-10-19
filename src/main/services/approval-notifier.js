@@ -15,17 +15,30 @@
 
 const LIMITS = Object.freeze({ ID: 128, TITLE: 120, BODY: 300, OPEN: 50 });
 
+/**
+ * @param {unknown} value
+ * @param {number} max
+ */
 const text = (value, max) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
 /**
+ * @typedef {{
+ *   on?(event: string, listener: () => void): unknown,
+ *   show(): void,
+ *   close?(): void,
+ * }} SystemNotification
+ */
+
+/**
  * @param {object} deps
- * @param {{ isSupported?: () => boolean, new (options: object): object }|null} deps.Notification  Electron's
- * @param {() => object|null} deps.getMainWindow
+ * @param {{ isSupported?: () => boolean, new (options: { title: string, body: string }): SystemNotification }|null} deps.Notification  Electron's
+ * @param {() => import('electron').BrowserWindow|null} deps.getMainWindow
  * @param {() => Promise<boolean>|boolean} deps.isEnabled  the switch under Settings › General
  * @param {(chatId: string|null) => void} deps.openChat  tells the renderer which chat to show
  */
 function createApprovalNotifier({ Notification, getMainWindow, isEnabled, openChat }) {
   /** requestId → the notification on screen. */
+  /** @type {Map<string, SystemNotification>} */
   const open = new Map();
 
   function supported() {
@@ -44,12 +57,16 @@ function createApprovalNotifier({ Notification, getMainWindow, isEnabled, openCh
     win.focus?.();
   }
 
+  /**
+   * @param {string} requestId
+   * @param {SystemNotification} notification
+   */
   function forget(requestId, notification) {
     if (open.get(requestId) === notification) open.delete(requestId);
   }
 
   /**
-   * @param {{ requestId: string, chatId?: string|null, title: string, body: string }} request
+   * @param {Partial<{ requestId: string, chatId: string|null, title: string, body: string }>} [request]
    * @returns {Promise<boolean>} whether a notification went up
    */
   async function show(request = {}) {
@@ -62,7 +79,7 @@ function createApprovalNotifier({ Notification, getMainWindow, isEnabled, openCh
     } catch {
       enabled = false;
     }
-    if (!enabled || !supported()) return false;
+    if (!enabled || !Notification || !supported()) return false;
     // Many cards at once — a misbehaving run — must not flood the system.
     if (open.size >= LIMITS.OPEN) return false;
     const chatId = typeof request.chatId === 'string' && request.chatId ? request.chatId.slice(0, LIMITS.ID) : null;
@@ -84,6 +101,7 @@ function createApprovalNotifier({ Notification, getMainWindow, isEnabled, openCh
   }
 
   /** The card was decided or expired: its notification has nothing left to point to. */
+  /** @param {unknown} requestId */
   function close(requestId) {
     const id = text(requestId, LIMITS.ID);
     const notification = open.get(id);

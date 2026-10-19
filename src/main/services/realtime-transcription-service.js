@@ -20,6 +20,25 @@ const { LEGACY_LOCALE, speechLanguageFor } = require('../../shared/i18n');
  * turn detection.
  */
 
+/**
+ * The WebSocket as it is used here: Node's global one, which takes `headers`
+ * as an extension of the browser's constructor, or a stand-in of the tests.
+ *
+ * @typedef {{
+ *   send(data: string): void,
+ *   close(): void,
+ *   addEventListener(type: string, listener: (event: { data?: unknown }) => void): void,
+ * }} RealtimeSocket
+ * @typedef {new (url: string, options: { headers: Record<string, string> }) => RealtimeSocket} RealtimeSocketConstructor
+ *
+ * An event of the realtime API; each field is checked where it is read.
+ * @typedef {{ type?: unknown, item_id?: unknown, delta?: unknown, transcript?: unknown,
+ *   error?: { message?: unknown, event_id?: unknown } }} RealtimeEvent
+ *
+ * @typedef {import('../../shared/contracts/message').Message | string} VoiceError
+ * @typedef {{ ok: true } | { error: VoiceError }} StartResult
+ */
+
 const REALTIME_TRANSCRIPTION_URL = 'wss://api.openai.com/v1/realtime?intent=transcription';
 const TRANSCRIPTION_MODEL = 'gpt-live-transcribe';
 // Names the model would otherwise hear as something else.
@@ -36,6 +55,7 @@ const MAX_QUEUED_BYTES = BYTES_PER_SECOND * 20;
 // The renderer stops at the time limit; this is main's own ceiling.
 const MAX_SESSION_BYTES = BYTES_PER_SECOND * (MAX_VOICE_RECORDING_MS / 1000 + 30);
 
+/** @param {string} language */
 function sessionUpdate(language) {
   return {
     type: 'session.update',
@@ -57,21 +77,34 @@ function sessionUpdate(language) {
   };
 }
 
-/** What OpenAI said, quoted as it stands; Snotra's own words when it said nothing. */
+/**
+ * What OpenAI said, quoted as it stands; Snotra's own words when it said nothing.
+ *
+ * @param {{ message?: unknown }|undefined} error
+ */
 function apiMessage(error) {
   const message = typeof error?.message === 'string' ? error.message.trim() : '';
   return message || createMessage('chat.voice.failed');
 }
 
+/** @param {unknown} data */
 function textOf(data) {
   if (typeof data === 'string') return data;
-  try {
-    return Buffer.from(data).toString('utf8');
-  } catch {
-    return '';
-  }
+  if (data instanceof ArrayBuffer) return Buffer.from(data).toString('utf8');
+  if (ArrayBuffer.isView(data)) return Buffer.from(data.buffer, data.byteOffset, data.byteLength).toString('utf8');
+  return '';
 }
 
+/**
+ * @param {object} deps
+ * @param {import('../ports/credential-port').CredentialPort} deps.credentials
+ * @param {string} [deps.speechProviderId]
+ * @param {() => string|Promise<string>} [deps.getAppLocale]
+ * @param {() => RealtimeSocketConstructor} [deps.getWebSocket]
+ * @param {string} [deps.url]
+ * @param {number} [deps.connectTimeoutMs]
+ * @param {number} [deps.finishTimeoutMs]
+ */
 function createRealtimeTranscriptionService({
   credentials,
   speechProviderId = 'openai',
@@ -98,34 +131,56 @@ function createRealtimeTranscriptionService({
    * bytes of the audio the settled turns at the front cover — where a fallback
    * has to pick up. `onError(error)` reports a failure after the start, a
    * refused connection included; the session is over then.
+   *
+   * @param {Parameters<import('../ports/speech-port').SpeechPort['openLiveTranscription']>[0]} [options]
+   * @returns {import('../ports/speech-port').LiveTranscription}
    */
   function open({ onUpdate = () => {}, onError = () => {} } = {}) {
     // 'open' while audio comes in, 'finishing' after the stop, then 'closed'.
+    /**
+     * `open`, `finishing` or `closed`. Typed as a string: it changes while the
+     * async parts wait, which a literal type would take for settled.
+     *
+     * @type {string}
+     */
     let phase = 'open';
     let up = false;
+    /** @type {RealtimeSocket|null} */
     let socket = null;
+    /** @type {VoiceError|null} */
     let lastError = null;
-    let settleStarted;
+    /** @type {(result: StartResult) => void} */
+    let settleStarted = () => {};
     let startSettled = false;
+    /** @type {Promise<StartResult>} */
     const started = new Promise((resolve) => { settleStarted = resolve; });
-    let settleReady;
+    /** @type {(result: StartResult) => void} */
+    let settleReady = () => {};
     let readySettled = false;
+    /** @type {Promise<StartResult>} */
     const ready = new Promise((resolve) => { settleReady = resolve; });
+    /** @type {object[]} */
     const queue = [];
     let queuedBytes = 0;
     let totalBytes = 0;
     let bytesSinceCommit = 0;
     let commitSeq = 0;
     // item id → { text, final }, in the order the items were first heard of.
+    /** @type {Map<string, { text: string, final: boolean }>} */
     const turns = new Map();
+    /** @type {Set<unknown>} */
     const committed = new Set();
     // Items committed but not yet settled.
+    /** @type {Set<unknown>} */
     const awaiting = new Set();
     // Our commits not yet answered, each with the audio offset it was sent at,
     // and the offset each committed item ends at.
+    /** @type {Map<string, number>} */
     const pendingCommits = new Map();
+    /** @type {Map<unknown, number>} */
     const itemEnds = new Map();
     const detector = createTurnDetector({ sampleRate: VOICE_SAMPLE_RATE });
+    /** @type {(() => void)|null} */
     let finished = null;
 
     const connectTimer = setTimeout(
@@ -133,6 +188,7 @@ function createRealtimeTranscriptionService({
       connectTimeoutMs,
     );
 
+    /** @param {boolean} [allFinal] */
     function snapshot(allFinal = false) {
       return [...turns.values()].map(({ text, final }) => ({ text, final: allFinal || final }));
     }
@@ -142,7 +198,8 @@ function createRealtimeTranscriptionService({
       let bytes = 0;
       for (const [id, turn] of turns) {
         if (!turn.final) break;
-        if (itemEnds.has(id)) bytes = itemEnds.get(id);
+        const end = itemEnds.get(id);
+        if (end !== undefined) bytes = end;
       }
       return bytes;
     }
@@ -151,6 +208,7 @@ function createRealtimeTranscriptionService({
       if (phase !== 'closed') onUpdate({ turns: snapshot(), settledBytes: settledBytes() });
     }
 
+    /** @param {StartResult} result */
     function resolveReady(result) {
       if (readySettled) return;
       readySettled = true;
@@ -166,12 +224,14 @@ function createRealtimeTranscriptionService({
       finished?.();
     }
 
+    /** @param {StartResult} result */
     function resolveStarted(result) {
       if (startSettled) return;
       startSettled = true;
       settleStarted(result);
     }
 
+    /** @param {VoiceError} error */
     function fail(error) {
       if (phase === 'closed') return;
       const wasStarted = startSettled;
@@ -183,10 +243,15 @@ function createRealtimeTranscriptionService({
       if (wasStarted && wasRunning) onError(error);
     }
 
+    /** @param {object} event */
     function send(event) {
-      socket.send(JSON.stringify(event));
+      socket?.send(JSON.stringify(event));
     }
 
+    /**
+     * @param {object} event
+     * @param {number} [bytes]
+     */
     function write(event, bytes = 0) {
       if (up) {
         send(event);
@@ -198,10 +263,15 @@ function createRealtimeTranscriptionService({
       queue.push(event);
     }
 
+    /** @param {unknown} itemId */
     function turnFor(itemId) {
       const id = typeof itemId === 'string' ? itemId : '';
-      if (!turns.has(id)) turns.set(id, { text: '', final: false });
-      return turns.get(id);
+      let turn = turns.get(id);
+      if (!turn) {
+        turn = { text: '', final: false };
+        turns.set(id, turn);
+      }
+      return turn;
     }
 
     function commit() {
@@ -223,6 +293,7 @@ function createRealtimeTranscriptionService({
       return false;
     }
 
+    /** @param {RealtimeEvent|null|undefined} event */
     function onEvent(event) {
       switch (event?.type) {
         case 'session.updated':
@@ -274,7 +345,7 @@ function createRealtimeTranscriptionService({
           // A commit with too little audio in the buffer — a stop right after a
           // settled turn, say — is refused; nothing is lost by that.
           const causedBy = event.error?.event_id;
-          if (causedBy && pendingCommits.has(causedBy)) {
+          if (typeof causedBy === 'string' && causedBy && pendingCommits.has(causedBy)) {
             pendingCommits.delete(causedBy);
             checkFinished();
             return;
@@ -298,12 +369,14 @@ function createRealtimeTranscriptionService({
       const WebSocketImpl = getWebSocket();
       socket = new WebSocketImpl(url, { headers: { Authorization: `Bearer ${apiKey}` } });
       resolveStarted({ ok: true });
-      socket.addEventListener('open', () => {
+      const live = socket;
+      live.addEventListener('open', () => {
         if (phase === 'closed') return;
         send(sessionUpdate(language));
       });
-      socket.addEventListener('message', (message) => {
+      live.addEventListener('message', (message) => {
         if (phase === 'closed') return;
+        /** @type {RealtimeEvent} */
         let event;
         try {
           event = JSON.parse(textOf(message.data));
@@ -314,10 +387,14 @@ function createRealtimeTranscriptionService({
       });
       // The browser API tells nothing about why — a refused key and a missing
       // network look the same from here.
-      socket.addEventListener('close', () => fail(createMessage('chat.voice.error.connection')));
+      live.addEventListener('close', () => fail(createMessage('chat.voice.error.connection')));
     })().catch(() => fail(createMessage('chat.voice.error.connection')));
 
-    /** Passes 16-bit PCM on; commits when a turn ended inside it. */
+    /**
+     * Passes 16-bit PCM on; commits when a turn ended inside it.
+     *
+     * @param {Buffer} bytes
+     */
     function append(bytes) {
       if (phase !== 'open' || totalBytes + bytes.byteLength > MAX_SESSION_BYTES) return;
       totalBytes += bytes.byteLength;
@@ -342,9 +419,10 @@ function createRealtimeTranscriptionService({
       }
       phase = 'finishing';
       const started = await ready;
-      if (started.ok && phase === 'finishing') {
+      if ('ok' in started && started.ok && phase === 'finishing') {
         if (bytesSinceCommit > 0 && (detector.hasSpeech() || hasOpenTurn())) commit();
-        await new Promise((resolve) => {
+        /** @type {Promise<void>} */
+        const settled = new Promise((resolve) => {
           const timer = setTimeout(resolve, finishTimeoutMs);
           finished = () => {
             clearTimeout(timer);
@@ -352,6 +430,7 @@ function createRealtimeTranscriptionService({
           };
           checkFinished();
         });
+        await settled;
       }
       const error = lastError;
       close();

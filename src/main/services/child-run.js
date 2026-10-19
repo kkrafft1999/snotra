@@ -17,20 +17,36 @@
 const { createOutputSink } = require('./child-output-sink');
 
 /**
+ * @typedef {import('child_process').ChildProcess} ChildProcess
+ *
+ * @typedef {{ error: string }
+ *   | { stdout: string, stderr: string, exitCode: number|null, timedOut: boolean, aborted: boolean,
+ *       truncated: boolean }} ChildRunResult
+ */
+
+/**
  * @param {object} deps
  * @param {typeof import('child_process').spawn} deps.spawn
  * @param {string} [deps.platform]
  */
 function createChildRunner({ spawn, platform = process.platform }) {
   // The stop of every child still running, for `disposeSync()` (#506).
+  /** @type {Set<() => void>} */
   const running = new Set();
 
-  /** Ends the process tree — a command almost always starts children of its own. */
+  /**
+   * Ends the process tree — a command almost always starts children of its own.
+   *
+   * @param {ChildProcess|null|undefined} child
+   */
   function killTree(child) {
     if (!child || child.killed) return;
     try {
       if (platform === 'win32') {
         spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
+      } else if (child.pid === undefined) {
+        // The spawn failed, so there is no group to signal.
+        child.kill('SIGKILL');
       } else {
         process.kill(-child.pid, 'SIGKILL');
       }
@@ -51,10 +67,13 @@ function createChildRunner({ spawn, platform = process.platform }) {
    * itself into closes with it and does the same (#991). A process that
    * leaves the group on purpose (`setsid`) escapes on POSIX — the security
    * concept says so (§9).
+   *
+   * @param {ChildProcess|null|undefined} child
    */
   function killLeftovers(child) {
-    if (platform === 'win32' || !Number.isInteger(child?.pid)) return;
-    try { process.kill(-child.pid, 'SIGKILL'); } catch { /* the group is empty */ }
+    const pid = child?.pid;
+    if (platform === 'win32' || typeof pid !== 'number' || !Number.isInteger(pid)) return;
+    try { process.kill(-pid, 'SIGKILL'); } catch { /* the group is empty */ }
   }
 
   /**
@@ -71,8 +90,7 @@ function createChildRunner({ spawn, platform = process.platform }) {
    * @param {(read: () => {stdout: string, stderr: string}) => void} [request.exposeOutput]
    *   gets a way to read what the process printed so far, once it has started (#792)
    * @param {string} request.startError       the sentence when the spawn fails without a message
-   * @returns {Promise<{error: string} | {stdout: string, stderr: string, exitCode: number|null,
-   *   timedOut: boolean, aborted: boolean, truncated: boolean}>}
+   * @returns {Promise<ChildRunResult>}
    */
   function run({
     command,
@@ -91,6 +109,7 @@ function createChildRunner({ spawn, platform = process.platform }) {
     const stderr = createOutputSink(maxOutputBytes);
     exposeOutput?.(() => ({ stdout: stdout.text(), stderr: stderr.text() }));
     return new Promise((resolve) => {
+      /** @type {ChildProcess} */
       let child;
       try {
         child = spawn(command, args, {
@@ -123,6 +142,7 @@ function createChildRunner({ spawn, platform = process.platform }) {
       abortSignal?.addEventListener('abort', onAbort, { once: true });
       running.add(onAbort);
 
+      /** @param {ChildRunResult} result */
       const finish = (result) => {
         if (settled) return;
         settled = true;

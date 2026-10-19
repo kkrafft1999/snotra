@@ -37,8 +37,18 @@ const PAIRING_ID = new RegExp(`^[${protocol.ALPHABET}]{4}$`);
 const PATH_PART = /^[A-Za-z0-9_-]+$/;
 /** Names a plain object resolves to something other than its own data. */
 const RESERVED = new Set(['__proto__', 'constructor', 'prototype']);
+/** @param {string} part */
 const isPathPart = (part) => PATH_PART.test(part) && !RESERVED.has(part);
-const STATUSES = new Set(['open', 'pending', 'paired']);
+
+/** @typedef {'open' | 'pending' | 'paired'} ChannelStatus */
+/**
+ * @param {unknown} value
+ * @returns {value is ChannelStatus}
+ */
+const isChannelStatus = (value) => value === 'open' || value === 'pending' || value === 'paired';
+
+/** @typedef {import('../../application/ports/remote-relay-port').RemoteRelayPort} RemoteRelayPort */
+/** @typedef {import('../../application/ports/remote-relay-port').RemoteSigner} RemoteSigner */
 
 /**
  * @typedef {Object} FirebaseRelayEndpoint
@@ -49,11 +59,20 @@ const STATUSES = new Set(['open', 'pending', 'paired']);
  * @property {string} [identityToolkitUrl]  the emulator's, for tests against it
  */
 
+/**
+ * An object that is not an array — a node of the database's tree.
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
 function isRecord(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** @returns {Promise<void>} */
+/**
+ * @param {number} ms
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<void>}
+ */
 function defaultWait(ms, signal) {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(undefined), ms);
@@ -64,9 +83,14 @@ function defaultWait(ms, signal) {
   });
 }
 
-/** The body as text, refused once it grows past `limit` bytes. */
+/**
+ * The body as text, refused once it grows past `limit` bytes.
+ * @param {Response} response
+ * @param {number} limit
+ */
 async function readLimited(response, limit) {
   if (!response.body) return '';
+  /** @type {Buffer[]} */
   const chunks = [];
   let total = 0;
   for await (const chunk of response.body) {
@@ -77,6 +101,7 @@ async function readLimited(response, limit) {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+/** @param {unknown} value */
 function keyBundleOf(value) {
   if (!isRecord(value) || typeof value.sign !== 'string' || typeof value.agree !== 'string') return null;
   return { sign: value.sign, agree: value.agree };
@@ -87,12 +112,13 @@ function keyBundleOf(value) {
  * and the MAC keep their strings — whether they are valid points and the right
  * MAC is the core's question, asked through the crypto port.
  *
+ * @param {unknown} tree
  * @returns {import('../../application/ports/remote-relay-port').RemoteChannelRecord | null | undefined}
  *   `undefined` for a tree that is no channel at all
  */
 function channelRecordOf(tree) {
   if (tree === null || tree === undefined) return null;
-  if (!isRecord(tree) || !STATUSES.has(tree.status)) return undefined;
+  if (!isRecord(tree) || !isChannelStatus(tree.status)) return undefined;
   return {
     status: tree.status,
     phoneKeys: keyBundleOf(tree.phoneKeys),
@@ -105,20 +131,39 @@ function channelRecordOf(tree) {
  * database's tree. Path parts and keys are checked, so a relay cannot reach
  * `__proto__`; a change at a path that fails the check leaves the tree as it
  * was, the same object.
+ *
+ * @param {unknown} tree
+ * @param {unknown} path
+ * @param {unknown} data
+ * @param {boolean} merge
+ * @returns {unknown}
  */
 function applyAt(tree, path, data, merge) {
   const parts = String(path).split('/').filter(Boolean);
   if (!parts.every(isPathPart)) return tree;
+  /**
+   * @param {unknown} node
+   * @param {string} key
+   * @param {unknown} value
+   * @returns {Record<string, unknown>}
+   */
   const set = (node, key, value) => {
+    /** @type {Record<string, unknown>} */
     const next = isRecord(node) ? { ...node } : {};
     if (value === null) delete next[key];
     else next[key] = value;
     return next;
   };
+  /**
+   * @param {unknown} node
+   * @param {number} depth
+   * @returns {unknown}
+   */
   const write = (node, depth) => {
     if (depth === parts.length) {
       if (!merge) return data;
       if (!isRecord(data)) return node;
+      /** @type {Record<string, unknown>} */
       let next = isRecord(node) ? node : {};
       for (const [key, value] of Object.entries(data)) {
         if (isPathPart(key)) next = set(next, key, value);
@@ -148,9 +193,15 @@ function createFirebaseRelayAdapter({
   wait = defaultWait,
   timeoutMs = REQUEST_TIMEOUT_MS,
 }) {
-  /** channelId → the desktop's ID token for it */
+  /**
+   * channelId → the desktop's ID token for it
+   * @type {Map<string, string>}
+   */
   const tokens = new Map();
-  /** every stream still followed */
+  /**
+   * every stream still followed
+   * @type {Set<AbortController>}
+   */
   const streams = new Set();
 
   /** The endpoint, or `not-configured` when there is none. */
@@ -159,6 +210,7 @@ function createFirebaseRelayAdapter({
     return endpoint;
   }
 
+  /** @param {string} route */
   function relayUrl(route) {
     const { relayUrl: base, relayHost } = requireEndpoint();
     return `${base || `https://${relayHost}/v1`}${route}`;
@@ -169,7 +221,7 @@ function createFirebaseRelayAdapter({
    *
    * @param {string} url
    * @param {{ method?: string, body?: unknown, idToken?: string }} [options]
-   * @returns {Promise<any>}
+   * @returns {Promise<unknown>}
    */
   async function call(url, { method = 'POST', body, idToken } = {}) {
     /** @type {Record<string, string>} */
@@ -201,6 +253,7 @@ function createFirebaseRelayAdapter({
   }
 
   /** §5.1: the relay's custom token becomes an ID token through the Identity Toolkit. */
+  /** @param {unknown} customToken */
   async function signIn(customToken) {
     if (typeof customToken !== 'string' || !customToken || customToken.length > MAX_TOKEN_CHARS) {
       throw new RemoteRelayError(RELAY_REASONS.INVALID_RESPONSE);
@@ -210,7 +263,7 @@ function createFirebaseRelayAdapter({
     const answer = await call(`${base}/accounts:signInWithCustomToken?key=${encodeURIComponent(apiKey)}`, {
       body: { token: customToken, returnSecureToken: true },
     });
-    const idToken = answer?.idToken;
+    const idToken = isRecord(answer) ? answer.idToken : undefined;
     if (typeof idToken !== 'string' || !idToken || idToken.length > MAX_TOKEN_CHARS) {
       throw new RemoteRelayError(RELAY_REASONS.INVALID_RESPONSE);
     }
@@ -220,46 +273,54 @@ function createFirebaseRelayAdapter({
   /** §5.2: a challenge, as the bytes every proof signs. */
   async function challenge() {
     const answer = await call(relayUrl('/challenges'));
-    const text = answer?.challenge;
+    const text = isRecord(answer) ? answer.challenge : undefined;
     const bytes = protocol.fromB64u(text);
-    if (!bytes || bytes.length === 0 || bytes.length > 64) throw new RemoteRelayError(RELAY_REASONS.INVALID_RESPONSE);
+    if (typeof text !== 'string' || !bytes || bytes.length === 0 || bytes.length > 64) throw new RemoteRelayError(RELAY_REASONS.INVALID_RESPONSE);
     return { text, bytes };
   }
 
-  /** §5.9: a token for a channel the desktop opened in an earlier start. */
+  /**
+   * §5.9: a token for a channel the desktop opened in an earlier start.
+   * @param {string} channelId
+   * @param {RemoteSigner} sign
+   */
   async function fetchToken(channelId, sign) {
     const { text, bytes } = await challenge();
     const proof = sign(protocol.tokenMessage(bytes, channelId, protocol.ROLES.DESKTOP));
     const answer = await call(relayUrl('/tokens'), {
       body: { challenge: text, channelId, role: protocol.ROLES.DESKTOP, proof: protocol.toB64u(proof) },
     });
-    const idToken = await signIn(answer?.token);
+    const idToken = await signIn(isRecord(answer) ? answer.token : undefined);
     tokens.set(channelId, idToken);
     return idToken;
   }
 
+  /** @param {string} channelId */
   function tokenFor(channelId) {
     const idToken = tokens.get(channelId);
     if (!idToken) throw new RemoteRelayError(RELAY_REASONS.UNAUTHORIZED);
     return idToken;
   }
 
+  /** @type {RemoteRelayPort['openPairing']} */
   async function openPairing({ desktopKeys, sign }) {
     const { text, bytes } = await challenge();
     const proof = sign(protocol.openMessage(bytes, desktopKeys));
     const answer = await call(relayUrl('/pairings'), {
       body: { challenge: text, desktopKeys: { sign: desktopKeys.sign, agree: desktopKeys.agree }, proof: protocol.toB64u(proof) },
     });
-    const channelId = answer?.channelId;
-    if (!protocol.fromB64u(channelId, protocol.CHANNEL_ID_BYTES)
-      || typeof answer.pairingId !== 'string' || !PAIRING_ID.test(answer.pairingId)
-      || !Number.isFinite(answer.expiresAt)) {
+    const fields = isRecord(answer) ? answer : {};
+    const channelId = fields.channelId;
+    if (typeof channelId !== 'string' || !protocol.fromB64u(channelId, protocol.CHANNEL_ID_BYTES)
+      || typeof fields.pairingId !== 'string' || !PAIRING_ID.test(fields.pairingId)
+      || typeof fields.expiresAt !== 'number' || !Number.isFinite(fields.expiresAt)) {
       throw new RemoteRelayError(RELAY_REASONS.INVALID_RESPONSE);
     }
-    tokens.set(channelId, await signIn(answer.token));
-    return { channelId, pairingId: answer.pairingId, expiresAt: answer.expiresAt, relayHost: requireEndpoint().relayHost };
+    tokens.set(channelId, await signIn(fields.token));
+    return { channelId, pairingId: fields.pairingId, expiresAt: fields.expiresAt, relayHost: requireEndpoint().relayHost };
   }
 
+  /** @type {RemoteRelayPort['watchChannel']} */
   function watchChannel(channelId, { onRecord, onError }) {
     const controller = new AbortController();
     streams.add(controller);
@@ -268,7 +329,11 @@ function createFirebaseRelayAdapter({
       streams.delete(controller);
     };
 
-    /** One connection, until the stream ends; `true` once the channel is gone for good. */
+    /**
+     * One connection, until the stream ends; `true` once the channel is gone for good.
+     * @param {() => void} onLive
+     * @returns {Promise<boolean>}
+     */
     async function connect(onLive) {
       if (!endpoint) throw new RemoteRelayError(RELAY_REASONS.NOT_CONFIGURED);
       const url = `${endpoint.databaseUrl}/channels/${channelId}/meta.json?auth=${encodeURIComponent(tokenFor(channelId))}`;
@@ -276,6 +341,7 @@ function createFirebaseRelayAdapter({
       if (!response.ok || !response.body) {
         throw new RemoteRelayError(reasonForStatus(response.status), { status: response.status });
       }
+      /** @type {unknown} */
       let tree;
       let gone = false;
       await readEventStream(response.body, ({ type, data }) => {
@@ -346,10 +412,12 @@ function createFirebaseRelayAdapter({
     return { close: stop };
   }
 
+  /** @type {RemoteRelayPort['confirmPairing']} */
   async function confirmPairing(channelId, macD) {
     await call(relayUrl(`/channels/${channelId}/confirm`), { body: { macD }, idToken: tokenFor(channelId) });
   }
 
+  /** @type {RemoteRelayPort['cancelPairing']} */
   async function cancelPairing(channelId, pairingId) {
     try {
       await call(relayUrl(`/pairings/${encodeURIComponent(pairingId)}`), { method: 'DELETE', idToken: tokenFor(channelId) });
@@ -358,7 +426,9 @@ function createFirebaseRelayAdapter({
     }
   }
 
+  /** @type {RemoteRelayPort['deleteChannel']} */
   async function deleteChannel(channelId, { sign }) {
+    /** @param {string} idToken */
     const remove = (idToken) => call(relayUrl(`/channels/${channelId}`), { method: 'DELETE', idToken });
     try {
       const held = tokens.get(channelId);

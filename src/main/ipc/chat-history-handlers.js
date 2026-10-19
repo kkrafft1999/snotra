@@ -17,6 +17,7 @@ const { CHAT_HISTORY_UNREADABLE } = require('../services/chat-history-store');
  * Ohne Anhang-Ablage verhaelt sich der Verlauf wie vor Issue #94: Bilddaten
  * landen nie in der Session-Datei, es gibt dann eben auch keine Datei daneben.
  */
+/** @type {ReturnType<typeof import('../services/chat-attachment-store').createChatAttachmentStore>} */
 const NO_ATTACHMENT_STORE = {
   persistMessages: async (_chatId, messages) => messages,
   readAttachment: async () => ({ ok: false }),
@@ -28,12 +29,34 @@ const NO_ATTACHMENT_STORE = {
  * Ohne Chat-Einstellungen (Tests, Minimalaufbau) verhaelt sich der Verlauf wie
  * vor Issue #211: Es wird nichts je Chat gemerkt und nichts hergestellt.
  */
+/**
+ * What the handlers use of the chat settings service.
+ *
+ * @typedef {Object} ChatSessionSettingsLike
+ * @property {(chatId: unknown, options?: { activation?: string }) => Promise<object>} activate
+ * @property {(chatId: unknown) => object} valuesFor
+ * @property {(chatId: unknown) => void} forget
+ */
+
+/** @type {ChatSessionSettingsLike} */
 const NO_CHAT_SESSION_SETTINGS = {
   activate: async () => ({}),
   valuesFor: () => ({}),
   forget: () => {},
 };
 
+/**
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {import('../ports/chat-history-store-port').ChatHistoryStorePort} deps.chatHistoryStore
+ * @param {Record<string, string>} deps.REQ
+ * @param {ReturnType<typeof import('../services/chat-attachment-store').createChatAttachmentStore>} [deps.chatAttachments]
+ * @param {() => string|null} [deps.getActiveWorkspaceRoot]
+ * @param {(root: string) => Promise<boolean>} [deps.isKnownWorkspaceRoot]
+ * @param {ChatSessionSettingsLike} [deps.chatSessionSettings]
+ * @param {(toolName: string) => (string|null)} [deps.toolCategoryOf]
+ * @param {() => number} [deps.now]
+ */
 function registerChatHistoryHandlers({
   ipcMain,
   chatHistoryStore,
@@ -49,6 +72,10 @@ function registerChatHistoryHandlers({
   // Renderer. Einspeisbar, damit Tests eine Reihenfolge festlegen koennen.
   now = () => Date.now(),
 }) {
+  /**
+   * @param {unknown} sessionRow
+   * @returns {Promise<string|null>}
+   */
   async function resolveSessionWorkspaceRoot(sessionRow) {
     const activeRoot = getActiveWorkspaceRoot();
     if (!sessionRow || typeof sessionRow !== 'object' || !('workspaceRoot' in sessionRow)) {
@@ -75,6 +102,10 @@ function registerChatHistoryHandlers({
    * and this one save is skipped — the new chat or the folder switch that
    * asked for it must not fail over it. `unreadable` tells the renderer that
    * nothing was saved, so it can say so in the chat (#977).
+   *
+   * @template T
+   * @param {() => Promise<T>} run
+   * @returns {Promise<T | { ok: false, unreadable: true }>}
    */
   async function skipWhenUnreadable(run) {
     try {
@@ -85,6 +116,9 @@ function registerChatHistoryHandlers({
     }
   }
 
+  /**
+   * @param {unknown} id
+   */
   async function bucketKeyForSession(id) {
     const session = typeof id === 'string' ? await chatHistoryStore.getSessionMeta(id) : null;
     const root = session
@@ -167,9 +201,9 @@ function registerChatHistoryHandlers({
         }
       );
       if (!normalized) return { ok: false };
-      const previousUpdatedAt = Number.isFinite(existing?.updatedAt) ? existing.updatedAt : null;
+      const previousUpdatedAt = typeof existing?.updatedAt === 'number' && Number.isFinite(existing.updatedAt) ? existing.updatedAt : null;
       normalized.updatedAt =
-        previousUpdatedAt !== null && !chatHistoryStore.storedChatMessagesChanged(existing.messages, normalized.messages)
+        existing && previousUpdatedAt !== null && !chatHistoryStore.storedChatMessagesChanged(existing.messages, normalized.messages)
           ? previousUpdatedAt
           : now();
       // The store drops the oldest chats beyond MAX_CHAT_SESSIONS, with their

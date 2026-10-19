@@ -13,10 +13,10 @@
     "lib": ["es2024"],
     "types": ["node"],
     "skipLibCheck": true,
-    // Not `strict` as a whole: `noImplicitAny` is still off, so an
-    // unannotated parameter stays `any` instead of failing. Turned on, it
-    // reports about 1,900 places, most of them untyped parameters in files the
-    // included ones import, which is a typing project of its own (#1098).
+    // Not `strict` as a whole: `noImplicitAny` is still off, because the last
+    // files — the chat engine, the permission core, the sandbox service, the
+    // policy store and the composition root — are not annotated yet (#1098).
+    // Every other file passes with it on.
     // `strictNullChecks` is on: `null` and `undefined` are values of their
     // own, and a truthiness check narrows a `{ error } | { ok }` union. What
     // is on catches a port and its adapter disagreeing — a missing or extra
@@ -28,20 +28,21 @@
     "strictBindCallApply": true,
     "noImplicitThis": true
   },
-  // A deliberate list, not the whole of `src/`: the core, the ports, the
-  // contracts and the adapters that implement the ports. Files these import
-  // are checked too, since `checkJs` checks every file in the program.
+  // `src/application`, `src/main` and `src/shared` as a whole, except the files
+  // listed under `exclude` while they are still untyped (#1098). Files an
+  // included one imports are checked too, since `checkJs` checks every file in
+  // the program, so `exclude` only keeps a file from being a root of its own.
   "include": [
     "src/application/**/*.js",
-    "src/main/ports/**/*.js",
-    "src/main/adapters/**/*.js",
-    "src/main/remote/**/*.js",
-    "src/shared/contracts/**/*.js",
-    "src/main/services/shell-runner-service.js",
-    "src/main/services/python-runner-service.js",
-    "src/main/services/tool-policy-store.js",
-    "src/main/services/atomic-write.js",
-    "src/main/tools/workspace-tool-registry.js",
+    "src/main/**/*.js",
+    "src/shared/**/*.js",
     "types/**/*.d.ts"
+  ],
+  "exclude": [
+    "src/main/index.js",
+    "src/main/composition/create-application.js",
+    "src/main/ipc/settings-handlers.js",
+    "src/main/ipc/tool-permission-handlers.js",
+    "src/main/services/settings-presentation-service.js"
   ]
 }

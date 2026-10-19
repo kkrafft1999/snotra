@@ -34,6 +34,7 @@
  * @returns {ChatModelTarget}
  */
 function createChatModelTarget({ providerId, model, presetId, providerOptions, reasoningEffort }) {
+  /** @type {ChatModelTarget} */
   const out = {
     providerId: String(providerId ?? ''),
     model: String(model ?? ''),

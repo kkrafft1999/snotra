@@ -16,6 +16,28 @@ const { createOwnSecretsAdapter } = require('../adapters/own-secrets-adapter');
  * Renderer) und die Sitzungsfreigaben. Fehlen Policy oder Freigaben (Tests,
  * Minimalaufbau), verhält sich die Engine fail-safe: Modus `smart`, jede
  * Rückfrage wird abgelehnt.
+ *
+ * @param {Object} deps
+ * @param {import('../ports/llm-config-store-port').LlmConfigStorePort} deps.llmConfigStore
+ * @param {import('../ports/provider-runtime-port').ProviderRuntimePort} deps.providerRuntime
+ * @param {import('../ports/provider-secrets-port').ProviderSecretsPort} deps.providerSecrets
+ * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore
+ * @param {Parameters<typeof createWorkspaceToolAdapter>[0]} deps.toolRegistry
+ * @param {Parameters<typeof createSkillsAdapter>[0]|null} deps.skillsService
+ * @param {import('../../application/ports/environment-port').EnvironmentPort|null} [deps.environment]
+ * @param {import('../../application/ports/project-instructions-port').ProjectInstructionsPort|null} [deps.projectInstructions]
+ * @param {import('../../application/ports/memory-port').MemoryPort|null} [deps.memory]
+ * @param {typeof import('path')} deps.path
+ * @param {number} [deps.maxToolRounds]
+ * @param {Parameters<typeof createToolPolicyAdapter>[0]['toolPolicyStore']|null} [deps.toolPolicyStore]
+ * @param {import('../../application/ports/tool-approval-port').ToolApprovalPort|null} [deps.approvals]
+ * @param {ReturnType<typeof createSessionGrants>} [deps.sessionGrants]
+ * @param {NonNullable<Parameters<typeof createWorkspaceToolAdapter>[1]>} [deps.toolAdapterDeps]
+ * @param {(chatId: string) => string|null} [deps.resolveChatMode]
+ * @param {(chatId?: string) => Promise<string|null>} [deps.resolveReasoningLevel]
+ * @param {(run: { sessionId: string|number, chatId: string|null }) => void} [deps.onRunSettled]
+ * @param {import('../../application/ports/config-proposal-port').ConfigProposalPort|null} [deps.configProposals]
+ * @param {Parameters<typeof createProviderLlmAdapter>[0]['modelPrices']} [deps.modelPrices]
  */
 function createChatApplication({
   llmConfigStore,

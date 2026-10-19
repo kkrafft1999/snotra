@@ -35,6 +35,14 @@ const ATTACHMENTS_DIRNAME = 'chat-attachments';
 /** Chat-IDs sind UUIDs aus dem Renderer; das hier ist die harmlose Teilmenge. */
 const SAFE_CHAT_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$/;
 
+/**
+ * @param {object} deps
+ * @param {Pick<import('electron').App, 'getPath'>} deps.app
+ * @param {typeof import('fs/promises')} deps.fs
+ * @param {typeof import('path')} deps.path
+ * @param {{ warn?: (message: string) => void }|null} [deps.log]
+ * @param {string} [deps.platform]
+ */
 function createChatAttachmentStore({ app, fs, path, log = console, platform = process.platform }) {
   function rootDir() {
     return path.join(app.getPath('userData'), ATTACHMENTS_DIRNAME);
@@ -45,6 +53,8 @@ function createChatAttachmentStore({ app, fs, path, log = console, platform = pr
    * uebernommen, alles andere bekommt ihren Hash — so kann keine ID mit `/`
    * oder `..` aus dem Anhang-Ordner herausfuehren, ohne dass deswegen Bilder
    * verloren gingen.
+   *
+   * @param {unknown} chatId
    */
   function chatDirName(chatId) {
     const raw = typeof chatId === 'string' ? chatId.trim() : '';
@@ -53,12 +63,21 @@ function createChatAttachmentStore({ app, fs, path, log = console, platform = pr
     return createHash('sha256').update(raw).digest('hex').slice(0, 32);
   }
 
+  /**
+   * @param {unknown} chatId
+   */
   function chatDir(chatId) {
     const name = chatDirName(chatId);
     return name ? path.join(rootDir(), name) : '';
   }
 
-  /** Schreibt ein Bild unter seinem Inhalts-Hash und liefert die Referenz. */
+  /**
+   * Schreibt ein Bild unter seinem Inhalts-Hash und liefert die Referenz.
+   *
+   * @param {string} dir
+   * @param {import('../../shared/contracts/attachments').ImageAttachment} attachment
+   * @returns {Promise<import('../../shared/contracts/attachments').StoredImageAttachment|null>}
+   */
   async function writeImage(dir, attachment) {
     const ext = attachmentFileExtension(attachment.mediaType);
     if (!ext) return null;
@@ -80,6 +99,7 @@ function createChatAttachmentStore({ app, fs, path, log = console, platform = pr
       await writeFileAtomic(fs, target, buf, { platform });
     }
 
+    /** @type {import('../../shared/contracts/attachments').StoredImageAttachment} */
     const ref = { kind: ATTACHMENT_KINDS.IMAGE, mediaType: attachment.mediaType, file, bytes: buf.length };
     if (attachment.name) ref.name = attachment.name;
     return ref;
@@ -89,6 +109,10 @@ function createChatAttachmentStore({ app, fs, path, log = console, platform = pr
    * Ein Anhang in Ablage-Form. Liegen Bilddaten bei, werden sie geschrieben —
    * auch wenn schon eine Referenz dransteht: das Schreiben ist ohnehin
    * wiederholbar und heilt nebenbei eine Referenz auf eine verschwundene Datei.
+   *
+   * @param {string} dir
+   * @param {unknown} raw
+   * @returns {Promise<import('../../shared/contracts/attachments').StoredImageAttachment|null>}
    */
   async function toStoredRef(dir, raw) {
     const withData = normalizeImageAttachment(raw);
@@ -107,12 +131,17 @@ function createChatAttachmentStore({ app, fs, path, log = console, platform = pr
    * Legt die Anhaenge aller Nachrichten einer Session ab und liefert die
    * Nachrichten mit Referenzen statt Bilddaten zurueck. Nachrichten ohne
    * Anhang bleiben unangetastet.
+   *
+   * @param {unknown} chatId
+   * @param {unknown} messages  the chat's messages as the renderer sends them
+   * @returns {Promise<unknown>}
    */
   async function persistMessages(chatId, messages) {
     if (!Array.isArray(messages)) return messages;
     const dir = chatDir(chatId);
     if (!dir) return messages;
 
+    /** @type {unknown[]} */
     const out = [];
     for (const message of messages) {
       const list = Array.isArray(message?.attachments) ? message.attachments : null;
@@ -120,6 +149,7 @@ function createChatAttachmentStore({ app, fs, path, log = console, platform = pr
         out.push(message);
         continue;
       }
+      /** @type {import('../../shared/contracts/attachments').StoredImageAttachment[]} */
       const refs = [];
       for (const raw of list.slice(0, LIMITS.MAX_IMAGES_PER_MESSAGE)) {
         const ref = await toStoredRef(dir, raw);
@@ -133,6 +163,10 @@ function createChatAttachmentStore({ app, fs, path, log = console, platform = pr
   /**
    * Liest ein abgelegtes Bild fuer die Anzeige. Eine fehlende Datei ist kein
    * Fehler, sondern `{ ok: false }` — der Renderer zeigt dann einen Platzhalter.
+   *
+   * @param {unknown} chatId
+   * @param {unknown} file
+   * @returns {Promise<{ ok: false } | { ok: true, mediaType: string, dataBase64: string }>}
    */
   async function readAttachment(chatId, file) {
     const dir = chatDir(chatId);
@@ -153,7 +187,11 @@ function createChatAttachmentStore({ app, fs, path, log = console, platform = pr
     }
   }
 
-  /** Bilder eines geloeschten Chats mit entfernen. */
+  /**
+   * Bilder eines geloeschten Chats mit entfernen.
+   *
+   * @param {unknown} chatId
+   */
   async function deleteChat(chatId) {
     const dir = chatDir(chatId);
     if (!dir) return;
@@ -168,6 +206,8 @@ function createChatAttachmentStore({ app, fs, path, log = console, platform = pr
    * Raeumt alles weg, wozu es keine Session mehr gibt: aus dem Verlauf
    * gefallene Chats (MAX_CHAT_SESSIONS), geloeschte Chats und Reste aus einer
    * in Quarantaene gestellten Verlaufsdatei.
+   *
+   * @param {unknown} keepIds
    */
   async function pruneChats(keepIds) {
     const keep = new Set();

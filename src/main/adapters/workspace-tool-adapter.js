@@ -13,7 +13,7 @@ const { TOOL_CONTENT_SCANS, TOOL_FILE_EVENTS } = require('../tools/tool-descript
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL, workspaceSkillOfPath } = require('../../shared/contracts/skills');
 const { checkSkillDocument } = require('../../shared/runtime/skill-frontmatter');
-const { APP_LOCALES, translate } = require('../../shared/i18n');
+const { APP_LOCALES, translate, normalizeLocale } = require('../../shared/i18n');
 const { menuPath } = require('../../shared/i18n/ui-quotes');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { scanSensitiveContent, containsOwnSecret } = require('../../shared/runtime/sensitive-content');
@@ -74,9 +74,9 @@ const { readRegularFile } = require('../services/read-regular-file');
  *   isolation state for the card (#329)
  * @param {((workspaceRoot: string) => Promise<boolean>) | null} [deps.isSandboxDisabled]  per-workspace opt-out (#357)
  * @param {import('../tools/tool-call-planner').ProgramAllowanceMatcher | null} [deps.matchProgramAllowance]  (#408)
- * @param {((workspaceRoot: string) => Promise<object[]>) | null} [deps.readProgramAllowances]  (#408)
+ * @param {((workspaceRoot: string | null) => Promise<object[]>) | null} [deps.readProgramAllowances]  (#408)
  * @param {number} [deps.maxScanBytes]
- * @param {{ record: Function }} [deps.fileChangeRecorder]  keeps before/after of every write (#348)
+ * @param {{ record(written: object): { relativePath: string } }} [deps.fileChangeRecorder]  keeps before/after of every write (#348)
  * @param {(options?: object) => Promise<void>} [deps.refreshDynamicTools]  the tools only known at run time (#107)
  * @param {OutsideAccess} [deps.outsideAccess]  what a card may open outside the open folder (#792)
  * @returns {import('../../application/ports/tool-port').ToolPort}
@@ -103,7 +103,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
   } = deps;
   const maxScanBytes = deps.maxScanBytes || 2 * 1024 * 1024;
   /** The tool's definition, which is also its descriptor (#1008); null when unknown. */
-  const definitionOf = (name) => (typeof toolRegistry.getDefinition === 'function' ? toolRegistry.getDefinition(name) : null);
+  const definitionOf = (/** @type {string} */ name) => (typeof toolRegistry.getDefinition === 'function' ? toolRegistry.getDefinition(name) : null);
   const planner =
     fsService && fs && path
       ? createToolCallPlanner({
@@ -121,6 +121,10 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         })
       : null;
 
+  /**
+   * @param {string[] | undefined} patterns
+   * @returns {NonNullable<import('../../application/ports/tool-port').ToolHandlerContext['sensitivity']>}
+   */
   function buildSensitivity(patterns) {
     const matcher = createSensitivePathMatcher({ userPatterns: patterns });
     return {
@@ -129,6 +133,10 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     };
   }
 
+  /**
+   * @param {string} name
+   * @param {import('../../application/ports/tool-port').ToolPlan | null | undefined} plan
+   */
   async function scanTargetsForSensitiveContent(name, plan) {
     // Ganze Datei prüfen, nicht nur den Ausschnitt: Token-Muster dürfen
     // nicht durch Zeilen-/Byte-Fenster umgangen werden (Konzept §4).
@@ -279,9 +287,12 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       const contentScan = definition?.contentScan || null;
       // What the writing tools wrote, before and after (#348). Recorded only
       // once the call has come back without an error.
+      /** @type {object[]} */
       const writes = [];
       // What the sandbox refused during a shell or Python run (#792).
+      /** @type {object | null} */
       let sandboxBlocked = null;
+      /** @type {import('../../application/ports/tool-port').ToolHandlerContext} */
       const handlerContext = {
         ...context,
         // What a card opened outside the open folder (#792, step 4), checked
@@ -379,6 +390,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
         }
       }
 
+      /** @type {import('../../application/ports/tool-port').ToolExecutionResult} */
       const result = { output, progressEvents };
       if (fileChanges.length) result.fileChanges = fileChanges;
       if (sandboxBlocked) result.sandboxBlocked = sandboxBlocked;
@@ -392,6 +404,11 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
    * folder's skill source (`.agents/skills/<name>/SKILL.md`), in the words the
    * model reads: English, with the menu path in the user's language because
    * the model passes it on.
+   *
+   * @param {ToolDefinition | null | undefined} definition
+   * @param {import('../../application/ports/tool-port').ToolArguments} args
+   * @param {Record<string, any> | null} parsed
+   * @param {Partial<import('../../application/ports/tool-port').ToolExecutionContext>} context
    */
   async function checkWrittenSkills(definition, args, parsed, context) {
     if (!writesFiles(definition) || !fs || !path || !parsed || parsed.error) return [];
@@ -399,6 +416,7 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
       ? path.resolve(context.workspaceRoot)
       : null;
     if (!root) return [];
+    /** @type {Array<ReturnType<typeof describeSkillCheck>>} */
     const checks = [];
     for (const written of writtenRelativePaths(definition, args, parsed)) {
       if (parseSkillPath(written)) continue;
@@ -419,9 +437,15 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     return checks;
   }
 
-  /** Hands the writes of a successful call to the recorder; their summaries. */
+  /**
+   * Hands the writes of a successful call to the recorder; their summaries.
+   *
+   * @param {object[]} writes
+   * @param {Record<string, any> | null} parsed
+   */
   function recordFileChanges(writes, parsed) {
     if (!writes.length || !fileChangeRecorder || !parsed || parsed.error) return [];
+    /** @type {Array<{ relativePath: string }>} */
     const summaries = [];
     for (const written of writes) {
       try {
@@ -441,6 +465,10 @@ const SKILL_FILE = 'SKILL.md';
  * What the model is told about a skill it has just written (#160). A valid
  * one still has to be switched on by the user — folder skills start off — so
  * the note says where; an invalid one is skipped by the catalog until fixed.
+ *
+ * @param {string} name
+ * @param {ReturnType<typeof checkSkillDocument>} checked
+ * @param {string | undefined} locale
  */
 function describeSkillCheck(name, checked, locale) {
   if (checked.ok) {
@@ -448,7 +476,7 @@ function describeSkillCheck(name, checked, locale) {
       skill: name,
       valid: true,
       note: `Valid skill of this folder. Folder skills start switched off: the user turns it on under `
-        + `"${menuPath(locale, 'settings.skills')}" — tell them, unless it is on already.`,
+        + `"${menuPath(normalizeLocale(locale), 'settings.skills')}" — tell them, unless it is on already.`,
     };
   }
   return {
@@ -459,14 +487,22 @@ function describeSkillCheck(name, checked, locale) {
   };
 }
 
-/** Whether a tool writes files of the workspace, whose result the tree shows. */
+/**
+ * Whether a tool writes files of the workspace, whose result the tree shows.
+ *
+ * @param {ToolDefinition | null | undefined} definition
+ */
 function writesFiles(definition) {
   return definition?.fileEvents === TOOL_FILE_EVENTS.WRITE || definition?.fileEvents === TOOL_FILE_EVENTS.WRITE_ARGS;
 }
 
-/** The file tools a skill is written with (#160); an image stays an image. */
+/**
+ * The file tools a skill is written with (#160); an image stays an image.
+ *
+ * @param {ToolDefinition | null | undefined} definition
+ */
 function writesSkillFiles(definition) {
-  return writesFiles(definition) && definition.category === TOOL_CATEGORIES.WRITE;
+  return writesFiles(definition) && definition?.category === TOOL_CATEGORIES.WRITE;
 }
 
 /**
@@ -477,8 +513,13 @@ function writesSkillFiles(definition) {
  * Gefragt wird das Ergebnis, nicht die Argumente: `apply_patch` im
  * Diff-Modus kennt seine Pfade erst aus dem Patch, und ein Aufruf, der nichts
  * geschrieben hat, meldet so auch nichts.
+ *
+ * @param {ToolDefinition | null | undefined} definition
+ * @param {import('../../application/ports/tool-port').ToolArguments | null | undefined} args
+ * @param {Record<string, any> | null | undefined} parsed
  */
 function writtenRelativePaths(definition, args, parsed) {
+  /** @type {string[]} */
   const paths = [];
   if (definition?.fileEvents === TOOL_FILE_EVENTS.WRITE_ARGS) {
     // Der einzige Fall ohne Pfad im Ergebnis — er steht nur im Aufruf.
@@ -500,6 +541,8 @@ function writtenRelativePaths(definition, args, parsed) {
 /**
  * The workspace path a reading tool read, or null. A `skill:` path lies
  * outside the open folder (#429) and has no row in the tree.
+ *
+ * @param {import('../../application/ports/tool-port').ToolArguments | null | undefined} args
  */
 function readRelativePath(args) {
   const rel = typeof args?.relative_path === 'string' ? args.relative_path.trim() : '';
@@ -511,8 +554,14 @@ function readRelativePath(args) {
  * The file events of a call (#158, #347). A read marks one file in the tree;
  * a search is not a read (its descriptor has no `fileEvents`), and what the
  * agent opens after it is marked anyway.
+ *
+ * @param {ToolDefinition | null | undefined} definition
+ * @param {import('../../application/ports/tool-port').ToolArguments | null | undefined} args
+ * @param {string} output
+ * @param {Array<{ relativePath?: string }>} [fileChanges]
  */
 function collectProgressEvents(definition, args, output, fileChanges = []) {
+  /** @type {object[]} */
   const events = [];
   const reads = definition?.fileEvents === TOOL_FILE_EVENTS.READ;
   if (!writesFiles(definition) && !reads) return events;

@@ -4,6 +4,9 @@ const { createListModelsResult, normalizeBaseUrl } = require('../../shared/contr
 const { createMessage } = require('../../shared/contracts/message');
 
 /**
+ * @param {Object} deps
+ * @param {import('../ports/provider-runtime-port').ProviderRuntimePort} deps.providerRuntime
+ * @param {import('../ports/provider-secrets-port').ProviderSecretsPort} deps.providerSecrets
  * @returns {import('../ports/provider-model-listing-port').ProviderModelListingPort}
  */
 function createProviderModelListingAdapter({ providerRuntime, providerSecrets }) {
@@ -27,6 +30,7 @@ function createProviderModelListingAdapter({ providerRuntime, providerSecrets })
       const storedBaseUrl = normalizeBaseUrl(stored.baseUrl || provider.defaultBaseUrl);
       const requestedBaseUrl = provider.fields?.baseUrl ? normalizeBaseUrl(request.baseUrl) : '';
       const sameEndpoint = !requestedBaseUrl || requestedBaseUrl === storedBaseUrl;
+      /** @type {import('../ports/provider-runtime-port').ProviderConfig} */
       const config = {
         signal: request.signal,
         apiKey: request.apiKey || (sameEndpoint ? stored.apiKey : '') || '',

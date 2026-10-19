@@ -11,6 +11,18 @@
 // und die App scheint nicht zu starten. Deshalb liegt die Pruefung als reine
 // Funktion hier und nicht im Electron-Code.
 
+/**
+ * A rectangle in screen coordinates; `workArea` of an Electron display.
+ *
+ * @typedef {{ x: number, y: number, width: number, height: number }} Rect
+ *
+ * What is kept of a window between two starts. Without `x`/`y` Electron
+ * centres the window itself.
+ *
+ * @typedef {{ width: number, height: number, x?: number, y?: number,
+ *   maximized: boolean, fullScreen: boolean }} WindowState
+ */
+
 const fsSync = require('fs');
 const path = require('path');
 const { renameSyncWithRetry } = require('./services/rename-with-retry');
@@ -28,18 +40,32 @@ const DEFAULT_WINDOW_HEIGHT = 960;
  */
 const MIN_VISIBLE_PX = 100;
 
-const isPositive = (value) => Number.isFinite(value) && value > 0;
+/**
+ * @param {unknown} value
+ * @returns {value is number}
+ */
+const isFiniteNumber = (value) => typeof value === 'number' && Number.isFinite(value);
+
+/**
+ * @param {unknown} value
+ * @returns {value is number}
+ */
+const isPositive = (value) => isFiniteNumber(value) && value > 0;
 
 /**
  * Die Groesse darf nicht ueber die Arbeitsflaeche hinauswachsen: auf einem
  * 13-Zoll-Notebook ist der sichtbare Bereich keine 960 px hoch, und ein
  * Fenster, dessen Fuss unter der Bildschirmkante liegt, verdeckt die
  * Chat-Eingabe.
+ *
+ * @param {{ width?: number, height?: number }|null|undefined} workArea
+ * @param {{ width?: unknown, height?: unknown }} [size]
  */
 function fitToWorkArea(
   workArea,
   { width = DEFAULT_WINDOW_WIDTH, height = DEFAULT_WINDOW_HEIGHT } = {}
 ) {
+  /** @param {unknown} value */
   const limit = (value) => (isPositive(value) ? value : Infinity);
   return {
     width: Math.round(Math.min(isPositive(width) ? width : DEFAULT_WINDOW_WIDTH, limit(workArea?.width))),
@@ -50,26 +76,39 @@ function fitToWorkArea(
 /**
  * Aus der Datei wird nur uebernommen, was Hand und Fuss hat. Eine halb
  * geschriebene oder von Hand verbogene Datei darf den Start nicht kippen.
+ *
+ * @param {{ width?: unknown, height?: unknown, x?: unknown, y?: unknown, maximized?: unknown, fullScreen?: unknown }|null|undefined} raw
+ * @returns {WindowState|null}
  */
 function normalizeWindowState(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const size = {
-    width: isPositive(raw.width) ? Math.round(raw.width) : null,
-    height: isPositive(raw.height) ? Math.round(raw.height) : null,
-  };
-  if (!size.width || !size.height) return null;
-  const hasPosition = Number.isFinite(raw.x) && Number.isFinite(raw.y);
+  const width = isPositive(raw.width) ? Math.round(raw.width) : null;
+  const height = isPositive(raw.height) ? Math.round(raw.height) : null;
+  if (!width || !height) return null;
+  const { x, y } = raw;
+  const hasPosition = isFiniteNumber(x) && isFiniteNumber(y);
   return {
-    ...size,
-    ...(hasPosition ? { x: Math.round(raw.x), y: Math.round(raw.y) } : {}),
+    width,
+    height,
+    ...(hasPosition ? { x: Math.round(x), y: Math.round(y) } : {}),
     maximized: raw.maximized === true,
     fullScreen: raw.fullScreen === true,
   };
 }
 
+/**
+ * @param {number} value
+ * @param {number} min
+ * @param {number} max
+ */
 const clamp = (value, min, max) => Math.round(Math.min(Math.max(value, min), Math.max(min, max)));
 
-/** Liegt genug vom Fenster auf dieser Arbeitsflaeche, um es noch zu treffen? */
+/**
+ * Liegt genug vom Fenster auf dieser Arbeitsflaeche, um es noch zu treffen?
+ *
+ * @param {Rect} rect
+ * @param {Rect|null|undefined} workArea
+ */
 function overlapsEnough(rect, workArea) {
   if (!workArea) return false;
   const overlapX = Math.min(rect.x + rect.width, workArea.x + workArea.width) - Math.max(rect.x, workArea.x);
@@ -82,12 +121,18 @@ function overlapsEnough(rect, workArea) {
  * Welche Bildschirmgrenzen gelten fuer den gespeicherten Zustand? Der
  * Bildschirm, auf dem das Fenster zuletzt lag — und wenn es den nicht mehr
  * gibt, keiner.
+ *
+ * @param {WindowState} state
+ * @param {Array<{ workArea?: Rect }>} displays
+ * @returns {Rect|null}
  */
 function displayWorkAreaFor(state, displays) {
   if (!Array.isArray(displays)) return null;
-  const rect = { x: state.x, y: state.y, width: state.width, height: state.height };
+  const { x, y } = state;
+  if (x === undefined || y === undefined) return null;
+  const rect = { x, y, width: state.width, height: state.height };
   for (const display of displays) {
-    if (overlapsEnough(rect, display?.workArea)) return display.workArea;
+    if (display?.workArea && overlapsEnough(rect, display.workArea)) return display.workArea;
   }
   return null;
 }
@@ -96,12 +141,10 @@ function displayWorkAreaFor(state, displays) {
  * Der Fensterzustand fuer den naechsten Start.
  *
  * @param {object}   options
- * @param {object?}  options.saved           Inhalt der gespeicherten Datei (roh).
- * @param {object[]} options.displays        `screen.getAllDisplays()`.
- * @param {object?}  options.primaryWorkArea Arbeitsflaeche des Hauptbildschirms.
- * @returns {{ width: number, height: number, x?: number, y?: number,
- *             maximized: boolean, fullScreen: boolean }}
- *          Ohne `x`/`y` zentriert Electron das Fenster selbst.
+ * @param {Parameters<typeof normalizeWindowState>[0]} [options.saved]  Inhalt der gespeicherten Datei (roh).
+ * @param {Array<{ workArea?: Rect }>} [options.displays]  `screen.getAllDisplays()`.
+ * @param {Rect|null} [options.primaryWorkArea]  Arbeitsflaeche des Hauptbildschirms.
+ * @returns {WindowState}  Ohne `x`/`y` zentriert Electron das Fenster selbst.
  */
 function resolveWindowBounds({ saved = null, displays = [], primaryWorkArea = null } = {}) {
   const state = normalizeWindowState(saved);
@@ -109,22 +152,24 @@ function resolveWindowBounds({ saved = null, displays = [], primaryWorkArea = nu
     return { ...fitToWorkArea(primaryWorkArea), maximized: false, fullScreen: false };
   }
 
-  const hasPosition = Number.isFinite(state.x) && Number.isFinite(state.y);
-  const workArea = (hasPosition ? displayWorkAreaFor(state, displays) : null) || primaryWorkArea;
+  const { x, y } = state;
+  const hasPosition = isFiniteNumber(x) && isFiniteNumber(y);
+  const display = hasPosition ? displayWorkAreaFor(state, displays) : null;
+  const workArea = display || primaryWorkArea;
   const size = fitToWorkArea(workArea, { width: state.width, height: state.height });
   const flags = { maximized: state.maximized, fullScreen: state.fullScreen };
 
   // Kein Bildschirm mehr unter dem Fenster (Monitor abgezogen, Aufloesung
   // geaendert): die Groesse bleibt, die Position faellt weg — sonst startet die
   // App irgendwo im Nichts.
-  if (!hasPosition || !displayWorkAreaFor(state, displays)) {
+  if (!hasPosition || !display) {
     return { ...size, ...flags };
   }
 
   return {
     ...size,
-    x: clamp(state.x, workArea.x, workArea.x + workArea.width - size.width),
-    y: clamp(state.y, workArea.y, workArea.y + workArea.height - size.height),
+    x: clamp(x, display.x, display.x + display.width - size.width),
+    y: clamp(y, display.y, display.y + display.height - size.height),
     ...flags,
   };
 }
@@ -133,8 +178,14 @@ function resolveWindowBounds({ saved = null, displays = [], primaryWorkArea = nu
  * Die Ablage selbst. `fs` ist injizierbar, damit der Test ohne echtes
  * Dateisystem auskommt; geschrieben wird synchron, weil der letzte Stand beim
  * Schliessen des Fensters faellig ist und der Prozess danach nicht mehr wartet.
+ *
+ * @param {object} options
+ * @param {string} options.filePath
+ * @param {Pick<typeof fsSync, 'readFileSync' | 'mkdirSync' | 'writeFileSync' | 'renameSync' | 'unlinkSync'>} [options.fs]
+ * @param {{ error?: (...args: unknown[]) => void }} [options.log]
+ * @param {Parameters<typeof renameSyncWithRetry>[3]} [options.retry]
  */
-function createWindowStateStore({ filePath, fs = fsSync, log = console, retry } = {}) {
+function createWindowStateStore({ filePath, fs = fsSync, log = console, retry }) {
   return {
     read() {
       try {
@@ -144,6 +195,7 @@ function createWindowStateStore({ filePath, fs = fsSync, log = console, retry } 
         return null;
       }
     },
+    /** @param {WindowState} state */
     write(state) {
       const tmp = `${filePath}.tmp`;
       try {

@@ -1,9 +1,11 @@
 /**
  * UI-Präferenzen-Persistenz.
  *
+ * @typedef {import('../../shared/contracts/settings').UiPrefs} UiPrefs
+ *
  * @typedef {Object} UiPrefsStorePort
- * @property {() => Promise<object>} readUIPrefs
- * @property {(updater: (prefs: object) => object|Promise<object>) => Promise<object>} updateUIPrefs
+ * @property {() => Promise<UiPrefs>} readUIPrefs
+ * @property {(updater: (prefs: UiPrefs) => UiPrefs|Promise<UiPrefs>) => Promise<UiPrefs>} updateUIPrefs
  */
 
 module.exports = {};
