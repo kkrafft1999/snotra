@@ -110,6 +110,7 @@ const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { createConversationService } = require('../../application/chat/conversation-service');
+const { createChatHistoryAdapter } = require('../adapters/chat-history-adapter');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
 const { createToolPermissionService } = require('../services/tool-permission-service');
 const { createRemoteBridge } = require('./create-remote-bridge');
@@ -840,7 +841,7 @@ function createApplication({
   registerChatHandlers({
     ipcMain,
     chatEngine,
-    conversation: createConversationService({ engine: chatEngine, history: chatHistory }),
+    conversation: createConversationService({ engine: chatEngine, history: createChatHistoryAdapter(chatHistory) }),
     REQ,
     PUSH,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,

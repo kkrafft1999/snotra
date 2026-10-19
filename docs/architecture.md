@@ -292,7 +292,7 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
 - `chat-history-port` — the stored conversation as the conversation service
   (`application/chat/conversation-service.js`) reads and changes it: a chat
   with its messages, the cost added per turn, the title (#981). Implemented by
-  `main/services/chat-history-service.js`
+  `main/adapters/chat-history-adapter.js` over `main/services/chat-history-service.js`
 - `workspace-path-port` — path helpers (e.g. `basename`)
 - `own-secrets-port` — the app's own secrets, compared against the text the
   prompt embeds by itself (#528); `main/adapters/own-secrets-adapter.js` wires
