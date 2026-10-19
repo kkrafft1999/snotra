@@ -3,12 +3,13 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
+const { registerSettingsForTest: registerSettingsHandlers } = require('./helpers/settings-handlers');
 const {
-  registerSettingsHandlers,
-  mergeProviderPatchIntoConfigImpl,
-  applyActivePreset,
-  isPresetUsable,
-} = require('../src/main/ipc/settings-handlers');
+  mergeProviderPatchIntoConfig: mergeProviderPatchIntoConfigImpl,
+  createLlmPresets,
+} = require('../src/main/services/llm-settings');
+const applyActivePreset = (deps, presetId, options) => createLlmPresets(deps).applyActivePreset(presetId, options);
+const isPresetUsable = (deps, presetId) => createLlmPresets(deps).isPresetUsable(presetId);
 const { createStorageService } = require('../src/main/services/storage-service');
 const { createTestConfirmations } = require('./helpers/confirmations');
 const { createSkillsService } = require('../src/main/services/skills-service');

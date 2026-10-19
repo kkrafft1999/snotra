@@ -14,7 +14,7 @@ const crypto = require('crypto');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { chatSessionFileName } = require('../src/main/services/chat-history-store');
 const { createToolPolicyStore, POLICY_FILENAME, POLICY_KEY_FILENAME } = require('../src/main/services/tool-policy-store');
-const { registerSettingsHandlers } = require('../src/main/ipc/settings-handlers');
+const { registerSettingsForTest: registerSettingsHandlers } = require('./helpers/settings-handlers');
 const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
 const { KEY_ALWAYS_DURABLE } = require('../src/main/services/safe-storage-key-durability');
 const {

@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { registerSettingsHandlers, mergePresetConnection } = require('../src/main/ipc/settings-handlers');
+const { registerSettingsForTest: registerSettingsHandlers } = require('./helpers/settings-handlers');
+const { mergePresetConnection } = require('../src/main/services/llm-settings');
 const { createStorageService } = require('../src/main/services/storage-service');
 const {
   createLlmConfigStorePort,

@@ -83,11 +83,9 @@ const { defaultOnSwitch } = require('../services/ui-pref-switches');
 const { createExecutionToolSettings, pythonCommandForSandbox } = require('../services/execution-tool-settings');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
 const { registerVoiceHandlers } = require('../ipc/voice-handlers');
-const {
-  registerSettingsHandlers,
-  applyActivePreset,
-  isPresetUsable,
-} = require('../ipc/settings-handlers');
+const { registerSettingsHandlers } = require('../ipc/settings-handlers');
+const { createLlmPresets } = require('../services/llm-settings');
+const { createSettingsService } = require('../services/settings-service');
 const { createChatSessionSettings } = require('../services/chat-session-settings');
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
@@ -250,15 +248,15 @@ function createApplication({
   // Modell und Freigabemodus gehoeren zum Chat (Issue #211). Gesetzt wird
   // beides weiterhin ueber die bestehenden Wege — „Auto“ also nur nach dem
   // nativen Dialog; hier wird es je Chat gemerkt und beim Wechsel hergestellt.
-  const presetDeps = { llmConfigStore, providerCatalog, safeStorage };
+  const llmPresets = createLlmPresets({ llmConfigStore, providerCatalog, safeStorage });
   const chatSessionSettings = createChatSessionSettings({
     chatHistoryStore,
-    applyPreset: (presetId) => applyActivePreset(presetDeps, presetId),
+    applyPreset: (presetId) => llmPresets.applyActivePreset(presetId),
     getDefaultPresetId: async () => {
       const config = await llmConfigStore.readLLMConfig();
       return config.defaultPresetId || config.activePresetId || null;
     },
-    isPresetUsable: (presetId) => isPresetUsable(presetDeps, presetId),
+    isPresetUsable: (presetId) => llmPresets.isPresetUsable(presetId),
     getPresetAlias: async (presetId) => (await llmConfigStore.readLLMConfig()).presetAliases?.[presetId] || null,
     getActivePresetId: async () => (await llmConfigStore.readLLMConfig()).activePresetId || null,
     getActiveMode: async () => (await toolPolicyStore.read()).mode,
@@ -744,14 +742,28 @@ function createApplication({
   }
   registerVoiceHandlers({ ipcMain, speech, REQ, PUSH });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
-  registerSettingsHandlers({
-    ipcMain,
+  const settings = createSettingsService({
     safeStorage,
     safeStorageKey,
     llmConfigStore,
     uiPrefsStore,
-    workspaceFolderStore,
     providerCatalog,
+    presets: llmPresets,
+    chatSessionSettings,
+    skillCatalog: skillsService,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    imageGenerationSettings,
+    pythonSettings,
+    shellSettings,
+    onAppLocaleChanged: rememberedUiPrefs.setAppLocale,
+    onShowHiddenFilesChanged: rememberedUiPrefs.setShowHiddenFiles,
+    confirmations,
+  });
+  registerSettingsHandlers({
+    ipcMain,
+    settings,
+    uiPrefsStore,
+    workspaceFolderStore,
     providerModels,
     REQ,
     workspaceActivation,
@@ -762,12 +774,9 @@ function createApplication({
     memory,
     webSearchSettings,
     imageGenerationSettings,
-    onAppLocaleChanged: rememberedUiPrefs.setAppLocale,
-    onShowHiddenFilesChanged: rememberedUiPrefs.setShowHiddenFiles,
     mcpSettings,
     pythonSettings,
     shellSettings,
-    chatSessionSettings,
     confirmations,
   });
   registerModelPriceHandlers({ ipcMain, modelPrices, REQ });

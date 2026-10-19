@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const compat = require('../src/main/providers/openai-compatible');
 const { streamChatCompletionsRound } = require('../src/main/providers/openai-chat-transport');
 const { streamResponsesRound } = require('../src/main/providers/openai-responses-transport');
-const { mergePresetConnection } = require('../src/main/ipc/settings-handlers');
+const { mergePresetConnection } = require('../src/main/services/llm-settings');
 const { getProvider } = require('../src/main/providers');
 const {
   MAX_OUTPUT_TOKENS_MAX,

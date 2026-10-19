@@ -265,8 +265,9 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   `python-execution`) — `updateUIPrefs` leaves a switch off that comes
   without one — and a local MCP server stored with a command that is new or
   changed (`mcp-launch`, subject from `services/mcp-launch-confirmation.js`)
-  — `saveMcpServer` refuses it. `ipc/settings-handlers.js` asks, with the
-  prompts of `ipc/settings-confirmation-dialogs.js`
+  — `saveMcpServer` refuses it. `services/settings-service.js` (execution
+  tools) and `ipc/settings-handlers.js` (MCP) ask, with the
+  prompts of `services/settings-confirmation-dialogs.js`
 - `config-proposal-port` — what a chat switched for itself, and how the model
   asks for a change (#774). The core asks the user on a card through the
   approval port and records the answer here; where the overrides are kept and
@@ -1469,14 +1470,16 @@ with `||` or `??` and optional calls stay allowed — they wire a default, they
 do not decide. A test in the same file feeds it the pieces #1005 moved out, so
 the guard itself is checked to catch them.
 
-It still imports `applyActivePreset` and `isPresetUsable` from
-`ipc/settings-handlers.js`, a handler module — the logic belongs in a service
+From `ipc/settings-handlers.js` it imports only the registration; what the
+chat's own settings need of the model entries — `applyActivePreset`,
+`isPresetUsable` — comes from `services/llm-settings.js`
 ([#1006](https://github.com/kkrafft1999/snotra/issues/1006)).
 
 These are the topics that did move out:
 
 | Topic | Module |
 | ----- | ------ |
+| The model settings (#1006): merging and encrypting a provider's or an entry's connection, when an entry is usable, the active entry; the dialog's save with its rollback, the reasoning level, the interface preferences with their confirmations | rules: `services/llm-settings.js`; flow: `services/settings-service.js`; channels: `ipc/settings-handlers.js` |
 | Own secrets (concept §5): which values a tool result must never carry | `services/own-secrets.js` |
 | Masking the status of an MCP server | `services/mcp-status-masking.js` |
 | The model's skill suggestion (`SKILLS_SUGGEST`) | `ipc/skill-suggestion-handlers.js` |
@@ -1560,7 +1563,7 @@ works at once. Ciphertext written in between could never be read again after a
 crash. `services/safe-storage-key-durability.js` watches for the key, and
 every encrypted write waits for it: the chat history, the web search key and
 MCP secrets in `storage-service`, provider keys and headers in
-`ipc/settings-handlers.js` (before the config lock, so nothing else waits with
+`services/settings-service.js` (before the config lock, so nothing else waits with
 them), and a new `tool-policy.key` in `tool-policy-store`. What only reads does
 not wait: a plain history is taken in as plain as it was and encrypted in the
 background once the key is there, a missing policy is
@@ -3301,7 +3304,7 @@ picked in *Settings › General*, not on Apply (#297). A change runs like this:
 
 ```
 Renderer: language picked -> setUIPrefs({ appLocale })
-  -> settings-handlers writes appLocale
+  -> settings-service writes appLocale
   -> onAppLocaleChanged -> remembered-ui-prefs remembers the locale
                         -> main/index.js rebuilds the menu bar
   -> Renderer: once the stored value comes back, setLocale() redraws the interface
