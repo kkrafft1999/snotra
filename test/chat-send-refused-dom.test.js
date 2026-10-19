@@ -29,7 +29,7 @@ async function mount(t, { configured = true, beginRun = () => {} } = {}) {
     getChatHistory: async () => ({ sessions: [], activeChatId: null }),
     setActiveChatId: async () => {},
     upsertChatSession: async () => ({ ok: true }),
-    generateChatTitle: async () => ({ title: '' }),
+    nameChat: async () => ({ title: null }),
     abortChat: () => {},
     chat: (messages, options) => new Promise((resolve) => sends.push({
       messages,

@@ -43,7 +43,7 @@ async function setup(t, { maxChatSessions = 3, chatSessionSettings, fsImpl = fs,
   // Issue #131: welche Ordner der Nutzer schon geoeffnet hat, entscheidet, ob
   // eine Session den von ihr genannten Workspace behalten darf.
   let knownRoots = new Set();
-  registerChatHistoryHandlers({
+  const chatHistory = registerChatHistoryHandlers({
     ipcMain,
     chatHistoryStore,
     REQ,
@@ -58,7 +58,7 @@ async function setup(t, { maxChatSessions = 3, chatSessionSettings, fsImpl = fs,
   const setKnownRoots = (...roots) => {
     knownRoots = new Set(roots.map((r) => path.resolve(r)));
   };
-  return { ipcMain, storage, tmpDir, setActiveRoot, setKnownRoots, now: () => clock };
+  return { ipcMain, chatHistory, storage, tmpDir, setActiveRoot, setKnownRoots, now: () => clock };
 }
 
 /**
@@ -706,10 +706,10 @@ test('the reasoning level comes from main, the payload\'s is dropped (#725)', as
   assert.equal(stored.reasoningEffort, 'medium');
 });
 
-test('the chat cost is saved, comes back, and stays when a save omits it (#949)', async (t) => {
-  const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
+test('the chat cost is main\'s sum: added per turn, kept by every save, never taken from the renderer (#949, #981)', async (t) => {
+  const { ipcMain, chatHistory, tmpDir, setActiveRoot } = await setup(t);
   setActiveRoot(tmpDir);
-  const cost = {
+  const turn = {
     models: [{
       providerId: 'openai',
       model: 'gpt-x',
@@ -721,17 +721,34 @@ test('the chat cost is saved, comes back, and stays when a save omits it (#949)'
     }],
     priceTable: { date: '2026-10-15', origin: 'bundled' },
   };
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('priced'), cost });
+  // A first turn can end before the chat's first save is in: the sum waits.
+  assert.equal((await chatHistory.addCost('priced', turn)).models[0].rounds, 2);
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('priced'));
   let session = (await getHistory(ipcMain)).sessions.find((s) => s.id === 'priced');
-  assert.deepEqual(session.cost, { version: 1, ...cost });
+  assert.deepEqual(session.cost, { version: 1, ...turn });
 
-  // A save without the field — the title written later, say — keeps it.
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('priced', { title: 'Renamed' }));
+  // The next turn adds to it; a save from the renderer keeps it and cannot set it.
+  assert.equal((await chatHistory.addCost('priced', turn)).models[0].rounds, 4);
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('priced', { title: 'Renamed' }), cost: { models: [] } });
   session = (await getHistory(ipcMain)).sessions.find((s) => s.id === 'priced');
-  assert.equal(session.cost.models[0].rounds, 2);
+  assert.equal(session.cost.models[0].rounds, 4);
 
-  // Garbage in the payload is dropped, not stored.
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('junk'), cost: { models: 'no' } });
+  // Cost sent along with a save is dropped.
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('junk'), cost: turn });
   session = (await getHistory(ipcMain)).sessions.find((s) => s.id === 'junk');
   assert.equal(session.cost, undefined);
+});
+
+test('a chat is named in main, and a deleted one is not brought back (#981)', async (t) => {
+  const { ipcMain, chatHistory, tmpDir, setActiveRoot } = await setup(t);
+  setActiveRoot(tmpDir);
+  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('named'));
+  assert.equal(await chatHistory.setTitle('named', 'A proper name'), true);
+  const loaded = await chatHistory.load('named');
+  assert.equal(loaded.title, 'A proper name');
+  assert.ok(loaded.messages.length > 0);
+
+  await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'named');
+  assert.equal(await chatHistory.setTitle('named', 'Too late'), false);
+  assert.equal(await chatHistory.load('named'), null);
 });

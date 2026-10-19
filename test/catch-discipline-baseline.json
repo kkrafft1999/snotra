@@ -86,7 +86,7 @@
     "renderer/components/ChatConfigIndicator.js": 1,
     "renderer/components/ChatHistoryPanel.js": 3,
     "renderer/components/ChatModelPicker.js": 2,
-    "renderer/components/ChatStream.js": 6,
+    "renderer/components/ChatStream.js": 5,
     "renderer/components/FeedbackDialog.js": 3,
     "renderer/components/FileInfoDialog.js": 2,
     "renderer/components/FileTree.js": 3,

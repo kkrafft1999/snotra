@@ -73,7 +73,7 @@ async function mount({
       saves.push(JSON.parse(JSON.stringify(row)));
       return upsertChatSession ? upsertChatSession(row) : { ok: true };
     },
-    generateChatTitle: async () => ({ title: '' }),
+    nameChat: async () => ({ title: null }),
     abortChat: () => {},
     readWorkspaceImage: async (src) => {
       imageReads.push(src);

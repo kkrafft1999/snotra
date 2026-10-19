@@ -2,6 +2,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { registerChatHandlers } = require('../src/main/ipc/chat-handlers');
+const { createConversationService } = require('../src/application/chat/conversation-service');
+
+/** The conversation service over a history that keeps nothing (#981). */
+const conversationFor = (chatEngine) => createConversationService({
+  engine: chatEngine,
+  history: { load: async () => null, addCost: async () => null, setTitle: async () => false },
+});
 const { resolveToolRoundLimit } = require('../src/application/chat/chat-engine');
 const { createChatApplication } = require('../src/main/composition/create-chat-application');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
@@ -216,6 +223,7 @@ function setupChatHandlers({
   registerChatHandlers({
     ipcMain,
     chatEngine,
+    conversation: conversationFor(chatEngine),
     REQ,
     PUSH,
     // Seit Issue #68 injiziert der Handler den Root, der Payload traegt ihn nicht.
@@ -253,6 +261,7 @@ test('CHAT_SEND reports an unknown provider without calling streamChatRound', as
   registerChatHandlers({
     ipcMain,
     chatEngine,
+    conversation: conversationFor(chatEngine),
     REQ,
     PUSH,
   });
@@ -697,7 +706,7 @@ test('CHAT_SEND ends every run with a run-end marker behind its last event (#721
 test('CHAT_SEND sends the run-end marker also when the run throws (#721)', async () => {
   const ipcMain = makeIpcMain();
   const chatEngine = { send: async () => { throw new Error('kaputt'); } };
-  registerChatHandlers({ ipcMain, chatEngine, REQ, PUSH });
+  registerChatHandlers({ ipcMain, chatEngine, conversation: conversationFor(chatEngine), REQ, PUSH });
   const { event, sent } = makeFakeEvent(7);
 
   await assert.rejects(
@@ -748,7 +757,7 @@ test('main takes the chat id by the engine\'s rule: trimmed, never cut down (#53
     abort: (sessionId, chatId) => aborts.push([sessionId, chatId]),
   };
   const ipcMain = makeIpcMain();
-  registerChatHandlers({ ipcMain, chatEngine, REQ, PUSH });
+  registerChatHandlers({ ipcMain, chatEngine, conversation: conversationFor(chatEngine), REQ, PUSH });
   const send = ipcMain.handlers.get(REQ.CHAT_SEND);
   const abort = ipcMain.onHandlers.get(REQ.CHAT_ABORT);
   const long = 'c'.repeat(129);
@@ -835,7 +844,7 @@ test('a navigation inside the page or of a sub-frame leaves the runs alone (#979
 test('a window is watched once, however many turns it sends (#979)', async () => {
   const chatEngine = { send: async () => ({ content: '' }), abort: () => {} };
   const ipcMain = makeIpcMain();
-  registerChatHandlers({ ipcMain, chatEngine, REQ, PUSH });
+  registerChatHandlers({ ipcMain, chatEngine, conversation: conversationFor(chatEngine), REQ, PUSH });
   const send = ipcMain.handlers.get(REQ.CHAT_SEND);
   const { sender } = makeWatchedSender(7);
   for (let i = 0; i < 3; i += 1) await send({ sender }, { messages: [{ role: 'user', content: 'Hi' }], chatId: 'chat-a' });

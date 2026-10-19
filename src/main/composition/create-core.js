@@ -78,6 +78,8 @@ const { createLlmPresets } = require('../services/llm-settings');
 const { createSettingsService } = require('../services/settings-service');
 const { createChatHistoryService } = require('../services/chat-history-service');
 const { createToolPermissionService } = require('../services/tool-permission-service');
+const { createConversationService } = require('../../application/chat/conversation-service');
+const { createChatHistoryAdapter } = require('../adapters/chat-history-adapter');
 const { createChatSessionSettings } = require('../services/chat-session-settings');
 const { createFeedbackService, osVersionReader, resolveFeedbackEndpoint } = require('../services/feedback-service');
 const { createAppNotices, postStoreFileEvent } = require('../services/app-notices');
@@ -726,6 +728,8 @@ function createCore({
     chatSessionSettings,
     toolCategoryOf: (name) => toolRegistry.getDefinition(name)?.category || null,
   });
+  // What a turn means for the stored chat: its cost, its name (#981).
+  const conversation = createConversationService({ engine: chatEngine, history: createChatHistoryAdapter(chatHistory) });
   const toolPermissions = createToolPermissionService({
     confirmations,
     toolPolicyStore,
@@ -838,6 +842,7 @@ function createCore({
     securityPageData,
     settings,
     chatHistory,
+    conversation,
     toolPermissions,
     remote,
     notifyToolPermissionsChanged,

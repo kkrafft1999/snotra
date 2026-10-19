@@ -13,6 +13,7 @@
 
 const { DEFAULT_REASONING_LEVEL } = require('../../shared/contracts/reasoning');
 const { CHAT_ACTIVATION, sanitizeChatId } = require('../../shared/contracts/chat');
+const { mergeSessionCost, normalizeSessionCost } = require('../../shared/contracts/cost');
 const { CHAT_HISTORY_UNREADABLE } = require('./chat-history-store');
 
 /**
@@ -68,6 +69,15 @@ function createChatHistoryService({
   // Injectable, so tests can fix an order.
   now = () => Date.now(),
 }) {
+  /**
+   * The cost of turns in chats that have no row yet (#981): a chat is first
+   * saved by the renderer, and a fast first turn can end before that save is
+   * in. Its first save takes the sum along.
+   *
+   * @type {Map<string, import('../../shared/contracts/cost').SessionCost>}
+   */
+  const pendingCost = new Map();
+
   /**
    * @param {unknown} sessionRow
    * @returns {Promise<string|null>}
@@ -194,9 +204,9 @@ function createChatHistoryService({
           messages,
           workspaceRoot: await resolveSessionWorkspaceRoot(sessionRow),
           ...sessionSettings,
-          // The renderer sums the chat's cost (#949); a save that does not
-          // carry it keeps the one already stored.
-          cost: sessionRow?.cost === undefined ? existing?.cost : sessionRow.cost,
+          // The cost is main's word as well (#981): summed per turn by the
+          // conversation service, never taken from the renderer.
+          cost: mergeSessionCost(existing?.cost, pendingCost.get(sessionId)),
           // A time the renderer sends does not count (#245): it writes the chat
           // also when nothing was said — on leaving, on a model switch, for a
           // title that came later. Main sets the stamp just below, and only for
@@ -221,6 +231,7 @@ function createChatHistoryService({
       // id. Everything else without a session is swept only while no history
       // lies moved aside next to this one — the folders may belong to its
       // chats, and the copy is kept so that it can be recovered (#565).
+      pendingCost.delete(sessionId);
       for (const id of droppedIds) await chatAttachments.deleteChat(id);
       if (!(await chatHistoryStore.hasSetAsideChatHistory())) {
         await chatAttachments.pruneChats((await chatHistoryStore.listSessions()).map((s) => s.id));
@@ -239,6 +250,7 @@ function createChatHistoryService({
       if (!id) return { ok: false };
       // The chat's file, its entry and every folder pointer to it.
       await chatHistoryStore.deleteSession(id);
+      pendingCost.delete(id);
       await chatAttachments.deleteChat(id);
       chatSessionSettings.forget(id);
       return { ok: true };
@@ -291,7 +303,76 @@ function createChatHistoryService({
     return chatAttachments.readAttachment(chatId.trim(), file);
   }
 
-  return { listForActiveFolder, getSession, saveSession, deleteSession, setActive, activate, readAttachment };
+  // --- The chat-history port of the core (#981) -----------------------------
+
+  /**
+   * A chat with its messages for the conversation service — in whichever
+   * folder it is kept: a run that ended in the background may belong to a
+   * folder that is no longer open.
+   *
+   * @param {string} chatId
+   * @returns {Promise<import('../../application/ports/chat-history-port').StoredChat|null>}
+   */
+  async function load(chatId) {
+    const id = sanitizeChatId(chatId);
+    const session = id ? await chatHistoryStore.getSession(id) : null;
+    if (!session) return null;
+    return {
+      id: session.id,
+      title: session.title,
+      messages: Array.isArray(session.messages) ? session.messages : [],
+      cost: normalizeSessionCost(session.cost),
+    };
+  }
+
+  /**
+   * Adds a turn's cost to the chat's sum (#949, #981).
+   *
+   * @param {string} chatId
+   * @param {unknown} cost
+   */
+  function addCost(chatId, cost) {
+    return /** @type {Promise<import('../../shared/contracts/cost').SessionCost|null>} */ (chatHistoryStore.withChatHistoryLock(async () => {
+      const id = sanitizeChatId(chatId);
+      if (!id) return null;
+      const meta = await chatHistoryStore.getSessionMeta(id);
+      if (!meta) {
+        const pending = mergeSessionCost(pendingCost.get(id), cost);
+        if (pending) pendingCost.set(id, pending);
+        return pending;
+      }
+      const next = mergeSessionCost(meta.cost, cost);
+      if (next) await chatHistoryStore.patchSession(id, { cost: next });
+      return next;
+    }));
+  }
+
+  /**
+   * Names a stored chat (#359, #981). A chat deleted meanwhile is not brought back.
+   *
+   * @param {string} chatId
+   * @param {string} title
+   */
+  function setTitle(chatId, title) {
+    return /** @type {Promise<boolean>} */ (chatHistoryStore.withChatHistoryLock(async () => {
+      const id = sanitizeChatId(chatId);
+      if (!id || !(await chatHistoryStore.getSessionMeta(id))) return false;
+      return chatHistoryStore.patchSession(id, { title });
+    }));
+  }
+
+  return {
+    listForActiveFolder,
+    getSession,
+    saveSession,
+    deleteSession,
+    setActive,
+    activate,
+    readAttachment,
+    load,
+    addCost,
+    setTitle,
+  };
 }
 
 module.exports = { createChatHistoryService };
