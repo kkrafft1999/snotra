@@ -62,7 +62,7 @@
     "main/services/remembered-ui-prefs.js": 2,
     "main/services/sandbox-service.js": 9,
     "main/services/sandbox-violations.js": 1,
-    "main/services/security-page-data.js": 2,
+    "application/permissions/security-page-data.js": 2,
     "main/services/shell-runner-service.js": 1,
     "main/services/skills-service.js": 2,
     "main/services/skills-watcher.js": 1,

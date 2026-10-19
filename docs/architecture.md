@@ -158,7 +158,7 @@ rows still open are tracked in
 | Which skills and tools a chat has, and the check of a proposal to change them (#773, #774) | `src/application/chat/chat-configuration-service.js`, with `src/application/tools/mcp-remembered-tools.js` | — | moved (#1172); reads the skill catalogue through a typedef of its own (`SkillCatalog`) |
 | Whether a program allowance covers a command (#408) | `src/main/services/program-allowances-service.js` | the matching to `src/application/permissions/`; finding a program on the PATH stays in main | open |
 | The scopes, merging and loosening rules of the policy | `src/main/services/tool-policy-store.js` | the rules to `src/application/permissions/` next to `tool-policy.js`; the signed file stays in main | open |
-| What Settings › Security and the mode pill read | `src/main/services/security-page-data.js` | `src/application/permissions/`, next to `security-overview.js` | open |
+| What Settings › Security and the mode pill read | `src/application/permissions/security-page-data.js` | — | moved (#1172); reads the chat list, the recent folders and the sandbox state through typedefs of its own |
 
 ## Layers
 
@@ -177,7 +177,7 @@ code is.
 | **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
 | **Application tools** | `src/application/tools/` | The tools (#982): the registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, `generate_image`, the call planner (arguments, targets, plan key, sandbox plan, preview), argument conformance and the roots a grant opens. Called through the tool adapter. Only through injected services, see [Business rules outside the core](#business-rules-outside-the-core-982) |
 | **Application skills** | `src/application/skills/` | Which skills are switched on and where a switch is bound (#576, #982), and the model's skill suggestion (#125, #1172); the scan that finds them is `services/skills-service.js` |
-| **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content and the overview the Security page reads. No Electron, no file system; the heart of [`security-concept.md`](./security-concept.md) |
+| **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content, the overview the Security page reads and what it reads from (`security-page-data.js`, #1172). No Electron, no file system of its own; the heart of [`security-concept.md`](./security-concept.md) |
 | **Application ports** | `src/application/ports/` | 23 typedef files, the contracts between the core and main — see [Ports](#ports) |
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
 | **Electron adapters** | `src/main/electron/` | What talks to Electron's APIs below the shell (#983): the secret store over `safeStorage`, system notifications, the push to the window, the native confirmation, the application and file context menus, the HTML preview's views, diagnostics and the crash dialog. `test/electron-free-main.test.js` keeps these names out of `services/` and `adapters/` |
@@ -1570,7 +1570,7 @@ These are the topics that did move out:
 | Own secrets (concept §5): which values a tool result must never carry | `services/own-secrets.js` |
 | Masking the status of an MCP server | `services/mcp-status-masking.js` |
 | The model's skill suggestion (`SKILLS_SUGGEST`) | `ipc/skill-suggestion-handlers.js` |
-| What Settings › Tools › Autonomy, Tools › Security and the mode pill read | `services/security-page-data.js` |
+| What Settings › Tools › Autonomy, Tools › Security and the mode pill read | `application/permissions/security-page-data.js` |
 | Which skills and tools a chat has — the composer pill (`CHAT_GET_CONFIGURATION`) and the model's `get_configuration` (#773) | `application/chat/chat-configuration-service.js`, `ipc/chat-configuration-handlers.js`; why a tool is not offered: `whyNotOffered` in `tools/workspace-tool-registry.js` |
 | The model's proposal to switch a skill or tool for one chat (`propose_config_change`, #774): checked behind the port, asked on a card (approval checkpoint `config`), kept in the chat's row | engine: `proposeConfigChange` / `refreshCapabilities` in `application/chat/chat-engine.js`, port `application/ports/config-proposal-port.js`; check: `prepareProposal` in `application/chat/chat-configuration-service.js`; storage: `configOverridesFor` in `application/chat/chat-session-settings.js`; arithmetic: `contracts/chat-configuration.js`; card: `renderer/utils/config-proposal-view.js` |
 | The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |

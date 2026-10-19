@@ -62,7 +62,7 @@ const {
 } = require('../adapters/persistence-store-adapters');
 const { createOwnSecrets } = require('../services/own-secrets');
 const { createMcpSettings } = require('../services/mcp-settings');
-const { createSecurityPageData } = require('../services/security-page-data');
+const { createSecurityPageData } = require('../../application/permissions/security-page-data');
 const { createProviderSecretsPort } = require('../adapters/provider-secrets-adapter');
 const { createCredentialAdapter } = require('../adapters/credential-adapter');
 const { createFilesystemIpcAdapter } = require('../adapters/filesystem-ipc-adapter');
