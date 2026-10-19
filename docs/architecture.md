@@ -1225,7 +1225,7 @@ encrypted all of them again on the main thread (AR-10).
   for the write that carries its change, so a failed save reaches the chat's
   banner (#977). The chat's own file is written before the save returns.
   Changes run one after the other inside the store, apart from
-  `withChatHistoryLock`, which the IPC handlers hold for their read-modify-write
+  `withChatHistoryLock`, which `services/chat-history-service.js` holds for its read-modify-write
   and which the store never waits for. `whenWritesSettled` — what the quit
   waits for (#679) — includes the store's queue and its index write.
 - **The index is a cache of the files.** Each load checks it against the
@@ -1479,6 +1479,7 @@ These are the topics that did move out:
 
 | Topic | Module |
 | ----- | ------ |
+| The chat history's rules (#1006): which folder a chat is kept under, model, mode and level as main's word, the time stamp, the oldest chats beyond `MAX_CHAT_SESSIONS` with their images | `services/chat-history-service.js`; channels: `ipc/chat-history-handlers.js` |
 | The model settings (#1006): merging and encrypting a provider's or an entry's connection, when an entry is usable, the active entry; the dialog's save with its rollback, the reasoning level, the interface preferences with their confirmations | rules: `services/llm-settings.js`; flow: `services/settings-service.js`; channels: `ipc/settings-handlers.js` |
 | Own secrets (concept §5): which values a tool result must never carry | `services/own-secrets.js` |
 | Masking the status of an MCP server | `services/mcp-status-masking.js` |

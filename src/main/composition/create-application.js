@@ -88,6 +88,7 @@ const { createLlmPresets } = require('../services/llm-settings');
 const { createSettingsService } = require('../services/settings-service');
 const { createChatSessionSettings } = require('../services/chat-session-settings');
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
+const { createChatHistoryService } = require('../services/chat-history-service');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
 const { registerFeedbackHandlers } = require('../ipc/feedback-handlers');
 const { createFeedbackService, osVersionReader, resolveFeedbackEndpoint } = require('../services/feedback-service');
@@ -780,16 +781,15 @@ function createApplication({
     confirmations,
   });
   registerModelPriceHandlers({ ipcMain, modelPrices, REQ });
-  registerChatHistoryHandlers({
-    ipcMain,
+  const chatHistory = createChatHistoryService({
     chatHistoryStore,
-    REQ,
     chatAttachments,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
     isKnownWorkspaceRoot: (folderPath) => workspaceActivation.isKnownFolder(folderPath),
     chatSessionSettings,
     toolCategoryOf: (name) => toolRegistry.getDefinition(name)?.category || null,
   });
+  registerChatHistoryHandlers({ ipcMain, chatHistory, REQ });
   registerUpdateHandlers({ ipcMain, updates, REQ, PUSH, getMainWindow });
   // The feedback form (#1045): sent from here, never from the window.
   const feedback = createFeedbackService({

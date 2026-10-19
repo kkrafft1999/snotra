@@ -50,7 +50,7 @@ which do not run in CI.
 | B06 | Tools | `main/tools/`, `workspace-tool-adapter`, `workspace-path-adapter`, `http-url-fetch-adapter`, `tavily-web-search-adapter`, `presentation/tool-display`, `contracts/tool-categories`, `runtime/url-safety`, `runtime/html-to-text` | 3.7k | stable |
 | **Wave 3 — state and lifecycle** |||||
 | B07 | Settings and persistence | `storage-service`, `ipc/settings-handlers`, `settings-service`, `llm-settings`, `contracts/settings`, `chat-session-settings`, `settings-presentation-service`, `persistence-store-adapters`, `chat-preferences-adapter`, `userdata-migration`, `rename-with-retry` | 3.8k | stable (#473 is fixed) |
-| B08 | Chat history and attachments | `chat-history-normalization`, `ipc/chat-history-handlers`, `chat-attachment-store`, `contracts/attachments`, `contracts/workspace-image` | 1.3k | stable |
+| B08 | Chat history and attachments | `chat-history-normalization`, `chat-history-service`, `ipc/chat-history-handlers`, `chat-attachment-store`, `contracts/attachments`, `contracts/workspace-image` | 1.3k | stable |
 | B09 | Update and release | `update-*`, `ipc/update-handlers`, `UpdateDialog`, `AppVersionBadge`, `application-menu`, `.github/workflows/`, `scripts/`, `package.json` | 2.0k, plus 1.0k outside `src/` | stable |
 | B10 | Skills, memory, project instructions | `skills-*`, `skill-suggestion-service`, `memory-adapter`, `project-instructions-adapter`, `environment-adapter`, their contracts and runtime helpers, `system-skills/` | 2.1k | stable (#160 comes later) |
 | **Wave 4 — renderer** |||||

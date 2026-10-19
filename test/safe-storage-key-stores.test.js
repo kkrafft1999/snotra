@@ -15,7 +15,7 @@ const { createStorageService } = require('../src/main/services/storage-service')
 const { chatSessionFileName } = require('../src/main/services/chat-history-store');
 const { createToolPolicyStore, POLICY_FILENAME, POLICY_KEY_FILENAME } = require('../src/main/services/tool-policy-store');
 const { registerSettingsForTest: registerSettingsHandlers } = require('./helpers/settings-handlers');
-const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
+const { registerChatHistoryForTest: registerChatHistoryHandlers } = require('./helpers/chat-history-handlers');
 const { KEY_ALWAYS_DURABLE } = require('../src/main/services/safe-storage-key-durability');
 const {
   createChatHistoryStorePort,
