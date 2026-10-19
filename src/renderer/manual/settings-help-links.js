@@ -102,6 +102,11 @@ export const SETTINGS_HELP = Object.freeze({
     slug: 'troubleshooting/logs-and-reports',
     section: { en: 'The log file', de: 'Die Logdatei' },
   },
+  // The link in the box of a tool result that looked like an injection (#1011).
+  'chat.injectionFlag': {
+    slug: 'safety/why-snotra-asks',
+    section: { en: 'When a tool result looks like instructions', de: 'Wenn ein Tool-Ergebnis nach Anweisungen aussieht' },
+  },
   'chat.saveNotice': {
     slug: 'troubleshooting/keychain-and-storage',
     section: { en: 'When a chat is not being saved', de: 'Wenn ein Chat nicht gespeichert wird' },
