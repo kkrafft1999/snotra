@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { MEMORY_SCOPES, MEMORY_ORIGINS } = require('../src/shared/contracts/memory');
 const { TOOL_RISK_CLASSES } = require('../src/shared/contracts/tool-permissions');
 const { TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');

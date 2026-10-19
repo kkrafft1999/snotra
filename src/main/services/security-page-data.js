@@ -16,7 +16,7 @@ const { describeRememberedMcpTools } = require('./mcp-remembered-tools');
  * @param {Pick<import('../ports/chat-history-store-port').ChatHistoryStorePort,
  *   'listSessions' | 'normalizeWorkspaceRoot' | 'sessionMatchesWorkspace'>} deps.chatHistoryStore
  * @param {Pick<import('../ports/ui-prefs-store-port').UiPrefsStorePort, 'readUIPrefs'>} deps.uiPrefsStore
- * @param {Pick<ReturnType<typeof import('../tools/workspace-tool-registry').createWorkspaceToolRegistry>, 'listRiskCatalog'>} deps.toolRegistry
+ * @param {Pick<ReturnType<typeof import('../../application/tools/workspace-tool-registry').createWorkspaceToolRegistry>, 'listRiskCatalog'>} deps.toolRegistry
  * @param {{ readMcpServers: () => Promise<McpServers> }} deps.mcpConfigStore
  * @param {Pick<import('../../application/ports/code-execution-port').CodeExecutionPort, 'isAvailable'>} deps.pythonRunner
  * @param {Pick<import('../../application/ports/shell-execution-port').ShellExecutionPort, 'isAvailable'>} deps.shellRunner

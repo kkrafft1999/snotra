@@ -121,13 +121,11 @@ imports.
   ([#996](https://github.com/kkrafft1999/snotra/issues/996)).
 - The core is small. It runs one turn: engine, history trimming, prompt blocks
   and the permission decision — about 5.3k lines, against some 22k in
-  `src/main/services/` alone. The planner and the tool descriptors moved in
-  with #982, and so did the skill selection; the tool registry, session
-  settings and program allowances still sit in `src/main/` — the list is in
-  [Business rules outside the core](#business-rules-outside-the-core-982).
-  Six of the application ports — web search, URL fetch, code and shell
-  execution, MCP, image generation — are consumed only by main's registry, never
-  by the core ([#982](https://github.com/kkrafft1999/snotra/issues/982)).
+  `src/main/services/` alone. The tool registry, the planner, the tool
+  descriptors and the skill selection moved in with
+  [#982](https://github.com/kkrafft1999/snotra/issues/982); session settings,
+  chat configuration and program allowances still sit in `src/main/` — the
+  list is in [Business rules outside the core](#business-rules-outside-the-core-982).
 - The conversation itself — runs, persistence — is the renderer's, see
   [Renderer](#renderer-what-was-moved-what-stays)
   ([#981](https://github.com/kkrafft1999/snotra/issues/981)).
@@ -151,7 +149,7 @@ what touches the machine as an injected port. Inventory of 2026-10-19:
 | How far a model's arguments fit the schema | `src/application/tools/argument-conformance.js` | — | moved |
 | The roots a card's grant opens outside the folder | `src/application/tools/outside-roots.js` | — | moved; which grants a card may offer — the home folder, Snotra's own storage, the skill roots — stays in `services/outside-access.js`, which knows this machine's paths |
 | Why a command runs without the sandbox | `src/shared/contracts/sandbox-reasons.js` | — | moved out of `services/sandbox-service.js` |
-| The tool registry: the built-in definitions, which tools are offered and why not (`whyNotOffered`), the MCP tools merged in, the system prompt's tool part | `src/main/tools/workspace-tool-registry.js` (~2.1k lines), `src/main/tools/generate-image-tool.js` | `src/application/tools/`; the handlers that read files or start processes reach main through the ports that exist for it (web search, URL fetch, code and shell execution, MCP, image generation) and the file service | open |
+| The tool registry: the built-in definitions, which tools are offered and why not (`whyNotOffered`), the MCP tools merged in, the system prompt's tool part, `generate_image` | `src/application/tools/workspace-tool-registry.js`, `src/application/tools/generate-image-tool.js` | — | moved; the file tools reach the file service through `file-tools-port` (`adapters/file-tools-adapter.js`), the others through the ports that were there for it (web search, URL fetch, code and shell execution, MCP, image generation) |
 | Which skills are on, what the prompt gets of them, what a tick becomes when stored and what making a skill global does to its switch | `src/application/skills/skill-selection.js` | — | moved; `services/skills-service.js` scans the folders, resolves the folder's key and hands the scanned skills in |
 | The model's skill suggestion | `src/main/services/skill-suggestion-service.js` | `src/application/skills/` | open |
 | A chat's model, mode, reasoning level and switched skills and tools; the fallback to "Smart" when "Auto" is refused | `src/main/services/chat-session-settings.js` | `src/application/chat/`, over the chat-history store port that #981 brings | open; waits for #1006 and #981, which change the same wiring |
@@ -175,17 +173,16 @@ code is.
 | **Shared files** | `src/shared/ipc-channels.js`, `src/shared/manual-channels.js`, `src/shared/limits.js` | Channel names of both windows and the limits that several sides need |
 | **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming, the prompt blocks for environment, memory and project instructions, and the best-effort injection flags on tool results (`injection-detector.js` behind `ports/injection-flag-port.js`, #1011). Only through injected ports |
 | **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
-| **Application tools** | `src/application/tools/` | What a tool call is before it runs (#982): the tool descriptors, the call planner (arguments, targets, plan key, sandbox plan, preview), argument conformance and the roots a grant opens. Only through injected services, see [Business rules outside the core](#business-rules-outside-the-core-982) |
+| **Application tools** | `src/application/tools/` | The tools (#982): the registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, `generate_image`, the call planner (arguments, targets, plan key, sandbox plan, preview), argument conformance and the roots a grant opens. Called through the tool adapter. Only through injected services, see [Business rules outside the core](#business-rules-outside-the-core-982) |
 | **Application skills** | `src/application/skills/` | Which skills are switched on and where a switch is bound (#576, #982); the scan that finds them is `services/skills-service.js` |
 | **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content and the overview the Security page reads. No Electron, no file system; the heart of [`security-concept.md`](./security-concept.md) |
 | **Application ports** | `src/application/ports/` | 23 typedef files, the contracts between the core and main — see [Ports](#ports) |
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
-| **Electron adapters** | `src/main/electron/` | What talks to Electron's APIs below the shell (#983): the secret store over `safeStorage`, system notifications, the push to the window, the native confirmation, the application and file context menus, the HTML preview's views, diagnostics and the crash dialog. `test/electron-free-main.test.js` keeps these names out of `services/`, `tools/` and `adapters/` |
+| **Electron adapters** | `src/main/electron/` | What talks to Electron's APIs below the shell (#983): the secret store over `safeStorage`, system notifications, the push to the window, the native confirmation, the application and file context menus, the HTML preview's views, diagnostics and the crash dialog. `test/electron-free-main.test.js` keeps these names out of `services/` and `adapters/` |
 | **Remote bridge** | `src/main/remote/` | The adapters of the mobile remote (#1114): the protocol's bytes (`pairing-protocol.js`), the keys kept through `safeStorage`, the relay over Firebase's REST interfaces and in memory, the native sheet's wording. Type-checked like `adapters/` |
 | **Main ports** | `src/main/ports/` | 12 interface types for infrastructure (narrow surfaces, no leaks) |
 | **Platforms** | `src/main/platforms/` | What each operating system and packaging variant can do, resolved once at start, see [Platform capabilities](#platform-capabilities) |
 | **Providers** | `src/main/providers/` | Five provider modules and the two shared OpenAI transports behind `providers/index.js`, see [Provider adapters](#provider-adapters) |
-| **Tools** | `src/main/tools/` | The tool registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) — and `generate_image`. Business rules, called through the tool adapter; bound for the core (#982) |
 | **Services** | `src/main/services/` | 76 modules (~22k lines) and by far the largest layer: storage, file system, sandbox, MCP, updates, skills, watchers, the signed policy store, outside access, program allowances, document text. Most of the backend's logic lives here |
 | **Composition root** | `src/main/composition/` | `createCore()` builds services, adapters and engine from ports, without Electron; `createApplication()` wraps it for the desktop and registers the IPC handlers — see [Composition root](#composition-root) |
 | **IPC** | `src/main/ipc/` | The handlers behind every channel, event push to the renderer, and `trusted-sender.js`, which refuses any sender that is not the app's own page. They parse, validate and delegate; what the settings, the chat history and the tool permissions decide lives in services since [#1006](https://github.com/kkrafft1999/snotra/issues/1006) |
@@ -200,7 +197,7 @@ re-exports under `src/main/` are gone (#531).
 
 Since [#1008](https://github.com/kkrafft1999/snotra/issues/1008) everything the
 app knows about a built-in tool sits on its registry definition, in
-`src/main/tools/workspace-tool-registry.js` or a module of its own such as
+`src/application/tools/workspace-tool-registry.js` or a module of its own such as
 `generate-image-tool.js`. Besides schema, texts, handler and risk class, the
 definition carries the tool's **descriptor**: its category in the log, its group
 in the composer indicator, its line (`display`: a catalogue key and a target
@@ -241,13 +238,13 @@ front end reads the same DTO fields and needs no table of tool names.
 ## Ports
 
 **Application ports** (`src/application/ports/`) — the contracts between the
-application layer and main. There are 25. Twelve are consumed by the chat
+application layer and main. There are 26. Twelve are consumed by the chat
 engine (`llm`, `tool`, `chat-preferences`, `workspace-path`, `skill`,
 `environment`, `project-instructions`, `memory`, `own-secrets`, `tool-policy`,
-`tool-approval`, `config-proposal`); the other six — `web-search`, `url-fetch`,
-`code-execution`, `shell-execution`, `mcp` and `image-generation` — describe
-what main's tool registry calls and the core never sees
-([#982](https://github.com/kkrafft1999/snotra/issues/982)); and
+`tool-approval`, `config-proposal`); seven — `file-tools`, `web-search`, `url-fetch`,
+`code-execution`, `shell-execution`, `mcp` and `image-generation` — are what
+the tool registry calls, in the core since
+[#982](https://github.com/kkrafft1999/snotra/issues/982); and
 `user-confirmation` is what main's IPC handlers ask before anything loosens
 ([#980](https://github.com/kkrafft1999/snotra/issues/980)); the three
 `remote-*` ports are what the pairing of the mobile remote decides over
@@ -377,10 +374,15 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   without a watcher**: these are three files that are read afresh per request —
   unlike the skill catalogue, which scans entire directories and parses front
   matter, and therefore needs both
+- `file-tools-port` — the file tools as the tool registry calls them (#982):
+  list, read, search, write, patch, load a skill, and writing a generated image.
+  Each run answers with the JSON the model gets. `main/adapters/file-tools-adapter.js`
+  hands on exactly these members of `main/services/fs-service.js`, which
+  resolves every path and writes safely
 - `image-generation-port` — an image from a prompt (#85); the service sits in
   `main/adapters/openai-image-generation-adapter.js` and the port stays narrow
   on purpose, because the services differ more than they look. Consumed by
-  `main/tools/generate-image-tool.js`, not by the core
+  `application/tools/generate-image-tool.js`
 - `web-search-port` — searching the internet (issue #63); the provider sits in
   the adapter alone (`main/adapters/tavily-web-search-adapter.js`), and the tool
   handler does not know it
@@ -2780,7 +2782,7 @@ What a test holds, as of 2026-10-18:
 | `npm run typecheck` (`tsc`, run by `npm test`) | `src/application/`, `src/main/` and `src/shared/` type-check against their JSDoc, with `strictNullChecks` (the files on the `exclude` list in `tsconfig.json` apart); every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
 | `test/port-conformance.test.js` | Every port has an implementation that names it, no port file exports a value, the type check is still in the gate (#1004, #1098) |
 | `test/composition-root-wiring.test.js` | `create-core.js` and `create-application.js` hold wiring only: no branch beyond "was this optional dependency handed in", no loop, comparison, `try`/`catch` or clock, at most 1,000 lines ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)) |
-| `test/electron-free-main.test.js` | `src/main/services/`, `tools/` and `adapters/` name no Electron API — no `safeStorage`, `app.getPath`, `webContents`, `dialog`, `Notification`, … and no type from `electron`; what needs them lives in `src/main/electron/` ([#983](https://github.com/kkrafft1999/snotra/issues/983)) |
+| `test/electron-free-main.test.js` | `src/main/services/` and `adapters/` name no Electron API (the tools are in the core since #982) — no `safeStorage`, `app.getPath`, `webContents`, `dialog`, `Notification`, … and no type from `electron`; what needs them lives in `src/main/electron/` ([#983](https://github.com/kkrafft1999/snotra/issues/983)) |
 | `test/catch-discipline.test.js` | Every `catch` in `src/` rethrows, reports, logs or carries a comment why it may stay quiet; every `void call()` in the renderer has a `.catch`. Against a baseline that may only shrink, `test/catch-discipline-baseline.json`, per file and count; it also fails when the baseline lists more than the scan finds, so a fixed site comes off the list in the same change. A heuristic scanner, its limits are in the head of the test ([#1000](https://github.com/kkrafft1999/snotra/issues/1000)) |
 | `test/filesystem-port-typedef.test.js` | The `filesystem-port` typedef lists exactly the members of its adapter (#650) |
 | `test/remote-key-leak.test.js` | The mobile remote's private keys and relay tokens reach no log, IPC payload or diagnostics report; the pairing code reaches the window only while it is shown (#1114) |

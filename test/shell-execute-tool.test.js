@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 const nodePath = require('path');
 const { pathToFileURL } = require('url');
 
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
 const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
 const { TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');

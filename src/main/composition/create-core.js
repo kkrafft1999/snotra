@@ -29,7 +29,8 @@ const { createSessionGrants } = require('../../application/permissions/session-g
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/workspace-tree');
 const { TOOL_SETUPS } = require('../../shared/contracts/chat-configuration');
-const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../../application/tools/workspace-tool-registry');
+const { createFileToolsAdapter } = require('../adapters/file-tools-adapter');
 const { createManualLookup, loadVendoredMarkedLexer } = require('../services/manual-lookup');
 const { createMcpService } = require('../services/mcp-service');
 const { createMcpAdapter } = require('../adapters/mcp-adapter');
@@ -475,7 +476,7 @@ function createCore({
   /** @type {ReturnType<typeof createChatConfigurationService>} */
   let chatConfiguration;
   const toolRegistry = createWorkspaceToolRegistry({
-    fsService,
+    fsService: createFileToolsAdapter(fsService),
     webSearch,
     pythonRunner,
     urlFetch,

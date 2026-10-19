@@ -4,7 +4,7 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { removeTempDir } = require('./helpers/temp-dir');
 
 // SEARCH_MAX_OUTPUT_CHARS in fs-service.js.

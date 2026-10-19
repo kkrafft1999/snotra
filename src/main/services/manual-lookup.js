@@ -15,14 +15,14 @@
  */
 
 const vm = require('node:vm');
-const { buildSearchIndex, pageSections, searchManual, MIN_QUERY_LENGTH } = require('../../shared/manual/manual-search');
+const {
+  buildSearchIndex, pageSections, searchManual, MIN_QUERY_LENGTH, DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS,
+} = require('../../shared/manual/manual-search');
 const { headingSlug } = require('../../shared/runtime/heading-slug');
 const { manualWebUrl, normalizeManualLocale } = require('./manual-service');
 const { parseManualAddress } = require('../../shared/manual/manual-address');
 const { splitManualLocale } = require('../../shared/i18n/locales');
 
-const DEFAULT_SEARCH_RESULTS = 5;
-const MAX_SEARCH_RESULTS = 10;
 /** The longest page is about 15 000 characters; a section is far below. */
 const MAX_PAGE_CHARS = 12_000;
 

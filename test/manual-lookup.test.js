@@ -16,7 +16,7 @@ const {
   parsePageReference,
   MAX_PAGE_CHARS,
 } = require('../src/main/services/manual-lookup');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
 const { TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
 const { descriptorOf } = require('./helpers/tool-descriptors');

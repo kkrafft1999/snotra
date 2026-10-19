@@ -495,7 +495,7 @@ test('deaktivierte Tools, ungültige Argumente und Plan-Fehler blockieren ohne H
 // stored name stays, but no longer counts — the settings do not list the two
 // any more, so a refusal could never be lifted.
 test('a stale switch-off does not refuse the basic equipment (#552)', async () => {
-  const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+  const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
   const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
   const listed = [];
   const fsService = {
@@ -660,7 +660,7 @@ test('broad searches leave out hits under a user-defined sensitive pattern (#525
   const fs = require('fs/promises');
   const os = require('os');
   const { createFsService } = require('../src/main/services/fs-service');
-  const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+  const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
   const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 
   const ws = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-525-'));

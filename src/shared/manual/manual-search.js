@@ -365,7 +365,13 @@ function searchManual(index, query, { limit = MAX_RESULTS } = {}) {
   return results.slice(0, limit);
 }
 
+/** How many pages `search_manual` returns unless asked for fewer or more, and at most (#947). */
+const DEFAULT_SEARCH_RESULTS = 5;
+const MAX_SEARCH_RESULTS = 10;
+
 module.exports = {
+  DEFAULT_SEARCH_RESULTS,
+  MAX_SEARCH_RESULTS,
   MIN_QUERY_LENGTH,
   fold,
   queryTerms,

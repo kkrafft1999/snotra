@@ -10,7 +10,7 @@
  * copy that could drift from them.
  */
 
-const { createWorkspaceToolRegistry } = require('../../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../../src/application/tools/workspace-tool-registry');
 const { formatToolDisplayLine, summarizeToolCall } = require('../../src/shared/presentation/tool-display');
 
 const DESCRIPTOR_FIELDS = Object.freeze([

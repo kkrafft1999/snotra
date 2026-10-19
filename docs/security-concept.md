@@ -34,7 +34,7 @@ piece of tool text is therefore not an approval.
 
 The verified starting point: v1.3.1, commit `1e2b50d`:
 
-- The [registry](../src/main/tools/workspace-tool-registry.js) holds eight read
+- The [registry](../src/application/tools/workspace-tool-registry.js) holds eight read
   tools, `debug_wait` and three write tools. So far, `requiresWrite` and
   `allowWorkspaceWrite` control visibility and execution wholesale.
 - The [chat engine](../src/application/chat/chat-engine.js) runs tool calls one

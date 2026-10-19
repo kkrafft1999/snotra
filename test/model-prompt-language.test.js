@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 // man dem Diff nicht an und im Chat erst, wenn ein englischsprachiger Nutzer
 // eine deutsche Antwort bekommt. Deshalb diese Datei.
 
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { buildEnvironmentSystemPrompt } = require('../src/application/chat/environment-prompt');
 const { buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt } = require('../src/application/chat/memory-prompt');
 const {
@@ -250,7 +250,7 @@ function looksGerman(text) {
 const MODEL_CHANNEL_SOURCES = [
   'src/main/services/fs-service.js',
   'src/application/tools/tool-call-planner.js',
-  'src/main/tools/workspace-tool-registry.js',
+  'src/application/tools/workspace-tool-registry.js',
   'src/main/adapters/http-url-fetch-adapter.js',
   'src/main/adapters/mcp-adapter.js',
   'src/main/adapters/workspace-tool-adapter.js',
@@ -280,11 +280,11 @@ const MODEL_CHANNEL_SOURCES = [
 // sentence would slip through unnoticed.
 const NOT_MODEL_CHANNEL = [
   // Registration guards: programming errors at construction time (#278).
-  { file: 'src/main/tools/workspace-tool-registry.js', text: 'Tool benötigt name, description bzw. descriptionKey, parameters und handler.' },
-  { file: 'src/main/tools/workspace-tool-registry.js', text: ': ohne description braucht es eine modelDescription.' },
-  { file: 'src/main/tools/workspace-tool-registry.js', text: ': modelDescription muss ein String sein.' },
-  { file: 'src/main/tools/workspace-tool-registry.js', text: ' benötigt eine gültige riskClass.' },
-  { file: 'src/main/tools/workspace-tool-registry.js', text: ' hat eine ungültige zusätzliche riskClass: ' },
+  { file: 'src/application/tools/workspace-tool-registry.js', text: 'Tool benötigt name, description bzw. descriptionKey, parameters und handler.' },
+  { file: 'src/application/tools/workspace-tool-registry.js', text: ': ohne description braucht es eine modelDescription.' },
+  { file: 'src/application/tools/workspace-tool-registry.js', text: ': modelDescription muss ein String sein.' },
+  { file: 'src/application/tools/workspace-tool-registry.js', text: ' benötigt eine gültige riskClass.' },
+  { file: 'src/application/tools/workspace-tool-registry.js', text: ' hat eine ungültige zusätzliche riskClass: ' },
   // Construction guard (#278).
   { file: 'src/main/adapters/memory-adapter.js', text: 'createMemoryAdapter benötigt fs und path.' },
 ];

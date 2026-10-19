@@ -3,7 +3,7 @@
  *
  * What a tool is — its schema, risk class, preview, display line and
  * category — is decided once, in its descriptor: the registry definition in
- * `src/main/tools/`. The renderer never looks a tool up by its name. It gets
+ * `src/application/tools/`. The renderer never looks a tool up by its name. It gets
  * the few facts it has to show as fields of the payloads it already receives:
  *
  *  - `category` on every tool trace entry and tool line (icon and grouping),

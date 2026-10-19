@@ -12,7 +12,7 @@ const path = require('path');
 
 const { createOutsideAccess, outsideRootsFrom, OUTSIDE_WORKSPACE } = require('../src/main/services/outside-access');
 const { createFsService } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
 const { createToolApprovalRequestDto } = require('../src/shared/contracts/tool-permissions');
 const { normalizeSandboxOutside } = require('../src/shared/contracts/chat');

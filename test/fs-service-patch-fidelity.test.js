@@ -12,7 +12,7 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { removeTempDir } = require('./helpers/temp-dir');
 
 const LIMITS = { maxReadFileBytes: 4 * 1024 * 1024, maxWriteFileBytes: 4 * 1024 * 1024 };
