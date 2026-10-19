@@ -405,3 +405,22 @@ test('a remembered command and a session approval read on the Security page as t
   }]);
   assert.match(group.items[0].text, /docs\/a⟨U\+202E⟩\.md/);
 });
+
+// The verb comes from the descriptor's presentation (#1008), not from the tool's name.
+test('card: the image tool generates or redraws, unless replacing has no way back (#85)', async () => {
+  const { buildApprovalCardView } = await load();
+  const image = (targets, overrides = {}) => buildApprovalCardView(dto({
+    tool: 'generate_image', riskClasses: ['write', 'external'], sessionAllowed: false, targets, ...overrides,
+  }));
+  assert.equal(image([{ path: 'assets/a.png', kind: 'file', exists: false }]).headline.verb, 'generate the image');
+  assert.equal(image([{ path: 'assets/a.png', kind: 'file', exists: true }]).headline.verb, 'redraw the image');
+  assert.equal(
+    image([{ path: 'assets/a.png', kind: 'file', exists: true }], { riskClasses: ['delete', 'external'] }).headline.verb,
+    'send to an external service',
+  );
+  // Without the presentation the card falls back to what the risk class says.
+  assert.equal(
+    image([{ path: 'assets/a.png', kind: 'file', exists: false }], { presentation: undefined }).headline.verb,
+    'send to an external service',
+  );
+});
