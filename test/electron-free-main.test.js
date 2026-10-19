@@ -1,11 +1,11 @@
 'use strict';
 
-// Services, tools and adapters run without Electron (#983, AR-08).
+// Services and adapters run without Electron (#983, AR-08).
 //
 // What talks to Electron lives in src/main/electron/ (the desktop's adapters:
 // the keychain, notifications, the window push, native dialogs, menus, the
 // HTML preview) and in the shell around it — index.js, window.js, the IPC
-// handlers. Everything under services/, tools/ and adapters/ gets ports and
+// handlers. Everything under services/ and adapters/ gets ports and
 // plain values instead: a secret store, not `safeStorage`; a user-data path,
 // not `app.getPath`; an event push, not `webContents.send`. So a second host
 // — a CLI, a headless server — can build them without Electron.
@@ -21,7 +21,9 @@ const path = require('path');
 const { codeOnly } = require('./helpers/code-only');
 
 const MAIN = path.join(__dirname, '..', 'src', 'main');
-const GUARDED = ['services', 'tools', 'adapters'];
+// The tools moved into src/application/tools/ (#982), where the import guard
+// allows no Node built-in and no package at all.
+const GUARDED = ['services', 'adapters'];
 
 /** Electron's modules and the members of `app`, `shell` and `session` the app used to reach for. */
 const ELECTRON_NAMES = [
@@ -54,9 +56,9 @@ function electronNames(source) {
   return found.sort((a, b) => a.line - b.line);
 }
 
-test('services, tools and adapters name no Electron API', () => {
+test('services and adapters name no Electron API', () => {
   const files = GUARDED.flatMap((dir) => jsFiles(path.join(MAIN, dir)));
-  assert.ok(files.length > 100, `found only ${files.length} files — did the folders move?`);
+  assert.ok(files.length > 90, `found only ${files.length} files — did the folders move?`);
   const findings = files.flatMap((file) => electronNames(fs.readFileSync(file, 'utf8'))
     .map(({ line, name }) => `${path.relative(MAIN, file)}:${line} ${name}`));
   assert.deepEqual(findings, [], 'hand the module a port or a value, or move it to src/main/electron/');

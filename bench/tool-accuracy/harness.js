@@ -25,7 +25,7 @@ const src = (rel) => require(path.join(ROOT, 'src', rel));
 
 const { createChatEngine } = src('application/chat/chat-engine');
 const { createSessionGrants } = src('application/permissions/session-grants');
-const { createWorkspaceToolRegistry } = src('main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = src('application/tools/workspace-tool-registry');
 const { createWorkspaceToolAdapter } = src('main/adapters/workspace-tool-adapter');
 const { createNodeWorkspacePathAdapter } = src('main/adapters/workspace-path-adapter');
 const { createFsService } = src('main/services/fs-service');

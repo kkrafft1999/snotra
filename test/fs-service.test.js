@@ -8,7 +8,7 @@ const {
   LIST_DIRECTORY_MAX_ENTRIES,
   READ_DIRECTORY_MAX_ENTRIES,
 } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { removeTempDir } = require('./helpers/temp-dir');
 
 function makeFsService({ locale } = {}) {

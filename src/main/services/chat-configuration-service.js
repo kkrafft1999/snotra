@@ -113,7 +113,7 @@ function cleanNames(names) {
 /**
  * @param {object} deps
  * @param {Pick<ReturnType<typeof import('./skills-service').createSkillsService>, 'listCatalog'>} deps.skills
- * @param {Pick<ReturnType<typeof import('../tools/workspace-tool-registry').createToolRegistry>,
+ * @param {Pick<ReturnType<typeof import('../../application/tools/workspace-tool-registry').createToolRegistry>,
  *   'describeOffers' | 'listRiskCatalog'>} deps.toolRegistry
  * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore
  * @param {{ readMcpServers?: () => Promise<Array<{ id: string, label?: string, enabled?: boolean, knownTools?: string[] }>> }|null} [deps.mcpConfigStore]

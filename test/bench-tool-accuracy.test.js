@@ -15,7 +15,7 @@ const { UNCUT_TOOLS, UNCUT_PROMPT_LINES, wrapRegistryForArm, propertyAt } = requ
 const { scoreTask, normalisePath, specsOf, toolsOf, GROUPS } = require('../bench/tool-accuracy/score');
 const { FIXTURE, createScriptedLlm, prepareWorkspace, removeWorkspace, runTask } = require('../bench/tool-accuracy/harness');
 const { mcnemarExact, comparePaired } = require('../bench/tool-accuracy/report');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 
 const AVAILABLE = { isAvailable: () => true, isConfigured: () => true };
 

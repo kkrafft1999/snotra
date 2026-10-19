@@ -1,6 +1,6 @@
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { resolveNetworkDomains, resolveRunDomains } = require('../../shared/runtime/sandbox-domains');
-const { SANDBOX_REASONS } = require('../services/sandbox-service');
+const { SANDBOX_REASONS } = require('../../shared/contracts/sandbox-reasons');
 const { LIST_DIRECTORY_MAX_ENTRIES } = require('../../shared/contracts/list-directory');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
@@ -27,12 +27,22 @@ const {
   TOOL_CONTENT_SCANS,
   TOOL_FILE_EVENTS,
   assertCompleteDescriptor,
-} = require('../../application/tools/tool-descriptor');
+} = require('./tool-descriptor');
 const { MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS } = require('../../shared/contracts/memory');
 const {
   DEFAULT_SEARCH_RESULTS: DEFAULT_MANUAL_SEARCH_RESULTS,
   MAX_SEARCH_RESULTS: MAX_MANUAL_SEARCH_RESULTS,
-} = require('../services/manual-lookup');
+} = require('../../shared/manual/manual-search');
+
+/**
+ * The model's look into the bundled manual (#947); on the desktop
+ * `src/main/services/manual-lookup.js`. Each answer goes to the model as JSON.
+ *
+ * @typedef {Object} ManualLookup
+ * @property {() => boolean} isAvailable
+ * @property {(request: { query?: unknown, locale?: unknown, limit?: unknown }) => unknown} search
+ * @property {(request: { slug?: unknown, anchor?: unknown, locale?: unknown }) => unknown} read
+ */
 const { LOCALES, createTranslator, normalizeLocale } = require('../../shared/i18n');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { createGenerateImageTool } = require('./generate-image-tool');
@@ -65,8 +75,8 @@ function toDisabledNameSet(disabledNames) {
  *
  * @typedef {{
  *   name: string,
- *   handler: (args: any, context: import('../../application/ports/tool-port').ToolHandlerContext) => unknown,
- *   targets?: (args: import('../../application/ports/tool-port').ToolArguments) =>
+ *   handler: (args: any, context: import('../ports/tool-port').ToolHandlerContext) => unknown,
+ *   targets?: (args: import('../ports/tool-port').ToolArguments) =>
  *     Array<{ path: unknown, kind: string, access: string, overwrite?: boolean }> | { error: string },
  *   [field: string]: any,
  * }} BuiltInTool
@@ -586,8 +596,8 @@ function createToolRegistry(initialDefinitions = []) {
 
   /**
    * @param {string} name
-   * @param {import('../../application/ports/tool-port').ToolArguments | null | undefined} args
-   * @param {import('../../application/ports/tool-port').ToolHandlerContext & { allowedNames?: string[] | null }} [context]
+   * @param {import('../ports/tool-port').ToolArguments | null | undefined} args
+   * @param {import('../ports/tool-port').ToolHandlerContext & { allowedNames?: string[] | null }} [context]
    */
   async function execute(name, args, context = {}) {
     const definition = getDefinition(name);
@@ -666,7 +676,7 @@ const ALLOWANCE_SKIP_TEXT = Object.freeze({
  * had, or why the one for its program did not apply.
  *
  * @param {{ isolated?: boolean, domains?: string[], writePaths?: string[], trustd?: boolean, reason?: string } | null | undefined} isolation
- * @param {import('../../application/ports/tool-port').ToolPlan['sandbox'] | null} [sandboxPlan]
+ * @param {import('../ports/tool-port').ToolPlan['sandbox'] | null} [sandboxPlan]
  */
 function describeIsolationForModel(isolation, sandboxPlan = null) {
   if (!isolation) return null;
@@ -698,7 +708,7 @@ function describeIsolationForModel(isolation, sandboxPlan = null) {
  * Whether the approved plan runs without sandbox (#357). Only the planner
  * decides that — a call without a plan stays isolated.
  *
- * @param {import('../../application/ports/tool-port').ToolPlan | null | undefined} plan
+ * @param {import('../ports/tool-port').ToolPlan | null | undefined} plan
  */
 function sandboxDisabledByPlan(plan) {
   return plan?.sandbox?.disabled === true;
@@ -736,21 +746,21 @@ function sandboxDisabledByPlan(plan) {
  * Schluessel.
  *
  * @param {{
- *   fsService: import('../services/fs-service').FsService,
- *   webSearch?: import('../../application/ports/web-search-port').WebSearchPort | null,
- *   pythonRunner?: (import('../../application/ports/code-execution-port').CodeExecutionPort
+ *   fsService: import('../ports/file-tools-port').FileToolsPort,
+ *   webSearch?: import('../ports/web-search-port').WebSearchPort | null,
+ *   pythonRunner?: (import('../ports/code-execution-port').CodeExecutionPort
  *     & { setupNeeded?: () => string | undefined }) | null,
- *   urlFetch?: import('../../application/ports/url-fetch-port').UrlFetchPort | null,
- *   shellRunner?: (import('../../application/ports/shell-execution-port').ShellExecutionPort
+ *   urlFetch?: import('../ports/url-fetch-port').UrlFetchPort | null,
+ *   shellRunner?: (import('../ports/shell-execution-port').ShellExecutionPort
  *     & { setupNeeded?: () => string | undefined }) | null,
- *   memory?: import('../../application/ports/memory-port').MemoryPort | null,
- *   documentText?: { runExtractDocumentTextTool: (args: import('../../application/ports/tool-port').ToolArguments,
+ *   memory?: import('../ports/memory-port').MemoryPort | null,
+ *   documentText?: { runExtractDocumentTextTool: (args: import('../ports/tool-port').ToolArguments,
  *     workspaceRoot: string | null | undefined, options: object) => Promise<string> } | null,
- *   imageGeneration?: import('../../application/ports/image-generation-port').ImageGenerationPort | null,
+ *   imageGeneration?: import('../ports/image-generation-port').ImageGenerationPort | null,
  *   configuration?: { describeForModel: (input: { workspaceRoot?: string | null, chatSkillNames: string[],
  *     overrides?: import('../../shared/contracts/chat-configuration').ChatConfigOverrides | null,
  *     canPropose: boolean }) => Promise<unknown> } | null,
- *   manual?: ReturnType<typeof import('../services/manual-lookup').createManualLookup> | null,
+ *   manual?: ManualLookup | null,
  * }} deps
  */
 function createWorkspaceToolRegistry({

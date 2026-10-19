@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {
   createToolRegistry,
   createWorkspaceToolRegistry,
-} = require('../src/main/tools/workspace-tool-registry');
+} = require('../src/application/tools/workspace-tool-registry');
 const { TOOL_RISK_CLASSES } = require('../src/shared/contracts/tool-permissions');
 
 function definition(name, { riskClass = TOOL_RISK_CLASSES.READ, requiresWorkspace } = {}) {

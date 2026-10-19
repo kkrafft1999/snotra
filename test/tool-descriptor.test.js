@@ -7,7 +7,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const { createWorkspaceToolRegistry, createToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry, createToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { assertCompleteDescriptor, descriptorProblems } = require('../src/application/tools/tool-descriptor');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { normalizeSessionForLoad, sanitizeChatMessagesForStore } = require('../src/main/services/chat-history-normalization');

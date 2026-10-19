@@ -184,7 +184,7 @@ test('the key tables of the contract layer point at existing entries', () => {
  */
 test('every tool line carries all its sentences', () => {
   const { lineKeysOf } = require('../src/shared/presentation/tool-display');
-  const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+  const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
   const definitions = createWorkspaceToolRegistry({ fsService: {} }).listDefinitions();
   const missing = [];
   for (const definition of definitions) {

@@ -5,7 +5,7 @@ const { createChatEngine, CHAT_ENGINE_EVENTS } = require('../src/application/cha
 const { formatLine: formatToolDisplayLine } = require('./helpers/tool-descriptors');
 const { TOOL_LINE_PHASES } = require('../src/shared/contracts/enums');
 const { sleepAbortable } = require('../src/shared/runtime/abort');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { TOOL_RESULTS_ARE_DATA_RULE } = require('../src/shared/contracts/tool-permissions');
 
 const { translateMessage } = require('../src/shared/i18n');

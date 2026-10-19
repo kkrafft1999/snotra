@@ -8,7 +8,7 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { parseSkillPath, formatSkillPath } = require('../src/shared/runtime/skill-path');
 const { removeTempDir } = require('./helpers/temp-dir');
 

@@ -20,7 +20,6 @@
  *   agent left alone will happily loop on "make it a bit bluer".
  */
 
-const path = require('path');
 const { TOOL_RISK_CLASSES } = require('../../shared/contracts/tool-permissions');
 const { TOOL_SETUPS, CONFIG_TOOL_GROUPS } = require('../../shared/contracts/chat-configuration');
 const { TOOL_CATEGORIES } = require('../../shared/contracts/tool-categories');
@@ -29,7 +28,7 @@ const {
   TOOL_EXTERNAL_SERVICES,
 } = require('../../shared/contracts/tool-presentation');
 const { TOOL_LINE_TARGETS } = require('../../shared/presentation/tool-display');
-const { TOOL_PREVIEW_KINDS, TOOL_FILE_EVENTS } = require('../../application/tools/tool-descriptor');
+const { TOOL_PREVIEW_KINDS, TOOL_FILE_EVENTS } = require('./tool-descriptor');
 const {
   IMAGE_GENERATION_ERROR_CODES,
   IMAGE_SIZES,
@@ -38,10 +37,10 @@ const {
   IMAGE_EXTENSIONS_BY_FORMAT,
   IMAGE_GENERATION_LIMITS: LIMITS,
 } = require('../../shared/contracts/image-generation');
-const { imageDimensions } = require('../services/image-dimensions');
+const { imageDimensions } = require('./image-dimensions');
 
-/** @typedef {import('../../application/ports/image-generation-port').ImageGenerationOk} ImageGenerationOk */
-/** @typedef {import('../../application/ports/tool-port').ToolArguments} ToolArguments */
+/** @typedef {import('../ports/image-generation-port').ImageGenerationOk} ImageGenerationOk */
+/** @typedef {import('../ports/tool-port').ToolArguments} ToolArguments */
 
 const GENERATE_IMAGE_TOOL = 'generate_image';
 
@@ -49,9 +48,23 @@ const GENERATE_IMAGE_TOOL = 'generate_image';
 const HELD_IMAGE_TTL_MS = 15 * 60 * 1000;
 const MAX_HELD_IMAGES = 4;
 
+/**
+ * The extension of a path's last part, as `path.extname` gives it: from its
+ * last dot, `''` for none and for a name that only starts with one; a
+ * trailing separator is ignored. Either separator ends a part, so a Windows
+ * path reads the same everywhere.
+ *
+ * @param {string} relativePath
+ */
+function extensionOf(relativePath) {
+  const name = relativePath.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || '';
+  const dot = name.lastIndexOf('.');
+  return dot > 0 && name !== '..' ? name.slice(dot) : '';
+}
+
 /** @param {unknown} relativePath */
 function formatForPath(relativePath) {
-  const ext = path.extname(String(relativePath || '')).toLowerCase();
+  const ext = extensionOf(String(relativePath || '')).toLowerCase();
   for (const [format, extensions] of Object.entries(IMAGE_EXTENSIONS_BY_FORMAT)) {
     if (extensions.includes(ext)) return format;
   }
@@ -62,8 +75,8 @@ const SUPPORTED_EXTENSIONS = Object.values(IMAGE_EXTENSIONS_BY_FORMAT).flat();
 
 /**
  * @param {Object} deps
- * @param {Pick<import('../services/fs-service').FsService, 'writeBinaryFileForTool'>} deps.fsService
- * @param {import('../../application/ports/image-generation-port').ImageGenerationPort|null} deps.imageGeneration
+ * @param {Pick<import('../ports/file-tools-port').FileToolsPort, 'writeBinaryFileForTool'>} deps.fsService
+ * @param {import('../ports/image-generation-port').ImageGenerationPort|null} deps.imageGeneration
  * @param {() => number} [deps.now]
  */
 function createGenerateImageTool({ fsService, imageGeneration = null, now = () => Date.now() }) {
@@ -127,7 +140,7 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
 
   /**
    * @param {ToolArguments} args
-   * @param {import('../../application/ports/tool-port').ToolHandlerContext} [context]
+   * @param {import('../ports/tool-port').ToolHandlerContext} [context]
    */
   async function handler(args, { workspaceRoot, outsideRoots, abortSignal, recovery, onWritten } = {}) {
     if (!imageGeneration) {

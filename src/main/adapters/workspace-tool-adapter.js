@@ -25,7 +25,7 @@ const { readRegularFile } = require('../services/read-regular-file');
  * What this adapter does with a call — check its output, leave sensitive
  * entries out of a listing, report the files it read or wrote — is read from
  * the tool's descriptor (#1008): `contentScan`, `broadListing`, `fileEvents`,
- * `mayOverwrite`. See `src/main/tools/tool-descriptor.js`.
+ * `mayOverwrite`. See `src/application/tools/tool-descriptor.js`.
  */
 
 /**
@@ -54,7 +54,7 @@ const { readRegularFile } = require('../services/read-regular-file');
  * `typeof … === 'function'` below are for registry stubs in tests, which
  * implement less than this.
  *
- * @typedef {ReturnType<typeof import('../tools/workspace-tool-registry').createWorkspaceToolRegistry>} ToolRegistry
+ * @typedef {ReturnType<typeof import('../../application/tools/workspace-tool-registry').createWorkspaceToolRegistry>} ToolRegistry
  *
  * @typedef {import('../../application/tools/tool-call-planner').FsService} FsService
  * @typedef {import('../../application/tools/tool-call-planner').OutsideAccess} OutsideAccess

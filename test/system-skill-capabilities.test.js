@@ -15,7 +15,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { marked } = require('marked');
 
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { bundleManual } = require('../scripts/bundle-manual.js');
 const search = require('../src/shared/manual/manual-search.js');
 const { headingSlug } = require('../src/shared/runtime/heading-slug.js');

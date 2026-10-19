@@ -235,7 +235,7 @@
 
   <rect class="tool" x="372" y="1240" width="280" height="112" rx="10" fill="#fdf1f6"/>
   <text class="btitle tt-tool" x="384" y="1262">Tool registry</text>
-  <text class="bsub" x="384" y="1278">src/main/tools (registry + planner)</text>
+  <text class="bsub" x="384" y="1278">src/application/tools (in the core since #982)</text>
   <g>
     <rect class="tool" x="384" y="1290" width="120" height="26" rx="6"/><text class="chip tt-tool" x="444" y="1308">list_directory</text>
     <rect class="tool" x="516" y="1290" width="120" height="26" rx="6"/><text class="chip tt-tool" x="576" y="1308">read_file_text</text>

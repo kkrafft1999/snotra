@@ -3,7 +3,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { imageDimensions } = require('../src/main/services/image-dimensions');
+const { imageDimensions } = require('../src/application/tools/image-dimensions');
 const { createImageGenerationSettings } = require('../src/main/services/image-generation-settings');
 
 function png(width, height) {

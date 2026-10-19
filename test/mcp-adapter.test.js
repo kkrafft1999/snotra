@@ -8,7 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createMcpAdapter, renderContent, MAX_RESULT_CHARS } = require('../src/main/adapters/mcp-adapter');
-const { createToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { TOOL_RISK_CLASSES } = require('../src/shared/contracts/tool-permissions');
 const { MCP_CONNECTION_STATES } = require('../src/shared/contracts/mcp');
