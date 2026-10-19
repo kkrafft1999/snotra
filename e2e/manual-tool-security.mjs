@@ -201,6 +201,14 @@ try {
       ipcMain.removeHandler('toolPermissions:getSandboxOverview');
       ipcMain.handle('toolPermissions:getSandboxOverview', async () => ({
         integrity: 'ok', encryptionAvailable: true, platform: 'win32', homeDir: '',
+        // The platform register resolved for Windows (#1149).
+        platformCapabilities: {
+          executionSandbox: false, sandboxGitSsh: false, selfUpdate: true, secureStorage: true,
+          gaps: {
+            executionSandbox: { reason: 'approval.isolation.reason.platform', issue: 990 },
+            sandboxGitSsh: { reason: 'approval.isolation.reason.platform', issue: 990 },
+          },
+        },
         sandbox: { isolated: false, status: 'unavailable', reason: 'platform', platform: 'win32' },
         activeRoot: 'C:\\Users\\u\\garden-planner', newWorkspaceSandbox: true,
         global: { programs: [], hosts: [] },

@@ -22,9 +22,13 @@ export function folderName(root) {
   return parts[parts.length - 1] || root;
 }
 
-/** Windows has no sandbox (#990): nothing to switch, nothing to allow. */
+/**
+ * A platform without a sandbox — Windows (#990) — has nothing to switch and
+ * nothing to allow. The platform register says so (#1149), and the sandbox's
+ * state carries the same reason.
+ */
 export function hasNoSandbox(overview) {
-  return overview?.platform === 'win32' || overview?.sandbox?.reason === 'platform';
+  return overview?.platformCapabilities?.executionSandbox === false || overview?.sandbox?.reason === 'platform';
 }
 
 /** "2 programs · 1 host", or '' when there is nothing. */

@@ -10,15 +10,18 @@
 const path = require('path');
 const { createMessage } = require('../../shared/contracts/message');
 const { PRODUCT_NAMES } = require('../app-identity');
+const { PLATFORM_CAPABILITIES, PLATFORM_VARIANTS } = require('../../shared/contracts/platform-capabilities');
+const { declaredPlatformCapability } = require('../platforms');
 
 /** Verzeichnisse, in die nur root schreibt — dort liegt eine Paketinstallation. */
 const LINUX_SYSTEM_PREFIXES = ['/opt/', '/usr/', '/snap/'];
 
 // Why an installation does not replace itself. The update dialog words them in
-// the interface language, so they travel as keys (#353).
+// the interface language, so they travel as keys (#353). A platform or
+// packaging variant that cannot update itself says so in the platform register
+// (#1149); these are the states of one installation.
 const REASONS = Object.freeze({
   dev: createMessage('update.reason.dev'),
-  package: createMessage('update.reason.package'),
   platform: createMessage('update.reason.platform'),
   layout: createMessage('update.reason.layout'),
   readOnly: createMessage('update.reason.readOnly'),
@@ -61,6 +64,22 @@ function isLinuxSystemPath(dir) {
 }
 
 /**
+ * An installation of a platform (and packaging variant) whose layout allows a
+ * swap: whether it may replace itself is the platform register's to say.
+ *
+ * @template {{ kind: string }} T
+ * @param {T} target
+ * @param {string} platform
+ * @param {string|null} [variant]
+ * @returns {T & { canSelfUpdate: boolean, reason?: { key: string } }}
+ */
+function byRegister(target, platform, variant = null) {
+  const declared = declaredPlatformCapability(platform, PLATFORM_CAPABILITIES.SELF_UPDATE, variant);
+  if (declared?.supported === true) return { ...target, canSelfUpdate: true };
+  return { ...target, canSelfUpdate: false, reason: declared?.reason ? createMessage(declared.reason) : REASONS.platform };
+}
+
+/**
  * Welche Art von Installation laeuft hier gerade?
  *
  * @param {object} ctx
@@ -84,7 +103,7 @@ function detectInstallTarget({ platform, execPath, env = {}, isPackaged = true }
     if (MAC_READ_ONLY_BUNDLE.test(appBundlePath)) {
       return { kind: 'macos-read-only', canSelfUpdate: false, reason: REASONS.readOnly, appBundlePath };
     }
-    return { kind: 'macos-bundle', canSelfUpdate: true, appBundlePath };
+    return byRegister({ kind: 'macos-bundle', appBundlePath }, platform);
   }
 
   if (platform === 'win32') {
@@ -92,7 +111,7 @@ function detectInstallTarget({ platform, execPath, env = {}, isPackaged = true }
     if (!installDir || installDir === '.') {
       return { kind: 'unsupported', canSelfUpdate: false, reason: REASONS.layout };
     }
-    return { kind: 'windows-dir', canSelfUpdate: true, installDir };
+    return byRegister({ kind: 'windows-dir', installDir }, platform);
   }
 
   if (platform === 'linux') {
@@ -100,16 +119,16 @@ function detectInstallTarget({ platform, execPath, env = {}, isPackaged = true }
     // einzige Fall, in dem eine einzelne Datei ersetzt wird statt ein Ordner.
     const appImagePath = typeof env.APPIMAGE === 'string' ? env.APPIMAGE.trim() : '';
     if (appImagePath) {
-      return { kind: 'linux-appimage', canSelfUpdate: true, appImagePath };
+      return byRegister({ kind: 'linux-appimage', appImagePath }, platform);
     }
     const installDir = path.posix.dirname(String(execPath || ''));
     if (!installDir || installDir === '.') {
       return { kind: 'unsupported', canSelfUpdate: false, reason: REASONS.layout };
     }
     if (isLinuxSystemPath(installDir)) {
-      return { kind: 'linux-package', canSelfUpdate: false, reason: REASONS.package, installDir };
+      return byRegister({ kind: 'linux-package', installDir }, platform, PLATFORM_VARIANTS.LINUX_PACKAGE);
     }
-    return { kind: 'linux-dir', canSelfUpdate: true, installDir };
+    return byRegister({ kind: 'linux-dir', installDir }, platform);
   }
 
   return { kind: 'unsupported', canSelfUpdate: false, reason: REASONS.platform };

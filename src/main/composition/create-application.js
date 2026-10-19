@@ -44,6 +44,7 @@ const { createApprovalNotifier } = require('../services/approval-notifier');
 const { createProgramAllowances } = require('../services/program-allowances-service');
 const { existsSync, readFileSync } = require('fs');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
+const { resolveRunningPlatform } = require('../platforms/running-platform');
 const {
   createProviderRuntimeAdapter,
   createProviderCatalogAdapter,
@@ -650,10 +651,9 @@ function createApplication({
     quitApp: () => app.quit(),
   }));
 
-  const settingsPresentation = createSettingsPresentationService({
-    providerCatalog,
-    defaultProviderId,
-  });
+  // What this platform can do, resolved once at start (#1149).
+  const platformCapabilities = resolveRunningPlatform({ app, safeStorage, env });
+  const settingsPresentation = createSettingsPresentationService({ providerCatalog, defaultProviderId, platformCapabilities });
 
   // Umgebungsangaben fuer den Systemprompt (Issue #138). Die Shell kommt aus
   // derselben Erkennung wie `shell_execute` selbst — sonst nennt der Prompt
@@ -907,6 +907,7 @@ function createApplication({
     listKnownWorkspaces: securityPageData.listKnownWorkspaces,
     folderExists: securityPageData.folderExists,
     platform: process.platform,
+    platformCapabilities,
     homeDir: os.homedir(),
   });
 

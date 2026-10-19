@@ -774,6 +774,7 @@ module.exports = {
   'settings.shell.status.enabled': '{where}. shell_execute wird dem Modell angeboten.',
   'settings.sandbox.isolated': 'Isoliert: schreibt nur im Projektordner und in einem temporären Ordner, kein Zugriff auf Schlüssel und Browserdaten, Netzwerk nur für die Domains, die der Aufruf nennt — auf der Freigabekarte, in „Auto“ ohne Rückfrage.',
   'settings.sandbox.pending': 'Die Isolation wird beim ersten Lauf des Tools geprüft.',
+  'platform.gap.sandboxGitSsh': 'Unter Linux kann sich Git über SSH in der Sandbox noch nicht anmelden. Nimm die HTTPS-Adresse des Repositorys, oder schalte die Sandbox für den Ordner aus.',
   'settings.sandbox.reason.platform': 'Nicht isoliert: Unter Windows gibt es noch keine Sandbox — jeder Lauf hat deine vollen Rechte.',
   'settings.sandbox.reason.dependencies': 'Nicht isoliert: Die Sandbox braucht die Pakete {packages}. Installiere sie (zum Beispiel „sudo apt install bubblewrap socat ripgrep“) und starte Snotra neu.',
   'settings.sandbox.reason.selfTest': 'Nicht isoliert: Die Sandbox startet auf diesem System nicht{detail}. Ab Ubuntu 24.04 schränkt das System unprivilegierte User-Namespaces ein; „sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0“ oder ein AppArmor-Profil für bwrap hebt das auf. Starte Snotra danach neu.',
