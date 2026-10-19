@@ -35,8 +35,8 @@ async function makeStore(t, { encryption = true, confirmationReceipts = ACCEPT_E
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-mcp-'));
   t.after(() => removeTempDir(tmpDir));
   const storage = createStorageService({
-    app: { getPath: () => tmpDir },
-    safeStorage: fakeSafeStorage(encryption),
+    userDataPath: tmpDir,
+    secretStore: fakeSafeStorage(encryption),
     fs,
     path,
     providerCatalog: createMockProviderCatalog(() => null),

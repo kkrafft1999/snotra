@@ -214,8 +214,8 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     { listMeta: () => providers.listProviderMeta() }
   );
   const storage = createStorageService({
-    app: { getPath: () => tmpDir },
-    safeStorage,
+    userDataPath: tmpDir,
+    secretStore: safeStorage,
     fs: storageFs,
     path,
     providerCatalog,

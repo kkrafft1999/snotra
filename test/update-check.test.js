@@ -8,6 +8,7 @@ const assert = require('node:assert/strict');
 
 const { createUpdateCheck } = require('../src/main/adapters/update-adapter');
 const { PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
+const { createWindowPush } = require('../src/main/electron/window-push');
 
 function makeWindow(sent, { destroyed = false } = {}) {
   return {
@@ -37,7 +38,7 @@ function makeUpdates({ updateAvailable = true, readInstallFailure, clearInstallF
 function makeCheck({ updates, sent = [], env = {}, window, isAutomaticCheckEnabled } = {}) {
   return createUpdateCheck({
     updates,
-    getMainWindow: () => (window === undefined ? makeWindow(sent) : window),
+    push: createWindowPush(() => (window === undefined ? makeWindow(sent) : window)),
     PUSH,
     ...(isAutomaticCheckEnabled ? { isAutomaticCheckEnabled } : {}),
     env,

@@ -87,7 +87,7 @@ function contextMenuPosition(position, win) {
  * @param {import('../ports/filesystem-port').FilesystemPort} deps.filesystem
  * @param {Record<string, string>} deps.REQ
  * @param {Record<string, string> | null} [deps.PUSH]
- * @param {Pick<ReturnType<typeof import('../services/file-context-menu').createFileContextMenu>, 'popup' | 'reveal'> | null} [deps.fileContextMenu]
+ * @param {Pick<ReturnType<typeof import('../electron/file-context-menu').createFileContextMenu>, 'popup' | 'reveal'> | null} [deps.fileContextMenu]
  * @param {() => (import('electron').BrowserWindow | null)} [deps.getMainWindow]
  * @param {Pick<import('electron').Dialog, 'showMessageBox'> | null} [deps.dialog]
  * @param {import('../../application/ports/user-confirmation-port').UserConfirmationPort} [deps.confirmations]

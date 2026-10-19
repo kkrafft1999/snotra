@@ -103,8 +103,8 @@ test('secret MCP headers never reach the renderer and are masked in a status (#3
   const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'snotra-mcp-headers-'));
   t.after(() => removeTempDir(tmpDir));
   const storage = createStorageService({
-    app: { getPath: () => tmpDir },
-    safeStorage: {
+    userDataPath: tmpDir,
+    secretStore: {
       isEncryptionAvailable: () => true,
       encryptString: (plain) => Buffer.from(`enc:${plain}`, 'utf8'),
       decryptString: (buf) => buf.toString('utf8').slice(4),

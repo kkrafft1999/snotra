@@ -91,11 +91,11 @@ function withMenuPaths(skill, locale) {
  * app.asar as well. Without an app that knows its path — a test — there are
  * none.
  *
- * @param {{ app?: { getAppPath?: () => string }, path: typeof import('path') }} deps
+ * @param {{ appPath?: string | null, path: typeof import('path') }} deps  `appPath` is where the app is installed
  * @returns {string|null}
  */
-function bundledSystemSkillsDir({ app, path }) {
-  return typeof app?.getAppPath === 'function' ? path.join(app.getAppPath(), 'system-skills') : null;
+function bundledSystemSkillsDir({ appPath, path }) {
+  return appPath ? path.join(appPath, 'system-skills') : null;
 }
 
 /**

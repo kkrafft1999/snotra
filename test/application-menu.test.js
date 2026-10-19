@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createApplicationMenuTemplate, MENU_ITEM_IDS, MANUAL_URLS } = require('../src/main/services/application-menu');
+const { createApplicationMenuTemplate, MENU_ITEM_IDS, MANUAL_URLS } = require('../src/main/electron/application-menu');
 
 const PUSH = {
   UI_OPEN_SETTINGS: 'ui:open-settings',

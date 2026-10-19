@@ -32,8 +32,8 @@ async function setup(t, { maxChatSessions = 3 } = {}) {
   t.after(() => removeTempDir(tmpDir));
   const app = { getPath: () => tmpDir };
   const storage = createStorageService({
-    app,
-    safeStorage: { isEncryptionAvailable: () => false },
+    userDataPath: app.getPath(),
+    secretStore: { isEncryptionAvailable: () => false },
     fs,
     path,
     providerCatalog: createMockProviderCatalog(() => ({ defaultModel: 'gpt-4o', fields: { apiKey: true } })),
@@ -41,7 +41,7 @@ async function setup(t, { maxChatSessions = 3 } = {}) {
     maxFolderHistory: 5,
     defaultProviderId: 'openai',
   });
-  const chatAttachments = createChatAttachmentStore({ app, fs, path, log: { warn() {} } });
+  const chatAttachments = createChatAttachmentStore({ userDataPath: app.getPath(), fs, path, log: { warn() {} } });
   const ipcMain = createMockIpcMain();
   registerChatHistoryHandlers({
     ipcMain,
@@ -218,8 +218,8 @@ test('ohne Anhang-Ablage bleibt der Verlauf frei von Bilddaten', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-attach-off-'));
   t.after(() => removeTempDir(tmpDir));
   const storage = createStorageService({
-    app: { getPath: () => tmpDir },
-    safeStorage: { isEncryptionAvailable: () => false },
+    userDataPath: tmpDir,
+    secretStore: { isEncryptionAvailable: () => false },
     fs,
     path,
     providerCatalog: createMockProviderCatalog(() => ({ defaultModel: 'gpt-4o', fields: { apiKey: true } })),

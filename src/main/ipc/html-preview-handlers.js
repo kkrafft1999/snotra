@@ -22,7 +22,7 @@ function boundsOf(value) {
 /**
  * @param {object} deps
  * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
- * @param {ReturnType<typeof import('../services/html-preview-service').createHtmlPreviewService>} deps.htmlPreview
+ * @param {ReturnType<typeof import('../electron/html-preview-service').createHtmlPreviewService>} deps.htmlPreview
  * @param {Record<string, string>} deps.REQ
  */
 function registerHtmlPreviewHandlers({ ipcMain, htmlPreview, REQ }) {

@@ -67,7 +67,7 @@ async function setup(t, { dialogResponse = 0, workspaceRoot = OPEN, locale = 'en
   const getMainWindow = () => ({ isDestroyed: () => false });
   const { confirmations, storeReceipts, confirmed } = createTestConfirmations({ dialog, getMainWindow });
   const toolPolicyStore = createToolPolicyStore({
-    app: { getPath: () => dir }, safeStorage: makeSafeStorage(safeStorageAvailable), fs, path, crypto, log: { warn() {} },
+    userDataPath: dir, secretStore: makeSafeStorage(safeStorageAvailable), fs, path, crypto, log: { warn() {} },
     confirmationReceipts: storeReceipts,
   });
   const ipcMain = createMockIpcMain();

@@ -25,7 +25,7 @@ const { createInMemoryRelayAdapter } = require('../src/main/remote/in-memory-rel
 const { createFirebaseRelayAdapter } = require('../src/main/remote/firebase-relay-adapter');
 const { createRemoteIdentityStore, FILE_NAME } = require('../src/main/remote/identity-store-adapter');
 const { createConfirmationReceipts } = require('../src/application/permissions/user-confirmation');
-const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+const { createNativeConfirmationAdapter } = require('../src/main/electron/native-confirmation-adapter');
 const { createErrorReporter, installProcessErrorHandlers } = require('../src/main/services/error-reporter');
 const { buildDiagnosticsReport } = require('../src/main/services/diagnostics-report');
 const { writeFileAtomic } = require('../src/main/services/atomic-write');
@@ -46,8 +46,8 @@ function wiredMain(t, { relay, dir = tempDir(t) } = {}) {
   const ipcMain = createMockIpcMain();
   const ipc = [];
   const bridge = createRemoteBridge({
-    app: { getPath: () => dir },
-    safeStorage,
+    userDataPath: dir,
+    secretStore: safeStorage,
     fs: fsp,
     path,
     confirmations: createNativeConfirmationAdapter({ dialog, receipts: { issue: registry.issue } }),
