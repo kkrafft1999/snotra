@@ -252,7 +252,6 @@ function createApplication({
 
   registerChatHandlers({
     ipcMain,
-    chatEngine: core.chatEngine,
     conversation: core.conversation,
     REQ,
     PUSH,

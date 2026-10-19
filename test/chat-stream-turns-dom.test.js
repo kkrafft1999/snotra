@@ -81,9 +81,9 @@ async function mount({
         ? readWorkspaceImage(src, imageReads.length)
         : { ok: true, mime: 'image/png', base64: 'AAAA' };
     },
-    chat: (messages, options) =>
+    chat: (message, options) =>
       new Promise((resolve) => {
-        const send = { messages, options, settled: false };
+        const send = { message, options, settled: false };
         // The reply and main's end marker, apart or together: the reply can
         // overtake the events, the marker comes behind the last one (#721).
         send.reply = (result) => { send.settled = true; resolve(result); };
@@ -235,7 +235,7 @@ test('a new chat and a folder switch take the pending images along with the text
   ask('Hello');
   await flush();
   assert.equal(sends.length, 1);
-  assert.equal(sends[0].messages.at(-1).attachments, undefined, 'nothing from the earlier draft travels along');
+  assert.equal(sends[0].message.attachments, undefined, 'nothing from the earlier draft travels along');
 });
 
 test('an image still being prepared at a switch does not land in the next chat (#588)', async (t) => {
@@ -292,7 +292,7 @@ test('Enter right after a paste waits for the image instead of sending without i
 
   bitmap.resolve(null);
   await until(() => sends.length === 1, 'the send');
-  const question = sends[0].messages.at(-1);
+  const question = sends[0].message;
   assert.equal(question.content, 'What is wrong here?');
   assert.equal(question.attachments?.length, 1, 'the image went along');
 });
@@ -548,66 +548,20 @@ test('events that arrive after the reply still reach their run (#721)', async (t
 
 // --- #979 -----------------------------------------------------------------------
 
-const lastTurn = (save) => save.messages[save.messages.length - 1];
-const traceLines = (message) => (message.toolTrace || []).map((e) => (typeof e === 'string' ? e : e.line));
-
-test('a finished step is saved while the run goes on, the running one is not (#979)', async (t) => {
-  const held = [];
-  let holdSaves = false;
-  const env = await mount({
-    upsertChatSession: () => (holdSaves ? new Promise((resolve) => held.push(resolve)) : { ok: true }),
-  });
+test('a run is saved by main, not here: no write on send, after a step, or when it settles (#979, #981)', async (t) => {
+  const env = await mount();
   t.after(env.cleanup);
   const { sends, saves, ask, emit } = env;
 
   ask('Read both notes.');
   await flush();
-  assert.equal(saves.length, 1, 'the question is saved on send');
-  assert.equal(lastTurn(saves[0]).streaming, true, 'with the turn under way');
-
-  holdSaves = true;
+  assert.deepEqual(sends[0].message, { content: 'Read both notes.' }, 'only the question goes to main');
   emit('toolLine', sends[0], { phase: 'start', line: 'Reading a.txt', tool: 'read_file', callIndex: 0 });
-  assert.equal(saves.length, 1, 'a step that started is not a reason to save');
   emit('toolLine', sends[0], { phase: 'done', line: 'Read a.txt', tool: 'read_file', callIndex: 0 });
-  await until(() => saves.length === 2, 'the save after the first step');
-  assert.deepEqual(traceLines(lastTurn(saves[1])), ['Read a.txt']);
-
-  // While that save is under way, a second step finishes and a third starts.
-  emit('toolLine', sends[0], { phase: 'start', line: 'Reading b.txt', tool: 'read_file', callIndex: 1 });
-  emit('toolLine', sends[0], { phase: 'done', line: 'Read b.txt', tool: 'read_file', callIndex: 1 });
-  emit('toolLine', sends[0], { phase: 'start', line: 'Reading c.txt', tool: 'read_file', callIndex: 2 });
+  sends[0].resolve({ content: 'Both read.', toolTrace: [{ line: 'Read a.txt' }] });
   await flush();
-  assert.equal(saves.length, 2, 'one save at a time');
-
-  holdSaves = false;
-  held.shift()();
-  await until(() => saves.length === 3, 'the save that takes the second step along');
-  assert.deepEqual(traceLines(lastTurn(saves[2])), ['Read a.txt', 'Read b.txt'], 'the running step stays out');
-  assert.equal(lastTurn(saves[2]).streaming, true);
-
-  sends[0].resolve({ content: 'Both read.', toolTrace: [{ line: 'Read a.txt' }, { line: 'Read b.txt' }, { line: 'Read c.txt' }] });
-  await until(() => saves.length === 4, 'the save when the run settles');
   await flush();
-  assert.equal(saves.length, 4, 'nothing is saved from a checkpoint after the run settled');
-  assert.equal(lastTurn(saves[3]).streaming, false, 'the settled turn is not cut off');
-  assert.equal(lastTurn(saves[3]).content, 'Both read.');
-});
-
-test('a run in the background saves its own chat after each step (#979)', async (t) => {
-  const env = await mount();
-  t.after(env.cleanup);
-  const { chat, sends, saves, ask, emit } = env;
-
-  ask('Question in A');
-  await flush();
-  await chat.startNewChat();
-  const before = saves.length;
-  emit('toolLine', sends[0], { phase: 'start', line: 'Step of A', tool: 'read_file', callIndex: 0 });
-  emit('toolLine', sends[0], { phase: 'done', line: 'Step of A done', tool: 'read_file', callIndex: 0 });
-  await until(() => saves.length > before, 'the save of A');
-  const save = saves[saves.length - 1];
-  assert.equal(save.id, 'chat-a');
-  assert.deepEqual(traceLines(lastTurn(save)), ['Step of A done']);
+  assert.equal(saves.length, 0);
 });
 
 test('a turn cut off by a crash or reload comes back marked as interrupted (#979)', async (t) => {
@@ -648,26 +602,26 @@ test('an answer that settled carries no interrupted note (#979)', async (t) => {
   assert.equal(list.querySelector('.chat-interrupted-note'), null);
 });
 
-test('a run stopped by a reload is not saved as one the user stopped (#979)', async (t) => {
+test('a cancelled reply after a reload is not drawn as a turn the user stopped (#979)', async (t) => {
   const env = await mount();
   t.after(env.cleanup);
-  const { sends, saves, ask, emit } = env;
+  const { appStore, sends, ask, emit } = env;
 
   ask('Read the notes.');
   await flush();
   emit('toolLine', sends[0], { phase: 'start', line: 'Reading a.txt', tool: 'read_file', callIndex: 0 });
   emit('toolLine', sends[0], { phase: 'done', line: 'Read a.txt', tool: 'read_file', callIndex: 0 });
-  await until(() => saves.length === 2, 'the save after the step');
+  const answer = appStore.chatMessages.at(-1);
 
-  // The window reloads; main stops the run and its reply still comes in.
+  // The window reloads; main stops the run and keeps its last save (#981),
+  // and the cancelled reply still comes in.
   window.dispatchEvent(new Event('beforeunload'));
-  emit('toolLine', sends[0], { phase: 'start', line: 'Reading b.txt', tool: 'read_file', callIndex: 1 });
-  emit('toolLine', sends[0], { phase: 'done', line: 'Read b.txt', tool: 'read_file', callIndex: 1 });
   sends[0].resolve({ cancelled: true, content: '', toolTrace: [{ line: 'Read a.txt' }, { line: 'Read b.txt' }] });
   await flush();
   await flush();
-  assert.equal(saves.length, 2, 'the save mid-run is the last one');
-  assert.equal(lastTurn(saves[1]).streaming, true);
+  assert.equal(appStore.chatRuns.size, 0, 'the run is let go');
+  assert.equal(answer.streaming, true, 'the turn is not settled as a stopped one');
+  assert.equal(answer.toolTrace.length, 1, 'nothing of the cancelled reply is taken in');
 });
 
 // --- #998 -----------------------------------------------------------------------

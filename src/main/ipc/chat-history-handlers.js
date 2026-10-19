@@ -1,6 +1,7 @@
 // The chat history's channels. What a save keeps, which folder a chat belongs
 // to and when the oldest go is decided in `services/chat-history-service.js`
-// (#1006); these handlers only delegate.
+// (#1006); these handlers only delegate. The renderer reads, deletes and
+// points; it writes no chat — the conversation service does (#981).
 
 /**
  * @param {object} deps
@@ -14,8 +15,6 @@ function registerChatHistoryHandlers({ ipcMain, chatHistory, REQ }) {
   ipcMain.handle(REQ.CHAT_HISTORY_GET_SESSION, async (_event, rawId) => ({
     session: await chatHistory.getSession(rawId),
   }));
-
-  ipcMain.handle(REQ.CHAT_HISTORY_UPSERT, async (_event, sessionRow) => chatHistory.saveSession(sessionRow));
 
   ipcMain.handle(REQ.CHAT_HISTORY_DELETE, async (_event, rawId) => chatHistory.deleteSession(rawId));
 

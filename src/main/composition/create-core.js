@@ -80,6 +80,7 @@ const { createSettingsService } = require('../services/settings-service');
 const { createChatHistoryService } = require('../services/chat-history-service');
 const { createToolPermissionService } = require('../services/tool-permission-service');
 const { createConversationService } = require('../../application/chat/conversation-service');
+const { translateMessage } = require('../../shared/i18n');
 const { createChatHistoryAdapter } = require('../adapters/chat-history-adapter');
 const { createChatSessionSettings } = require('../../application/chat/chat-session-settings');
 const { createFeedbackService, osVersionReader, resolveFeedbackEndpoint } = require('../services/feedback-service');
@@ -730,7 +731,12 @@ function createCore({
     toolCategoryOf: (name) => toolRegistry.getDefinition(name)?.category || null,
   });
   // What a turn means for the stored chat: its cost, its name (#981).
-  const conversation = createConversationService({ engine: chatEngine, history: createChatHistoryAdapter(chatHistory) });
+  const conversation = createConversationService({
+    engine: chatEngine,
+    history: createChatHistoryAdapter(chatHistory),
+    // An error is kept in the chat as the interface says it, like the renderer did.
+    describeError: (error) => translateMessage(getAppLocale(), error),
+  });
   const toolPermissions = createToolPermissionService({
     confirmations,
     toolPolicyStore,

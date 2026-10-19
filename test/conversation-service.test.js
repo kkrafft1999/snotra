@@ -34,6 +34,11 @@ function memoryHistory(chats = {}) {
       store.get(id).title = title;
       return true;
     },
+    save: async (chat) => {
+      store.set(chat.id, { ...(store.get(chat.id) || {}), ...structuredClone(chat) });
+      return { ok: true };
+    },
+    readAttachment: async () => ({ ok: false }),
   };
 }
 
@@ -45,6 +50,7 @@ function fakeEngine({ result = { content: 'ok' }, title = 'A name' } = {}) {
       calls.push(['send', request.payload.chatId]);
       return result;
     },
+    abort: () => {},
     generateTitle: async ({ messages }) => {
       calls.push(['title', messages.map((m) => m.content)]);
       return title ? { title } : { error: 'no title' };
@@ -58,19 +64,17 @@ test('a turn\'s cost is added to the chat, and the reply carries the new sum', a
   const history = memoryHistory({ c1: { id: 'c1', messages: TURN, cost: round(1) } });
   const engine = fakeEngine({ result: { content: 'ok', cost: round(2) } });
   const conversation = createConversationService({ engine, history });
-  const reply = await conversation.sendTurn({ sessionId: 1, payload: { chatId: 'c1', messages: [] }, onEvent: () => {} });
+  const reply = await conversation.runTurn({ sessionId: 1, chatId: 'c1', message: { content: 'More?' } });
   assert.equal(reply.content, 'ok');
   assert.equal(reply.chatCost.models[0].rounds, 3);
   assert.equal(history.store.get('c1').cost.models[0].rounds, 3);
 });
 
-test('a turn without cost, or without a chat, leaves the sum alone', async () => {
+test('a turn without cost leaves the sum alone', async () => {
   const history = memoryHistory({ c1: { id: 'c1', messages: TURN, cost: round(1) } });
   const conversation = createConversationService({ engine: fakeEngine({ result: { error: 'boom' } }), history });
-  const reply = await conversation.sendTurn({ sessionId: 1, payload: { chatId: 'c1', messages: [] }, onEvent: () => {} });
+  const reply = await conversation.runTurn({ sessionId: 1, chatId: 'c1', message: { content: 'More?' } });
   assert.equal('chatCost' in reply, false);
-  const noChat = createConversationService({ engine: fakeEngine({ result: { content: 'x', cost: round(1) } }), history });
-  assert.equal('chatCost' in (await noChat.sendTurn({ sessionId: 1, payload: { chatId: null, messages: [] }, onEvent: () => {} })), false);
   assert.equal(history.store.get('c1').cost.models[0].rounds, 1);
 });
 
@@ -80,7 +84,7 @@ test('a sum that cannot be written does not cost the turn its answer', async () 
   const original = console.error;
   console.error = () => {};
   try {
-    const reply = await conversation.sendTurn({ sessionId: 1, payload: { chatId: 'c1', messages: [] }, onEvent: () => {} });
+    const reply = await conversation.runTurn({ sessionId: 1, chatId: 'c1', message: { content: 'More?' } });
     assert.equal(reply.content, 'ok');
     assert.equal('chatCost' in reply, false);
   } finally {

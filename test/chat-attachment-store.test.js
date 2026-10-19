@@ -12,7 +12,7 @@ const { createStorageService } = require('../src/main/services/storage-service')
 const { createChatAttachmentStore } = require('../src/main/services/chat-attachment-store');
 const { createChatHistoryStorePort } = require('../src/main/adapters/persistence-store-adapters');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
-const { registerChatHistoryForTest: registerChatHistoryHandlers } = require('./helpers/chat-history-handlers');
+const { registerChatHistoryForTest: registerChatHistoryHandlers, SAVE_CHAT } = require('./helpers/chat-history-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { removeTempDir } = require('./helpers/temp-dir');
@@ -78,7 +78,7 @@ function sessionWithImage(id, { content = 'Was steht da?', attachments = [imageA
 test('Bild überlebt Speichern und Laden — als Datei-Referenz, nicht als Base64', async (t) => {
   const { ipcMain, attachmentsDir, readRawHistory } = await setup(t);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionWithImage('chat-a'));
 
   const raw = await readRawHistory();
   assert.equal(raw.includes(PNG_1PX), false, 'Base64 steht in der Verlaufsdatei');
@@ -102,14 +102,14 @@ test('Bild überlebt Speichern und Laden — als Datei-Referenz, nicht als Base6
 test('dieselbe Nachricht mehrfach sichern legt keine zweite Datei an', async (t) => {
   const { ipcMain, attachmentsDir } = await setup(t);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionWithImage('chat-a'));
   const [file] = await fs.readdir(attachmentsDir('chat-a'));
 
   // Runde zwei: der Renderer schickt dieselbe Nachricht erneut mit — einmal
   // noch mit Bilddaten, einmal nur noch mit der Referenz.
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionWithImage('chat-a'));
   await ipcMain.invoke(
-    REQ.CHAT_HISTORY_UPSERT,
+    SAVE_CHAT,
     sessionWithImage('chat-a', { attachments: [{ kind: 'image', mediaType: 'image/png', file }] })
   );
 
@@ -121,7 +121,7 @@ test('dieselbe Nachricht mehrfach sichern legt keine zweite Datei an', async (t)
 test('Nachricht ohne Text, nur mit Bild, bleibt erhalten und benennt den Chat', async (t) => {
   const { ipcMain } = await setup(t);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-a', { content: '' }));
+  await ipcMain.invoke(SAVE_CHAT, sessionWithImage('chat-a', { content: '' }));
 
   const { sessions } = await getHistory(ipcMain);
   assert.equal(sessions.length, 1);
@@ -134,7 +134,7 @@ test('Nachricht ohne Text, nur mit Bild, bleibt erhalten und benennt den Chat', 
 test('fehlende Datei beim Laden ist kein Fehler, sondern ein leeres Ergebnis', async (t) => {
   const { ipcMain, attachmentsDir } = await setup(t);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionWithImage('chat-a'));
   const [file] = await fs.readdir(attachmentsDir('chat-a'));
   await fs.rm(path.join(attachmentsDir('chat-a'), file));
 
@@ -162,8 +162,8 @@ test('das Lesen nimmt nur Dateinamen an, die die Ablage selbst vergeben hat', as
 test('Bilder eines gelöschten Chats werden mit entfernt', async (t) => {
   const { ipcMain, attachmentsDir } = await setup(t);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-a'));
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-b', { attachments: [imageAttachment(PNG_1PX_RED)] }));
+  await ipcMain.invoke(SAVE_CHAT, sessionWithImage('chat-a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionWithImage('chat-b', { attachments: [imageAttachment(PNG_1PX_RED)] }));
   await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'chat-a');
 
   await assert.rejects(() => fs.readdir(attachmentsDir('chat-a')), { code: 'ENOENT' });
@@ -174,7 +174,7 @@ test('aus MAX_CHAT_SESSIONS gefallene Chats lassen ihre Bilder nicht liegen', as
   const { ipcMain, attachmentsDir, tmpDir } = await setup(t, { maxChatSessions: 2 });
 
   for (const [index, id] of ['chat-a', 'chat-b', 'chat-c'].entries()) {
-    await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
+    await ipcMain.invoke(SAVE_CHAT, {
       ...sessionWithImage(id, { attachments: [imageAttachment(index === 0 ? PNG_1PX : PNG_1PX_RED)] }),
       updatedAt: 1000 + index,
     });
@@ -191,7 +191,7 @@ test('verwaiste Ordner verschwinden beim nächsten Sichern', async (t) => {
   await fs.mkdir(orphan, { recursive: true });
   await fs.writeFile(path.join(orphan, `${'a'.repeat(64)}.png`), 'alt');
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionWithImage('chat-a'));
 
   assert.deepEqual(await fs.readdir(path.join(tmpDir, 'chat-attachments')), ['chat-a']);
 });
@@ -235,7 +235,7 @@ test('ohne Anhang-Ablage bleibt der Verlauf frei von Bilddaten', async (t) => {
     getActiveWorkspaceRoot: () => null,
   });
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionWithImage('chat-a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionWithImage('chat-a'));
 
   const raw = await readRawHistoryIn(tmpDir);
   assert.equal(raw.includes(PNG_1PX), false);

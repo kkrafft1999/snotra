@@ -1,13 +1,12 @@
-// Wer den Zeitpunkt eines Chats setzt (Issue #245).
+// Who sets a chat's time (#245), and who writes it at all (#981).
 //
-// Das Datum im Verlauf soll sagen, wann der Chat gefuehrt wurde. Frueher
-// stempelte der Renderer bei jedem Schreiben — und er schreibt den abgehenden
-// Chat auch dann, wenn man ihn nur angesehen hat. Ein alter Chat wanderte so
-// auf „heute“ und nach oben, ohne dass ein Wort gefallen waere.
-//
-// Geprueft wird hier die Verdrahtung: dass die Nutzlast aus dem Renderer
-// ueberhaupt keinen Zeitpunkt mehr traegt. Was der Main daraus macht, prueft
-// test/chat-history-handlers.test.js.
+// The date in the history is meant to say when the chat was held. The
+// renderer used to stamp every write — and it wrote the chat it left even
+// when it had only been looked at, so an old chat moved to "today" and to the
+// top without a word said. Since #245 main sets the time; since #981 the
+// renderer writes no chat at all: main saves a turn when it runs. Checked
+// here: looking at chats, starting a new one, being named — none of it
+// writes. What main stamps is checked in test/chat-history-service.test.js.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -35,6 +34,7 @@ async function mountChat({ sessions = [], activeChatId = null } = {}) {
 
   const upserts = [];
   const api = {
+    // The renderer has no writing channel any more; a call would land here.
     onChatDelta: () => {},
     onChatProgress: () => {},
     onChatToolLine: () => {},
@@ -71,40 +71,27 @@ async function mountChat({ sessions = [], activeChatId = null } = {}) {
   return { chat, appStore, upserts, cleanup: dom.cleanup };
 }
 
-test('der Renderer sichert den abgehenden Chat ohne Zeitpunkt', async (t) => {
+test('a chat that is only looked at is not written when the folder\'s chat is shown', async (t) => {
   const { chat, upserts, cleanup } = await mountChat();
   t.after(cleanup);
 
   await chat.loadChatForWorkspace('/ws');
 
-  assert.equal(upserts.length, 1, 'der angesehene Chat wird weiterhin gesichert');
-  assert.equal(upserts[0].id, 'chat-alt');
-  assert.ok(!('updatedAt' in upserts[0]), 'aber ohne eigenen Zeitstempel');
-  assert.deepEqual(
-    upserts[0].messages.map((m) => m.content),
-    ['Hallo', 'Guten Tag'],
-    'der Nachrichtenstand geht unveraendert mit — daran erkennt der Main den Zug'
-  );
+  assert.equal(upserts.length, 0);
 });
 
-test('auch „Neuer Chat“ sichert den abgehenden Chat ohne Zeitpunkt', async (t) => {
+test('"New chat" does not write the chat it leaves either', async (t) => {
   const { chat, upserts, cleanup } = await mountChat();
   t.after(cleanup);
 
   await chat.startNewChat();
 
-  assert.equal(upserts.length, 1);
-  assert.ok(!('updatedAt' in upserts[0]));
+  assert.equal(upserts.length, 0);
 });
 
-test('ein nachgezogener Titel geht ebenfalls ohne Zeitpunkt hinaus', async (t) => {
-  const { chat, appStore, upserts, cleanup } = await mountChat();
+test('the renderer offers no way to write a chat', async (t) => {
+  const { chat, cleanup } = await mountChat();
   t.after(cleanup);
 
-  appStore.currentChatTitle = 'Vom Modell benannt';
-  await chat.persistCurrentChat();
-
-  assert.equal(upserts.length, 1);
-  assert.equal(upserts[0].title, 'Vom Modell benannt');
-  assert.ok(!('updatedAt' in upserts[0]));
+  assert.equal('persistCurrentChat' in chat, false);
 });

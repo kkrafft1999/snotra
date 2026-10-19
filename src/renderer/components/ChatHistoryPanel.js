@@ -45,7 +45,6 @@ export function initChatHistoryPanel({
   api,
   appStore,
   stopChatVoiceListening,
-  persistCurrentChat,
   renderChatMessages,
   updateChatChrome,
   onInputChanged,
@@ -315,7 +314,6 @@ export function initChatHistoryPanel({
     // weggeschaltete Flaeche und die Eingabezeile kaeme ohne Hoehe zurueck.
     revealChatPanel();
     stopChatVoiceListening();
-    await persistCurrentChat();
     appStore.chatSessionId += 1;
     // A chat whose run is still in memory opens from there (#320): the file
     // only knows the state from when the run left the screen. Any other one

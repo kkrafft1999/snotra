@@ -29,16 +29,16 @@ async function mount() {
     onChatToolLine: (cb) => { listeners.toolLine = cb; return () => {}; },
     getChatHistory: async () => ({ sessions: [], activeChatId: null }),
     setActiveChatId: async (id) => { activeIds.push(id); },
+    // The renderer writes no chat since #981; a call would land here.
     upsertChatSession: async (row) => {
       upserts.push(structuredClone(row));
       return { ok: true };
     },
-    nameChat: async () => ({ title: null }),
     writeClipboardText: async () => ({ ok: true }),
     abortChat: (chatId) => { aborted.push(chatId); },
-    chat: (messages, options) =>
+    chat: (message, options) =>
       new Promise((resolve) => {
-        const send = { messages, options, settled: false };
+        const send = { message, options, settled: false };
         // Main's end marker comes after the reply here: the order the
         // renderer has to cope with when the reply overtakes the events (#721).
         send.resolve = (result) => {
@@ -102,7 +102,10 @@ async function mount() {
     dom.cleanup();
   }
 
-  return { dom: { cleanup }, chat, appStore, api, sends, upserts, activeIds, aborted, runsChanged, ask, emit, emitDelta, screenText };
+  /** A progress event main sends about a chat rather than a step. */
+  const emitProgress = (payload) => listeners.progress(payload);
+
+  return { dom: { cleanup }, chat, appStore, api, sends, upserts, activeIds, aborted, runsChanged, ask, emit, emitDelta, emitProgress, screenText };
 }
 
 test('a run goes on when another chat is opened, and writes its answer into its own chat', async (t) => {
@@ -134,10 +137,10 @@ test('a run goes on when another chat is opened, and writes its answer into its 
   await flush();
   await flush();
 
-  const written = upserts.find((row) => row.id === 'chat-a');
-  assert.ok(written, 'the answer is written into chat A');
-  assert.deepEqual(written.messages.map((m) => m.content), ['Check the docs folder.', 'Two dead links.']);
-  assert.equal(written.workspaceRoot, '/ws');
+  // Main writes the answer into chat A (#981); the turn went out as chat A's
+  // question alone, and the renderer writes nothing.
+  assert.deepEqual(run.message, { content: 'Check the docs folder.' });
+  assert.deepEqual(upserts, []);
   assert.equal(appStore.currentChatId, newChatId, 'the screen stays where the user is');
   assert.equal(chat.runs.stateOf('chat-a'), null);
   assert.equal(appStore.chatRuns.size, 0);
@@ -461,8 +464,7 @@ test('a question sent before the first chat is loaded goes into that chat (#721)
   assert.ok(appStore.currentChatId, 'the folder\'s chat is on screen');
   assert.equal(sends[0].options.chatId, appStore.currentChatId, 'the run belongs to the chat on screen');
   assert.match(screenText(), /Summarise the documents\./);
-  assert.ok(upserts.some((row) => row.id === appStore.currentChatId
-    && row.messages.some((m) => m.content === 'Summarise the documents.')), 'the question is saved with its chat');
+  assert.deepEqual(sends[0].message, { content: 'Summarise the documents.' }, 'the question goes to main with its chat');
   assert.equal(chat.runs.stateOf(''), null, 'nothing runs in a chat without an id');
 });
 
@@ -537,4 +539,17 @@ test('a second send while a draft waits for its chat is not taken (#721)', async
   assert.equal(sends.length, 1);
   assert.match(screenText(), /First question/);
   assert.doesNotMatch(screenText(), /Second question/);
+});
+
+test('a name main gives the chat shows in the header, and not for a chat deleted meanwhile (#981)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { chat, appStore } = env;
+  // As main sends it once the turn is saved and named, after the run has ended.
+  env.emitProgress({ type: 'chat-named', chatId: 'chat-a', title: 'Dead links in the docs' });
+  assert.equal(appStore.currentChatTitle, 'Dead links in the docs');
+
+  chat.runs.discard('chat-b');
+  env.emitProgress({ type: 'chat-named', chatId: 'chat-b', title: 'Gone' });
+  assert.equal(appStore.currentChatTitle, 'Dead links in the docs');
 });

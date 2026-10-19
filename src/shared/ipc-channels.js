@@ -245,7 +245,6 @@ const REQUEST_CHANNELS = Object.freeze({
   CHAT_HISTORY_GET: 'chatHistory:get',
   /** One chat with its messages, when it is opened; the list has none (#985). */
   CHAT_HISTORY_GET_SESSION: 'chatHistory:getSession',
-  CHAT_HISTORY_UPSERT: 'chatHistory:upsert',
   CHAT_HISTORY_DELETE: 'chatHistory:delete',
   CHAT_HISTORY_SET_ACTIVE: 'chatHistory:setActive',
   /**
@@ -260,9 +259,8 @@ const REQUEST_CHANNELS = Object.freeze({
    */
   CHAT_ATTACHMENT_READ: 'chatHistory:readAttachment',
 
+  /** A question for a chat (#981): main keeps the history, saves the turn and names the chat. */
   CHAT_SEND: 'chat:send',
-  /** Laesst das aktive Modell eine Ueberschrift fuer die Konversation bilden. */
-  CHAT_TITLE: 'chat:title',
   /** Renderer → Main (ipcRenderer.send), bricht laufenden CHAT_SEND ab. */
   CHAT_ABORT: 'chat:abort',
   /** What one or more writing calls changed in a file (#348). */

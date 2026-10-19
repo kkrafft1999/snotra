@@ -36,7 +36,7 @@ component level *inside* the main process.
 | Container | Technology | Responsibility |
 | --------- | ---------- | -------------- |
 | **Main process** | Electron main, Node.js | Composition root, IPC handlers, the chat engine and its tool loop (`src/application/`), the tool registry and planner, provider adapters, the services behind them (storage, file system, sandbox, MCP, updates, skills …), approvals, persistence. The only container that holds secrets, and the one that decides every access to the outside. |
-| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism; served from `snotra-app://app/` (`src/main/app-protocol.js`, [#1012](https://github.com/kkrafft1999/snotra/issues/1012)); the `GrantFileProtocolExtraPrivileges` fuse is off ([#1086](https://github.com/kkrafft1999/snotra/issues/1086)) | Chat, file tree, file views, settings — and, still, the state of the conversation: the run registry and when and what to persist live here, not in the core; the cost sum and the title moved to the core's conversation service ([#981](https://github.com/kkrafft1999/snotra/issues/981)). Sees nothing but `window.electronAPI` from the preload and the contracts. |
+| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism; served from `snotra-app://app/` (`src/main/app-protocol.js`, [#1012](https://github.com/kkrafft1999/snotra/issues/1012)); the `GrantFileProtocolExtraPrivileges` fuse is off ([#1086](https://github.com/kkrafft1999/snotra/issues/1086)) | Chat, file tree, file views, settings — and what a running turn looks like on screen. The conversation itself — history, saves, cost, title — is the core's since [#981](https://github.com/kkrafft1999/snotra/issues/981); the renderer sends a question and a chat id. Sees nothing but `window.electronAPI` from the preload and the contracts. |
 | **HTML preview** | `WebContentsView` with its own session (`snotra-html-preview`), the `snotra-html:` scheme and `sandbox: true` | Shows HTML pages from the workspace apart from the app's own UI ([#479](https://github.com/kkrafft1999/snotra/issues/479), see [HTML pages](#html-pages-479)). |
 | **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (#790): the page is `src/renderer/manual.html`, from the same `snotra-app:` origin, the content a bundle that `scripts/bundle-manual.js` builds into `src/manual/` from `manual/`. The app window's channels refuse it as a sender. |
 | **Execution sandbox** | Child processes through `@anthropic-ai/sandbox-runtime`: Seatbelt on macOS, bubblewrap on Linux; unisolated on Windows | `shell_execute` and `run_python` (#329): write only inside the workspace, network only through the proxy in main and only to approved domains. See [`security-concept.md`](./security-concept.md), section 9. |
@@ -128,9 +128,11 @@ imports.
   security page reads with
   [#1172](https://github.com/kkrafft1999/snotra/issues/1172) — the list is in
   [Business rules outside the core](#business-rules-outside-the-core-982).
-- The conversation itself — runs, persistence — is the renderer's, see
-  [Renderer](#renderer-what-was-moved-what-stays)
-  ([#981](https://github.com/kkrafft1999/snotra/issues/981)).
+- The conversation is the core's since
+  [#981](https://github.com/kkrafft1999/snotra/issues/981): the conversation
+  service keeps a chat's history, saves its turns and sums its cost; the
+  renderer sends a question and draws what it is told, see
+  [Renderer](#renderer-what-was-moved-what-stays).
 - A second front end (a CLI, say) would therefore have to take most of
   `src/main/` with it, not only add adapters and a composition root. That is
   scenario CORE-1 of [`quality-requirements.md`](./quality-requirements.md), and
@@ -192,7 +194,7 @@ code is.
 | **IPC** | `src/main/ipc/` | The handlers behind every channel, event push to the renderer, and `trusted-sender.js`, which refuses any sender that is not the app's own page. They parse, validate and delegate; what the settings, the chat history and the tool permissions decide lives in services since [#1006](https://github.com/kkrafft1999/snotra/issues/1006) |
 | **Main shell** | `src/main/index.js`, `src/main/window.js`, `src/main/window-state.js`, `src/main/app-lifecycle.js`, `src/main/app-identity.js`, `src/main/permissions.js`, `src/main/app-protocol.js`, `src/main/workspace-state.js`, `src/main/manual-window.js`, `src/main/data/` | The Electron start-up and its windows, the single-instance lock, the `snotra-app:` scheme the windows load from, the media permissions, the active workspace root, the manual window; `data/` holds the bundled model price table |
 | **Preload** | `src/preload/` | `index.js` builds `window.electronAPI` for the app window, `manual.js` the manual window's. Both are bundled by esbuild into one file each, because a sandboxed preload cannot load siblings |
-| **Renderer** | `src/renderer/` | DOM, CSS and native ES modules: chat, file tree, file views, settings, the manual page. It also owns the conversation state ([#981](https://github.com/kkrafft1999/snotra/issues/981)); apart from that it sees only `window.electronAPI` and the contracts |
+| **Renderer** | `src/renderer/` | DOM, CSS and native ES modules: chat, file tree, file views, settings, the manual page. What a running turn looks like on screen is its own; the conversation is the core's ([#981](https://github.com/kkrafft1999/snotra/issues/981)). Apart from that it sees only `window.electronAPI` and the contracts |
 
 Main imports the chat core from `src/application/chat/` directly; the former
 re-exports under `src/main/` are gone (#531).
@@ -1246,9 +1248,9 @@ anything in advance either — the root comes into being only with the activatio
 the renderer, so that interface and trust boundary mean the same folder.
 
 The chat history has a single, narrowly drawn exception (issue #131): a
-conversation belongs to the folder it was held in, but the renderer saves it on a
-folder change only once the new root is already active in main. A session is
-therefore allowed to name its own root in `CHAT_HISTORY_UPSERT` — it is accepted
+conversation belongs to the folder it was held in, and a save may come after the
+new root is already active in main. A save is therefore allowed to name its chat's
+own root (the conversation service names the root the chat is stored under) — it is accepted
 only if `workspaceActivation.isKnownFolder()` confirms it as an already opened
 folder, otherwise the active root applies again. The path thus ends up solely as
 a key in the history bucket and opens no file access; the trust boundary remains
@@ -1335,8 +1337,8 @@ On loading, the renderer receives only the reference and fetches the image data
 only when displaying, via `CHAT_ATTACHMENT_READ`; a folder with many sessions thus
 does not send its entire image stock over IPC. A missing file is `{ ok: false }`
 and is shown as a placeholder, not as an error. Cleanup happens under the history
-lock: `CHAT_HISTORY_DELETE` removes the chat's folder, and a
-`CHAT_HISTORY_UPSERT` removes the folders of the sessions it drops out of
+lock: `CHAT_HISTORY_DELETE` removes the chat's folder, and a save
+(`saveSession` in `services/chat-history-service.js`) removes the folders of the sessions it drops out of
 `MAX_CHAT_SESSIONS`. After that it sweeps everything for which there is no longer a
 session — but only while no history lies moved aside next to the live one
 (`chat-history.json.undecryptable-*` or `.unreadable-*` from before #985, a
@@ -1356,8 +1358,8 @@ model and mode.
 `modelPresetId` and `toolPermissionMode` per chat, writes both into the chat's row
 in the history and applies them again on a switch. The values come exclusively
 from main: `CHAT_HISTORY_ACTIVATE` names only the chat identifier and whether the
-switch was explicit, and `CHAT_HISTORY_UPSERT` discards what the renderer sends
-along for these two fields (concept §5).
+switch was explicit, and a save takes these two fields from main alone, never from
+the chat it is handed (concept §5).
 
 Two deliberately different rules for a new chat:
 
@@ -1408,7 +1410,7 @@ without thinking. Ollama's thinking travels the same way as `ollamaThinking`.
 - **Stored:** `chat-session-settings` keeps `reasoningEffort` next to model and
   mode, in memory and in the chat's history row. Only main writes it:
   `SETTINGS_SET_REASONING_EFFORT` checks the level against the model of the chat
-  on screen, and `CHAT_HISTORY_UPSERT` drops whatever the renderer sends along.
+  on screen, and a save takes it from main alone.
   Unlike the mode, nothing is applied when a chat comes on screen.
 - **Read:** a round asks for it. `resolveChatTarget({ chatId })` in the LLM
   adapter takes the chat's own level, else the model's default (usually
@@ -1424,7 +1426,7 @@ without thinking. Ollama's thinking travels the same way as `ollamaThinking`.
   — outside the listbox — and sets one through `SETTINGS_SET_REASONING_EFFORT`
   without closing. The pill reads `model · level`; entries are named by their
   model, with the entry's name (`entryName`) only for two with the same model.
-- **New chats:** `CHAT_HISTORY_UPSERT` saves a chat's first row with `medium`
+- **New chats:** the first save of a chat writes its row with `medium`
   unless a level was chosen, so a row without a level is always one from
   before #726.
 - **Entries carry none** since #726 (`llm-config.json` version 6). The
@@ -1455,26 +1457,33 @@ threw a run's result away as soon as another chat was opened.
   `chat:progress` of type `run-end` behind the last event, also when the run
   throws, and the renderer settles a run only once it has the reply *and* that
   marker (or after a grace of 10 s, should the marker never come).
-- **Renderer:** `appStore.chatRuns` holds the runs. While its chat is on screen
-  the chat's data lives in `appStore` as before; when another chat takes the
-  screen, the run takes its chat along (`run.chat`) and keeps writing into those
-  messages without touching the list. Opening the chat again puts it back
-  (`ChatStream.runs.attach`) — from memory, because the file only knows the
-  state from when it left. A finished run writes into its own chat and does
-  not make it the folder's active chat. Deleting a running chat stops the run
-  first, so that its answer cannot bring the chat back.
-- **Saved while it runs (#979):** the renderer writes a running turn after
-  every finished step (`checkpointRun` in `ChatStream.js`), one write at a
-  time per run, without the step still running. A message that is still
-  streaming when it is written is stored with `interrupted: true`; the write
-  after the run settles drops the mark. A crash, a quit or a reload therefore
-  leaves the turn up to its last finished step, and the restored chat shows
-  it with an *Interrupted* note. Once the page unloads (`beforeunload`), the
-  renderer writes nothing more of a run.
+- **Renderer:** `appStore.chatRuns` holds what the screen needs of the runs:
+  which chat streams, the answer drawn as its events come in, the cards. While
+  its chat is on screen the chat's data lives in `appStore` as before; when
+  another chat takes the screen, the run takes its chat along (`run.chat`) and
+  keeps drawing into those messages without touching the list. Opening the
+  chat again puts it back (`ChatStream.runs.attach`). It writes nothing: the
+  run itself is the core's (#981), keyed by window and chat in the
+  conversation service and the engine. Deleting a running chat stops the run
+  first, and main does not write a chat deleted in this run of the app.
+- **Saved while it runs (#979):** the conversation service writes a running
+  turn after every finished step, one write at a time per run, without the
+  step still running (`application/chat/turn-messages.js`). A message that is
+  still streaming when it is written is stored with `interrupted: true`; the
+  write after the run settles drops the mark. A crash, a quit or a reload
+  therefore leaves the turn up to its last finished step, and the restored
+  chat shows it with an *Interrupted* note.
 - **A window that reloads or dies (#979):** `chat-handlers.js` watches a
-  window from its first send on and stops all of its runs on a main-frame
-  `did-start-navigation`, on `render-process-gone` and on `destroyed`. The
-  reloaded page cannot pick a run up again, so none goes on unseen.
+  window from its first send on and abandons all of its runs on a main-frame
+  `did-start-navigation`, on `render-process-gone` and on `destroyed`
+  (`conversation.abandon`): they stop, and nothing more of them is written, so
+  the last checkpoint stays. The reloaded page cannot pick a run up again, so
+  none goes on unseen.
+- **Saves the user sees (#977):** after every save the conversation service
+  sends `chat-saved` (`ok`, `problem`); the banner follows it and the history
+  column redraws. A chat whose save did not go through is kept in memory, and
+  its next turn goes on from there, so the first save that does go through
+  takes all of it along.
 - **Mode:** the policy file holds the mode of the chat on screen.
   `chat-session-settings` remembers the mode a chat had when it left the screen
   (`modeFor`), and the policy port answers a run with its own chat's mode.
@@ -1965,43 +1974,29 @@ The renderer **may** *display* provider IDs and preset fields from IPC DTOs, as
 long as it parses no provider wire formats and duplicates no tool or provider
 logic.
 
-**Moved to the core (#981).** `application/chat/conversation-service.js` owns
-what a turn means for the stored chat, through the chat-history port: it adds
-the turn's cost to the chat's sum (#949) and answers `chat:send` with it as
-`chatCost`, and it names the chat after its first answer (`chat:title` carries
-only the chat id). The renderer shows the sum it is told and sends no cost
-with a save; main ignores one if it does. A turn that ends before the chat's
-first save is in keeps its sum in main until that save.
+**Moved to the core (#981).** `application/chat/conversation-service.js` keeps
+the conversation, through the chat-history port. `chat:send` carries the
+question, the chat id and the renderer's run id; `runTurn` loads the chat,
+appends the question and saves it (the chat becomes its folder's active one),
+sends the model the stored history — images of earlier turns read back from
+the attachment store, as the renderer sent them from memory —, saves after
+every finished step, and saves the settled turn
+(`application/chat/turn-messages.js`: stopped, failed, answered) with its
+usage. It adds the turn's cost to the chat's sum (#949) and answers with it as
+`chatCost`, and names the chat after its first answer, announced with
+`chat-named` after the run has ended. `stop` keeps a stopped turn as far as it
+had come, the running step included; `abandon` writes nothing more. The
+renderer has no channel to write a chat: `chatHistory:upsert` and `chat:title`
+are gone.
 
-`runTurn` is the whole turn in the core: it loads the chat, appends the
-question and saves it (the chat becomes its folder's active one), sends the
-model the stored history — images of earlier turns read back from the
-attachment store, as the renderer sent them from memory — saves after every
-finished step with the turn marked as cut off (#979), and saves the settled
-turn (`application/chat/turn-messages.js`: stopped, failed, answered) with its
-cost and usage. `stop` keeps a stopped turn as far as it had come; `abandon`
-(a window that reloads or dies) writes nothing more, so the last checkpoint
-stays. A chat deleted while its turn runs is not written back. The desktop
-renderer does not use it yet; it still sends the whole history (next slice of
-#981).
-
-**Not presentation, and still here.** The rest of the conversation lives in
-the renderer, and the core runs one turn of it
-([#981](https://github.com/kkrafft1999/snotra/issues/981)):
-
-- the run registry (`chatRuns` in `renderer/state/store.js`) and `settleRun` in
-  `renderer/components/ChatStream.js` — which run is on, what a finished or
-  aborted run leaves behind;
-- when and what to persist: the chat history is written from here, and a
-  running turn only reaches it when it ends ([#979](https://github.com/kkrafft1999/snotra/issues/979));
-- when to ask for a title (after a settled turn) and the seed of the greeting;
-- the whole history, which the renderer sends with every turn
-  (`messages` in `chat:send`, `main/ipc/chat-handlers.js`).
-
-A front end that is not this renderer would have to do all of it again. The
-target is a conversation service in `src/application/` that appends turns and
-persists them through a port, with the renderer sending only the new message
-and the chat id.
+**Still here, and why.** The renderer draws a run: it builds the answer on
+screen from the events (`onChatDelta`, `onChatToolLine`), settles what it shows
+(`settleRunMessages`) once the reply *and* the run-end marker are in (#721),
+holds the runs it draws in `appStore.chatRuns`, and seeds the greeting of a
+new chat, which is never stored. These are the screen's state; the rules of
+what a turn leaves in the chat exist once, in the core. A second registry of
+runs in main next to the conversation service's and the engine's would add
+nothing a front end needs (#981, step 4).
 
 ### Splitting inside the renderer ([#81](https://github.com/kkrafft1999/snotra/issues/81))
 

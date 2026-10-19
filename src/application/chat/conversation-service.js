@@ -15,7 +15,6 @@ const { createTurnAnswer, applyTurnEvent, answerForCheckpoint, settleTurn } = re
  * @typedef {import('../ports/chat-history-port').StoredChat} StoredChat
  * @typedef {import('../../shared/contracts/cost').SessionCost} SessionCost
  * @typedef {Pick<ReturnType<typeof import('./chat-engine').createChatEngine>, 'send' | 'generateTitle' | 'abort'>} ConversationEngine
- * @typedef {Parameters<ConversationEngine['send']>[0]} TurnRequest
  * @typedef {import('./turn-messages').EngineEvent} EngineEvent
  * @typedef {import('./turn-messages').ChatMessage} ChatMessage
  *
@@ -69,6 +68,22 @@ function createConversationService({ engine, history, describeError = (error) =>
 
   /** @type {Set<Promise<void>>} names still being made */
   const background = new Set();
+  /**
+   * Chats whose last save did not go through (#977): what they hold since, by
+   * chat id. The next turn goes on from here rather than from the older copy
+   * on disk, and its first save that goes through takes all of it along — as
+   * when the renderer held the chat in memory.
+   *
+   * @type {Map<string, ChatMessage[]>}
+   */
+  const unsaved = new Map();
+  /**
+   * The latest turn of each chat, until it has saved for the last time: the
+   * next turn in the same chat waits for it.
+   *
+   * @type {Map<string, { turn: RunningTurn, sessionId: string|number, finished: Promise<unknown>, done: boolean }>}
+   */
+  const lastTurn = new Map();
   /** @type {Map<string, RunningTurn>} the turns under way, by front end and chat */
   const running = new Map();
   /** @param {string|number} sessionId @param {string} chatId */
@@ -92,19 +107,6 @@ function createConversationService({ engine, history, describeError = (error) =>
       console.error('[conversation] the turn\'s cost was not added:', error);
       return undefined;
     }
-  }
-
-  /**
-   * Runs a turn on messages the front end holds and adds what it cost to the
-   * chat. The reply carries the chat's new sum as `chatCost`.
-   *
-   * @param {TurnRequest} request
-   */
-  async function sendTurn(request) {
-    const result = await engine.send(request);
-    const chatId = request?.payload?.chatId;
-    const chatCost = await addTurnCost(typeof chatId === 'string' ? chatId : '', result);
-    return chatCost === undefined ? result : { ...result, chatCost };
   }
 
   /**
@@ -142,18 +144,52 @@ function createConversationService({ engine, history, describeError = (error) =>
    *
    * @param {TurnInput} input
    */
-  async function runTurn({ sessionId, chatId, message, workspaceRoot = null, selectedPath = null, selectedIsDirectory = false, onEvent = () => {} }) {
+  async function runTurn(input) {
+    const { sessionId, chatId } = input;
+    /** @type {RunningTurn} */
+    const turn = { stopped: false, abandoned: false };
+    const key = runKey(sessionId, chatId);
+    // Known from the first moment: a stop pressed while the chat is still
+    // being loaded must not be lost.
+    running.set(key, turn);
+    const previous = lastTurn.get(chatId);
+    /** @type {() => void} */
+    let finish = () => {};
+    const finished = new Promise((resolve) => { finish = () => resolve(undefined); });
+    const mine = { turn, sessionId, finished, done: false };
+    lastTurn.set(chatId, mine);
+    try {
+      if (previous) {
+        // A new turn in the same chat replaces one still going, as the engine
+        // does: it is stopped and saved first, and this one goes on from what
+        // it left — not from an older copy on disk.
+        if (!previous.done) {
+          previous.turn.stopped = true;
+          engine.abort(previous.sessionId, chatId);
+        }
+        await previous.finished;
+      }
+      return await runOneTurn(input, turn, key);
+    } finally {
+      mine.done = true;
+      finish();
+      if (lastTurn.get(chatId) === mine) lastTurn.delete(chatId);
+    }
+  }
+
+  /**
+   * @param {TurnInput} input
+   * @param {RunningTurn} turn
+   * @param {string} key
+   */
+  async function runOneTurn({ sessionId, chatId, message, workspaceRoot = null, selectedPath = null, selectedIsDirectory = false, onEvent = () => {} }, turn, key) {
     const stored = await history.load(chatId);
     /** @type {ChatMessage} */
     const question = { role: 'user', content: typeof message?.content === 'string' ? message.content : '' };
     if (Array.isArray(message?.attachments) && message.attachments.length > 0) question.attachments = message.attachments;
     /** @type {ChatMessage[]} */
-    const asked = [...(stored?.messages || []), question];
+    const asked = [...(unsaved.get(chatId) || stored?.messages || []), question];
     const answer = createTurnAnswer();
-    /** @type {RunningTurn} */
-    const turn = { stopped: false, abandoned: false };
-    const key = runKey(sessionId, chatId);
-    running.set(key, turn);
     // A stored chat stays under its folder; a new one goes under the open one.
     const base = stored ? { id: chatId, workspaceRoot: stored.workspaceRoot ?? null } : { id: chatId };
 
@@ -163,17 +199,21 @@ function createConversationService({ engine, history, describeError = (error) =>
      */
     const save = async (messages, options = {}) => {
       if (turn.abandoned) return;
-      let outcome;
+      // What the front end's banner says (#977): `unreadable` when main skipped
+      // the save rather than write over a file it could not read (#473),
+      // `failed` when the write itself went wrong, nothing otherwise.
+      /** @type {{ ok: boolean, problem: 'unreadable'|'failed'|null }} */
+      let saved;
       try {
-        outcome = await history.save({ ...base, messages, ...(options.tokenUsage ? { tokenUsage: options.tokenUsage } : {}) }, { markActive: options.markActive === true });
+        const outcome = await history.save({ ...base, messages, ...(options.tokenUsage ? { tokenUsage: options.tokenUsage } : {}) }, { markActive: options.markActive === true });
+        saved = { ok: outcome?.ok === true, problem: outcome?.unreadable ? 'unreadable' : null };
       } catch (error) {
         console.error('[conversation] the chat was not saved:', error);
-        outcome = { ok: false };
+        saved = { ok: false, problem: 'failed' };
       }
-      onEvent(progressEvent(CHAT_PROGRESS_TYPES.CHAT_SAVED, {
-        ok: outcome?.ok === true,
-        ...(outcome?.unreadable ? { unreadable: true } : {}),
-      }));
+      if (saved.problem) unsaved.set(chatId, messages);
+      else if (saved.ok) unsaved.delete(chatId);
+      onEvent(progressEvent(CHAT_PROGRESS_TYPES.CHAT_SAVED, saved));
     };
 
     // One write at a time; steps that finish meanwhile go with the next one.
@@ -197,7 +237,9 @@ function createConversationService({ engine, history, describeError = (error) =>
       // The question is part of the chat from now on, and the chat the one
       // its folder opens with.
       await save([...asked, answerForCheckpoint(answer)], { markActive: true });
-      result = await engine.send({
+      // Stopped before the engine had the turn: it never starts. From here on
+      // the engine knows the run at once, and a stop reaches it.
+      result = turn.stopped || turn.abandoned ? { cancelled: true, content: '', toolTrace: [] } : await engine.send({
         sessionId,
         payload: {
           messages: await messagesForModel(chatId, asked),
@@ -244,11 +286,11 @@ function createConversationService({ engine, history, describeError = (error) =>
    * settles as far as it had come.
    *
    * @param {string|number} sessionId
-   * @param {string} [chatId]
+   * @param {string|null} [chatId]  undefined: every turn of the front end; null: the one without a chat (#532)
    */
   function stop(sessionId, chatId) {
     for (const [key, turn] of running) {
-      if (chatId === undefined ? key.startsWith(`${sessionId}\u0000`) : key === runKey(sessionId, chatId)) turn.stopped = true;
+      if (chatId === undefined ? key.startsWith(`${sessionId}\u0000`) : chatId !== null && key === runKey(sessionId, chatId)) turn.stopped = true;
     }
     engine.abort(sessionId, chatId);
   }
@@ -299,7 +341,7 @@ function createConversationService({ engine, history, describeError = (error) =>
     while (background.size > 0) await Promise.all([...background]);
   }
 
-  return { sendTurn, runTurn, stop, abandon, nameChat, settled };
+  return { runTurn, stop, abandon, nameChat, settled };
 }
 
 module.exports = { createConversationService, titleSource };

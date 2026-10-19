@@ -6,7 +6,7 @@ const path = require('path');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { createChatHistoryStorePort } = require('../src/main/adapters/persistence-store-adapters');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
-const { registerChatHistoryForTest: registerChatHistoryHandlers } = require('./helpers/chat-history-handlers');
+const { registerChatHistoryForTest: registerChatHistoryHandlers, SAVE_CHAT } = require('./helpers/chat-history-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { removeTempDir } = require('./helpers/temp-dir');
@@ -100,11 +100,11 @@ test('upsert + get round-trips a session and respects workspace filtering', asyn
   const ws = tmpDir;
   setActiveRoot(ws);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
 
   setActiveRoot(null);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('b'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('b'));
 
   setActiveRoot(ws);
   const inWs = await getHistory(ipcMain);
@@ -119,15 +119,15 @@ test('upsert + get round-trips a session and respects workspace filtering', asyn
 
 test('upsert rejects invalid session rows', async (t) => {
   const { ipcMain } = await setup(t);
-  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, null), { ok: false });
-  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { id: '   ' }), { ok: false });
+  assert.deepEqual(await ipcMain.invoke(SAVE_CHAT, null), { ok: false });
+  assert.deepEqual(await ipcMain.invoke(SAVE_CHAT, { id: '   ' }), { ok: false });
 });
 
 test('delete removes the session and its active pointer', async (t) => {
   const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
   const ws = tmpDir;
   setActiveRoot(ws);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
 
   const res = await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a');
@@ -144,7 +144,7 @@ test('setActive clears the pointer for empty ids', async (t) => {
   const { ipcMain, tmpDir, setActiveRoot } = await setup(t);
   const ws = tmpDir;
   setActiveRoot(ws);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, null);
   const after = await getHistory(ipcMain);
@@ -157,7 +157,7 @@ test('pruning beyond MAX_CHAT_SESSIONS drops oldest sessions and their active po
   setActiveRoot(ws);
   for (let i = 1; i <= 4; i++) {
     await ipcMain.invoke(
-      REQ.CHAT_HISTORY_UPSERT,
+      SAVE_CHAT,
       sessionRow(`s${i}`, { updatedAt: i * 1000 })
     );
     if (i === 1) await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 's1');
@@ -174,7 +174,7 @@ test('parallel upserts of distinct sessions lose no updates', async (t) => {
   const ids = Array.from({ length: 20 }, (_, i) => `c${i}`);
   await Promise.all(
     ids.map((id, i) =>
-      ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow(id, { updatedAt: i }))
+      ipcMain.invoke(SAVE_CHAT, sessionRow(id, { updatedAt: i }))
     )
   );
   const after = await getHistory(ipcMain);
@@ -185,13 +185,13 @@ test('parallel upsert/delete/setActive interleaving stays consistent', async (t)
   const { ipcMain, tmpDir, setActiveRoot } = await setup(t, { maxChatSessions: 100 });
   const ws = tmpDir;
   setActiveRoot(ws);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('keep'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('keep'));
 
   await Promise.all([
-    ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('temp')),
+    ipcMain.invoke(SAVE_CHAT, sessionRow('temp')),
     ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'temp'),
     ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'keep'),
-    ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('keep', { title: 'Updated' })),
+    ipcMain.invoke(SAVE_CHAT, sessionRow('keep', { title: 'Updated' })),
   ]);
 
   const after = await getHistory(ipcMain);
@@ -208,7 +208,7 @@ test('repeated upserts of the same id serialize through the lock (last write win
   await Promise.all(
     Array.from({ length: 10 }, (_, i) =>
       ipcMain.invoke(
-        REQ.CHAT_HISTORY_UPSERT,
+        SAVE_CHAT,
         sessionRow('same', { updatedAt: 1000 + i, title: `v${i}` })
       )
     )
@@ -223,7 +223,7 @@ test('upsert accepts semantic live messages and GET returns normalized loaded sh
   const ws = tmpDir;
   setActiveRoot(ws);
 
-  const upsertRes = await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
+  const upsertRes = await ipcMain.invoke(SAVE_CHAT, {
     id: 'rich',
     updatedAt: 5000,
     messages: [
@@ -284,11 +284,11 @@ test('upsert preserves an existing stored title when the semantic payload omits 
   setActiveRoot(ws);
 
   await ipcMain.invoke(
-    REQ.CHAT_HISTORY_UPSERT,
+    SAVE_CHAT,
     sessionRow('keep-title', { title: 'Mein gespeicherter Titel', updatedAt: 1000 })
   );
 
-  const upsertRes = await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
+  const upsertRes = await ipcMain.invoke(SAVE_CHAT, {
     id: 'keep-title',
     updatedAt: 2000,
     messages: [{ role: 'user', content: 'Späterer Verlauf ohne Titel im Payload' }],
@@ -305,7 +305,7 @@ test('upsert rejects a session whose sanitized messages become empty', async (t)
   const ws = tmpDir;
   setActiveRoot(ws);
 
-  const res = await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
+  const res = await ipcMain.invoke(SAVE_CHAT, {
     id: 'empty',
     updatedAt: 1000,
     messages: [
@@ -328,7 +328,7 @@ test('Chat-Verlauf ignoriert einen nie geoeffneten Workspace aus dem Renderer (#
   // Manipulierte Payload: Session behauptet, zu '/' zu gehoeren. Seit #131 darf
   // eine Session ihren Root zwar nennen — aber nur einen bereits geoeffneten
   // Ordner, und '/' ist hier keiner.
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: '/' });
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('a'), workspaceRoot: '/' });
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a', '/');
 
   const inWs = await getHistory(ipcMain);
@@ -352,12 +352,12 @@ test('Ordnerwechsel laesst die Konversation beim alten Ordner (Issue #131)', asy
   setKnownRoots(wsA, wsB);
 
   setActiveRoot(wsA);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: wsA });
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('a'), workspaceRoot: wsA });
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
 
   // Ab hier ist im Main schon Ordner B aktiv, der Renderer sichert erst jetzt.
   setActiveRoot(wsB);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: wsA });
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('a'), workspaceRoot: wsA });
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
 
   const inB = await getHistory(ipcMain);
@@ -376,7 +376,7 @@ test('ein unbekannter Workspace faellt auf den aktiven Ordner zurueck (Issue #68
   setActiveRoot(ws);
   setKnownRoots(ws);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
+  await ipcMain.invoke(SAVE_CHAT, {
     ...sessionRow('a'),
     workspaceRoot: path.join(tmpDir, 'nie-geoeffnet'),
   });
@@ -392,7 +392,7 @@ test('ein ausdruecklich ordnerloser Chat behaelt seinen eigenen Bucket', async (
 
   // Chat ohne Ordner gefuehrt, danach Ordner geoeffnet und erst dann gesichert.
   setActiveRoot(ws);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), workspaceRoot: null });
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('a'), workspaceRoot: null });
   await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
 
   const inWs = await getHistory(ipcMain);
@@ -428,7 +428,7 @@ test('Modell und Freigabemodus des Chats kommen aus dem Main, nicht aus der Nutz
   });
   const { ipcMain, storage } = await setup(t, { chatSessionSettings });
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
+  await ipcMain.invoke(SAVE_CHAT, {
     ...sessionRow('a'),
     // Ein Renderer, der sich selbst Rechte geben will: wird verworfen.
     modelPresetId: 'preset-untergeschoben',
@@ -446,10 +446,10 @@ test('ohne gemerkte Werte bleibt stehen, was schon gespeichert war', async (t) =
   });
   const { ipcMain, storage } = await setup(t, { chatSessionSettings });
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
   // Zweiter Lauf ohne Merkwerte — etwa nach einem Neustart.
   chatSessionSettings.valuesFor = () => ({});
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), updatedAt: 2000 });
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('a'), updatedAt: 2000 });
 
   const stored = await storage.getChatSession('a');
   assert.equal(stored.modelPresetId, 'preset-echt');
@@ -479,7 +479,7 @@ test('ein geloeschter Chat wird auch im Main vergessen', async (t) => {
   const chatSessionSettings = fakeChatSessionSettings();
   const { ipcMain } = await setup(t, { chatSessionSettings });
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
   await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a');
 
   assert.deepEqual(chatSessionSettings.calls.forget, ['a']);
@@ -503,12 +503,12 @@ test('#245: Oeffnen und Verlassen ohne Eingabe laesst den Zeitpunkt stehen', asy
   const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
   setActiveRoot(tmpDir);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
   const gefuehrt = (await storedSession(storage, 'a')).updatedAt;
 
   // Genau das, was der Renderer beim Verlassen eines nur angesehenen Chats
   // schickt: derselbe Nachrichtenstand noch einmal.
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
 
   assert.equal((await storedSession(storage, 'a')).updatedAt, gefuehrt);
 });
@@ -518,7 +518,7 @@ test('#245: ein Modell- oder Moduswechsel verschiebt den Zeitpunkt nicht', async
   const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t, { chatSessionSettings });
   setActiveRoot(tmpDir);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
   const gefuehrt = (await storedSession(storage, 'a')).updatedAt;
 
   // Der Nutzer stellt in der Chat-Leiste um; der Main merkt sich den Wert und
@@ -527,7 +527,7 @@ test('#245: ein Modell- oder Moduswechsel verschiebt den Zeitpunkt nicht', async
     modelPresetId: 'preset-neu',
     toolPermissionMode: 'ask-all',
   });
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
 
   const stored = await storedSession(storage, 'a');
   assert.equal(stored.modelPresetId, 'preset-neu', 'der Wert selbst wird gespeichert');
@@ -539,11 +539,11 @@ test('#245: eine gesendete Nachricht setzt den Zeitpunkt auf jetzt', async (t) =
   const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
   setActiveRoot(tmpDir);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
   const vorher = (await storedSession(storage, 'a')).updatedAt;
 
   await ipcMain.invoke(
-    REQ.CHAT_HISTORY_UPSERT,
+    SAVE_CHAT,
     sessionRow('a', {
       messages: [
         { role: 'user', content: 'hello from a' },
@@ -563,11 +563,11 @@ test('#245: eine eingetroffene Antwort setzt den Zeitpunkt, auch bei gleicher An
     { role: 'user', content: 'Was steht in der Datei?' },
     { role: 'assistant', content: 'Einen Moment' },
   ];
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { messages: laufend }));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a', { messages: laufend }));
   const vorher = (await storedSession(storage, 'a')).updatedAt;
 
   await ipcMain.invoke(
-    REQ.CHAT_HISTORY_UPSERT,
+    SAVE_CHAT,
     sessionRow('a', {
       messages: [laufend[0], { role: 'assistant', content: 'Die vollstaendige Antwort' }],
     })
@@ -580,12 +580,12 @@ test('#245: ein nachgezogener Titel verschiebt den Zeitpunkt nicht', async (t) =
   const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
   setActiveRoot(tmpDir);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { title: '' }));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a', { title: '' }));
   const antwort = (await storedSession(storage, 'a')).updatedAt;
 
   // Das Modell benennt die Konversation im Hintergrund, nachdem die Antwort
   // schon steht — der Chat darf dadurch nicht juenger werden als die Antwort.
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { title: 'Vom Modell benannt' }));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a', { title: 'Vom Modell benannt' }));
 
   const stored = await storedSession(storage, 'a');
   assert.equal(stored.title, 'Vom Modell benannt');
@@ -596,7 +596,7 @@ test('#245: ein Zeitpunkt aus der Nutzlast gilt nicht', async (t) => {
   const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t);
   setActiveRoot(tmpDir);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a', { updatedAt: 9_999_999_999 }));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('a', { updatedAt: 9_999_999_999 }));
 
   const stored = await storedSession(storage, 'a');
   assert.notEqual(stored.updatedAt, 9_999_999_999);
@@ -607,11 +607,11 @@ test('#245: ein nur angesehener Chat bleibt im Verlauf, wo er war', async (t) =>
   const { ipcMain, storage, tmpDir, setActiveRoot } = await setup(t, { maxChatSessions: 10 });
   setActiveRoot(tmpDir);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('alt'));
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('neu'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('alt'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('neu'));
 
   // „alt“ geoeffnet, das Modell gewechselt, wieder weggewechselt.
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('alt'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('alt'));
 
   const got = await getHistory(ipcMain);
   assert.deepEqual(got.sessions.map((s) => s.id), ['neu', 'alt']);
@@ -638,7 +638,7 @@ test('#245: eine Verlaufsdatei aus einer aelteren Version wird nicht neu gestemp
   // Der Renderer laedt sie und schreibt sie beim Verlassen unveraendert zurueck.
   const geladen = await getHistory(ipcMain);
   const session = geladen.sessions.find((s) => s.id === 'legacy');
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, {
+  await ipcMain.invoke(SAVE_CHAT, {
     id: 'legacy',
     title: session.title,
     workspaceRoot: session.workspaceRoot,
@@ -651,7 +651,7 @@ test('#245: eine Verlaufsdatei aus einer aelteren Version wird nicht neu gestemp
 test('#473: with a history index that cannot be read a save is skipped, not written over it', async (t) => {
   const first = await setup(t);
   first.setActiveRoot(first.tmpDir);
-  await first.ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('a'));
+  await first.ipcMain.invoke(SAVE_CHAT, sessionRow('a'));
   await first.ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'a');
   await first.storage.whenWritesSettled();
   const target = path.join(first.tmpDir, 'chat-history', 'index.json');
@@ -673,7 +673,7 @@ test('#473: with a history index that cannot be read a save is skipped, not writ
   // The new chat, the folder switch and the delete that ask for these go on,
   // and the answer says why nothing was saved, so the chat can tell (#977).
   const skipped = { ok: false, unreadable: true };
-  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('b')), skipped);
+  assert.deepEqual(await ipcMain.invoke(SAVE_CHAT, sessionRow('b')), skipped);
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, 'b'), skipped);
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, 'a'), skipped);
   assert.equal(await fs.readFile(target, 'utf8'), original, 'the index stays as it was');
@@ -689,19 +689,19 @@ test('the reasoning level comes from main, the payload\'s is dropped (#725)', as
   const chatSessionSettings = fakeChatSessionSettings({ a: { reasoningEffort: 'high' } });
   const { ipcMain, storage } = await setup(t, { chatSessionSettings });
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), reasoningEffort: 'max' });
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('a'), reasoningEffort: 'max' });
   let stored = await storage.getChatSession('a');
   assert.equal(stored.reasoningEffort, 'high');
 
   // Without a remembered value the stored one stays; the payload still counts for nothing.
   chatSessionSettings.valuesFor = () => ({});
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('a'), reasoningEffort: 'max', updatedAt: 2000 });
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('a'), reasoningEffort: 'max', updatedAt: 2000 });
   stored = await storage.getChatSession('a');
   assert.equal(stored.reasoningEffort, 'high');
 
   // A chat saved for the first time without a choice gets the default (#726):
   // only a row from before has none.
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('b'), reasoningEffort: 'max' });
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('b'), reasoningEffort: 'max' });
   stored = await storage.getChatSession('b');
   assert.equal(stored.reasoningEffort, 'medium');
 });
@@ -723,18 +723,18 @@ test('the chat cost is main\'s sum: added per turn, kept by every save, never ta
   };
   // A first turn can end before the chat's first save is in: the sum waits.
   assert.equal((await chatHistory.addCost('priced', turn)).models[0].rounds, 2);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('priced'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('priced'));
   let session = (await getHistory(ipcMain)).sessions.find((s) => s.id === 'priced');
   assert.deepEqual(session.cost, { version: 1, ...turn });
 
   // The next turn adds to it; a save from the renderer keeps it and cannot set it.
   assert.equal((await chatHistory.addCost('priced', turn)).models[0].rounds, 4);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('priced', { title: 'Renamed' }), cost: { models: [] } });
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('priced', { title: 'Renamed' }), cost: { models: [] } });
   session = (await getHistory(ipcMain)).sessions.find((s) => s.id === 'priced');
   assert.equal(session.cost.models[0].rounds, 4);
 
   // Cost sent along with a save is dropped.
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, { ...sessionRow('junk'), cost: turn });
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('junk'), cost: turn });
   session = (await getHistory(ipcMain)).sessions.find((s) => s.id === 'junk');
   assert.equal(session.cost, undefined);
 });
@@ -742,7 +742,7 @@ test('the chat cost is main\'s sum: added per turn, kept by every save, never ta
 test('a chat is named in main, and a deleted one is not brought back (#981)', async (t) => {
   const { ipcMain, chatHistory, tmpDir, setActiveRoot } = await setup(t);
   setActiveRoot(tmpDir);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, sessionRow('named'));
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('named'));
   assert.equal(await chatHistory.setTitle('named', 'A proper name'), true);
   const loaded = await chatHistory.load('named');
   assert.equal(loaded.title, 'A proper name');

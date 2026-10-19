@@ -7,7 +7,13 @@ const { createConversationService } = require('../src/application/chat/conversat
 /** The conversation service over a history that keeps nothing (#981). */
 const conversationFor = (chatEngine) => createConversationService({
   engine: chatEngine,
-  history: { load: async () => null, addCost: async () => null, setTitle: async () => false },
+  history: {
+    load: async () => null,
+    save: async () => ({ ok: true }),
+    readAttachment: async () => ({ ok: false }),
+    addCost: async () => null,
+    setTitle: async () => false,
+  },
 });
 const { resolveToolRoundLimit } = require('../src/application/chat/chat-engine');
 const { createChatApplication } = require('../src/main/composition/create-chat-application');
@@ -230,19 +236,20 @@ function setupChatHandlers({
     getActiveWorkspaceRoot: () => workspaceRoot,
   });
   return {
-    sendHandler: ipcMain.handlers.get(REQ.CHAT_SEND),
+    // A turn belongs to a chat (#981); a test that names none sends in this one.
+    sendHandler: (event, payload) => ipcMain.handlers.get(REQ.CHAT_SEND)(event, { chatId: 'chat-test', ...payload }),
     abortHandler: ipcMain.onHandlers.get(REQ.CHAT_ABORT),
     toolRegistry,
     chatEngine,
   };
 }
 
-test('CHAT_SEND rejects an empty messages payload', async () => {
+test('CHAT_SEND refuses a turn without a chat to keep it in (#981)', async () => {
   const { provider } = makeScriptedProvider([assistantText('unused')]);
   const { sendHandler } = setupChatHandlers({ provider });
   const { event } = makeFakeEvent();
 
-  const res = await sendHandler(event, { messages: [] });
+  const res = await sendHandler(event, { message: { content: 'Hi' }, chatId: '   ' });
   assert.deepEqual(res, { error: { key: 'chat.error.noMessages' }, code: 'INVALID' });
   assert.equal(errorText(res), 'Keine Nachrichten übergeben.');
   assert.equal(errorText(res, 'en'), 'No messages handed over.');
@@ -267,7 +274,7 @@ test('CHAT_SEND reports an unknown provider without calling streamChatRound', as
   });
   const { event } = makeFakeEvent();
 
-  const res = await ipcMain.handlers.get(REQ.CHAT_SEND)(event, { messages: [{ role: 'user', content: 'Hi' }] });
+  const res = await ipcMain.handlers.get(REQ.CHAT_SEND)(event, { message: { content: 'Hi' }, chatId: 'chat-a' });
   assert.equal(res.code, 'INVALID');
   assert.equal(res.error.key, 'provider.error.unknown');
   assert.equal(calls.length, 0);
@@ -279,7 +286,7 @@ test('CHAT_SEND fails fast when the API key is missing', async () => {
   const { sendHandler } = setupChatHandlers({ provider, storage });
   const { event } = makeFakeEvent();
 
-  const res = await sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }] });
+  const res = await sendHandler(event, { message: { content: 'Hi' } });
   assert.equal(res.code, 'NO_API_KEY');
   assert.equal(calls.length, 0);
 });
@@ -290,7 +297,7 @@ test('CHAT_SEND fails fast when a required base URL is missing', async () => {
   const { sendHandler } = setupChatHandlers({ provider, storage });
   const { event } = makeFakeEvent();
 
-  const res = await sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }] });
+  const res = await sendHandler(event, { message: { content: 'Hi' } });
   assert.equal(res.code, 'NO_BASE_URL');
   assert.equal(calls.length, 0);
 });
@@ -302,7 +309,7 @@ test('CHAT_SEND returns the final assistant text when no tools are called', asyn
   const { sendHandler } = setupChatHandlers({ provider });
   const { event } = makeFakeEvent();
 
-  const res = await sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }] });
+  const res = await sendHandler(event, { message: { content: 'Hi' } });
   assert.equal(res.content, 'Hallo!');
   assert.deepEqual(res.toolTrace, []);
   assert.deepEqual(res.usage, { prompt: 10, completion: 2, total: 12, cached: 0 });
@@ -325,7 +332,7 @@ test('CHAT_SEND runs a full tool round-trip: tool call -> registry -> follow-up 
   const { event, sent } = makeFakeEvent();
 
   const res = await sendHandler(event, {
-    messages: [{ role: 'user', content: 'Was liegt hier?' }],
+    message: { content: 'Was liegt hier?' },
   });
 
   assert.equal(res.content, 'Im Ordner liegen 3 Dateien.');
@@ -372,7 +379,7 @@ test('CHAT_SEND emits a workspace fileWritten progress event after write_file_te
   const { event, sent } = makeFakeEvent();
 
   const res = await sendHandler(event, {
-    messages: [{ role: 'user', content: 'Schreib eine Datei' }],
+    message: { content: 'Schreib eine Datei' },
   });
 
   assert.equal(res.content, 'Geschrieben.');
@@ -387,8 +394,8 @@ test('CHAT_SEND emits a workspace fileWritten progress event after write_file_te
     type: 'workspace',
     event: 'fileWritten',
     relativePath: 'notes/new.md',
-    // Every event names its chat and run since #320; this send named neither.
-    chatId: null,
+    // Every event names its chat and run since #320; this send named no run.
+    chatId: 'chat-test',
     runId: null,
   });
 });
@@ -403,7 +410,7 @@ test('CHAT_SEND rejects tool calls with a synthetic error when no workspace is o
   const { event } = makeFakeEvent();
 
   const res = await sendHandler(event, {
-    messages: [{ role: 'user', content: 'ls' }],
+    message: { content: 'ls' },
     // kein workspaceRoot
   });
 
@@ -431,7 +438,7 @@ test('CHAT_SEND attaches the adapter metadata to the tool trace entry', async ()
   const { event } = makeFakeEvent();
 
   const res = await sendHandler(event, {
-    messages: [{ role: 'user', content: 'lade den Skill' }],
+    message: { content: 'lade den Skill' },
   });
 
   assert.equal(res.toolTrace[0].skill, 'traffic');
@@ -450,7 +457,7 @@ test('CHAT_SEND stops with TOOL_LIMIT once the configured round limit is exhaust
   const { event } = makeFakeEvent();
 
   const res = await sendHandler(event, {
-    messages: [{ role: 'user', content: 'ls endlos' }],
+    message: { content: 'ls endlos' },
   });
 
   assert.equal(res.code, 'TOOL_LIMIT');
@@ -466,7 +473,7 @@ test('CHAT_SEND surfaces a provider error mid-loop and stops further rounds', as
   const { sendHandler } = setupChatHandlers({ provider });
   const { event } = makeFakeEvent();
 
-  const res = await sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }] });
+  const res = await sendHandler(event, { message: { content: 'Hi' } });
   assert.equal(res.error, 'Kontingent erschöpft');
   assert.equal(res.code, 'RATE_LIMIT');
   assert.equal(calls.length, 1, 'the loop must not continue after a provider error');
@@ -479,7 +486,7 @@ test('CHAT_SEND returns a cancelled result with the partial text when the provid
   const { sendHandler } = setupChatHandlers({ provider });
   const { event, sent } = makeFakeEvent();
 
-  const res = await sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }] });
+  const res = await sendHandler(event, { message: { content: 'Hi' } });
   assert.equal(res.cancelled, true);
   assert.equal(res.content, 'Teilantwort');
   const phases = sent.filter((s) => s.channel === PUSH.CHAT_PROGRESS).map((s) => s.payload.phase);
@@ -500,7 +507,7 @@ test('CHAT_ABORT cancels an in-flight CHAT_SEND for the same sender', async () =
   const { sendHandler, abortHandler } = setupChatHandlers({ provider });
   const { event } = makeFakeEvent(7);
 
-  const pending = sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }] });
+  const pending = sendHandler(event, { message: { content: 'Hi' } });
   abortHandler({ sender: { id: 7 } });
   const res = await pending;
 
@@ -519,7 +526,7 @@ test('CHAT_SEND bietet Schreib-Tools unabhaengig vom alten Schreibschalter an (I
   const { event } = makeFakeEvent();
 
   await sendHandler(event, {
-    messages: [{ role: 'user', content: 'Hallo' }],
+    message: { content: 'Hallo' },
   });
 
   const tools = calls[0].tools;
@@ -549,7 +556,7 @@ test('CHAT_SEND lehnt einen Schreibaufruf ohne Freigabe-Oberflaeche sicher ab un
   const { event, sent } = makeFakeEvent();
 
   const res = await sendHandler(event, {
-    messages: [{ role: 'user', content: 'Schreib eine Datei' }],
+    message: { content: 'Schreib eine Datei' },
   });
 
   assert.equal(res.code, 'PERMISSION');
@@ -579,7 +586,7 @@ test('CHAT_SEND gibt dem Modell bei Nutzer-Ablehnung ein strukturiertes permissi
   const { event } = makeFakeEvent();
 
   const res = await sendHandler(event, {
-    messages: [{ role: 'user', content: 'Schreib eine Datei' }],
+    message: { content: 'Schreib eine Datei' },
   });
 
   assert.equal(res.content, 'Verstanden, ich schreibe nichts.');
@@ -603,7 +610,7 @@ test('CHAT_SEND sends no system prompt without workspace and keeps baseSystemPro
   // Ohne geöffneten Ordner und ohne baseSystemPrompt beginnt die Konversation
   // direkt mit der User-Nachricht.
   await emptyHandlers.sendHandler(makeFakeEvent().event, {
-    messages: [{ role: 'user', content: 'Hallo' }],
+    message: { content: 'Hallo' },
   });
   assert.equal(empty.calls[0].messages.some((m) => m.role === 'system'), false);
 
@@ -614,7 +621,7 @@ test('CHAT_SEND sends no system prompt without workspace and keeps baseSystemPro
     workspaceRoot: '/tmp/snotra-test-project',
   });
   await configuredHandlers.sendHandler(makeFakeEvent().event, {
-    messages: [{ role: 'user', content: 'Hallo' }],
+    message: { content: 'Hallo' },
   });
   const systemMessage = configured.calls[0].messages[0];
   assert.equal(systemMessage.role, 'system');
@@ -636,7 +643,7 @@ test('CHAT_SEND ignoriert einen im Payload mitgeschickten Workspace-Root (#68)',
   const { event } = makeFakeEvent();
 
   await sendHandler(event, {
-    messages: [{ role: 'user', content: 'Was liegt hier?' }],
+    message: { content: 'Was liegt hier?' },
     workspaceRoot: '/',
     selectedPath: '/etc/passwd',
   });
@@ -650,7 +657,7 @@ test('CHAT_SEND ohne aktiven Workspace laesst die Tools ohne Wurzel (#68)', asyn
   const { event } = makeFakeEvent();
 
   await sendHandler(event, {
-    messages: [{ role: 'user', content: 'Hallo' }],
+    message: { content: 'Hallo' },
     workspaceRoot: '/tmp/snotra-project',
   });
 
@@ -671,7 +678,7 @@ test('CHAT_SEND tags every event with its chat and run', async () => {
   const { sendHandler } = setupChatHandlers({ provider });
   const { event, sent } = makeFakeEvent(7);
 
-  const res = await sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }], chatId: 'chat-a', runId: 'run-1' });
+  const res = await sendHandler(event, { message: { content: 'Hi' }, chatId: 'chat-a', runId: 'run-1' });
 
   assert.equal(res.content, 'hi');
   const delta = sent.find((entry) => entry.channel === PUSH.CHAT_DELTA);
@@ -695,7 +702,7 @@ test('CHAT_SEND ends every run with a run-end marker behind its last event (#721
   const { sendHandler } = setupChatHandlers({ provider });
   const { event, sent } = makeFakeEvent(7);
 
-  await sendHandler(event, { messages: [{ role: 'user', content: 'Hi' }], chatId: 'chat-a', runId: 'run-1' });
+  await sendHandler(event, { message: { content: 'Hi' }, chatId: 'chat-a', runId: 'run-1' });
 
   const ends = sent.filter((entry) => entry.payload.type === 'run-end');
   assert.equal(ends.length, 1, 'one marker per run');
@@ -710,11 +717,13 @@ test('CHAT_SEND sends the run-end marker also when the run throws (#721)', async
   const { event, sent } = makeFakeEvent(7);
 
   await assert.rejects(
-    ipcMain.handlers.get(REQ.CHAT_SEND)(event, { messages: [{ role: 'user', content: 'Hi' }], chatId: 'chat-a', runId: 'run-1' }),
+    ipcMain.handlers.get(REQ.CHAT_SEND)(event, { message: { content: 'Hi' }, chatId: 'chat-a', runId: 'run-1' }),
     /kaputt/,
   );
 
-  assert.deepEqual(sent, [{ channel: PUSH.CHAT_PROGRESS, payload: { type: 'run-end', chatId: 'chat-a', runId: 'run-1' } }]);
+  // The turn's saves are reported first; the end marker is the last thing sent.
+  assert.deepEqual(sent.at(-1), { channel: PUSH.CHAT_PROGRESS, payload: { type: 'run-end', chatId: 'chat-a', runId: 'run-1' } });
+  assert.deepEqual(sent.slice(0, -1).map((s) => s.payload.type), ['chat-saved', 'chat-saved']);
 });
 
 test('CHAT_ABORT with a chat stops only that chat; the window\'s other run goes on', async () => {
@@ -733,8 +742,8 @@ test('CHAT_ABORT with a chat stops only that chat; the window\'s other run goes 
   const { sendHandler, abortHandler } = setupChatHandlers({ provider });
   const { event } = makeFakeEvent(7);
 
-  const runA = sendHandler(event, { messages: [{ role: 'user', content: 'A' }], chatId: 'chat-a' });
-  const runB = sendHandler(event, { messages: [{ role: 'user', content: 'B' }], chatId: 'chat-b' });
+  const runA = sendHandler(event, { message: { content: 'A' }, chatId: 'chat-a' });
+  const runB = sendHandler(event, { message: { content: 'B' }, chatId: 'chat-b' });
   await new Promise((resolve) => setImmediate(resolve));
   abortHandler({ sender: { id: 7 } }, { chatId: 'chat-a' });
 
@@ -764,9 +773,11 @@ test('main takes the chat id by the engine\'s rule: trimmed, never cut down (#53
 
   for (const [raw, expected] of [[' chat-1 ', 'chat-1'], ['   ', null], [long, null], ['c'.repeat(128), 'c'.repeat(128)]]) {
     const { event, sent } = makeFakeEvent();
-    await send(event, { messages: [{ role: 'user', content: 'Hi' }], chatId: raw });
-    assert.equal(sends.at(-1), expected, JSON.stringify(raw).slice(0, 20));
-    assert.equal(sent.at(-1).payload.chatId, expected, 'the event carries the id the run is keyed by');
+    const before = sends.length;
+    await send(event, { message: { content: 'Hi' }, chatId: raw });
+    // A turn without a usable chat id is refused before it runs (#981).
+    assert.equal(sends.length > before ? sends.at(-1) : null, expected, JSON.stringify(raw).slice(0, 20));
+    assert.equal(sent.at(-1).payload.chatId, expected, 'the end marker carries the id the run is keyed by');
   }
 
   abort({ sender: { id: 7 } }, {});
@@ -815,9 +826,9 @@ for (const [what, emit] of [
     const one = makeWatchedSender(7);
     const other = makeWatchedSender(8);
 
-    const runA = sendHandler({ sender: one.sender }, { messages: [{ role: 'user', content: 'A' }], chatId: 'chat-a' });
-    const runB = sendHandler({ sender: one.sender }, { messages: [{ role: 'user', content: 'B' }], chatId: 'chat-b' });
-    const runC = sendHandler({ sender: other.sender }, { messages: [{ role: 'user', content: 'C' }], chatId: 'chat-c' });
+    const runA = sendHandler({ sender: one.sender }, { message: { content: 'A' }, chatId: 'chat-a' });
+    const runB = sendHandler({ sender: one.sender }, { message: { content: 'B' }, chatId: 'chat-b' });
+    const runC = sendHandler({ sender: other.sender }, { message: { content: 'C' }, chatId: 'chat-c' });
     await new Promise((resolve) => setImmediate(resolve));
     emit(one.sender);
 
@@ -833,7 +844,7 @@ test('a navigation inside the page or of a sub-frame leaves the runs alone (#979
   const { sendHandler } = setupChatHandlers({ provider });
   const { sender } = makeWatchedSender(7);
 
-  const run = sendHandler({ sender }, { messages: [{ role: 'user', content: 'A' }], chatId: 'chat-a' });
+  const run = sendHandler({ sender }, { message: { content: 'A' }, chatId: 'chat-a' });
   await new Promise((resolve) => setImmediate(resolve));
   sender.emit('did-start-navigation', { isMainFrame: true, isSameDocument: true });
   sender.emit('did-start-navigation', { isMainFrame: false, isSameDocument: false });
@@ -847,7 +858,7 @@ test('a window is watched once, however many turns it sends (#979)', async () =>
   registerChatHandlers({ ipcMain, chatEngine, conversation: conversationFor(chatEngine), REQ, PUSH });
   const send = ipcMain.handlers.get(REQ.CHAT_SEND);
   const { sender } = makeWatchedSender(7);
-  for (let i = 0; i < 3; i += 1) await send({ sender }, { messages: [{ role: 'user', content: 'Hi' }], chatId: 'chat-a' });
+  for (let i = 0; i < 3; i += 1) await send({ sender }, { message: { content: 'Hi' }, chatId: 'chat-a' });
   assert.equal(sender.listenerCount('did-start-navigation'), 1);
   assert.equal(sender.listenerCount('render-process-gone'), 1);
   assert.equal(sender.listenerCount('destroyed'), 1);

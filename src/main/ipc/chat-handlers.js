@@ -1,12 +1,14 @@
 const { CHAT_ENGINE_EVENTS } = require('../../application/chat/chat-engine');
-const { sanitizeChatId, createRunEndEvent } = require('../../shared/contracts/chat');
+const { sanitizeChatId, createRunEndEvent, createChatErrorResult } = require('../../shared/contracts/chat');
+const { CHAT_ERROR_CODES } = require('../../shared/contracts/enums');
+const { createMessage } = require('../../shared/contracts/message');
 
 /**
  * @param {object} deps
  * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
- * @param {Pick<ReturnType<typeof import('../../application/chat/chat-engine').createChatEngine>, 'abort'>} deps.chatEngine
- * @param {ReturnType<typeof import('../../application/chat/conversation-service').createConversationService>} deps.conversation
- *   the turn and what it means for the stored chat (#981)
+ * @param {Pick<ReturnType<typeof import('../../application/chat/conversation-service').createConversationService>,
+ *   'runTurn' | 'stop' | 'abandon'>} deps.conversation
+ *   the turn and the chat it belongs to (#981)
  * @param {Record<string, string>} deps.REQ
  * @param {Record<string, string>} deps.PUSH
  * @param {() => string|null} [deps.getActiveWorkspaceRoot]
@@ -14,7 +16,6 @@ const { sanitizeChatId, createRunEndEvent } = require('../../shared/contracts/ch
  */
 function registerChatHandlers({
   ipcMain,
-  chatEngine,
   conversation,
   REQ,
   PUSH,
@@ -22,7 +23,6 @@ function registerChatHandlers({
   fileChangeRecorder = null,
 }) {
   if (!conversation) throw new Error('registerChatHandlers requires the conversation service.');
-  const engine = chatEngine;
 
   /** @type {Record<string, string>} */
   const eventChannels = {
@@ -58,7 +58,8 @@ function registerChatHandlers({
     if (!webContents || watched.has(webContents) || typeof webContents.on !== 'function') return;
     watched.add(webContents);
     const sessionId = webContents.id;
-    const stopRuns = () => engine.abort(sessionId);
+    // What was saved after the runs' last finished step stays (#979, #981).
+    const stopRuns = () => conversation.abandon(sessionId);
     webContents.on('did-start-navigation', (details) => {
       if (details?.isMainFrame !== false && !details?.isSameDocument) stopRuns();
     });
@@ -71,7 +72,7 @@ function registerChatHandlers({
   // does on send (#532) — it does not widen the stop to the whole window.
   ipcMain.on(REQ.CHAT_ABORT, (event, payload) => {
     const chatId = payload?.chatId == null ? undefined : sanitizeChatId(payload.chatId);
-    engine.abort(event.sender.id, chatId);
+    conversation.stop(event.sender.id, chatId);
   });
 
   // The renderer names changes by the ids main gave it; it gets back the
@@ -82,33 +83,32 @@ function registerChatHandlers({
     return fileChangeRecorder.describe(ids);
   });
 
-  // The renderer names the chat; which messages a title is made from, and
-  // whether the chat still needs one, main decides (#981).
-  ipcMain.handle(REQ.CHAT_TITLE, async (_event, payload) => conversation.nameChat(sanitizeChatId(payload?.chatId) || ''));
-
-  // Der Workspace-Root kommt aus dem Main-Prozess, nicht aus dem Payload
-  // (Issue #68). Die Nutzlast wird feldweise uebernommen, damit der Renderer
-  // auch nichts anderes an der Engine vorbeischmuggeln kann.
+  // The renderer sends the question and the chat it belongs to; the chat's
+  // history, what is saved and when, main keeps (#981). The workspace root
+  // comes from main as well, never from the payload (#68), and the payload is
+  // taken field by field, so nothing else reaches the engine past it.
   ipcMain.handle(REQ.CHAT_SEND, async (event, payload) => {
-    // Nur ein Geltungsbereich fuer Sitzungsfreigaben (Issue #66), keine
-    // Rechtequelle: ein anderer Chat teilt keine Freigaben.
-    // The same rule as in the engine (#532), so that the events carry the id
-    // the run is keyed by.
+    // A scope for session approvals (#66), no source of rights: another chat
+    // shares none. The same rule as in the engine (#532), so that the events
+    // carry the id the run is keyed by.
     const chatId = sanitizeChatId(payload?.chatId);
     // The renderer's own label for this turn; it only ever comes back to it.
     const runId = sanitizeRouteId(payload?.runId, 64);
     const route = { chatId, runId };
     watchSender(event.sender);
     try {
-      return await conversation.sendTurn({
+      // A turn belongs to a chat; without one there is nothing to keep it in.
+      if (!chatId) return createChatErrorResult({ error: createMessage('chat.error.noMessages'), code: CHAT_ERROR_CODES.INVALID });
+      return await conversation.runTurn({
         sessionId: event.sender.id,
-        payload: {
-          messages: payload?.messages,
-          workspaceRoot: getActiveWorkspaceRoot(),
-          selectedPath: payload?.selectedPath ?? null,
-          selectedIsDirectory: payload?.selectedIsDirectory === true,
-          chatId,
+        chatId,
+        message: {
+          content: typeof payload?.message?.content === 'string' ? payload.message.content : '',
+          ...(Array.isArray(payload?.message?.attachments) ? { attachments: payload.message.attachments } : {}),
         },
+        workspaceRoot: getActiveWorkspaceRoot(),
+        selectedPath: payload?.selectedPath ?? null,
+        selectedIsDirectory: payload?.selectedIsDirectory === true,
         onEvent: (/** @type {{ type?: string, payload?: unknown }} */ engineEvent) => forwardEvent(event.sender, engineEvent, route),
       });
     } finally {
