@@ -10,12 +10,14 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
 
 const { createRelayStandIn, FAULTS } = require('../e2e/remote/relay-stand-in');
 const { databaseNodeUrl } = require('../src/main/remote/firebase-relay-adapter');
 
 const RUNNER = path.join(__dirname, '..', 'e2e', 'remote', 'relay-conformance.mjs');
-const runner = () => import(RUNNER);
+// A file URL: on Windows import() takes no drive path.
+const runner = () => import(pathToFileURL(RUNNER).href);
 
 /** @param {import('node:test').TestContext} t @param {string[]} [faults] */
 async function standIn(t, faults = []) {
