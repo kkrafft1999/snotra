@@ -55,14 +55,17 @@ case $host$command$protocol in *"$nl"*) fail 'a line break in an argument' ;; es
 dir=$(mktemp -d "${TMPDIR:-/tmp}/snotra-ssh.XXXXXX") || fail 'no temporary folder for the relay'
 
 # git's stdin goes to the relay after the request; fd 3, because an
-# asynchronous list starts with stdin on /dev/null. The shell lets go of
-# git's stdout before it waits: when the relay closes, git must see the end
-# of the stream, or a failed sign-in would hang until the timeout.
+# asynchronous list starts with stdin on /dev/null. When the relay closes,
+# git must see the end of its stream, or a failed sign-in would hang until
+# the timeout while git still holds its end open: so socat closes git's
+# stdout then (`shut-close`; a pipe cannot be shut down half-way), and the
+# shell lets go of it before it waits. -t: after git's last byte, the
+# answer may still take its time.
 exec 3<&0
 {
   printf 'SNOTRA-SSH 1\n%s\n%s\n%s\n%s\n%s\n%s\n' "$dir" "$family" "$port" "$host" "$protocol" "$command"
   exec cat <&3
-} | socat -t 3600 - TCP:127.0.0.1:2222,retry=50,interval=0.1 &
+} | socat -t 3600 STDIO,shut-close TCP:127.0.0.1:2222,retry=50,interval=0.1 &
 exec >&- 3<&-
 wait
 
