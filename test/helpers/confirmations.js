@@ -5,7 +5,7 @@
 // the policy store redeeming from it.
 
 const { createConfirmationReceipts } = require('../../src/application/permissions/user-confirmation');
-const { createNativeConfirmationAdapter } = require('../../src/main/adapters/native-confirmation-adapter');
+const { createNativeConfirmationAdapter } = require('../../src/main/electron/native-confirmation-adapter');
 
 function createTestConfirmations({ dialog = null, getMainWindow = () => null } = {}) {
   const receipts = createConfirmationReceipts();

@@ -16,21 +16,21 @@ const { LIMITS } = require('../shared/limits');
 const { createApplication } = require('./composition/create-application');
 const { APP_NAME, STORAGE_NAME, LEGACY_APP_NAME } = require('./app-identity');
 const { createUserDataMigration } = require('./services/userdata-migration');
-const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('./services/application-menu');
+const { createApplicationMenuTemplate, MENU_ITEM_IDS } = require('./electron/application-menu');
 const { claimSingleInstance, createStartupFailureHandler, holdQuitForPendingWrites } = require('./app-lifecycle');
 const { guardIpcMain } = require('./ipc/trusted-sender');
-const { HTML_PREVIEW_SCHEME_PRIVILEGES } = require('./services/html-preview-service');
+const { HTML_PREVIEW_SCHEME_PRIVILEGES } = require('./electron/html-preview-service');
 const { APP_SCHEME_PRIVILEGES, registerAppProtocol } = require('./app-protocol');
 const { createManualService } = require('./services/manual-service');
 const { createManualWindowController, registerManualOpenHandler } = require('./manual-window');
 const { createLogFile, teeConsole } = require('./services/log-file');
 const { createErrorReporter, installProcessErrorHandlers } = require('./services/error-reporter');
 const { createAppNotices } = require('./services/app-notices');
-const { createDiagnostics } = require('./services/diagnostics');
-const { createRendererCrashHandler } = require('./services/renderer-crash');
+const { createDiagnostics } = require('./electron/diagnostics');
+const { createRendererCrashHandler } = require('./electron/renderer-crash');
 const { registerDiagnosticsHandlers } = require('./ipc/diagnostics-handlers');
 const { createSafeStorageKeyDurability, LOCAL_STATE_FILENAME } = require('./services/safe-storage-key-durability');
-const { requireRealEncryption } = require('./services/safe-storage-backend');
+const { requireRealEncryption } = require('./electron/safe-storage-backend');
 
 // The storage identity first (#795): userData and the safeStorage key are
 // derived from the name the app has at this point, and stay with it. The app

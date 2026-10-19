@@ -19,11 +19,16 @@ const PORT_DIRS = ['src/application/ports', 'src/main/ports'];
 const ADAPTER_DIRS = ['src/main/adapters', 'src/main/remote'];
 /**
  * Services that implement a port themselves rather than through an adapter
- * (#1098). Each one is in tsconfig.json's include list by name.
+ * (#1098), and the Electron modules that implement one (#983): the rest of
+ * `src/main/electron/` is the desktop shell and implements none.
  */
 const IMPLEMENTING_SERVICES = [
   'src/main/services/shell-runner-service.js',
   'src/main/services/python-runner-service.js',
+  'src/main/electron/native-confirmation-adapter.js',
+  'src/main/electron/safe-storage-backend.js',
+  'src/main/electron/system-notification-adapter.js',
+  'src/main/electron/window-push.js',
 ];
 
 /** Adapter factories that implement no port: stores and helpers main uses directly. */

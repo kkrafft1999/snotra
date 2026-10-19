@@ -47,7 +47,7 @@ function createUpdateAdapter(updateService) {
  *
  * @param {object} deps
  * @param {import('../ports/update-port').UpdatePort} deps.updates  the adapter above, or a test double
- * @param {() => { isDestroyed: () => boolean, webContents: { send: Function } }|null} deps.getMainWindow
+ * @param {import('../../application/ports/event-push-port').EventPushPort} deps.push  to the app window
  * @param {{ UPDATE_AVAILABLE: string }} deps.PUSH
  * @param {() => Promise<boolean>|boolean} [deps.isAutomaticCheckEnabled]
  *   the setting *Check for updates at start-up* (#987). Off, the silent check
@@ -58,7 +58,7 @@ function createUpdateAdapter(updateService) {
  *   the window it takes screenshots of.
  */
 function createUpdateCheck({
-  updates, getMainWindow, PUSH, isAutomaticCheckEnabled = () => true, env = process.env,
+  updates, push, PUSH, isAutomaticCheckEnabled = () => true, env = process.env,
 }) {
   /** @param {{ silent?: boolean }} options */
   return async function runUpdateCheck({ silent }) {
@@ -73,10 +73,9 @@ function createUpdateCheck({
       ? await updates.readInstallFailure()
       : null;
     const result = await updates.checkForUpdate({ respectIgnored: silent && !lastInstallFailure });
-    const win = getMainWindow();
-    if (!win || win.isDestroyed()) return;
     if (silent && !result.updateAvailable) return;
-    win.webContents.send(PUSH.UPDATE_AVAILABLE, { ...result, lastInstallFailure, manual: !silent });
+    // Without a window the answer has nowhere to go, and a failure stays recorded.
+    if (!push.push(PUSH.UPDATE_AVAILABLE, { ...result, lastInstallFailure, manual: !silent })) return;
     if (lastInstallFailure) await updates.clearInstallFailure?.();
   };
 }

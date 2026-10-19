@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createRendererCrashHandler } = require('../src/main/services/renderer-crash');
+const { createRendererCrashHandler } = require('../src/main/electron/renderer-crash');
 
 /** A page that dies leaves a box with a reload offer, not a blank window (#978). */
 

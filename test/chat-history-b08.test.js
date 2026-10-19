@@ -51,8 +51,8 @@ async function tempUserData(t) {
 function start(dir, { safeStorage = { isEncryptionAvailable: () => false }, maxChatSessions = 50, fsImpl = fs, platform } = {}) {
   const app = { getPath: () => dir };
   const storage = createStorageService({
-    app,
-    safeStorage,
+    userDataPath: app.getPath(),
+    secretStore: safeStorage,
     fs: fsImpl,
     path,
     providerCatalog: createMockProviderCatalog(() => null),
@@ -66,7 +66,7 @@ function start(dir, { safeStorage = { isEncryptionAvailable: () => false }, maxC
     ipcMain,
     chatHistoryStore: createChatHistoryStorePort(storage),
     REQ,
-    chatAttachments: createChatAttachmentStore({ app, fs: fsImpl, path, log: silentLog, platform }),
+    chatAttachments: createChatAttachmentStore({ userDataPath: app.getPath(), fs: fsImpl, path, log: silentLog, platform }),
   });
   return { ipcMain, storage };
 }

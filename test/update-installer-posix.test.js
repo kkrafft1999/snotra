@@ -85,7 +85,7 @@ function readLines(file) {
  */
 function writeStandIn(fixture, file, label, behaviour) {
   const confirm = `${JSON.stringify(process.execPath)} -e ${shellQuote(
-    `require(${JSON.stringify(SERVICE)}).createUpdateService({ app: { getVersion: () => ${JSON.stringify(VERSION)},`
+    `require(${JSON.stringify(SERVICE)}).createUpdateService({ installation: { getVersion: () => ${JSON.stringify(VERSION)},`
     + ` getPath: () => ${JSON.stringify(fixture.userData)} } }).confirmInstallStarted()`
     + '.then((ok) => process.exit(ok ? 0 : 9))',
   )} || exit 9`;
@@ -157,7 +157,7 @@ function isRunning(pid) {
 /** What the next start of the app makes of the status file. */
 async function nextStartReads(fixture, runningVersion = '1.7.1') {
   const svc = createUpdateService({
-    app: { getVersion: () => runningVersion, getPath: () => fixture.userData },
+    installation: { getVersion: () => runningVersion, getPath: () => fixture.userData },
     storage: { readUIPrefs: async () => ({}), updateUIPrefs: async () => {} },
   });
   return svc.readInstallFailure();

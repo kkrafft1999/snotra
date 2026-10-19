@@ -120,8 +120,9 @@ const EXECUTION_SWITCH_KEYS = ['shellExecutionEnabled', 'pythonExecutionEnabled'
 
 /**
  * @param {object} deps
- * @param {Pick<import('electron').App, 'getPath' | 'getLocale'>} deps.app
- * @param {Pick<import('electron').SafeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'>} deps.safeStorage
+ * @param {string} deps.userDataPath  the folder every store file lives in
+ * @param {import('../../application/ports/secret-store-port').SecretStorePort} deps.secretStore
+ * @param {() => string} [deps.getSystemLocale]  the system's locale, for the first run's interface language
  * @param {Pick<import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability, 'whenDurable' | 'wouldWait'>} [deps.safeStorageKey]
  * @param {typeof import('fs/promises')} deps.fs
  * @param {typeof import('path')} deps.path
@@ -135,8 +136,9 @@ const EXECUTION_SWITCH_KEYS = ['shellExecutionEnabled', 'pythonExecutionEnabled'
  * @param {{ redeem: (receipt: unknown, action: string, subject?: string) => boolean }} [deps.confirmationReceipts]
  */
 function createStorageService({
-  app,
-  safeStorage,
+  userDataPath,
+  secretStore,
+  getSystemLocale = () => '',
   /** When ciphertext may reach the disk (#1060); without it, at once. */
   safeStorageKey = KEY_ALWAYS_DURABLE,
   fs,
@@ -372,11 +374,11 @@ function createStorageService({
   }
 
   function getLLMConfigPath() {
-    return path.join(app.getPath('userData'), LLM_CONFIG_FILENAME);
+    return path.join(userDataPath, LLM_CONFIG_FILENAME);
   }
 
   function getLegacyOpenAIConfigPath() {
-    return path.join(app.getPath('userData'), LEGACY_OPENAI_CONFIG_FILENAME);
+    return path.join(userDataPath, LEGACY_OPENAI_CONFIG_FILENAME);
   }
 
   /**
@@ -851,9 +853,9 @@ function createStorageService({
    */
   function decryptIfPossible(b64) {
     if (!b64 || typeof b64 !== 'string') return null;
-    if (!safeStorage.isEncryptionAvailable()) return null;
+    if (!secretStore.isEncryptionAvailable()) return null;
     try {
-      return safeStorage.decryptString(Buffer.from(b64, 'base64'));
+      return secretStore.decryptString(Buffer.from(b64, 'base64'));
     } catch {
       return null;
     }
@@ -868,10 +870,10 @@ function createStorageService({
    * @returns {Promise<string|null>}
    */
   async function encryptForDisk(plaintext) {
-    if (!plaintext || !safeStorage.isEncryptionAvailable()) return null;
+    if (!plaintext || !secretStore.isEncryptionAvailable()) return null;
     await safeStorageKey.whenDurable();
     try {
-      return safeStorage.encryptString(plaintext).toString('base64');
+      return secretStore.encryptString(plaintext).toString('base64');
     } catch {
       return null;
     }
@@ -983,7 +985,7 @@ function createStorageService({
   // Schluessel liegt wie die Provider-Keys verschluesselt (safeStorage).
 
   function getWebSearchConfigPath() {
-    return path.join(app.getPath('userData'), WEB_SEARCH_CONFIG_FILENAME);
+    return path.join(userDataPath, WEB_SEARCH_CONFIG_FILENAME);
   }
 
   async function readWebSearchConfig() {
@@ -1056,7 +1058,7 @@ function createStorageService({
   // gedacht, der die Prozesse startet.
 
   function getMcpConfigPath() {
-    return path.join(app.getPath('userData'), MCP_CONFIG_FILENAME);
+    return path.join(userDataPath, MCP_CONFIG_FILENAME);
   }
 
   /**
@@ -1430,7 +1432,7 @@ function createStorageService({
   }
 
   function getLastFolderConfigPath() {
-    return path.join(app.getPath('userData'), LAST_FOLDER_FILENAME);
+    return path.join(userDataPath, LAST_FOLDER_FILENAME);
   }
 
   /**
@@ -1486,7 +1488,7 @@ function createStorageService({
   }
 
   function getUIPrefsPath() {
-    return path.join(app.getPath('userData'), UI_PREFS_FILENAME);
+    return path.join(userDataPath, UI_PREFS_FILENAME);
   }
 
   /**
@@ -1517,7 +1519,7 @@ function createStorageService({
   function firstRunUiPrefs() {
     let systemLocale = '';
     try {
-      systemLocale = app.getLocale?.() || '';
+      systemLocale = getSystemLocale() || '';
     } catch {
       // Before `ready` there is no locale to read; English it is.
     }
@@ -1621,9 +1623,9 @@ function createStorageService({
   const chatHistory = createChatHistoryStore({
     fs,
     path,
-    safeStorage,
+    secretStore,
     safeStorageKey,
-    userDataPath: () => app.getPath('userData'),
+    userDataPath: () => userDataPath,
     writeJsonAtomic,
     encryptForDisk,
     decryptIfPossible,
@@ -1653,7 +1655,7 @@ function createStorageService({
   }
 
   function getFolderHistoryPath() {
-    return path.join(app.getPath('userData'), FOLDER_HISTORY_FILENAME);
+    return path.join(userDataPath, FOLDER_HISTORY_FILENAME);
   }
 
   /**

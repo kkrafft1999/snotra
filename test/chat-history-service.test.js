@@ -16,8 +16,8 @@ async function setup(t, { maxChatSessions = 2, chatSessionSettings } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-chathist-svc-'));
   t.after(() => removeTempDir(tmpDir));
   const storage = createStorageService({
-    app: { getPath: () => tmpDir },
-    safeStorage: { isEncryptionAvailable: () => false },
+    userDataPath: tmpDir,
+    secretStore: { isEncryptionAvailable: () => false },
     fs,
     path,
     providerCatalog: createMockProviderCatalog(() => null),

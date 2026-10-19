@@ -228,7 +228,7 @@ function newestFirst(a, b) {
  * @param {object} deps
  * @param {typeof import('fs/promises')} deps.fs
  * @param {typeof import('path')} deps.path
- * @param {Pick<import('electron').SafeStorage, 'isEncryptionAvailable'>} deps.safeStorage
+ * @param {Pick<import('../../application/ports/secret-store-port').SecretStorePort, 'isEncryptionAvailable'>} deps.secretStore
  * @param {Pick<import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability, 'whenDurable' | 'wouldWait'>} deps.safeStorageKey
  * @param {() => string} deps.userDataPath
  * @param {(file: string, data: object) => Promise<void>} deps.writeJsonAtomic the storage's queued atomic write
@@ -245,7 +245,7 @@ function newestFirst(a, b) {
 function createChatHistoryStore({
   fs,
   path,
-  safeStorage,
+  secretStore,
   safeStorageKey,
   userDataPath,
   writeJsonAtomic,
@@ -398,7 +398,7 @@ function createChatHistoryStore({
     }
     // Without encrypted storage the key is out of reach for this run, not
     // wrong (#658) — a refusing keychain, a broken signature as in #657.
-    if (!safeStorage.isEncryptionAvailable()) return { status: READ.UNAVAILABLE, raw, encrypted: true };
+    if (!secretStore.isEncryptionAvailable()) return { status: READ.UNAVAILABLE, raw, encrypted: true };
     const plain = decryptIfPossible(data.payload);
     if (!plain) return { status: READ.UNDECRYPTABLE, raw, encrypted: true };
     data = parseJson(plain);
@@ -418,7 +418,7 @@ function createChatHistoryStore({
    * @returns {Promise<boolean>}
    */
   async function writeEnvelope(filePath, data, { plainWhileKeyPending = false } = {}) {
-    const encrypt = safeStorage.isEncryptionAvailable() && !(plainWhileKeyPending && safeStorageKey.wouldWait());
+    const encrypt = secretStore.isEncryptionAvailable() && !(plainWhileKeyPending && safeStorageKey.wouldWait());
     if (encrypt) {
       const payload = await encryptForDisk(JSON.stringify(data));
       if (payload) {
@@ -821,7 +821,7 @@ function createChatHistoryStore({
    * @param {HistoryState} s
    */
   function scheduleEncryption(s) {
-    if (!safeStorage.isEncryptionAvailable()) return;
+    if (!secretStore.isEncryptionAvailable()) return;
     const plainIds = [...s.metas.values()].filter((meta) => meta.plain).map((meta) => meta.id);
     if (plainIds.length === 0 && !s.plainIndex) return;
     const run = safeStorageKey.whenDurable().then(async () => {

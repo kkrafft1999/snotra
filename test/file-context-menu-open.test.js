@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { createFileContextMenu, LAUNCHABLE_EXTENSIONS } = require('../src/main/services/file-context-menu');
+const { createFileContextMenu, LAUNCHABLE_EXTENSIONS } = require('../src/main/electron/file-context-menu');
 const { removeTempDir } = require('./helpers/temp-dir');
 
 // CR-B17-08 (#649): "Open" on a program or script asks first, a failed Open

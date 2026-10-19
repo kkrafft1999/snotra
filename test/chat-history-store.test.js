@@ -44,8 +44,8 @@ async function tempDir(t) {
 
 function makeStorage(dir, { safeStorage = makeSafeStorage(), fsImpl = fs, maxChatSessions = 200, events = [] } = {}) {
   return createStorageService({
-    app: { getPath: () => dir },
-    safeStorage,
+    userDataPath: dir,
+    secretStore: safeStorage,
     fs: fsImpl,
     path,
     providerCatalog: createMockProviderCatalog(() => null),

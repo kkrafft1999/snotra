@@ -3,7 +3,8 @@
 /**
  * Approval-Port-Adapter (Issue #66, Konzept §6): Freigabe-Karten über IPC.
  *
- * Der Renderer meldet sich pro Fenster (webContents) als freigabefähig an.
+ * Der Renderer meldet sich pro Fenster als freigabefähig an — mit einem
+ * Push-Ziel (`EventPushTarget`, #983; unter Electron das `target`).
  * Ohne Anmeldung gibt es keine Karte und jede Anfrage verfällt sofort
  * (fail-safe). Jede Anfrage erhält eine zufällige `requestId` und ist an
  * Sitzung (Sender-ID), Plan und Policy-Version gebunden. Eine Antwort wird
@@ -28,7 +29,8 @@ const { isRecord } = require('../../shared/runtime/is-record');
 /**
  * @typedef {import('../../application/ports/tool-approval-port').ToolApprovalRequest} ToolApprovalRequest
  * @typedef {import('../../application/ports/tool-approval-port').ToolApprovalOutcome} ToolApprovalOutcome
- * @typedef {{ once?: Function, isDestroyed?: () => boolean, send?: Function }} ApprovalWindow
+ * A window that registered for cards; checked again before every push.
+ * @typedef {Partial<import('../../application/ports/event-push-port').EventPushTarget>} ApprovalWindow
  *
  * An open request: who asked, for which chat, and how to answer the waiting call.
  * @typedef {Object} PendingApproval
@@ -67,7 +69,7 @@ function abortReason(signal) {
  * @param {{ TOOL_APPROVAL_REQUEST: string, TOOL_APPROVAL_RESOLVED: string }} deps.PUSH
  * @param {{ warn?: Function }} [deps.log]
  * @returns {import('../../application/ports/tool-approval-port').ToolApprovalPort & {
- *   subscribe: (sessionId: string|number, webContents: ApprovalWindow) => boolean,
+ *   subscribe: (sessionId: string|number, target: ApprovalWindow) => boolean,
  *   unsubscribe: (sessionId: string|number) => void,
  *   respond: (sessionId: string|number, answer?: object) => { ok: boolean, error?: object, response?: string },
  *   getPendingRequest: (sessionId: string|number, requestId: string) => ToolApprovalRequest|null,
@@ -79,21 +81,21 @@ function abortReason(signal) {
  * }}
  */
 function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
-  /** @type {Map<string|number, ApprovalWindow>} sessionId → webContents (nur angemeldete Fenster). */
+  /** @type {Map<string|number, ApprovalWindow>} sessionId → push target (nur angemeldete Fenster). */
   const subscribers = new Map();
   /** @type {Map<string, PendingApproval>} requestId → the open request */
   const pending = new Map();
 
   /**
-   * @param {ApprovalWindow|undefined} webContents
+   * @param {ApprovalWindow|undefined} target
    * @param {string} channel
    * @param {object} payload
    */
-  function send(webContents, channel, payload) {
-    if (!webContents || typeof webContents.send !== 'function') return false;
-    if (typeof webContents.isDestroyed === 'function' && webContents.isDestroyed()) return false;
+  function send(target, channel, payload) {
+    if (!target || typeof target.send !== 'function') return false;
+    if (typeof target.isDestroyed === 'function' && target.isDestroyed()) return false;
     try {
-      webContents.send(channel, payload);
+      target.send(channel, payload);
       return true;
     } catch (error) {
       log?.warn?.(`[tool-approval] Senden fehlgeschlagen: ${error?.message || error}`);
@@ -110,9 +112,9 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
     if (!entry) return false;
     pending.delete(requestId);
     entry.cleanup?.();
-    const webContents = subscribers.get(entry.sessionId);
-    if (webContents) {
-      send(webContents, PUSH.TOOL_APPROVAL_RESOLVED, {
+    const target = subscribers.get(entry.sessionId);
+    if (target) {
+      send(target, PUSH.TOOL_APPROVAL_RESOLVED, {
         requestId,
         response: outcome.invalidated ? null : outcome.response,
         invalidated: outcome.invalidated === true,
@@ -166,12 +168,12 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
 
   return {
     /** Renderer meldet sich als freigabefähig an; bei Zerstörung wieder ab. */
-    subscribe(sessionId, webContents) {
-      if (!webContents) return false;
-      subscribers.set(sessionId, webContents);
-      if (typeof webContents.once === 'function') {
-        webContents.once('destroyed', () => {
-          if (subscribers.get(sessionId) === webContents) subscribers.delete(sessionId);
+    subscribe(sessionId, target) {
+      if (!target) return false;
+      subscribers.set(sessionId, target);
+      if (typeof target.once === 'function') {
+        target.once('destroyed', () => {
+          if (subscribers.get(sessionId) === target) subscribers.delete(sessionId);
           invalidateSession(sessionId, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
         });
       }
@@ -182,16 +184,16 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
       invalidateSession(sessionId, PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI);
     },
     isAvailable(sessionId) {
-      const webContents = subscribers.get(sessionId);
-      if (!webContents) return false;
-      if (typeof webContents.isDestroyed === 'function' && webContents.isDestroyed()) {
+      const target = subscribers.get(sessionId);
+      if (!target) return false;
+      if (typeof target.isDestroyed === 'function' && target.isDestroyed()) {
         subscribers.delete(sessionId);
         return false;
       }
       return true;
     },
     requestApproval({ sessionId, request, abortSignal }) {
-      const webContents = subscribers.get(sessionId);
+      const target = subscribers.get(sessionId);
       if (!this.isAvailable(sessionId)) {
         return Promise.resolve({ invalidated: true, reason: PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI, requestId: '' });
       }
@@ -210,7 +212,7 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
           cleanup: () => abortSignal?.removeEventListener?.('abort', onAbort),
         });
         const dto = createToolApprovalRequestDto({ ...request, requestId });
-        if (!send(webContents, PUSH.TOOL_APPROVAL_REQUEST, dto)) {
+        if (!send(target, PUSH.TOOL_APPROVAL_REQUEST, dto)) {
           settle(requestId, { invalidated: true, reason: PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI });
         }
       });

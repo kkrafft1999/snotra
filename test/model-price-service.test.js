@@ -32,7 +32,7 @@ function setup(t, options = {}) {
   const make = (more = {}) => createModelPriceService({
     fs: fs.promises,
     path,
-    app: { getPath: () => dir },
+    userDataPath: dir,
     snapshot: SNAPSHOT,
     now: () => new Date('2026-10-15T12:00:00Z'),
     log: { warn() {} },

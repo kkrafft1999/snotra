@@ -22,7 +22,7 @@ const { createWorkspaceSandboxDefault } = require('../services/workspace-sandbox
 const { createToolPolicyStore } = require('../services/tool-policy-store');
 const { KEY_ALWAYS_DURABLE } = require('../services/safe-storage-key-durability');
 const { createToolApprovalAdapter } = require('../adapters/tool-approval-adapter');
-const { createNativeConfirmationAdapter } = require('../adapters/native-confirmation-adapter');
+const { createNativeConfirmationAdapter } = require('../electron/native-confirmation-adapter');
 const { createConfigProposalAdapter } = require('../adapters/config-proposal-adapter');
 const { createConfirmationReceipts } = require('../../application/permissions/user-confirmation');
 const { createSessionGrants } = require('../../application/permissions/session-grants');
@@ -41,6 +41,8 @@ const { createShellRunnerService } = require('../services/shell-runner-service')
 const { createSandboxService, sensitiveReadPaths } = require('../services/sandbox-service');
 const { createOutsideAccess } = require('../services/outside-access');
 const { createApprovalNotifier } = require('../services/approval-notifier');
+const { createSystemNotificationAdapter } = require('../electron/system-notification-adapter');
+const { createSafeStorageSecretStore } = require('../electron/safe-storage-backend');
 const { createProgramAllowances } = require('../services/program-allowances-service');
 const { existsSync, readFileSync } = require('fs');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
@@ -72,9 +74,9 @@ const { registerFsHandlers } = require('../ipc/fs-handlers');
 const { createPdfAssetReader } = require('../services/pdf-assets');
 const { createDocumentTextExtractor } = require('../services/document-text-worker');
 const { createDocumentTextService } = require('../services/document-text-service');
-const { createHtmlPreviewService } = require('../services/html-preview-service');
+const { createHtmlPreviewService } = require('../electron/html-preview-service');
 const { registerHtmlPreviewHandlers } = require('../ipc/html-preview-handlers');
-const { createFileContextMenu } = require('../services/file-context-menu');
+const { createFileContextMenu } = require('../electron/file-context-menu');
 const { createMoveToTrash } = require('../services/move-to-trash');
 const { withHomeDir } = require('../services/home-dir');
 const { createRememberedUiPrefs } = require('../services/remembered-ui-prefs');
@@ -98,7 +100,7 @@ const { registerSkillSuggestionHandlers } = require('../ipc/skill-suggestion-han
 const { registerSkillMoveHandlers } = require('../ipc/skill-move-handlers');
 const { registerChatConfigurationHandlers } = require('../ipc/chat-configuration-handlers');
 const { registerApprovalNotificationHandlers } = require('../ipc/approval-notification-handlers');
-const { createWindowPush } = require('../ipc/window-push');
+const { createWindowPush } = require('../electron/window-push');
 const { createChatConfigurationService } = require('../services/chat-configuration-service');
 const { registerShellHandlers } = require('../ipc/shell-handlers');
 const { registerPreviewHistoryMenuHandlers } = require('../ipc/preview-history-menu-handlers');
@@ -142,7 +144,7 @@ function createApplication({
   defaultProviderId = 'openai',
   speechProviderId = 'openai',
   updates: updatesOverride,
-  systemSkillsDir = bundledSystemSkillsDir({ app, path }),
+  systemSkillsDir = bundledSystemSkillsDir({ appPath: app.getAppPath?.(), path }),
   watchFile = null,
   realpathNative = null,
   manual = null,
@@ -158,20 +160,25 @@ function createApplication({
   const os = withHomeDir(baseOs);
   const providerRuntime = createProviderRuntimeAdapter(providersModule);
   const providerCatalog = createProviderCatalogAdapter(providerRuntime);
+  // Every store file lives here, and every secret goes through the keychain (#983).
+  const userDataPath = app.getPath('userData');
+  const secretStore = createSafeStorageSecretStore(safeStorage);
 
   // Notices for the window (#1001). Created first: the stores report what
   // they set aside while they are read, before the window exists.
   const notices = givenNotices || createAppNotices();
   // The pushes wired here: none before the window opens or after it closes.
-  const pushToWindow = createWindowPush(getMainWindow);
+  const eventPush = createWindowPush(getMainWindow);
+  const pushToWindow = eventPush.push;
 
   // The receipts of the user-confirmation port (#980). Made before the
   // stores: the preferences and the MCP servers redeem them too (#1104).
   const confirmationReceipts = createConfirmationReceipts();
 
   const storage = createStorageService({
-    app,
-    safeStorage,
+    userDataPath,
+    secretStore,
+    getSystemLocale: () => app.getLocale?.() || '',
     safeStorageKey,
     fs,
     path,
@@ -184,11 +191,11 @@ function createApplication({
   });
 
   // Prices for the estimated chat cost (#949).
-  const modelPrices = createModelPriceService({ fs, path, app, providers: providersModule });
+  const modelPrices = createModelPriceService({ fs, path, userDataPath, providers: providersModule });
 
   // Bilder eines Chats liegen als Dateien neben der Verlaufsdatei, nicht als
   // Base64 darin (Issue #94).
-  const chatAttachments = createChatAttachmentStore({ app, fs, path });
+  const chatAttachments = createChatAttachmentStore({ userDataPath, fs, path });
 
   const llmConfigStore = createLlmConfigStorePort(storage);
   const providerSecrets = createProviderSecretsPort(storage);
@@ -237,8 +244,8 @@ function createApplication({
   // Tool-Berechtigungen (Issue #66): signierter Policy-Speicher, Karten-Adapter
   // und Sitzungsfreigaben leben im Main; der Renderer stoesst nur an.
   const toolPolicyStore = createToolPolicyStore({
-    app,
-    safeStorage,
+    userDataPath,
+    secretStore,
     safeStorageKey,
     fs,
     path,
@@ -252,7 +259,7 @@ function createApplication({
   // Modell und Freigabemodus gehoeren zum Chat (Issue #211). Gesetzt wird
   // beides weiterhin ueber die bestehenden Wege — „Auto“ also nur nach dem
   // nativen Dialog; hier wird es je Chat gemerkt und beim Wechsel hergestellt.
-  const llmPresets = createLlmPresets({ llmConfigStore, providerCatalog, safeStorage });
+  const llmPresets = createLlmPresets({ llmConfigStore, providerCatalog, secretStore });
   const chatSessionSettings = createChatSessionSettings({
     chatHistoryStore,
     applyPreset: (presetId) => llmPresets.applyActivePreset(presetId),
@@ -381,7 +388,7 @@ function createApplication({
   const outsideAccess = createOutsideAccess({
     path,
     homeDir: os.homedir(),
-    userDataPath: app.getPath('userData'),
+    userDataPath,
     globalSkillRoots,
     realPath: (p) => fsService.resolveExistingRealPath(p),
   });
@@ -402,7 +409,7 @@ function createApplication({
     fs,
     existsSync,
     spawn: childProcess.spawn,
-    userDataPath: app.getPath('userData'),
+    userDataPath,
     protectedWritePaths: globalSkillRoots,
     readShellPath: async () => (await shellRunnerService.detect()).path || '',
     // The interpreter run_python would use decides whether pip needs its
@@ -419,8 +426,8 @@ function createApplication({
     platform: process.platform,
     readUserPath: async () => (await shellRunnerService.detect()).path || '',
     readAllowances: (workspaceRoot) => toolPolicyStore.readProgramAllowances(workspaceRoot),
-    protectedRoots: [app.getPath('userData')],
-    sensitivePaths: sensitiveReadPaths({ platform: process.platform, userDataPath: app.getPath('userData') }),
+    protectedRoots: [userDataPath],
+    sensitivePaths: sensitiveReadPaths({ platform: process.platform, userDataPath }),
   });
   const shellRunnerService = createShellRunnerService({
     spawn: childProcess.spawn,
@@ -607,7 +614,7 @@ function createApplication({
   const speech = createSpeechAdapter(realtimeTranscription, whisperService);
 
   const updates = updatesOverride || createUpdateAdapter(createUpdateService({
-    app,
+    installation: app,
     storage: uiPrefsStore,
     // Nach dem Tausch laeuft schon das Helferskript und wartet auf das
     // Ende dieses Prozesses — erst danach startet es die neue Version.
@@ -673,7 +680,7 @@ function createApplication({
       fs,
       path,
       // Harte Grenze: Snotra-eigener Speicher (Konfiguration, Policy, Verlauf).
-      protectedRoots: [app.getPath('userData')],
+      protectedRoots: [userDataPath],
       outsideAccess,
       trashItem: moveToTrash,
       readOwnSecrets: ownSecrets.readOwnSecrets,
@@ -707,8 +714,7 @@ function createApplication({
   // (#792, step 5). The renderer knows when and writes the words; main shows
   // it, keeps the switch, and on a click brings the window and the chat up.
   const approvalNotifier = createApprovalNotifier({
-    Notification,
-    getMainWindow,
+    notifications: createSystemNotificationAdapter({ Notification, getMainWindow }),
     isEnabled: defaultOnSwitch(uiPrefsStore, 'approvalNotificationsEnabled'),
     openChat: (chatId) => pushToWindow(PUSH.APPROVAL_NOTIFICATION_OPEN, { chatId }),
   });
@@ -747,7 +753,7 @@ function createApplication({
   registerVoiceHandlers({ ipcMain, speech, REQ, PUSH });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
   const settings = createSettingsService({
-    safeStorage,
+    secretStore,
     safeStorageKey,
     llmConfigStore,
     uiPrefsStore,
@@ -894,8 +900,8 @@ function createApplication({
   // Pairing a phone as the mobile remote (#1114). Nothing of it runs before
   // the user starts a pairing (R7); its Allow comes from the native dialog.
   const remote = createRemoteBridge({
-    app,
-    safeStorage,
+    userDataPath,
+    secretStore,
     safeStorageKey,
     fs,
     path,
@@ -918,7 +924,7 @@ function createApplication({
 
   const runUpdateCheck = createUpdateCheck({
     updates,
-    getMainWindow,
+    push: eventPush,
     PUSH,
     // Read when the check runs, so the switch needs no restart (#987).
     isAutomaticCheckEnabled: defaultOnSwitch(uiPrefsStore, 'autoUpdateCheckEnabled'),

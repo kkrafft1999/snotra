@@ -8,8 +8,10 @@ const { createSettingsService } = require('../../src/main/services/settings-serv
  * (#1006). Tests that drive the channels keep handing in one bag of deps.
  */
 function registerSettingsForTest(deps) {
-  const presets = createLlmPresets(deps);
-  const settings = createSettingsService({ ...deps, presets });
+  // Older tests hand in the stand-in as `safeStorage`; the services take a secret store (#983).
+  const secretStore = deps.secretStore ?? deps.safeStorage;
+  const presets = createLlmPresets({ ...deps, secretStore });
+  const settings = createSettingsService({ ...deps, secretStore, presets });
   registerSettingsHandlers({ ...deps, settings });
   return settings;
 }

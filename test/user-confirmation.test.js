@@ -19,7 +19,7 @@ const {
   createConfirmationReceipts,
   createRefusingConfirmation,
 } = require('../src/application/permissions/user-confirmation');
-const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+const { createNativeConfirmationAdapter } = require('../src/main/electron/native-confirmation-adapter');
 const { createToolPolicyStore } = require('../src/main/services/tool-policy-store');
 const { registerToolPermissionsForTest: registerToolPermissionHandlers } = require('./helpers/tool-permission-handlers');
 const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
@@ -46,7 +46,7 @@ async function makeStore(t, options = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-confirm-'));
   t.after(() => removeTempDir(dir));
   return createToolPolicyStore({
-    app: { getPath: () => dir }, safeStorage: makeSafeStorage(), fs, path, crypto, log: { warn() {} }, ...options,
+    userDataPath: dir, secretStore: makeSafeStorage(), fs, path, crypto, log: { warn() {} }, ...options,
   });
 }
 

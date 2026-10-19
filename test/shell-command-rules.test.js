@@ -279,7 +279,7 @@ async function setup(t, { dialogResponse = 0 } = {}) {
   };
   const { confirmations, storeReceipts, confirmed } = createTestConfirmations({ dialog, getMainWindow });
   const toolPolicyStore = createToolPolicyStore({
-    app: { getPath: () => dir }, safeStorage: makeSafeStorage(), fs, path: nodePath, crypto, log: { warn() {} },
+    userDataPath: dir, secretStore: makeSafeStorage(), fs, path: nodePath, crypto, log: { warn() {} },
     confirmationReceipts: storeReceipts,
   });
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });

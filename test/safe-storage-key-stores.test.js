@@ -74,8 +74,8 @@ async function tempDir(t) {
 
 function makeStorage(dir, { safeStorageKey, encryption = true } = {}) {
   return createStorageService({
-    app: { getPath: () => dir },
-    safeStorage: makeSafeStorage(encryption),
+    userDataPath: dir,
+    secretStore: makeSafeStorage(encryption),
     safeStorageKey,
     fs,
     path,
@@ -92,8 +92,8 @@ function makePolicyStore(dir, safeStorageKey) {
   return createToolPolicyStore({
     // What is checked here is the key, not the confirmation (#980).
     confirmationReceipts: { redeem: () => true },
-    app: { getPath: () => dir },
-    safeStorage: makeSafeStorage(true),
+    userDataPath: dir,
+    secretStore: makeSafeStorage(true),
     safeStorageKey,
     fs,
     path,

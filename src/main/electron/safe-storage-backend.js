@@ -14,6 +14,9 @@
  * on a system without encryption — no keys stored, and the settings say why.
  *
  * Off Linux there is no such backend, and `safeStorage` is passed on as it is.
+ *
+ * `createSafeStorageSecretStore` hands the guarded `safeStorage` to the stores
+ * as the secret-store port (#983).
  */
 
 const PLAIN_TEXT_BACKENDS = new Set(['basic_text']);
@@ -64,4 +67,20 @@ function requireRealEncryption(safeStorage, { platform = process.platform } = {}
   });
 }
 
-module.exports = { requireRealEncryption };
+/**
+ * The secret-store port on the desktop (#983): `safeStorage`, after
+ * `requireRealEncryption`. Each call goes to it when it is made, so a
+ * keychain unlocked later is used from then on.
+ *
+ * @param {Pick<import('electron').SafeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'>} safeStorage
+ * @returns {import('../../application/ports/secret-store-port').SecretStorePort}
+ */
+function createSafeStorageSecretStore(safeStorage) {
+  return {
+    isEncryptionAvailable: () => safeStorage.isEncryptionAvailable(),
+    encryptString: (plainText) => safeStorage.encryptString(plainText),
+    decryptString: (cipherText) => safeStorage.decryptString(cipherText),
+  };
+}
+
+module.exports = { requireRealEncryption, createSafeStorageSecretStore };

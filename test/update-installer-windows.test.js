@@ -75,7 +75,7 @@ static class StandIn {
 
 const CONFIRM_SCRIPT = [
   "const { service, version, userData } = require(require('node:path').join(__dirname, 'confirm.json'));",
-  'require(service).createUpdateService({ app: { getVersion: () => version, getPath: () => userData } })',
+  'require(service).createUpdateService({ installation: { getVersion: () => version, getPath: () => userData } })',
   '  .confirmInstallStarted().then((ok) => process.exit(ok ? 0 : 9));',
   '',
 ].join('\n');
@@ -504,7 +504,7 @@ async function assertRolledBack(fixture, reason) {
 
   // The next start of the old version shows the reason next to the update.
   const failure = await createUpdateService({
-    app: { getVersion: () => '1.12.0', getPath: () => fixture.userData },
+    installation: { getVersion: () => '1.12.0', getPath: () => fixture.userData },
   }).readInstallFailure();
   assert.equal(failure?.stage, 'start');
   assert.match(failure.error, reason);
