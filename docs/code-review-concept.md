@@ -42,7 +42,7 @@ which do not run in CI.
 |---|---|---|---|---|
 | **Wave 1 — foundation and trust boundaries** |||||
 | B01 | Skeleton and boundaries | `main/index.js`, `main/window*.js`, `main/permissions.js`, `preload/`, `shared/ipc-channels.js`, `shared/limits.js`, `main/composition/`, `contracts/index.js`, `contracts/enums.js`, `ipc/shell-handlers`, `ipc/request-lifecycle`, boundary guards | 2.8k | stable |
-| B02 | Permission decisions | `application/permissions/`, `tool-policy-store`, `program-allowances-service`, `ipc/tool-permission-handlers`, `tool-approval-adapter`, `contracts/tool-permissions`, `contracts/program-allowances`, `runtime/sensitive-*`, `runtime/path-pattern` | 4.1k | stable |
+| B02 | Permission decisions | `application/permissions/`, `tool-policy-store`, `program-allowances-service`, `tool-permission-service`, `ipc/tool-permission-handlers`, `tool-approval-adapter`, `contracts/tool-permissions`, `contracts/program-allowances`, `runtime/sensitive-*`, `runtime/path-pattern` | 4.1k | stable |
 | B03 | Sandbox and process execution | `sandbox-service`, `sandboxed-spawn`, `shell-runner-service`, `python-runner-service`, `runtime/shell-command-guard`, `runtime/simple-command`, `runtime/sandbox-domains`, `child-output-sink` | 2.0k | stable |
 | **Wave 2 — chat core** |||||
 | B04 | Chat engine | `application/chat/`, `application/ports/`, `ipc/chat-handlers`, `contracts/chat`, `contracts/message`, `contracts/context-breakdown`, `contracts/usage`, `runtime/abort`, `runtime/partial-json` | 3.9k | stable |

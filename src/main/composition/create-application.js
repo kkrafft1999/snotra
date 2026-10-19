@@ -110,6 +110,7 @@ const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
+const { createToolPermissionService } = require('../services/tool-permission-service');
 const { createRemoteBridge } = require('./create-remote-bridge');
 const { registerRemoteHandlers } = require('../ipc/remote-handlers');
 
@@ -856,17 +857,12 @@ function createApplication({
     fs,
     onSandboxDetected: notifyToolPermissionsChanged,
   });
-  registerToolPermissionHandlers({
-    ipcMain,
-    dialog,
+  const toolPermissions = createToolPermissionService({
     confirmations,
-    getMainWindow,
     toolPolicyStore,
     approvals,
     sessionGrants,
     getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
-    REQ,
-    PUSH,
     chatSessionSettings,
     getLocale: getAppLocale,
     describeExecutionTools: securityPageData.describeExecutionTools,
@@ -879,6 +875,17 @@ function createApplication({
     platform: process.platform,
     platformCapabilities,
     homeDir: os.homedir(),
+  });
+  registerToolPermissionHandlers({
+    ipcMain,
+    permissions: toolPermissions,
+    approvals,
+    dialog,
+    getMainWindow,
+    getLocale: getAppLocale,
+    homeDir: os.homedir(),
+    REQ,
+    PUSH,
   });
 
   // Pairing a phone as the mobile remote (#1114). Nothing of it runs before

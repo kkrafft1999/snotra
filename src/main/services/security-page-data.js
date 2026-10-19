@@ -9,8 +9,8 @@ const { describeRememberedMcpTools } = require('./mcp-remembered-tools');
 /**
  * What main reads for Settings › Security (#447, #448) and for the mode pill
  * (#357). Only reading and shaping: the verdicts come from
- * `application/permissions/security-overview.js`, and the IPC handlers in
- * `ipc/tool-permission-handlers.js` put the two together.
+ * `application/permissions/security-overview.js`, and
+ * `services/tool-permission-service.js` puts the two together.
  *
  * @param {object} deps
  * @param {Pick<import('../ports/chat-history-store-port').ChatHistoryStorePort,

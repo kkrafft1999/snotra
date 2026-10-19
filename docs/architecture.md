@@ -159,7 +159,7 @@ code is.
 | **Tools** | `src/main/tools/` | The tool registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, the call planner (targets, plan key, sandbox plan, preview) and argument conformance. Business rules, called through the tool adapter |
 | **Services** | `src/main/services/` | 76 modules (~22k lines) and by far the largest layer: storage, file system, sandbox, MCP, updates, skills, watchers, the signed policy store, outside access, program allowances, document text. Most of the backend's logic lives here |
 | **Composition root** | `src/main/composition/` | `createApplication()` builds services, adapters and engine and registers the IPC handlers — see [Composition root](#composition-root) |
-| **IPC** | `src/main/ipc/` | The handlers behind every channel, event push to the renderer, and `trusted-sender.js`, which refuses any sender that is not the app's own page. Mostly parse, validate and delegate; three of them hold logic ([#1006](https://github.com/kkrafft1999/snotra/issues/1006)) |
+| **IPC** | `src/main/ipc/` | The handlers behind every channel, event push to the renderer, and `trusted-sender.js`, which refuses any sender that is not the app's own page. They parse, validate and delegate; what the settings, the chat history and the tool permissions decide lives in services since [#1006](https://github.com/kkrafft1999/snotra/issues/1006) |
 | **Main shell** | `src/main/index.js`, `src/main/window.js`, `src/main/window-state.js`, `src/main/app-lifecycle.js`, `src/main/app-identity.js`, `src/main/permissions.js`, `src/main/app-protocol.js`, `src/main/workspace-state.js`, `src/main/manual-window.js`, `src/main/data/` | The Electron start-up and its windows, the single-instance lock, the `snotra-app:` scheme the windows load from, the media permissions, the active workspace root, the manual window; `data/` holds the bundled model price table |
 | **Preload** | `src/preload/` | `index.js` builds `window.electronAPI` for the app window, `manual.js` the manual window's. Both are bundled by esbuild into one file each, because a sandboxed preload cannot load siblings |
 | **Renderer** | `src/renderer/` | DOM, CSS and native ES modules: chat, file tree, file views, settings, the manual page. It also owns the conversation state ([#981](https://github.com/kkrafft1999/snotra/issues/981)); apart from that it sees only `window.electronAPI` and the contracts |
@@ -675,7 +675,7 @@ allowance to the runner; `planSpawn` passes folders and trustd to
 `sandbox.prepare`, whose `buildConfig` adds them. The settings list lives in
 `renderer/components/ToolSecurityPanel.js`, the dialog in
 `renderer/components/ProgramAllowanceDialog.js`; widening goes through a
-native confirmation in `main/ipc/tool-permission-handlers.js`.
+native confirmation in `main/services/tool-permission-service.js`.
 
 **Scopes of the sandbox grants**
 ([#1119](https://github.com/kkrafft1999/snotra/issues/1119)). The policy file
@@ -1479,6 +1479,7 @@ These are the topics that did move out:
 
 | Topic | Module |
 | ----- | ------ |
+| The tool permissions (#1006): their state and the overviews of the Security pages, every change with the confirmation it asks and what it voids, the answers to approval cards; the prompts | `services/tool-permission-service.js`, `services/tool-permission-dialogs.js`; channels and the native folder picker: `ipc/tool-permission-handlers.js` |
 | The chat history's rules (#1006): which folder a chat is kept under, model, mode and level as main's word, the time stamp, the oldest chats beyond `MAX_CHAT_SESSIONS` with their images | `services/chat-history-service.js`; channels: `ipc/chat-history-handlers.js` |
 | The model settings (#1006): merging and encrypting a provider's or an entry's connection, when an entry is usable, the active entry; the dialog's save with its rollback, the reasoning level, the interface preferences with their confirmations | rules: `services/llm-settings.js`; flow: `services/settings-service.js`; channels: `ipc/settings-handlers.js` |
 | Own secrets (concept §5): which values a tool result must never carry | `services/own-secrets.js` |
@@ -1802,7 +1803,7 @@ register: `sandbox-service` (no sandbox off the register; the agent socket and
 the expected SSH reads only where `sandboxGitSsh` holds),
 `program-allowances-service`, the switch-on prompt for an execution tool
 (`settings-confirmation-dialogs.js`), the Security page's overview
-(`tool-permission-handlers.js`) and the installation target of the updater
+(`tool-permission-service.js`) and the installation target of the updater
 (`update-targets.js`). Checks that only pick *how* a platform does something
 stay where they are: paths and case folding, shell and interpreter choice,
 the Windows Job Object and `taskkill`, `rename` retries, menus, key bindings,

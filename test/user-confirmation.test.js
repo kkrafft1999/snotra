@@ -21,7 +21,7 @@ const {
 } = require('../src/application/permissions/user-confirmation');
 const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
 const { createToolPolicyStore } = require('../src/main/services/tool-policy-store');
-const { registerToolPermissionHandlers } = require('../src/main/ipc/tool-permission-handlers');
+const { registerToolPermissionsForTest: registerToolPermissionHandlers } = require('./helpers/tool-permission-handlers');
 const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
 const { registerSkillMoveHandlers } = require('../src/main/ipc/skill-move-handlers');
 const { createToolApprovalAdapter } = require('../src/main/adapters/tool-approval-adapter');
