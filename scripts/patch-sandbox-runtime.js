@@ -57,6 +57,7 @@ const MONITOR_PATCHED = "snotraOnLogEntry(logProcess.stdout, (data) => {";
 
 const RELAY_ANCHOR = '        ...RELAYS_LISTEN,\n    ];';
 const RELAY_PATCHED = '        ...RELAYS_LISTEN,\n        ...snotraSshRelay(socat),\n    ];';
+const RELAY_MARKER = '// Added by Snotra, scripts/patch-sandbox-runtime.js (#1155).';
 
 function runtimeFile(name) {
   const entry = require.resolve('@anthropic-ai/sandbox-runtime');
@@ -111,7 +112,8 @@ function snotraOnLogEntry(stream, handler) {
  * the launcher is started by absolute path, never looked up. The port is the
  * one `ssh-relay-client.sh` connects to; it exists only in the run's own
  * network namespace. `set -f` and an empty IFS keep a space in the
- * launcher's path from splitting it. Copied into the runtime as it stands, so
+ * launcher's path from splitting it; `pipes` lets the launcher close its
+ * output while it still reads (a socket pair is one descriptor for both). Copied into the runtime as it stands, so
  * it must not use anything from this file; no `!` anywhere and no `,` in the
  * SYSTEM command (the runtime's note on RELAYS_LISTEN; socat's address syntax).
  *
@@ -121,7 +123,7 @@ function snotraOnLogEntry(stream, handler) {
 function snotraSshRelay(socat) {
   return [
     '[ -z "${SNOTRA_SSH_RELAY:-}" ] || ' + socat
-      + " -t 3600 TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY'"
+      + " -t 3600 TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY,pipes'"
       + ' >/dev/null 2>&1 &',
   ];
 }
@@ -171,10 +173,18 @@ function patchLogMonitor(file = monitorPath()) {
  */
 function patchSshRelay(file = linuxPath()) {
   const source = fs.readFileSync(file, 'utf8');
-  if (source.includes(RELAY_PATCHED)) return 'already';
+  const helper = `\n${RELAY_MARKER}\n${snotraSshRelay.toString()}\n`;
+  if (source.includes(RELAY_PATCHED)) {
+    if (source.includes(helper)) return 'already';
+    // Patched by an older Snotra: its line stays, the helper is replaced.
+    const start = source.indexOf(`\n${RELAY_MARKER}\n`);
+    const end = source.indexOf('\n}\n', start);
+    if (start < 0 || end < 0) return 'missing';
+    fs.writeFileSync(file, `${source.slice(0, start)}${helper}${source.slice(end + 3)}`);
+    return 'patched';
+  }
   const count = source.split(RELAY_ANCHOR).length - 1;
   if (count !== 1) return 'missing';
-  const helper = `\n// Added by Snotra, scripts/patch-sandbox-runtime.js (#1155).\n${snotraSshRelay.toString()}\n`;
   fs.writeFileSync(file, withHelper(source.replace(RELAY_ANCHOR, RELAY_PATCHED), helper));
   return 'patched';
 }

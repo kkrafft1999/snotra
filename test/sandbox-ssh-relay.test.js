@@ -36,7 +36,7 @@ const posixOnly = { skip: process.platform === 'win32' ? 'POSIX shell scripts' :
 
 test('the installed runtime starts the SSH relay before the seccomp filter (scripts/patch-sandbox-runtime.js)', async () => {
   const source = await fs.readFile(linuxPath(), 'utf8');
-  assert.ok(source.includes(RELAY_PATCHED) && source.includes('function snotraSshRelay(socat)'),
+  assert.ok(source.includes(RELAY_PATCHED) && source.includes(snotraSshRelay.toString()),
     'The line patched after `npm install` is missing — did an update of @anthropic-ai/sandbox-runtime move it? '
     + 'Without it Git over SSH cannot sign in inside the Linux sandbox (#1155).');
   // The relay goes in front of the filter, like the runtime's own relays.
@@ -62,6 +62,10 @@ test('the relay patch adds its line once, its helper before the source map, and 
     assert.ok(patched.endsWith('\n//# sourceMappingURL=linux-sandbox-utils.js.map'));
     assert.equal(patchSshRelay(file), 'already');
     assert.equal(await fs.readFile(file, 'utf8'), patched, 'a second run changes nothing');
+    // An older helper is replaced, the rest stays.
+    await fs.writeFile(file, patched.replace(snotraSshRelay.toString(), 'function snotraSshRelay(socat) {\n  return [];\n}'));
+    assert.equal(patchSshRelay(file), 'patched');
+    assert.equal(await fs.readFile(file, 'utf8'), patched);
     await fs.writeFile(file, 'something else entirely');
     assert.equal(patchSshRelay(file), 'missing');
   } finally {
@@ -95,10 +99,10 @@ test('the relay starts only for a run that names the launcher, and a space in it
     runLine({ SNOTRA_SSH_RELAY: launcher });
     const args = (await fs.readFile(argsFile, 'utf8')).trim().split('\n');
     assert.deepEqual(args, [
-      '-t', '3600', 'TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr', 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY',
+      '-t', '3600', 'TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr', 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY,pipes',
     ]);
     // What socat hands to /bin/sh for each connection: the launcher, whole.
-    const system = args[3].slice('SYSTEM:'.length);
+    const system = args[3].slice('SYSTEM:'.length, -',pipes'.length);
     const launched = childProcess.spawnSync('/bin/sh', ['-c', system], {
       env: { PATH: process.env.PATH, SNOTRA_SSH_RELAY: launcher }, encoding: 'utf8',
     });
