@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const {
   createChatSessionSettings,
   CHAT_ACTIVATION,
-} = require('../src/main/services/chat-session-settings');
+} = require('../src/application/chat/chat-session-settings');
 
 /**
  * Modell und Freigabemodus gehören zum Chat (Issue #211). Geprüft wird hier der

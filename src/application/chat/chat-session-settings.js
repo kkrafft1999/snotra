@@ -50,7 +50,7 @@ const {
   chatModelPresetIdForStore,
   chatToolPermissionModeForStore,
   chatReasoningEffortForStore,
-} = require('./chat-history-normalization');
+} = require('../../shared/contracts/chat-session-fields');
 const { CHAT_ACTIVATION } = require('../../shared/contracts/chat');
 const {
   normalizeChatConfigOverrides,
@@ -86,9 +86,20 @@ function dropOldest(map, limit) {
 const MAX_REMEMBERED_CHATS = 500;
 
 /**
+ * What the session settings keep in the chat history (#982): one chat's index
+ * entry, and a patch of its own settings under the history's lock. On the
+ * desktop the history store of `src/main/services/storage-service.js`.
+ *
+ * @typedef {Object} ChatSettingsStore
+ * @property {(fn: () => Promise<unknown>) => Promise<unknown>} withChatHistoryLock
+ * @property {(id: string, patch: Record<string, unknown>) => Promise<boolean>} patchSession
+ * @property {(id: string) => Promise<{ modelPresetId?: unknown, toolPermissionMode?: unknown,
+ *   reasoningEffort?: unknown, configOverrides?: unknown } | null>} getSessionMeta
+ */
+
+/**
  * @param {object} deps
- * @param {Pick<import('../ports/chat-history-store-port').ChatHistoryStorePort,
- *   'withChatHistoryLock' | 'patchSession' | 'getSessionMeta'>} deps.chatHistoryStore
+ * @param {ChatSettingsStore} deps.chatHistoryStore
  * @param {(presetId: string) => unknown} deps.applyPreset
  * @param {() => Promise<string|null|undefined>} deps.getDefaultPresetId
  * @param {(presetId: string) => boolean|Promise<boolean>} [deps.isPresetUsable]

@@ -5,7 +5,7 @@
  */
 
 /**
- * The part of `services/chat-session-settings.js` this adapter calls, written
+ * The part of `application/chat/chat-session-settings.js` this adapter calls, written
  * from the consumer's side: that module is not in the checked program.
  * @typedef {Object} ChatSessionSettings
  * @property {ConfigProposalPort['overridesFor']} configOverridesFor
@@ -15,7 +15,7 @@
 
 /**
  * What a chat switched for itself, and the card that changes it (#774). The
- * overrides live in the chat's row (`services/chat-session-settings.js`); a
+ * overrides live in the chat's row (`application/chat/chat-session-settings.js`); a
  * proposal is checked against the catalogue by
  * `services/chat-configuration-service.js`. Moved out of the composition root
  * in #1098 so that the type check compares it with the port.

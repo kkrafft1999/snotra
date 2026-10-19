@@ -122,9 +122,9 @@ imports.
 - The core is small. It runs one turn: engine, history trimming, prompt blocks
   and the permission decision — about 5.3k lines, against some 22k in
   `src/main/services/` alone. The tool registry, the planner, the tool
-  descriptors and the skill selection moved in with
-  [#982](https://github.com/kkrafft1999/snotra/issues/982); session settings,
-  chat configuration and program allowances still sit in `src/main/` — the
+  descriptors, the skill selection and the chat session settings moved in with
+  [#982](https://github.com/kkrafft1999/snotra/issues/982); chat configuration
+  and program allowances still sit in `src/main/` — the
   list is in [Business rules outside the core](#business-rules-outside-the-core-982).
 - The conversation itself — runs, persistence — is the renderer's, see
   [Renderer](#renderer-what-was-moved-what-stays)
@@ -140,7 +140,9 @@ What a second front end needs but finds in `src/main/`, each with the place it
 moves to ([#982](https://github.com/kkrafft1999/snotra/issues/982), one pull
 request per module). A module moves when it can do without Node built-ins and
 packages — `test/application-layer-imports.test.js` holds that — and takes
-what touches the machine as an injected port. Inventory of 2026-10-19:
+what touches the machine as an injected port. Inventory of 2026-10-19; the
+rows still open are tracked in
+[#1172](https://github.com/kkrafft1999/snotra/issues/1172):
 
 | Rule | Current place | Target | State |
 | ---- | ------------- | ------ | ----- |
@@ -152,7 +154,7 @@ what touches the machine as an injected port. Inventory of 2026-10-19:
 | The tool registry: the built-in definitions, which tools are offered and why not (`whyNotOffered`), the MCP tools merged in, the system prompt's tool part, `generate_image` | `src/application/tools/workspace-tool-registry.js`, `src/application/tools/generate-image-tool.js` | — | moved; the file tools reach the file service through `file-tools-port` (`adapters/file-tools-adapter.js`), the others through the ports that were there for it (web search, URL fetch, code and shell execution, MCP, image generation) |
 | Which skills are on, what the prompt gets of them, what a tick becomes when stored and what making a skill global does to its switch | `src/application/skills/skill-selection.js` | — | moved; `services/skills-service.js` scans the folders, resolves the folder's key and hands the scanned skills in |
 | The model's skill suggestion | `src/main/services/skill-suggestion-service.js` | `src/application/skills/` | open |
-| A chat's model, mode, reasoning level and switched skills and tools; the fallback to "Smart" when "Auto" is refused | `src/main/services/chat-session-settings.js` | `src/application/chat/`, over the chat-history store port that #981 brings | open; waits for #1006 and #981, which change the same wiring |
+| A chat's model, mode, reasoning level and switched skills and tools; the fallback to "Smart" when "Auto" is refused | `src/application/chat/chat-session-settings.js` | — | moved; keeps them in the chat history through a typedef of its own (`ChatSettingsStore`); the stored fields are normalized in `shared/contracts/chat-session-fields.js` for it and for the history |
 | Which skills and tools a chat has, and the check of a proposal to change them (#773, #774) | `src/main/services/chat-configuration-service.js` | `src/application/chat/` | open; with the session settings |
 | Whether a program allowance covers a command (#408) | `src/main/services/program-allowances-service.js` | the matching to `src/application/permissions/`; finding a program on the PATH stays in main | open |
 | The scopes, merging and loosening rules of the policy | `src/main/services/tool-policy-store.js` | the rules to `src/application/permissions/` next to `tool-policy.js`; the signed file stays in main | open |
@@ -171,7 +173,7 @@ code is.
 | **Shared manual** | `src/shared/manual/` | Addressing and searching the pages of the user manual, for main and the manual window |
 | **Shared presentation** | `src/shared/presentation/` | `tool-display.js`: the lines of the tool log, by the key and target a tool's descriptor names. For main adapters and tests; not imported by the core |
 | **Shared files** | `src/shared/ipc-channels.js`, `src/shared/manual-channels.js`, `src/shared/limits.js` | Channel names of both windows and the limits that several sides need |
-| **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming, the prompt blocks for environment, memory and project instructions, and the best-effort injection flags on tool results (`injection-detector.js` behind `ports/injection-flag-port.js`, #1011). Only through injected ports |
+| **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming, the prompt blocks for environment, memory and project instructions, and the best-effort injection flags on tool results (`injection-detector.js` behind `ports/injection-flag-port.js`, #1011), and a chat's own settings — model, mode, reasoning level, switched skills and tools (`chat-session-settings.js`, #982). Only through injected ports |
 | **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
 | **Application tools** | `src/application/tools/` | The tools (#982): the registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, `generate_image`, the call planner (arguments, targets, plan key, sandbox plan, preview), argument conformance and the roots a grant opens. Called through the tool adapter. Only through injected services, see [Business rules outside the core](#business-rules-outside-the-core-982) |
 | **Application skills** | `src/application/skills/` | Which skills are switched on and where a switch is bound (#576, #982); the scan that finds them is `services/skills-service.js` |
@@ -301,7 +303,7 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   asks for a change (#774). The core asks the user on a card through the
   approval port and records the answer here; where the overrides are kept and
   how a proposal is checked is main's business
-  (`services/chat-session-settings.js`, `services/chat-configuration-service.js`),
+  (`application/chat/chat-session-settings.js`, `services/chat-configuration-service.js`),
   which `main/adapters/config-proposal-adapter.js` hands on
 - `remote-relay-port` — the blind relay of the mobile remote as the desktop's
   pairing sees it (#1114): open a pairing, follow the channel, confirm, cancel,
@@ -1348,7 +1350,7 @@ permission mode in the signed `tool-policy.json`. An entry from the history
 therefore came back with its messages, but ran on with the currently configured
 model and mode.
 
-`services/chat-session-settings.js` is the counterpart to that. It remembers
+`application/chat/chat-session-settings.js` is the counterpart to that. It remembers
 `modelPresetId` and `toolPermissionMode` per chat, writes both into the chat's row
 in the history and applies them again on a switch. The values come exclusively
 from main: `CHAT_HISTORY_ACTIVATE` names only the chat identifier and whether the
@@ -1570,9 +1572,9 @@ These are the topics that did move out:
 | The model's skill suggestion (`SKILLS_SUGGEST`) | `ipc/skill-suggestion-handlers.js` |
 | What Settings › Tools › Autonomy, Tools › Security and the mode pill read | `services/security-page-data.js` |
 | Which skills and tools a chat has — the composer pill (`CHAT_GET_CONFIGURATION`) and the model's `get_configuration` (#773) | `services/chat-configuration-service.js`, `ipc/chat-configuration-handlers.js`; why a tool is not offered: `whyNotOffered` in `tools/workspace-tool-registry.js` |
-| The model's proposal to switch a skill or tool for one chat (`propose_config_change`, #774): checked in main, asked on a card (approval checkpoint `config`), kept in the chat's row | engine: `proposeConfigChange` / `refreshCapabilities` in `application/chat/chat-engine.js`, port `application/ports/config-proposal-port.js`; check: `prepareProposal` in `services/chat-configuration-service.js`; storage: `configOverridesFor` in `services/chat-session-settings.js`; arithmetic: `contracts/chat-configuration.js`; card: `renderer/utils/config-proposal-view.js` |
+| The model's proposal to switch a skill or tool for one chat (`propose_config_change`, #774): checked in main, asked on a card (approval checkpoint `config`), kept in the chat's row | engine: `proposeConfigChange` / `refreshCapabilities` in `application/chat/chat-engine.js`, port `application/ports/config-proposal-port.js`; check: `prepareProposal` in `services/chat-configuration-service.js`; storage: `configOverridesFor` in `application/chat/chat-session-settings.js`; arithmetic: `contracts/chat-configuration.js`; card: `renderer/utils/config-proposal-view.js` |
 | The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |
-| A chat whose "Auto" the policy store refuses runs at "Smart" (#419) | `applyModeOrDefault` in `services/chat-session-settings.js` |
+| A chat whose "Auto" the policy store refuses runs at "Smart" (#419) | `applyModeOrDefault` in `application/chat/chat-session-settings.js` |
 | Settings › MCP: the saved servers taken over into the service, the test of one server (reload, connect, mask), the start-up move of deselected tools (#449) | `services/mcp-settings.js` |
 | One log line per watcher and minute for a failing watch (#648) | `services/watcher-warning.js` |
 | The switch in front of `run_python` and `shell_execute`: offered only when found and switched on, the sandbox self-test only when on, and what is missing (#773) | `services/execution-tool-settings.js` |
