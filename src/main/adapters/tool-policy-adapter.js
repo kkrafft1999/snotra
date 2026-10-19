@@ -8,15 +8,22 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 
 /**
+ * What the policy store hands back, written from the consumer's side:
+ * `tool-policy-store.js` is not in the checked program (#1098). `integrity`
+ * is a plain string here, since the store also reports `unreadable`.
+ * @typedef {Omit<import('../../application/ports/tool-policy-port').ToolPolicySnapshot, 'integrity'|'rulesVersion'> & { integrity: string }} ToolPolicyState
+ */
+
+/**
  * The permission state for one run (#66, concept §7), read from the signed
  * policy store. Moved out of the composition root in #1098 so that the type
  * check compares it with the port.
  *
- * @param {Object} deps
- * @param {{ read: () => Promise<Object> }} deps.toolPolicyStore
- * @param {(chatId: string) => string|null} [deps.resolveChatMode]  the mode of
- *   a chat that is running in the background (#320); `null` means "the store's
- *   mode applies"
+ * @param {{
+ *   toolPolicyStore: { read: () => Promise<ToolPolicyState> },
+ *   resolveChatMode?: (chatId: string) => string|null,
+ * }} deps  `resolveChatMode` gives the mode of a chat that is running in the
+ *   background (#320); `null` means "the store's mode applies"
  * @returns {import('../../application/ports/tool-policy-port').ToolPolicyPort}
  */
 function createToolPolicyAdapter({ toolPolicyStore, resolveChatMode = () => null }) {
@@ -32,7 +39,8 @@ function createToolPolicyAdapter({ toolPolicyStore, resolveChatMode = () => null
         sensitivePathPatterns: state.sensitivePathPatterns,
         policyVersion: state.policyVersion,
         rulesVersion: rulesVersionOf(state),
-        integrity: state.integrity,
+        // `unreadable` threw above, so what is left is the port's union.
+        integrity: /** @type {import('../../application/ports/tool-policy-port').ToolPolicySnapshot['integrity']} */ (state.integrity),
         encryptionAvailable: state.encryptionAvailable,
         // Hosts kept open per workspace (#946) and in every workspace
         // (#1119); not part of the rules version, so keeping one costs
