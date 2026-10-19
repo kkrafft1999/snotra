@@ -8,7 +8,7 @@
  *
  * @param {object} deps
  * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
- * @param {Pick<ReturnType<typeof import('../services/chat-configuration-service').createChatConfigurationService>, 'describe'>} deps.chatConfiguration
+ * @param {Pick<ReturnType<typeof import('../../application/chat/chat-configuration-service').createChatConfigurationService>, 'describe'>} deps.chatConfiguration
  * @param {() => string|null} [deps.getActiveWorkspaceRoot]
  * @param {() => Promise<unknown>} [deps.getChatOverrides]  what the open chat switched on a card
  * @param {Record<string, string>} deps.REQ

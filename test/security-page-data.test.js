@@ -6,7 +6,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { createSecurityPageData } = require('../src/main/services/security-page-data');
+const { createSecurityPageData } = require('../src/application/permissions/security-page-data');
 
 const SESSIONS = [
   { id: 'a', title: '  First chat ', workspaceRoot: '/ws', toolPermissionMode: 'auto' },

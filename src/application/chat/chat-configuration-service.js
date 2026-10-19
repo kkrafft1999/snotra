@@ -19,7 +19,7 @@ const {
   proposalKey,
 } = require('../../shared/contracts/chat-configuration');
 const { menuPath } = require('../../shared/i18n/ui-quotes');
-const { describeRememberedMcpTools } = require('./mcp-remembered-tools');
+const { describeRememberedMcpTools } = require('../tools/mcp-remembered-tools');
 
 /**
  * One skill as the indicator and the model's `get_configuration` list it.
@@ -111,16 +111,21 @@ function cleanNames(names) {
  * (#18), and a folder skill's description goes out cut and as data.
  */
 /**
+ * @typedef {import('../../shared/contracts/settings').UiPrefs} UiPrefs
+ * @typedef {import('../skills/skill-catalog').SkillCatalog} SkillCatalog
+ */
+
+/**
  * @param {object} deps
- * @param {Pick<ReturnType<typeof import('./skills-service').createSkillsService>, 'listCatalog'>} deps.skills
- * @param {Pick<ReturnType<typeof import('../../application/tools/workspace-tool-registry').createToolRegistry>,
+ * @param {SkillCatalog} deps.skills
+ * @param {Pick<ReturnType<typeof import('../tools/workspace-tool-registry').createToolRegistry>,
  *   'describeOffers' | 'listRiskCatalog'>} deps.toolRegistry
- * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore
+ * @param {{ readUIPrefs: () => Promise<UiPrefs> }} deps.uiPrefsStore
  * @param {{ readMcpServers?: () => Promise<Array<{ id: string, label?: string, enabled?: boolean, knownTools?: string[] }>> }|null} [deps.mcpConfigStore]
  */
 function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mcpConfigStore = null }) {
   /**
-   * @param {Partial<import('../ports/ui-prefs-store-port').UiPrefs>} prefs
+   * @param {Partial<UiPrefs>} prefs
    * @param {string|null} workspaceRoot
    */
   async function readCatalog(prefs, workspaceRoot) {
@@ -176,7 +181,7 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
    * @returns {Promise<ChatConfiguration>}
    */
   async function describe({ workspaceRoot = null, chatSkillNames = [], overrides = null } = {}) {
-    /** @type {Partial<import('../ports/ui-prefs-store-port').UiPrefs>} */
+    /** @type {Partial<UiPrefs>} */
     const prefs = (await uiPrefsStore.readUIPrefs()) || {};
     const locale = prefs.appLocale;
     const root = typeof workspaceRoot === 'string' && workspaceRoot.trim() ? workspaceRoot : null;
@@ -306,7 +311,7 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
    *   overrides?: unknown,
    *   proposal?: { kind?: unknown, name?: unknown, enable?: unknown, reason?: unknown },
    * }} [input]
-   * @returns {ReturnType<import('../../application/ports/config-proposal-port').ConfigProposalPort['prepare']>}
+   * @returns {ReturnType<import('../ports/config-proposal-port').ConfigProposalPort['prepare']>}
    */
   async function prepareProposal({ workspaceRoot = null, chatSkillNames = [], overrides = null, proposal } = {}) {
     const kind = Object.values(CONFIG_PROPOSAL_KINDS).find((known) => known === proposal?.kind);

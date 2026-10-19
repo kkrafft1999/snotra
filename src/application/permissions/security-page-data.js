@@ -1,28 +1,39 @@
 'use strict';
 
-const { describeRememberedMcpTools } = require('./mcp-remembered-tools');
+const { describeRememberedMcpTools } = require('../tools/mcp-remembered-tools');
 
 /**
  * @typedef {NonNullable<NonNullable<Parameters<typeof describeRememberedMcpTools>[0]>['servers']>} McpServers
  */
 
 /**
- * What main reads for Settings › Security (#447, #448) and for the mode pill
- * (#357). Only reading and shaping: the verdicts come from
- * `application/permissions/security-overview.js`, and
- * `services/tool-permission-service.js` puts the two together.
+ * What Settings › Security (#447, #448) and the mode pill (#357) read. Only
+ * reading and shaping: the verdicts come from `security-overview.js`, and
+ * `src/main/services/tool-permission-service.js` puts the two together. What
+ * it reads from comes in through typedefs of its own (#1172): the chat list,
+ * the recent folders, the sandbox's state.
+ *
+ * @typedef {{ id: string, title?: unknown, workspaceRoot?: string | null, toolPermissionMode?: unknown }} ChatListEntry
+ * @typedef {Object} ChatList
+ * @property {() => Promise<ChatListEntry[]>} listSessions  every chat's index entry, newest first
+ * @property {(raw: unknown) => string | null} normalizeWorkspaceRoot
+ * @property {(sessionRow: { workspaceRoot?: string | null }, workspaceRoot: string | null) => boolean} sessionMatchesWorkspace
+ *
+ * @typedef {{ isolated: boolean, status: string, reason: string, platform: string, missing: string[],
+ *   detail: string, pipLegacyCerts: boolean }} SandboxDescription
+ * @typedef {Object} SandboxState
+ * @property {() => SandboxDescription} describe  what is known, without waiting
+ * @property {() => Promise<unknown>} detect  runs the detection once per start
  *
  * @param {object} deps
- * @param {Pick<import('../ports/chat-history-store-port').ChatHistoryStorePort,
- *   'listSessions' | 'normalizeWorkspaceRoot' | 'sessionMatchesWorkspace'>} deps.chatHistoryStore
- * @param {Pick<import('../ports/ui-prefs-store-port').UiPrefsStorePort, 'readUIPrefs'>} deps.uiPrefsStore
- * @param {Pick<ReturnType<typeof import('../../application/tools/workspace-tool-registry').createWorkspaceToolRegistry>, 'listRiskCatalog'>} deps.toolRegistry
+ * @param {ChatList} deps.chatHistoryStore
+ * @param {{ readUIPrefs: () => Promise<import('../../shared/contracts/settings').UiPrefs> }} deps.uiPrefsStore
+ * @param {Pick<ReturnType<typeof import('../tools/workspace-tool-registry').createWorkspaceToolRegistry>, 'listRiskCatalog'>} deps.toolRegistry
  * @param {{ readMcpServers: () => Promise<McpServers> }} deps.mcpConfigStore
- * @param {Pick<import('../../application/ports/code-execution-port').CodeExecutionPort, 'isAvailable'>} deps.pythonRunner
- * @param {Pick<import('../../application/ports/shell-execution-port').ShellExecutionPort, 'isAvailable'>} deps.shellRunner
- * @param {Pick<ReturnType<typeof import('./sandbox-service').createSandboxService>, 'describe' | 'detect'>} deps.sandboxService
- * @param {Partial<Pick<import('../ports/workspace-folder-store-port').WorkspaceFolderStorePort,
- *   'getValidatedFolderHistory' | 'getValidatedLastFolder'>>|null} [deps.workspaceFolderStore]
+ * @param {Pick<import('../ports/code-execution-port').CodeExecutionPort, 'isAvailable'>} deps.pythonRunner
+ * @param {Pick<import('../ports/shell-execution-port').ShellExecutionPort, 'isAvailable'>} deps.shellRunner
+ * @param {SandboxState} deps.sandboxService
+ * @param {{ getValidatedFolderHistory?: () => Promise<string[]>, getValidatedLastFolder?: () => Promise<string | null> }|null} [deps.workspaceFolderStore]
  * @param {Pick<typeof import('fs/promises'), 'stat'>|null} [deps.fs]
  * @param {() => void} [deps.onSandboxDetected]
  */
