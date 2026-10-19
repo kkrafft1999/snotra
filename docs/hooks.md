@@ -118,6 +118,19 @@ Answers an event does not list are ignored and noted in the trace.
   applies. When the result has to be shortened for the budget, the tool output
   is cut first and the feedback is kept.
 - A hook error is shown in the trace; the model gets no feedback for it.
+- **Injection flags (#1011).** A `PostToolUse` hook is meant to become one
+  more source behind `application/ports/injection-flag-port.js`, next to the
+  built-in detector: a hook that recognises an injection adds a flag with the
+  source `hook:<key>`, merged with the built-in one onto the tool row. The flag
+  is a warning and nothing more — it does not reach the model, the policy or
+  any card.
+- **A failing tightening hook fails open.** `PostToolUse` runs after the call,
+  so it cannot hold one back; a hook that errors, times out or answers with
+  garbage leaves the result as it is — no feedback and, as a flag source, no
+  flag. That is fail-open for the hook's own effect only: every boundary that
+  was in force holds unchanged, and the next call goes through the policy and
+  `PreToolUse` again. A guard that must never fail open does not belong here
+  but in `PreToolUse`, where an error counts as `ask` (§4.5).
 
 ### 2.5 `RunEnd`
 

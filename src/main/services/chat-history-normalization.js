@@ -18,6 +18,7 @@ const {
   normalizeSandboxLive,
   normalizeSandboxOutside,
 } = require('../../shared/contracts/chat');
+const { normalizeInjectionFlag } = require('../../shared/contracts/injection-flag');
 const { normalizeSessionCost } = require('../../shared/contracts/cost');
 const { createMessage, isMessage } = require('../../shared/contracts/message');
 const { normalizeChatConfigOverrides } = require('../../shared/contracts/chat-configuration');
@@ -30,7 +31,7 @@ const { isRecord } = require('../../shared/runtime/is-record');
 /**
  * A tool step as the history keeps it: the display line alone, or the line with
  * what the display derives its icon, grouping and notes from (#60, #66, #187,
- * #348, #792, #1008).
+ * #348, #792, #1008, #1011).
  *
  * @typedef {string | {
  *   line: string,
@@ -45,6 +46,7 @@ const { isRecord } = require('../../shared/runtime/is-record');
  *   sandboxDecision?: import('../../shared/contracts/chat').SandboxDecision,
  *   sandboxLive?: import('../../shared/contracts/chat').SandboxLiveEntry[],
  *   sandboxOutside?: import('../../shared/contracts/chat').SandboxOutsideEntry[],
+ *   injectionFlag?: import('../../shared/contracts/injection-flag').InjectionFlag,
  * }} StoredTraceEntry
  */
 
@@ -391,7 +393,9 @@ function toolTraceEntryForStore(entry, toolCategoryOf = null) {
   const sandboxLive = normalizeSandboxLive(fields.sandboxLive);
   // …and on a card before a file tool reached outside the open folder (#792, step 4).
   const sandboxOutside = normalizeSandboxOutside(fields.sandboxOutside);
-  if (!tool && !skill && !permission && !round && !schema && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside) return line;
+  // A result that looked like a prompt injection (#1011): kinds and short excerpts.
+  const injectionFlag = normalizeInjectionFlag(fields.injectionFlag);
+  if (!tool && !skill && !permission && !round && !schema && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside && !injectionFlag) return line;
   /** @type {Exclude<StoredTraceEntry, string>} */
   const out = { line };
   if (tool) out.tool = tool;
@@ -405,6 +409,7 @@ function toolTraceEntryForStore(entry, toolCategoryOf = null) {
   if (sandboxDecision) out.sandboxDecision = sandboxDecision;
   if (sandboxLive) out.sandboxLive = sandboxLive;
   if (sandboxOutside) out.sandboxOutside = sandboxOutside;
+  if (injectionFlag) out.injectionFlag = injectionFlag;
   return out;
 }
 

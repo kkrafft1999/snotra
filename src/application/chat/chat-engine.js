@@ -76,6 +76,8 @@ const {
 const { decideToolPolicy } = require('../permissions/tool-policy');
 const { createSessionGrants } = require('../permissions/session-grants');
 const { buildApprovalRequest } = require('../permissions/approval-request');
+const { createBuiltinInjectionDetector } = require('./injection-detector');
+const { flagToolResult } = require('./injection-flagging');
 const {
   createSensitiveMarker,
   redactSensitiveToolMessages,
@@ -1069,6 +1071,7 @@ function mergeSandboxGrants(session, chosen) {
  * @property {number} [maxToolRounds]
  * @property {(run: { sessionId: string|number, chatId: string|null }) => void} [onRunSettled]
  * @property {import('../ports/config-proposal-port').ConfigProposalPort|null} [configProposals]
+ * @property {ReadonlyArray<import('../ports/injection-flag-port').InjectionFlagPort>} [injectionFlags]
  */
 
 /**
@@ -1093,6 +1096,9 @@ function createChatEngine({
   onRunSettled = () => {},
   // What a chat switched for itself, and the card that changes it (#774).
   configProposals = null,
+  // Who may flag a tool result as a likely prompt injection (#1011): the
+  // built-in detector, later a PostToolUse hook (#927). A warning only.
+  injectionFlags = [createBuiltinInjectionDetector()],
 }) {
   /**
    * One run per window *and* chat (#320). Until then a window had exactly one
@@ -3036,6 +3042,17 @@ function createChatEngine({
             throw error;
           }
           let content = localizeSystemSkillResult(toolName, args, outcome.content);
+          // A best-effort warning for the user (#1011, SEC-4): what the
+          // sources find goes onto the row and nowhere else — not into the
+          // policy, not into what the model receives. Looked at before the
+          // cut, so that nothing hides behind the budget.
+          const injectionFlag = await flagToolResult(injectionFlags, {
+            toolName,
+            category: typeof entry.category === 'string' ? entry.category : '',
+            skill: typeof entry.skill === 'string' ? entry.skill : '',
+            content: typeof content === 'string' ? content : '',
+          });
+          if (injectionFlag) entry.injectionFlag = injectionFlag;
           // Cut to the room left in the budget now, not once the total has
           // overflowed (#169); the tool line says so.
           const capped = capToolOutput(content, toolOutputRoom(apiMessages, messageCharLimit));

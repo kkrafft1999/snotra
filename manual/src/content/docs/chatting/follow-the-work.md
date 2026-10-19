@@ -28,6 +28,14 @@ Once the answer is complete, the steps fold into one line that counts them, such
 
 If a command or a Python run on macOS or Linux tried to reach something the sandbox keeps closed — a folder outside the project, a host it was not allowed — a box *The sandbox blocked …* appears under the tool log. It lists what was blocked, how often, and why. That is usually the reason a command failed in a way its own output does not explain. [since 1.18] For a write or a read of a protected location, a card asks right after the run whether to allow it and run the command again; a connection to a host the call did not name waits for you on a card while the command runs. The box then also says what you decided; [since 1.21] once you have answered everything, the card gives way to it, and it folds to one line that opens on a click. More on [Run commands in the sandbox](../../safety/sandbox/).
 
+## When a result reads like instructions
+
+[since 1.28] Some text is written for the model rather than for you: a web page that says *ignore all previous instructions*, a file that poses as a message from Snotra, characters you cannot see. When a tool result contains something like that, a box *A tool result reads like instructions to the agent* appears under the tool log. It names the step, says what kind of text it found, and quotes it.
+
+![An answer whose tool log reads "1 file read". Below it a box: "A tool result reads like instructions to the agent · File notes/seed-catalogue.md read", the kind "Tells the agent to ignore what it was told" with the quoted sentence from the file, a note that what the agent may do has not changed, and the link "What this check does". Then the answer, which says it left the request in the file alone.](screenshots/injection-flag.webp)
+
+Nothing about what Snotra may do has changed: the next tool call is checked like every other one, and cards and the sandbox apply as before. Look closely at what it proposes next — a command you did not expect, a file that has nothing to do with the task, an address you don't know. If something seems off, deny the card or stop the run. Why the box can be wrong both ways: [Why Snotra asks before it acts](../../safety/why-snotra-asks/#when-a-tool-result-looks-like-instructions).
+
 ## What happens
 
 The tool log stays with the answer, also in the chat history. Files Snotra read or changed are marked in the file tree as well, and the line *Changed:* under the log leads to each change: [See what Snotra changed](../review-changes/).

@@ -146,6 +146,8 @@
  * @property {import('../../shared/contracts/chat').SandboxLiveEntry[]|null} [sandboxLive]  connections decided while the command waited (#792)
  * @property {import('../../shared/contracts/chat').SandboxOutsideEntry[]|null} [sandboxOutside]  paths outside the open folder decided on a card (#792)
  * @property {{ originalChars: number, keptChars: number }} [shortened]  output cut to the budget (#169)
+ * @property {import('../../shared/contracts/injection-flag').InjectionFlag} [injectionFlag]  the result looks like
+ *   a prompt injection (#1011) — a warning for the user, read by nothing that decides
  * @property {string} [skillPath]  a skill file reached by its absolute path, in the skill's own spelling (#427)
  * @property {{ outcome?: string }} [configProposal]  how a `propose_config` call ended (#774)
  */

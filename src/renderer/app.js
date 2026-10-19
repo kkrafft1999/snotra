@@ -12,6 +12,7 @@ import { initSkillAutocomplete } from './components/SkillAutocomplete.js';
 import { initSkillSuggestion } from './components/SkillSuggestion.js';
 import { createSkillCatalogSource } from './chat/skillCatalogSource.js';
 import { SANDBOX_SETTINGS_EVENT } from './chat/sandboxBlocked.js';
+import { INJECTION_HELP_EVENT, openInjectionHelp } from './chat/injectionFlags.js';
 import { initChatHistoryPanel } from './components/ChatHistoryPanel.js';
 import { initSettingsModal } from './components/SettingsModal.js';
 import { initUpdateDialog } from './components/UpdateDialog.js';
@@ -313,6 +314,8 @@ const openAllowanceSettings = () => settingsModal.openSettingsModal({ panel: 'sa
 // The box "The sandbox blocked …" under a message asks for it with an event
 // (#1119): it is drawn deep inside the chat, which knows nothing of the settings.
 document.addEventListener(SANDBOX_SETTINGS_EVENT, () => openSandboxSettings());
+// The help link of a flagged tool result (#1011).
+document.addEventListener(INJECTION_HELP_EVENT, () => openInjectionHelp(api));
 const openSecuritySettings = () => settingsModal.openSettingsModal({ panel: 'security' });
 initToolModePicker({ toolPermissions, onOpenSandboxSettings: openSandboxSettings, onOpenSecuritySettings: openSecuritySettings });
 // Skills and tools of the open chat (#773). The settings are built further

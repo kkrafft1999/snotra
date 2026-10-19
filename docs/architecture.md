@@ -147,7 +147,7 @@ code is.
 | **Shared manual** | `src/shared/manual/` | Addressing and searching the pages of the user manual, for main and the manual window |
 | **Shared presentation** | `src/shared/presentation/` | `tool-display.js`: the lines of the tool log, by the key and target a tool's descriptor names. For main adapters and tests; not imported by the core |
 | **Shared files** | `src/shared/ipc-channels.js`, `src/shared/manual-channels.js`, `src/shared/limits.js` | Channel names of both windows and the limits that several sides need |
-| **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming and the prompt blocks for environment, memory and project instructions. Only through injected ports |
+| **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming, the prompt blocks for environment, memory and project instructions, and the best-effort injection flags on tool results (`injection-detector.js` behind `ports/injection-flag-port.js`, #1011). Only through injected ports |
 | **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
 | **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content and the overview the Security page reads. No Electron, no file system; the heart of [`security-concept.md`](./security-concept.md) |
 | **Application ports** | `src/application/ports/` | 22 typedef files, the contracts between the core and main — see [Ports](#ports) |
@@ -355,6 +355,13 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   redirects and limits live in the adapter
   (`main/adapters/http-url-fetch-adapter.js`), the address check itself in
   `shared/runtime/url-safety.js`
+- `injection-flag-port` — a source that may flag a tool result as a likely
+  prompt injection (#1011). After a call ran, the engine asks every source
+  (`chat/injection-flagging.js`) and puts what they found on the tool row and
+  nowhere else: neither the model, the policy nor a card reads it, and a source
+  that throws contributes nothing. The built-in source is
+  `chat/injection-detector.js`, which implements the port itself and is the
+  engine's default; a `PostToolUse` hook (#927) is meant to become a second one
 - `code-execution-port` — running a Python program (issue #86); interpreter
   detection, time limit and process-tree kill live in
   `main/services/python-runner-service.js`, which implements the port itself;
