@@ -51,7 +51,6 @@ const {
   TOOL_POLICY_INTEGRITY,
   normalizeToolPermissionMode,
   normalizePermissionRule,
-  normalizePermissionRules,
   normalizeSensitivePathPatterns,
   isCommandRule,
 } = require('../../shared/contracts/tool-permissions');
@@ -67,7 +66,6 @@ const {
 } = require('../../application/permissions/user-confirmation');
 const {
   normalizeProgramAllowance,
-  normalizeProgramAllowances,
   isNarrowing,
   PROGRAM_ALLOWANCE_LIMITS,
   combineProgramAllowances,
@@ -76,24 +74,28 @@ const {
 
 const { readFileWithRetry } = require('./rename-with-retry');
 const { writeFileAtomic } = require('./atomic-write');
-const { grantedHosts } = require('./sandbox-violations');
+const { grantedHosts } = require('../../shared/runtime/granted-hosts');
+const {
+  MAX_WORKSPACE_HOSTS,
+  MAX_GLOBAL_HOSTS,
+  MAX_KNOWN_WORKSPACES,
+  MAX_AUTO_CHATS,
+  defaultPayload,
+  chatKey,
+  withAutoChat,
+  normalizeWorkspaceRoots,
+  sameCommandRule,
+  normalizePolicyPayload,
+  failSafePayload,
+  policyVersionOf,
+  allRules,
+} = require('../../application/permissions/tool-policy-rules');
 const { KEY_ALWAYS_DURABLE } = require('../../shared/contracts/safe-storage-key');
 
 const POLICY_FILENAME = 'tool-policy.json';
 const POLICY_KEY_FILENAME = 'tool-policy.key';
 const POLICY_FILE_VERSION = 1;
 const HMAC_KEY_BYTES = 32;
-/** Hosts one workspace may keep open for its runs (#946). */
-const MAX_WORKSPACE_HOSTS = 10;
-/** Hosts kept open in every workspace (#1119). */
-const MAX_GLOBAL_HOSTS = 10;
-/**
- * Folders remembered as already there while new workspaces start without the
- * sandbox (#1119), the most recent last.
- */
-const MAX_KNOWN_WORKSPACES = 1000;
-/** Chats remembered as confirmed into "Auto" (#980) — as many as chat settings keep. */
-const MAX_AUTO_CHATS = 500;
 
 const INTEGRITY = TOOL_POLICY_INTEGRITY;
 
@@ -120,23 +122,7 @@ class PolicyKeyUnreadableError extends Error {
  * @typedef {import('../../shared/contracts/program-allowances').ProgramAllowance} ProgramAllowance
  * @typedef {import('../../shared/contracts/message').Message} Message
  * @typedef {(typeof TOOL_POLICY_INTEGRITY)[keyof typeof TOOL_POLICY_INTEGRITY]} PolicyIntegrity
- * @typedef {object} PolicyPayload
- * @property {number} revision
- * @property {ToolPermissionMode} mode
- * @property {PermissionRule[]} globalRules
- * @property {Record<string, PermissionRule[]>} workspaceRules
- * @property {string[]} sensitivePathPatterns
- * @property {string[]} unsandboxedWorkspaces
- * @property {ProgramAllowance[]} programAllowances
- * @property {Record<string, ProgramAllowance[]>} workspaceProgramAllowances
- * @property {Record<string, ToolPermissionMode>} workspaceModes
- * @property {Record<string, string[]>} workspaceHosts
- * @property {string[]} globalHosts
- * @property {boolean} newWorkspaceSandboxOff
- * @property {string[]} knownWorkspaces
- * @property {string[]} autoChats
- * @property {boolean} legacyWriteMigrated
- * @property {number} updatedAt
+ * @typedef {import('../../application/permissions/tool-policy-rules').PolicyPayload} PolicyPayload
  *
  * What a read of the file makes of it: the payload (the fail-safe one on a
  * check that failed) and what the check found. `missing` has no payload yet.
@@ -179,156 +165,6 @@ class PolicyKeyUnreadableError extends Error {
  * @typedef {{ error?: Message, unchanged?: boolean } | null} UpdateOutcome
  * @typedef {(draft: PolicyPayload, context: UpdateContext) => UpdateOutcome | Promise<UpdateOutcome>} PolicyUpdater
  */
-
-/** @returns {PolicyPayload} */
-function defaultPayload() {
-  return {
-    revision: 0,
-    mode: DEFAULT_TOOL_PERMISSION_MODE,
-    globalRules: [],
-    workspaceRules: {},
-    sensitivePathPatterns: [],
-    unsandboxedWorkspaces: [],
-    // Program allowances for every workspace (#408) — and, since #1119, per
-    // workspace: root → entries.
-    programAllowances: [],
-    workspaceProgramAllowances: {},
-    workspaceModes: {},
-    workspaceHosts: {},
-    globalHosts: [],
-    // New workspaces start with the sandbox off (#1119); `knownWorkspaces` are
-    // the folders that were there before, which keep their setting.
-    newWorkspaceSandboxOff: false,
-    knownWorkspaces: [],
-    autoChats: [],
-    legacyWriteMigrated: false,
-    updatedAt: 0,
-  };
-}
-
-/**
- * @param {unknown} chatId
- * @returns {string | null}
- */
-function chatKey(chatId) {
-  return typeof chatId === 'string' && chatId && chatId.length <= 200 ? chatId : null;
-}
-
-/**
- * Chat ids, each once, the most recent last (#980).
- *
- * @param {unknown} value
- * @returns {string[]}
- */
-function normalizeAutoChats(value) {
-  if (!Array.isArray(value)) return [];
-  /** @type {string[]} */
-  const out = [];
-  for (const entry of value) {
-    const id = chatKey(entry);
-    if (id && !out.includes(id)) out.push(id);
-  }
-  return out.slice(-MAX_AUTO_CHATS);
-}
-
-/**
- * @param {string[]} list
- * @param {string} chatId
- * @returns {string[]}
- */
-function withAutoChat(list, chatId) {
-  return [...list.filter((id) => id !== chatId), chatId].slice(-MAX_AUTO_CHATS);
-}
-
-/**
- * Root → the hosts a connection card opened for that workspace (#946), in
- * the form the card offered them: `host:port` or `*.domain`. Anything a card
- * could not have offered is dropped, and so is a root without hosts.
- *
- * @param {unknown} value
- * @returns {Record<string, string[]>}
- */
-function normalizeWorkspaceHosts(value) {
-  /** @type {Record<string, string[]>} */
-  const out = {};
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
-  for (const [root, raw] of Object.entries(value)) {
-    if (typeof root !== 'string' || !root) continue;
-    const hosts = grantedHosts(raw).slice(0, MAX_WORKSPACE_HOSTS);
-    if (hosts.length > 0) out[root] = hosts;
-  }
-  return out;
-}
-
-/**
- * Root → the program allowances of that workspace (#1119); a root without any is dropped.
- *
- * @param {unknown} value
- * @returns {Record<string, ProgramAllowance[]>}
- */
-function normalizeWorkspaceProgramAllowances(value) {
-  /** @type {Record<string, ProgramAllowance[]>} */
-  const out = {};
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
-  for (const [root, raw] of Object.entries(value)) {
-    if (typeof root !== 'string' || !root) continue;
-    const entries = normalizeProgramAllowances(raw);
-    if (entries.length > 0) out[root] = entries;
-  }
-  return out;
-}
-
-/**
- * Root → `ask-all` | `auto`; `smart` and unknown values are no entry (#413).
- *
- * @param {unknown} value
- * @returns {Record<string, ToolPermissionMode>}
- */
-function normalizeWorkspaceModes(value) {
-  /** @type {Record<string, ToolPermissionMode>} */
-  const out = {};
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
-  for (const [root, raw] of Object.entries(value)) {
-    if (typeof root !== 'string' || !root || typeof raw !== 'string') continue;
-    const mode = normalizeToolPermissionMode(raw);
-    if (mode !== raw || mode === DEFAULT_TOOL_PERMISSION_MODE) continue;
-    out[root] = mode;
-  }
-  return out;
-}
-
-/**
- * Canonical roots only, each once; anything else is not a workspace (#357).
- *
- * @param {unknown} value
- * @returns {string[]}
- */
-function normalizeWorkspaceRoots(value) {
-  if (!Array.isArray(value)) return [];
-  /** @type {string[]} */
-  const out = [];
-  for (const entry of value) {
-    if (typeof entry !== 'string' || !entry || out.includes(entry)) continue;
-    out.push(entry);
-  }
-  return out;
-}
-
-/**
- * @param {unknown} a
- * @param {unknown} b
- * @returns {boolean}
- */
-function sameCommandRule(a, b) {
-  return (
-    isCommandRule(a) &&
-    isCommandRule(b) &&
-    a.root === b.root &&
-    a.command === b.command &&
-    a.cwd === b.cwd &&
-    a.networkDomains.join('\n') === b.networkDomains.join('\n')
-  );
-}
 
 /**
  * @param {{
@@ -483,82 +319,6 @@ function createToolPolicyStore({
     }
   }
 
-  /**
-   * @param {unknown} raw
-   * @returns {PolicyPayload}
-   */
-  function normalizePayload(raw) {
-    /** @type {Record<string, unknown>} */
-    const data = isRecord(raw) ? raw : {};
-    const out = defaultPayload();
-    out.revision = typeof data.revision === 'number' && Number.isInteger(data.revision) && data.revision >= 0 ? data.revision : 0;
-    out.mode = normalizeToolPermissionMode(data.mode);
-    out.globalRules = normalizePermissionRules(data.globalRules).filter(
-      (rule) => rule.scope === PERMISSION_RULE_SCOPES.GLOBAL
-    );
-    out.workspaceRules = {};
-    if (isRecord(data.workspaceRules)) {
-      for (const [root, rules] of Object.entries(data.workspaceRules)) {
-        if (typeof root !== 'string' || !root) continue;
-        const normalized = normalizePermissionRules(rules).filter(
-          (rule) => rule.scope === PERMISSION_RULE_SCOPES.WORKSPACE && rule.root === root
-        );
-        if (normalized.length > 0) out.workspaceRules[root] = normalized;
-      }
-    }
-    out.sensitivePathPatterns = normalizeSensitivePathPatterns(data.sensitivePathPatterns);
-    out.unsandboxedWorkspaces = normalizeWorkspaceRoots(data.unsandboxedWorkspaces);
-    out.programAllowances = normalizeProgramAllowances(data.programAllowances);
-    out.workspaceProgramAllowances = normalizeWorkspaceProgramAllowances(data.workspaceProgramAllowances);
-    out.workspaceModes = normalizeWorkspaceModes(data.workspaceModes);
-    out.workspaceHosts = normalizeWorkspaceHosts(data.workspaceHosts);
-    out.globalHosts = grantedHosts(data.globalHosts).slice(0, MAX_GLOBAL_HOSTS);
-    out.newWorkspaceSandboxOff = data.newWorkspaceSandboxOff === true;
-    out.knownWorkspaces = normalizeWorkspaceRoots(data.knownWorkspaces).slice(-MAX_KNOWN_WORKSPACES);
-    out.autoChats = normalizeAutoChats(data.autoChats);
-    out.legacyWriteMigrated = data.legacyWriteMigrated === true;
-    out.updatedAt = typeof data.updatedAt === 'number' && Number.isFinite(data.updatedAt) ? data.updatedAt : 0;
-    return out;
-  }
-
-  /**
-   * Fail-safe: only what tightens survives a failed check — blocks, patterns,
-   * and "Always ask" as the mode (#419) or as a workspace default (#413).
-   *
-   * @param {unknown} payload
-   * @returns {PolicyPayload}
-   */
-  function failSafe(payload) {
-    const out = normalizePayload(payload);
-    if (out.mode !== TOOL_PERMISSION_MODES.ASK_ALL) out.mode = DEFAULT_TOOL_PERMISSION_MODE;
-    out.globalRules = out.globalRules.filter((rule) => rule.effect === PERMISSION_RULE_EFFECTS.DENY);
-    for (const root of Object.keys(out.workspaceRules)) {
-      out.workspaceRules[root] = out.workspaceRules[root].filter(
-        (rule) => rule.effect === PERMISSION_RULE_EFFECTS.DENY
-      );
-      if (out.workspaceRules[root].length === 0) delete out.workspaceRules[root];
-    }
-    // A switched-off sandbox is a loosening like an allow rule (#357), and so
-    // is a program allowance (#408).
-    out.unsandboxedWorkspaces = [];
-    out.programAllowances = [];
-    out.workspaceProgramAllowances = {};
-    // So is a host kept open for a workspace (#946) or for every one, the
-    // sandbox off for new workspaces (#1119), and a chat's confirmed "Auto"
-    // (#980).
-    out.workspaceHosts = {};
-    out.globalHosts = [];
-    out.newWorkspaceSandboxOff = false;
-    out.knownWorkspaces = [];
-    out.autoChats = [];
-    // "Auto" as a workspace default goes with them; "Always ask" only tightens
-    // and stays, like a deny rule (#413).
-    for (const [root, mode] of Object.entries(out.workspaceModes)) {
-      if (mode !== TOOL_PERMISSION_MODES.ASK_ALL) delete out.workspaceModes[root];
-    }
-    return out;
-  }
-
   async function detectLegacyWrite() {
     if (!uiPrefsPath) return false;
     try {
@@ -585,38 +345,38 @@ function createToolPolicyStore({
       // There but unreadable (#512): not the fail-safe of a broken file. The
       // payload grants nothing, and `update` refuses to write over it.
       log?.warn?.(`[tool-policy] Policy-Datei nicht lesbar: ${error?.message || error}`);
-      return { payload: failSafe(null), integrity: INTEGRITY.UNREADABLE };
+      return { payload: failSafePayload(null), integrity: INTEGRITY.UNREADABLE };
     }
     let parsed;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return { payload: failSafe(null), integrity: INTEGRITY.INVALID };
+      return { payload: failSafePayload(null), integrity: INTEGRITY.INVALID };
     }
     if (!parsed || typeof parsed !== 'object' || parsed.version !== POLICY_FILE_VERSION || !parsed.payload) {
-      return { payload: failSafe(parsed?.payload), integrity: INTEGRITY.INVALID };
+      return { payload: failSafePayload(parsed?.payload), integrity: INTEGRITY.INVALID };
     }
     let key;
     try {
       key = await keyToVerify();
     } catch (error) {
       log?.warn?.(`[tool-policy] ${error?.message || error}`);
-      return { payload: failSafe(parsed.payload), integrity: INTEGRITY.UNREADABLE };
+      return { payload: failSafePayload(parsed.payload), integrity: INTEGRITY.UNREADABLE };
     }
     if (!key) {
       // Ohne Schlüssel lässt sich nichts verifizieren: Fail-safe, aber Sperren
       // und Muster bleiben wirksam.
-      return { payload: failSafe(parsed.payload), integrity: INTEGRITY.UNSIGNED };
+      return { payload: failSafePayload(parsed.payload), integrity: INTEGRITY.UNSIGNED };
     }
     if (typeof parsed.signature !== 'string' || !parsed.signature) {
-      return { payload: failSafe(parsed.payload), integrity: INTEGRITY.UNSIGNED };
+      return { payload: failSafePayload(parsed.payload), integrity: INTEGRITY.UNSIGNED };
     }
     const expected = key === KEY_NOT_MADE_YET ? null : sign(key, serializePayload(parsed.payload));
     if (!signaturesEqual(expected, parsed.signature)) {
       log?.warn?.('[tool-policy] Signatur der Policy-Datei ungültig; Fail-safe aktiv.');
-      return { payload: failSafe(parsed.payload), integrity: INTEGRITY.INVALID };
+      return { payload: failSafePayload(parsed.payload), integrity: INTEGRITY.INVALID };
     }
-    return { payload: normalizePayload(parsed.payload), integrity: INTEGRITY.OK };
+    return { payload: normalizePolicyPayload(parsed.payload), integrity: INTEGRITY.OK };
   }
 
   /** @param {PolicyPayload} payload */
@@ -629,21 +389,6 @@ function createToolPolicyStore({
     // Reads of the same file run all the time (every state refresh), and on
     // Windows one of them can hold the target for a moment — the rename retries.
     await writeFileAtomic(fs, target, JSON.stringify(file), { mode: 0o600 });
-  }
-
-  /**
-   * @param {PolicyPayload} payload
-   * @param {PolicyIntegrity} integrity
-   */
-  function policyVersionOf(payload, integrity) {
-    return `${payload.revision}:${integrity}`;
-  }
-
-  /** @param {PolicyPayload} payload */
-  function allRules(payload) {
-    const out = [...payload.globalRules];
-    for (const rules of Object.values(payload.workspaceRules)) out.push(...rules);
-    return out;
   }
 
   /**
@@ -711,12 +456,12 @@ function createToolPolicyStore({
         return { ok: false, error: createMessage('permissions.error.policyUnreadable'), ...snapshot(loaded.payload, loaded.integrity) };
       }
       const base = loaded.integrity === INTEGRITY.MISSING ? defaultPayload() : loaded.payload;
-      const draft = normalizePayload(JSON.parse(JSON.stringify(base)));
+      const draft = normalizePolicyPayload(JSON.parse(JSON.stringify(base)));
       const result = await updater(draft, { encryptionAvailable: encryptionAvailable(), integrity: loaded.integrity });
       if (result && result.error) return { ok: false, error: result.error, ...snapshot(base, loaded.integrity) };
       // Nothing to change after all: no new revision, nothing written.
       if (result && result.unchanged) return { ok: true, unchanged: true, ...snapshot(base, loaded.integrity) };
-      const next = normalizePayload(draft);
+      const next = normalizePolicyPayload(draft);
       next.revision = base.revision + 1;
       next.updatedAt = now();
       await writeToDisk(next);
