@@ -386,6 +386,38 @@ history without encrypted storage" in section 9 records that.
   chat that comes back on screen gets "Auto" only when the signed policy names
   it as confirmed, or its workspace's confirmed default is "Auto" — its own
   history file is not enough.
+- **Settings that loosen (#1104).** Three settings changed what the agent may
+  do, or what crosses the network, without any dialog. Each is decided:
+  - *`shell_execute` and `run_python` switched on* go through the port, each
+    as an action of its own; switching one off asks nothing. A switched-on
+    tool still asks on a card for every run, but "Auto" runs it without one,
+    and the "Auto" a user confirmed earlier did not name execution — on
+    Windows, or in a workspace without the sandbox, without isolation. The
+    preferences store leaves a switch off that comes without a receipt; the
+    rest of the same write is kept.
+  - *A local MCP server stored with a command that is new or changed* — the
+    command, its arguments, its folder or its environment — goes through the
+    port, with a prompt that names the command line, the folder and the names
+    (never the values) of its variables. Such a process runs with the user's
+    rights, outside the sandbox and without a card, as soon as the server is
+    switched on — or tested, which starts it even when it is off. So the
+    confirmation sits where the command is stored, not where it is switched
+    on: the MCP store refuses the save without a receipt bound to the server
+    and exactly that launch. An import saves its servers switched off, but a
+    local one still asks, one prompt per server. Switching a server on or
+    off, renaming it, its tools and a remote server over HTTP start nothing
+    new and ask nothing; a remote server's every tool call is on a card
+    (`execute` and `external`, section 11).
+  - *"Ignore TLS certificate" on a model entry* is classified as **not
+    loosening** and asks nothing. It gives up the check that the server
+    behind an address the user typed is the one it claims to be; it gives the
+    agent no tool, no file and no host. The address itself may be plain
+    `http://` without any dialog, which is more open still, and a front end
+    that could set the flag could set that address as well. The residual
+    risk, stated plainly: unlike a changed address (#560), the flag keeps the
+    stored key with the entry, so on a network someone controls the key can
+    be read. The form says what the switch is for; the channel stays
+    desktop-only (remote interface §8.3).
 
 Snotra cannot reliably tell whether a permissible model call was caused
 indirectly by foreign text. The prompt rule supports the model; the effective
@@ -1408,7 +1440,7 @@ not a claim that the product modes are identical.
 
 | Decision | Ownership / the conservative interim state |
 | --- | --- |
-| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio or, since #341, over Streamable HTTP; every MCP tool carries `execute` **and** `external` whatever the transport, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. **Endpoint changes settled in #341:** saving a server with another address or another transport switches it off and forgets its remembered tool catalogue, so nothing accepted for one endpoint carries over to another; it connects again only after the user switched it on (a connection test works on a switched-off server and closes it right after). A remote address needs `https` except on loopback; private network addresses are allowed, because the user enters the address deliberately — unlike `fetch_url`, where the model picks the target. Credentials in the URL are refused; headers are stored like environment variables (secret by default, `{ enc }` via `safeStorage`, not stored at all without encryption), count as own secrets and are masked in every status. They go to the configured origin only: redirects are followed by hand and only on the same origin. OAuth is not supported. Still open: isolation of local server processes, which run with the user's rights (see #329 for the built-in execution tools). |
+| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio or, since #341, over Streamable HTTP; every MCP tool carries `execute` **and** `external` whatever the transport, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. **Endpoint changes settled in #341:** saving a server with another address or another transport switches it off and forgets its remembered tool catalogue, so nothing accepted for one endpoint carries over to another; it connects again only after the user switched it on (a connection test works on a switched-off server and closes it right after). A remote address needs `https` except on loopback; private network addresses are allowed, because the user enters the address deliberately — unlike `fetch_url`, where the model picks the target. Credentials in the URL are refused; headers are stored like environment variables (secret by default, `{ enc }` via `safeStorage`, not stored at all without encryption), count as own secrets and are masked in every status. They go to the configured origin only: redirects are followed by hand and only on the same origin. OAuth is not supported. Still open: isolation of local server processes, which run with the user's rights (see #329 for the built-in execution tools); since #1104 a new or changed command is stored only after a native confirmation (section 5). |
 | Web search providers, permitted targets and redirects, and the amount of data | To be decided in #63. The request including the search text is external; search responses are untrusted. Provider keys stay in the adapter. |
 | The exact content patterns, false positives and the limits with large files | To be versioned and tested in #66; the minimum groups from section 4 are mandatory. No broad detection of personal data or entropy in the first step. |
 | A separate persistent audit journal with retention and export | An extension of #66/#67 where needed; sanitised decisions in the existing chat history for now. No unlimited full-text logging. |

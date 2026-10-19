@@ -10,6 +10,7 @@ const {
   isPresetUsable,
 } = require('../src/main/ipc/settings-handlers');
 const { createStorageService } = require('../src/main/services/storage-service');
+const { createTestConfirmations } = require('./helpers/confirmations');
 const { createSkillsService } = require('../src/main/services/skills-service');
 const { translateMessage } = require('../src/shared/i18n');
 const { createWorkspaceActivation } = require('../src/main/services/workspace-activation');
@@ -178,7 +179,20 @@ function makeHandlerProviders({ listModelsImpl } = {}) {
   };
 }
 
-async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog, storageFs = fs, shellSettings = null, chatSessionSettings = null } = {}) {
+/**
+ * `dialogResponse` answers every native confirmation (#1104): 0 confirms,
+ * 1 cancels; null leaves the port without a dialog, which confirms nothing.
+ */
+async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog, storageFs = fs, shellSettings = null, chatSessionSettings = null, dialogResponse = 0, platform = 'darwin' } = {}) {
+  const prompts = [];
+  const { confirmations, storeReceipts } = createTestConfirmations({
+    dialog: dialogResponse === null ? null : {
+      showMessageBox: async (options) => {
+        prompts.push(options);
+        return { response: dialogResponse };
+      },
+    },
+  });
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-settings-'));
   t.after(() => removeTempDir(tmpDir));
   const safeStorage = {
@@ -208,6 +222,7 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     maxChatSessions: 10,
     maxFolderHistory: 5,
     defaultProviderId: 'openai',
+    confirmationReceipts: storeReceipts,
   });
   const llmConfigStore = createLlmConfigStorePort(storage);
   const providerSecrets = createProviderSecretsPort(storage);
@@ -246,10 +261,13 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     skillCatalog,
     shellSettings,
     chatSessionSettings,
+    confirmations,
+    platform,
   });
   return {
     ipcMain,
     storage,
+    prompts,
     llmConfigStore,
     uiPrefsStore,
     workspaceActivation,
@@ -1188,4 +1206,94 @@ test('without a level of its own the chat shows the default; an older model show
     levels: [],
     defaultLevel: null,
   });
+});
+
+// --- Execution tools switched on only with a person at the machine (#1104) ---
+
+test('switching shell_execute on asks in a native dialog; cancel is the default (#1104)', async (t) => {
+  const { ipcMain, storage, prompts } = await setupHandlers(t);
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { appLocale: 'en' });
+
+  const prefs = await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true });
+  assert.equal(prefs.shellExecutionEnabled, true);
+  assert.equal(prefs.notConfirmed, undefined);
+  assert.equal((await storage.readUIPrefs()).shellExecutionEnabled, true);
+
+  assert.equal(prompts.length, 1);
+  assert.equal(prompts[0].message, 'Switch on shell_execute?');
+  assert.deepEqual(prompts[0].buttons, ['Switch on', 'Cancel']);
+  assert.equal(prompts[0].defaultId, 1);
+  assert.equal(prompts[0].cancelId, 1);
+  assert.match(prompts[0].detail, /runs in the sandbox/);
+  assert.match(prompts[0].detail, /Settings › Tools › Autonomy/);
+});
+
+test('cancelled, the switch stays off and the answer names it as not confirmed (#1104)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t, { dialogResponse: 1 });
+  const prefs = await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { pythonExecutionEnabled: true });
+  assert.equal(prefs.pythonExecutionEnabled, false);
+  assert.deepEqual(prefs.notConfirmed, ['pythonExecutionEnabled']);
+  assert.equal((await storage.readUIPrefs()).pythonExecutionEnabled, false);
+});
+
+test('a declined switch does not hold up the rest of the same write (#1104)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t, { dialogResponse: 1 });
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true, markdownZoom: 1.25 });
+  const stored = await storage.readUIPrefs();
+  assert.equal(stored.shellExecutionEnabled, false);
+  assert.equal(stored.markdownZoom, 1.25);
+});
+
+test('without a person at the machine nothing is switched on (#1104)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t, { dialogResponse: null });
+  const prefs = await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true, pythonExecutionEnabled: true });
+  assert.deepEqual(prefs.notConfirmed, ['shellExecutionEnabled', 'pythonExecutionEnabled']);
+  const stored = await storage.readUIPrefs();
+  assert.equal(stored.shellExecutionEnabled, false);
+  assert.equal(stored.pythonExecutionEnabled, false);
+});
+
+test('commitSettings asks for an execution tool in its preferences as well (#1104)', async (t) => {
+  const { ipcMain, storage, llmConfigStore, prompts } = await setupHandlers(t, { dialogResponse: 1 });
+  await seedTwoPresets(llmConfigStore);
+  await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o' }],
+    activePresetId: 'p1',
+    uiPrefs: { baseSystemPrompt: 'Sei knapp.', shellExecutionEnabled: true },
+  });
+  assert.equal(prompts.length, 1);
+  const stored = await storage.readUIPrefs();
+  assert.equal(stored.baseSystemPrompt, 'Sei knapp.');
+  assert.equal(stored.shellExecutionEnabled, false);
+});
+
+test('switching off, or on when already on, asks nothing (#1104)', async (t) => {
+  const { ipcMain, storage, prompts } = await setupHandlers(t);
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true });
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true });
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: false });
+  assert.equal(prompts.length, 1);
+  assert.equal((await storage.readUIPrefs()).shellExecutionEnabled, false);
+});
+
+test('on Windows the prompt says there is no sandbox, in the language of the interface (#1104)', async (t) => {
+  const { ipcMain, prompts } = await setupHandlers(t, { platform: 'win32', dialogResponse: 1 });
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { appLocale: 'de' });
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { pythonExecutionEnabled: true });
+  assert.equal(prompts[0].message, 'run_python einschalten?');
+  assert.match(prompts[0].detail, /keine Sandbox/);
+  assert.match(prompts[0].detail, /Einstellungen › Tools › Autonomie/);
+  assert.deepEqual(prompts[0].buttons, ['Einschalten', 'Abbrechen']);
+});
+
+test('the preferences store switches no execution tool on without a receipt (#1104)', async (t) => {
+  const { storage } = await setupHandlers(t);
+  const written = await storage.updateUIPrefs((prefs) => ({ ...prefs, shellExecutionEnabled: true, pythonExecutionEnabled: true }));
+  assert.equal(written.shellExecutionEnabled, false);
+  assert.equal(written.pythonExecutionEnabled, false);
+  const forged = await storage.updateUIPrefs(
+    (prefs) => ({ ...prefs, shellExecutionEnabled: true }),
+    { confirmations: { shellExecutionEnabled: {} } }
+  );
+  assert.equal(forged.shellExecutionEnabled, false);
 });

@@ -257,7 +257,14 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   and its `redeem` to the store. Taking a protection back needs no receipt.
   Letting a phone in as the mobile remote is an action of its own
   (`remote-pairing`, #1114): its prompt can be closed unanswered through an
-  `AbortSignal` when the pairing expires or is cancelled meanwhile
+  `AbortSignal` when the pairing expires or is cancelled meanwhile. Two
+  settings redeem receipts in `services/storage-service.js` (#1104):
+  `shell_execute` or `run_python` switched on (`shell-execution`,
+  `python-execution`) — `updateUIPrefs` leaves a switch off that comes
+  without one — and a local MCP server stored with a command that is new or
+  changed (`mcp-launch`, subject from `services/mcp-launch-confirmation.js`)
+  — `saveMcpServer` refuses it. `ipc/settings-handlers.js` asks, with the
+  prompts of `ipc/settings-confirmation-dialogs.js`
 - `config-proposal-port` — what a chat switched for itself, and how the model
   asks for a change (#774). The core asks the user on a card through the
   approval port and records the answer here; where the overrides are kept and

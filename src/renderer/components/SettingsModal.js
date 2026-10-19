@@ -4,7 +4,7 @@ import {
   APP_LOCALES, DEFAULT_LOCALE, LOCALE_INFO, LOCALES,
 } from '../i18n.js';
 import { invokeErrorDetail, invokeErrorMessage } from '../utils/invoke-error.js';
-import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
+import { bindInstantSwitch, bindInstantChoice, INSTANT_DECLINED } from './InstantSetting.js';
 import { normalizeAppearance } from './ThemeManager.js';
 import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
 import { initProgramAllowanceDialog } from './ProgramAllowanceDialog.js';
@@ -2889,10 +2889,13 @@ export function initSettingsModal(deps) {
 
   // Instant settings (issue #297): each one is written on its own through
   // setUIPrefs, and the answer is checked — a store that did not take the
-  // value must not leave the switch saying it did.
+  // value must not leave the switch saying it did. Switching an execution
+  // tool on asks in a native dialog first (#1104); a "Cancel" there is
+  // answered as declined, not as a failure.
   async function saveUiPref(key, value) {
     const prefs = await api.setUIPrefs({ [key]: value });
-    return prefs?.[key] === value;
+    if (prefs?.[key] === value) return true;
+    return Array.isArray(prefs?.notConfirmed) && prefs.notConfirmed.includes(key) ? INSTANT_DECLINED : false;
   }
 
   /**
@@ -2934,7 +2937,7 @@ export function initSettingsModal(deps) {
   function bindPrefSwitch(input, statusId, key, after) {
     return bindInstantSwitch(input, document.getElementById(statusId), async (value) => {
       const ok = await saveUiPref(key, value);
-      if (ok) await after?.(value);
+      if (ok === true) await after?.(value);
       return ok;
     });
   }
@@ -2944,7 +2947,7 @@ export function initSettingsModal(deps) {
     choiceAppLocale,
     document.getElementById('status-app-locale'),
     async (lc) => {
-      const ok = await saveUiPref('appLocale', lc);
+      const ok = (await saveUiPref('appLocale', lc)) === true;
       // Switch first, then report — the status speaks the new language.
       // Since epic #277 `setLocale` redraws the whole interface, inside the
       // dialog and outside it, without a restart.

@@ -17,6 +17,9 @@ Snotra can run shell commands and Python code: `git status`, a build, a test run
 
 1. Open *Settings › Tools › Autonomy* and open the row *Execute*.
 2. Switch on *Allow shell commands*, *Allow Python execution*, or both.
+3. [since 1.28] A dialog of your operating system asks *Switch on shell_execute?* or *Switch on run_python?* and says what the tool may then do — on Windows, that there is no sandbox. Choose *Switch on*. *Cancel* leaves the switch off.
+
+Switching off never asks.
 
 Commands run in your login shell on macOS and Linux (zsh, bash …), with the `PATH` from your shell profile, and in PowerShell or `cmd.exe` on Windows. Python is looked for automatically; to use a particular interpreter — a virtual environment with the packages you need, say — set it under *Settings › Tools › Setup*.
 

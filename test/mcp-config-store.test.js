@@ -15,6 +15,7 @@ const path = require('path');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
 const { removeTempDir } = require('./helpers/temp-dir');
+const { ACCEPT_EVERY_RECEIPT, createTestConfirmations } = require('./helpers/confirmations');
 
 const TOKEN = 'ghp_streng_geheim_1234567890';
 
@@ -30,7 +31,7 @@ function fakeSafeStorage(available = true) {
   };
 }
 
-async function makeStore(t, { encryption = true } = {}) {
+async function makeStore(t, { encryption = true, confirmationReceipts = ACCEPT_EVERY_RECEIPT } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-mcp-'));
   t.after(() => removeTempDir(tmpDir));
   const storage = createStorageService({
@@ -42,6 +43,7 @@ async function makeStore(t, { encryption = true } = {}) {
     maxChatSessions: 3,
     maxFolderHistory: 5,
     defaultProviderId: 'openai',
+    confirmationReceipts,
   });
   return { storage, tmpDir, file: () => path.join(tmpDir, 'mcp-servers.json') };
 }
@@ -441,4 +443,131 @@ test('switching a server between local and remote counts as a changed endpoint (
   assert.equal(shown.enabled, false);
   assert.deepEqual(shown.knownTools, []);
   assert.deepEqual(shown.env, [], 'the environment of the local process does not travel along');
+});
+
+// --- A local command needs a person at the machine (#1104) ---
+
+const { CONFIRMATION_ACTIONS } = require('../src/application/permissions/user-confirmation');
+const { validateMcpServerInput } = require('../src/shared/contracts/mcp');
+const { mcpLaunchSubject } = require('../src/main/services/mcp-launch-confirmation');
+
+/** A store wired like the composition root: it redeems only the receipts of `confirmations`. */
+async function makeGuardedStore(t) {
+  const confirmations = createTestConfirmations();
+  const made = await makeStore(t, { confirmationReceipts: confirmations.storeReceipts });
+  /** Options for `saveMcpServer` as if the person had allowed exactly this launch. */
+  const allowed = (input) => {
+    const { value, env } = validateMcpServerInput(input);
+    return confirmations.confirmed(CONFIRMATION_ACTIONS.MCP_LAUNCH, mcpLaunchSubject(value, env));
+  };
+  return { ...made, allowed, confirmed: confirmations.confirmed };
+}
+
+test('a new local server is refused without a receipt, and nothing is written (#1104)', async (t) => {
+  const { storage, file } = await makeGuardedStore(t);
+  const result = await storage.saveMcpServer(GITHUB);
+  assert.equal(result.ok, false);
+  assert.equal(result.notConfirmed, true);
+  assert.equal(result.errors[0].key, 'mcp.error.launchNotConfirmed');
+  await assert.rejects(fs.readFile(file()), { code: 'ENOENT' });
+  assert.deepEqual(await storage.readMcpServers(), []);
+});
+
+test('a receipt for exactly this launch stores the server, and is good once (#1104)', async (t) => {
+  const { storage, allowed } = await makeGuardedStore(t);
+  const options = allowed(GITHUB);
+  assert.equal((await storage.saveMcpServer(GITHUB, options)).ok, true);
+  assert.deepEqual((await storage.readMcpServers()).map((s) => s.id), ['github']);
+  // The same receipt again, for a changed command: spent.
+  const changed = { ...GITHUB, args: ['-y', 'something-else'], env: { GITHUB_TOKEN: { keep: true } } };
+  assert.equal((await storage.saveMcpServer(changed, options)).ok, false);
+});
+
+test('a receipt for another launch, or for another action, stores nothing (#1104)', async (t) => {
+  const { storage, allowed, confirmed } = await makeGuardedStore(t);
+  const other = { ...GITHUB, command: 'node', args: ['harmless.js'] };
+  assert.equal((await storage.saveMcpServer(GITHUB, allowed(other))).ok, false);
+  assert.equal((await storage.saveMcpServer(GITHUB, confirmed(CONFIRMATION_ACTIONS.SHELL_EXECUTION))).ok, false);
+  assert.equal((await storage.saveMcpServer(GITHUB, { confirmation: { forged: true } })).ok, false);
+  assert.deepEqual(await storage.readMcpServers(), []);
+});
+
+test('switching off and on, renaming and the tool catalogue need no receipt; a changed command does (#1104)', async (t) => {
+  const { storage, allowed } = await makeGuardedStore(t);
+  assert.equal((await storage.saveMcpServer(GITHUB, allowed(GITHUB))).ok, true);
+  const kept = { ...GITHUB, env: { GITHUB_TOKEN: { keep: true }, LANG: { secret: false, value: 'de_DE' } } };
+
+  assert.equal((await storage.saveMcpServer({ ...kept, enabled: false })).ok, true);
+  assert.equal((await storage.saveMcpServer({ ...kept, enabled: true })).ok, true);
+  assert.equal((await storage.saveMcpServer({ ...kept, knownTools: ['search'] })).ok, true);
+  assert.equal((await storage.saveMcpServer({ ...kept, label: 'GitHub (work)' })).ok, true);
+
+  for (const changed of [
+    { ...kept, command: 'node' },
+    { ...kept, args: ['-y', '@evil/server'] },
+    { ...kept, cwd: '/tmp' },
+    { ...kept, env: { ...kept.env, NODE_OPTIONS: { secret: false, value: '--require /tmp/x.js' } } },
+    { ...kept, env: { ...kept.env, LANG: { secret: false, value: 'en_US' } } },
+    { ...kept, env: { ...kept.env, GITHUB_TOKEN: { value: 'ghp_new' } } },
+  ]) {
+    assert.equal((await storage.saveMcpServer(changed)).ok, false, JSON.stringify(changed));
+  }
+  const [stored] = await storage.readMcpServers();
+  assert.equal(stored.command, 'npx');
+  assert.equal(stored.label, 'GitHub (work)');
+});
+
+test('a remote server starts no process and needs no receipt (#1104)', async (t) => {
+  const { storage } = await makeGuardedStore(t);
+  assert.equal((await storage.saveMcpServer(REMOTE)).ok, true);
+});
+
+test('turning a remote server into a local one needs a receipt (#1104)', async (t) => {
+  const { storage } = await makeGuardedStore(t);
+  assert.equal((await storage.saveMcpServer(REMOTE)).ok, true);
+  const local = { id: REMOTE.id, label: REMOTE.label, transport: 'stdio', command: 'npx', args: ['x'] };
+  assert.equal((await storage.saveMcpServer(local)).ok, false);
+});
+
+test('the settings decide from the masked list what the store decides from the file (#1104)', async (t) => {
+  const { createMcpSettings } = require('../src/main/services/mcp-settings');
+  const { storage, confirmed } = await makeGuardedStore(t);
+  const settings = createMcpSettings({
+    mcpService: { setServers() {}, connect: async () => null, describeConnections: () => [] },
+    mcpAdapter: { describeSkippedTools: () => [] },
+    mcpConfigStore: storage,
+    mcpSecrets: storage,
+    ownSecrets: { readMcpSecrets: async () => [] },
+    uiPrefsStore: storage,
+  });
+
+  const asked = await settings.launchConfirmation(GITHUB);
+  assert.deepEqual(asked.server, {
+    label: 'GitHub', command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'], cwd: '', envKeys: ['GITHUB_TOKEN', 'LANG'],
+  });
+  const options = confirmed(CONFIRMATION_ACTIONS.MCP_LAUNCH, asked.subject);
+  assert.equal((await settings.save(GITHUB, options)).ok, true);
+
+  // What the window sends back for a switch or a rename: kept secrets, the plain value as shown.
+  const [listed] = await storage.readMcpServers();
+  const toggled = {
+    id: listed.id, label: 'Renamed', transport: listed.transport, command: listed.command, args: listed.args,
+    cwd: listed.cwd, env: { GITHUB_TOKEN: { keep: true }, LANG: { keep: true, secret: false } }, enabled: false,
+  };
+  assert.equal(await settings.launchConfirmation(toggled), null);
+  assert.equal((await settings.save(toggled)).ok, true);
+  assert.notEqual(await settings.launchConfirmation({ ...toggled, args: ['other'] }), null);
+});
+
+test('an add with a taken identifier asks nothing; the store refuses it as taken (#1104)', async (t) => {
+  const { createMcpSettings } = require('../src/main/services/mcp-settings');
+  const { storage, allowed } = await makeGuardedStore(t);
+  assert.equal((await storage.saveMcpServer(GITHUB, allowed(GITHUB))).ok, true);
+  const settings = createMcpSettings({
+    mcpService: { setServers() {} }, mcpAdapter: {}, mcpConfigStore: storage, mcpSecrets: storage,
+    ownSecrets: { readMcpSecrets: async () => [] }, uiPrefsStore: storage,
+  });
+  const add = { ...GITHUB, command: 'node', create: true };
+  assert.equal(await settings.launchConfirmation(add), null);
+  assert.equal((await settings.save(add)).errors[0].key, 'mcp.error.idExists');
 });

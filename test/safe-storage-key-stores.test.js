@@ -29,6 +29,7 @@ const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createHeldSafeStorageKey, settle } = require('./helpers/held-safe-storage-key');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { removeTempDir } = require('./helpers/temp-dir');
+const { ACCEPT_EVERY_RECEIPT } = require('./helpers/confirmations');
 
 function makeSafeStorage(available = true) {
   return {
@@ -82,6 +83,8 @@ function makeStorage(dir, { safeStorageKey, encryption = true } = {}) {
     maxChatSessions: 10,
     maxFolderHistory: 5,
     defaultProviderId: GATEWAY.id,
+    // What is checked here is the key, not the confirmation (#1104).
+    confirmationReceipts: ACCEPT_EVERY_RECEIPT,
   });
 }
 
