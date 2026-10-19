@@ -548,7 +548,6 @@ function registerToolPermissionHandlers({
       : described?.sandbox || null;
     return {
       integrity: state.integrity,
-      encryptionAvailable: state.encryptionAvailable,
       platform,
       platformCapabilities,
       homeDir,
@@ -572,7 +571,9 @@ function registerToolPermissionHandlers({
     return {
       mode: state.mode,
       integrity: state.integrity,
-      encryptionAvailable: state.encryptionAvailable,
+      // Whether "Auto" can be stored at all is the platform's (#1156); the
+      // store still asks safeStorage itself before it signs anything.
+      platformCapabilities,
       legacyWriteMigrated: state.legacyWriteMigrated === true,
       globalRules: state.globalRules,
       workspaceRules: root && state.workspaceRules[root] ? state.workspaceRules[root] : [],
@@ -654,7 +655,6 @@ function registerToolPermissionHandlers({
       },
       sensitivePathPatterns: state.sensitivePathPatterns,
       integrity: state.integrity,
-      encryptionAvailable: state.encryptionAvailable,
     });
   }
 

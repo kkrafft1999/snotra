@@ -1774,7 +1774,8 @@ export function initSettingsModal(deps) {
     // than inviting a key that may well be stored (CR-B14-09).
     webSearchStateUnknown = !state || typeof state !== 'object';
     webSearchHasKey = state?.hasApiKey === true;
-    webSearchEncryption = state?.encryptionAvailable !== false;
+    // Whether a key can be stored is the platform's, read once at start (#1156).
+    webSearchEncryption = appStore.llmState.platformCapabilities?.secureStorage !== false;
     syncWebSearchUI();
   }
 
@@ -2133,7 +2134,7 @@ export function initSettingsModal(deps) {
     setupDraftFromServerState();
     renderDraftPresetList();
     let loadError = null;
-    modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.encryptionAvailable);
+    modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.platformCapabilities?.secureStorage !== false);
     for (const setting of instantSettings) setting.status.clear();
     // The appearance is not in the UI prefs but in the renderer's
     // localStorage (see ThemeManager.js). "System" is a choice of its own

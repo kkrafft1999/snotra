@@ -22,7 +22,7 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 function overviewWith(patch = {}) {
   return {
     integrity: 'ok',
-    encryptionAvailable: true,
+    platformCapabilities: { secureStorage: true },
     platform: 'darwin',
     homeDir: '/Users/u',
     sandbox: { isolated: true, status: 'isolated', reason: '', platform: 'darwin' },

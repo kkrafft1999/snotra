@@ -613,7 +613,7 @@ test('getLLMState returns normalized preset and provider view DTOs', async (t) =
   });
 
   const state = await ipcMain.invoke(REQ.SETTINGS_GET_LLM_STATE);
-  assert.equal(state.encryptionAvailable, true);
+  assert.equal('encryptionAvailable' in state, false);
   assert.equal(state.presets.length, 1);
   assert.equal(state.presets[0].label, 'OpenAI · gpt-4o');
   assert.equal(state.presets[0].sublabel, 'reasoning_effort: low');

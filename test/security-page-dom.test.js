@@ -41,7 +41,7 @@ function overviewWith(patch = {}) {
 }
 
 function permissionsState(patch = {}) {
-  return { mode: 'smart', workspaceRoot: ROOT, workspaceMode: 'smart', encryptionAvailable: true, homeDir: '/Users/u', ...patch };
+  return { mode: 'smart', workspaceRoot: ROOT, workspaceMode: 'smart', platformCapabilities: { secureStorage: true }, homeDir: '/Users/u', ...patch };
 }
 
 /** The renderer's permission state, reduced to what the page uses. */
@@ -346,8 +346,8 @@ test('Windows without a sandbox: the platform reason, not the workspace switch',
 test('without safeStorage: "Auto" cannot be the default', async () => {
   const dom = setupRendererDom();
   try {
-    await openPage(overviewWith({ integrity: 'unsigned', encryptionAvailable: false }), {
-      state: permissionsState({ encryptionAvailable: false }),
+    await openPage(overviewWith({ integrity: 'unsigned', platformCapabilities: { secureStorage: false } }), {
+      state: permissionsState({ platformCapabilities: { secureStorage: false } }),
     });
     const doc = dom.document;
     // The warning itself is ToolPermissionsPanel's, in the same header.

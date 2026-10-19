@@ -222,6 +222,22 @@ test('normalizeSessionForStore defaults missing tokenUsage to zero', () => {
   assert.deepEqual(session.tokenUsage, { prompt: 0, completion: 0, total: 0 });
 });
 
+// The guard asks safeStorage itself, not the platform register the window
+// reads (#1156): without encrypted storage the web search key is refused and
+// no file is written, in plain text or otherwise.
+test('the web search key is refused without encrypted storage (#1156)', async (t) => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
+  t.after(() => removeTempDir(tmpDir));
+  const storage = makeStorage(tmpDir);
+
+  const result = await storage.setWebSearchApiKey('tvly-secret');
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.key, 'settings.error.encryptionUnavailable');
+  assert.equal(result.hasApiKey, false);
+  await assert.rejects(fs.readFile(path.join(tmpDir, 'web-search-config.json'), 'utf8'), { code: 'ENOENT' });
+});
+
 test('a first run starts in the system language when the app speaks it (#1013)', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-storage-'));
   t.after(() => removeTempDir(tmpDir));

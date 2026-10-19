@@ -30,7 +30,7 @@ function stateWith(patch) {
     mode: 'smart',
     workspaceRoot: '/work/projekt',
     workspaceMode: 'smart',
-    encryptionAvailable: false,
+    platformCapabilities: { secureStorage: false },
     integrity: 'unsigned',
     globalRules: [],
     workspaceRules: [],
@@ -46,7 +46,7 @@ test('view: "Auto" is unavailable without encrypted storage, unless it is the mo
   assert.deepEqual(blocked.map((o) => [o.value, o.unavailable]), [['smart', false], ['ask-all', false], ['auto', true]]);
   assert.equal(blocked[2].description, 'Not available: this system offers no encrypted storage.');
   assert.equal(toolModeOptions(stateWith({ mode: 'auto' }))[2].unavailable, false);
-  assert.equal(toolModeOptions(stateWith({ encryptionAvailable: true }))[2].unavailable, false);
+  assert.equal(toolModeOptions(stateWith({ platformCapabilities: { secureStorage: true } }))[2].unavailable, false);
   assert.equal(toolModeOptions()[2].unavailable, false, 'without a state nothing is marked');
 });
 
