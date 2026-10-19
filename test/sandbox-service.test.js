@@ -494,7 +494,8 @@ test('on Linux git\'s SSH goes through the relay outside the seccomp filter, nev
   const plain = await noAgent.service.prepare({ command: 'git fetch', runTmp: '/tmp/r' });
   assert.equal(plain.args[1], 'export TMPDIR=/tmp/r; git fetch');
   assert.equal('SNOTRA_SSH_RELAY' in plain.env, false);
-  assert.equal('allowRead' in noAgent.calls.updateConfig.at(-1).filesystem, false);
+  // known_hosts stays readable, so the failure is the missing agent's.
+  assert.deepEqual(noAgent.calls.updateConfig.at(-1).filesystem.allowRead, sshReadPaths(os.homedir()));
   plain.release();
 });
 

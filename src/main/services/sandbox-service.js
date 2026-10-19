@@ -754,7 +754,8 @@ function createSandboxService({
     const hiddenSocket = relay && socket && deniedReads.some((denied) => isPathInside(path, denied, socket)) ? [socket] : [];
     const allowRead = [
       ...grantedReads,
-      ...(platform === 'darwin' || relay ? sshReadPaths(os.homedir()) : []),
+      // Without an agent too: an unknown host is then not what SSH reports.
+      ...(platformSupports(platform, PLATFORM_CAPABILITIES.SANDBOX_GIT_SSH) ? sshReadPaths(os.homedir()) : []),
       ...hiddenSocket,
     ];
     return {
