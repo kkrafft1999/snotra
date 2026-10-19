@@ -91,10 +91,19 @@ const {
 const { endpointHost, isLocalEndpoint } = require('./provider-endpoint');
 const {
   TOOL_CATEGORIES,
-  TOOL_CATEGORY_BY_TOOL,
-  toolCategory,
+  isToolCategory,
+  entryToolCategory,
   toolCategoryForEntry,
 } = require('./tool-categories');
+const {
+  TOOL_APPROVAL_VERBS,
+  TOOL_APPROVAL_WARNINGS,
+  TOOL_EXTERNAL_SERVICES,
+  isToolApprovalVerb,
+  isToolApprovalWarning,
+  isToolExternalService,
+  normalizeToolPresentation,
+} = require('./tool-presentation');
 const {
   GET_CONFIGURATION_TOOL,
   PROPOSE_CONFIG_CHANGE_TOOL,
@@ -113,7 +122,6 @@ const {
   CONFIG_TOOL_GROUPS,
   SKILLS_PLACE,
   toolSettingsPlace,
-  toolConfigGroup,
   skillOrigin,
   clipConfigDescription,
 } = require('./chat-configuration');
@@ -416,9 +424,16 @@ module.exports = {
   endpointHost,
   isLocalEndpoint,
   TOOL_CATEGORIES,
-  TOOL_CATEGORY_BY_TOOL,
-  toolCategory,
+  isToolCategory,
+  entryToolCategory,
   toolCategoryForEntry,
+  TOOL_APPROVAL_VERBS,
+  TOOL_APPROVAL_WARNINGS,
+  TOOL_EXTERNAL_SERVICES,
+  isToolApprovalVerb,
+  isToolApprovalWarning,
+  isToolExternalService,
+  normalizeToolPresentation,
   GET_CONFIGURATION_TOOL,
   PROPOSE_CONFIG_CHANGE_TOOL,
   CONFIG_PROPOSAL_KINDS,
@@ -436,7 +451,6 @@ module.exports = {
   CONFIG_TOOL_GROUPS,
   SKILLS_PLACE,
   toolSettingsPlace,
-  toolConfigGroup,
   skillOrigin,
   clipConfigDescription,
   CHAT_ACTIVATION,

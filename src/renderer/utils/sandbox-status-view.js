@@ -61,8 +61,9 @@ export function describeSandboxStatus(sandbox, enabled, { workspaceDisabled = fa
  */
 export function describeFolderSandbox(state) {
   const isolation = state?.executionIsolation;
+  // Main lists the execution tools that are on (#1008); their names are shown.
   const tools = (Array.isArray(isolation?.tools) ? isolation.tools : [])
-    .filter((entry) => entry === 'shell_execute' || entry === 'run_python');
+    .filter((entry) => typeof entry === 'string' && entry);
   const root = typeof state?.workspaceRoot === 'string' ? state.workspaceRoot : '';
   if (!root || tools.length === 0) return { visible: false, unisolated: false, text: '' };
   const names = tools.join(t('chat.toolMode.unisolated.and'));

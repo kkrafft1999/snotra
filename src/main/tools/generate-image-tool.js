@@ -22,7 +22,14 @@
 
 const path = require('path');
 const { TOOL_RISK_CLASSES } = require('../../shared/contracts/tool-permissions');
-const { TOOL_SETUPS } = require('../../shared/contracts/chat-configuration');
+const { TOOL_SETUPS, CONFIG_TOOL_GROUPS } = require('../../shared/contracts/chat-configuration');
+const { TOOL_CATEGORIES } = require('../../shared/contracts/tool-categories');
+const {
+  TOOL_APPROVAL_VERBS,
+  TOOL_EXTERNAL_SERVICES,
+} = require('../../shared/contracts/tool-presentation');
+const { TOOL_LINE_TARGETS } = require('../../shared/presentation/tool-display');
+const { TOOL_PREVIEW_KINDS, TOOL_FILE_EVENTS } = require('./tool-descriptor');
 const {
   IMAGE_GENERATION_ERROR_CODES,
   IMAGE_SIZES,
@@ -177,6 +184,17 @@ function createGenerateImageTool({ fsService, imageGeneration = null, now = () =
 
   return {
     name: GENERATE_IMAGE_TOOL,
+    // Descriptor (#1008): see tool-descriptor.js. A generated image is a write
+    // as well, but "1 file written" would hide the one thing that cost money.
+    category: TOOL_CATEGORIES.IMAGE,
+    configGroup: CONFIG_TOOL_GROUPS.IMAGE,
+    display: { key: 'tools.line.generateImage', target: TOOL_LINE_TARGETS.PATH },
+    // What goes out is the prompt, and the prompt is what is paid for (#85).
+    preview: TOOL_PREVIEW_KINDS.PROMPT,
+    approval: { verb: TOOL_APPROVAL_VERBS.IMAGE },
+    externalService: TOOL_EXTERNAL_SERVICES.IMAGE_GENERATION,
+    setupPage: 'tools',
+    fileEvents: TOOL_FILE_EVENTS.WRITE,
     // Writes a file, and the prompt leaves the machine to a service that
     // bills it: `write` for the target, `external` for the request.
     riskClass: TOOL_RISK_CLASSES.WRITE,

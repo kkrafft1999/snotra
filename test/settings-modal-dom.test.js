@@ -45,8 +45,8 @@ async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
     getUIPrefs: async () => ({ baseSystemPrompt: '', appLocale: 'de', disabledTools: [] }),
     getToolCatalog: async () => ({ tools: [] }),
     getSkillCatalog: async () => ({ skills: [], activeSkills: [] }),
-    getPythonState: async () => ({ enabled: false }),
-    getShellState: async () => ({ enabled: false }),
+    getPythonState: async () => ({ enabled: false, tool: 'run_python' }),
+    getShellState: async () => ({ enabled: false, tool: 'shell_execute' }),
     // The shape main answers with (settings-handlers.js): `hasApiKey`.
     getWebSearchState: async () => ({ available: true, hasApiKey: false, encryptionAvailable: true }),
     getAppVersion: async () => '1.5.3',

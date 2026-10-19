@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const { normalizeToolPresentation } = require('../src/shared/contracts/tool-presentation');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 
 // Renderer-Modul ist natives ESM; das Contract-Bundle entsteht im pretest-Schritt.
 const load = () =>
@@ -23,8 +25,20 @@ async function inGerman(fn) {
   }
 }
 
+/**
+ * An approval request as main sends it: the presentation comes from the
+ * tool's descriptor (#1008), as the planner puts it on the plan.
+ */
 function dto(overrides = {}) {
+  const tool = overrides.tool || 'edit_file';
+  let presentation;
+  try {
+    presentation = normalizeToolPresentation(descriptorOf(tool));
+  } catch {
+    presentation = normalizeToolPresentation(null);
+  }
   return {
+    presentation,
     contractVersion: 1,
     requestId: 'req-1',
     tool: 'edit_file',

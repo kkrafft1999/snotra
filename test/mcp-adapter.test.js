@@ -427,7 +427,7 @@ test('ein abgeschaltetes MCP-Tool wird von der Policy blockiert', () => {
 
 // --- Tool-Log (#60) ---
 
-const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
+const { formatLine: formatToolDisplayLine } = require('./helpers/tool-descriptors');
 
 test('das Tool-Log zeigt Server und Tool statt des Namensraums', () => {
   const entry = { tool: 'mcp__github__search', args: { q: 'x' } };

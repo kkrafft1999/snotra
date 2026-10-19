@@ -7,7 +7,7 @@ const {
   TOOL_SETUPS,
   SKILLS_PLACE,
   toolSettingsPlace,
-  toolConfigGroup,
+  CONFIG_TOOL_GROUPS,
   skillOrigin,
   clipConfigDescription,
   GET_CONFIGURATION_TOOL,
@@ -162,7 +162,8 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
       .map((tool) => ({
         name: tool.name,
         mcpServer: tool.mcpServer || null,
-        group: toolConfigGroup(tool.name, { mcpServer: tool.mcpServer }),
+        // The descriptor names the group (#1008); an MCP tool goes by its server.
+        group: tool.mcpServer ? CONFIG_TOOL_GROUPS.MCP : tool.group || CONFIG_TOOL_GROUPS.OTHER,
         on: tool.reason === null,
         reason: tool.reason,
         setup: tool.setup,

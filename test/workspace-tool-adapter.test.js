@@ -2,11 +2,16 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { CHAT_PROGRESS_TYPES, WORKSPACE_PROGRESS_EVENTS } = require('../src/shared/contracts/enums');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 
 function makeRegistry(executeImpl) {
   return {
     getTools() {
       return [];
+    },
+    // What the adapter does with a call is in the tool's descriptor (#1008).
+    getDefinition(name) {
+      return { name, riskClass: 'read', ...descriptorOf(name) };
     },
     buildSystemPrompt() {
       return '';

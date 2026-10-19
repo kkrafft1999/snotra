@@ -45,10 +45,12 @@
  *   absent on a plan that failed (`error`)
  * @property {string} [recovery]
  * @property {{ kind: string, text: string, truncated: boolean, masked: boolean }} [preview]
+ * @property {{ category: string, verb?: string, warning?: string }} [presentation]  how the approval
+ *   card speaks of the tool, from its descriptor (#1008)
  * @property {{ reason: string }} [hardLimit]  verletzte harte Grenze → deny in jedem Modus
  * @property {boolean} [unknownTool]
  * @property {{ command: string|null, cwd: string, networkDomains: string[], stdin: boolean }} [shellCommand]
- *   `shell_execute` only: the call in the form a remembered command is compared in (#121);
+ *   shell commands only: the call in the form a remembered command is compared in (#121);
  *   `command` is null when the command line cannot be remembered
  * @property {{ disabled: boolean, root: string, allowance?: object, allowanceSkipped?: string }} [sandbox]
  *   the tools that run a process only: what the run is isolated with, as approved (#329, #357, #408)
@@ -117,6 +119,7 @@
  * @property {number} [round]  1-based tool round of the turn the call came in (#187)
  * @property {SchemaViolations} [schema]  schema violations in the arguments (#187)
  * @property {string} [skill]  the skill the call reads from or writes to (#61, #160, #173)
+ * @property {string} [category]  icon and group in the tool log, from the descriptor (#1008)
  * @property {Array<object>} [changes]  what the call changed, summaries only (#348)
  * @property {object} [sandboxBlocked]  what the sandbox refused during the run (#792)
  * @property {object} [sandboxDecision]  what the user decided on the sandbox card (#792)

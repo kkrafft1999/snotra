@@ -21,7 +21,7 @@
  * @property {() => Promise<boolean>} hasSetAsideChatHistory A history moved aside (#565) lies next to the live one
  * @property {(existingMessages: unknown, nextMessages: object[]) => boolean} storedChatMessagesChanged
  * @property {(sessionRow: object, options?: object) => object|null} normalizeSessionForStore
- * @property {(sessionRow: object) => object|null} normalizeSessionForLoad
+ * @property {(sessionRow: object, options?: { toolCategoryOf?: (toolName: string) => (string|null) }) => object|null} normalizeSessionForLoad
  * @property {(meta: object) => object|null} normalizeSessionMetaForList A row of the history list
  * @property {(raw: unknown) => string|null} normalizeWorkspaceRoot
  * @property {(workspaceRoot: string|null) => string} workspaceBucketKey

@@ -9,6 +9,7 @@
 'use strict';
 
 const { isMessage } = require('./message');
+const { normalizeToolPresentation } = require('./tool-presentation');
 
 // Stamped on every approval request; the renderer draws no card for another
 // value (`isToolApprovalRequestDto`). Raise it when a card of the old shape
@@ -580,6 +581,7 @@ function normalizeApprovalTarget(raw) {
  * @param {object} [request.sessionScope]  a message descriptor
  * @param {string} [request.providerLabel]
  * @param {Object} [request.preview]
+ * @param {Object} [request.presentation]  the tool's presentation (#1008), see tool-presentation.js
  * @param {string|null} [request.chatId]
  * @param {boolean} [request.alwaysAllowed]
  * @param {string} [request.alwaysUnavailableReason]
@@ -601,6 +603,7 @@ function createToolApprovalRequestDto({
   sessionScope,
   providerLabel,
   preview,
+  presentation,
   chatId,
   alwaysAllowed,
   alwaysUnavailableReason,
@@ -630,6 +633,9 @@ function createToolApprovalRequestDto({
   // Which chat asks (#320): with a run per chat, a card can arrive for a chat
   // that is not on screen, and the renderer holds it until that chat is open.
   if (typeof chatId === 'string' && chatId) dto.chatId = chatId.slice(0, 128);
+  // How the card speaks of the tool (#1008): the renderer reads these fields
+  // instead of comparing tool names.
+  if (presentation && typeof presentation === 'object') dto.presentation = normalizeToolPresentation(presentation);
   if (isMessage(sessionScope)) dto.sessionScope = sessionScope;
   // Which question the card asks (#792): before a call, about its output, or
   // after a run the sandbox refused something in.

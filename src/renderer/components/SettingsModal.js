@@ -261,6 +261,9 @@ export function initSettingsModal(deps) {
   const shellSandboxEl = document.getElementById('settings-shell-sandbox');
   const pythonSandboxEl = document.getElementById('settings-python-sandbox');
   let shellReady = false;
+  // The tool behind each switch, as main reports it with the state (#1008).
+  let pythonToolName = '';
+  let shellToolName = '';
   // Last sandbox state main reported with each tool, for redrawing the
   // isolation lines when the workspace switch changes (#357).
   let pythonSandboxState = null;
@@ -1689,6 +1692,8 @@ export function initSettingsModal(deps) {
       state = { loadFailed: true };
     }
     pythonReady = state?.found === true && state?.enabled === true;
+    // The tool behind the switch, as main names it (#1008).
+    if (typeof state?.tool === 'string' && state.tool) pythonToolName = state.tool;
     setPythonStatus(describePythonState(state));
     pythonSandboxState = state?.sandbox || null;
     syncExecutionTools();
@@ -1752,6 +1757,7 @@ export function initSettingsModal(deps) {
       state = { loadFailed: true };
     }
     shellReady = state?.found === true && state?.enabled === true;
+    if (typeof state?.tool === 'string' && state.tool) shellToolName = state.tool;
     setShellStatus(describeShellState(state));
     shellSandboxState = state?.sandbox || null;
     syncExecutionTools();
@@ -2965,7 +2971,7 @@ export function initSettingsModal(deps) {
   const autoUpdateCheckSwitch = bindPrefSwitch(
     inputAutoUpdateCheck, 'status-auto-update-check', 'autoUpdateCheckEnabled'
   );
-  // Both decide whether run_python / shell_execute are offered; the status
+  // Both decide whether the execution tools are offered; the status
   // line and the tool list follow what main now reports.
   // The mode pill turns amber for "Auto" with an unisolated execution tool
   // (#357, amber since #396), so it has to hear about both switches too.
@@ -2974,14 +2980,14 @@ export function initSettingsModal(deps) {
   // also clears an old tick-off from the tool list, which no longer exists.
   const pythonSwitch = bindPrefSwitch(
     inputPythonEnabled, 'status-python-enabled', 'pythonExecutionEnabled', async (on) => {
-      if (on) await setToolEnabled('run_python', true);
+      if (on && pythonToolName) await setToolEnabled(pythonToolName, true);
       await loadPythonState();
       void toolPermissions?.refresh?.();
     }
   );
   const shellSwitch = bindPrefSwitch(
     inputShellEnabled, 'status-shell-enabled', 'shellExecutionEnabled', async (on) => {
-      if (on) await setToolEnabled('shell_execute', true);
+      if (on && shellToolName) await setToolEnabled(shellToolName, true);
       await loadShellState();
       void toolPermissions?.refresh?.();
     }

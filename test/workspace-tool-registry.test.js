@@ -847,7 +847,7 @@ test('an MCP tool lacks its server; a throwing availability check counts as not 
     isAvailable: () => { throw new Error('gone'); },
   }]);
   const [offer] = registry.describeOffers({});
-  assert.deepEqual(offer, { name: 'mcp__github__get_issue', mcpServer: 'GitHub', reason: 'notConfigured', setup: 'mcp' });
+  assert.deepEqual(offer, { name: 'mcp__github__get_issue', mcpServer: 'GitHub', group: 'mcp', reason: 'notConfigured', setup: 'mcp' });
   assert.deepEqual(registry.getTools({}), []);
 });
 

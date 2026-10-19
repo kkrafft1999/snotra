@@ -85,10 +85,10 @@ test('only an edit that takes rights away counts as narrowing', () => {
 
 test('a run\'s domains put the allowance first, so the cap never drops them', () => {
   const declared = Array.from({ length: 20 }, (_, i) => `d${i}.example.com`);
-  const domains = resolveRunDomains('shell_execute', { command: 'x', network_domains: declared }, { domains: ['graph.microsoft.com'] });
+  const domains = resolveRunDomains('shell', { command: 'x', network_domains: declared }, { domains: ['graph.microsoft.com'] });
   assert.equal(domains.length, 20);
   assert.equal(domains[0], 'graph.microsoft.com');
-  assert.deepEqual(resolveRunDomains('shell_execute', { command: 'x' }, null), []);
+  assert.deepEqual(resolveRunDomains('shell', { command: 'x' }, null), []);
 });
 
 // ── One simple command ──────────────────────────────────────────────────────

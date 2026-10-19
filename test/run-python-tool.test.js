@@ -4,8 +4,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
-const { toolCategory, TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
+const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
+const { TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
 
 function makeRegistry({ available = true, run } = {}) {
@@ -160,7 +161,7 @@ test('die Freigabe-Karte bekommt den vollständigen Quelltext als Vorschau', asy
 });
 
 test('run_python has a category of its own and a display line', () => {
-  assert.equal(toolCategory('run_python'), TOOL_CATEGORIES.EXEC);
+  assert.equal(descriptorOf('run_python').category, TOOL_CATEGORIES.EXEC);
   assert.equal(summarizeToolCall('run_python', { code: 'print(1)' }, 'start'), 'Running Python (1 line) …');
   assert.equal(
     summarizeToolCall('run_python', { code: 'a = 1\n\nprint(a)' }, 'done'),

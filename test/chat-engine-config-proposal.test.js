@@ -7,7 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { createChatEngine } = require('../src/application/chat/chat-engine');
-const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
+const { formatLine: formatToolDisplayLine } = require('./helpers/tool-descriptors');
 const {
   applyConfigProposal,
   declineConfigProposal,

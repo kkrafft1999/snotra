@@ -140,9 +140,9 @@ test('findPendingToolLine findet die Zeile zum Aufruf, nicht die daneben', async
 test('buildToolLog zeichnet den Trace und lässt den letzten Schritt laufen', async () => {
   await withDom(({ buildToolLog }) => {
     const log = buildToolLog(
-      [{ line: 'Hat README.md gelesen', tool: 'read_file_text' }, { line: 'Liest docs/', tool: 'list_directory' }],
+      [{ line: 'Hat README.md gelesen', tool: 'read_file_text', category: 'read' }, { line: 'Liest docs/', tool: 'list_directory', category: 'list' }],
       'running',
-      [{ line: 'Schreibt notiz.md', callIndex: 0, tool: 'write_file_text' }]
+      [{ line: 'Schreibt notiz.md', callIndex: 0, tool: 'write_file_text', category: 'write' }]
     );
     const rows = stepRows(log);
     assert.deepEqual(rows.map(textOf), ['Hat README.md gelesen', 'Liest docs/', 'Schreibt notiz.md']);
@@ -159,7 +159,7 @@ test('buildToolLog zeichnet den Trace und lässt den letzten Schritt laufen', as
 
 test('ein einzelner Schritt bekommt kein Aufklapp-Element', async () => {
   await withDom(({ buildToolLog }) => {
-    const log = buildToolLog([{ line: 'Hat README.md gelesen', tool: 'read_file_text' }], 'done', []);
+    const log = buildToolLog([{ line: 'Hat README.md gelesen', tool: 'read_file_text', category: 'read' }], 'done', []);
     assert.ok(log.classList.contains('chat-tool-log--single'));
     assert.equal(log.querySelector('.chat-tool-summary').tabIndex, -1);
     assert.equal(log.open, false);
@@ -169,7 +169,7 @@ test('ein einzelner Schritt bekommt kein Aufklapp-Element', async () => {
 test('ab zwei Schritten ist der Log aufklappbar und bleibt offen', async () => {
   await withDom(({ buildToolLog }) => {
     const log = buildToolLog(
-      [{ line: 'Hat a gelesen', tool: 'read_file_text' }, { line: 'Hat b gelesen', tool: 'read_file_text' }],
+      [{ line: 'Hat a gelesen', tool: 'read_file_text', category: 'read' }, { line: 'Hat b gelesen', tool: 'read_file_text', category: 'read' }],
       'done',
       []
     );
@@ -185,7 +185,7 @@ test('der Einzeiler ist eine Live-Region und sagt das Nachdenken an', async () =
   await withDom(({ buildToolLog, syncToolLogSummary }) => {
     // Nachgedacht wird zwischen den Runden: alle Schritte sind erledigt.
     const log = buildToolLog(
-      [{ line: 'Hat a gelesen', tool: 'read_file_text' }, { line: 'Hat b gelesen', tool: 'read_file_text' }],
+      [{ line: 'Hat a gelesen', tool: 'read_file_text', category: 'read' }, { line: 'Hat b gelesen', tool: 'read_file_text', category: 'read' }],
       'done',
       []
     );
@@ -208,9 +208,9 @@ test('der Einzeiler ist eine Live-Region und sagt das Nachdenken an', async () =
 test('finalizeAllToolLines wirft nie gelaufene Aufrufe weg und schließt den Rest ab', async () => {
   await withDom(({ buildToolLog, finalizeAllToolLines }) => {
     const log = buildToolLog(
-      [{ line: 'Hat a gelesen', tool: 'read_file_text' }, { line: 'Liest b', tool: 'read_file_text' }],
+      [{ line: 'Hat a gelesen', tool: 'read_file_text', category: 'read' }, { line: 'Liest b', tool: 'read_file_text', category: 'read' }],
       'running',
-      [{ line: 'Schreibt c', callIndex: 0, tool: 'write_file_text' }]
+      [{ line: 'Schreibt c', callIndex: 0, tool: 'write_file_text', category: 'write' }]
     );
     finalizeAllToolLines(log);
     const rows = stepRows(log);
@@ -224,7 +224,7 @@ test('finalizeAllToolLines wirft nie gelaufene Aufrufe weg und schließt den Res
 test('readToolLogSteps liest Text, Kategorie und Zustand aus dem Baum', async () => {
   await withDom(({ buildToolLog, readToolLogSteps }) => {
     const log = buildToolLog(
-      [{ line: 'Hat a gelesen', tool: 'read_file_text' }, { line: 'Liest b', tool: 'read_file_text' }],
+      [{ line: 'Hat a gelesen', tool: 'read_file_text', category: 'read' }, { line: 'Liest b', tool: 'read_file_text', category: 'read' }],
       'running',
       []
     );
@@ -241,11 +241,12 @@ test('toolTraceEntryForStore behält nur Zeile, Tool und Audit', async () => {
     // trägt dort bis zu 2 MB Dateiinhalt.
     const entry = toolTraceEntryForStore({
       line: 'Hat notiz.md geschrieben',
-      tool: 'write_file_text',
+      tool: 'write_file_text', category: 'write',
       args: { content: 'x'.repeat(1000) },
       permission: { decision: 'allow', status: 'ok' },
     });
-    assert.deepEqual(Object.keys(entry).sort(), ['line', 'permission', 'tool']);
+    // The category main wrote from the descriptor stays with it (#1008).
+    assert.deepEqual(Object.keys(entry).sort(), ['category', 'line', 'permission', 'tool']);
     assert.equal(entry.line, 'Hat notiz.md geschrieben');
     // Ohne Zusatzinfo bleibt es bei der reinen Zeile (Sessions vor #60).
     assert.equal(toolTraceEntryForStore({ line: 'Denkt nach' }), 'Denkt nach');
@@ -255,7 +256,11 @@ test('toolTraceEntryForStore behält nur Zeile, Tool und Audit', async () => {
 
 test('traceEntryCategory lässt Einträge ohne Tool-Namen ohne Symbol', async () => {
   await withDom(({ traceEntryCategory }) => {
-    assert.equal(traceEntryCategory({ line: 'Hat a gelesen', tool: 'read_file_text' }), 'read');
+    assert.equal(traceEntryCategory({ line: 'Hat a gelesen', tool: 'read_file_text', category: 'read' }), 'read');
+    // The category is main's to say (#1008): an entry without one is "other",
+    // whatever its name — and a skill turns a write into a skill write.
+    assert.equal(traceEntryCategory({ line: 'Hat a gelesen', tool: 'read_file_text' }), 'other');
+    assert.equal(traceEntryCategory({ line: 'x', tool: 'edit_file', category: 'write', skill: 's' }), 'skill-write');
     assert.equal(traceEntryCategory('alte Session ohne Tool-Namen'), null);
     assert.equal(traceEntryCategory({ line: 'nur eine Zeile' }), null);
     assert.equal(traceEntryCategory(null), null);

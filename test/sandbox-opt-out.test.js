@@ -17,6 +17,8 @@ const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner')
 const { planSpawn } = require('../src/main/services/sandboxed-spawn');
 const { createShellRunnerService } = require('../src/main/services/shell-runner-service');
 const { createPythonRunnerService } = require('../src/main/services/python-runner-service');
+const { normalizeToolPresentation } = require('../src/shared/contracts/tool-presentation');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 
 const loadRenderer = (file) =>
   import(pathToFileURL(nodePath.join(__dirname, '..', 'src', 'renderer', 'utils', file)).href);
@@ -202,6 +204,8 @@ function cardDto(tool, isolation, mode = 'smart') {
   return {
     contractVersion: 1, requestId: 'req-ws', tool, riskClasses: ['execute'], targets: [], mode, sessionAllowed: false,
     preview: { ...preview, isolation },
+    // Verb and warning of the card come from the tool's descriptor (#1008).
+    presentation: normalizeToolPresentation(descriptorOf(tool)),
   };
 }
 

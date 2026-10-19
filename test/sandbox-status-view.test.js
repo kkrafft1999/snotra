@@ -65,8 +65,8 @@ test('folder shield: only with an open folder and an execution tool', async () =
   assert.deepEqual(describeFolderSandbox(permissions({ unisolated: true, tools: ['shell_execute'], reason: 'workspace' }, null)), hidden);
   assert.deepEqual(describeFolderSandbox(permissions(undefined)), hidden);
   assert.deepEqual(describeFolderSandbox(null), hidden);
-  // Only the two execution tools count.
-  assert.deepEqual(describeFolderSandbox(permissions({ unisolated: false, tools: ['read_file_text'], reason: '' })), hidden);
+  // Main lists only the execution tools that are on (#1008); nothing else to filter here.
+  assert.deepEqual(describeFolderSandbox(permissions({ unisolated: false, tools: [null, ''], reason: '' })), hidden);
 });
 
 test('folder shield: isolated, still being checked, switched off, no sandbox on the system', async () => {
