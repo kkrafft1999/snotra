@@ -118,6 +118,13 @@ async function setup(t, rounds) {
   return { chatHistory, conversation, llm, events, turn };
 }
 
+/** Resolves once the model has the turn: then a stop or a reload reaches the engine. */
+function modelReached() {
+  let reached;
+  const promise = new Promise((resolve) => { reached = resolve; });
+  return { promise, reached };
+}
+
 const progress = (events, type) => events.filter((e) => e.type === 'progress' && e.payload?.type === type).map((e) => e.payload);
 
 test('a first turn makes the chat: question and answer saved, the chat its folder\'s active one, named', async (t) => {
@@ -166,9 +173,12 @@ test('a turn is saved after each finished step and stored as cut off until it se
   const { chatHistory, turn } = await setup(t, [
     callTool('list_directory', { relative_path: '.' }),
     async () => {
-      // The second round: the step is done, the checkpoint written.
-      await new Promise((resolve) => setTimeout(resolve, 20));
-      midRun = await history.load('tools');
+      // The second round: the step is done; wait for its checkpoint on disk.
+      for (let i = 0; i < 200; i += 1) {
+        midRun = await history.load('tools');
+        if (midRun?.messages?.[1]?.toolTrace?.length) break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
       return text('There is a README.');
     },
     text('Folder'),
@@ -191,13 +201,15 @@ test('a turn is saved after each finished step and stored as cut off until it se
 test('a turn the user stops is kept as far as it had come, not as cut off', async (t) => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
+  const model = modelReached();
   const { chatHistory, conversation, turn } = await setup(t, [async (params) => {
     params.callbacks.onTextDelta('Half an ans');
+    model.reached();
     await gate;
     return text('never seen');
   }]);
   const running = turn('stopped', { content: 'Tell me' });
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await model.promise;
   conversation.stop(7, 'stopped');
   release();
   await running;
@@ -209,12 +221,14 @@ test('a turn the user stops is kept as far as it had come, not as cut off', asyn
 test('a front end that goes away leaves the last save, marked as cut off, and nothing more (#979)', async (t) => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
+  const model = modelReached();
   const { chatHistory, conversation, events, turn } = await setup(t, [async () => {
+    model.reached();
     await gate;
     return text('never written');
   }]);
   const running = turn('gone', { content: 'Long question' });
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await model.promise;
   conversation.abandon(7);
   release();
   await running;
@@ -227,12 +241,14 @@ test('a front end that goes away leaves the last save, marked as cut off, and no
 test('a chat deleted while its turn runs is not written back', async (t) => {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
+  const model = modelReached();
   const { chatHistory, turn } = await setup(t, [async () => {
+    model.reached();
     await gate;
     return text('too late');
   }]);
   const running = turn('doomed', { content: 'Hi' });
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await model.promise;
   await chatHistory.deleteSession('doomed');
   release();
   await running;
