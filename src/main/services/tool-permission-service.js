@@ -178,6 +178,7 @@ function createToolPermissionService({
     try {
       return (await toolPolicyStore.read()).encryptionAvailable === true;
     } catch {
+      // Rules that cannot be read cannot store a loosening either.
       return false;
     }
   }
@@ -230,6 +231,7 @@ function createToolPermissionService({
     try {
       described = await describeExecutionTools();
     } catch {
+      // Without the tools' state the pill shows no warning rather than a wrong one.
       return none;
     }
     const tools = Array.isArray(described?.active) ? described.active : [];
@@ -413,12 +415,12 @@ function createToolPermissionService({
     const workspaceSandboxDisabled = !!root && Array.isArray(state.unsandboxedWorkspaces)
       && state.unsandboxedWorkspaces.includes(root);
     const [tools, chats, isolation, grants, described] = await Promise.all([
-      Promise.resolve().then(describeTools).catch(() => []),
-      root ? Promise.resolve().then(() => describeWorkspaceChats(root)).catch(() => []) : [],
+      Promise.resolve().then(describeTools).catch(() => [] /* without the tools the page shows the rules alone */),
+      root ? Promise.resolve().then(() => describeWorkspaceChats(root)).catch(() => [] /* no chats named, the rest stands */) : [],
       describeUnisolatedExecution(workspaceSandboxDisabled),
       describeSessionGrants(),
       typeof describeExecutionTools === 'function'
-        ? Promise.resolve().then(describeExecutionTools).catch(() => null)
+        ? Promise.resolve().then(describeExecutionTools).catch(() => null /* the sandbox line stays unknown */)
         : null,
     ]);
     /** @type {Set<string|null>} */
@@ -512,7 +514,7 @@ function createToolPermissionService({
     if (preview.effect === PERMISSION_RULE_EFFECTS.ALLOW && preview.tool) {
       // An allow rule for a tool that executes or reaches out would be
       // confirmed and listed, and then never apply (#517).
-      const tools = await Promise.resolve().then(describeTools).catch(() => []);
+      const tools = await Promise.resolve().then(describeTools).catch(() => [] /* without the catalogue the rule is confirmed but not checked against its tool */);
       const known = (Array.isArray(tools) ? tools : []).find((tool) => tool && tool.name === preview.tool);
       const classes = Array.isArray(known?.riskClasses) ? known.riskClasses : [];
       if (classes.some((cls) => !PERSISTENT_ALLOW_CLASSES.includes(cls))) {

@@ -145,6 +145,7 @@ function createSettingsService({
     try {
       own = (await chatSessionSettings?.reasoningEffortFor()) || null;
     } catch {
+      // Without the chat's own level the model's default applies.
       own = null;
     }
     return {
@@ -308,6 +309,7 @@ function createSettingsService({
       await applyUiPrefsPatch(uiPatch);
       return true;
     } catch {
+      // The caller says the preferences were not saved; false is that answer.
       return false;
     }
   }
@@ -539,6 +541,7 @@ function createSettingsService({
         return draft;
       });
     } catch {
+      // The store could not write: the dialog says so, nothing was saved.
       return createSettingsError(createMessage('settings.error.modelsNotSaved'));
     }
     if (validationError) return rejectModelPart(/** @type {SettingsFailure} */ (validationError).error, uiPatch);
@@ -554,6 +557,7 @@ function createSettingsService({
           return previousConfig;
         });
       } catch {
+        // A newer save came in, or the write failed: the dialog says the rollback did not happen.
         return createSettingsError(createMessage('settings.error.uiNotSaved.rollbackFailed'));
       }
       return createSettingsError(createMessage('settings.error.uiNotSaved.rolledBack'));
@@ -563,7 +567,7 @@ function createSettingsService({
     // entry, not only the next new one (#211).
     await chatSessionSettings?.rememberPreset(activePresetId);
     // The OpenAI key may have come or gone; the image tool follows it (#85).
-    await imageGenerationSettings?.refresh().catch(() => {});
+    await imageGenerationSettings?.refresh().catch(() => { /* the tool is re-checked at its next use */ });
     return createSettingsOk();
   }
 

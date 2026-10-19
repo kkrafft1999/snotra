@@ -146,6 +146,7 @@ function canDecryptApiKeyEnc(safeStorage, apiKeyEnc) {
     const plain = safeStorage.decryptString(Buffer.from(apiKeyEnc, 'base64'));
     return typeof plain === 'string' && plain.length > 0;
   } catch {
+    // A key that does not decrypt is the answer here, not an error.
     return false;
   }
 }
