@@ -35,18 +35,7 @@ const {
   summarizeViolations, describeForModel, widerFolder, widerHost, grantedHosts, parseViolationLine, NETWORK_REASONS,
 } = require('./sandbox-violations');
 
-const SANDBOX_REASONS = Object.freeze({
-  /** Windows (and anything that is neither macOS nor Linux). */
-  PLATFORM: 'platform',
-  /** Linux without bubblewrap, socat or ripgrep. */
-  DEPENDENCIES: 'dependencies',
-  /** The library could not be loaded or initialised. */
-  START: 'start',
-  /** The self-test ran and failed — typically restricted user namespaces. */
-  SELF_TEST: 'self-test',
-  /** The user switched the sandbox off for this workspace (#357). */
-  WORKSPACE: 'workspace',
-});
+const { SANDBOX_REASONS } = require('../../shared/contracts/sandbox-reasons');
 
 /** The Linux packages the runtime needs, as the distributions name them. */
 const LINUX_PACKAGES = Object.freeze(['bubblewrap', 'socat', 'ripgrep']);

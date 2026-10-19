@@ -13,7 +13,7 @@ const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
+const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
 const { removeTempDir } = require('./helpers/temp-dir');
 
 const READ_ONLY = /Skill folders are read-only\. Keep what a skill produces in "\.agents\/data\/" in the open folder\./;

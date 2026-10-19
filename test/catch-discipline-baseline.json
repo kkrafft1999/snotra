@@ -76,7 +76,7 @@
     "main/services/userdata-migration.js": 2,
     "main/services/whisper-service.js": 1,
     "main/services/workspace-activation.js": 1,
-    "main/tools/tool-call-planner.js": 4,
+    "application/tools/tool-call-planner.js": 4,
     "main/tools/workspace-tool-registry.js": 3,
     "preload/index.js": 1,
     "renderer/app.js": 8,

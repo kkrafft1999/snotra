@@ -227,7 +227,7 @@ const fsPromises = require('node:fs/promises');
 const os = require('node:os');
 const nodePath = require('node:path');
 const { createFsService } = require('../src/main/services/fs-service');
-const { validateArguments } = require('../src/main/tools/tool-call-planner');
+const { validateArguments } = require('../src/application/tools/tool-call-planner');
 const { createHttpUrlFetchAdapter } = require('../src/main/adapters/http-url-fetch-adapter');
 const { renderContent, MAX_RESULT_CHARS } = require('../src/main/adapters/mcp-adapter');
 const { parseHttpUrl } = require('../src/shared/runtime/url-safety');
@@ -249,7 +249,7 @@ function looksGerman(text) {
 /** Files whose strings end up in a tool result. */
 const MODEL_CHANNEL_SOURCES = [
   'src/main/services/fs-service.js',
-  'src/main/tools/tool-call-planner.js',
+  'src/application/tools/tool-call-planner.js',
   'src/main/tools/workspace-tool-registry.js',
   'src/main/adapters/http-url-fetch-adapter.js',
   'src/main/adapters/mcp-adapter.js',
