@@ -73,7 +73,7 @@ const {
  * @typedef {() => void} Notify  tells the window that asked to read the permission state again
  * @typedef {ReturnType<typeof import('./tool-policy-store').createToolPolicyStore>} ToolPolicyStore
  * @typedef {Awaited<ReturnType<ToolPolicyStore['read']>>} PolicyState
- * @typedef {ReturnType<typeof import('./security-page-data').createSecurityPageData>} SecurityPageData
+ * @typedef {ReturnType<typeof import('../../application/permissions/security-page-data').createSecurityPageData>} SecurityPageData
  * @typedef {NonNullable<ReturnType<typeof normalizeToolApprovalResponse>> & { ruleId?: string|null, workspaceStored?: boolean }} ApprovalAnswer
  *   an answer of the renderer, with what main adds before it reaches the waiting call
  * @typedef {{ entries?: Array<{ allow: string[] }> }} SandboxCardView  what is read of a sandbox card's `sandbox`
