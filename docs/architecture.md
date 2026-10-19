@@ -36,7 +36,7 @@ component level *inside* the main process.
 | Container | Technology | Responsibility |
 | --------- | ---------- | -------------- |
 | **Main process** | Electron main, Node.js | Composition root, IPC handlers, the chat engine and its tool loop (`src/application/`), the tool registry and planner, provider adapters, the services behind them (storage, file system, sandbox, MCP, updates, skills …), approvals, persistence. The only container that holds secrets, and the one that decides every access to the outside. |
-| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism; served from `snotra-app://app/` (`src/main/app-protocol.js`, [#1012](https://github.com/kkrafft1999/snotra/issues/1012)); the `GrantFileProtocolExtraPrivileges` fuse is off ([#1086](https://github.com/kkrafft1999/snotra/issues/1086)) | Chat, file tree, file views, settings — and, still, the state of the conversation: the run registry, when and what to persist, the cost sum and the title trigger live here, not in the core ([#981](https://github.com/kkrafft1999/snotra/issues/981)). Sees nothing but `window.electronAPI` from the preload and the contracts. |
+| **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism; served from `snotra-app://app/` (`src/main/app-protocol.js`, [#1012](https://github.com/kkrafft1999/snotra/issues/1012)); the `GrantFileProtocolExtraPrivileges` fuse is off ([#1086](https://github.com/kkrafft1999/snotra/issues/1086)) | Chat, file tree, file views, settings — and, still, the state of the conversation: the run registry and when and what to persist live here, not in the core; the cost sum and the title moved to the core's conversation service ([#981](https://github.com/kkrafft1999/snotra/issues/981)). Sees nothing but `window.electronAPI` from the preload and the contracts. |
 | **HTML preview** | `WebContentsView` with its own session (`snotra-html-preview`), the `snotra-html:` scheme and `sandbox: true` | Shows HTML pages from the workspace apart from the app's own UI ([#479](https://github.com/kkrafft1999/snotra/issues/479), see [HTML pages](#html-pages-479)). |
 | **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (#790): the page is `src/renderer/manual.html`, from the same `snotra-app:` origin, the content a bundle that `scripts/bundle-manual.js` builds into `src/manual/` from `manual/`. The app window's channels refuse it as a sender. |
 | **Execution sandbox** | Child processes through `@anthropic-ai/sandbox-runtime`: Seatbelt on macOS, bubblewrap on Linux; unisolated on Windows | `shell_execute` and `run_python` (#329): write only inside the workspace, network only through the proxy in main and only to approved domains. See [`security-concept.md`](./security-concept.md), section 9. |
@@ -150,7 +150,7 @@ code is.
 | **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming and the prompt blocks for environment, memory and project instructions. Only through injected ports |
 | **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
 | **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content and the overview the Security page reads. No Electron, no file system; the heart of [`security-concept.md`](./security-concept.md) |
-| **Application ports** | `src/application/ports/` | 22 typedef files, the contracts between the core and main — see [Ports](#ports) |
+| **Application ports** | `src/application/ports/` | 23 typedef files, the contracts between the core and main — see [Ports](#ports) |
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
 | **Remote bridge** | `src/main/remote/` | The adapters of the mobile remote (#1114): the protocol's bytes (`pairing-protocol.js`), the keys kept through `safeStorage`, the relay over Firebase's REST interfaces and in memory, the native sheet's wording. Type-checked like `adapters/` |
 | **Main ports** | `src/main/ports/` | 12 interface types for infrastructure (narrow surfaces, no leaks) |
@@ -289,6 +289,10 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   safety phrase of `remote-protocol.md` part 1, computed by
   `main/remote/pairing-protocol.js` and proven against its test vectors
 - `chat-preferences-port` — UI prefs, system prompt, tool round limit
+- `chat-history-port` — the stored conversation as the conversation service
+  (`application/chat/conversation-service.js`) reads and changes it: a chat
+  with its messages, the cost added per turn, the title (#981). Implemented by
+  `main/services/chat-history-service.js`
 - `workspace-path-port` — path helpers (e.g. `basename`)
 - `own-secrets-port` — the app's own secrets, compared against the text the
   prompt embeds by itself (#528); `main/adapters/own-secrets-adapter.js` wires
@@ -1497,7 +1501,7 @@ These are the topics that did move out:
 | A folder switch that changed the root: approvals pruned, watchers moved, skill scans dropped | `onWorkspaceChanged` of `services/workspace-activation.js`; the reactions stay wiring |
 | A push to the window only while it exists; the approval notification channels | `ipc/window-push.js`, `ipc/approval-notification-handlers.js` |
 | Where the bundled system skills are; the OS version for the feedback form | `bundledSystemSkillsDir` in `services/skills-service.js`, `osVersionReader` in `services/feedback-service.js` |
-| The estimated chat cost (#949): prices per model — override, local, table — and the price-table update, the only request it makes, on the user's click | service: `services/model-price-service.js` (snapshot `data/model-prices.json`, renewed by `scripts/update-model-prices.js`); a round priced in `adapters/provider-llm-adapter.js`, the turn summed in `application/chat/chat-engine.js`; arithmetic: `contracts/cost.js`; display: `renderer/components/CostPanel.js`, `renderer/components/ModelPricesSettings.js` |
+| The estimated chat cost (#949): prices per model — override, local, table — and the price-table update, the only request it makes, on the user's click | service: `services/model-price-service.js` (snapshot `data/model-prices.json`, renewed by `scripts/update-model-prices.js`); a round priced in `adapters/provider-llm-adapter.js`, the turn summed in `application/chat/chat-engine.js`, the chat's sum added and kept by `application/chat/conversation-service.js` (#981); arithmetic: `contracts/cost.js`; display: `renderer/components/CostPanel.js`, `renderer/components/ModelPricesSettings.js` |
 
 What legitimately stays in the module is the one state holder that has no
 rule of its own — whether a web search key is present — and the callbacks that
@@ -1878,8 +1882,16 @@ The renderer **may** *display* provider IDs and preset fields from IPC DTOs, as
 long as it parses no provider wire formats and duplicates no tool or provider
 logic.
 
-**Not presentation, and still here.** The conversation lives in the renderer,
-and the core runs one turn of it
+**Moved to the core (#981).** `application/chat/conversation-service.js` owns
+what a turn means for the stored chat, through the chat-history port: it adds
+the turn's cost to the chat's sum (#949) and answers `chat:send` with it as
+`chatCost`, and it names the chat after its first answer (`chat:title` carries
+only the chat id). The renderer shows the sum it is told and sends no cost
+with a save; main ignores one if it does. A turn that ends before the chat's
+first save is in keeps its sum in main until that save.
+
+**Not presentation, and still here.** The rest of the conversation lives in
+the renderer, and the core runs one turn of it
 ([#981](https://github.com/kkrafft1999/snotra/issues/981)):
 
 - the run registry (`chatRuns` in `renderer/state/store.js`) and `settleRun` in
@@ -1887,8 +1899,7 @@ and the core runs one turn of it
   aborted run leaves behind;
 - when and what to persist: the chat history is written from here, and a
   running turn only reaches it when it ends ([#979](https://github.com/kkrafft1999/snotra/issues/979));
-- the cost sum of a chat (#949, `mergeSessionCost` in `ChatStream.js`), the
-  trigger for the title and the seed of the greeting;
+- when to ask for a title (after a settled turn) and the seed of the greeting;
 - the whole history, which the renderer sends with every turn
   (`messages` in `chat:send`, `main/ipc/chat-handlers.js`).
 

@@ -55,7 +55,7 @@ import { resolveNative } from '../utils/nativePath.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 import { settingsHelpTarget } from '../manual/settings-help-links.js';
 
-const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, isDerivedChatTitle, mergeSessionCost, normalizeSessionCost, PROPOSE_CONFIG_CHANGE_TOOL } = contracts;
+const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, normalizeSessionCost, PROPOSE_CONFIG_CHANGE_TOOL } = contracts;
 
 /** Why a save did not go through (#977), and what the banner says about it. */
 const SAVE_PROBLEMS = Object.freeze({ UNREADABLE: 'unreadable', FAILED: 'failed' });
@@ -344,9 +344,10 @@ export function initChatStream({
   }
 
   function applyUsageFromResult(result) {
-    // The cost adds up over the chat, unlike the context size below (#949).
-    if (result?.cost) {
-      appStore.chatCost = mergeSessionCost(appStore.chatCost, result.cost);
+    // The chat's cost as main summed it (#949, #981), unlike the context size
+    // below; a turn that cost nothing brings no sum and the shown one stays.
+    if (result && 'chatCost' in result) {
+      appStore.chatCost = normalizeSessionCost(result.chatCost);
       costPanel.refresh();
     }
     // contextUsage = letzte Runde (Kontext). Aeltere Engine-Ergebnisse ohne
@@ -905,11 +906,10 @@ export function initChatStream({
    * shows the banner instead (#977).
    */
   async function persistChat(chat, { markActive = false } = {}) {
-    if (!chat?.id || lastPersisted.get(chat.id) === DELETED) return;
+    if (!chat?.id || deletedChats.has(chat.id)) return;
     try {
       const persistable = persistableMessages(chat.messages);
       if (persistable.length === 0) return;
-      lastPersisted.set(chat.id, { messages: chat.messages, count: persistable.length });
       // Ohne Zeitstempel: Wann ein Chat zuletzt gefuehrt wurde, entscheidet der
       // Main am Nachrichtenstand (Issue #245). Diese Funktion laeuft auch beim
       // blossen Verlassen eines Chats — ein Stempel von hier hiesse „heute
@@ -919,9 +919,7 @@ export function initChatStream({
         workspaceRoot: chat.workspaceRoot,
         messages: persistable,
         tokenUsage: chat.tokenUsage,
-        // Only ever grows (#949): a chat without a sum here sends none, and the
-        // one already stored stays.
-        ...(chat.cost ? { cost: chat.cost } : {}),
+        // No cost: main sums it per turn and keeps it with the chat (#981).
         // Nur einen bereits benannten Chat betiteln — sonst leitet die Ablage
         // den Titel selbst aus der ersten Frage ab.
         ...(chat.title ? { title: chat.title } : {}),
@@ -1083,11 +1081,9 @@ export function initChatStream({
   // without touching the list; opening the chat again puts it back on screen.
 
   let runSeq = 0;
-  // chatId → what was written last: the message array and how many messages
-  // went in. A title that arrives late only writes its snapshot if that is
-  // still the latest state of the chat.
-  const lastPersisted = new Map();
-  const DELETED = Symbol('deleted');
+  // Chats deleted in this session: nothing of theirs is written any more, and a
+  // name that arrives late does not show (#981).
+  const deletedChats = new Set();
 
   function persistableMessages(messages) {
     return messages.filter((m) => !m.greeting).map(withoutRunningStep);
@@ -1130,13 +1126,6 @@ export function initChatStream({
         run.checkpointing = false;
       }
     })();
-  }
-
-  /** Whether `chat` is exactly what the history holds for it right now. */
-  function isLatestWritten(chat) {
-    const latest = lastPersisted.get(chat.id);
-    return !!latest && latest !== DELETED && latest.messages === chat.messages
-      && latest.count === persistableMessages(chat.messages).length;
   }
 
   function isRunning(run) {
@@ -1255,7 +1244,7 @@ export function initChatStream({
 
   /** The chat is being deleted: its run stops and must not write the chat back. */
   function discardChatRun(chatId) {
-    lastPersisted.set(chatId, DELETED);
+    deletedChats.add(chatId);
     const run = appStore.chatRuns.get(chatId);
     if (!run) return;
     run.discarded = true;
@@ -1843,7 +1832,7 @@ export function initChatStream({
         chat.tokenUsage = coerceUsage(usage);
         chat.contextBreakdown = result?.contextBreakdown ?? null;
       }
-      if (result?.cost) chat.cost = mergeSessionCost(chat.cost, result.cost);
+      if (result && 'chatCost' in result) chat.cost = normalizeSessionCost(result.chatCost);
     }
 
     try {
@@ -1863,55 +1852,36 @@ export function initChatStream({
   }
 
   /**
-   * Laesst das Modell die Konversation benennen, sobald die erste Antwort
-   * steht. Laeuft genau einmal je Chat: Danach steht im Titel etwas, das nicht
-   * mehr dem aus der Frage abgeleiteten entspricht. Aeltere Chats mit
-   * abgeleitetem Titel werden beim naechsten Zug nachbenannt.
+   * Asks main to name the chat once its first answer stands (#359). Whether
+   * the chat still needs a name and what it is made from, main decides and
+   * keeps (#981); here the name only follows the chat to where it is shown.
    *
    * `offScreenChat` is the chat of a run that ended in the background (#320);
    * without it, the chat on screen is meant.
    */
   async function maybeGenerateChatTitle(chatId, offScreenChat = null) {
     if (!activeProviderConfigured?.()) return;
-    const source = offScreenChat || (appStore.currentChatId === chatId ? currentChatSnapshot() : null);
-    if (!source) return;
-    const messages = source.messages.filter((m) => !m.greeting && !m.isError && !m.streaming);
-    const firstUser = messages.find((m) => m.role === 'user');
-    const firstAnswer = messages.find((m) => m.role === 'assistant');
-    if (!firstUser || !firstAnswer) return;
-
-    // A German fallback stored before #359 still counts as "not named yet".
-    if (!isDerivedChatTitle(source.title, messages)) return;
-
     let result = null;
     try {
-      result = await api.generateChatTitle([
-        { role: 'user', content: String(firstUser.content ?? '') },
-        { role: 'assistant', content: String(firstAnswer.content ?? '') },
-      ]);
+      result = await api.nameChat(chatId);
     } catch {
+      // Without a name the chat keeps the one derived from its question.
       return;
     }
     const title = typeof result?.title === 'string' ? result.title.trim() : '';
-    if (!title) return;
-    if (lastPersisted.get(chatId) === DELETED) return;
+    if (!title || deletedChats.has(chatId)) return;
+    if (offScreenChat) offScreenChat.title = title;
     // Wherever the chat is by now, the title follows it there.
     if (appStore.currentChatId === chatId && !canAttachChat(chatId)) {
       appStore.currentChatTitle = title;
       syncChatTitle?.();
-      await persistCurrentChat();
-      return;
-    }
-    const run = appStore.chatRuns.get(chatId);
-    if (run?.chat) {
+    } else {
       // Running again in the background: its next write takes the title along.
-      run.chat.title = title;
-      return;
+      const run = appStore.chatRuns.get(chatId);
+      if (run?.chat) run.chat.title = title;
     }
-    // Nobody has the chat open. Only write if nothing newer went in since —
-    // otherwise the snapshot would take back what was said after it.
-    if (!isLatestWritten(source)) return;
-    await persistChat({ ...source, title });
+    // The history column shows the new name.
+    onChatPersisted();
   }
 
   function formatAttachmentSize(bytes) {

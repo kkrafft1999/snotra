@@ -4,8 +4,9 @@ const { sanitizeChatId, createRunEndEvent } = require('../../shared/contracts/ch
 /**
  * @param {object} deps
  * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
- * @param {Pick<ReturnType<typeof import('../../application/chat/chat-engine').createChatEngine>,
- *   'send' | 'abort' | 'generateTitle'>} deps.chatEngine
+ * @param {Pick<ReturnType<typeof import('../../application/chat/chat-engine').createChatEngine>, 'abort'>} deps.chatEngine
+ * @param {ReturnType<typeof import('../../application/chat/conversation-service').createConversationService>} deps.conversation
+ *   the turn and what it means for the stored chat (#981)
  * @param {Record<string, string>} deps.REQ
  * @param {Record<string, string>} deps.PUSH
  * @param {() => string|null} [deps.getActiveWorkspaceRoot]
@@ -14,11 +15,13 @@ const { sanitizeChatId, createRunEndEvent } = require('../../shared/contracts/ch
 function registerChatHandlers({
   ipcMain,
   chatEngine,
+  conversation,
   REQ,
   PUSH,
   getActiveWorkspaceRoot = () => null,
   fileChangeRecorder = null,
 }) {
+  if (!conversation) throw new Error('registerChatHandlers requires the conversation service.');
   const engine = chatEngine;
 
   /** @type {Record<string, string>} */
@@ -79,9 +82,9 @@ function registerChatHandlers({
     return fileChangeRecorder.describe(ids);
   });
 
-  ipcMain.handle(REQ.CHAT_TITLE, async (_event, payload) => {
-    return engine.generateTitle({ messages: payload?.messages });
-  });
+  // The renderer names the chat; which messages a title is made from, and
+  // whether the chat still needs one, main decides (#981).
+  ipcMain.handle(REQ.CHAT_TITLE, async (_event, payload) => conversation.nameChat(sanitizeChatId(payload?.chatId) || ''));
 
   // Der Workspace-Root kommt aus dem Main-Prozess, nicht aus dem Payload
   // (Issue #68). Die Nutzlast wird feldweise uebernommen, damit der Renderer
@@ -97,7 +100,7 @@ function registerChatHandlers({
     const route = { chatId, runId };
     watchSender(event.sender);
     try {
-      return await engine.send({
+      return await conversation.sendTurn({
         sessionId: event.sender.id,
         payload: {
           messages: payload?.messages,

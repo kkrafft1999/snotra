@@ -44,7 +44,7 @@ async function mountChat({ sessions = [], activeChatId = null } = {}) {
       upserts.push(row);
       return { ok: true };
     },
-    generateChatTitle: async () => ({ title: '' }),
+    nameChat: async () => ({ title: null }),
     writeClipboardText: async () => ({ ok: true }),
     abortChat: async () => ({ ok: true }),
     chat: async () => ({ ok: true }),

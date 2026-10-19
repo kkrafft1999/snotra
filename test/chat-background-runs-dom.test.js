@@ -33,7 +33,7 @@ async function mount() {
       upserts.push(structuredClone(row));
       return { ok: true };
     },
-    generateChatTitle: async () => ({ title: '' }),
+    nameChat: async () => ({ title: null }),
     writeClipboardText: async () => ({ ok: true }),
     abortChat: (chatId) => { aborted.push(chatId); },
     chat: (messages, options) =>

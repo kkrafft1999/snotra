@@ -180,7 +180,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // A chat's messages, read when it is opened (#985).
   getChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET_SESSION, id),
   upsertChatSession: (session) => ipcRenderer.invoke(REQ.CHAT_HISTORY_UPSERT, session),
-  generateChatTitle: (messages) => ipcRenderer.invoke(REQ.CHAT_TITLE, { messages }),
+  nameChat: (chatId) => ipcRenderer.invoke(REQ.CHAT_TITLE, { chatId }),
   // The diff of one or more changes to a file, by the ids of their summaries (#348).
   getFileChanges: (ids) => ipcRenderer.invoke(REQ.CHAT_FILE_CHANGES, { ids: Array.isArray(ids) ? ids : [] }),
   deleteChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_DELETE, id),

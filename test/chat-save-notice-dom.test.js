@@ -35,7 +35,7 @@ async function mount() {
       if (answer instanceof Error) throw answer;
       return answer;
     },
-    generateChatTitle: async () => ({ title: '' }),
+    nameChat: async () => ({ title: null }),
     openManual: async (target) => { manualOpened.push(target); return { ok: true }; },
     abortChat() {},
     chat: (messages, options) =>
