@@ -1971,6 +1971,18 @@ only the chat id). The renderer shows the sum it is told and sends no cost
 with a save; main ignores one if it does. A turn that ends before the chat's
 first save is in keeps its sum in main until that save.
 
+`runTurn` is the whole turn in the core: it loads the chat, appends the
+question and saves it (the chat becomes its folder's active one), sends the
+model the stored history — images of earlier turns read back from the
+attachment store, as the renderer sent them from memory — saves after every
+finished step with the turn marked as cut off (#979), and saves the settled
+turn (`application/chat/turn-messages.js`: stopped, failed, answered) with its
+cost and usage. `stop` keeps a stopped turn as far as it had come; `abandon`
+(a window that reloads or dies) writes nothing more, so the last checkpoint
+stays. A chat deleted while its turn runs is not written back. The desktop
+renderer does not use it yet; it still sends the whole history (next slice of
+#981).
+
 **Not presentation, and still here.** The rest of the conversation lives in
 the renderer, and the core runs one turn of it
 ([#981](https://github.com/kkrafft1999/snotra/issues/981)):
