@@ -8,7 +8,7 @@ const { SKILL_SUGGESTION_MODES } = require('../../shared/contracts/enums');
  *
  * @param {object} deps
  * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
- * @param {Pick<ReturnType<typeof import('../services/skill-suggestion-service').createSkillSuggestionService>, 'suggest'>} deps.skillSuggestionService
+ * @param {Pick<ReturnType<typeof import('../../application/skills/skill-suggestion-service').createSkillSuggestionService>, 'suggest'>} deps.skillSuggestionService
  * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore
  * @param {Record<string, string>} deps.REQ
  */

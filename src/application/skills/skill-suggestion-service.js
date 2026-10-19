@@ -36,7 +36,7 @@ const NONE = 'KEINER';
  * leeres Objekt reicht also nicht, das endet in einem TypeError mitten im
  * Lauf. Hier interessiert nur die fertige Antwort, deshalb tun sie nichts.
  *
- * @returns {import('../../application/ports/llm-port').LlmStreamCallbacks}
+ * @returns {import('../ports/llm-port').LlmStreamCallbacks}
  */
 function stilleCallbacks() {
   const nichts = () => {};
@@ -73,10 +73,10 @@ function buildPrompt(skills) {
 
 /**
  * @param {object} deps
- * @param {Pick<import('../../application/ports/llm-port').LlmPort, 'resolveChatTarget' | 'streamRound'>} deps.llm
- * @param {Pick<ReturnType<typeof import('./skills-service').createSkillsService>, 'listCatalog'>} deps.skillCatalog
+ * @param {Pick<import('../ports/llm-port').LlmPort, 'resolveChatTarget' | 'streamRound'>} deps.llm
+ * @param {import('./skill-catalog').SkillCatalog} deps.skillCatalog
  * @param {() => string|null} [deps.getActiveWorkspaceRoot]
- * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort|null} [deps.uiPrefsStore]
+ * @param {{ readUIPrefs: () => Promise<import('../../shared/contracts/settings').UiPrefs> }|null} [deps.uiPrefsStore]
  */
 function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoot, uiPrefsStore }) {
   if (!llm || !skillCatalog) {
@@ -85,7 +85,7 @@ function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoo
 
   async function verfuegbareSkills() {
     const workspaceRoot = typeof getActiveWorkspaceRoot === 'function' ? getActiveWorkspaceRoot() : null;
-    /** @type {Partial<import('../ports/ui-prefs-store-port').UiPrefs>} */
+    /** @type {Partial<import('../../shared/contracts/settings').UiPrefs>} */
     const prefs = uiPrefsStore ? await uiPrefsStore.readUIPrefs() : {};
     const { skills } = await skillCatalog.listCatalog({
       workspaceRoot: typeof workspaceRoot === 'string' && workspaceRoot.trim() ? workspaceRoot : null,
