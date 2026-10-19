@@ -38,7 +38,7 @@ const {
  * @typedef {import('../../shared/contracts/settings').UiPrefs} UiPrefs
  * @typedef {import('../../shared/contracts/settings').UiPrefsPatch} UiPrefsPatch
  * @typedef {keyof typeof EXECUTION_SWITCH_ACTIONS} ExecutionSwitch
- * @typedef {import('./llm-settings').SafeStorageLike} SafeStorageLike
+ * @typedef {import('./llm-settings').SecretStoreLike} SecretStoreLike
  * @typedef {import('./llm-settings').SettingsFailure} SettingsFailure
  * @typedef {import('../../shared/contracts/settings').PresetWire} PresetWire
  * @typedef {import('../ports/llm-config-store-port').LlmConfigDocument} LlmConfigDocument
@@ -65,7 +65,7 @@ const EXECUTION_SWITCH_KEYS = ['shellExecutionEnabled', 'pythonExecutionEnabled'
 
 /**
  * @param {object} deps
- * @param {SafeStorageLike} deps.safeStorage
+ * @param {SecretStoreLike} deps.secretStore
  * @param {import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability} [deps.safeStorageKey]
  * @param {import('../ports/llm-config-store-port').LlmConfigStorePort} deps.llmConfigStore
  * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore
@@ -83,7 +83,7 @@ const EXECUTION_SWITCH_KEYS = ['shellExecutionEnabled', 'pythonExecutionEnabled'
  * @param {string} [deps.platform]
  */
 function createSettingsService({
-  safeStorage,
+  secretStore,
   /** When ciphertext may reach the disk (#1060); without it, at once. */
   safeStorageKey = KEY_ALWAYS_DURABLE,
   llmConfigStore,
@@ -174,7 +174,7 @@ function createSettingsService({
     return {
       config: { ...config, presets: presetsWire },
       chatTarget,
-      apiKeyDecryptable: describeKeyReadability(safeStorage, config),
+      apiKeyDecryptable: describeKeyReadability(secretStore, config),
       locale: prefs.appLocale,
       reasoning: await chatReasoningState(chatTarget),
     };
@@ -419,16 +419,16 @@ function createSettingsService({
       const presetPatch = connectionPatches.get(pr.id);
       const incomingPresetSecret = !!(presetPatch?.apiKey || presetPatch?.extraHeaders);
       if (meta.fields?.apiKey && (incomingKey || incomingPresetSecret)) {
-        if (!safeStorage.isEncryptionAvailable()) {
+        if (!secretStore.isEncryptionAvailable()) {
           return rejectModelPart(createMessage('settings.error.encryptionUnavailable'), uiPatch);
         }
       }
     }
 
     // A key or headers go to the disk encrypted. On a fresh Windows profile
-    // the save waits until the key behind safeStorage is on disk itself
+    // the save waits until the key behind secretStore is on disk itself
     // (#1060) — before the config lock, so nothing else waits with it.
-    if (safeStorage.isEncryptionAvailable() && carriesSecret(patches, connectionPatches)) {
+    if (secretStore.isEncryptionAvailable() && carriesSecret(patches, connectionPatches)) {
       await safeStorageKey.whenDurable();
     }
 
@@ -445,7 +445,7 @@ function createSettingsService({
         const draft = cloneLlmConfig(config);
 
         for (const providerId of Object.keys(patches)) {
-          const res = mergeProviderPatchIntoConfig({ safeStorage, providerCatalog }, draft, providerId, patches[providerId]);
+          const res = mergeProviderPatchIntoConfig({ secretStore, providerCatalog }, draft, providerId, patches[providerId]);
           if (!res.ok) {
             validationError = res;
             return config;
@@ -463,7 +463,7 @@ function createSettingsService({
         for (const pr of entries) {
           const meta = providerCatalog.getProvider(pr.providerId);
           if (!meta || !hasPresetConnection(meta)) continue;
-          const merged = mergePresetConnection({ safeStorage }, {
+          const merged = mergePresetConnection({ secretStore }, {
             previous: storedById.get(pr.id)?.connection,
             patch: connectionPatches.get(pr.id),
             provider: meta,
@@ -486,7 +486,7 @@ function createSettingsService({
           const meta = providerCatalog.getProvider(stored.providerId);
           if (!meta) return false;
           const entry = (config.providers && config.providers[stored.providerId]) || {};
-          return !isProviderConfigured({ safeStorage }, meta, entry, stored);
+          return !isProviderConfigured({ secretStore }, meta, entry, stored);
         };
         const usableIds = new Set();
         for (const pr of entries) {
@@ -496,7 +496,7 @@ function createSettingsService({
             return config;
           }
           const entry = (draft.providers && draft.providers[pr.providerId]) || {};
-          if (isProviderConfigured({ safeStorage }, meta, entry, pr)) {
+          if (isProviderConfigured({ secretStore }, meta, entry, pr)) {
             usableIds.add(pr.id);
             continue;
           }

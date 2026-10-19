@@ -8,8 +8,9 @@ const {
   mergeProviderPatchIntoConfig: mergeProviderPatchIntoConfigImpl,
   createLlmPresets,
 } = require('../src/main/services/llm-settings');
-const applyActivePreset = (deps, presetId, options) => createLlmPresets(deps).applyActivePreset(presetId, options);
-const isPresetUsable = (deps, presetId) => createLlmPresets(deps).isPresetUsable(presetId);
+const presetsOf = (deps) => createLlmPresets({ ...deps, secretStore: deps.secretStore ?? deps.safeStorage });
+const applyActivePreset = (deps, presetId, options) => presetsOf(deps).applyActivePreset(presetId, options);
+const isPresetUsable = (deps, presetId) => presetsOf(deps).isPresetUsable(presetId);
 const { createStorageService } = require('../src/main/services/storage-service');
 const { createTestConfirmations } = require('./helpers/confirmations');
 const { createSkillsService } = require('../src/main/services/skills-service');
@@ -71,7 +72,7 @@ const mockProviders = {
 function makeDeps(encryptionAvailable = true) {
   const runtime = createMockProviderRuntime((id) => mockProviders.getProvider(id));
   return {
-    safeStorage: {
+    secretStore: {
       isEncryptionAvailable: () => encryptionAvailable,
       encryptString(plaintext) {
         return Buffer.from(`enc:${plaintext}`, 'utf8');

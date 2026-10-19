@@ -257,7 +257,7 @@ function createApplication({
   // Modell und Freigabemodus gehoeren zum Chat (Issue #211). Gesetzt wird
   // beides weiterhin ueber die bestehenden Wege — „Auto“ also nur nach dem
   // nativen Dialog; hier wird es je Chat gemerkt und beim Wechsel hergestellt.
-  const llmPresets = createLlmPresets({ llmConfigStore, providerCatalog, safeStorage: secretStore });
+  const llmPresets = createLlmPresets({ llmConfigStore, providerCatalog, secretStore });
   const chatSessionSettings = createChatSessionSettings({
     chatHistoryStore,
     applyPreset: (presetId) => llmPresets.applyActivePreset(presetId),
@@ -751,7 +751,7 @@ function createApplication({
   registerVoiceHandlers({ ipcMain, speech, REQ, PUSH });
   registerWhisperHandlers({ ipcMain, speech, uiPrefsStore, REQ });
   const settings = createSettingsService({
-    safeStorage: secretStore,
+    secretStore,
     safeStorageKey,
     llmConfigStore,
     uiPrefsStore,

@@ -157,7 +157,7 @@ test('only the OpenAI-compatible form shows the field', () => {
 
 test('saving sets, keeps and clears the stored limit', () => {
   const safeStorage = { isEncryptionAvailable: () => true, encryptString: (s) => Buffer.from(s) };
-  const merge = (previous, raw) => mergePresetConnection({ safeStorage }, {
+  const merge = (previous, raw) => mergePresetConnection({ secretStore: safeStorage }, {
     previous,
     patch: normalizePresetConnectionPatch(raw, COMPAT),
     provider: COMPAT,

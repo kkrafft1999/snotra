@@ -16,7 +16,7 @@ const PROVIDERS = {
 };
 const providerCatalog = { getProvider: (/** @type {string} */ id) => PROVIDERS[id] || null };
 
-const safeStorage = {
+const secretStore = {
   isEncryptionAvailable: () => true,
   encryptString: (/** @type {string} */ plain) => Buffer.from(`enc:${plain}`, 'utf8'),
   decryptString: (/** @type {Buffer} */ buf) => {
@@ -71,11 +71,11 @@ const TWO_ENTRIES = {
 
 function setup({ config = TWO_ENTRIES, uiPrefs = memoryUiPrefsStore() } = {}) {
   const llmConfigStore = memoryLlmConfigStore(config);
-  const presets = createLlmPresets({ llmConfigStore, providerCatalog, safeStorage });
+  const presets = createLlmPresets({ llmConfigStore, providerCatalog, secretStore });
   /** @type {string[]} */
   const remembered = [];
   const service = createSettingsService({
-    safeStorage,
+    secretStore,
     llmConfigStore,
     uiPrefsStore: uiPrefs,
     providerCatalog,
@@ -90,14 +90,14 @@ function setup({ config = TWO_ENTRIES, uiPrefs = memoryUiPrefsStore() } = {}) {
 }
 
 test('an entry is usable with a readable key or, for a local server, a URL', () => {
-  assert.equal(isProviderConfigured({ safeStorage }, PROVIDERS.openai, { apiKeyEnc: enc('k') }), true);
-  assert.equal(isProviderConfigured({ safeStorage }, PROVIDERS.openai, { apiKeyEnc: 'not-ours' }), false);
-  assert.equal(isProviderConfigured({ safeStorage }, PROVIDERS.openai, {}), false);
-  assert.equal(isProviderConfigured({ safeStorage }, PROVIDERS.ollama, {}), true, 'the default URL counts');
+  assert.equal(isProviderConfigured({ secretStore }, PROVIDERS.openai, { apiKeyEnc: enc('k') }), true);
+  assert.equal(isProviderConfigured({ secretStore }, PROVIDERS.openai, { apiKeyEnc: 'not-ours' }), false);
+  assert.equal(isProviderConfigured({ secretStore }, PROVIDERS.openai, {}), false);
+  assert.equal(isProviderConfigured({ secretStore }, PROVIDERS.ollama, {}), true, 'the default URL counts');
 });
 
 test('key readability is reported per provider and, separately, per entry', () => {
-  const readable = describeKeyReadability(safeStorage, {
+  const readable = describeKeyReadability(secretStore, {
     providers: { openai: { apiKeyEnc: enc('k') }, other: { apiKeyEnc: 'garbage' } },
     presets: [{ id: 'openai', providerId: 'x', connection: { apiKeyEnc: 'garbage' } }],
   });
