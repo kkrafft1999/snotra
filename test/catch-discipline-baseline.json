@@ -54,7 +54,7 @@
     "main/services/move-to-trash.js": 1,
     "main/services/pdf-assets.js": 1,
     "main/services/pdf-text.js": 1,
-    "main/services/program-allowances-service.js": 5,
+    "main/services/program-allowances-service.js": 4,
     "main/services/python-runner-service.js": 3,
     "main/services/raw-fs.js": 1,
     "main/services/read-regular-file.js": 2,
