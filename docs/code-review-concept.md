@@ -42,15 +42,15 @@ which do not run in CI.
 |---|---|---|---|---|
 | **Wave 1 — foundation and trust boundaries** |||||
 | B01 | Skeleton and boundaries | `main/index.js`, `main/window*.js`, `main/permissions.js`, `preload/`, `shared/ipc-channels.js`, `shared/limits.js`, `main/composition/`, `contracts/index.js`, `contracts/enums.js`, `ipc/shell-handlers`, `ipc/request-lifecycle`, boundary guards | 2.8k | stable |
-| B02 | Permission decisions | `application/permissions/`, `tool-policy-store`, `program-allowances-service`, `ipc/tool-permission-handlers`, `tool-approval-adapter`, `contracts/tool-permissions`, `contracts/program-allowances`, `runtime/sensitive-*`, `runtime/path-pattern` | 4.1k | stable |
+| B02 | Permission decisions | `application/permissions/`, `tool-policy-store`, `program-allowances-service`, `tool-permission-service`, `ipc/tool-permission-handlers`, `tool-approval-adapter`, `contracts/tool-permissions`, `contracts/program-allowances`, `runtime/sensitive-*`, `runtime/path-pattern` | 4.1k | stable |
 | B03 | Sandbox and process execution | `sandbox-service`, `sandboxed-spawn`, `shell-runner-service`, `python-runner-service`, `runtime/shell-command-guard`, `runtime/simple-command`, `runtime/sandbox-domains`, `child-output-sink` | 2.0k | stable |
 | **Wave 2 — chat core** |||||
 | B04 | Chat engine | `application/chat/`, `application/ports/`, `ipc/chat-handlers`, `contracts/chat`, `contracts/message`, `contracts/context-breakdown`, `contracts/usage`, `runtime/abort`, `runtime/partial-json` | 3.9k | stable |
 | B05 | Providers | `main/providers/`, `provider-*-adapter`, `credential-adapter`, `provider-secrets-adapter`, `request-timeout`, `contracts/llm-target`, `contracts/provider-endpoint`, `runtime/fetch-errors`; voice input in the main process: `whisper-service`, `speech-adapter`, `contracts/voice` | 2.9k | mostly stable (#428 adds a provider) |
 | B06 | Tools | `main/tools/`, `workspace-tool-adapter`, `workspace-path-adapter`, `http-url-fetch-adapter`, `tavily-web-search-adapter`, `presentation/tool-display`, `contracts/tool-categories`, `runtime/url-safety`, `runtime/html-to-text` | 3.7k | stable |
 | **Wave 3 — state and lifecycle** |||||
-| B07 | Settings and persistence | `storage-service`, `ipc/settings-handlers`, `contracts/settings`, `chat-session-settings`, `settings-presentation-service`, `persistence-store-adapters`, `chat-preferences-adapter`, `userdata-migration`, `rename-with-retry` | 3.8k | stable (#473 is fixed) |
-| B08 | Chat history and attachments | `chat-history-normalization`, `ipc/chat-history-handlers`, `chat-attachment-store`, `contracts/attachments`, `contracts/workspace-image` | 1.3k | stable |
+| B07 | Settings and persistence | `storage-service`, `ipc/settings-handlers`, `settings-service`, `llm-settings`, `contracts/settings`, `chat-session-settings`, `settings-presentation-service`, `persistence-store-adapters`, `chat-preferences-adapter`, `userdata-migration`, `rename-with-retry` | 3.8k | stable (#473 is fixed) |
+| B08 | Chat history and attachments | `chat-history-normalization`, `chat-history-service`, `ipc/chat-history-handlers`, `chat-attachment-store`, `contracts/attachments`, `contracts/workspace-image` | 1.3k | stable |
 | B09 | Update and release | `update-*`, `ipc/update-handlers`, `UpdateDialog`, `AppVersionBadge`, `application-menu`, `.github/workflows/`, `scripts/`, `package.json` | 2.0k, plus 1.0k outside `src/` | stable |
 | B10 | Skills, memory, project instructions | `skills-*`, `skill-suggestion-service`, `memory-adapter`, `project-instructions-adapter`, `environment-adapter`, their contracts and runtime helpers, `system-skills/` | 2.1k | stable (#160 comes later) |
 | **Wave 4 — renderer** |||||

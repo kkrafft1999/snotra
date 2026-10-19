@@ -15,7 +15,7 @@ const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
 
-const { registerSettingsHandlers } = require('../src/main/ipc/settings-handlers');
+const { registerSettingsForTest: registerSettingsHandlers } = require('./helpers/settings-handlers');
 const { createApplication } = require('../src/main/composition/create-application');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');

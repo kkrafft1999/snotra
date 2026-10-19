@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { registerSettingsHandlers, mergePresetConnection } = require('../src/main/ipc/settings-handlers');
+const { registerSettingsForTest: registerSettingsHandlers } = require('./helpers/settings-handlers');
+const { mergePresetConnection } = require('../src/main/services/llm-settings');
 const { createStorageService } = require('../src/main/services/storage-service');
 const {
   createLlmConfigStorePort,
@@ -60,7 +61,7 @@ const EVIL = 'http://evil.example/v1';
 test('a new address drops the stored key and headers (#560)', () => {
   const previous = { baseUrl: GOOD, apiKeyEnc: enc('key'), extraHeadersEnc: enc('X-GW: hdr') };
 
-  const { connection } = mergePresetConnection({ safeStorage }, { previous, patch: { baseUrl: EVIL }, provider: COMPAT });
+  const { connection } = mergePresetConnection({ secretStore: safeStorage }, { previous, patch: { baseUrl: EVIL }, provider: COMPAT });
 
   assert.equal(connection.baseUrl, EVIL);
   assert.equal(connection.apiKeyEnc, undefined);
@@ -70,7 +71,7 @@ test('a new address drops the stored key and headers (#560)', () => {
 test('the same address, written differently, keeps the stored key and headers (#560)', () => {
   const previous = { baseUrl: GOOD, apiKeyEnc: enc('key'), extraHeadersEnc: enc('X-GW: hdr') };
 
-  const { connection } = mergePresetConnection({ safeStorage }, {
+  const { connection } = mergePresetConnection({ secretStore: safeStorage }, {
     previous,
     patch: { baseUrl: `  ${GOOD}/  `.trim(), apiStyle: 'full' },
     provider: COMPAT,
@@ -84,7 +85,7 @@ test('the same address, written differently, keeps the stored key and headers (#
 test('an entry on the default address keeps its key when the draft names that address (#560)', () => {
   const previous = { apiKeyEnc: enc('key') };
 
-  const { connection } = mergePresetConnection({ safeStorage }, {
+  const { connection } = mergePresetConnection({ secretStore: safeStorage }, {
     previous,
     patch: { baseUrl: COMPAT.defaultBaseUrl },
     provider: COMPAT,
@@ -96,7 +97,7 @@ test('an entry on the default address keeps its key when the draft names that ad
 test('a new address with a new key stores the new key only (#560)', () => {
   const previous = { baseUrl: GOOD, apiKeyEnc: enc('old'), extraHeadersEnc: enc('X-GW: old') };
 
-  const { connection } = mergePresetConnection({ safeStorage }, {
+  const { connection } = mergePresetConnection({ secretStore: safeStorage }, {
     previous,
     patch: { baseUrl: EVIL, apiKey: 'new' },
     provider: COMPAT,
@@ -117,7 +118,7 @@ for (const patch of [{ apiKey: 'sk-new' }, { extraHeaders: 'X-GW: secret' }]) {
       isEncryptionAvailable: () => false,
       encryptString: (/** @type {string} */ text) => { encrypted += 1; return safeStorage.encryptString(text); },
     };
-    const result = mergePresetConnection({ safeStorage: withoutEncryption }, {
+    const result = mergePresetConnection({ secretStore: withoutEncryption }, {
       previous: { baseUrl: GOOD },
       patch,
       provider: COMPAT,

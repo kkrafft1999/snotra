@@ -202,12 +202,9 @@ function createApplication({
   registerWhisperHandlers({ ipcMain, speech: core.speech, uiPrefsStore, REQ });
   registerSettingsHandlers({
     ipcMain,
-    safeStorage: core.secretStore,
-    safeStorageKey,
-    llmConfigStore: core.llmConfigStore,
+    settings: core.settings,
     uiPrefsStore,
     workspaceFolderStore: core.workspaceFolderStore,
-    providerCatalog: core.providerCatalog,
     providerModels: core.providerModels,
     REQ,
     workspaceActivation: core.workspaceActivation,
@@ -218,25 +215,13 @@ function createApplication({
     memory: core.memory,
     webSearchSettings: core.webSearchSettings,
     imageGenerationSettings: core.imageGenerationSettings,
-    onAppLocaleChanged: core.rememberedUiPrefs.setAppLocale,
-    onShowHiddenFilesChanged: core.rememberedUiPrefs.setShowHiddenFiles,
     mcpSettings: core.mcpSettings,
     pythonSettings: core.pythonSettings,
     shellSettings: core.shellSettings,
-    chatSessionSettings,
     confirmations,
   });
   registerModelPriceHandlers({ ipcMain, modelPrices: core.modelPrices, REQ });
-  registerChatHistoryHandlers({
-    ipcMain,
-    chatHistoryStore: core.chatHistoryStore,
-    REQ,
-    chatAttachments: core.chatAttachments,
-    getActiveWorkspaceRoot,
-    isKnownWorkspaceRoot: (folderPath) => core.workspaceActivation.isKnownFolder(folderPath),
-    chatSessionSettings,
-    toolCategoryOf: (name) => core.toolRegistry.getDefinition(name)?.category || null,
-  });
+  registerChatHistoryHandlers({ ipcMain, chatHistory: core.chatHistory, REQ });
   registerUpdateHandlers({ ipcMain, updates, REQ, PUSH, getMainWindow });
   registerFeedbackHandlers({ ipcMain, feedback: core.feedback, REQ });
   registerNoticeHandlers({ ipcMain, notices: core.notices, REQ, PUSH, getMainWindow, shell });
@@ -273,30 +258,16 @@ function createApplication({
     getActiveWorkspaceRoot,
     fileChangeRecorder: core.fileChangeRecorder,
   });
-  const { securityPageData } = core;
   registerToolPermissionHandlers({
     ipcMain,
-    dialog,
-    confirmations,
-    getMainWindow,
-    toolPolicyStore: core.toolPolicyStore,
+    permissions: core.toolPermissions,
     approvals: core.approvals,
-    sessionGrants: core.sessionGrants,
-    getActiveWorkspaceRoot,
+    dialog,
+    getMainWindow,
+    getLocale: getAppLocale,
+    homeDir: core.os.homedir(),
     REQ,
     PUSH,
-    chatSessionSettings,
-    getLocale: getAppLocale,
-    describeExecutionTools: securityPageData.describeExecutionTools,
-    programAllowances: core.programAllowances,
-    describeChats: securityPageData.describeChats,
-    describeTools: securityPageData.describeTools,
-    describeWorkspaceChats: securityPageData.describeWorkspaceChats,
-    listKnownWorkspaces: securityPageData.listKnownWorkspaces,
-    folderExists: securityPageData.folderExists,
-    platform: process.platform,
-    platformCapabilities: core.platformCapabilities,
-    homeDir: core.os.homedir(),
   });
   // Pairing a phone as the mobile remote (#1114); its Allow comes from the native dialog.
   registerRemoteHandlers({ ipcMain, pairing: core.remote.pairing, pushToWindow, REQ, PUSH });

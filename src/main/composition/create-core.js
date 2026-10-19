@@ -74,7 +74,10 @@ const { createRememberedUiPrefs } = require('../services/remembered-ui-prefs');
 const { createWatcherWarning } = require('../services/watcher-warning');
 const { defaultOnSwitch } = require('../services/ui-pref-switches');
 const { createExecutionToolSettings, pythonCommandForSandbox } = require('../services/execution-tool-settings');
-const { applyActivePreset, isPresetUsable } = require('../ipc/settings-handlers');
+const { createLlmPresets } = require('../services/llm-settings');
+const { createSettingsService } = require('../services/settings-service');
+const { createChatHistoryService } = require('../services/chat-history-service');
+const { createToolPermissionService } = require('../services/tool-permission-service');
 const { createChatSessionSettings } = require('../services/chat-session-settings');
 const { createFeedbackService, osVersionReader, resolveFeedbackEndpoint } = require('../services/feedback-service');
 const { createAppNotices, postStoreFileEvent } = require('../services/app-notices');
@@ -217,15 +220,15 @@ function createCore({
   // Modell und Freigabemodus gehoeren zum Chat (Issue #211). Gesetzt wird
   // beides weiterhin ueber die bestehenden Wege — „Auto“ also nur nach dem
   // nativen Dialog; hier wird es je Chat gemerkt und beim Wechsel hergestellt.
-  const presetDeps = { llmConfigStore, providerCatalog, safeStorage: secretStore };
+  const llmPresets = createLlmPresets({ llmConfigStore, providerCatalog, secretStore });
   const chatSessionSettings = createChatSessionSettings({
     chatHistoryStore,
-    applyPreset: (presetId) => applyActivePreset(presetDeps, presetId),
+    applyPreset: (presetId) => llmPresets.applyActivePreset(presetId),
     getDefaultPresetId: async () => {
       const config = await llmConfigStore.readLLMConfig();
       return config.defaultPresetId || config.activePresetId || null;
     },
-    isPresetUsable: (presetId) => isPresetUsable(presetDeps, presetId),
+    isPresetUsable: (presetId) => llmPresets.isPresetUsable(presetId),
     getPresetAlias: async (presetId) => (await llmConfigStore.readLLMConfig()).presetAliases?.[presetId] || null,
     getActivePresetId: async () => (await llmConfigStore.readLLMConfig()).activePresetId || null,
     getActiveMode: async () => (await toolPolicyStore.read()).mode,
@@ -696,6 +699,53 @@ function createCore({
     onSandboxDetected: notifyToolPermissionsChanged,
   });
 
+  // What the settings, the chat history and the tool permissions decide —
+  // reached through IPC by the desktop, directly by any other front end (#1006).
+  const settings = createSettingsService({
+    secretStore,
+    safeStorageKey,
+    llmConfigStore,
+    uiPrefsStore,
+    providerCatalog,
+    presets: llmPresets,
+    chatSessionSettings,
+    skillCatalog: skillsService,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    imageGenerationSettings,
+    pythonSettings,
+    shellSettings,
+    onAppLocaleChanged: rememberedUiPrefs.setAppLocale,
+    onShowHiddenFilesChanged: rememberedUiPrefs.setShowHiddenFiles,
+    confirmations,
+  });
+  const chatHistory = createChatHistoryService({
+    chatHistoryStore,
+    chatAttachments,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    isKnownWorkspaceRoot: (folderPath) => workspaceActivation.isKnownFolder(folderPath),
+    chatSessionSettings,
+    toolCategoryOf: (name) => toolRegistry.getDefinition(name)?.category || null,
+  });
+  const toolPermissions = createToolPermissionService({
+    confirmations,
+    toolPolicyStore,
+    approvals,
+    sessionGrants,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    chatSessionSettings,
+    getLocale: getAppLocale,
+    describeExecutionTools: securityPageData.describeExecutionTools,
+    programAllowances,
+    describeChats: securityPageData.describeChats,
+    describeTools: securityPageData.describeTools,
+    describeWorkspaceChats: securityPageData.describeWorkspaceChats,
+    listKnownWorkspaces: securityPageData.listKnownWorkspaces,
+    folderExists: securityPageData.folderExists,
+    platform: process.platform,
+    platformCapabilities,
+    homeDir: os.homedir(),
+  });
+
   // Pairing a phone as the mobile remote (#1114). Nothing of it runs before
   // the user starts a pairing (R7); its Allow comes from the user-confirmation port.
   const remote = createRemoteBridge({
@@ -786,6 +836,9 @@ function createCore({
     feedback,
     skillSuggestionService,
     securityPageData,
+    settings,
+    chatHistory,
+    toolPermissions,
     remote,
     notifyToolPermissionsChanged,
     dispose,

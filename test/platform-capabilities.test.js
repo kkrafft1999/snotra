@@ -30,7 +30,7 @@ const {
 } = require('../src/main/platforms');
 const { resolveRunningPlatform } = require('../src/main/platforms/running-platform');
 const { detectInstallTarget } = require('../src/main/services/update-targets');
-const { executionSwitchDialog } = require('../src/main/ipc/settings-confirmation-dialogs');
+const { executionSwitchDialog } = require('../src/main/services/settings-confirmation-dialogs');
 const { createTranslator } = require('../src/shared/i18n');
 
 const ROOT = path.join(__dirname, '..');
