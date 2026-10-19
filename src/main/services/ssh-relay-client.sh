@@ -59,7 +59,8 @@ dir=$(mktemp -d "${TMPDIR:-/tmp}/snotra-ssh.XXXXXX") || fail 'no temporary folde
 # byte, the answer may still take its time.
 #
 # The answer reaches git through one last `cat`, which ends when the relay
-# closes (socat's `shut-close`: a pipe cannot be shut down half-way). Before
+# closes (`shut-close` on the writing half: a pipe cannot be shut down
+# half-way, and socat 1.8 ignores the option on STDIO as a whole). Before
 # git's stream ends with it, ssh's error output goes to git's stderr: once
 # git sees the end, it gives up, and the run — and this script with it — may
 # be gone before anything printed later arrived. The shell lets go of git's
@@ -69,7 +70,7 @@ exec 3<&0
 {
   printf 'SNOTRA-SSH 1\n%s\n%s\n%s\n%s\n%s\n%s\n' "$dir" "$family" "$port" "$host" "$protocol" "$command"
   exec cat <&3
-} 2>/dev/null | socat -t 3600 STDIO,shut-close TCP:127.0.0.1:2222,retry=50,interval=0.1 2>"$dir/relay" | {
+} 2>/dev/null | socat -t 3600 STDIN!!STDOUT,shut-close TCP:127.0.0.1:2222,retry=50,interval=0.1 2>"$dir/relay" | {
   cat
   # socat's own complaints only where the relay gave no answer: after one, a
   # connection the launcher closed while git still wrote is no news.
