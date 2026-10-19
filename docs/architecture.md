@@ -159,7 +159,7 @@ code is.
 | **Providers** | `src/main/providers/` | Five provider modules and the two shared OpenAI transports behind `providers/index.js`, see [Provider adapters](#provider-adapters) |
 | **Tools** | `src/main/tools/` | The tool registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, the call planner (targets, plan key, sandbox plan, preview) and argument conformance. Business rules, called through the tool adapter |
 | **Services** | `src/main/services/` | 76 modules (~22k lines) and by far the largest layer: storage, file system, sandbox, MCP, updates, skills, watchers, the signed policy store, outside access, program allowances, document text. Most of the backend's logic lives here |
-| **Composition root** | `src/main/composition/` | `createApplication()` builds services, adapters and engine and registers the IPC handlers — see [Composition root](#composition-root) |
+| **Composition root** | `src/main/composition/` | `createCore()` builds services, adapters and engine from ports, without Electron; `createApplication()` wraps it for the desktop and registers the IPC handlers — see [Composition root](#composition-root) |
 | **IPC** | `src/main/ipc/` | The handlers behind every channel, event push to the renderer, and `trusted-sender.js`, which refuses any sender that is not the app's own page. They parse, validate and delegate; what the settings, the chat history and the tool permissions decide lives in services since [#1006](https://github.com/kkrafft1999/snotra/issues/1006) |
 | **Main shell** | `src/main/index.js`, `src/main/window.js`, `src/main/window-state.js`, `src/main/app-lifecycle.js`, `src/main/app-identity.js`, `src/main/permissions.js`, `src/main/app-protocol.js`, `src/main/workspace-state.js`, `src/main/manual-window.js`, `src/main/data/` | The Electron start-up and its windows, the single-instance lock, the `snotra-app:` scheme the windows load from, the media permissions, the active workspace root, the manual window; `data/` holds the bundled model price table |
 | **Preload** | `src/preload/` | `index.js` builds `window.electronAPI` for the app window, `manual.js` the manual window's. Both are bundled by esbuild into one file each, because a sandboxed preload cannot load siblings |
@@ -1471,33 +1471,54 @@ Several ids of one file are combined: before the first against after the last.
 
 ## Composition root
 
-`src/main/composition/create-application.js` is the central entry point after the
-Electron bootstrap:
+Two layers since [#983](https://github.com/kkrafft1999/snotra/issues/983):
 
-1. Creates infrastructure services (`storage-service`, `fs-service`, …)
-2. Wraps them in narrow port adapters (`persistence-store-adapters`, …)
-3. Builds the chat application via `create-chat-application.js` (LLM, tool and
-   preferences adapters → `createChatEngine`)
-4. Registers IPC handlers with injected dependencies
+- **`src/main/composition/create-core.js`** — `createCore()` builds the
+  application without Electron and without IPC: the stores
+  (`storage-service`, the signed policy, the history), the file system and
+  sandbox services, the tool registry, MCP, skills, speech, the remote bridge
+  and the chat engine via `create-chat-application.js`. It takes ports and
+  plain values only — a `secretStore`, a `userDataPath`, `getAppVersion`,
+  `confirmations`, `notifications`, an `eventPush`, a `trashItem` — typed in
+  `core-options.js`, and returns the services a front end registers its
+  handlers on. Each missing port has a safe default: no confirmation
+  (`createRefusingConfirmation`, nothing loosens), no notifications, pushes
+  dropped. `test/create-core.test.js` builds it under plain Node with a host
+  that has no keyring and runs a chat turn with a tool call through it.
+- **`src/main/composition/create-application.js`** — `createApplication()` is
+  the desktop's composition. It turns Electron's objects into those ports —
+  `safeStorage` into the secret store (`electron/safe-storage-backend.js`),
+  `Notification` into notifications, the window into the event push, the
+  native message box into the user confirmation, `shell.trashItem` into the
+  trash —, calls `createCore()`, builds the few pieces that are the desktop's
+  alone (the update service, the file context menu, the HTML preview) and
+  registers every IPC handler. Its options, the ones `src/main/index.js` hands
+  in, are typed in `application-options.js`.
 
-The rule of #508 is that it holds wiring and nothing else. #510 cut it from
-983 to 831 lines; it grew back to about 1,120 with decisions in it again, and
+A second host — a CLI, a headless server — writes its own second layer and
+reuses the first. What it still has to take from `src/main/` beyond that is
+the subject of [#982](https://github.com/kkrafft1999/snotra/issues/982).
+
+The rule of #508 is that the composition holds wiring and nothing else. #510
+cut it from 983 to 831 lines; it grew back to about 1,120 with decisions in it again, and
 #1005 cut it to about 940. Whatever makes a decision or shapes data lives next
 to its topic and is tested there; the composition root creates it and passes
 it on.
 
-`test/composition-root-wiring.test.js` keeps it that way. It reads the source
-without comments and strings and fails on a branch whose condition is anything
+`test/composition-root-wiring.test.js` keeps it that way, for both files. It
+reads the source without comments and strings and fails on a branch whose condition is anything
 but "was this optional dependency handed in" (`Menu`, `shell`, `watchFile`,
 `manual` …, an explicit list), on a loop, `switch`, `try`/`catch`, `.catch(`,
-`else`, comparison, clock or timer, and on more than 1,000 lines. Falling back
+`else`, comparison, clock or timer, and on more than 1,000 lines per file. Falling back
 with `||` or `??` and optional calls stay allowed — they wire a default, they
 do not decide. A test in the same file feeds it the pieces #1005 moved out, so
 the guard itself is checked to catch them.
 
-From `ipc/settings-handlers.js` it imports only the registration; what the
-chat's own settings need of the model entries — `applyActivePreset`,
-`isPresetUsable` — comes from `services/llm-settings.js`
+Neither file imports logic from a handler module. `create-core.js` builds the
+services the settings, the chat history and the tool permissions decide in —
+`services/settings-service.js` with `services/llm-settings.js`,
+`services/chat-history-service.js`, `services/tool-permission-service.js` —
+and returns them; `create-application.js` registers the handlers on them
 ([#1006](https://github.com/kkrafft1999/snotra/issues/1006)).
 
 These are the topics that did move out:
@@ -2720,7 +2741,7 @@ What a test holds, as of 2026-10-18:
 | `test/adapter-port-shapes.test.js` | Port adapters expose only permitted methods |
 | `npm run typecheck` (`tsc`, run by `npm test`) | `src/application/`, `src/main/` and `src/shared/` type-check against their JSDoc, with `strictNullChecks` (the files on the `exclude` list in `tsconfig.json` apart); every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
 | `test/port-conformance.test.js` | Every port has an implementation that names it, no port file exports a value, the type check is still in the gate (#1004, #1098) |
-| `test/composition-root-wiring.test.js` | `create-application.js` holds wiring only: no branch beyond "was this optional dependency handed in", no loop, comparison, `try`/`catch` or clock, at most 1,000 lines ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)) |
+| `test/composition-root-wiring.test.js` | `create-core.js` and `create-application.js` hold wiring only: no branch beyond "was this optional dependency handed in", no loop, comparison, `try`/`catch` or clock, at most 1,000 lines ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)) |
 | `test/electron-free-main.test.js` | `src/main/services/`, `tools/` and `adapters/` name no Electron API — no `safeStorage`, `app.getPath`, `webContents`, `dialog`, `Notification`, … and no type from `electron`; what needs them lives in `src/main/electron/` ([#983](https://github.com/kkrafft1999/snotra/issues/983)) |
 | `test/catch-discipline.test.js` | Every `catch` in `src/` rethrows, reports, logs or carries a comment why it may stay quiet; every `void call()` in the renderer has a `.catch`. Against a baseline that may only shrink, `test/catch-discipline-baseline.json`, per file and count; it also fails when the baseline lists more than the scan finds, so a fixed site comes off the list in the same change. A heuristic scanner, its limits are in the head of the test ([#1000](https://github.com/kkrafft1999/snotra/issues/1000)) |
 | `test/filesystem-port-typedef.test.js` | The `filesystem-port` typedef lists exactly the members of its adapter (#650) |
