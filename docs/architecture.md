@@ -122,8 +122,8 @@ imports.
 - The core is small. It runs one turn: engine, history trimming, prompt blocks
   and the permission decision — about 5.3k lines, against some 22k in
   `src/main/services/` alone. The planner and the tool descriptors moved in
-  with #982; the tool registry, session settings, skill selection and program
-  allowances still sit in `src/main/` — the list is in
+  with #982, and so did the skill selection; the tool registry, session
+  settings and program allowances still sit in `src/main/` — the list is in
   [Business rules outside the core](#business-rules-outside-the-core-982).
   Six of the application ports — web search, URL fetch, code and shell
   execution, MCP, image generation — are consumed only by main's registry, never
@@ -152,8 +152,8 @@ what touches the machine as an injected port. Inventory of 2026-10-19:
 | The roots a card's grant opens outside the folder | `src/application/tools/outside-roots.js` | — | moved; which grants a card may offer — the home folder, Snotra's own storage, the skill roots — stays in `services/outside-access.js`, which knows this machine's paths |
 | Why a command runs without the sandbox | `src/shared/contracts/sandbox-reasons.js` | — | moved out of `services/sandbox-service.js` |
 | The tool registry: the built-in definitions, which tools are offered and why not (`whyNotOffered`), the MCP tools merged in, the system prompt's tool part | `src/main/tools/workspace-tool-registry.js` (~2.1k lines), `src/main/tools/generate-image-tool.js` | `src/application/tools/`; the handlers that read files or start processes reach main through the ports that exist for it (web search, URL fetch, code and shell execution, MCP, image generation) and the file service | open |
-| Which skills are on for a chat and what the prompt gets of them (`getActiveSkills`, `bindSelection`, the default and workspace selections) | `src/main/services/skills-service.js` | a new `src/application/skills`, over a catalogue port; scanning the folders and moving a skill stay in main | open |
-| The model's skill suggestion | `src/main/services/skill-suggestion-service.js` | a new `src/application/skills` | open |
+| Which skills are on, what the prompt gets of them, what a tick becomes when stored and what making a skill global does to its switch | `src/application/skills/skill-selection.js` | — | moved; `services/skills-service.js` scans the folders, resolves the folder's key and hands the scanned skills in |
+| The model's skill suggestion | `src/main/services/skill-suggestion-service.js` | `src/application/skills/` | open |
 | A chat's model, mode, reasoning level and switched skills and tools; the fallback to "Smart" when "Auto" is refused | `src/main/services/chat-session-settings.js` | `src/application/chat/`, over the chat-history store port that #981 brings | open; waits for #1006 and #981, which change the same wiring |
 | Which skills and tools a chat has, and the check of a proposal to change them (#773, #774) | `src/main/services/chat-configuration-service.js` | `src/application/chat/` | open; with the session settings |
 | Whether a program allowance covers a command (#408) | `src/main/services/program-allowances-service.js` | the matching to `src/application/permissions/`; finding a program on the PATH stays in main | open |
@@ -176,6 +176,7 @@ code is.
 | **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming, the prompt blocks for environment, memory and project instructions, and the best-effort injection flags on tool results (`injection-detector.js` behind `ports/injection-flag-port.js`, #1011). Only through injected ports |
 | **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
 | **Application tools** | `src/application/tools/` | What a tool call is before it runs (#982): the tool descriptors, the call planner (arguments, targets, plan key, sandbox plan, preview), argument conformance and the roots a grant opens. Only through injected services, see [Business rules outside the core](#business-rules-outside-the-core-982) |
+| **Application skills** | `src/application/skills/` | Which skills are switched on and where a switch is bound (#576, #982); the scan that finds them is `services/skills-service.js` |
 | **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content and the overview the Security page reads. No Electron, no file system; the heart of [`security-concept.md`](./security-concept.md) |
 | **Application ports** | `src/application/ports/` | 22 typedef files, the contracts between the core and main — see [Ports](#ports) |
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
