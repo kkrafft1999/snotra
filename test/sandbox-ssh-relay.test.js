@@ -99,10 +99,10 @@ test('the relay starts only for a run that names the launcher, and a space in it
     runLine({ SNOTRA_SSH_RELAY: launcher });
     const args = (await fs.readFile(argsFile, 'utf8')).trim().split('\n');
     assert.deepEqual(args, [
-      '-t', '3600', 'TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr', 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY,pipes',
+      '-t', '3600', 'TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr', 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY,pipes,shut-close',
     ]);
     // What socat hands to /bin/sh for each connection: the launcher, whole.
-    const system = args[3].slice('SYSTEM:'.length, -',pipes'.length);
+    const system = args[3].slice('SYSTEM:'.length, args[3].indexOf(','));
     const launched = childProcess.spawnSync('/bin/sh', ['-c', system], {
       env: { PATH: process.env.PATH, SNOTRA_SSH_RELAY: launcher }, encoding: 'utf8',
     });
@@ -320,7 +320,7 @@ function reachable(port) {
 /** A run's stderr for an assertion message. */
 function said(result) {
   return `exit ${result.exitCode}; stdout: ${String(result.stdout ?? '').trim() || '(empty)'}; `
-    + `stderr: ${String(result.stderr ?? '').trim().slice(-3_000) || '(empty)'}`;
+    + `stderr: ${String(result.stderr ?? '').trim().slice(-8_000) || '(empty)'}`;
 }
 
 test('git signs in through the agent inside the Linux sandbox, and the key file stays unreadable (#1155)', async (t) => {
@@ -423,9 +423,24 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
   sh('git', ['-C', work, 'push', '-q', repo, 'HEAD:refs/heads/main']);
   const head = sh('git', ['-C', work, 'rev-parse', 'HEAD']).trim();
 
-  const run = (command, extra = {}) => shellRunner.run({
-    command, cwd: workspace, workspaceRoot: workspace, networkDomains: [host], timeoutMs: 60_000, ...extra,
-  });
+  // A run that does not end gets a look at what was still alive, which says where.
+  const run = async (command, extra = {}) => {
+    let snapshot = '';
+    const look = setTimeout(() => {
+      const ps = childProcess.spawnSync('sh', ['-c',
+        'ps -eo pid,ppid,stat,etimes,comm --forest | grep -E "socat|ssh|git|cat|sh$|apply-seccomp|bwrap"; '
+        + 'for p in $(pgrep -x socat; pgrep -x ssh; pgrep -x cat); do echo "== $p $(tr "\\0" " " </proc/$p/cmdline | cut -c1-120)"; '
+        + 'ls -l /proc/$p/fd 2>&1 | tail -n +2 | grep -v -E " (142|145) "; done'],
+      { encoding: 'utf8' });
+      snapshot = `${ps.stdout}${ps.stderr}`;
+    }, 20_000);
+    const result = await shellRunner.run({
+      command, cwd: workspace, workspaceRoot: workspace, networkDomains: [host], timeoutMs: 30_000, ...extra,
+    });
+    clearTimeout(look);
+    if (result.exitCode === null) result.stderr = `${result.stderr}\n[the run hung]\n${snapshot}`;
+    return result;
+  };
   const lsRemote = `git ls-remote ssh://${user}@${host}:${port}${repo}`;
   env.SSH_AUTH_SOCK = agentSocket;
 
@@ -474,18 +489,8 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
   if (savedKnownHosts === null) await fs.rm(knownHosts, { force: true });
   else await fs.writeFile(knownHosts, savedKnownHosts);
   // Through the relay, and it fails at once: the run ends with ssh, no timeout.
-  // Should it hang, what was still alive after a while says where.
-  let snapshot = '';
-  const look = setTimeout(() => {
-    const ps = childProcess.spawnSync('sh', ['-c',
-      'ps -eo pid,ppid,stat,etimes,args --forest | grep -E "socat|ssh|git|cat|relay|bwrap|seccomp" | grep -v grep; '
-      + 'for p in $(pgrep -f "socat|ssh-relay|git-upload|ls-remote"); do echo "== $p"; ls -l /proc/$p/fd 2>&1 | tail -n +2; done'],
-    { encoding: 'utf8' });
-    snapshot = `${ps.stdout}${ps.stderr}`;
-  }, 15_000);
-  const unknownHost = await run(lsRemote, { timeoutMs: 30_000 });
-  clearTimeout(look);
-  assert.notEqual(unknownHost.exitCode, null, `the run hung; ${said(unknownHost)}\n${snapshot}`);
+  const unknownHost = await run(lsRemote);
+  assert.notEqual(unknownHost.exitCode, null, said(unknownHost));
   assert.notEqual(unknownHost.exitCode, 0, said(unknownHost));
   assert.match(unknownHost.stderr, /Host key verification failed[^]*<sandbox_ssh>[^]*known_hosts/, said(unknownHost));
 });

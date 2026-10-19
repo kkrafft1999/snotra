@@ -113,7 +113,9 @@ function snotraOnLogEntry(stream, handler) {
  * one `ssh-relay-client.sh` connects to; it exists only in the run's own
  * network namespace. `set -f` and an empty IFS keep a space in the
  * launcher's path from splitting it; `pipes` lets the launcher close its
- * output while it still reads (a socket pair is one descriptor for both). Copied into the runtime as it stands, so
+ * output while it still reads (a socket pair is one descriptor for both),
+ * and `shut-close` closes the launcher's input when the run's side ends —
+ * a pipe cannot be shut down half-way. Copied into the runtime as it stands, so
  * it must not use anything from this file; no `!` anywhere and no `,` in the
  * SYSTEM command (the runtime's note on RELAYS_LISTEN; socat's address syntax).
  *
@@ -123,7 +125,7 @@ function snotraOnLogEntry(stream, handler) {
 function snotraSshRelay(socat) {
   return [
     '[ -z "${SNOTRA_SSH_RELAY:-}" ] || ' + socat
-      + " -t 3600 TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY,pipes'"
+      + " -t 3600 TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY,pipes,shut-close'"
       + ' >/dev/null 2>&1 &',
   ];
 }
