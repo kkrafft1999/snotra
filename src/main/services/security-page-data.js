@@ -1,6 +1,6 @@
 'use strict';
 
-const { describeRememberedMcpTools } = require('./mcp-remembered-tools');
+const { describeRememberedMcpTools } = require('../../application/tools/mcp-remembered-tools');
 
 /**
  * @typedef {NonNullable<NonNullable<Parameters<typeof describeRememberedMcpTools>[0]>['servers']>} McpServers

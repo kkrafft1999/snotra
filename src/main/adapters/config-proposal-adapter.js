@@ -17,7 +17,7 @@
  * What a chat switched for itself, and the card that changes it (#774). The
  * overrides live in the chat's row (`application/chat/chat-session-settings.js`); a
  * proposal is checked against the catalogue by
- * `services/chat-configuration-service.js`. Moved out of the composition root
+ * `application/chat/chat-configuration-service.js`. Moved out of the composition root
  * in #1098 so that the type check compares it with the port.
  *
  * @param {{

@@ -3,7 +3,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { describeRememberedMcpTools } = require('../src/main/services/mcp-remembered-tools');
+const { describeRememberedMcpTools } = require('../src/application/tools/mcp-remembered-tools');
 
 const SERVERS = [
   { id: 'github', label: 'GitHub', enabled: true, knownTools: ['issues', 'pulls'] },
