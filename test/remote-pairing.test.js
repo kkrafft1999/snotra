@@ -385,7 +385,7 @@ test('the words are never translated: a German desktop shows the same six', asyn
 });
 
 test('the native adapter: an aborted signal closes the sheet and confirms nothing', async () => {
-  const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+  const { createNativeConfirmationAdapter } = require('../src/main/electron/native-confirmation-adapter');
   const { createFakeDialog } = require('./helpers/remote-pairing');
   const dialog = createFakeDialog();
   const port = createNativeConfirmationAdapter({ dialog });

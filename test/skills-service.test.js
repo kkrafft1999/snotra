@@ -407,7 +407,7 @@ test('the per-folder cap keeps the first skills by name, whatever the directory 
 });
 
 test('the system skills sit next to the app, and there are none without an app path', () => {
-  assert.equal(bundledSystemSkillsDir({ app: { getAppPath: () => '/App' }, path: path.posix }), '/App/system-skills');
-  assert.equal(bundledSystemSkillsDir({ app: {}, path }), null);
-  assert.equal(bundledSystemSkillsDir({ app: undefined, path }), null);
+  assert.equal(bundledSystemSkillsDir({ appPath: '/App', path: path.posix }), '/App/system-skills');
+  assert.equal(bundledSystemSkillsDir({ appPath: null, path }), null);
+  assert.equal(bundledSystemSkillsDir({ appPath: undefined, path }), null);
 });

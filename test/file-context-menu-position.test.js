@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { contextMenuPosition } = require('../src/main/ipc/fs-handlers');
-const { createFileContextMenu } = require('../src/main/services/file-context-menu');
+const { createFileContextMenu } = require('../src/main/electron/file-context-menu');
 
 const windowWithZoom = (zoom) => ({
   isDestroyed: () => false,

@@ -42,7 +42,7 @@
     "main/services/feedback-service.js": 4,
     "main/services/file-info.js": 3,
     "main/services/fs-service.js": 20,
-    "main/services/html-preview-service.js": 6,
+    "main/electron/html-preview-service.js": 6,
     "main/services/image-dimensions.js": 1,
     "main/services/image-generation-settings.js": 2,
     "main/services/log-file.js": 3,

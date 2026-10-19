@@ -22,44 +22,28 @@ const LIMITS = Object.freeze({ ID: 128, TITLE: 120, BODY: 300, OPEN: 50 });
 const text = (value, max) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 
 /**
- * @typedef {{
- *   on?(event: string, listener: () => void): unknown,
- *   show(): void,
- *   close?(): void,
- * }} SystemNotification
- */
-
-/**
  * @param {object} deps
- * @param {{ isSupported?: () => boolean, new (options: { title: string, body: string }): SystemNotification }|null} deps.Notification  Electron's
- * @param {() => import('electron').BrowserWindow|null} deps.getMainWindow
+ * @param {import('../../application/ports/notification-port').NotificationPort|null} deps.notifications
+ *   the system's; without them, none
  * @param {() => Promise<boolean>|boolean} deps.isEnabled  the switch under Settings › General
  * @param {(chatId: string|null) => void} deps.openChat  tells the renderer which chat to show
  */
-function createApprovalNotifier({ Notification, getMainWindow, isEnabled, openChat }) {
+function createApprovalNotifier({ notifications, isEnabled, openChat }) {
   /** requestId → the notification on screen. */
-  /** @type {Map<string, SystemNotification>} */
+  /** @type {Map<string, import('../../application/ports/notification-port').ShownNotification>} */
   const open = new Map();
 
   function supported() {
     try {
-      return typeof Notification === 'function' && (typeof Notification.isSupported !== 'function' || Notification.isSupported());
+      return !!notifications && notifications.isSupported();
     } catch {
       return false;
     }
   }
 
-  function focusWindow() {
-    const win = getMainWindow?.();
-    if (!win || (typeof win.isDestroyed === 'function' && win.isDestroyed())) return;
-    if (typeof win.isMinimized === 'function' && win.isMinimized()) win.restore?.();
-    win.show?.();
-    win.focus?.();
-  }
-
   /**
    * @param {string} requestId
-   * @param {SystemNotification} notification
+   * @param {import('../../application/ports/notification-port').ShownNotification} notification
    */
   function forget(requestId, notification) {
     if (open.get(requestId) === notification) open.delete(requestId);
@@ -79,24 +63,26 @@ function createApprovalNotifier({ Notification, getMainWindow, isEnabled, openCh
     } catch {
       enabled = false;
     }
-    if (!enabled || !Notification || !supported()) return false;
+    if (!enabled || !notifications || !supported()) return false;
     // Many cards at once — a misbehaving run — must not flood the system.
     if (open.size >= LIMITS.OPEN) return false;
     const chatId = typeof request.chatId === 'string' && request.chatId ? request.chatId.slice(0, LIMITS.ID) : null;
+    /** @type {import('../../application/ports/notification-port').ShownNotification} */
     let notification;
     try {
-      notification = new Notification({ title, body: text(request.body, LIMITS.BODY) });
+      notification = notifications.show({
+        title,
+        body: text(request.body, LIMITS.BODY),
+        onClick: () => {
+          forget(requestId, notification);
+          openChat(chatId);
+        },
+        onClose: () => forget(requestId, notification),
+      });
     } catch {
       return false;
     }
     open.set(requestId, notification);
-    notification.on?.('click', () => {
-      forget(requestId, notification);
-      focusWindow();
-      openChat(chatId);
-    });
-    notification.on?.('close', () => forget(requestId, notification));
-    notification.show();
     return true;
   }
 
@@ -108,7 +94,7 @@ function createApprovalNotifier({ Notification, getMainWindow, isEnabled, openCh
     if (!notification) return false;
     open.delete(id);
     try {
-      notification.close?.();
+      notification.close();
     } catch {
       /* already gone */
     }

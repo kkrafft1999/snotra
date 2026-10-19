@@ -15,7 +15,7 @@ const { registerSkillMoveHandlers } = require('../src/main/ipc/skill-move-handle
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { SKILL_SOURCES } = require('../src/shared/contracts/skills');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
-const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+const { createNativeConfirmationAdapter } = require('../src/main/electron/native-confirmation-adapter');
 const { removeTempDir } = require('./helpers/temp-dir');
 
 /** The dialog for notices, and the confirmation port over the same dialog (#980). */

@@ -95,7 +95,7 @@ function normalizeStoredTable(raw) {
  * @param {Pick<typeof import('fs/promises'), 'readFile' | 'open' | 'unlink' | 'rename'>} deps.fs
  *   the promise API (`fs/promises`), as the other stores take it
  * @param {typeof import('path')} deps.path
- * @param {Pick<import('electron').App, 'getPath'>} deps.app
+ * @param {string} deps.userDataPath
  * @param {typeof fetch} [deps.fetchImpl]
  * @param {{ date?: string, models?: Record<string, unknown> }} [deps.snapshot]  the table bundled with the release
  * @param {Pick<typeof import('../providers'), 'getProvider' | 'litellmPriceProviders'>} [deps.providers]
@@ -105,7 +105,7 @@ function normalizeStoredTable(raw) {
 function createModelPriceService({
   fs,
   path,
-  app,
+  userDataPath,
   fetchImpl = (url, init) => fetch(url, init),
   snapshot = require('../data/model-prices.json'),
   // The capability register (#996): which models run locally, which LiteLLM
@@ -114,7 +114,7 @@ function createModelPriceService({
   now = () => new Date(),
   log = console,
 }) {
-  const filePath = () => path.join(app.getPath('userData'), PRICES_FILENAME);
+  const filePath = () => path.join(userDataPath, PRICES_FILENAME);
   /** @param {unknown} providerId */
   const traitsOf = (providerId) => declaredProviderTraits(providers.getProvider(providerId));
   /** @type {PriceState} */

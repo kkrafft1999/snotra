@@ -5,7 +5,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { requireRealEncryption } = require('../src/main/services/safe-storage-backend');
+const { requireRealEncryption, createSafeStorageSecretStore } = require('../src/main/electron/safe-storage-backend');
 
 function fakeSafeStorage(backend, { available = true } = {}) {
   return {
@@ -54,4 +54,12 @@ test('macOS and Windows get safeStorage unchanged', () => {
     const raw = fakeSafeStorage('basic_text');
     assert.equal(requireRealEncryption(raw, { platform }), raw, platform);
   }
+});
+
+test('the secret store asks the guarded safeStorage on every call (#983)', () => {
+  const guarded = requireRealEncryption(fakeSafeStorage('basic_text'), { platform: 'linux' });
+  const store = createSafeStorageSecretStore(guarded);
+  assert.deepEqual(Object.keys(store).sort(), ['decryptString', 'encryptString', 'isEncryptionAvailable']);
+  assert.equal(store.isEncryptionAvailable(), false);
+  assert.throws(() => store.encryptString('secret'), /basic_text/);
 });

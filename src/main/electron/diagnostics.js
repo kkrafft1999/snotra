@@ -1,7 +1,7 @@
 'use strict';
 
 const { DEFAULT_LOCALE, createTranslator } = require('../../shared/i18n');
-const { buildDiagnosticsReport } = require('./diagnostics-report');
+const { buildDiagnosticsReport } = require('../services/diagnostics-report');
 
 /**
  * Copy diagnostics and show the log (#978), from the Help menu and from the
