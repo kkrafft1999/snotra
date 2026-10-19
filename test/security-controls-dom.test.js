@@ -39,7 +39,7 @@ function stateWith(patch = {}) {
     mode: 'smart',
     workspaceRoot: ROOT,
     workspaceMode: 'smart',
-    encryptionAvailable: true,
+    platformCapabilities: { secureStorage: true },
     integrity: 'ok',
     globalRules: [],
     workspaceRules: [],

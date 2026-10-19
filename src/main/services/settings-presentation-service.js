@@ -220,7 +220,6 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
   }
 
   function buildLlmStateDto({
-    encryptionAvailable,
     config,
     chatTarget,
     connectionOverrides,
@@ -247,7 +246,6 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
       .filter(Boolean);
 
     return {
-      encryptionAvailable,
       activeProvider: active,
       activePresetId: config.activePresetId || null,
       chatTarget,

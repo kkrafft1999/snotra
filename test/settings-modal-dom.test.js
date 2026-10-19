@@ -22,7 +22,7 @@ async function until(predicate, what, { timeoutMs = 5000 } = {}) {
   }
 }
 
-async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
+async function mountSettings({ providers, modalDeps, platformCapabilities = { secureStorage: true }, ...overrides } = {}) {
   const dom = setupRendererDom();
   const { initSettingsModal } = await importRenderer('components', 'SettingsModal.js');
   const { appStore } = await importRenderer('state', 'store.js');
@@ -32,7 +32,7 @@ async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
   setLocale('de', { force: true });
 
   appStore.llmState = {
-    encryptionAvailable: true,
+    platformCapabilities,
     activeProvider: 'openai',
     activePresetId: null,
     presets: [],
@@ -48,7 +48,7 @@ async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
     getPythonState: async () => ({ enabled: false }),
     getShellState: async () => ({ enabled: false }),
     // The shape main answers with (settings-handlers.js): `hasApiKey`.
-    getWebSearchState: async () => ({ available: true, hasApiKey: false, encryptionAvailable: true }),
+    getWebSearchState: async () => ({ available: true, hasApiKey: false }),
     getAppVersion: async () => '1.5.3',
     cancelModelListing: async () => {},
     listModels: async () => ({ models: [] }),
@@ -2120,4 +2120,34 @@ test('a failed Python or shell check says so instead of "not in this installatio
   assert.match(shell.textContent, /konnte nicht nach einer Shell suchen/);
   assert.ok(python.classList.contains('error'));
   assert.ok(shell.classList.contains('error'));
+});
+
+// Both notices read encrypted storage from the platform register (#1156) —
+// the web search card no longer from a field of its own state.
+test('without encrypted storage the model and web search notices show (#1156)', async (t) => {
+  const { dom } = await mountSettings({
+    platformCapabilities: {
+      executionSandbox: true, sandboxGitSsh: true, selfUpdate: true, secureStorage: false,
+      gaps: { secureStorage: { reason: 'settings.error.encryptionUnavailable', permanent: true } },
+    },
+  });
+  t.after(() => dom.cleanup());
+  const warning = dom.document.getElementById('modal-encryption-warning');
+  assert.equal(warning.classList.contains('hidden'), false);
+  assert.equal(warning.textContent,
+    'Verschlüsselter Speicher ist auf diesem System nicht verfügbar. Ein Key kann nicht sicher gespeichert werden.');
+  await until(() => dom.document.getElementById('settings-web-search-status').textContent !== '', 'web search status');
+  const status = dom.document.getElementById('settings-web-search-status');
+  assert.equal(status.textContent,
+    'Verschlüsselter Speicher ist auf diesem System nicht verfügbar — ein Schlüssel kann nicht sicher abgelegt werden.');
+  assert.equal(dom.document.getElementById('btn-web-search-save').disabled, true);
+});
+
+test('with encrypted storage neither notice shows (#1156)', async (t) => {
+  const { dom } = await mountSettings();
+  t.after(() => dom.cleanup());
+  assert.equal(dom.document.getElementById('modal-encryption-warning').classList.contains('hidden'), true);
+  await flush();
+  assert.doesNotMatch(dom.document.getElementById('settings-web-search-status').textContent, /Verschlüsselter Speicher/);
+  assert.equal(dom.document.getElementById('btn-web-search-save').disabled, false);
 });

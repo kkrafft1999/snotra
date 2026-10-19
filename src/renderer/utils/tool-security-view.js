@@ -158,7 +158,7 @@ export function describeSandboxTile(overview, ws, { autoLabel = '' } = {}) {
       offBlocked: false,
     };
   }
-  const offBlocked = overview?.encryptionAvailable === false;
+  const offBlocked = overview?.platformCapabilities?.secureStorage === false;
   const base = {
     checked: true,
     switchable: true,
@@ -234,7 +234,7 @@ export function describeGlobalDetail(overview) {
     noWorkspace: !workspacesOf(overview).some((ws) => ws.open),
     newWorkspaceSandbox: overview?.newWorkspaceSandbox !== false,
     // Off cannot be stored without encrypted storage; it is not offered then.
-    newWorkspaceOffBlocked: overview?.encryptionAvailable === false && overview?.newWorkspaceSandbox !== false,
+    newWorkspaceOffBlocked: overview?.platformCapabilities?.secureStorage === false && overview?.newWorkspaceSandbox !== false,
     programs: global.programs,
     hosts: global.hosts,
     system: describeSystemLine(overview),

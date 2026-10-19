@@ -106,6 +106,29 @@ test('a new address with a new key stores the new key only (#560)', () => {
   assert.equal(connection.extraHeadersEnc, undefined);
 });
 
+// The guard asks safeStorage itself, whatever the platform register said at
+// start (#1156): a key or headers without encrypted storage are refused, and
+// nothing goes to the disk in plain text.
+for (const patch of [{ apiKey: 'sk-new' }, { extraHeaders: 'X-GW: secret' }]) {
+  test(`an entry refuses ${Object.keys(patch)[0]} without encrypted storage (#1156)`, () => {
+    let encrypted = 0;
+    const withoutEncryption = {
+      ...safeStorage,
+      isEncryptionAvailable: () => false,
+      encryptString: (/** @type {string} */ text) => { encrypted += 1; return safeStorage.encryptString(text); },
+    };
+    const result = mergePresetConnection({ safeStorage: withoutEncryption }, {
+      previous: { baseUrl: GOOD },
+      patch,
+      provider: COMPAT,
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.connection, undefined);
+    assert.equal(encrypted, 0);
+  });
+}
+
 async function setup(t, { onShowHiddenFilesChanged = null } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-b07-settings-'));
   t.after(() => removeTempDir(dir));

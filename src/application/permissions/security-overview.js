@@ -190,7 +190,6 @@ function describeExecution(execution, tools) {
  * @param {Object} [input.execution]            sandbox state, workspace switch, program allowances, kept hosts
  * @param {string[]} [input.sensitivePathPatterns]  the user's own patterns
  * @param {string} [input.integrity]
- * @param {boolean} [input.encryptionAvailable]
  */
 function describeSecurityOverview(input = {}) {
   const root = typeof input.root === 'string' && input.root ? input.root : null;
@@ -249,7 +248,6 @@ function describeSecurityOverview(input = {}) {
     defaultMode: mode,
     allowancesApply,
     integrity: typeof input.integrity === 'string' ? input.integrity : 'ok',
-    encryptionAvailable: input.encryptionAvailable !== false,
     chatsWithOtherMode: root ? cleanChats(input.chats, mode) : [],
     classes,
     execution: describeExecution(input.execution, tools),

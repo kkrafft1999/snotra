@@ -70,7 +70,7 @@ const RISK_CLASS_KEYS = Object.freeze({
  * so that it can still be seen and left.
  */
 export function toolModeOptions(state = null, current = state?.mode) {
-  const autoBlocked = state?.encryptionAvailable === false && current !== TOOL_PERMISSION_MODES.AUTO;
+  const autoBlocked = state?.platformCapabilities?.secureStorage === false && current !== TOOL_PERMISSION_MODES.AUTO;
   return MODE_ORDER.map((value) => {
     const unavailable = autoBlocked && value === TOOL_PERMISSION_MODES.AUTO;
     return {
@@ -463,7 +463,7 @@ export function describeWorkspaceDefault(state) {
   view.label = splitAtFolder(t('chat.toolMode.remember.label', { mode: modeLabel(mode), folder: FOLDER_MARK }), folder);
   if (view.checked) {
     view.hint = t('chat.toolMode.remember.hint.checked', { mode: modeLabel(SMART) });
-  } else if (mode === TOOL_PERMISSION_MODES.AUTO && state?.encryptionAvailable === false) {
+  } else if (mode === TOOL_PERMISSION_MODES.AUTO && state?.platformCapabilities?.secureStorage === false) {
     view.disabled = true;
     view.hint = t('chat.toolMode.remember.hint.needsEncryption');
   } else if (workspaceMode !== SMART) {

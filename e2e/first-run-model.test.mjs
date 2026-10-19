@@ -50,7 +50,7 @@ test('first run: adding a model makes the chat usable next to the default entry'
   }, { what: 'hint without a model' });
   // Without encrypted storage (a Linux runner without a keyring) that hint
   // takes precedence; the model added below needs no key, so the rest holds.
-  const { encryptionAvailable } = await page.evaluate(() => window.electronAPI.getLLMState());
+  const encryptionAvailable = (await page.evaluate(() => window.electronAPI.getLLMState())).platformCapabilities?.secureStorage === true;
   let expectedHint = process.platform === 'darwin'
     ? 'Set up a language model to start chatting: Snotra Agent › Settings… (⌘,).'
     : 'Set up a language model to start chatting: View › Settings… (Ctrl+,).';

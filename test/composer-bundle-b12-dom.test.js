@@ -78,7 +78,7 @@ test('tabbing past the mode menu closes it', async () => {
       mode: 'smart',
       workspaceRoot: '/work',
       workspaceMode: 'smart',
-      encryptionAvailable: true,
+      platformCapabilities: { secureStorage: true },
       executionIsolation: { unisolated: false, tools: [], reason: '', pending: false },
     }),
   });

@@ -25,7 +25,7 @@ function stateWith(sessionGrants) {
     mode: 'smart',
     workspaceRoot: '/work/projekt',
     workspaceMode: 'smart',
-    encryptionAvailable: true,
+    platformCapabilities: { secureStorage: true },
     integrity: 'ok',
     globalRules: [],
     workspaceRules: [],

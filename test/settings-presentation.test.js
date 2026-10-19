@@ -33,7 +33,6 @@ test('every registered provider exposes presentation metadata', () => {
 
 test('buildLlmStateDto returns normalized preset and provider views', () => {
   const dto = presentation.buildLlmStateDto({
-    encryptionAvailable: true,
     config: {
       activeProvider: 'openai',
       activePresetId: 'p1',
@@ -65,7 +64,8 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
     locale: 'de',
   });
 
-  assert.equal(dto.encryptionAvailable, true);
+  // Encrypted storage reaches the window through the platform register only (#1156).
+  assert.equal('encryptionAvailable' in dto, false);
   assert.equal(dto.activePresetId, 'p1');
   assert.equal(dto.presets.length, 2);
 
@@ -135,7 +135,6 @@ test('buildPresetView respects connection draft overrides', () => {
 
 test('a stored but undecryptable API key marks provider and presets as not configured', () => {
   const build = (apiKeyDecryptable) => presentation.buildLlmStateDto({
-    encryptionAvailable: true,
     config: {
       version: 3,
       activeProvider: 'openai',
@@ -292,7 +291,6 @@ test('buildLlmStateDto speaks the stored language', () => {
     providers: { ollama: { baseUrl: 'http://127.0.0.1:11434' } },
   };
   const build = (locale) => presentation.buildLlmStateDto({
-    encryptionAvailable: true,
     config,
     chatTarget: { providerId: 'ollama', model: 'llama3.2' },
     locale,
@@ -379,7 +377,6 @@ test('die bestehenden Anbieter zeigen keines der neuen Felder', () => {
 
 test('an entry with an older OpenAI model shows no level and says it is no longer offered (#724)', () => {
   const dto = presentation.buildLlmStateDto({
-    encryptionAvailable: true,
     config: {
       activeProvider: 'openai',
       activePresetId: 'old',

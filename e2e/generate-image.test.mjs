@@ -88,7 +88,7 @@ test('generate_image draws through the Images API into the workspace', { timeout
     explain: async () => `${await evidence()}\nstored titles: ${JSON.stringify((await storedSessions(page)).map((session) => session.title))}`,
   });
 
-  const { encryptionAvailable } = await page.evaluate(() => window.electronAPI.getLLMState());
+  const encryptionAvailable = (await page.evaluate(() => window.electronAPI.getLLMState())).platformCapabilities?.secureStorage === true;
   if (!encryptionAvailable) {
     t.skip('no encrypted storage here (a Linux runner without a keyring): no OpenAI key to draw with');
     return;

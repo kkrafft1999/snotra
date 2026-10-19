@@ -200,7 +200,7 @@ try {
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('toolPermissions:getSandboxOverview');
       ipcMain.handle('toolPermissions:getSandboxOverview', async () => ({
-        integrity: 'ok', encryptionAvailable: true, platform: 'win32', homeDir: '',
+        integrity: 'ok', platform: 'win32', homeDir: '',
         // The platform register resolved for Windows (#1149).
         platformCapabilities: {
           executionSandbox: false, sandboxGitSsh: false, selfUpdate: true, secureStorage: true,
