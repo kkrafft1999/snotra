@@ -99,11 +99,14 @@ test('the relay starts only for a run that names the launcher, and a space in it
     runLine({ SNOTRA_SSH_RELAY: launcher });
     const args = (await fs.readFile(argsFile, 'utf8')).trim().split('\n');
     assert.deepEqual(args, [
-      '-t', '3600', 'TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr', 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY,pipes,shut-close',
+      '-t', '3600', 'TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr',
+      'EXEC:/bin/sh -c IFS=;set\t-f;exec\t/bin/sh\t$SNOTRA_SSH_RELAY,pipes,shut-close',
     ]);
-    // What socat hands to /bin/sh for each connection: the launcher, whole.
-    const system = args[3].slice('SYSTEM:'.length, args[3].indexOf(','));
-    const launched = childProcess.spawnSync('/bin/sh', ['-c', system], {
+    // What socat runs for each connection, split at its spaces: the launcher, whole.
+    const exec = args[3].slice('EXEC:'.length, args[3].indexOf(',')).split(' ');
+    assert.deepEqual(exec.slice(0, 2), ['/bin/sh', '-c']);
+    assert.equal(exec.length, 3, 'one word for the shell, whatever the launcher\'s path');
+    const launched = childProcess.spawnSync(exec[0], exec.slice(1), {
       env: { PATH: process.env.PATH, SNOTRA_SSH_RELAY: launcher }, encoding: 'utf8',
     });
     assert.equal(launched.stdout, 'launched 0\n', launched.stderr);
@@ -472,7 +475,7 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
   assert.notEqual(pythonFromRun.exitCode, 0, said(pythonFromRun));
   assert.equal(dockerReached, false, 'nothing in the run reached the socket');
   // And the relay runs git's commands only.
-  const other = await run(`/bin/sh -x "$SNOTRA_SSH_CLIENT" -p ${port} ${user}@${host} 'touch /tmp/snotra-relay-pwned'`);
+  const other = await run(`/bin/sh "$SNOTRA_SSH_CLIENT" -p ${port} ${user}@${host} 'touch /tmp/snotra-relay-pwned'`);
   assert.equal(other.exitCode, 255, said(other));
   assert.match(other.stderr, /only git commands are relayed/, said(other));
   assert.equal(existsSync('/tmp/snotra-relay-pwned'), false);

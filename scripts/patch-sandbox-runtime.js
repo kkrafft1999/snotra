@@ -111,13 +111,23 @@ function snotraOnLogEntry(stream, handler) {
  * seccomp filter, beside the runtime's own relays and with the same `socat`;
  * the launcher is started by absolute path, never looked up. The port is the
  * one `ssh-relay-client.sh` connects to; it exists only in the run's own
- * network namespace. `set -f` and an empty IFS keep a space in the
- * launcher's path from splitting it; `pipes` lets the launcher close its
- * output while it still reads (a socket pair is one descriptor for both),
- * and `shut-close` closes the launcher's input when the run's side ends —
- * a pipe cannot be shut down half-way. Copied into the runtime as it stands, so
- * it must not use anything from this file; no `!` anywhere and no `,` in the
- * SYSTEM command (the runtime's note on RELAYS_LISTEN; socat's address syntax).
+ * network namespace.
+ *
+ * How the launcher is started decides whether a connection can end:
+ * - EXEC, and a shell that `exec`s the launcher: nothing between socat and
+ *   the launcher holds the pipes. SYSTEM puts a process of socat's own in
+ *   between, which keeps them open after the launcher has closed its end.
+ * - `pipes`: the launcher can close its output while it still reads; a
+ *   socket pair is one descriptor for both.
+ * - `shut-close`: when the run's side ends, the launcher's input is closed —
+ *   a pipe cannot be shut down half-way.
+ * - socat splits EXEC's command at spaces, so the shell's words are separated
+ *   by tabs; an empty IFS and `set -f` keep a space in the launcher's path
+ *   from splitting it.
+ *
+ * Copied into the runtime as it stands, so it must not use anything from
+ * this file; no `!` anywhere and no `,` in the command (the runtime's note
+ * on RELAYS_LISTEN; socat's address syntax).
  *
  * @param {string} socat  the runtime's socat, already quoted for the shell
  * @returns {string[]}
@@ -125,7 +135,7 @@ function snotraOnLogEntry(stream, handler) {
 function snotraSshRelay(socat) {
   return [
     '[ -z "${SNOTRA_SSH_RELAY:-}" ] || ' + socat
-      + " -t 3600 TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY,pipes,shut-close'"
+      + " -t 3600 TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr 'EXEC:/bin/sh -c IFS=;set\t-f;exec\t/bin/sh\t$SNOTRA_SSH_RELAY,pipes,shut-close'"
       + ' >/dev/null 2>&1 &',
   ];
 }

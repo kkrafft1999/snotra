@@ -20,11 +20,11 @@
 # stays where ssh reads it.
 #
 # However it ends, it ends the same way: output closed first, then the rest
-# of the client's stream read away until the client closes. socat (with
-# `pipes`) sees the end of the output as such and passes it on, and git sees
-# its connection close. Were this script simply to exit, socat would take it
-# for a dead child and hold the connection open for its whole timeout, while
-# git — its own end still open — waits for more.
+# of the client's stream read away until the client closes. socat (EXEC
+# with `pipes`) sees the end of the output as such and passes it on, and git
+# sees its connection close. Were this script simply to exit, socat would
+# take it for a dead child and hold the connection open for its whole
+# timeout, while git — its own end still open — waits for more.
 
 # Programs by absolute PATH entries only, from /: the run's folder is where
 # the relay starts, and a relative entry would find what the run put there.
