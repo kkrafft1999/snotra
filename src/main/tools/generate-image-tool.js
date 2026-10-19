@@ -29,7 +29,7 @@ const {
   TOOL_EXTERNAL_SERVICES,
 } = require('../../shared/contracts/tool-presentation');
 const { TOOL_LINE_TARGETS } = require('../../shared/presentation/tool-display');
-const { TOOL_PREVIEW_KINDS, TOOL_FILE_EVENTS } = require('./tool-descriptor');
+const { TOOL_PREVIEW_KINDS, TOOL_FILE_EVENTS } = require('../../application/tools/tool-descriptor');
 const {
   IMAGE_GENERATION_ERROR_CODES,
   IMAGE_SIZES,

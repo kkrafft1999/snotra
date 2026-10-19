@@ -6,7 +6,7 @@ const { MEMORY_SCOPES, MEMORY_ORIGINS } = require('../src/shared/contracts/memor
 const { TOOL_RISK_CLASSES } = require('../src/shared/contracts/tool-permissions');
 const { TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
 const { descriptorOf } = require('./helpers/tool-descriptors');
-const { validateArguments } = require('../src/main/tools/tool-call-planner');
+const { validateArguments } = require('../src/application/tools/tool-call-planner');
 
 function makeFsServiceStub() {
   return new Proxy({}, { get: () => async () => ({}) });

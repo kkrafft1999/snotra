@@ -7,7 +7,7 @@ const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-too
 const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
 const { TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
 const { descriptorOf } = require('./helpers/tool-descriptors');
-const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
+const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
 
 function makeRegistry({ available = true, run } = {}) {
   const calls = [];

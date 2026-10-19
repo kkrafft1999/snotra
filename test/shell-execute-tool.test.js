@@ -9,7 +9,7 @@ const nodePath = require('path');
 const { pathToFileURL } = require('url');
 
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
+const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
 const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
 const { TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
 const { normalizeToolPresentation } = require('../src/shared/contracts/tool-presentation');

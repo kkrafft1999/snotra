@@ -38,6 +38,7 @@ import {
 // What a writing call changed (#348): summaries from main, diffs on demand.
 import { changedFilesOf, changesAreLive, markChangesLive, normalizeChanges } from '../chat/fileChanges.js';
 import { syncSandboxBlocked } from '../chat/sandboxBlocked.js';
+import { syncInjectionFlags } from '../chat/injectionFlags.js';
 // Diagnose-Puffer für den Tool-Log (Issue #87): Ereignisse, Zustände, Fehler.
 import { toolLogDebug } from '../chat/toolLogDebug.js';
 import { compactToolLinePayload } from '../utils/tool-log-debug.js';
@@ -1140,6 +1141,8 @@ export function initChatStream({
     // What the sandbox refused (#792) stands first, right under the log —
     // and takes the place of a sandbox card whose answer it holds now.
     syncSandboxBlocked(messageEl, message?.toolTrace, { homeDir: getHomeDir() });
+    // A result that looked like a prompt injection (#1011) stands below it.
+    syncInjectionFlags(messageEl, message?.toolTrace);
     approvalCards?.retireRecorded?.(messageEl, message);
     syncChangesStrip(messageEl, changedFilesOf(message?.toolTrace), {
       isLive: changesAreLive,
@@ -1401,8 +1404,9 @@ export function initChatStream({
     const sandboxDecision = phase === 'done' ? payload?.sandboxDecision : undefined;
     const sandboxLive = phase === 'done' ? payload?.sandboxLive : undefined;
     const sandboxOutside = phase === 'done' ? payload?.sandboxOutside : undefined;
+    const injectionFlag = phase === 'done' ? payload?.injectionFlag : undefined;
     const entry = toolTraceEntryForStore({
-      line, tool, skill, category, permission, changes, sandboxBlocked, sandboxDecision, sandboxLive, sandboxOutside,
+      line, tool, skill, category, permission, changes, sandboxBlocked, sandboxDecision, sandboxLive, sandboxOutside, injectionFlag,
     });
     if (phase === 'pending') {
       const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
@@ -1475,7 +1479,7 @@ export function initChatStream({
       setToolLineDone(doneRow, line);
       applyPermissionToRow(doneRow, permission);
       if (changes) applyChangesToRow(doneRow, changes);
-      if (changes || (entry && typeof entry === 'object' && (entry.sandboxBlocked || entry.sandboxLive || entry.sandboxOutside))) {
+      if (changes || (entry && typeof entry === 'object' && (entry.sandboxBlocked || entry.sandboxLive || entry.sandboxOutside || entry.injectionFlag))) {
         syncMessageChanges(wrap.parentElement, last);
       }
     } else {

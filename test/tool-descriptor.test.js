@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { createWorkspaceToolRegistry, createToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { assertCompleteDescriptor, descriptorProblems } = require('../src/main/tools/tool-descriptor');
+const { assertCompleteDescriptor, descriptorProblems } = require('../src/application/tools/tool-descriptor');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { normalizeSessionForLoad, sanitizeChatMessagesForStore } = require('../src/main/services/chat-history-normalization');
 const { createToolApprovalRequestDto } = require('../src/shared/contracts/tool-permissions');

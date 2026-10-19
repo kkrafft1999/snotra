@@ -9,7 +9,7 @@ const {
 const { formatToolDisplayLine } = require('../../shared/presentation/tool-display');
 const { TOOL_CATEGORIES } = require('../../shared/contracts/tool-categories');
 const { normalizeToolPresentation } = require('../../shared/contracts/tool-presentation');
-const { TOOL_CONTENT_SCANS, TOOL_FILE_EVENTS } = require('../tools/tool-descriptor');
+const { TOOL_CONTENT_SCANS, TOOL_FILE_EVENTS } = require('../../application/tools/tool-descriptor');
 const { parseSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL, workspaceSkillOfPath } = require('../../shared/contracts/skills');
 const { checkSkillDocument } = require('../../shared/runtime/skill-frontmatter');
@@ -17,8 +17,8 @@ const { APP_LOCALES, translate, normalizeLocale } = require('../../shared/i18n')
 const { menuPath } = require('../../shared/i18n/ui-quotes');
 const { createSensitivePathMatcher } = require('../../shared/runtime/sensitive-paths');
 const { scanSensitiveContent, containsOwnSecret } = require('../../shared/runtime/sensitive-content');
-const { createToolCallPlanner } = require('../tools/tool-call-planner');
-const { measureArgumentConformance } = require('../tools/argument-conformance');
+const { createToolCallPlanner } = require('../../application/tools/tool-call-planner');
+const { measureArgumentConformance } = require('../../application/tools/argument-conformance');
 const { readRegularFile } = require('../services/read-regular-file');
 
 /*
@@ -56,8 +56,8 @@ const { readRegularFile } = require('../services/read-regular-file');
  *
  * @typedef {ReturnType<typeof import('../tools/workspace-tool-registry').createWorkspaceToolRegistry>} ToolRegistry
  *
- * @typedef {import('../tools/tool-call-planner').FsService} FsService
- * @typedef {import('../tools/tool-call-planner').OutsideAccess} OutsideAccess
+ * @typedef {import('../../application/tools/tool-call-planner').FsService} FsService
+ * @typedef {import('../../application/tools/tool-call-planner').OutsideAccess} OutsideAccess
  */
 
 /**
@@ -73,7 +73,7 @@ const { readRegularFile } = require('../services/read-regular-file');
  * @param {(() => Promise<{isolated: boolean, reason?: string, missing?: string[]}>) | null} [deps.describeSandbox]
  *   isolation state for the card (#329)
  * @param {((workspaceRoot: string) => Promise<boolean>) | null} [deps.isSandboxDisabled]  per-workspace opt-out (#357)
- * @param {import('../tools/tool-call-planner').ProgramAllowanceMatcher | null} [deps.matchProgramAllowance]  (#408)
+ * @param {import('../../application/tools/tool-call-planner').ProgramAllowanceMatcher | null} [deps.matchProgramAllowance]  (#408)
  * @param {((workspaceRoot: string | null) => Promise<object[]>) | null} [deps.readProgramAllowances]  (#408)
  * @param {number} [deps.maxScanBytes]
  * @param {{ record(written: object): { relativePath: string } }} [deps.fileChangeRecorder]  keeps before/after of every write (#348)

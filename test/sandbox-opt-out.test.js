@@ -13,7 +13,7 @@ const nodePath = require('path');
 const { pathToFileURL } = require('url');
 
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
+const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
 const { planSpawn } = require('../src/main/services/sandboxed-spawn');
 const { createShellRunnerService } = require('../src/main/services/shell-runner-service');
 const { createPythonRunnerService } = require('../src/main/services/python-runner-service');

@@ -156,6 +156,11 @@ const {
   isToolLinePhase,
 } = require('./chat');
 const {
+  INJECTION_SIGNAL_KINDS,
+  INJECTION_FLAG_SOURCES,
+  normalizeInjectionFlag,
+} = require('./injection-flag');
+const {
   createWorkspaceTreeChangedEvent,
   MAX_TREE_CHANGED_DIRECTORIES,
 } = require('./workspace-tree');
@@ -482,6 +487,9 @@ module.exports = {
   normalizeSandboxLive,
   normalizeSandboxOutside,
   SANDBOX_BLOCKED_KINDS,
+  INJECTION_SIGNAL_KINDS,
+  INJECTION_FLAG_SOURCES,
+  normalizeInjectionFlag,
   createPermissionProgressEvent,
   isChatErrorCode,
   isChatPhase,

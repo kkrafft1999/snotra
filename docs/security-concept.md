@@ -328,6 +328,23 @@ history without encrypted storage" in section 9 records that.
   follow-up call runs through the policy again, no matter what the fetched text
   says. The reduced markup (no HTML, no scripts) is about saving tokens, not a
   security measure.
+- **Injection flags are a warning, never a boundary (#1011, SEC-4):** after a
+  tool ran, `application/chat/injection-flagging.js` asks every source behind
+  `ports/injection-flag-port.js` whether the result looks like a prompt
+  injection — today the built-in, pattern-based `injection-detector.js`, later
+  a `PostToolUse` hook (#927). What they find becomes `injectionFlag` on the
+  tool's trace entry: kinds and short excerpts, shown in a box under the tool
+  log and kept with the history. Nothing else reads it. The result reaches the
+  model unchanged, and the policy, the cards, the session grants and the
+  sandbox never see the flag, so a flag cannot loosen a boundary and a missing
+  one cannot open one; `test/chat-engine-injection-flags.test.js` runs the same
+  turn with a source that always flags, one that throws and none, in every
+  mode, and requires identical decisions and identical model input. A source
+  that throws or answers with garbage contributes nothing — the warning fails
+  open, the boundaries do not move. To keep the box worth reading, a strong
+  pattern flags on its own and a weak one only next to a weak one of another
+  kind; a phrase in quotation marks does not count, and results of skills,
+  the manual and writes are not looked at.
 - **Technical enforcement:** the policy sits in the application and main layers;
   the renderer only delivers validated user decisions. Every subsequent tool
   call is checked anew, no matter how convincingly a piece of tool text demands

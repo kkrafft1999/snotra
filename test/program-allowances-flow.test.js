@@ -12,7 +12,7 @@ const nodePath = require('path');
 const { pathToFileURL } = require('url');
 
 const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
+const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
 const { planSpawn } = require('../src/main/services/sandboxed-spawn');
 const { createToolApprovalRequestDto } = require('../src/shared/contracts/tool-permissions');
 

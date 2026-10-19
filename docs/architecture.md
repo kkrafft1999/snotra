@@ -121,9 +121,11 @@ imports.
   ([#996](https://github.com/kkrafft1999/snotra/issues/996)).
 - The core is small. It runs one turn: engine, history trimming, prompt blocks
   and the permission decision — about 5.3k lines, against some 22k in
-  `src/main/services/` alone. The tool registry, the planner, session settings,
-  skill selection, outside access and program allowances sit in `src/main/`.
-  Six of the 18 application ports — web search, URL fetch, code and shell
+  `src/main/services/` alone. The planner and the tool descriptors moved in
+  with #982; the tool registry, session settings, skill selection and program
+  allowances still sit in `src/main/` — the list is in
+  [Business rules outside the core](#business-rules-outside-the-core-982).
+  Six of the application ports — web search, URL fetch, code and shell
   execution, MCP, image generation — are consumed only by main's registry, never
   by the core ([#982](https://github.com/kkrafft1999/snotra/issues/982)).
 - The conversation itself — runs, persistence — is the renderer's, see
@@ -133,6 +135,30 @@ imports.
   `src/main/` with it, not only add adapters and a composition root. That is
   scenario CORE-1 of [`quality-requirements.md`](./quality-requirements.md), and
   the review rates it *at risk*.
+
+### Business rules outside the core (#982)
+
+What a second front end needs but finds in `src/main/`, each with the place it
+moves to ([#982](https://github.com/kkrafft1999/snotra/issues/982), one pull
+request per module). A module moves when it can do without Node built-ins and
+packages — `test/application-layer-imports.test.js` holds that — and takes
+what touches the machine as an injected port. Inventory of 2026-10-19:
+
+| Rule | Current place | Target | State |
+| ---- | ------------- | ------ | ----- |
+| What a tool is: category, risk class, preview kind, the line in the log, the content scans and file events | `src/application/tools/tool-descriptor.js` | — | moved |
+| The plan of a call: arguments checked, targets resolved and classified, plan key, sandbox plan, the preview on the card | `src/application/tools/tool-call-planner.js` | — | moved; takes the file service and the outside access as typedefs of its own (`FsService`, `OutsideAccess`) |
+| How far a model's arguments fit the schema | `src/application/tools/argument-conformance.js` | — | moved |
+| The roots a card's grant opens outside the folder | `src/application/tools/outside-roots.js` | — | moved; which grants a card may offer — the home folder, Snotra's own storage, the skill roots — stays in `services/outside-access.js`, which knows this machine's paths |
+| Why a command runs without the sandbox | `src/shared/contracts/sandbox-reasons.js` | — | moved out of `services/sandbox-service.js` |
+| The tool registry: the built-in definitions, which tools are offered and why not (`whyNotOffered`), the MCP tools merged in, the system prompt's tool part | `src/main/tools/workspace-tool-registry.js` (~2.1k lines), `src/main/tools/generate-image-tool.js` | `src/application/tools/`; the handlers that read files or start processes reach main through the ports that exist for it (web search, URL fetch, code and shell execution, MCP, image generation) and the file service | open |
+| Which skills are on for a chat and what the prompt gets of them (`getActiveSkills`, `bindSelection`, the default and workspace selections) | `src/main/services/skills-service.js` | a new `src/application/skills`, over a catalogue port; scanning the folders and moving a skill stay in main | open |
+| The model's skill suggestion | `src/main/services/skill-suggestion-service.js` | a new `src/application/skills` | open |
+| A chat's model, mode, reasoning level and switched skills and tools; the fallback to "Smart" when "Auto" is refused | `src/main/services/chat-session-settings.js` | `src/application/chat/`, over the chat-history store port that #981 brings | open; waits for #1006 and #981, which change the same wiring |
+| Which skills and tools a chat has, and the check of a proposal to change them (#773, #774) | `src/main/services/chat-configuration-service.js` | `src/application/chat/` | open; with the session settings |
+| Whether a program allowance covers a command (#408) | `src/main/services/program-allowances-service.js` | the matching to `src/application/permissions/`; finding a program on the PATH stays in main | open |
+| The scopes, merging and loosening rules of the policy | `src/main/services/tool-policy-store.js` | the rules to `src/application/permissions/` next to `tool-policy.js`; the signed file stays in main | open |
+| What Settings › Security and the mode pill read | `src/main/services/security-page-data.js` | `src/application/permissions/`, next to `security-overview.js` | open |
 
 ## Layers
 
@@ -147,8 +173,9 @@ code is.
 | **Shared manual** | `src/shared/manual/` | Addressing and searching the pages of the user manual, for main and the manual window |
 | **Shared presentation** | `src/shared/presentation/` | `tool-display.js`: the lines of the tool log, by the key and target a tool's descriptor names. For main adapters and tests; not imported by the core |
 | **Shared files** | `src/shared/ipc-channels.js`, `src/shared/manual-channels.js`, `src/shared/limits.js` | Channel names of both windows and the limits that several sides need |
-| **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming and the prompt blocks for environment, memory and project instructions. Only through injected ports |
+| **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming, the prompt blocks for environment, memory and project instructions, and the best-effort injection flags on tool results (`injection-detector.js` behind `ports/injection-flag-port.js`, #1011). Only through injected ports |
 | **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
+| **Application tools** | `src/application/tools/` | What a tool call is before it runs (#982): the tool descriptors, the call planner (arguments, targets, plan key, sandbox plan, preview), argument conformance and the roots a grant opens. Only through injected services, see [Business rules outside the core](#business-rules-outside-the-core-982) |
 | **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content and the overview the Security page reads. No Electron, no file system; the heart of [`security-concept.md`](./security-concept.md) |
 | **Application ports** | `src/application/ports/` | 23 typedef files, the contracts between the core and main — see [Ports](#ports) |
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
@@ -157,7 +184,7 @@ code is.
 | **Main ports** | `src/main/ports/` | 12 interface types for infrastructure (narrow surfaces, no leaks) |
 | **Platforms** | `src/main/platforms/` | What each operating system and packaging variant can do, resolved once at start, see [Platform capabilities](#platform-capabilities) |
 | **Providers** | `src/main/providers/` | Five provider modules and the two shared OpenAI transports behind `providers/index.js`, see [Provider adapters](#provider-adapters) |
-| **Tools** | `src/main/tools/` | The tool registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, the call planner (targets, plan key, sandbox plan, preview) and argument conformance. Business rules, called through the tool adapter |
+| **Tools** | `src/main/tools/` | The tool registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) — and `generate_image`. Business rules, called through the tool adapter; bound for the core (#982) |
 | **Services** | `src/main/services/` | 76 modules (~22k lines) and by far the largest layer: storage, file system, sandbox, MCP, updates, skills, watchers, the signed policy store, outside access, program allowances, document text. Most of the backend's logic lives here |
 | **Composition root** | `src/main/composition/` | `createCore()` builds services, adapters and engine from ports, without Electron; `createApplication()` wraps it for the desktop and registers the IPC handlers — see [Composition root](#composition-root) |
 | **IPC** | `src/main/ipc/` | The handlers behind every channel, event push to the renderer, and `trusted-sender.js`, which refuses any sender that is not the app's own page. They parse, validate and delegate; what the settings, the chat history and the tool permissions decide lives in services since [#1006](https://github.com/kkrafft1999/snotra/issues/1006) |
@@ -178,7 +205,7 @@ definition carries the tool's **descriptor**: its category in the log, its group
 in the composer indicator, its line (`display`: a catalogue key and a target
 kind), its preview kind on the card, the card's verb and warning, the process it
 starts, the outside service it talks to, where it is set up, and what the
-adapter does with its output. `src/main/tools/tool-descriptor.js` lists the
+adapter does with its output. `src/application/tools/tool-descriptor.js` lists the
 fields and holds a built-in definition to them; a tool with an incomplete
 descriptor does not register. MCP tools get the defaults: category `other`, a
 line that names server and tool.
@@ -360,6 +387,13 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   redirects and limits live in the adapter
   (`main/adapters/http-url-fetch-adapter.js`), the address check itself in
   `shared/runtime/url-safety.js`
+- `injection-flag-port` — a source that may flag a tool result as a likely
+  prompt injection (#1011). After a call ran, the engine asks every source
+  (`chat/injection-flagging.js`) and puts what they found on the tool row and
+  nowhere else: neither the model, the policy nor a card reads it, and a source
+  that throws contributes nothing. The built-in source is
+  `chat/injection-detector.js`, which implements the port itself and is the
+  engine's default; a `PostToolUse` hook (#927) is meant to become a second one
 - `code-execution-port` — running a Python program (issue #86); interpreter
   detection, time limit and process-tree kill live in
   `main/services/python-runner-service.js`, which implements the port itself;
@@ -2664,8 +2698,11 @@ on a service that is not a port, it either derives the type from the service
 or declares the members it calls itself, from its own side. Derived with
 `ReturnType<typeof …>`, because the module is part of the checked program:
 `ToolRegistry` in `workspace-tool-adapter.js`, `FsService` at the end of
-`fs-service.js`, `ToolPolicyState` in `tool-policy-adapter.js` and
-`OutsideAccess` in `tool-call-planner.js`. A change in the registry, the file
+`fs-service.js` and `ToolPolicyState` in `tool-policy-adapter.js`. The tool
+planner, in the application layer since #982, names no type of main: it
+declares what it calls of the file service and the outside access itself
+(`FsService`, `OutsideAccess` in `tool-call-planner.js`), and the check
+compares them where the tool adapter hands both in. A change in the registry, the file
 service or the store reaches every consumer at once, and a call the type does
 not allow fails the check. The provider modules' `presentation` is typed as
 `ProviderPresentation` in `provider-runtime-port.js`, the extras of
