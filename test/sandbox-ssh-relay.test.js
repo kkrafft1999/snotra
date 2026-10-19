@@ -14,6 +14,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const childProcess = require('child_process');
 const net = require('net');
+const dns = require('dns').promises;
 const fs = require('fs').promises;
 const { existsSync } = require('fs');
 const path = require('path');
@@ -41,6 +42,10 @@ test('the installed runtime starts the SSH relay before the seccomp filter (scri
   // The relay goes in front of the filter, like the runtime's own relays.
   const builder = source.slice(source.indexOf('function buildSandboxCommand('));
   assert.ok(builder.indexOf('...snotraSshRelay(socat)') < builder.indexOf('applySeccompPrefix + quote('));
+  // The launcher runs the runtime's own GIT_SSH_COMMAND, the route through its proxy.
+  const utils = await fs.readFile(path.join(path.dirname(linuxPath()), 'sandbox-utils.js'), 'utf8');
+  assert.match(utils, /GIT_SSH_COMMAND=ssh \$\{sshMuxOverride\} -o ProxyCommand='socat - PROXY:localhost:%h:%p,proxyport=/,
+    'the runtime no longer sets the Linux GIT_SSH_COMMAND ssh-relay.sh relies on (#1155)');
 });
 
 test('the relay patch adds its line once, its helper before the source map, and leaves another runtime alone', async () => {
@@ -365,6 +370,12 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
     return;
   }
 
+  // Snotra takes no bare `localhost` as a network domain, but a name under
+  // `.localhost` (RFC 6761), which the runtime's proxy dials on loopback only.
+  const host = 'snotra-git.localhost';
+  const resolves = await dns.lookup(host).then(() => true, () => false);
+  if (!resolves) sh('sudo', ['sh', '-c', `printf '127.0.0.1 ${host}\\n::1 ${host}\\n' >> /etc/hosts`]);
+
   // A local sshd, as this user, on a free port; the runner image may lack it.
   if (!existsSync('/usr/sbin/sshd')) sh('sudo', ['apt-get', 'install', '-y', 'openssh-server']);
   sh('ssh-keygen', ['-q', '-t', 'ed25519', '-N', '', '-f', path.join(base, 'host_key')]);
@@ -390,7 +401,7 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
   children.push(sshd);
   await until(() => reachable(port), 'sshd');
   const hostKey = (await fs.readFile(path.join(base, 'host_key.pub'), 'utf8')).split(' ').slice(0, 2).join(' ');
-  await fs.appendFile(knownHosts, `${savedKnownHosts && !savedKnownHosts.endsWith('\n') ? '\n' : ''}[localhost]:${port} ${hostKey}\n`);
+  await fs.appendFile(knownHosts, `${savedKnownHosts && !savedKnownHosts.endsWith('\n') ? '\n' : ''}[${host}]:${port} ${hostKey}\n`);
 
   // An ssh-agent holding the key.
   const agentSocket = path.join(base, 'agent.sock');
@@ -409,9 +420,9 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
   const head = sh('git', ['-C', work, 'rev-parse', 'HEAD']).trim();
 
   const run = (command, extra = {}) => shellRunner.run({
-    command, cwd: workspace, workspaceRoot: workspace, networkDomains: ['localhost'], timeoutMs: 60_000, ...extra,
+    command, cwd: workspace, workspaceRoot: workspace, networkDomains: [host], timeoutMs: 60_000, ...extra,
   });
-  const lsRemote = `git ls-remote ssh://${user}@localhost:${port}${repo}`;
+  const lsRemote = `git ls-remote ssh://${user}@${host}:${port}${repo}`;
   env.SSH_AUTH_SOCK = agentSocket;
 
   const signedIn = await run(lsRemote);
@@ -428,8 +439,21 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
   // The run itself still cannot reach the agent: the seccomp filter stays on.
   const agentFromRun = await run('ssh-add -l');
   assert.notEqual(agentFromRun.exitCode, 0, said(agentFromRun));
+  // Nor any other local socket, such as Docker's: still refused at socket().
+  let dockerReached = false;
+  const dockerSocket = path.join(base, 'docker.sock');
+  const docker = net.createServer((socket) => { dockerReached = true; socket.end('pong\n'); });
+  await new Promise((resolve) => docker.listen(dockerSocket, resolve));
+  t.after(() => new Promise((resolve) => docker.close(resolve)));
+  const dockerFromRun = await run(`socat - UNIX-CONNECT:'${dockerSocket}' </dev/null`);
+  assert.notEqual(dockerFromRun.exitCode, 0, said(dockerFromRun));
+  assert.doesNotMatch(dockerFromRun.stdout, /pong/);
+  assert.match(dockerFromRun.stderr, /Operation not permitted|Permission denied/, said(dockerFromRun));
+  const pythonFromRun = await run(`python3 -c "import socket; s = socket.socket(socket.AF_UNIX); s.connect('${dockerSocket}'); print(s.recv(9))"`);
+  assert.notEqual(pythonFromRun.exitCode, 0, said(pythonFromRun));
+  assert.equal(dockerReached, false, 'nothing in the run reached the socket');
   // And the relay runs git's commands only.
-  const other = await run(`/bin/sh "$SNOTRA_SSH_CLIENT" -p ${port} ${user}@localhost 'touch /tmp/snotra-relay-pwned'`);
+  const other = await run(`/bin/sh "$SNOTRA_SSH_CLIENT" -p ${port} ${user}@${host} 'touch /tmp/snotra-relay-pwned'`);
   assert.equal(other.exitCode, 255, said(other));
   assert.match(other.stderr, /only git commands are relayed/, said(other));
   assert.equal(existsSync('/tmp/snotra-relay-pwned'), false);
@@ -445,7 +469,9 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
   env.SSH_AUTH_SOCK = agentSocket;
   if (savedKnownHosts === null) await fs.rm(knownHosts, { force: true });
   else await fs.writeFile(knownHosts, savedKnownHosts);
+  // Through the relay, and it fails at once: the run ends with ssh, no timeout.
   const unknownHost = await run(lsRemote);
+  assert.notEqual(unknownHost.exitCode, null, `the run hung; ${said(unknownHost)}`);
   assert.notEqual(unknownHost.exitCode, 0, said(unknownHost));
   assert.match(unknownHost.stderr, /Host key verification failed[^]*<sandbox_ssh>[^]*known_hosts/, said(unknownHost));
 });

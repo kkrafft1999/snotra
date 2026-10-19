@@ -33,6 +33,12 @@
  * `SNOTRA_SSH_RELAY`: it listens on the run's own loopback and hands each
  * connection to the launcher, which checks git's request and runs ssh with
  * the agent. Without it Git over SSH cannot sign in inside the Linux sandbox.
+ * A runtime update has to keep four things, each checked by
+ * `test/sandbox-ssh-relay.test.js`: the anchor closes the relay list in
+ * `buildSandboxCommand`, ahead of `apply-seccomp`; the runtime still sets a
+ * Linux `GIT_SSH_COMMAND` that goes out through its proxy (the launcher runs
+ * it); the inner script still runs in the run's own network namespace with
+ * `socat`; and the whole route on the Linux runner still signs in.
  *
  * Nothing breaks when a line to patch is not there; the install only warns.
  * `test/sandbox-live-network.test.js`, `test/sandbox-log-monitor.test.js` and
