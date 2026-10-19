@@ -41,7 +41,7 @@ const { EXECUTION_SANDBOX, SANDBOX_GIT_SSH, SELF_UPDATE, SECURE_STORAGE } = PLAT
 function complete() {
   return {
     [EXECUTION_SANDBOX]: { supported: true },
-    [SANDBOX_GIT_SSH]: { supported: false, reason: 'platform.gap.sandboxGitSsh', issue: 1155 },
+    [SANDBOX_GIT_SSH]: { supported: false, reason: 'approval.isolation.reason.platform', issue: 990 },
     [SELF_UPDATE]: { supported: false, reason: 'update.reason.package', permanent: true, rationale: 'by design' },
     [SECURE_STORAGE]: {
       supported: AT_START,
@@ -91,7 +91,7 @@ test('a declaration that leaves a capability out, or a gap unexplained, is refus
   const both = { ...complete(), [SELF_UPDATE]: { ...complete()[SELF_UPDATE], issue: 7 } };
   assert.deepEqual(platformDeclarationProblems(both), [`"${SELF_UPDATE}": a permanent gap has no issue to close it`]);
 
-  const unknownKey = { ...complete(), [SANDBOX_GIT_SSH]: { supported: false, reason: 'no.such.key', issue: 1155 } };
+  const unknownKey = { ...complete(), [SANDBOX_GIT_SSH]: { supported: false, reason: 'no.such.key', issue: 990 } };
   assert.deepEqual(platformDeclarationProblems(unknownKey, { knownReasonKeys }), [
     `"${SANDBOX_GIT_SSH}": reason key "no.such.key" is not in the message catalogue`,
   ]);
@@ -119,12 +119,12 @@ test('resolved for Windows: no sandbox, tracked by #990', () => {
   });
 });
 
-test('resolved for a Linux system package: no self-update, for good; Git over SSH tracked by #1155', () => {
+test('resolved for a Linux system package: no self-update, for good; Git over SSH through the relay (#1155)', () => {
   const resolved = resolvePlatform({ platform: 'linux', variant: PLATFORM_VARIANTS.LINUX_PACKAGE, facts: { encryptionAvailable: true } });
   assert.equal(resolved.executionSandbox, true);
   assert.equal(resolved.selfUpdate, false);
+  assert.equal(resolved.sandboxGitSsh, true);
   assert.deepEqual(resolved.gaps, {
-    sandboxGitSsh: { reason: 'platform.gap.sandboxGitSsh', issue: 1155 },
     selfUpdate: { reason: 'update.reason.package', permanent: true },
   });
   // The AppImage and the extracted folder are plain Linux.

@@ -30,7 +30,7 @@
 const PLATFORM_CAPABILITIES = Object.freeze({
   /** Shell commands and Python run isolated in the sandbox (#329). */
   EXECUTION_SANDBOX: 'executionSandbox',
-  /** Git over SSH signs in from inside the sandbox through the ssh-agent (#932). */
+  /** Git over SSH signs in from inside the sandbox through the ssh-agent (#932, Linux #1155). */
   SANDBOX_GIT_SSH: 'sandboxGitSsh',
   /** The app replaces itself with a new version (#353). */
   SELF_UPDATE: 'selfUpdate',

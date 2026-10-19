@@ -32,7 +32,7 @@
         "appCategoryType": "public.app-category.productivity",
         "icon": "./icon",
         "asar": {
-          "unpack": "{**/node_modules/@anthropic-ai/sandbox-runtime/vendor/**,**/src/main/services/ssh-proxy.pl}"
+          "unpack": "{**/node_modules/@anthropic-ai/sandbox-runtime/vendor/**,**/src/main/services/ssh-proxy.pl,**/src/main/services/ssh-relay.sh,**/src/main/services/ssh-relay-client.sh}"
         },
         "afterComplete": [
           "./scripts/sign-macos.js"
