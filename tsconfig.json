@@ -14,9 +14,8 @@
     "types": ["node"],
     "skipLibCheck": true,
     // Not `strict` as a whole: `noImplicitAny` is still off, because the last
-    // files — the chat engine, the permission core, the sandbox service, the
-    // policy store and the composition root — are not annotated yet (#1098).
-    // Every other file passes with it on.
+    // files — the sandbox service and the composition root — are not
+    // annotated yet (#1098). Every other file passes with it on.
     // `strictNullChecks` is on: `null` and `undefined` are values of their
     // own, and a truthiness check narrows a `{ error } | { ok }` union. What
     // is on catches a port and its adapter disagreeing — a missing or extra
@@ -40,9 +39,6 @@
   ],
   "exclude": [
     "src/main/index.js",
-    "src/main/composition/create-application.js",
-    "src/main/ipc/settings-handlers.js",
-    "src/main/ipc/tool-permission-handlers.js",
-    "src/main/services/settings-presentation-service.js"
+    "src/main/composition/create-application.js"
   ]
 }

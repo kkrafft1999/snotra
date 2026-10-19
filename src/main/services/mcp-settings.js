@@ -30,7 +30,7 @@ const { createMessage } = require('../../shared/contracts/message');
  *
  * @typedef {Object} McpConfigStore
  * @property {() => Promise<McpServerView[]>} readMcpServers
- * @property {(input: Record<string, unknown>, options?: { confirmation?: object }) => Promise<{ ok: boolean, errors: Message[], endpointChanged?: boolean, notConfirmed?: boolean }>} saveMcpServer
+ * @property {(input: Record<string, unknown>, options?: { confirmation?: object|null }) => Promise<{ ok: boolean, errors: Message[], endpointChanged?: boolean, notConfirmed?: boolean }>} saveMcpServer
  * @property {(id: string) => Promise<{ ok: boolean, errors: Message[] }>} deleteMcpServer
  * @property {() => Promise<unknown>} clearMcpServerDisabledTools
  */
@@ -104,7 +104,7 @@ function createMcpSettings({ mcpService, mcpAdapter, mcpConfigStore, mcpSecrets,
     },
     /**
      * @param {Record<string, unknown>} input
-     * @param {{ confirmation?: object }} [options]
+     * @param {{ confirmation?: object|null }} [options]
      */
     save: (input, options) => mcpConfigStore.saveMcpServer(input, options),
     /** @param {string} id */

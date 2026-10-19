@@ -76,10 +76,12 @@ const QR_PAYLOAD = /^snotra-pair:v1\/[a-z0-9.-]+(?::\d{1,5})?\/[0-9A-HJKMNP-TV-Z
 const SAFETY_WORD = /^[a-z][a-z-]{1,9}[a-z]$/;
 const PHRASE_WORDS = 6;
 
+/** @param {unknown} value */
 function finiteTime(value) {
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
 }
 
+/** @param {*} code */
 function normalizeCode(code) {
   if (!code || typeof code !== 'object') return null;
   const expiresAt = finiteTime(code.expiresAt);
@@ -88,11 +90,13 @@ function normalizeCode(code) {
   return { display: code.display, qr: code.qr, expiresAt };
 }
 
+/** @param {*} words */
 function normalizeWords(words) {
   if (!Array.isArray(words) || words.length !== PHRASE_WORDS) return null;
   return words.every((word) => typeof word === 'string' && SAFETY_WORD.test(word)) ? [...words] : null;
 }
 
+/** @param {*} phone */
 function normalizePhone(phone) {
   if (!phone || typeof phone !== 'object') return null;
   return { pairedAt: finiteTime(phone.pairedAt), connected: phone.connected === true };

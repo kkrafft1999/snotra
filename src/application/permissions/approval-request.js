@@ -17,17 +17,25 @@ const {
   COMMAND_RULE_TOOL,
   COMMAND_RULE_UNAVAILABLE_REASONS,
   normalizeRiskClasses,
+  normalizeToolPermissionMode,
 } = require('../../shared/contracts/tool-permissions');
 const { createMessage } = require('../../shared/contracts/message');
 
 // Die Schluessel kommen aus den Contracts, damit Karte, Chat-Pille und
 // Einstellungen (#67) denselben Wortlaut zeigen — gesprochen wird er dort, wo
 // er auf dem Schirm steht (#290).
+/** @typedef {import('../../shared/contracts/tool-permissions').ToolRiskClass} ToolRiskClass */
+/** @typedef {import('../ports/tool-approval-port').ToolApprovalRequest} ToolApprovalRequest */
+
 const MODE_KEYS = TOOL_PERMISSION_MODE_LABEL_KEYS;
 const CLASS_KEYS = TOOL_RISK_CLASS_LABEL_KEYS;
 
+/**
+ * @param {unknown} mode
+ * @returns {string}  the catalogue key of the mode's name; an unknown mode reads as `smart`
+ */
 function modeLabelKey(mode) {
-  return MODE_KEYS[mode] || MODE_KEYS[TOOL_PERMISSION_MODES.SMART];
+  return MODE_KEYS[normalizeToolPermissionMode(mode)];
 }
 
 /**
@@ -43,6 +51,7 @@ function modeLabelKey(mode) {
  */
 function describeApprovalReason({ mode, askClasses, providerLabel, recovery, checkpoint = 'access' } = {}) {
   const classes = normalizeRiskClasses(askClasses) || [];
+  /** @type {import('../../shared/contracts/message').Message[]} */
   const parts = [];
   if (mode === TOOL_PERMISSION_MODES.ASK_ALL) {
     parts.push(createMessage('approval.reason.askAll'));
@@ -105,6 +114,15 @@ function describeSessionScope({ tool, targets, riskClasses } = {}) {
  * runs — and stays in main; the renderer only learns whether it is offered.
  *
  * Returns `{ rule }` or `{ reason }`, or null for a call it does not concern.
+ *
+ * @param {Object} input
+ * @param {string} input.tool
+ * @param {import('../ports/tool-port').ToolPlan} [input.plan]
+ * @param {ToolRiskClass[]} input.classes
+ * @param {string} input.mode
+ * @param {string} [input.checkpoint]
+ * @param {string|null} [input.workspaceRoot]
+ * @param {boolean} [input.encryptionAvailable]
  */
 function describeCommandRuleOffer({ tool, plan, classes, mode, checkpoint, workspaceRoot, encryptionAvailable }) {
   if (tool !== COMMAND_RULE_TOOL || checkpoint !== 'access') return null;
@@ -149,6 +167,7 @@ function describeCommandRuleOffer({ tool, plan, classes, mode, checkpoint, works
  * @param {'access'|'output'|'sandbox'|'config'} [input.checkpoint]
  * @param {string|null} [input.workspaceRoot]
  * @param {boolean} [input.encryptionAvailable]
+ * @returns {ToolApprovalRequest}
  */
 function buildApprovalRequest({
   tool,
@@ -169,6 +188,7 @@ function buildApprovalRequest({
     classes.length > 0 &&
     classes.every((cls) => SESSION_GRANTABLE_CLASSES.includes(cls));
   const targets = Array.isArray(plan?.targets) ? plan.targets : [];
+  /** @type {ToolApprovalRequest} */
   const request = {
     tool,
     riskClasses: classes,

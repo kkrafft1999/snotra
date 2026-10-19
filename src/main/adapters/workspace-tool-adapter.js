@@ -67,7 +67,7 @@ const { readRegularFile } = require('../services/read-regular-file');
  * @param {typeof import('fs/promises')} [deps.fs]
  * @param {typeof import('path')} [deps.path]
  * @param {string[]} [deps.protectedRoots]  harte Grenzen (Snotra-eigener Speicher)
- * @param {(absPath: string) => Promise<void>} [deps.trashItem]  shell.trashItem für Wiederherstellungskopien
+ * @param {((absPath: string) => Promise<void>) | null} [deps.trashItem]  shell.trashItem für Wiederherstellungskopien
  * @param {() => Promise<string[]>} [deps.readOwnSecrets]  konfigurierte Provider-Schlüssel (nur zum Vergleich)
  * @param {(() => {label?: string, login?: boolean}) | null} [deps.describeShell]  erkannte Shell für die Freigabekarte (#102)
  * @param {(() => Promise<{isolated: boolean, reason?: string, missing?: string[]}>) | null} [deps.describeSandbox]

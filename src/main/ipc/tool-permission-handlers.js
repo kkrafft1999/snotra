@@ -40,6 +40,7 @@ const {
   PERMISSION_DENIAL_REASONS,
   APPROVAL_RESPONSES,
   PERSISTENT_ALLOW_CLASSES,
+  isCommandRule,
   normalizeToolPermissionMode,
   normalizePermissionRule,
   normalizeSensitivePathPatterns,
@@ -62,9 +63,28 @@ const {
   createRefusingConfirmation,
 } = require('../../application/permissions/user-confirmation');
 
+/**
+ * @typedef {ReturnType<typeof createTranslator>} Translator
+ * @typedef {import('../../application/ports/user-confirmation-port').ConfirmationPrompt} ConfirmationPrompt
+ * @typedef {import('../../shared/contracts/tool-permissions').PermissionRule} PermissionRule
+ * @typedef {import('../../shared/contracts/tool-permissions').CommandRule} CommandRule
+ * @typedef {import('../../shared/contracts/program-allowances').ProgramAllowance} ProgramAllowance
+ * @typedef {import('electron').WebContents} Sender
+ * @typedef {ReturnType<typeof import('../services/tool-policy-store').createToolPolicyStore>} ToolPolicyStore
+ * @typedef {Awaited<ReturnType<ToolPolicyStore['read']>>} PolicyState
+ * @typedef {ReturnType<typeof import('../services/security-page-data').createSecurityPageData>} SecurityPageData
+ * @typedef {NonNullable<ReturnType<typeof normalizeToolApprovalResponse>> & { ruleId?: string|null, workspaceStored?: boolean }} ApprovalAnswer
+ *   an answer of the renderer, with what main adds before it reaches the waiting call
+ * @typedef {{ entries?: Array<{ allow: string[] }> }} SandboxCardView  what is read of a sandbox card's `sandbox`
+ */
+
 // The three dialogs are built for the language the interface speaks at the
 // moment they open (#353). They live only until the click, so there is nothing
 // to repaint on a language change.
+/**
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
+ */
 function autoModeDialog(t) {
   return {
     type: 'warning',
@@ -77,12 +97,22 @@ function autoModeDialog(t) {
   };
 }
 
+/**
+ * @param {PermissionRule} rule
+ * @param {Translator} t
+ * @returns {string}
+ */
 function ruleSubject(rule, t) {
   return rule.tool
     ? t('permissionDialog.subject.tool', { tool: rule.tool })
     : t('permissionDialog.subject.class', { riskClass: rule.riskClass });
 }
 
+/**
+ * @param {PermissionRule} rule
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
+ */
 function allowRuleDialog(rule, t) {
   const scope = rule.scope === PERMISSION_RULE_SCOPES.GLOBAL
     ? t('permissionDialog.scope.global')
@@ -106,6 +136,11 @@ function allowRuleDialog(rule, t) {
   };
 }
 
+/**
+ * @param {PermissionRule} rule
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
+ */
 function removeDenyRuleDialog(rule, t) {
   return {
     type: 'warning',
@@ -124,6 +159,10 @@ function removeDenyRuleDialog(rule, t) {
  * the mode on screen. Removing those is a loosening like deleting one deny
  * rule, so main confirms it natively and names what goes. Allow rules,
  * allowances and the sandbox opt-out going is a tightening and is not listed.
+ *
+ * @param {{ denyRules?: number, patterns?: string[], askAllDefaults?: number, askAllMode?: boolean }} losses
+ * @param {Translator} t
+ * @returns {string[]}
  */
 function protectionLosses({ denyRules = 0, patterns = [], askAllDefaults = 0, askAllMode = false }, t) {
   const lines = [];
@@ -136,6 +175,13 @@ function protectionLosses({ denyRules = 0, patterns = [], askAllDefaults = 0, as
   return lines;
 }
 
+/**
+ * @param {'resetWorkspace'|'resetAll'} kind
+ * @param {string[]} losses
+ * @param {Translator} t
+ * @param {string} [root]
+ * @returns {ConfirmationPrompt}
+ */
 function resetDialog(kind, losses, t, root = '') {
   return {
     type: 'warning',
@@ -153,6 +199,11 @@ function resetDialog(kind, losses, t, root = '') {
   };
 }
 
+/**
+ * @param {string[]} patterns
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
+ */
 function removePatternsDialog(patterns, t) {
   return {
     type: 'warning',
@@ -169,6 +220,10 @@ function removePatternsDialog(patterns, t) {
  * "Always allow this command" (#121). The dialog repeats exactly what is
  * remembered — command, folder, network — because that is the whole rule:
  * a different spelling of the command is a different command.
+ *
+ * @param {CommandRule} rule
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
  */
 function commandRuleDialog(rule, t) {
   const facts = [
@@ -197,6 +252,11 @@ function commandRuleDialog(rule, t) {
 /**
  * "For this workspace" on a connection card (#946). The dialog repeats what
  * is kept — the hosts and the folder — because that is the whole grant.
+ *
+ * @param {string[]} hosts
+ * @param {string} root
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
  */
 function workspaceHostsDialog(hosts, root, t) {
   return {
@@ -220,7 +280,13 @@ function workspaceHostsDialog(hosts, root, t) {
  */
 const SANDBOX_SETTING_PAGE = 'settings.sandbox';
 
-/** Hosts open in every workspace (#1119): only from the settings, never from a card. */
+/**
+ * Hosts open in every workspace (#1119): only from the settings, never from a card.
+ *
+ * @param {string[]} hosts
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
+ */
 function globalHostsDialog(hosts, t) {
   return {
     type: 'warning',
@@ -236,7 +302,12 @@ function globalHostsDialog(hosts, t) {
   };
 }
 
-/** New workspaces without the sandbox (#1119). */
+/**
+ * New workspaces without the sandbox (#1119).
+ *
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
+ */
 function newWorkspaceSandboxOffDialog(t) {
   return {
     type: 'warning',
@@ -252,7 +323,12 @@ function newWorkspaceSandboxOffDialog(t) {
   };
 }
 
-/** "Reset the sandbox everywhere" (#1119): only takes rights away, but all of them. */
+/**
+ * "Reset the sandbox everywhere" (#1119): only takes rights away, but all of them.
+ *
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
+ */
 function resetSandboxDialog(t) {
   return {
     type: 'warning',
@@ -265,6 +341,11 @@ function resetSandboxDialog(t) {
   };
 }
 
+/**
+ * @param {string} root
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
+ */
 function sandboxOffDialog(root, t) {
   return {
     type: 'warning',
@@ -281,7 +362,13 @@ function sandboxOffDialog(root, t) {
   };
 }
 
-/** "Auto" for every new chat in one workspace (#413). */
+/**
+ * "Auto" for every new chat in one workspace (#413).
+ *
+ * @param {string} root
+ * @param {Translator} t
+ * @returns {ConfirmationPrompt}
+ */
 function workspaceAutoDialog(root, t) {
   return {
     type: 'warning',
@@ -299,13 +386,26 @@ function workspaceAutoDialog(root, t) {
   };
 }
 
-/** `/Users/me/x` → `~/x`, so the dialog reads like the settings list. */
+/**
+ * `/Users/me/x` → `~/x`, so the dialog reads like the settings list.
+ *
+ * @param {string} value
+ * @param {string} [homeDir]
+ * @returns {string}
+ */
 function tildePath(value, homeDir) {
   if (!homeDir || typeof value !== 'string') return value;
   if (value === homeDir) return '~';
   return value.startsWith(`${homeDir}/`) ? `~${value.slice(homeDir.length)}` : value;
 }
 
+/**
+ * @param {ProgramAllowance} entry
+ * @param {Translator} t
+ * @param {string} [homeDir]
+ * @param {string|null} [root]
+ * @returns {ConfirmationPrompt}
+ */
 function programAllowanceDialog(entry, t, homeDir = '', root = null) {
   const lines = [];
   if (entry.domains.length > 0) lines.push(t('permissionDialog.allowance.domains', { domains: entry.domains.join(', ') }));
@@ -333,6 +433,35 @@ function programAllowanceDialog(entry, t, homeDir = '', root = null) {
   };
 }
 
+/**
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {Pick<import('electron').Dialog, 'showOpenDialog'>|null} [deps.dialog]
+ * @param {import('../../application/ports/user-confirmation-port').UserConfirmationPort} [deps.confirmations]
+ * @param {() => import('electron').BrowserWindow|null} [deps.getMainWindow]
+ * @param {ToolPolicyStore} deps.toolPolicyStore
+ * @param {Pick<ReturnType<typeof import('../adapters/tool-approval-adapter').createToolApprovalAdapter>,
+ *   'subscribe' | 'respond' | 'getPendingRequest' | 'listPending' | 'invalidateAll' | 'invalidateChat'>} deps.approvals
+ * @param {Pick<ReturnType<typeof import('../../application/permissions/session-grants').createSessionGrants>,
+ *   'list' | 'count' | 'clear' | 'clearChat' | 'revoke'>} deps.sessionGrants
+ * @param {() => string|null} [deps.getActiveWorkspaceRoot]
+ * @param {Record<string, string>} deps.REQ
+ * @param {Record<string, string>} deps.PUSH
+ * @param {Pick<ReturnType<typeof import('../services/chat-session-settings').createChatSessionSettings>,
+ *   'getCurrentChatId' | 'rememberMode' | 'forgetBackgroundModes'>|null} [deps.chatSessionSettings]
+ * @param {() => unknown} [deps.getLocale]
+ * @param {SecurityPageData['describeExecutionTools']|null} [deps.describeExecutionTools]
+ * @param {Pick<ReturnType<typeof import('../services/program-allowances-service').createProgramAllowances>,
+ *   'prepareEntry' | 'resolveProgram' | 'validateWritePath'>|null} [deps.programAllowances]
+ * @param {SecurityPageData['describeChats']} [deps.describeChats]
+ * @param {SecurityPageData['describeTools']} [deps.describeTools]
+ * @param {SecurityPageData['describeWorkspaceChats']} [deps.describeWorkspaceChats]
+ * @param {SecurityPageData['listKnownWorkspaces']} [deps.listKnownWorkspaces]
+ * @param {SecurityPageData['folderExists']} [deps.folderExists]
+ * @param {string} [deps.platform]
+ * @param {import('../../shared/contracts/platform-capabilities').PlatformCapabilities} [deps.platformCapabilities]
+ * @param {string} [deps.homeDir]
+ */
 function registerToolPermissionHandlers({
   ipcMain,
   // Only the folder picker of program allowances (#408); confirmations go
@@ -377,7 +506,14 @@ function registerToolPermissionHandlers({
     throw new Error('registerToolPermissionHandlers requires toolPolicyStore, approvals and sessionGrants.');
   }
 
-  /** The receipt of a confirmed loosening (#980), or null when it was not confirmed. */
+  /**
+   * The receipt of a confirmed loosening (#980), or null when it was not confirmed.
+   *
+   * @param {string} action
+   * @param {string} subject
+   * @param {ConfirmationPrompt} prompt
+   * @returns {Promise<object|null>}
+   */
   async function confirmLoosening(action, subject, prompt) {
     const outcome = await confirmations.confirm({ action, subject, prompt });
     return outcome?.confirmed === true && outcome.receipt ? outcome.receipt : null;
@@ -396,7 +532,11 @@ function registerToolPermissionHandlers({
     }
   }
 
-  /** Nach jeder Änderung: offene Karten verwerfen, Sitzungsfreigaben löschen, Renderer informieren. */
+  /**
+   * Nach jeder Änderung: offene Karten verwerfen, Sitzungsfreigaben löschen, Renderer informieren.
+   *
+   * @param {Sender|null|undefined} sender
+   */
   function afterPolicyChange(sender) {
     approvals.invalidateAll(PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
     sessionGrants.clear();
@@ -410,6 +550,8 @@ function registerToolPermissionHandlers({
    * session approvals go (#320). A run in another chat keeps working under its
    * own mode and keeps what the user granted it. Without a known chat, the old,
    * wider reset applies.
+   *
+   * @param {Sender|null|undefined} sender
    */
   function afterModeChange(sender) {
     const chatId = chatSessionSettings?.getCurrentChatId?.() ?? null;
@@ -431,6 +573,8 @@ function registerToolPermissionHandlers({
    * then, and the shield next to the folder name in any mode (#396, #398).
    * `pending`: the detection has not answered yet — isolated so far, but
    * not confirmed.
+   *
+   * @param {boolean} sandboxDisabled
    */
   async function describeUnisolatedExecution(sandboxDisabled) {
     const none = { unisolated: false, tools: [], reason: '', pending: false };
@@ -463,7 +607,7 @@ function registerToolPermissionHandlers({
     const currentChatId = chatSessionSettings?.getCurrentChatId?.() ?? null;
     let titles = new Map();
     try {
-      titles = (await describeChats([...new Set(grants.map((grant) => grant.chatId).filter(Boolean))])) || new Map();
+      titles = (await describeChats([...new Set(grants.flatMap((grant) => (grant.chatId ? [grant.chatId] : [])))])) || new Map();
     } catch {
       /* without titles the list still works */
     }
@@ -481,7 +625,11 @@ function registerToolPermissionHandlers({
     }));
   }
 
-  /** Every root the policy holds a sandbox setting or an allowance for (#1119). */
+  /**
+   * Every root the policy holds a sandbox setting or an allowance for (#1119).
+   *
+   * @param {PolicyState} state
+   */
   function sandboxRootsOf(state) {
     return [...new Set([
       ...(Array.isArray(state.unsandboxedWorkspaces) ? state.unsandboxedWorkspaces : []),
@@ -496,6 +644,9 @@ function registerToolPermissionHandlers({
    * setting for already, so a workspace can be checked and cleaned up
    * without opening it. Never a path the renderer makes up: anything else is
    * null. Every loosening names the root in its system dialog.
+   *
+   * @param {unknown} raw
+   * @returns {Promise<string|null>}
    */
   async function sandboxRootFor(raw) {
     const active = getActiveWorkspaceRoot() || null;
@@ -530,9 +681,10 @@ function registerToolPermissionHandlers({
           .catch(() => [] /* without the chats no session allowance is listed; the rest stands */)
         : [],
     ]);
+    /** @type {Set<string|null>} */
     const chatIds = new Set((Array.isArray(chats) ? chats : []).map((chat) => chat.id));
     const others = sandboxRootsOf(state).filter((root) => root !== active)
-      .sort((a, b) => a.split(/[\\/]/).pop().localeCompare(b.split(/[\\/]/).pop()) || a.localeCompare(b));
+      .sort((a, b) => (a.split(/[\\/]/).pop() ?? '').localeCompare(b.split(/[\\/]/).pop() ?? '') || a.localeCompare(b));
     const roots = active ? [active, ...others] : others;
     const workspaces = await Promise.all(roots.map(async (root) => ({
       root,
@@ -623,6 +775,7 @@ function registerToolPermissionHandlers({
         ? Promise.resolve().then(describeExecutionTools).catch(() => null)
         : null,
     ]);
+    /** @type {Set<string|null>} */
     const chatIds = new Set((Array.isArray(chats) ? chats : []).map((chat) => chat.id));
     const currentChatId = chatSessionSettings?.getCurrentChatId?.() ?? null;
     const mode = root
@@ -667,6 +820,7 @@ function registerToolPermissionHandlers({
     if (mode !== rawMode) return createSettingsError(createMessage('permissions.error.unknownMode'));
     // "Auto" is confirmed for the chat on screen, and remembered for it (#980).
     const chatId = chatSessionSettings?.getCurrentChatId?.() ?? null;
+    /** @type {object|null} */
     let confirmation = null;
     if (mode === TOOL_PERMISSION_MODES.AUTO) {
       // Without safeStorage "Auto" cannot be stored (#419): say so instead of
@@ -713,6 +867,7 @@ function registerToolPermissionHandlers({
         return createSettingsError(createMessage('permissions.error.allowNotForTool', { tool: preview.tool }));
       }
     }
+    /** @type {object|null} */
     let confirmation = null;
     if (preview.effect === PERMISSION_RULE_EFFECTS.ALLOW) {
       confirmation = await confirmLoosening(
@@ -733,6 +888,7 @@ function registerToolPermissionHandlers({
     if (!id) return createSettingsError(createMessage('permissions.error.ruleIdMissing'));
     const rule = await toolPolicyStore.findRule(id);
     if (!rule) return createSettingsError(createMessage('permissions.error.ruleNotFound'));
+    /** @type {object|null} */
     let confirmation = null;
     if (rule.effect === PERMISSION_RULE_EFFECTS.DENY) {
       confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.REMOVE_BLOCK, id, removeDenyRuleDialog(rule, createTranslator(getLocale())));
@@ -750,6 +906,7 @@ function registerToolPermissionHandlers({
     // Dropping a pattern turns files that asked into ordinary reads (#514).
     const current = (await toolPolicyStore.read()).sensitivePathPatterns || [];
     const removed = current.filter((pattern) => !next.includes(pattern));
+    /** @type {object|null} */
     let confirmation = null;
     if (removed.length > 0) {
       confirmation = await confirmLoosening(
@@ -806,6 +963,7 @@ function registerToolPermissionHandlers({
       denyRules: (state.workspaceRules?.[root] || []).filter((rule) => rule.effect === PERMISSION_RULE_EFFECTS.DENY).length,
       askAllDefaults: state.workspaceModes?.[root] === TOOL_PERMISSION_MODES.ASK_ALL ? 1 : 0,
     }, t);
+    /** @type {object|null} */
     let confirmation = null;
     if (losses.length > 0) {
       confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.RESET_WORKSPACE, root, resetDialog('resetWorkspace', losses, t, root));
@@ -826,6 +984,7 @@ function registerToolPermissionHandlers({
     if (typeof enabled !== 'boolean') return createSettingsError(createMessage('permissions.error.invalidSandboxSetting'));
     const root = await sandboxRootFor(rawRoot);
     if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
+    /** @type {object|null} */
     let confirmation = null;
     if (!enabled) {
       if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.sandboxOffNeedsEncryption'));
@@ -846,6 +1005,7 @@ function registerToolPermissionHandlers({
     const root = getActiveWorkspaceRoot();
     if (!root) return createSettingsError(createMessage('permissions.error.noWorkspace'));
     const current = await toolPolicyStore.readWorkspaceMode(root);
+    /** @type {object|null} */
     let confirmation = null;
     if (mode === TOOL_PERMISSION_MODES.AUTO && current !== TOOL_PERMISSION_MODES.AUTO) {
       if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.autoNeedsEncryption'));
@@ -862,6 +1022,10 @@ function registerToolPermissionHandlers({
    * The scope an allowance is stored in (#1119): `{ root: null }` for every
    * workspace, or the workspace it names — the open one, or one listed on
    * the page. Null when the renderer names a scope main does not know.
+   *
+   * @param {unknown} scope
+   * @param {unknown} rawRoot
+   * @returns {Promise<{ root: string|null }|null>}
    */
   async function allowanceScopeFor(scope, rawRoot) {
     if (scope === 'global') return { root: null };
@@ -891,7 +1055,7 @@ function registerToolPermissionHandlers({
       replaceRoot = from.root;
     }
     const state = await toolPolicyStore.read();
-    const listOf = (root) => (root
+    const listOf = (/** @type {string|null} */ root) => (root
       ? state.workspaceProgramAllowances?.[root] || []
       : Array.isArray(state.programAllowances) ? state.programAllowances : []);
     let previous = replacePath ? listOf(replaceRoot).find((other) => other.path === replacePath) || null : null;
@@ -901,6 +1065,7 @@ function registerToolPermissionHandlers({
       previousRoot = target.root;
     }
     const narrowing = !!previous && isNarrowing(previous, entry) && (previousRoot === target.root || previousRoot === null);
+    /** @type {object|null} */
     let confirmation = null;
     if (!narrowing) {
       confirmation = await confirmLoosening(
@@ -938,7 +1103,7 @@ function registerToolPermissionHandlers({
   // this page offers. What may be typed is what a card could have offered.
   ipcMain.handle(REQ.TOOL_PERMISSIONS_ADD_HOSTS, async (event, raw) => {
     const data = raw && typeof raw === 'object' ? raw : {};
-    const typed = Array.isArray(data.hosts) ? data.hosts.filter((host) => typeof host === 'string' && host.length <= 300) : [];
+    const typed = Array.isArray(data.hosts) ? data.hosts.filter((/** @type {unknown} */ host) => typeof host === 'string' && host.length <= 300) : [];
     const hosts = grantedHosts(typed);
     if (hosts.length === 0 || hosts.length !== typed.length) {
       return createSettingsError(createMessage('permissions.hosts.error.invalid'));
@@ -976,7 +1141,9 @@ function registerToolPermissionHandlers({
   // the folders Snotra knows by then keep their setting. On never asks.
   ipcMain.handle(REQ.TOOL_PERMISSIONS_SET_NEW_WORKSPACE_SANDBOX, async (event, enabled) => {
     if (typeof enabled !== 'boolean') return createSettingsError(createMessage('permissions.error.invalidSandboxSetting'));
+    /** @type {object|null} */
     let confirmation = null;
+    /** @type {string[]} */
     let knownRoots = [];
     if (!enabled) {
       if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.sandboxOffNeedsEncryption'));
@@ -1033,6 +1200,7 @@ function registerToolPermissionHandlers({
       return createSettingsError(createMessage('permissions.allowance.error.unavailable'));
     }
     const t = createTranslator(getLocale());
+    /** @type {import('electron').OpenDialogOptions} */
     const options = {
       title: t('permissionDialog.allowance.folderTitle'),
       message: t('permissionDialog.allowance.folderTitle'),
@@ -1088,13 +1256,16 @@ function registerToolPermissionHandlers({
    * No other card and no session approval is dropped: a new allow rule for
    * one command can only turn a question into an allowance, and nothing
    * granted before becomes wrong by it.
+   *
+   * @param {import('electron').IpcMainInvokeEvent} event
+   * @param {{ requestId: string }} response
    */
   async function rememberCommand(event, { requestId }) {
     const request = approvals.getPendingRequest?.(event.sender.id, requestId);
     if (!request) return { error: createMessage('approval.error.noPending') };
     if (request.alwaysAllowed !== true || !request.commandRule) return { ruleId: null };
     const rule = normalizePermissionRule({ ...request.commandRule, id: 'preview' });
-    if (!rule) return { error: createMessage('permissions.error.invalidRule') };
+    if (!rule || !isCommandRule(rule)) return { error: createMessage('permissions.error.invalidRule') };
     const confirmation = await confirmLoosening(
       CONFIRMATION_ACTIONS.ALLOW_RULE,
       permissionRuleSubject(rule),
@@ -1119,18 +1290,23 @@ function registerToolPermissionHandlers({
    * request — then answer the card. The workspace is the one the run asked
    * in, held by main; the renderer names only which offer it picked.
    * Cancelling the dialog leaves the card open, like "Always allow".
+   *
+   * @param {import('electron').IpcMainInvokeEvent} event
+   * @param {{ requestId: string, sandboxPaths?: string[] }} response
    */
   async function keepHostsForWorkspace(event, { requestId, sandboxPaths }) {
     const request = approvals.getPendingRequest?.(event.sender.id, requestId);
     if (!request) return { error: createMessage('approval.error.noPending') };
-    const entries = request.sandbox?.entries;
+    /** @type {SandboxCardView|undefined} */
+    const sandbox = request.sandbox;
+    const entries = sandbox?.entries;
     const root = typeof request.workspaceRoot === 'string' ? request.workspaceRoot : '';
     if (request.workspaceAllowed !== true || !root || !Array.isArray(entries) || entries.length === 0) {
       return { stored: false };
     }
     const hosts = [...new Set(entries.map((entry, i) => {
       const pick = Array.isArray(sandboxPaths) ? sandboxPaths[i] : undefined;
-      return entry.allow.includes(pick) ? pick : entry.allow[0];
+      return pick !== undefined && entry.allow.includes(pick) ? pick : entry.allow[0];
     }))];
     const confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.WORKSPACE_HOSTS, root, workspaceHostsDialog(hosts, root, createTranslator(getLocale())));
     if (!confirmation) return { error: createMessage('approval.error.workspaceNotConfirmed'), code: 'cancelled' };
@@ -1147,6 +1323,7 @@ function registerToolPermissionHandlers({
   }
 
   ipcMain.handle(REQ.TOOL_APPROVAL_RESPOND, async (event, payload) => {
+    /** @type {ApprovalAnswer|null} */
     const response = normalizeToolApprovalResponse(payload);
     if (!response) return createSettingsError(createMessage('approval.error.invalidResponse'));
     if (response.response === APPROVAL_RESPONSES.ALLOW_ALWAYS) {

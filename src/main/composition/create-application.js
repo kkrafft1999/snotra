@@ -114,16 +114,12 @@ const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handl
 const { createRemoteBridge } = require('./create-remote-bridge');
 const { registerRemoteHandlers } = require('../ipc/remote-handlers');
 
+/** @param {import('./application-options').ApplicationOptions} options */
 function createApplication({
   app,
   ipcMain,
   dialog,
   safeStorage,
-  /**
-   * When ciphertext may reach the disk (#1060): on a fresh Windows profile,
-   * once the key behind `safeStorage` is in `Local State`. index.js hands in
-   * the real one; without it nothing waits.
-   */
   safeStorageKey = KEY_ALWAYS_DURABLE,
   fs,
   path,
@@ -137,7 +133,6 @@ function createApplication({
   Menu = null,
   shell = null,
   clipboard = null,
-  /** Electron's, for a card waiting out of sight (#792, step 5); without it, none. */
   Notification = null,
   REQ,
   PUSH,
@@ -145,59 +140,16 @@ function createApplication({
   defaultProviderId = 'openai',
   speechProviderId = 'openai',
   updates: updatesOverride,
-  /** Where the system skills are; by default next to the app (`system-skills`). */
   systemSkillsDir = bundledSystemSkillsDir({ app, path }),
-  /**
-   * `fs.watch` aus dem synchronen fs-Modul — `fs` ist hier fs/promises und
-   * hat es nicht. Fehlt es, laeuft alles ohne Skill-Watcher (Issue #126).
-   */
   watchFile = null,
-  /**
-   * `fs.realpathSync.native`, aus demselben Grund von aussen hereingereicht.
-   * Nur der Dateibaum-Watcher braucht es — und nur, um Windows nicht an einem
-   * 8.3-Kurznamen abstuerzen zu lassen (Issue #158).
-   */
   realpathNative = null,
-  /**
-   * The bundled user manual (manual-service.js). With it the model gets
-   * search_manual and read_manual_page (#947); without it, neither.
-   */
   manual = null,
-  /**
-   * Called when the user switches the language (epic #277). The caller rebuilds
-   * the menu bar from it — the menu belongs to them, not here.
-   */
   onAppLocaleChanged = null,
-  /**
-   * Called when hidden files in the tree are switched on or off, and at
-   * start-up when the stored value is on (#436). The caller ticks the checkbox
-   * in its View menu, which starts unticked.
-   */
   onShowHiddenFilesChanged = null,
-  /**
-   * The process environment. Only `SNOTRA_NO_UPDATE_CHECK` is read: set to
-   * `1`, the silent check at start-up does not ask GitHub (#407). The smoke
-   * test sets it, so a release published in the meantime cannot put the
-   * update dialog over the window it takes screenshots of.
-   */
   env = process.env,
-  /**
-   * Electron's `session` and `WebContentsView`, for HTML files as live pages
-   * (#479). Without them the channels stay unregistered and the HTML view
-   * says that the preview could not be started.
-   */
   session = null,
   WebContentsView = null,
-  /**
-   * The notices for the window (#1001). The caller may hand in its own, so
-   * that the error path it set up before the app was ready (#978) posts to
-   * the same list the window reads; without one a fresh list is made here.
-   */
   notices: givenNotices = null,
-  /**
-   * The relay of the mobile remote (#1114). Without one, the Firebase relay of
-   * `src/main/remote/relay-endpoint.js`; tests hand in the in-memory relay.
-   */
   remoteRelay = null,
 }) {
   // Every adapter below asks this `os` for the home folder (#707).
@@ -263,6 +215,7 @@ function createApplication({
       webSearchKeyPresent = await webSearchStore.hasWebSearchApiKey();
       return webSearchKeyPresent;
     },
+    /** @param {string} plaintext */
     async setApiKey(plaintext) {
       const result = await webSearchStore.setWebSearchApiKey(plaintext);
       await webSearchSettings.refresh();
@@ -326,6 +279,7 @@ function createApplication({
   });
 
   // The engine is built further down; until then no chat is running.
+  /** @type {() => Iterable<string | null>} */
   let runningChatIds = () => [];
 
   /**
@@ -340,7 +294,11 @@ function createApplication({
     sessionGrants.retainChats(live);
   }
 
-  /** One chat's mode changed: only its own cards and approvals go. */
+  /**
+   * One chat's mode changed: only its own cards and approvals go.
+   *
+   * @param {string | null} chatId
+   */
   function invalidateChatPermissions(chatId) {
     approvals.invalidateChat(chatId, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
     sessionGrants.clearChat(chatId);
@@ -348,8 +306,10 @@ function createApplication({
 
   // Erst weiter unten gebaut (der Dienst braucht den Skill-Service), aber
   // schon hier benannt: Der Workspace-Wechsel direkt darunter greift darauf zu.
+  /** @type {ReturnType<typeof createSkillsWatcher> | null} */
   let skillsWatcher = null;
   // Dasselbe fuer den Dateibaum-Watcher (Issue #158).
+  /** @type {ReturnType<typeof createWorkspaceWatcher> | null} */
   let workspaceWatcher = null;
   // And for the skill scans: set once the skill service exists (#578).
   let dropSkillScans = () => {};
@@ -534,7 +494,8 @@ function createApplication({
     ? createManualLookup({ manual, loadLexer: () => loadVendoredMarkedLexer(MARKED_VENDOR_FILE, { readFileSync }) })
     : null;
   // Which skills and tools a chat has (#773); assigned once the skills exist.
-  let chatConfiguration = null;
+  /** @type {ReturnType<typeof createChatConfigurationService>} */
+  let chatConfiguration;
   const toolRegistry = createWorkspaceToolRegistry({
     fsService,
     webSearch,

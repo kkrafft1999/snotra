@@ -306,7 +306,7 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
    *   overrides?: unknown,
    *   proposal?: { kind?: unknown, name?: unknown, enable?: unknown, reason?: unknown },
    * }} [input]
-   * @returns {Promise<{ error: string } | { declined: true } | { card: object }>}
+   * @returns {ReturnType<import('../../application/ports/config-proposal-port').ConfigProposalPort['prepare']>}
    */
   async function prepareProposal({ workspaceRoot = null, chatSkillNames = [], overrides = null, proposal } = {}) {
     const kind = Object.values(CONFIG_PROPOSAL_KINDS).find((known) => known === proposal?.kind);

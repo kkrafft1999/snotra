@@ -95,7 +95,7 @@ function normalizeStoredTable(raw) {
  * @param {Pick<typeof import('fs/promises'), 'readFile' | 'open' | 'unlink' | 'rename'>} deps.fs
  *   the promise API (`fs/promises`), as the other stores take it
  * @param {typeof import('path')} deps.path
- * @param {{ getPath: (name: string) => string }} deps.app
+ * @param {Pick<import('electron').App, 'getPath'>} deps.app
  * @param {typeof fetch} [deps.fetchImpl]
  * @param {{ date?: string, models?: Record<string, unknown> }} [deps.snapshot]  the table bundled with the release
  * @param {Pick<typeof import('../providers'), 'getProvider' | 'litellmPriceProviders'>} [deps.providers]

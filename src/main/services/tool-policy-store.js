@@ -56,6 +56,7 @@ const {
   isCommandRule,
 } = require('../../shared/contracts/tool-permissions');
 const { createMessage } = require('../../shared/contracts/message');
+const { isRecord } = require('../../shared/runtime/is-record');
 const {
   CONFIRMATION_ACTIONS,
   NO_RECEIPTS,
@@ -104,6 +105,7 @@ const KEY_NOT_MADE_YET = Symbol('key not made yet');
 
 /** Thrown by `loadKey` when the key file exists but cannot be read (#512). */
 class PolicyKeyUnreadableError extends Error {
+  /** @param {{ message?: string } | null | undefined} cause  the error that stopped the read */
   constructor(cause) {
     super(`The key of the permission rules could not be read: ${cause?.message || cause}`);
     this.code = 'POLICY_KEY_UNREADABLE';
@@ -113,24 +115,69 @@ class PolicyKeyUnreadableError extends Error {
 /**
  * What the policy file holds, after normalising.
  *
- * @typedef {ReturnType<typeof normalizePermissionRules>[number]} PermissionRule
+ * @typedef {import('../../shared/contracts/tool-permissions').PermissionRule} PermissionRule
+ * @typedef {import('../../shared/contracts/tool-permissions').ToolPermissionMode} ToolPermissionMode
+ * @typedef {import('../../shared/contracts/program-allowances').ProgramAllowance} ProgramAllowance
+ * @typedef {import('../../shared/contracts/message').Message} Message
+ * @typedef {(typeof TOOL_POLICY_INTEGRITY)[keyof typeof TOOL_POLICY_INTEGRITY]} PolicyIntegrity
  * @typedef {object} PolicyPayload
  * @property {number} revision
- * @property {string} mode
+ * @property {ToolPermissionMode} mode
  * @property {PermissionRule[]} globalRules
  * @property {Record<string, PermissionRule[]>} workspaceRules
  * @property {string[]} sensitivePathPatterns
  * @property {string[]} unsandboxedWorkspaces
- * @property {ReturnType<typeof normalizeProgramAllowances>} programAllowances
- * @property {ReturnType<typeof normalizeWorkspaceProgramAllowances>} workspaceProgramAllowances
- * @property {ReturnType<typeof normalizeWorkspaceModes>} workspaceModes
- * @property {ReturnType<typeof normalizeWorkspaceHosts>} workspaceHosts
+ * @property {ProgramAllowance[]} programAllowances
+ * @property {Record<string, ProgramAllowance[]>} workspaceProgramAllowances
+ * @property {Record<string, ToolPermissionMode>} workspaceModes
+ * @property {Record<string, string[]>} workspaceHosts
  * @property {string[]} globalHosts
  * @property {boolean} newWorkspaceSandboxOff
  * @property {string[]} knownWorkspaces
  * @property {string[]} autoChats
  * @property {boolean} legacyWriteMigrated
  * @property {number} updatedAt
+ *
+ * What a read of the file makes of it: the payload (the fail-safe one on a
+ * check that failed) and what the check found. `missing` has no payload yet.
+ * @typedef {{ payload: null, integrity: 'missing' }
+ *   | { payload: PolicyPayload, integrity: Exclude<PolicyIntegrity, 'missing'> }} LoadedPolicy
+ *
+ * A receipt of the user-confirmation port, redeemed by identity (#980).
+ * @typedef {unknown} Receipt
+ *
+ * What a read hands out: the payload without its housekeeping, the version
+ * approvals bind to, and what the integrity check found.
+ * @typedef {object} PolicySnapshot
+ * @property {ToolPermissionMode} mode
+ * @property {PermissionRule[]} rules  the global and every workspace's rules
+ * @property {PermissionRule[]} globalRules
+ * @property {Record<string, PermissionRule[]>} workspaceRules
+ * @property {string[]} sensitivePathPatterns
+ * @property {string[]} unsandboxedWorkspaces
+ * @property {ProgramAllowance[]} programAllowances
+ * @property {Record<string, ProgramAllowance[]>} workspaceProgramAllowances
+ * @property {Record<string, ToolPermissionMode>} workspaceModes
+ * @property {Record<string, string[]>} workspaceHosts
+ * @property {string[]} globalHosts
+ * @property {boolean} newWorkspaceSandboxOff
+ * @property {string} policyVersion
+ * @property {PolicyIntegrity} integrity
+ * @property {boolean} encryptionAvailable
+ * @property {boolean} legacyWriteMigrated
+ * @property {number} revision
+ *
+ * What a change answers: the new state, or the old one with the refusal.
+ * `unchanged` is a change that turned out to be none.
+ * @typedef {PolicySnapshot & { ok: true, unchanged?: true }} PolicyChanged
+ * @typedef {PolicySnapshot & { ok: false, error: Message }} PolicyRefused
+ * @typedef {PolicyChanged | PolicyRefused} PolicyChange
+ *
+ * What an updater gets next to the draft, and what it hands back: `null` to
+ * write the draft, `{ error }` to refuse, `{ unchanged }` to write nothing.
+ * @typedef {{ encryptionAvailable: boolean, integrity: PolicyIntegrity }} UpdateContext
+ * @typedef {{ error?: Message, unchanged?: boolean } | null} UpdateOutcome
+ * @typedef {(draft: PolicyPayload, context: UpdateContext) => UpdateOutcome | Promise<UpdateOutcome>} PolicyUpdater
  */
 
 /** @returns {PolicyPayload} */
@@ -159,13 +206,23 @@ function defaultPayload() {
   };
 }
 
+/**
+ * @param {unknown} chatId
+ * @returns {string | null}
+ */
 function chatKey(chatId) {
   return typeof chatId === 'string' && chatId && chatId.length <= 200 ? chatId : null;
 }
 
-/** Chat ids, each once, the most recent last (#980). */
+/**
+ * Chat ids, each once, the most recent last (#980).
+ *
+ * @param {unknown} value
+ * @returns {string[]}
+ */
 function normalizeAutoChats(value) {
   if (!Array.isArray(value)) return [];
+  /** @type {string[]} */
   const out = [];
   for (const entry of value) {
     const id = chatKey(entry);
@@ -174,6 +231,11 @@ function normalizeAutoChats(value) {
   return out.slice(-MAX_AUTO_CHATS);
 }
 
+/**
+ * @param {string[]} list
+ * @param {string} chatId
+ * @returns {string[]}
+ */
 function withAutoChat(list, chatId) {
   return [...list.filter((id) => id !== chatId), chatId].slice(-MAX_AUTO_CHATS);
 }
@@ -182,8 +244,12 @@ function withAutoChat(list, chatId) {
  * Root → the hosts a connection card opened for that workspace (#946), in
  * the form the card offered them: `host:port` or `*.domain`. Anything a card
  * could not have offered is dropped, and so is a root without hosts.
+ *
+ * @param {unknown} value
+ * @returns {Record<string, string[]>}
  */
 function normalizeWorkspaceHosts(value) {
+  /** @type {Record<string, string[]>} */
   const out = {};
   if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
   for (const [root, raw] of Object.entries(value)) {
@@ -194,8 +260,14 @@ function normalizeWorkspaceHosts(value) {
   return out;
 }
 
-/** Root → the program allowances of that workspace (#1119); a root without any is dropped. */
+/**
+ * Root → the program allowances of that workspace (#1119); a root without any is dropped.
+ *
+ * @param {unknown} value
+ * @returns {Record<string, ProgramAllowance[]>}
+ */
 function normalizeWorkspaceProgramAllowances(value) {
+  /** @type {Record<string, ProgramAllowance[]>} */
   const out = {};
   if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
   for (const [root, raw] of Object.entries(value)) {
@@ -206,8 +278,14 @@ function normalizeWorkspaceProgramAllowances(value) {
   return out;
 }
 
-/** Root → `ask-all` | `auto`; `smart` and unknown values are no entry (#413). */
+/**
+ * Root → `ask-all` | `auto`; `smart` and unknown values are no entry (#413).
+ *
+ * @param {unknown} value
+ * @returns {Record<string, ToolPermissionMode>}
+ */
 function normalizeWorkspaceModes(value) {
+  /** @type {Record<string, ToolPermissionMode>} */
   const out = {};
   if (!value || typeof value !== 'object' || Array.isArray(value)) return out;
   for (const [root, raw] of Object.entries(value)) {
@@ -219,9 +297,15 @@ function normalizeWorkspaceModes(value) {
   return out;
 }
 
-/** Canonical roots only, each once; anything else is not a workspace (#357). */
+/**
+ * Canonical roots only, each once; anything else is not a workspace (#357).
+ *
+ * @param {unknown} value
+ * @returns {string[]}
+ */
 function normalizeWorkspaceRoots(value) {
   if (!Array.isArray(value)) return [];
+  /** @type {string[]} */
   const out = [];
   for (const entry of value) {
     if (typeof entry !== 'string' || !entry || out.includes(entry)) continue;
@@ -230,6 +314,11 @@ function normalizeWorkspaceRoots(value) {
   return out;
 }
 
+/**
+ * @param {unknown} a
+ * @param {unknown} b
+ * @returns {boolean}
+ */
 function sameCommandRule(a, b) {
   return (
     isCommandRule(a) &&
@@ -243,12 +332,8 @@ function sameCommandRule(a, b) {
 
 /**
  * @param {{
- *   app: { getPath: (name: string) => string },
- *   safeStorage: {
- *     isEncryptionAvailable: () => boolean,
- *     encryptString: (text: string) => Buffer,
- *     decryptString: (data: Buffer) => string,
- *   },
+ *   app: Pick<import('electron').App, 'getPath'>,
+ *   safeStorage: Pick<import('electron').SafeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'>,
  *   safeStorageKey?: import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability,
  *   fs: typeof import('fs/promises'),
  *   path: typeof import('path'),
@@ -366,19 +451,29 @@ function createToolPolicyStore({
    * key behind safeStorage (#1060), the check does not: it fails as it would
    * with the new key, and the next change makes the key.
    */
+  /** @returns {Promise<Buffer | null | typeof KEY_NOT_MADE_YET>} */
   async function keyToVerify() {
     if (!encryptionAvailable() || !safeStorageKey.wouldWait()) return loadKey();
     return (await readStoredKey()) || KEY_NOT_MADE_YET;
   }
 
+  /** @param {unknown} payload */
   function serializePayload(payload) {
     return JSON.stringify(payload);
   }
 
+  /**
+   * @param {Buffer} key
+   * @param {string} serialized
+   */
   function sign(key, serialized) {
     return crypto.createHmac('sha256', key).update(serialized).digest('hex');
   }
 
+  /**
+   * @param {unknown} a
+   * @param {unknown} b
+   */
   function signaturesEqual(a, b) {
     if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
     try {
@@ -388,16 +483,21 @@ function createToolPolicyStore({
     }
   }
 
+  /**
+   * @param {unknown} raw
+   * @returns {PolicyPayload}
+   */
   function normalizePayload(raw) {
-    const data = raw && typeof raw === 'object' ? raw : {};
+    /** @type {Record<string, unknown>} */
+    const data = isRecord(raw) ? raw : {};
     const out = defaultPayload();
-    out.revision = Number.isInteger(data.revision) && data.revision >= 0 ? data.revision : 0;
+    out.revision = typeof data.revision === 'number' && Number.isInteger(data.revision) && data.revision >= 0 ? data.revision : 0;
     out.mode = normalizeToolPermissionMode(data.mode);
     out.globalRules = normalizePermissionRules(data.globalRules).filter(
       (rule) => rule.scope === PERMISSION_RULE_SCOPES.GLOBAL
     );
     out.workspaceRules = {};
-    if (data.workspaceRules && typeof data.workspaceRules === 'object') {
+    if (isRecord(data.workspaceRules)) {
       for (const [root, rules] of Object.entries(data.workspaceRules)) {
         if (typeof root !== 'string' || !root) continue;
         const normalized = normalizePermissionRules(rules).filter(
@@ -417,13 +517,16 @@ function createToolPolicyStore({
     out.knownWorkspaces = normalizeWorkspaceRoots(data.knownWorkspaces).slice(-MAX_KNOWN_WORKSPACES);
     out.autoChats = normalizeAutoChats(data.autoChats);
     out.legacyWriteMigrated = data.legacyWriteMigrated === true;
-    out.updatedAt = Number.isFinite(data.updatedAt) ? data.updatedAt : 0;
+    out.updatedAt = typeof data.updatedAt === 'number' && Number.isFinite(data.updatedAt) ? data.updatedAt : 0;
     return out;
   }
 
   /**
    * Fail-safe: only what tightens survives a failed check — blocks, patterns,
    * and "Always ask" as the mode (#419) or as a workspace default (#413).
+   *
+   * @param {unknown} payload
+   * @returns {PolicyPayload}
    */
   function failSafe(payload) {
     const out = normalizePayload(payload);
@@ -470,6 +573,8 @@ function createToolPolicyStore({
   /**
    * Liest die Datei und prüft die Signatur. Liefert `{ payload, integrity }`;
    * bei `invalid`/`unsigned` ist payload bereits die Fail-safe-Fassung.
+   *
+   * @returns {Promise<LoadedPolicy>}
    */
   async function loadFromDisk() {
     let raw;
@@ -514,6 +619,7 @@ function createToolPolicyStore({
     return { payload: normalizePayload(parsed.payload), integrity: INTEGRITY.OK };
   }
 
+  /** @param {PolicyPayload} payload */
   async function writeToDisk(payload) {
     const target = policyPath();
     const key = await loadKey();
@@ -525,16 +631,26 @@ function createToolPolicyStore({
     await writeFileAtomic(fs, target, JSON.stringify(file), { mode: 0o600 });
   }
 
+  /**
+   * @param {PolicyPayload} payload
+   * @param {PolicyIntegrity} integrity
+   */
   function policyVersionOf(payload, integrity) {
     return `${payload.revision}:${integrity}`;
   }
 
+  /** @param {PolicyPayload} payload */
   function allRules(payload) {
     const out = [...payload.globalRules];
     for (const rules of Object.values(payload.workspaceRules)) out.push(...rules);
     return out;
   }
 
+  /**
+   * @param {PolicyPayload} payload
+   * @param {PolicyIntegrity} integrity
+   * @returns {PolicySnapshot}
+   */
   function snapshot(payload, integrity) {
     return {
       mode: payload.mode,
@@ -582,9 +698,12 @@ function createToolPolicyStore({
   /**
    * Serialisierte Änderung: liest den (fail-safe geprüften) Stand, wendet den
    * Updater an, erhöht die Revision und schreibt signiert zurück.
+   *
+   * @param {PolicyUpdater} updater
+   * @returns {Promise<PolicyChange>}
    */
   function update(updater) {
-    const task = writeChain.then(async () => {
+    const task = writeChain.then(/** @returns {Promise<PolicyChange>} */ async () => {
       const loaded = await loadFromDisk();
       // Nothing is written over a file that could not be read (#512): its
       // blocks would be gone for good, under a fresh signature.
@@ -611,11 +730,16 @@ function createToolPolicyStore({
   /**
    * Whether a loosening was confirmed by a person at the machine (#980). The
    * receipt is spent either way.
+   *
+   * @param {Receipt} confirmation
+   * @param {string} action
+   * @param {string} [subject]
    */
   function confirmedBy(confirmation, action, subject) {
     return confirmationReceipts.redeem(confirmation, action, subject) === true;
   }
 
+  /** @returns {{ error: Message }} */
   function notConfirmed() {
     return { error: createMessage('permissions.error.notConfirmed') };
   }
@@ -624,6 +748,9 @@ function createToolPolicyStore({
    * The mode the user picks for the chat on screen (#211). "Auto" needs a
    * receipt bound to that chat (#980), and the chat is remembered as
    * confirmed; any other mode forgets it again.
+   *
+   * @param {unknown} rawMode
+   * @param {{ confirmation?: Receipt, chatId?: unknown }} [options]
    */
   async function setMode(rawMode, { confirmation = null, chatId = null } = {}) {
     const mode = normalizeToolPermissionMode(rawMode);
@@ -646,6 +773,9 @@ function createToolPolicyStore({
    * "Auto" only where it was confirmed before, both signed in this file: for
    * this chat, or as the default of the workspace on screen (#413) — a chat
    * that got "Auto" from that default is remembered as confirmed.
+   *
+   * @param {unknown} rawMode
+   * @param {{ chatId?: unknown, workspaceRoot?: unknown }} [options]
    */
   async function restoreMode(rawMode, { chatId = null, workspaceRoot = null } = {}) {
     const mode = normalizeToolPermissionMode(rawMode);
@@ -664,13 +794,19 @@ function createToolPolicyStore({
     });
   }
 
-  /** Result carries `ruleId`: the new rule's, or that of the command rule it repeats (#121). */
+  /**
+   * Result carries `ruleId`: the new rule's, or that of the command rule it repeats (#121).
+   *
+   * @param {unknown} rawRule
+   * @param {{ confirmation?: Receipt }} [options]
+   */
   async function addRule(rawRule, { confirmation = null } = {}) {
     /** @type {string | null} */
     let ruleId = null;
     const result = await update((draft, { encryptionAvailable: enc }) => {
-      const id = typeof rawRule?.id === 'string' && rawRule.id.trim() ? rawRule.id.trim() : crypto.randomUUID();
-      const rule = normalizePermissionRule({ ...rawRule, id, createdAt: now() });
+      const fields = isRecord(rawRule) ? rawRule : {};
+      const id = typeof fields.id === 'string' && fields.id.trim() ? fields.id.trim() : crypto.randomUUID();
+      const rule = normalizePermissionRule({ ...fields, id, createdAt: now() });
       if (!rule) return { error: createMessage('permissions.error.invalidRule') };
       if (rule.effect === PERMISSION_RULE_EFFECTS.ALLOW && !enc) {
         return { error: createMessage('permissions.error.allowNeedsEncryption') };
@@ -702,7 +838,12 @@ function createToolPolicyStore({
     return result.ok ? { ...result, ruleId } : result;
   }
 
-  /** Taking a block away needs a receipt for that rule (#980); an allow rule goes freely. */
+  /**
+   * Taking a block away needs a receipt for that rule (#980); an allow rule goes freely.
+   *
+   * @param {unknown} ruleId
+   * @param {{ confirmation?: Receipt }} [options]
+   */
   async function removeRule(ruleId, { confirmation = null } = {}) {
     const id = typeof ruleId === 'string' ? ruleId.trim() : '';
     return update((draft) => {
@@ -727,13 +868,22 @@ function createToolPolicyStore({
     });
   }
 
-  /** Effekt einer Regel (für die native Bestätigung beim Löschen von Sperren). */
+  /**
+   * Effekt einer Regel (für die native Bestätigung beim Löschen von Sperren).
+   *
+   * @param {string} ruleId
+   */
   async function findRule(ruleId) {
     const state = await read();
     return state.rules.find((rule) => rule.id === ruleId) || null;
   }
 
-  /** Adding patterns tightens; dropping one needs a receipt for exactly those dropped (#514, #980). */
+  /**
+   * Adding patterns tightens; dropping one needs a receipt for exactly those dropped (#514, #980).
+   *
+   * @param {unknown} rawPatterns
+   * @param {{ confirmation?: Receipt }} [options]
+   */
   async function setSensitivePathPatterns(rawPatterns, { confirmation = null } = {}) {
     return update((draft) => {
       const next = normalizeSensitivePathPatterns(rawPatterns);
@@ -751,6 +901,10 @@ function createToolPolicyStore({
    * Switches the sandbox of the execution tools off or back on for one
    * workspace (#357). Off needs `safeStorage`, like every other loosening,
    * and a receipt for that root (#980).
+   *
+   * @param {unknown} root
+   * @param {unknown} enabled
+   * @param {{ confirmation?: Receipt }} [options]
    */
   async function setWorkspaceSandbox(root, enabled, { confirmation = null } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
@@ -769,7 +923,11 @@ function createToolPolicyStore({
     });
   }
 
-  /** Whether the sandbox is switched off for this workspace (#357). */
+  /**
+   * Whether the sandbox is switched off for this workspace (#357).
+   *
+   * @param {unknown} root
+   */
   async function isWorkspaceSandboxDisabled(root) {
     if (typeof root !== 'string' || !root) return false;
     const state = await read();
@@ -780,6 +938,10 @@ function createToolPolicyStore({
    * The mode new chats in one workspace start with (#413). `smart` removes the
    * entry. `auto` needs `safeStorage`, like every other loosening, and a
    * receipt for that root unless it is the default already (#980).
+   *
+   * @param {unknown} root
+   * @param {unknown} rawMode
+   * @param {{ confirmation?: Receipt }} [options]
    */
   async function setWorkspaceMode(root, rawMode, { confirmation = null } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
@@ -802,18 +964,34 @@ function createToolPolicyStore({
     });
   }
 
-  /** The default mode of one workspace; `smart` when it has none (#413). */
+  /**
+   * The default mode of one workspace; `smart` when it has none (#413).
+   *
+   * @param {unknown} root
+   * @returns {Promise<ToolPermissionMode>}
+   */
   async function readWorkspaceMode(root) {
     if (typeof root !== 'string' || !root) return DEFAULT_TOOL_PERMISSION_MODE;
     const state = await read();
     return state.workspaceModes[root] || DEFAULT_TOOL_PERMISSION_MODE;
   }
 
-  /** The allowances of one scope (#1119): a workspace's own, or those for every workspace (null). */
+  /**
+   * The allowances of one scope (#1119): a workspace's own, or those for every workspace (null).
+   *
+   * @param {PolicyPayload} draft
+   * @param {string | null} root
+   * @returns {ProgramAllowance[]}
+   */
   function allowanceList(draft, root) {
     return root ? draft.workspaceProgramAllowances[root] || [] : draft.programAllowances;
   }
 
+  /**
+   * @param {PolicyPayload} draft
+   * @param {string | null} root
+   * @param {ProgramAllowance[]} list
+   */
   function setAllowanceList(draft, root, list) {
     if (!root) draft.programAllowances = list;
     else if (list.length > 0) draft.workspaceProgramAllowances[root] = list;
@@ -828,6 +1006,9 @@ function createToolPolicyStore({
    * `safeStorage` and a receipt for the program in its scope (#980); only
    * taking rights away works without — and moving an allowance from every
    * workspace to one of them takes rights away, the other way round does not.
+   *
+   * @param {unknown} rawEntry
+   * @param {{ root?: string | null, replacePath?: string | null, replaceRoot?: string | null, confirmation?: Receipt }} [options]
    */
   async function setProgramAllowance(rawEntry, { root = null, replacePath = null, replaceRoot = root, confirmation = null } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
@@ -874,7 +1055,12 @@ function createToolPolicyStore({
     });
   }
 
-  /** Takes a program allowance away (#408) — a tightening, never refused. `root` null: every workspace. */
+  /**
+   * Takes a program allowance away (#408) — a tightening, never refused. `root` null: every workspace.
+   *
+   * @param {string} programPath
+   * @param {{ root?: string | null }} [options]
+   */
   async function removeProgramAllowance(programPath, { root = null } = {}) {
     return update((draft) => {
       setAllowanceList(draft, root || null, allowanceList(draft, root || null).filter((entry) => entry.path !== programPath));
@@ -886,6 +1072,8 @@ function createToolPolicyStore({
    * The allowances a run in `root` gets: those for every workspace and the
    * workspace's own, added up per program (#1119). Without a root only the
    * global ones. A store that cannot be read has none (#408).
+   *
+   * @param {string | null} [root]
    */
   async function readProgramAllowances(root = null) {
     const state = await read();
@@ -897,6 +1085,10 @@ function createToolPolicyStore({
    * Keeps hosts open for every run in one workspace (#946) — what a
    * connection card offered, confirmed by the user for that root (#980). A
    * loosening, so it needs `safeStorage`. Hosts already kept are no error.
+   *
+   * @param {unknown} root
+   * @param {unknown} rawHosts
+   * @param {{ confirmation?: Receipt }} [options]
    */
   async function addWorkspaceHosts(root, rawHosts, { confirmation = null } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
@@ -915,7 +1107,12 @@ function createToolPolicyStore({
     });
   }
 
-  /** Closes one host of a workspace again (#946) — a tightening, never refused. */
+  /**
+   * Closes one host of a workspace again (#946) — a tightening, never refused.
+   *
+   * @param {unknown} root
+   * @param {string} host
+   */
   async function removeWorkspaceHost(root, host) {
     return update((draft) => {
       if (typeof root !== 'string' || !root) return { error: createMessage('permissions.error.noWorkspace') };
@@ -932,6 +1129,9 @@ function createToolPolicyStore({
    * would offer: `host:port` or one level of `*.` above a host, never a
    * shared domain. A loosening: `safeStorage` and a receipt for exactly these
    * hosts.
+   *
+   * @param {unknown} rawHosts
+   * @param {{ confirmation?: Receipt }} [options]
    */
   async function addGlobalHosts(rawHosts, { confirmation = null } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
@@ -948,7 +1148,11 @@ function createToolPolicyStore({
     });
   }
 
-  /** Closes a host kept open everywhere (#1119) — a tightening, never refused. */
+  /**
+   * Closes a host kept open everywhere (#1119) — a tightening, never refused.
+   *
+   * @param {string} host
+   */
   async function removeGlobalHost(host) {
     return update((draft) => {
       draft.globalHosts = draft.globalHosts.filter((entry) => entry !== host);
@@ -956,7 +1160,11 @@ function createToolPolicyStore({
     });
   }
 
-  /** Every root the policy holds anything for. */
+  /**
+   * Every root the policy holds anything for.
+   *
+   * @param {PolicyPayload} draft
+   */
   function rootsWithSettings(draft) {
     return [
       ...draft.unsandboxedWorkspaces,
@@ -971,12 +1179,19 @@ function createToolPolicyStore({
    * While new workspaces start without the sandbox (#1119), a folder whose
    * sandbox setting was decided — by hand or by that default — is known, so
    * it is not taken for a new one again.
+   *
+   * @param {PolicyPayload} draft
+   * @param {unknown} root
    */
   function rememberWorkspace(draft, root) {
     if (draft.newWorkspaceSandboxOff !== true || typeof root !== 'string' || !root) return;
     draft.knownWorkspaces = [...draft.knownWorkspaces.filter((entry) => entry !== root), root].slice(-MAX_KNOWN_WORKSPACES);
   }
 
+  /**
+   * @param {PolicyPayload} payload
+   * @param {string} root
+   */
   function isKnownWorkspace(payload, root) {
     return payload.knownWorkspaces.includes(root) || rootsWithSettings(payload).includes(root);
   }
@@ -988,6 +1203,9 @@ function createToolPolicyStore({
    * and every folder the policy holds something for — keeps its setting.
    * On again forgets that list; folders that started without the sandbox in
    * the meantime keep their setting too.
+   *
+   * @param {unknown} enabled
+   * @param {{ confirmation?: Receipt, knownRoots?: unknown }} [options]
    */
   async function setNewWorkspaceSandbox(enabled, { confirmation = null, knownRoots = [] } = {}) {
     return update((draft, { encryptionAvailable: enc }) => {
@@ -1016,6 +1234,8 @@ function createToolPolicyStore({
    * changes again. The default itself was confirmed and is signed; without
    * `safeStorage` the folder simply stays isolated. Nothing is written for a
    * folder that is known, or while the default is on.
+   *
+   * @param {string | null} root
    */
   async function noteWorkspaceOpened(root) {
     if (typeof root !== 'string' || !root) return { ok: true, changed: false };
@@ -1036,6 +1256,8 @@ function createToolPolicyStore({
    * "Reset sandbox for this workspace" (#1119): the sandbox back on, its own
    * programs and hosts gone. What applies in every workspace stays. Only
    * takes rights away.
+   *
+   * @param {unknown} root
    */
   async function resetWorkspaceSandbox(root) {
     return update((draft) => {
@@ -1071,6 +1293,10 @@ function createToolPolicyStore({
   // opt-out (#357), the default mode (#413), the hosts kept open (#946) and
   // its own program allowances (#1119) go with the rules. When blocks or "Always ask" go too, that is a loosening
   // and needs a receipt for the root (#514, #980).
+  /**
+   * @param {unknown} root
+   * @param {{ confirmation?: Receipt }} [options]
+   */
   async function resetWorkspaceRules(root, { confirmation = null } = {}) {
     return update((draft) => {
       if (typeof root === 'string' && root) {
@@ -1088,7 +1314,11 @@ function createToolPolicyStore({
     });
   }
 
-  /** The widest action: always asked, so always a receipt (#514, #980). */
+  /**
+   * The widest action: always asked, so always a receipt (#514, #980).
+   *
+   * @param {{ confirmation?: Receipt }} [options]
+   */
   async function resetAll({ confirmation = null } = {}) {
     return update((draft) => {
       if (!confirmedBy(confirmation, CONFIRMATION_ACTIONS.RESET_ALL, '')) return notConfirmed();

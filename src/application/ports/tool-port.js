@@ -19,7 +19,7 @@
  * @property {string|null} [skillName]  the skill the path belongs to, also when given absolutely (#427)
  * @property {string} [skillPath]  the path inside that skill's folder
  * @property {string} [absPath]  the resolved absolute path
- * @property {string} [root]  the folder the path resolved in: the open folder or a skill's
+ * @property {string|null} [root]  the folder the path resolved in: the open folder or a skill's; `null` for a target outside both
  * @property {string[]} [rulePaths]  the spellings a permission rule is matched against, lexical and real
  * @property {'read'|'write'} [access]  what the call does with a path outside the open folder (#792)
  * @property {{ offers: OutsideGrant[] }} [outside]  a path outside the open folder no card has opened
@@ -87,7 +87,7 @@
  * @property {string[]} [riskClasses]
  * @property {string} [locale]  the interface language, for sentences that quote a settings page (#294)
  * @property {boolean} [ownSecretsCheck]  hold the output back when it contains an own secret (§5)
- * @property {{ writePaths: string[], readPaths: string[], hosts: string[] }} [sandboxGrants]
+ * @property {{ writePaths: string[], readPaths: string[], hosts: string[] }|null} [sandboxGrants]
  *   what sandbox cards opened for the shell and Python runs of this chat (#792)
  * @property {(request: { target: string, allow: string[] }, options?: { signal?: AbortSignal })
  *   => Promise<{ outcome: string, pattern?: string }>} [onSandboxNetworkAsk]
@@ -133,16 +133,18 @@
  * @property {number} [waitMs]
  * @property {boolean} [noWorkspace]
  * @property {string} [line]  fertige Anzeige-Zeile (done-Phase), für Persistenz
- * @property {object} [permission]  bereinigter Audit-Eintrag (Entscheidung, Klassen, Status)
+ * @property {import('../../shared/contracts/tool-permissions').PermissionAuditEntry & { sensitive?: true }} [permission]
+ *   bereinigter Audit-Eintrag (Entscheidung, Klassen, Status); `sensitive` when the output was bound to a provider
  * @property {number} [round]  1-based tool round of the turn the call came in (#187)
  * @property {SchemaViolations} [schema]  schema violations in the arguments (#187)
  * @property {string} [skill]  the skill the call reads from or writes to (#61, #160, #173)
  * @property {string} [category]  icon and group in the tool log, from the descriptor (#1008)
  * @property {Array<object>} [changes]  what the call changed, summaries only (#348)
- * @property {object} [sandboxBlocked]  what the sandbox refused during the run (#792)
- * @property {object} [sandboxDecision]  what the user decided on the sandbox card (#792)
- * @property {Array<object>} [sandboxLive]  connections decided while the command waited (#792)
- * @property {Array<object>} [sandboxOutside]  paths outside the open folder decided on a card (#792)
+ * @property {import('../../shared/contracts/chat').SandboxBlocked|null} [sandboxBlocked]  what the sandbox refused during the run (#792);
+ *   `null` while a refusal waits to be normalized
+ * @property {import('../../shared/contracts/chat').SandboxDecision} [sandboxDecision]  what the user decided on the sandbox card (#792)
+ * @property {import('../../shared/contracts/chat').SandboxLiveEntry[]|null} [sandboxLive]  connections decided while the command waited (#792)
+ * @property {import('../../shared/contracts/chat').SandboxOutsideEntry[]|null} [sandboxOutside]  paths outside the open folder decided on a card (#792)
  * @property {{ originalChars: number, keptChars: number }} [shortened]  output cut to the budget (#169)
  * @property {string} [skillPath]  a skill file reached by its absolute path, in the skill's own spelling (#427)
  * @property {{ outcome?: string }} [configProposal]  how a `propose_config` call ended (#774)
@@ -165,7 +167,17 @@
  * @property {boolean} [sensitive]  Ausgabe enthält lokal erkannte sensible Inhalte
  * @property {{ reason: string }} [hardLimit]  Ausgabe zurückgehalten (z. B. eigene Provider-Secrets)
  * @property {Array<object>} [fileChanges]  what a writing tool changed, before and after (#348)
- * @property {object} [sandboxBlocked]  what the sandbox refused during a shell or Python run (#792)
+ * @property {SandboxRefusal} [sandboxBlocked]  what the sandbox refused during a shell or Python run (#792)
+ */
+
+/**
+ * What the sandbox refused during one run, as the runner reports it. The engine
+ * normalizes it (`normalizeSandboxBlocked`) before it travels to the renderer
+ * or is stored. `allow` lists what a card may open for the entry.
+ *
+ * @typedef {Object} SandboxRefusal
+ * @property {Array<{ kind: string, target: string, count: number, folder?: boolean, allow?: string[] }>} [entries]
+ * @property {string[]} [raw]
  */
 
 /**

@@ -38,7 +38,7 @@ async function resolveDefaultPath(workspaceFolderStore) {
  * @param {object} deps
  * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
  * @param {Pick<import('electron').Dialog, 'showOpenDialog'>} deps.dialog
- * @param {() => import('electron').BrowserWindow} deps.getMainWindow
+ * @param {() => import('electron').BrowserWindow | null} deps.getMainWindow
  * @param {Pick<ReturnType<typeof import('../services/workspace-activation').createWorkspaceActivation>, 'activateChosenFolder'>|null} deps.workspaceActivation
  * @param {Parameters<typeof resolveDefaultPath>[0]} deps.workspaceFolderStore
  * @param {Record<string, string>} deps.REQ
@@ -71,7 +71,8 @@ function registerDialogHandlers({
     const defaultPath = await resolveDefaultPath(workspaceFolderStore);
     if (defaultPath) options.defaultPath = defaultPath;
 
-    const result = await dialog.showOpenDialog(getMainWindow(), options);
+    const win = getMainWindow();
+    const result = await (win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options));
     if (result.canceled || result.filePaths.length === 0) return null;
     if (!workspaceActivation) return result.filePaths[0];
     return workspaceActivation.activateChosenFolder(result.filePaths[0]);

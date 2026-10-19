@@ -18,7 +18,7 @@ const {
 
 /**
  * @param {{
- *   ipcMain: { handle: (channel: string, handler: Function) => void },
+ *   ipcMain: import('./trusted-sender').GuardedIpcMain,
  *   pairing: {
  *     getState: () => Promise<unknown>, start: () => Promise<unknown>, cancel: () => Promise<unknown>,
  *     unpair: () => Promise<unknown>, subscribe: (listener: (state: unknown) => void) => unknown,

@@ -18,8 +18,8 @@ const VARIANT_BY_INSTALL_KIND = Object.freeze({
 
 /**
  * @param {Object} deps
- * @param {{ getPath?: (name: string) => string, isPackaged?: boolean }} [deps.app]
- * @param {{ isEncryptionAvailable?: () => boolean }} [deps.safeStorage]
+ * @param {Partial<Pick<import('electron').App, 'getPath' | 'isPackaged'>>} [deps.app]
+ * @param {Partial<Pick<import('electron').SafeStorage, 'isEncryptionAvailable'>>} [deps.safeStorage]
  * @param {string} [deps.platform]
  * @param {NodeJS.ProcessEnv} [deps.env]
  * @param {string} [deps.execPath]

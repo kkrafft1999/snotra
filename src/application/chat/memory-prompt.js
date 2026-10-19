@@ -62,7 +62,7 @@ const STALE_ENTRIES_RULE =
  * The block of one level.
  * @param {Array<{scope: string, text: string, truncated?: boolean, guard?: string}>} files
  * @param {string} scope  one of `MEMORY_SCOPES`
- * @returns {{ text: string, parts: Array<object> }}
+ * @returns {{ text: string, parts: Array<import('../../shared/contracts/context-breakdown').ContextPart> }}
  */
 function buildMemoryBlock(files, scope) {
   const file = normalizeMemoryFiles(files).find((entry) => entry.scope === scope);
