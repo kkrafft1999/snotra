@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Two changes to @anthropic-ai/sandbox-runtime, made after every install.
+ * Three changes to @anthropic-ai/sandbox-runtime, made after every install.
  *
  * **The ask callback (#792).** The runtime's network proxy asks the host
  * application about a connection that matches no rule — and passes host and
@@ -24,9 +24,19 @@
  * monitor, which hands it one complete entry at a time. Without it a refusal
  * can go missing from a run's card and from what the model is told.
  *
+ * **The SSH relay (#1155).** On Linux the runtime's seccomp filter refuses
+ * every `socket(AF_UNIX)` inside a run, so ssh there cannot reach the
+ * ssh-agent, and the filter cannot tell one socket path from another. Only
+ * the lines the runtime's inner script runs before `apply-seccomp` may open
+ * one — that is where its own proxy relays start. This adds one more relay
+ * there, and only for a run whose environment names Snotra's launcher in
+ * `SNOTRA_SSH_RELAY`: it listens on the run's own loopback and hands each
+ * connection to the launcher, which checks git's request and runs ssh with
+ * the agent. Without it Git over SSH cannot sign in inside the Linux sandbox.
+ *
  * Nothing breaks when a line to patch is not there; the install only warns.
- * `test/sandbox-live-network.test.js` and `test/sandbox-log-monitor.test.js`
- * fail in that case, so that a runtime update that moved a line is noticed
+ * `test/sandbox-live-network.test.js`, `test/sandbox-log-monitor.test.js` and
+ * `test/sandbox-ssh-relay.test.js` fail in that case, so that a runtime update that moved a line is noticed
  * instead of quietly losing what it was for.
  */
 
@@ -39,6 +49,9 @@ const PATCHED = 'await sandboxAskCallback({ host, port, encodedCommand })';
 const MONITOR_ANCHOR = "logProcess.stdout?.on('data', (data) => {";
 const MONITOR_PATCHED = "snotraOnLogEntry(logProcess.stdout, (data) => {";
 
+const RELAY_ANCHOR = '        ...RELAYS_LISTEN,\n    ];';
+const RELAY_PATCHED = '        ...RELAYS_LISTEN,\n        ...snotraSshRelay(socat),\n    ];';
+
 function runtimeFile(name) {
   const entry = require.resolve('@anthropic-ai/sandbox-runtime');
   return path.join(path.dirname(entry), 'sandbox', name);
@@ -50,6 +63,10 @@ function managerPath() {
 
 function monitorPath() {
   return runtimeFile('macos-sandbox-utils.js');
+}
+
+function linuxPath() {
+  return runtimeFile('linux-sandbox-utils.js');
 }
 
 /**
@@ -82,6 +99,40 @@ function snotraOnLogEntry(stream, handler) {
 }
 
 /**
+ * The inner-script line that starts the SSH relay (#1155), for a run whose
+ * environment sets `SNOTRA_SSH_RELAY` to the launcher. It runs before the
+ * seccomp filter, beside the runtime's own relays and with the same `socat`;
+ * the launcher is started by absolute path, never looked up. The port is the
+ * one `ssh-relay-client.sh` connects to; it exists only in the run's own
+ * network namespace. `set -f` and an empty IFS keep a space in the
+ * launcher's path from splitting it. Copied into the runtime as it stands, so
+ * it must not use anything from this file; no `!` anywhere and no `,` in the
+ * SYSTEM command (the runtime's note on RELAYS_LISTEN; socat's address syntax).
+ *
+ * @param {string} socat  the runtime's socat, already quoted for the shell
+ * @returns {string[]}
+ */
+function snotraSshRelay(socat) {
+  return [
+    '[ -z "${SNOTRA_SSH_RELAY:-}" ] || ' + socat
+      + " -t 3600 TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr 'SYSTEM:set -f;IFS=;exec /bin/sh $SNOTRA_SSH_RELAY'"
+      + ' >/dev/null 2>&1 &',
+  ];
+}
+
+/**
+ * Appends a helper's source ahead of the source map comment, which stays the
+ * file's last line.
+ *
+ * @param {string} source
+ * @param {string} helper
+ */
+function withHelper(source, helper) {
+  const map = source.lastIndexOf('\n//# sourceMappingURL=');
+  return map >= 0 ? `${source.slice(0, map)}${helper}${source.slice(map)}` : `${source}${helper}`;
+}
+
+/**
  * @param {string} [file]  the runtime's sandbox-manager.js
  * @returns {'patched'|'already'|'missing'}
  */
@@ -104,10 +155,21 @@ function patchLogMonitor(file = monitorPath()) {
   const count = source.split(MONITOR_ANCHOR).length - 1;
   if (count !== 1) return 'missing';
   const helper = `\n// Added by Snotra, scripts/patch-sandbox-runtime.js (#881).\n${snotraOnLogEntry.toString()}\n`;
-  const patched = source.replace(MONITOR_ANCHOR, MONITOR_PATCHED);
-  // Ahead of the source map comment, which stays the file's last line.
-  const map = patched.lastIndexOf('\n//# sourceMappingURL=');
-  fs.writeFileSync(file, map >= 0 ? `${patched.slice(0, map)}${helper}${patched.slice(map)}` : `${patched}${helper}`);
+  fs.writeFileSync(file, withHelper(source.replace(MONITOR_ANCHOR, MONITOR_PATCHED), helper));
+  return 'patched';
+}
+
+/**
+ * @param {string} [file]  the runtime's linux-sandbox-utils.js
+ * @returns {'patched'|'already'|'missing'}
+ */
+function patchSshRelay(file = linuxPath()) {
+  const source = fs.readFileSync(file, 'utf8');
+  if (source.includes(RELAY_PATCHED)) return 'already';
+  const count = source.split(RELAY_ANCHOR).length - 1;
+  if (count !== 1) return 'missing';
+  const helper = `\n// Added by Snotra, scripts/patch-sandbox-runtime.js (#1155).\n${snotraSshRelay.toString()}\n`;
+  fs.writeFileSync(file, withHelper(source.replace(RELAY_ANCHOR, RELAY_PATCHED), helper));
   return 'patched';
 }
 
@@ -121,6 +183,11 @@ const PATCHES = [
     name: 'log monitor',
     apply: () => patchLogMonitor(),
     without: 'refusals that arrive together in the log may go missing from a run (#881)',
+  },
+  {
+    name: 'ssh relay',
+    apply: () => patchSshRelay(),
+    without: 'Git over SSH cannot sign in inside the Linux sandbox (#1155)',
   },
 ];
 
@@ -145,4 +212,5 @@ if (require.main === module) {
 module.exports = {
   patchSandboxRuntime, managerPath, ANCHOR, PATCHED,
   patchLogMonitor, monitorPath, MONITOR_ANCHOR, MONITOR_PATCHED, snotraOnLogEntry,
+  patchSshRelay, linuxPath, RELAY_ANCHOR, RELAY_PATCHED, snotraSshRelay,
 };
