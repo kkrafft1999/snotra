@@ -21,10 +21,9 @@ const {
   parseDomainInput,
   PROGRAM_ALLOWANCE_LIMITS,
 } = require('../../shared/contracts/program-allowances');
-const { parseSimpleCommand } = require('../../shared/runtime/simple-command');
 const { createMessage } = require('../../shared/contracts/message');
 const { isRecord } = require('../../shared/runtime/is-record');
-const { quoteArgv } = require('./sandbox-service');
+const { createProgramAllowanceMatcher } = require('../../application/permissions/program-allowance-match');
 const { PLATFORM_CAPABILITIES } = require('../../shared/contracts/platform-capabilities');
 const { platformSupports } = require('../platforms');
 
@@ -236,74 +235,14 @@ function createProgramAllowances({
     return { ok: true, entry };
   }
 
-  /**
-   * Program names an unreadable line mentions, for saying why nothing applies.
-   *
-   * @param {string} command
-   * @param {ProgramAllowance[]} allowances
-   */
-  function mentionedPrograms(command, allowances) {
-    /** @type {Set<string>} */
-    const names = new Set();
-    for (const token of String(command).split(/[\s;&|<>()`$"'=\\]+/)) {
-      const name = programName(token);
-      if (name) names.add(name);
-    }
-    return allowances.map((entry) => programName(entry.path)).filter((name) => names.has(name));
-  }
-
-  /**
-   * The allowance a shell_execute call gets, or why the one naming its
-   * program does not apply, or null when no allowance is concerned.
-   *
-   * @param {{ command?: unknown, cwd?: string|null, workspaceRoot?: string|null }} [params]
-   * @returns {Promise<null
-   *   | {allowance: {path: string, program: string, domains: string[], writePaths: string[], trustd: boolean},
-   *      command: string, entry: ProgramAllowance}
-   *   | {skipped: {program: string, reason: string}}>}
-   */
-  async function match({ command, cwd, workspaceRoot = null } = {}) {
+  const { match } = createProgramAllowanceMatcher({
+    readAllowances,
+    locate,
+    realPath: realpathOrNull,
     // An allowance widens the sandbox; without one there is nothing to widen.
-    if (!platformSupports(platform, PLATFORM_CAPABILITIES.EXECUTION_SANDBOX)) return null;
-    const allowances = (await readAllowances(workspaceRoot || null).catch(() => []))
-      .map(normalizeProgramAllowance)
-      .filter((entry) => entry !== null);
-    if (allowances.length === 0 || typeof command !== 'string') return null;
-
-    const parsed = parseSimpleCommand(command);
-    if (!parsed.ok) {
-      if (parsed.reason === 'empty') return null;
-      const [program] = mentionedPrograms(command, allowances);
-      if (!program) return null;
-      const reason = parsed.reason === 'expansion'
-        ? PROGRAM_ALLOWANCE_SKIP_REASONS.EXPANSION
-        : PROGRAM_ALLOWANCE_SKIP_REASONS.COMPOUND;
-      return { skipped: { program, reason } };
-    }
-
-    const [first] = parsed.words;
-    const name = programName(first.value);
-    const candidates = allowances.filter((entry) => programName(entry.path) === name);
-    if (candidates.length === 0) return null;
-    const located = await locate(first.value, cwd);
-    const real = located ? await realpathOrNull(located) : null;
-    for (const entry of candidates) {
-      if (!real || real !== (await realpathOrNull(entry.path))) continue;
-      return {
-        allowance: {
-          path: entry.path,
-          program: name,
-          domains: entry.domains,
-          writePaths: entry.writePaths,
-          trustd: platform === 'darwin' && entry.trustd,
-        },
-        command: `${quoteArgv([entry.path])}${command.slice(first.end)}`,
-        // The stored entry as it was matched, so a later change is noticed.
-        entry,
-      };
-    }
-    return { skipped: { program: name, reason: PROGRAM_ALLOWANCE_SKIP_REASONS.OTHER_FILE } };
-  }
+    sandboxSupported: platformSupports(platform, PLATFORM_CAPABILITIES.EXECUTION_SANDBOX),
+    trustdApplies: platform === 'darwin',
+  });
 
   return { resolveProgram, validateWritePath, prepareEntry, match, locate };
 }

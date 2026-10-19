@@ -36,6 +36,7 @@ const {
 } = require('./sandbox-violations');
 
 const { SANDBOX_REASONS } = require('../../shared/contracts/sandbox-reasons');
+const { quoteArgv } = require('../../shared/runtime/quote-argv');
 
 /** The Linux packages the runtime needs, as the distributions name them. */
 const LINUX_PACKAGES = Object.freeze(['bubblewrap', 'socat', 'ripgrep']);
@@ -200,20 +201,6 @@ const SSH_RELAY_CLIENT_SCRIPT = 'ssh-relay-client.sh';
 function sshRelayExports(clientPath) {
   return `export SNOTRA_SSH_CLIENT=${quoteArgv([clientPath])} GIT_SSH_VARIANT=ssh `
     + `GIT_SSH_COMMAND=${quoteArgv(['exec /bin/sh "$SNOTRA_SSH_CLIENT"'])}`;
-}
-
-/**
- * POSIX single-quoting, so an argv survives the trip through `sh -c`.
- *
- * @param {unknown[]} argv
- */
-function quoteArgv(argv) {
-  return argv
-    .map((arg) => {
-      const value = String(arg);
-      return /^[A-Za-z0-9_@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`;
-    })
-    .join(' ');
 }
 
 /**

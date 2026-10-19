@@ -124,7 +124,8 @@ imports.
   `src/main/services/` alone. The tool registry, the planner, the tool
   descriptors, the skill selection and the chat session settings moved in with
   [#982](https://github.com/kkrafft1999/snotra/issues/982), the chat
-  configuration with #1172; program allowances still sit in `src/main/` — the
+  configuration and the program-allowance matching with #1172; the policy
+  rules still sit in `src/main/` — the
   list is in [Business rules outside the core](#business-rules-outside-the-core-982).
 - The conversation itself — runs, persistence — is the renderer's, see
   [Renderer](#renderer-what-was-moved-what-stays)
@@ -156,7 +157,7 @@ rows still open are tracked in
 | The model's skill suggestion | `src/application/skills/skill-suggestion-service.js` | — | moved (#1172); reads the catalogue through `application/skills/skill-catalog.js`, a typedef it shares with the chat configuration |
 | A chat's model, mode, reasoning level and switched skills and tools; the fallback to "Smart" when "Auto" is refused | `src/application/chat/chat-session-settings.js` | — | moved; keeps them in the chat history through a typedef of its own (`ChatSettingsStore`); the stored fields are normalized in `shared/contracts/chat-session-fields.js` for it and for the history |
 | Which skills and tools a chat has, and the check of a proposal to change them (#773, #774) | `src/application/chat/chat-configuration-service.js`, with `src/application/tools/mcp-remembered-tools.js` | — | moved (#1172); reads the skill catalogue through a typedef of its own (`SkillCatalog`) |
-| Whether a program allowance covers a command (#408) | `src/main/services/program-allowances-service.js` | the matching to `src/application/permissions/`; finding a program on the PATH stays in main | open |
+| Whether a program allowance covers a command (#408) | `src/application/permissions/program-allowance-match.js` | — | moved (#1172); finding a program on the PATH, real paths and checking folders stay in `services/program-allowances-service.js`, which hands them in; `quoteArgv` moved to `shared/runtime/quote-argv.js` |
 | The scopes, merging and loosening rules of the policy | `src/main/services/tool-policy-store.js` | the rules to `src/application/permissions/` next to `tool-policy.js`; the signed file stays in main | open |
 | What Settings › Security and the mode pill read | `src/application/permissions/security-page-data.js` | — | moved (#1172); reads the chat list, the recent folders and the sandbox state through typedefs of its own |
 
