@@ -92,7 +92,7 @@ test('workspace default mode: remembered from the menu, used by a new chat, kept
   // With encrypted storage, "Auto" as the default — and the next start keeps it.
   let expected = 'ask-all';
   const set = await page.evaluate(() => window.electronAPI.setWorkspaceMode('auto'));
-  if ((await state(page)).encryptionAvailable === true) {
+  if ((await state(page)).platformCapabilities?.secureStorage === true) {
     assert.equal(set.ok, true);
     expected = 'auto';
   } else {

@@ -1817,11 +1817,35 @@ can also be asked directly with `platformSupports(platform, name)`; an
 
 What changes while the app runs is a state, not a platform capability: the
 sandbox's self-test, missing Linux packages or blocked user namespaces stay in
-the sandbox status, with their own wording. The security guards in main keep
-reading `safeStorage` live and fail closed; the `encryptionAvailable` fields of
-the settings DTOs stay as they are until the renderer reads `secureStorage`
-from the register instead
-([#1156](https://github.com/kkrafft1999/snotra/issues/1156)).
+the sandbox status, with their own wording.
+
+**Encrypted storage: the window reads the register, main asks live**
+([#1156](https://github.com/kkrafft1999/snotra/issues/1156)). Every notice
+that says there is no encrypted storage reads `platformCapabilities.secureStorage`
+— the key warning and the web search card in the settings, the chat hint,
+"Auto" in the mode menu and as a workspace default, the sandbox switch on
+Tools › Security. The tool permission state carries `platformCapabilities` for
+that, next to the LLM state and the sandbox overview; none of the DTOs has an
+`encryptionAvailable` field any more. Each notice keeps its own wording, which
+says more than the gap's generic reason key (`settings.error.encryptionUnavailable`,
+the text main's refusals use). What main *allows* is decided elsewhere: the
+policy store, the chat engine's offers, the key and header writes, the web
+search key, the history and the remote identity all call
+`safeStorage.isEncryptionAvailable()` themselves, each time, and fail closed.
+
+Whether the fact can change while the app runs depends on the platform. On
+Windows it cannot: DPAPI is there once the app is ready. On Linux the backend
+is picked once, when the app is ready, and kept for the process. On macOS it
+follows whether the Keychain hands out the key, and that is not settled once
+at start — a *Deny* can be followed by an *Allow*, a keychain can be locked —
+so there it is not ruled out. The
+register is a snapshot either way, and that is acceptable because it only
+steers what the window offers: storage that appears later shows up after a
+restart, and storage that disappears later meets main's guards, which refuse
+before any confirmation dialog opens (`test/tool-security-handlers.test.js`).
+A test or script that needs a system without encrypted storage switches it off
+before main starts (`e2e/helpers/no-encryption-preload.cjs`, via `launchApp`'s
+`mainPreload`), not after the start.
 
 `test/platform-capabilities.test.js` fails on an undeclared or unknown
 capability, on a gap without a reason key from the catalogue, on a gap with
@@ -2739,7 +2763,8 @@ divide the work, and what runs when, is in [`test-concept.md`](./test-concept.md
   ([#689](https://github.com/kkrafft1999/snotra/issues/689)) and the warm-up
   script of that fix are gone, and the test home no longer links
   `Library/Keychains`. The path without encryption stays covered where it was:
-  `isEncryptionAvailable` replaced in the app, or injected in the unit tests.
+  `isEncryptionAvailable` replaced in main before the app's code runs
+  (`e2e/helpers/no-encryption-preload.cjs`, #1156), or injected in the unit tests.
   `e2e/safe-storage.test.mjs` guards it: safeStorage is available in an empty
   home, what it encrypts decrypts with the mock key in plain Node (so it is not
   the keychain's key), and a restart of the same profile decrypts it again.

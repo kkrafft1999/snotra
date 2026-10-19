@@ -46,7 +46,7 @@ async function launchWithMicrophone(t, realtimeOptions) {
 }
 
 async function storeOpenAiKey(page, userDataDir) {
-  const { encryptionAvailable } = await page.evaluate(() => window.electronAPI.getLLMState());
+  const encryptionAvailable = (await page.evaluate(() => window.electronAPI.getLLMState())).platformCapabilities?.secureStorage === true;
   if (!encryptionAvailable) return false;
   const config = JSON.parse(await readFile(path.join(userDataDir, 'llm-config.json'), 'utf8'));
   const saved = await page.evaluate(({ rows, active }) => window.electronAPI.commitSettings({

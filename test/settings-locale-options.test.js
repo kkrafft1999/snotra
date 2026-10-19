@@ -14,7 +14,7 @@ async function openSettings(prefs) {
   const { initSettingsModal } = await importRenderer('components', 'SettingsModal.js');
   const { appStore } = await importRenderer('state', 'store.js');
   appStore.llmState = {
-    encryptionAvailable: true,
+    platformCapabilities: { secureStorage: true },
     activeProvider: 'openai',
     activePresetId: null,
     presets: [],
@@ -28,7 +28,7 @@ async function openSettings(prefs) {
     getSkillCatalog: async () => ({ skills: [], activeSkills: [] }),
     getPythonState: async () => ({ enabled: false }),
     getShellState: async () => ({ enabled: false }),
-    getWebSearchState: async () => ({ available: true, hasApiKey: false, encryptionAvailable: true }),
+    getWebSearchState: async () => ({ available: true, hasApiKey: false }),
     getAppVersion: async () => '1.5.3',
     cancelModelListing: async () => {},
     listModels: async () => ({ models: [] }),

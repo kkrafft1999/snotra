@@ -12,7 +12,9 @@ export const appStore = {
   // so what the tree shows can be referenced.
   showHiddenFiles: false,
   llmState: {
-    encryptionAvailable: true,
+    // The platform capability register (#1149); null until main has answered,
+    // which counts as "no gap" — the guards in main decide anyway (#1156).
+    platformCapabilities: null,
     activeProvider: 'openai',
     activePresetId: null,
     presets: [],

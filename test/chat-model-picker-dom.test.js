@@ -18,7 +18,7 @@ function llmState({ presets, reasoning } = {}) {
     activeProvider: 'openai',
     activePresetId: 'p1',
     chatTarget: { providerId: 'openai', model: 'gpt-5' },
-    encryptionAvailable: true,
+    platformCapabilities: { secureStorage: true },
     providers: [{ id: 'openai', name: 'OpenAI', configured: true, model: 'gpt-5' }],
     presets: presets ?? [entry('p1', 'gpt-5'), entry('p2', 'gpt-5-mini'), entry('p3', 'o4')],
     reasoning: reasoning ?? { level: null, levels: [], defaultLevel: null },
@@ -406,3 +406,33 @@ test('a provider gap is the provider\'s, and an older state without capabilities
   const { picker: old } = await setup();
   assert.equal(old.activeProviderSupportsImages(), false);
 });
+
+// The hint reads encrypted storage from the platform register (#1156), with
+// the wording it had when the LLM state carried a field of its own.
+for (const [locale, words] of [
+  ['en', 'Encrypted storage is not available. An API key cannot be stored safely here.'],
+  ['de', 'Verschlüsselter Speicher ist nicht verfügbar. Ein API-Key kann hier nicht sicher gespeichert werden.'],
+]) {
+  test(`without encrypted storage the hint says a key cannot be stored (${locale}, #1156)`, async () => {
+    const unconfigured = {
+      ...llmState(),
+      providers: [{ id: 'openai', name: 'OpenAI', configured: false, model: 'gpt-5' }],
+    };
+    const without = await setup({
+      locale,
+      state: {
+        ...unconfigured,
+        platformCapabilities: {
+          executionSandbox: true, sandboxGitSsh: true, selfUpdate: true, secureStorage: false,
+          gaps: { secureStorage: { reason: 'settings.error.encryptionUnavailable', permanent: true } },
+        },
+      },
+    });
+    const hint = without.document.getElementById('chat-hint');
+    assert.equal(hint.textContent, words);
+    assert.equal(hint.classList.contains('hidden'), false);
+
+    const withStorage = await setup({ locale, state: unconfigured });
+    assert.notEqual(withStorage.document.getElementById('chat-hint').textContent, words);
+  });
+}

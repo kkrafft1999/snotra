@@ -93,7 +93,6 @@ function registerSettingsHandlers({
   const presentationService = presentation;
 
   ipcMain.handle(REQ.SETTINGS_GET_LLM_STATE, async () => {
-    const encryptionAvailable = safeStorage.isEncryptionAvailable();
     const config = await llmConfigStore.readLLMConfig();
     const chatTarget = llmConfigStore.resolveChatModelTarget(config);
     const presetsWire = Array.isArray(config.presets)
@@ -121,7 +120,6 @@ function registerSettingsHandlers({
     // for the same reason as the tool catalogue below.
     const prefs = await uiPrefsStore.readUIPrefs();
     return presentationService.buildLlmStateDto({
-      encryptionAvailable,
       config: { ...config, presets: presetsWire },
       chatTarget,
       apiKeyDecryptable,
@@ -635,7 +633,6 @@ function registerSettingsHandlers({
   ipcMain.handle(REQ.SETTINGS_GET_WEB_SEARCH_STATE, async () => ({
     available: !!webSearchSettings,
     hasApiKey: webSearchSettings ? await webSearchSettings.refresh() : false,
-    encryptionAvailable: safeStorage.isEncryptionAvailable(),
   }));
 
   // Image generation (#85). The key never leaves main — the renderer learns

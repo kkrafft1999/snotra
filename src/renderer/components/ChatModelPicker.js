@@ -388,7 +388,7 @@ export function initChatModelPicker({
     }
 
     if (!isConfigured) {
-      if (!appStore.llmState.encryptionAvailable) {
+      if (appStore.llmState.platformCapabilities?.secureStorage === false) {
         chatHint.textContent = t('chat.hint.noEncryption');
       } else if (active?.keyUnreadable) {
         chatHint.textContent = t('chat.hint.keyUnreadable');

@@ -65,7 +65,7 @@ const openSettings = async () => {
 
 try {
   await waitForApp();
-  const { encryptionAvailable } = await page.evaluate(() => window.electronAPI.getLLMState());
+  const encryptionAvailable = (await page.evaluate(() => window.electronAPI.getLLMState())).platformCapabilities?.secureStorage === true;
   if (!encryptionAvailable) throw new Error('No encrypted storage here — the OpenAI key cannot be stored.');
   const saved = await page.evaluate(({ rows, active }) => window.electronAPI.commitSettings({
     presets: rows,
