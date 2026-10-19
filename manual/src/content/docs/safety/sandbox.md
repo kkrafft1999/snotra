@@ -17,7 +17,7 @@ Snotra can run shell commands and Python code: `git status`, a build, a test run
 
 1. Open *Settings › Tools › Autonomy* and open the row *Execute*.
 2. Switch on *Allow shell commands*, *Allow Python execution*, or both.
-3. [since 1.28] A dialog of your operating system asks *Switch on shell_execute?* or *Switch on run_python?* and says what the tool may then do — on Windows, that there is no sandbox. Choose *Switch on*. *Cancel* leaves the switch off.
+3. [since 1.27.1] A dialog of your operating system asks *Switch on shell_execute?* or *Switch on run_python?* and says what the tool may then do — on Windows, that there is no sandbox. Choose *Switch on*. *Cancel* leaves the switch off.
 
 Switching off never asks.
 
@@ -95,7 +95,7 @@ What it does not do: it does not stop a run from *reading* your other files, and
 
 ## Use Git over SSH
 
-[since 1.21.1] `git fetch`, `git pull`, `git push` and `git ls-remote` reach an SSH remote such as `git@gitlab.example.com:team/app.git` from inside the sandbox — on macOS, and [since 1.28] on Linux. Snotra sends Git's SSH connection through the sandbox's proxy, so it follows the same rules as any other connection, and the sandbox stays on.
+[since 1.21.1] `git fetch`, `git pull`, `git push` and `git ls-remote` reach an SSH remote such as `git@gitlab.example.com:team/app.git` from inside the sandbox — on macOS, and [since 1.27.1] on Linux. Snotra sends Git's SSH connection through the sandbox's proxy, so it follows the same rules as any other connection, and the sandbox stays on.
 
 ### What you need
 

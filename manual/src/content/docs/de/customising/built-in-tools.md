@@ -24,7 +24,7 @@ Jedes Tool lässt sich einzeln unter *Einstellungen › Tools › Autonomie* aus
 
 `run_python` führt Python-Code aus, den das Modell schreibt — für Berechnungen, Daten und Diagramme.
 
-1. Schalte es unter *Einstellungen › Tools › Autonomie › Ausführen › Python-Ausführung erlauben* ein und bestätige im folgenden Dialog mit *Einschalten* [seit 1.28]. Lies vorher [Befehle in der Sandbox ausführen](../../safety/sandbox/).
+1. Schalte es unter *Einstellungen › Tools › Autonomie › Ausführen › Python-Ausführung erlauben* ein und bestätige im folgenden Dialog mit *Einschalten* [seit 1.27.1]. Lies vorher [Befehle in der Sandbox ausführen](../../safety/sandbox/).
 2. Snotra sucht Python 3 selbst. Willst du einen bestimmten Interpreter — eine virtuelle Umgebung mit `pandas` zum Beispiel —, trag seinen Pfad unter *Einstellungen › Tools › Einrichtung › Python-Interpreter* ein und klick auf *Übernehmen*.
 
 Snotra installiert nie selbst Pakete; der Interpreter, den du wählst, entscheidet, welche das Modell hat.

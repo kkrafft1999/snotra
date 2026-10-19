@@ -48,13 +48,13 @@ Even in *Auto*, the mode without questions:
 
 The chat shows content Snotra did not write: model answers, files, web pages. A text in a file can contain instructions aimed at the model. For the model it is material, not a command, and every tool call that follows goes through the same check again.
 
-That is also why the app window is not trusted to loosen protection on its own. Switching on *Auto*, allowing something for good, switching the sandbox off or deleting a block is confirmed in a dialog of the operating system, outside the window. [since 1.28] So is switching on shell commands or Python, and saving a local MCP server with a new command — that program would run with your rights, outside the sandbox. Tightening — a block, *Always ask* — takes effect at once, without a dialog.
+That is also why the app window is not trusted to loosen protection on its own. Switching on *Auto*, allowing something for good, switching the sandbox off or deleting a block is confirmed in a dialog of the operating system, outside the window. [since 1.27.1] So is switching on shell commands or Python, and saving a local MCP server with a new command — that program would run with your rights, outside the sandbox. Tightening — a block, *Always ask* — takes effect at once, without a dialog.
 
 Your permissions are stored signed in your profile, not in the project folder. A repository you download cannot switch itself to *Auto* or turn the sandbox off.
 
 ## When a tool result looks like instructions
 
-[since 1.28] Snotra also looks at tool results for text that reads like orders to the model: a request to ignore earlier instructions, a fake system message, orders aimed at an AI, a request to send keys or the conversation somewhere, text hidden in characters you cannot see. When it finds one, the chat says so under the tool log — see [Follow what Snotra does](../../chatting/follow-the-work/#when-a-result-reads-like-instructions).
+[since 1.27.1] Snotra also looks at tool results for text that reads like orders to the model: a request to ignore earlier instructions, a fake system message, orders aimed at an AI, a request to send keys or the conversation somewhere, text hidden in characters you cannot see. When it finds one, the chat says so under the tool log — see [Follow what Snotra does](../../chatting/follow-the-work/#when-a-result-reads-like-instructions).
 
 This check is a warning, never the protection:
 
