@@ -1,5 +1,5 @@
 ---
-name: feedback
+name: user-feedback
 description: >-
   Looks for user feedback on GitHub in both of the shapes it arrives in — issues
   filed by the in-app feedback form (label `feedback`) and contributions by
