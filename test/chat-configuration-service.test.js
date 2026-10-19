@@ -10,7 +10,7 @@ const os = require('os');
 const path = require('path');
 const { createSkillsService } = require('../src/main/services/skills-service');
 const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
-const { createChatConfigurationService } = require('../src/main/services/chat-configuration-service');
+const { createChatConfigurationService } = require('../src/application/chat/chat-configuration-service');
 const { MAX_CONFIG_DESCRIPTION_CHARS } = require('../src/shared/contracts/chat-configuration');
 const { removeTempDir } = require('./helpers/temp-dir');
 

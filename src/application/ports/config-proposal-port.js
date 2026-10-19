@@ -5,8 +5,9 @@
  * its own.
  *
  * Where the overrides are kept (the chat's row in the history) and how a
- * proposal is checked against the catalogue is known only to main
- * (`application/chat/chat-session-settings.js`, `services/chat-configuration-service.js`).
+ * proposal is checked against the catalogue stays behind this port
+ * (`application/chat/chat-session-settings.js`, `application/chat/chat-configuration-service.js`),
+ * wired by the composition root.
  */
 
 /**

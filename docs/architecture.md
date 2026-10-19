@@ -123,8 +123,8 @@ imports.
   and the permission decision — about 5.3k lines, against some 22k in
   `src/main/services/` alone. The tool registry, the planner, the tool
   descriptors, the skill selection and the chat session settings moved in with
-  [#982](https://github.com/kkrafft1999/snotra/issues/982); chat configuration
-  and program allowances still sit in `src/main/` — the
+  [#982](https://github.com/kkrafft1999/snotra/issues/982), the chat
+  configuration with #1172; program allowances still sit in `src/main/` — the
   list is in [Business rules outside the core](#business-rules-outside-the-core-982).
 - The conversation itself — runs, persistence — is the renderer's, see
   [Renderer](#renderer-what-was-moved-what-stays)
@@ -155,7 +155,7 @@ rows still open are tracked in
 | Which skills are on, what the prompt gets of them, what a tick becomes when stored and what making a skill global does to its switch | `src/application/skills/skill-selection.js` | — | moved; `services/skills-service.js` scans the folders, resolves the folder's key and hands the scanned skills in |
 | The model's skill suggestion | `src/main/services/skill-suggestion-service.js` | `src/application/skills/` | open |
 | A chat's model, mode, reasoning level and switched skills and tools; the fallback to "Smart" when "Auto" is refused | `src/application/chat/chat-session-settings.js` | — | moved; keeps them in the chat history through a typedef of its own (`ChatSettingsStore`); the stored fields are normalized in `shared/contracts/chat-session-fields.js` for it and for the history |
-| Which skills and tools a chat has, and the check of a proposal to change them (#773, #774) | `src/main/services/chat-configuration-service.js` | `src/application/chat/` | open; with the session settings |
+| Which skills and tools a chat has, and the check of a proposal to change them (#773, #774) | `src/application/chat/chat-configuration-service.js`, with `src/application/tools/mcp-remembered-tools.js` | — | moved (#1172); reads the skill catalogue through a typedef of its own (`SkillCatalog`) |
 | Whether a program allowance covers a command (#408) | `src/main/services/program-allowances-service.js` | the matching to `src/application/permissions/`; finding a program on the PATH stays in main | open |
 | The scopes, merging and loosening rules of the policy | `src/main/services/tool-policy-store.js` | the rules to `src/application/permissions/` next to `tool-policy.js`; the signed file stays in main | open |
 | What Settings › Security and the mode pill read | `src/main/services/security-page-data.js` | `src/application/permissions/`, next to `security-overview.js` | open |
@@ -302,9 +302,9 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
 - `config-proposal-port` — what a chat switched for itself, and how the model
   asks for a change (#774). The core asks the user on a card through the
   approval port and records the answer here; where the overrides are kept and
-  how a proposal is checked is main's business
-  (`application/chat/chat-session-settings.js`, `services/chat-configuration-service.js`),
-  which `main/adapters/config-proposal-adapter.js` hands on
+  how a proposal is checked sit behind the port
+  (`application/chat/chat-session-settings.js`, `application/chat/chat-configuration-service.js`,
+  in the core since #982 and #1172), which `main/adapters/config-proposal-adapter.js` hands on
 - `remote-relay-port` — the blind relay of the mobile remote as the desktop's
   pairing sees it (#1114): open a pairing, follow the channel, confirm, cancel,
   delete. Channels and pairings are named by id only; tokens, challenges and
@@ -1571,8 +1571,8 @@ These are the topics that did move out:
 | Masking the status of an MCP server | `services/mcp-status-masking.js` |
 | The model's skill suggestion (`SKILLS_SUGGEST`) | `ipc/skill-suggestion-handlers.js` |
 | What Settings › Tools › Autonomy, Tools › Security and the mode pill read | `services/security-page-data.js` |
-| Which skills and tools a chat has — the composer pill (`CHAT_GET_CONFIGURATION`) and the model's `get_configuration` (#773) | `services/chat-configuration-service.js`, `ipc/chat-configuration-handlers.js`; why a tool is not offered: `whyNotOffered` in `tools/workspace-tool-registry.js` |
-| The model's proposal to switch a skill or tool for one chat (`propose_config_change`, #774): checked in main, asked on a card (approval checkpoint `config`), kept in the chat's row | engine: `proposeConfigChange` / `refreshCapabilities` in `application/chat/chat-engine.js`, port `application/ports/config-proposal-port.js`; check: `prepareProposal` in `services/chat-configuration-service.js`; storage: `configOverridesFor` in `application/chat/chat-session-settings.js`; arithmetic: `contracts/chat-configuration.js`; card: `renderer/utils/config-proposal-view.js` |
+| Which skills and tools a chat has — the composer pill (`CHAT_GET_CONFIGURATION`) and the model's `get_configuration` (#773) | `application/chat/chat-configuration-service.js`, `ipc/chat-configuration-handlers.js`; why a tool is not offered: `whyNotOffered` in `tools/workspace-tool-registry.js` |
+| The model's proposal to switch a skill or tool for one chat (`propose_config_change`, #774): checked behind the port, asked on a card (approval checkpoint `config`), kept in the chat's row | engine: `proposeConfigChange` / `refreshCapabilities` in `application/chat/chat-engine.js`, port `application/ports/config-proposal-port.js`; check: `prepareProposal` in `application/chat/chat-configuration-service.js`; storage: `configOverridesFor` in `application/chat/chat-session-settings.js`; arithmetic: `contracts/chat-configuration.js`; card: `renderer/utils/config-proposal-view.js` |
 | The update check after the start and from the menu | `createUpdateCheck` in `adapters/update-adapter.js` |
 | A chat whose "Auto" the policy store refuses runs at "Smart" (#419) | `applyModeOrDefault` in `application/chat/chat-session-settings.js` |
 | Settings › MCP: the saved servers taken over into the service, the test of one server (reload, connect, mask), the start-up move of deselected tools (#449) | `services/mcp-settings.js` |

@@ -30,7 +30,7 @@
     "main/services/approval-notifier.js": 3,
     "main/services/atomic-write.js": 1,
     "main/services/chat-attachment-store.js": 2,
-    "main/services/chat-configuration-service.js": 1,
+    "application/chat/chat-configuration-service.js": 1,
     "main/services/chat-history-normalization.js": 2,
     "main/services/chat-history-store.js": 6,
     "application/chat/chat-session-settings.js": 6,
