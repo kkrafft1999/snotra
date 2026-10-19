@@ -11,6 +11,13 @@ import { t } from '../i18n.js';
 const SAVED_VISIBLE_MS = 1600;
 
 /**
+ * What a `save` returns when the person said no to a confirmation the
+ * change needed (#1104): the control goes back, but nothing failed, so no
+ * "Not saved" appears.
+ */
+export const INSTANT_DECLINED = 'declined';
+
+/**
  * The status next to a control. The element carries `role="status"`, so a
  * screen reader hears the outcome without the focus moving.
  */
@@ -62,19 +69,22 @@ function bindInstant({ statusEl, targets, read, write, save }) {
   let queue = Promise.resolve();
 
   async function attempt(value, mine) {
-    let ok;
+    let result;
     try {
-      ok = (await save(value)) !== false;
+      result = await save(value);
     } catch {
-      ok = false;
+      result = false;
     }
+    const declined = result === INSTANT_DECLINED;
+    const ok = !declined && result !== false;
     if (ok) confirmed = value;
     if (mine !== latest) return;
     if (ok) {
       status.saved();
     } else {
       write(confirmed);
-      status.failed();
+      if (declined) status.clear();
+      else status.failed();
     }
   }
 

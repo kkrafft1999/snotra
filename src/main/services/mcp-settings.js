@@ -13,7 +13,12 @@
 
 const { maskMcpStatuses } = require('./mcp-status-masking');
 const { migrateMcpDisabledTools } = require('./mcp-disabled-tools-migration');
-const { qualifiedMcpToolName } = require('../../shared/contracts/mcp');
+const { qualifiedMcpToolName, validateMcpServerInput } = require('../../shared/contracts/mcp');
+const {
+  launchBeforeFromListed,
+  mcpLaunchNeedsConfirmation,
+  mcpLaunchSubject,
+} = require('./mcp-launch-confirmation');
 const { createMessage } = require('../../shared/contracts/message');
 
 /**
@@ -52,7 +57,34 @@ function createMcpSettings({ mcpService, mcpAdapter, mcpConfigStore, mcpSecrets,
     describeSkippedTools: () => mcpAdapter.describeSkippedTools(),
     /** Whether the last take-over of the saved servers failed (#1002). */
     hasLoadFailed: () => loadFailed,
-    save: (input) => mcpConfigStore.saveMcpServer(input),
+    /**
+     * What saving `input` would start that nobody confirmed (#1104): null,
+     * or the subject to confirm and what the prompt names. Decided from the
+     * stored list; the store decides again under its lock.
+     */
+    async launchConfirmation(input) {
+      if (!input || typeof input !== 'object') return null;
+      const servers = await mcpConfigStore.readMcpServers();
+      const id = typeof input.id === 'string' ? input.id.trim().toLowerCase() : '';
+      const listed = input.create === true ? null : servers.find((server) => server.id === id) || null;
+      // An input without a transport keeps the stored one, as the store does.
+      const withTransport = input.transport === undefined || input.transport === null
+        ? { ...input, transport: listed?.transport }
+        : input;
+      const { ok, value, env } = validateMcpServerInput(withTransport);
+      if (!ok || !mcpLaunchNeedsConfirmation(value, env, launchBeforeFromListed(listed))) return null;
+      return {
+        subject: mcpLaunchSubject(value, env),
+        server: {
+          label: value.label || value.id,
+          command: value.command,
+          args: value.args,
+          cwd: value.cwd || '',
+          envKeys: env.map((entry) => entry.key).sort(),
+        },
+      };
+    },
+    save: (input, options) => mcpConfigStore.saveMcpServer(input, options),
     remove: (id) => mcpConfigStore.deleteMcpServer(id),
     reload,
     async test(id) {

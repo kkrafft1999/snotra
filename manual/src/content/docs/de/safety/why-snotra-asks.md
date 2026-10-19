@@ -48,6 +48,6 @@ Auch in *Auto*, dem Modus ohne Rückfragen:
 
 Im Chat steht Inhalt, den Snotra nicht selbst geschrieben hat: Antworten des Modells, Dateien, Webseiten. Ein Text in einer Datei kann Anweisungen enthalten, die sich an das Modell richten. Für das Modell ist das Material, kein Befehl, und jeder Tool-Aufruf danach durchläuft dieselbe Prüfung von Neuem.
 
-Deshalb darf auch das App-Fenster den Schutz nicht allein lockern. *Auto* einschalten, etwas dauerhaft erlauben, die Sandbox abschalten oder eine Sperre löschen bestätigst du in einem Dialog des Betriebssystems, außerhalb des Fensters. Verschärfen — eine Sperre, *Immer fragen* — wirkt sofort, ohne Dialog.
+Deshalb darf auch das App-Fenster den Schutz nicht allein lockern. *Auto* einschalten, etwas dauerhaft erlauben, die Sandbox abschalten oder eine Sperre löschen bestätigst du in einem Dialog des Betriebssystems, außerhalb des Fensters. [seit 1.28] Ebenso das Einschalten von Shell-Befehlen oder Python und das Speichern eines lokalen MCP-Servers mit einem neuen Befehl — dieses Programm liefe mit deinen Rechten, außerhalb der Sandbox. Verschärfen — eine Sperre, *Immer fragen* — wirkt sofort, ohne Dialog.
 
 Deine Berechtigungen liegen signiert in deinem Profil, nicht im Projektordner. Ein Repository, das du herunterlädst, kann sich nicht selbst auf *Auto* stellen oder die Sandbox abschalten.

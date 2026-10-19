@@ -1418,6 +1418,19 @@ module.exports = {
   'permissions.integrity.unreadable': 'Die Berechtigungsdatei ließ sich nicht lesen. Tools bleiben gesperrt, bis sie wieder lesbar ist; an ihrem Inhalt wurde nichts geändert.',
   'permissions.legacyWriteHint': 'Dateiänderungen fragen jetzt nach deiner Freigabe. Den Modus kannst du jederzeit im Chat ändern.',
 
+  // ── Confirmations of settings that loosen a protection (#1104) ──────────
+  'settingsDialog.execution.confirm': 'Einschalten',
+  'settingsDialog.shell.title': 'shell_execute einschalten?',
+  'settingsDialog.shell.detail.sandboxed': 'Das Modell kann Snotra dann Shell-Befehle ausführen lassen. Jeder Befehl läuft in der Sandbox, außer ein Workspace hat sie ausgeschaltet; die Karte zeigt, ob ein Lauf isoliert ist. Außerhalb von „{mode}“ gibst du jeden Befehl auf einer Karte frei; in „{mode}“ läuft er ohne Rückfrage. Ausschalten kannst du es jederzeit unter {place}.',
+  'settingsDialog.shell.detail.unisolated': 'Das Modell kann Snotra dann Shell-Befehle ausführen lassen. Auf diesem System gibt es keine Sandbox: Ein Befehl kann alles, was du im Terminal kannst. Außerhalb von „{mode}“ gibst du jeden Befehl auf einer Karte frei; in „{mode}“ läuft er ohne Rückfrage. Ausschalten kannst du es jederzeit unter {place}.',
+  'settingsDialog.python.title': 'run_python einschalten?',
+  'settingsDialog.python.detail.sandboxed': 'Das Modell kann Snotra dann Python-Code ausführen lassen. Jeder Lauf ist in der Sandbox, außer ein Workspace hat sie ausgeschaltet; die Karte zeigt, ob ein Lauf isoliert ist. Außerhalb von „{mode}“ gibst du jedes Skript auf einer Karte frei; in „{mode}“ läuft es ohne Rückfrage. Ausschalten kannst du es jederzeit unter {place}.',
+  'settingsDialog.python.detail.unisolated': 'Das Modell kann Snotra dann Python-Code ausführen lassen. Auf diesem System gibt es keine Sandbox: Der Code kann überall lesen und schreiben, das Netzwerk erreichen und Programme starten. Außerhalb von „{mode}“ gibst du jedes Skript auf einer Karte frei; in „{mode}“ läuft es ohne Rückfrage. Ausschalten kannst du es jederzeit unter {place}.',
+  'settingsDialog.mcpLaunch.title': 'Darf Snotra dieses Programm starten?',
+  'settingsDialog.mcpLaunch.detail': 'Der MCP-Server „{label}“ startet diesen Befehl auf deinem Computer:\n\n{command}{folder}{env}\n\nEr läuft mit deinen vollen Rechten, außerhalb der Sandbox, sobald der Server eingeschaltet oder getestet wird. Erlaube nur Programme, denen du vertraust.',
+  'settingsDialog.mcpLaunch.folder': 'Ordner: {cwd}',
+  'settingsDialog.mcpLaunch.env': 'Umgebung: {names}',
+  'settingsDialog.mcpLaunch.confirm': 'Programm erlauben',
   // ── Native confirmation dialogs of the permissions (#353) ────────────────
   'permissionDialog.cancel': 'Abbrechen',
   'permissionDialog.auto.title': 'Auto / Vollzugriff aktivieren?',
@@ -2431,6 +2444,7 @@ module.exports = {
   'mcp.error.headerReserved': 'Den Header „{name}“ setzt Snotra selbst; er lässt sich nicht konfigurieren.',
   'mcp.error.headerDuplicate': 'Den Header „{name}“ gibt es doppelt.',
   'mcp.error.idExists': 'Es gibt bereits einen Server „{id}“. Wähle eine andere Kennung oder bearbeite den vorhandenen Server.',
+  'mcp.error.launchNotConfirmed': 'Nicht gespeichert: Du hast den Start des Programms nicht erlaubt.',
   'mcp.error.envKeepMissing': 'Für {names} ist nichts gespeichert, es gibt also keinen Wert zu behalten. Gib den Wert neu ein.',
   'mcp.error.envKeepChanged': 'Der gespeicherte Wert von {names} lässt sich nur unverändert behalten. Um zu ändern, ob er geheim ist, gib den Wert neu ein.',
   'mcp.error.envSecretEmpty': 'Der neue Wert von {names} ist leer. Gib einen Wert ein oder entferne die Variable, um den gespeicherten zu löschen.',

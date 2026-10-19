@@ -1411,6 +1411,19 @@ module.exports = {
   'permissions.integrity.unreadable': 'The permissions file could not be read. Tools stay blocked until it can be read again; nothing in it was changed.',
   'permissions.legacyWriteHint': 'File changes now ask for your approval. You can change the mode in the chat at any time.',
 
+  // ── Confirmations of settings that loosen a protection (#1104) ──────────
+  'settingsDialog.execution.confirm': 'Switch on',
+  'settingsDialog.shell.title': 'Switch on shell_execute?',
+  'settingsDialog.shell.detail.sandboxed': 'The model can then have Snotra run shell commands. Each command runs in the sandbox, unless a workspace has it switched off; the card says whether a run is isolated. Outside “{mode}” you approve every command on a card; in “{mode}” it runs without asking. You can switch it off again under {place}.',
+  'settingsDialog.shell.detail.unisolated': 'The model can then have Snotra run shell commands. There is no sandbox on this system: a command can do everything you can do in a terminal. Outside “{mode}” you approve every command on a card; in “{mode}” it runs without asking. You can switch it off again under {place}.',
+  'settingsDialog.python.title': 'Switch on run_python?',
+  'settingsDialog.python.detail.sandboxed': 'The model can then have Snotra run Python code. Each run is in the sandbox, unless a workspace has it switched off; the card says whether a run is isolated. Outside “{mode}” you approve every script on a card; in “{mode}” it runs without asking. You can switch it off again under {place}.',
+  'settingsDialog.python.detail.unisolated': 'The model can then have Snotra run Python code. There is no sandbox on this system: the code can read and write anywhere, reach the network and start programs. Outside “{mode}” you approve every script on a card; in “{mode}” it runs without asking. You can switch it off again under {place}.',
+  'settingsDialog.mcpLaunch.title': 'Allow Snotra to start this program?',
+  'settingsDialog.mcpLaunch.detail': 'The MCP server “{label}” starts this command on your computer:\n\n{command}{folder}{env}\n\nIt runs with your full rights, outside the sandbox, whenever the server is switched on or tested. Only allow programs you trust.',
+  'settingsDialog.mcpLaunch.folder': 'Folder: {cwd}',
+  'settingsDialog.mcpLaunch.env': 'Environment: {names}',
+  'settingsDialog.mcpLaunch.confirm': 'Allow program',
   // ── Native confirmation dialogs of the permissions (#353) ────────────────
   'permissionDialog.cancel': 'Cancel',
   'permissionDialog.auto.title': 'Switch on Auto (full access)?',
@@ -2427,6 +2440,7 @@ module.exports = {
   'mcp.error.headerReserved': 'The header “{name}” is set by Snotra itself and cannot be configured.',
   'mcp.error.headerDuplicate': 'The header “{name}” is there twice.',
   'mcp.error.idExists': 'A server “{id}” already exists. Choose another identifier, or edit that server.',
+  'mcp.error.launchNotConfirmed': 'Not saved: you did not allow the program to start.',
   'mcp.error.envKeepMissing': 'Nothing is stored for {names}, so there is no value to keep. Enter the value again.',
   'mcp.error.envKeepChanged': 'The stored value of {names} can only be kept as it is. To change whether it is secret, enter the value again.',
   'mcp.error.envSecretEmpty': 'The new value of {names} is empty. Enter a value, or remove the variable to delete the stored one.',

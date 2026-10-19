@@ -210,6 +210,10 @@ function createApplication({
   // The pushes wired here: none before the window opens or after it closes.
   const pushToWindow = createWindowPush(getMainWindow);
 
+  // The receipts of the user-confirmation port (#980). Made before the
+  // stores: the preferences and the MCP servers redeem them too (#1104).
+  const confirmationReceipts = createConfirmationReceipts();
+
   const storage = createStorageService({
     app,
     safeStorage,
@@ -221,6 +225,7 @@ function createApplication({
     maxFolderHistory: LIMITS.MAX_FOLDER_HISTORY,
     defaultProviderId,
     onStoreFileEvent: (event) => postStoreFileEvent(notices, event),
+    confirmationReceipts: { redeem: confirmationReceipts.redeem },
   });
 
   // Prices for the estimated chat cost (#949).
@@ -267,7 +272,6 @@ function createApplication({
   // Loosening only through the user-confirmation port (#980): the desktop's
   // adapter issues a receipt after the native dialog, the store redeems it.
   // Each side gets only its half of the registry.
-  const confirmationReceipts = createConfirmationReceipts();
   const confirmations = createNativeConfirmationAdapter({
     dialog,
     getMainWindow,
@@ -803,6 +807,7 @@ function createApplication({
     pythonSettings,
     shellSettings,
     chatSessionSettings,
+    confirmations,
   });
   registerModelPriceHandlers({ ipcMain, modelPrices, REQ });
   registerChatHistoryHandlers({

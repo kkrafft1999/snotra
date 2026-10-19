@@ -30,6 +30,15 @@ const {
   isMemoryScope,
   parseMemoryEntries,
 } = require('../../shared/contracts/memory');
+const { createTranslator } = require('../../shared/i18n');
+const { CONFIRMATION_ACTIONS, createRefusingConfirmation } = require('../../application/permissions/user-confirmation');
+const { executionSwitchDialog, mcpLaunchDialog } = require('./settings-confirmation-dialogs');
+
+/** What switching each execution tool on is confirmed as (#1104). */
+const EXECUTION_SWITCH_ACTIONS = Object.freeze({
+  shellExecutionEnabled: CONFIRMATION_ACTIONS.SHELL_EXECUTION,
+  pythonExecutionEnabled: CONFIRMATION_ACTIONS.PYTHON_EXECUTION,
+});
 
 function registerSettingsHandlers({
   ipcMain,
@@ -68,6 +77,15 @@ function registerSettingsHandlers({
    * switch, the main process only keeps the checkbox in the View menu in step.
    */
   onShowHiddenFilesChanged = null,
+  /**
+   * The user-confirmation port (#980). An execution tool switched on and a
+   * local MCP command stored are asked through it (#1104); without a person
+   * at the machine neither goes through — the stores take neither without
+   * its receipt.
+   */
+  confirmations = createRefusingConfirmation(),
+  /** Windows has no sandbox; the prompt for an execution tool says so. */
+  platform = process.platform,
 }) {
   if (!presentation || typeof presentation.buildLlmStateDto !== 'function') {
     throw new Error('registerSettingsHandlers requires an injected settings presentation service.');
@@ -174,11 +192,50 @@ function registerSettingsHandlers({
     return createSettingsOk();
   });
 
+  /**
+   * An execution tool switched on is asked through the port first (#1104).
+   * One the person declined leaves the patch, so the rest still saves; the
+   * receipts go to the store, which switches nothing on without one.
+   */
+  async function confirmExecutionSwitches(patch) {
+    const wanted = Object.keys(EXECUTION_SWITCH_ACTIONS).filter((key) => patch[key] === true);
+    if (wanted.length === 0) return { patch, receipts: {}, notConfirmed: [] };
+    const current = await uiPrefsStore.readUIPrefs();
+    const t = createTranslator(current.appLocale);
+    const out = { ...patch };
+    const receipts = {};
+    const notConfirmed = [];
+    for (const key of wanted) {
+      if (current[key] === true) continue;
+      const outcome = await confirmations.confirm({
+        action: EXECUTION_SWITCH_ACTIONS[key],
+        subject: '',
+        prompt: executionSwitchDialog(key, t, platform),
+      });
+      if (outcome?.confirmed === true && outcome.receipt) {
+        receipts[key] = outcome.receipt;
+      } else {
+        delete out[key];
+        notConfirmed.push(key);
+      }
+    }
+    return { patch: out, receipts, notConfirmed };
+  }
+
+  /** The stored preferences, with the switches the person did not confirm named. */
+  function withNotConfirmed(prefs, notConfirmed) {
+    return notConfirmed.length > 0 ? { ...prefs, notConfirmed } : prefs;
+  }
+
   // Schreibt System-Prompt, Sprache, Tool-Auswahl und die uebrigen UI-Werte.
   // false heisst: der Schreibversuch selbst ist fehlgeschlagen.
-  async function writeUiPrefsPatch(uiPatch) {
+  async function writeUiPrefsPatch(requested) {
     try {
-      await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, await bindSkillSelection(out, uiPatch)));
+      const { patch: uiPatch, receipts } = await confirmExecutionSwitches(requested);
+      await uiPrefsStore.updateUIPrefs(
+        async (out) => Object.assign(out, await bindSkillSelection(out, uiPatch)),
+        { confirmations: receipts }
+      );
       await applyUiPrefsPatch(uiPatch);
       return true;
     } catch {
@@ -616,9 +673,32 @@ function registerSettingsHandlers({
 
   ipcMain.handle(REQ.SETTINGS_GET_MCP_CATALOG, async () => buildMcpCatalog());
 
+  /**
+   * A local command that is new or changed is asked through the port before
+   * it is stored (#1104). Null: nothing to ask; `declined`: the person said
+   * no, or nobody could be asked.
+   */
+  async function confirmMcpLaunch(input) {
+    const needed = await mcpSettings.launchConfirmation?.(input);
+    if (!needed) return { receipt: null };
+    const t = createTranslator((await uiPrefsStore.readUIPrefs()).appLocale);
+    const outcome = await confirmations.confirm({
+      action: CONFIRMATION_ACTIONS.MCP_LAUNCH,
+      subject: needed.subject,
+      prompt: mcpLaunchDialog(needed.server, t),
+    });
+    if (outcome?.confirmed === true && outcome.receipt) return { receipt: outcome.receipt };
+    return { declined: true };
+  }
+
   ipcMain.handle(REQ.SETTINGS_SAVE_MCP_SERVER, async (_event, input) => {
     if (!mcpSettings) return createSettingsError(createMessage('settings.error.mcp.unavailable'));
-    const result = await mcpSettings.save(input);
+    const launch = await confirmMcpLaunch(input);
+    if (launch.declined) {
+      const error = createMessage('mcp.error.launchNotConfirmed');
+      return { ...createSettingsError(error), errors: [error], notConfirmed: true };
+    }
+    const result = await mcpSettings.save(input, { confirmation: launch.receipt });
     if (!result?.ok) {
       return { ...createSettingsError(result?.errors?.[0] || createMessage('settings.mcp.saveFailed')),
         errors: result?.errors || [] };
@@ -680,14 +760,17 @@ function registerSettingsHandlers({
   });
 
   ipcMain.handle(REQ.SETTINGS_SET_UI_PREFS, async (_event, partial) => {
-    const patch = normalizeUiPrefsPatch(partial);
+    const { patch, receipts, notConfirmed } = await confirmExecutionSwitches(normalizeUiPrefsPatch(partial));
     if (Object.keys(patch).length === 0) {
-      return uiPrefsStore.readUIPrefs();
+      return withNotConfirmed(await uiPrefsStore.readUIPrefs(), notConfirmed);
     }
     // Ticked skills are bound to the open folder here as well (#576).
-    const updated = await uiPrefsStore.updateUIPrefs(async (out) => Object.assign(out, await bindSkillSelection(out, patch)));
+    const updated = await uiPrefsStore.updateUIPrefs(
+      async (out) => Object.assign(out, await bindSkillSelection(out, patch)),
+      { confirmations: receipts }
+    );
     await applyUiPrefsPatch(patch);
-    return updated;
+    return withNotConfirmed(updated, notConfirmed);
   });
 }
 
