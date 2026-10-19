@@ -9,8 +9,7 @@ const {
 
 /**
  * What the policy store hands back, derived from the store itself (#1098).
- * `integrity` is a plain string there, since the store also reports
- * `unreadable`.
+ * `integrity` also has `unreadable` there, which the port does not.
  * @typedef {Awaited<ReturnType<ReturnType<typeof import('../services/tool-policy-store').createToolPolicyStore>['read']>>} ToolPolicyState
  */
 
@@ -40,7 +39,7 @@ function createToolPolicyAdapter({ toolPolicyStore, resolveChatMode = () => null
         policyVersion: state.policyVersion,
         rulesVersion: rulesVersionOf(state),
         // `unreadable` threw above, so what is left is the port's union.
-        integrity: /** @type {import('../../application/ports/tool-policy-port').ToolPolicySnapshot['integrity']} */ (state.integrity),
+        integrity: state.integrity,
         encryptionAvailable: state.encryptionAvailable,
         // Hosts kept open per workspace (#946) and in every workspace
         // (#1119); not part of the rules version, so keeping one costs
@@ -56,10 +55,16 @@ function createToolPolicyAdapter({ toolPolicyStore, resolveChatMode = () => null
  * A remembered chat mode only counts while the policy file is intact. On a
  * failed signature the store falls back to `smart` (concept §7), and a chat in
  * the background must not keep a looser mode past that.
+ *
+ * @param {ToolPolicyState} state
+ * @param {string | null} chatId
+ * @param {(chatId: string) => string | null} resolveChatMode
+ * @returns {import('../../shared/contracts/tool-permissions').ToolPermissionMode}
  */
 function modeForRun(state, chatId, resolveChatMode) {
   if (state.integrity !== 'ok' && state.integrity !== 'missing') return state.mode;
   if (!chatId) return state.mode;
+  /** @type {string | null} */
   let remembered = null;
   try {
     remembered = resolveChatMode(chatId);
@@ -74,6 +79,8 @@ function modeForRun(state, chatId, resolveChatMode) {
  * sensitive path patterns and the integrity state. The store's
  * `policyVersion` also moves when only the mode is written — which now happens
  * whenever another chat comes on screen (#320).
+ *
+ * @param {ToolPolicyState} state
  */
 function rulesVersionOf(state) {
   const hash = createHash('sha256');

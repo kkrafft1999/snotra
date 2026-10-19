@@ -34,12 +34,81 @@ const { createTranslator } = require('../../shared/i18n');
 const { CONFIRMATION_ACTIONS, createRefusingConfirmation } = require('../../application/permissions/user-confirmation');
 const { executionSwitchDialog, mcpLaunchDialog } = require('./settings-confirmation-dialogs');
 
+/**
+ * @typedef {import('../../shared/contracts/settings').UiPrefs} UiPrefs
+ * @typedef {import('../../shared/contracts/settings').UiPrefsPatch} UiPrefsPatch
+ * @typedef {keyof typeof EXECUTION_SWITCH_ACTIONS} ExecutionSwitch
+ */
+
 /** What switching each execution tool on is confirmed as (#1104). */
 const EXECUTION_SWITCH_ACTIONS = Object.freeze({
   shellExecutionEnabled: CONFIRMATION_ACTIONS.SHELL_EXECUTION,
   pythonExecutionEnabled: CONFIRMATION_ACTIONS.PYTHON_EXECUTION,
 });
 
+/** @type {ExecutionSwitch[]} */
+/** @type {ExecutionSwitch[]} */
+const EXECUTION_SWITCH_KEYS = ['shellExecutionEnabled', 'pythonExecutionEnabled'];
+
+/**
+ * @typedef {Pick<import('electron').SafeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'>} SafeStorageLike
+ * @typedef {import('../ports/provider-catalog-port').ProviderCatalogEntry} ProviderMeta
+ * @typedef {import('../../shared/contracts/settings').PresetWire} PresetWire
+ * @typedef {import('../ports/llm-config-store-port').LlmConfigDocument} LlmConfigDocument
+ * @typedef {import('../../shared/contracts/message').Message} Message
+ * @typedef {{ providerId: string, model?: string, presetId?: string }} ChatTarget
+ * @typedef {{ ok: false, error: Message|string, code?: string }} SettingsFailure
+ * @typedef {import('../../shared/contracts/settings').ProviderPatch} ProviderPatch
+ * @typedef {import('../../shared/contracts/settings').PresetConnection} PresetConnection
+ * @typedef {import('../../shared/contracts/settings').PresetConnectionPatch} PresetConnectionPatch
+ * @typedef {import('../services/storage-service').JsonObject} StoredEntry  a provider's stored connection, as parsed
+ *
+ * What the handlers use of each collaborator the composition root hands in.
+ * @typedef {Pick<ReturnType<typeof import('../services/chat-session-settings').createChatSessionSettings>,
+ *   'reasoningEffortFor' | 'rememberReasoningEffort' | 'rememberPreset'>} SettingsChatSession
+ * @typedef {Pick<ReturnType<typeof import('../services/workspace-activation').createWorkspaceActivation>,
+ *   'activateKnownFolder'>} SettingsWorkspaceActivation
+ * @typedef {Pick<ReturnType<typeof import('../services/skills-service').createSkillsService>,
+ *   'listCatalog' | 'bindSelection' | 'reload'>} SettingsSkillCatalog
+ * @typedef {{ listCatalog: (options: { locale?: string }) => unknown }} SettingsToolCatalog
+ * @typedef {{ refresh: () => Promise<boolean>,
+ *   setApiKey: (plaintext: string) => Promise<{ ok: boolean, error?: Message|string, hasApiKey?: boolean }> }} SettingsWebSearch
+ * @typedef {Pick<ReturnType<typeof import('../services/image-generation-settings').createImageGenerationSettings>,
+ *   'refresh' | 'listModels'>} SettingsImageGeneration
+ * @typedef {Pick<ReturnType<typeof import('../services/mcp-settings').createMcpSettings>,
+ *   'listServers' | 'describeConnections' | 'describeSkippedTools' | 'hasLoadFailed' | 'launchConfirmation'
+ *   | 'save' | 'remove' | 'reload' | 'test'>} SettingsMcp
+ * @typedef {{ refresh: () => Promise<object> }} SettingsExecutionTool  python or shell: what was found, re-detected
+ */
+
+/**
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {SafeStorageLike} deps.safeStorage
+ * @param {import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability} [deps.safeStorageKey]
+ * @param {import('../ports/llm-config-store-port').LlmConfigStorePort} deps.llmConfigStore
+ * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore
+ * @param {import('../ports/workspace-folder-store-port').WorkspaceFolderStorePort} deps.workspaceFolderStore
+ * @param {import('../ports/provider-catalog-port').ProviderCatalogPort} deps.providerCatalog
+ * @param {import('../ports/provider-model-listing-port').ProviderModelListingPort} deps.providerModels
+ * @param {Record<string, string>} deps.REQ
+ * @param {SettingsWorkspaceActivation|null} [deps.workspaceActivation]
+ * @param {() => string|null} [deps.getActiveWorkspaceRoot]
+ * @param {ReturnType<typeof import('../services/settings-presentation-service').createSettingsPresentationService>} deps.presentation
+ * @param {SettingsToolCatalog} deps.toolCatalog
+ * @param {SettingsSkillCatalog|null} [deps.skillCatalog]
+ * @param {import('../../application/ports/memory-port').MemoryPort|null} [deps.memory]
+ * @param {SettingsWebSearch|null} [deps.webSearchSettings]
+ * @param {SettingsImageGeneration|null} [deps.imageGenerationSettings]
+ * @param {SettingsMcp|null} [deps.mcpSettings]
+ * @param {SettingsExecutionTool|null} [deps.pythonSettings]
+ * @param {SettingsExecutionTool|null} [deps.shellSettings]
+ * @param {SettingsChatSession|null} [deps.chatSessionSettings]
+ * @param {((locale: unknown) => void)|null} [deps.onAppLocaleChanged]
+ * @param {((show: unknown) => void)|null} [deps.onShowHiddenFilesChanged]
+ * @param {import('../../application/ports/user-confirmation-port').UserConfirmationPort} [deps.confirmations]
+ * @param {string} [deps.platform]
+ */
 function registerSettingsHandlers({
   ipcMain,
   safeStorage,
@@ -95,12 +164,16 @@ function registerSettingsHandlers({
   ipcMain.handle(REQ.SETTINGS_GET_LLM_STATE, async () => {
     const config = await llmConfigStore.readLLMConfig();
     const chatTarget = llmConfigStore.resolveChatModelTarget(config);
-    const presetsWire = Array.isArray(config.presets)
-      ? config.presets.map((row) => llmConfigStore.normalizePresetEntry(row)).filter(Boolean)
-      : [];
+    /** @type {PresetWire[]} */
+    const presetsWire = [];
+    for (const row of Array.isArray(config.presets) ? config.presets : []) {
+      const preset = llmConfigStore.normalizePresetEntry(row);
+      if (preset) presetsWire.push(preset);
+    }
     // Gespeichert heisst nicht lesbar: nach einem Wechsel des App-Namens
     // (safeStorage-Schluessel haengt daran) oder des Benutzerkontos passt der
     // Schluessel nicht mehr. Die Praesentation zeigt das als keyUnreadable.
+    /** @type {Record<string, boolean>} */
     const apiKeyDecryptable = {};
     for (const [providerId, entry] of Object.entries(config.providers || {})) {
       if (entry && entry.apiKeyEnc) {
@@ -128,6 +201,11 @@ function registerSettingsHandlers({
     });
   });
 
+  /**
+   * @param {LlmConfigDocument} config
+   * @param {string} providerId
+   * @param {import('../../shared/contracts/settings').ProviderPatch} patch
+   */
   function mergeProviderPatchIntoConfig(config, providerId, patch) {
     return mergeProviderPatchIntoConfigImpl({ safeStorage, providerCatalog }, config, providerId, patch);
   }
@@ -135,10 +213,12 @@ function registerSettingsHandlers({
   /**
    * The levels the chat's model takes and the one it runs with (#725) — the
    * same resolution a round makes in the LLM adapter.
+   *
+   * @param {ChatTarget} target
    */
   function reasoningLevelsOf(target) {
     const provider = providerCatalog.getProvider(target?.providerId);
-    const model = target?.model || provider?.defaultModel;
+    const model = target?.model || provider?.defaultModel || '';
     return {
       provider,
       levels: reasoningLevelsFor(provider, model),
@@ -146,9 +226,13 @@ function registerSettingsHandlers({
     };
   }
 
+  /**
+   * @param {ChatTarget} target
+   */
   async function chatReasoningState(target) {
     const { levels, defaultLevel } = reasoningLevelsOf(target);
     if (levels.length === 0) return { level: null, levels: [], defaultLevel: null };
+    /** @type {string|null} */
     let own = null;
     try {
       own = (await chatSessionSettings?.reasoningEffortFor()) || null;
@@ -194,14 +278,19 @@ function registerSettingsHandlers({
    * An execution tool switched on is asked through the port first (#1104).
    * One the person declined leaves the patch, so the rest still saves; the
    * receipts go to the store, which switches nothing on without one.
+   *
+   * @param {UiPrefsPatch} patch
+   * @returns {Promise<{ patch: UiPrefsPatch, receipts: Partial<Record<ExecutionSwitch, unknown>>, notConfirmed: ExecutionSwitch[] }>}
    */
   async function confirmExecutionSwitches(patch) {
-    const wanted = Object.keys(EXECUTION_SWITCH_ACTIONS).filter((key) => patch[key] === true);
+    const wanted = EXECUTION_SWITCH_KEYS.filter((key) => patch[key] === true);
     if (wanted.length === 0) return { patch, receipts: {}, notConfirmed: [] };
     const current = await uiPrefsStore.readUIPrefs();
     const t = createTranslator(current.appLocale);
     const out = { ...patch };
+    /** @type {Partial<Record<ExecutionSwitch, unknown>>} */
     const receipts = {};
+    /** @type {ExecutionSwitch[]} */
     const notConfirmed = [];
     for (const key of wanted) {
       if (current[key] === true) continue;
@@ -220,13 +309,21 @@ function registerSettingsHandlers({
     return { patch: out, receipts, notConfirmed };
   }
 
-  /** The stored preferences, with the switches the person did not confirm named. */
+  /**
+   * The stored preferences, with the switches the person did not confirm named.
+   *
+   * @param {UiPrefs} prefs
+   * @param {ExecutionSwitch[]} notConfirmed
+   */
   function withNotConfirmed(prefs, notConfirmed) {
     return notConfirmed.length > 0 ? { ...prefs, notConfirmed } : prefs;
   }
 
   // Schreibt System-Prompt, Sprache, Tool-Auswahl und die uebrigen UI-Werte.
   // false heisst: der Schreibversuch selbst ist fehlgeschlagen.
+  /**
+   * @param {UiPrefsPatch} requested
+   */
   async function writeUiPrefsPatch(requested) {
     try {
       const { patch: uiPatch, receipts } = await confirmExecutionSwitches(requested);
@@ -247,6 +344,9 @@ function registerSettingsHandlers({
    * into that folder's own list, everything else into the global one, and
    * what this folder's catalogue cannot see is kept. Runs under the
    * preferences lock, on the stored state it is about to write over.
+   *
+   * @param {UiPrefs} current
+   * @param {UiPrefsPatch} uiPatch
    */
   async function bindSkillSelection(current, uiPatch) {
     if (!Array.isArray(uiPatch.activeSkills) || typeof skillCatalog?.bindSelection !== 'function') {
@@ -265,6 +365,8 @@ function registerSettingsHandlers({
   /**
    * What a written preferences patch changes outside the file. One place for
    * both handlers that write preferences — two copies had drifted apart (#562).
+   *
+   * @param {UiPrefsPatch} patch
    */
   async function applyUiPrefsPatch(patch) {
     if ('appLocale' in patch) onAppLocaleChanged?.(patch.appLocale);
@@ -287,6 +389,10 @@ function registerSettingsHandlers({
   // OpenAI-Schluessel — und laufen trotzdem durch. Die Meldung sagt, was
   // uebernommen wurde und was nicht (Issue #97). The reason goes into the
   // sentence as a message of its own, so both read in one language (#308).
+  /**
+   * @param {Message|string} reason
+   * @param {UiPrefsPatch} uiPatch
+   */
   async function rejectModelPart(reason, uiPatch) {
     if (Object.keys(uiPatch).length === 0) return createSettingsError(reason);
     if (!(await writeUiPrefsPatch(uiPatch))) {
@@ -304,6 +410,7 @@ function registerSettingsHandlers({
     // Die Normalisierung wirft Klartext-Geheimnisse weg (und das soll sie).
     // Der Verbindungs-Entwurf je Zeile wird deshalb vorher aus dem Rohpayload
     // gezogen und unten unter dem Dateilock verschluesselt (Issue #202).
+    /** @type {Map<string, import('../../shared/contracts/settings').PresetConnectionPatch>} */
     const connectionPatches = new Map();
     for (const row of rawPresets) {
       const provider = row?.providerId ? providerCatalog.getProvider(row.providerId) : null;
@@ -312,9 +419,12 @@ function registerSettingsHandlers({
       // Keyed like the normalised preset, whose id is trimmed (#562).
       if (patch) connectionPatches.set(row.id.trim(), patch);
     }
-    const presets = rawPresets
-      .map((row) => llmConfigStore.normalizePresetEntry(row))
-      .filter(Boolean);
+    /** @type {PresetWire[]} */
+    const presets = [];
+    for (const row of rawPresets) {
+      const preset = llmConfigStore.normalizePresetEntry(row);
+      if (preset) presets.push(preset);
+    }
     if (presets.length === 0) {
       return rejectModelPart(createMessage('settings.error.presets.empty'), uiPatch);
     }
@@ -336,6 +446,7 @@ function registerSettingsHandlers({
       payload?.providerPatches && typeof payload.providerPatches === 'object'
         ? payload.providerPatches
         : {};
+    /** @type {Record<string, import('../../shared/contracts/settings').ProviderPatch>} */
     const patches = Object.create(null);
     for (const [providerId, raw] of Object.entries(rawPatches)) {
       patches[providerId] = normalizeProviderPatch(raw, providerCatalog.getProvider(providerId));
@@ -362,8 +473,12 @@ function registerSettingsHandlers({
       await safeStorageKey.whenDurable();
     }
 
-    let validationError = null;
+    // Set inside the updater below, so the declared type has to survive the
+    // `null` it starts with.
+    let validationError = /** @type {SettingsFailure | null} */ (null);
+    /** @type {LlmConfigDocument} */
     let previousConfig;
+    /** @type {object} */
     let savedConfig;
     try {
       savedConfig = await llmConfigStore.updateLLMConfig(async (config) => {
@@ -406,7 +521,7 @@ function registerSettingsHandlers({
         // a key, and adding a first working model next to it has to be
         // possible (#670). What is new, or was complete before, still has to
         // be complete.
-        const wasStoredIncomplete = (pr) => {
+        const wasStoredIncomplete = (/** @type {PresetWire} */ pr) => {
           const stored = storedById.get(pr.id);
           if (!stored || stored.providerId !== pr.providerId) return false;
           const meta = providerCatalog.getProvider(stored.providerId);
@@ -417,6 +532,10 @@ function registerSettingsHandlers({
         const usableIds = new Set();
         for (const pr of presets) {
           const meta = providerCatalog.getProvider(pr.providerId);
+          if (!meta) {
+            validationError = createSettingsError(createMessage('settings.error.provider.unknown'));
+            return config;
+          }
           const entry = (draft.providers && draft.providers[pr.providerId]) || {};
           if (isProviderConfigured({ safeStorage }, meta, entry, pr)) {
             usableIds.add(pr.id);
@@ -674,9 +793,11 @@ function registerSettingsHandlers({
    * A local command that is new or changed is asked through the port before
    * it is stored (#1104). Null: nothing to ask; `declined`: the person said
    * no, or nobody could be asked.
+   *
+   * @param {Record<string, unknown>} input
    */
   async function confirmMcpLaunch(input) {
-    const needed = await mcpSettings.launchConfirmation?.(input);
+    const needed = await mcpSettings?.launchConfirmation?.(input);
     if (!needed) return { receipt: null };
     const t = createTranslator((await uiPrefsStore.readUIPrefs()).appLocale);
     const outcome = await confirmations.confirm({
@@ -771,6 +892,13 @@ function registerSettingsHandlers({
   });
 }
 
+/**
+ * @param {{ safeStorage: SafeStorageLike, providerCatalog: Pick<import('../ports/provider-catalog-port').ProviderCatalogPort, 'getProvider'> }} deps
+ * @param {LlmConfigDocument} config
+ * @param {string} providerId
+ * @param {ProviderPatch|null|undefined} patch
+ * @returns {{ ok: true } | SettingsFailure}
+ */
 function mergeProviderPatchIntoConfigImpl(deps, config, providerId, patch) {
   const { safeStorage, providerCatalog } = deps;
   const provider = providerCatalog.getProvider(providerId);
@@ -843,14 +971,26 @@ function mergeProviderPatchIntoConfigImpl(deps, config, providerId, patch) {
   return createSettingsOk();
 }
 
-/** Does a save bring a key or headers to encrypt (#1060)? */
+/**
+ * Does a save bring a key or headers to encrypt (#1060)?
+ *
+ * @param {Record<string, ProviderPatch>} providerPatches
+ * @param {Map<string, PresetConnectionPatch>} connectionPatches
+ */
 function carriesSecret(providerPatches, connectionPatches) {
-  const brings = (draft) => ['apiKey', 'extraHeaders'].some(
+  /** @type {Array<'apiKey' | 'extraHeaders'>} */
+  const secretFields = ['apiKey', 'extraHeaders'];
+  const brings = (/** @type {ProviderPatch | PresetConnectionPatch | undefined} */ draft) => secretFields.some(
     (field) => typeof draft?.[field] === 'string' && draft[field].trim().length > 0
   );
   return Object.values(providerPatches).some(brings) || [...connectionPatches.values()].some(brings);
 }
 
+/**
+ * @template {object} T
+ * @param {T} config
+ * @returns {T}
+ */
 function cloneLlmConfig(config) {
   return JSON.parse(JSON.stringify(config));
 }
@@ -858,6 +998,11 @@ function cloneLlmConfig(config) {
 // Prueft, ob ein gespeicherter Key mit dem aktuellen safeStorage-Schluessel
 // lesbar ist. Das Ergebnis wird sofort verworfen; nur die Entscheidbarkeit
 // zaehlt.
+/**
+ * @param {Pick<SafeStorageLike, 'isEncryptionAvailable' | 'decryptString'>|null|undefined} safeStorage
+ * @param {string|null|undefined} apiKeyEnc
+ * @returns {boolean}
+ */
 function canDecryptApiKeyEnc(safeStorage, apiKeyEnc) {
   if (!apiKeyEnc || typeof safeStorage?.decryptString !== 'function') return false;
   if (!safeStorage.isEncryptionAvailable()) return false;
@@ -873,9 +1018,15 @@ function canDecryptApiKeyEnc(safeStorage, apiKeyEnc) {
  * Fuehrt die gespeicherte Verbindung eines Eintrags mit dem Entwurf zusammen
  * (Issue #202). Geheimnisse werden hier verschluesselt; ein leerer Entwurf
  * laesst alles stehen, `remove*` loescht gezielt.
+ *
+ * @param {{ safeStorage: SafeStorageLike }} deps
+ * @param {{ previous?: PresetConnection, patch?: PresetConnectionPatch, provider?: ProviderMeta|null }} input
+ * @returns {SettingsFailure | { ok: true, connection: PresetConnection|undefined }}
  */
 function mergePresetConnection({ safeStorage }, { previous, patch, provider }) {
+  /** @type {PresetConnection & Record<string, unknown>} */
   const next = { ...(previous && typeof previous === 'object' ? previous : {}) };
+  /** @type {PresetConnectionPatch & Record<string, unknown>} */
   const draft = patch && typeof patch === 'object' ? patch : {};
   const endpointBefore = normalizeBaseUrl(next.baseUrl || provider?.defaultBaseUrl);
 
@@ -919,6 +1070,11 @@ function mergePresetConnection({ safeStorage }, { previous, patch, provider }) {
  * `makeDefault` schreibt zusaetzlich `defaultPresetId` fort, den Standard fuer
  * neue Chats. Das tut nur eine ausdrueckliche Wahl; wird ein Chat aus dem
  * Verlauf hergestellt, aendert sich der Standard nicht.
+ *
+ * @param {{ llmConfigStore: Pick<import('../ports/llm-config-store-port').LlmConfigStorePort, 'updateLLMConfig'>,
+ *   providerCatalog: Pick<import('../ports/provider-catalog-port').ProviderCatalogPort, 'getProvider'>, safeStorage: SafeStorageLike }} deps
+ * @param {unknown} rawPresetId
+ * @param {{ makeDefault?: boolean }} [options]
  */
 async function applyActivePreset(
   { llmConfigStore, providerCatalog, safeStorage },
@@ -929,16 +1085,16 @@ async function applyActivePreset(
     return createSettingsError(createMessage('settings.error.preset.none'));
   }
   const presetId = rawPresetId.trim();
-  let validationError = null;
+  let validationError = /** @type {SettingsFailure | null} */ (null);
   await llmConfigStore.updateLLMConfig(async (config) => {
     const preset = Array.isArray(config.presets)
       ? config.presets.find((p) => p && p.id === presetId)
       : null;
-    if (!preset || !providerCatalog.getProvider(preset.providerId)) {
+    const meta = preset ? providerCatalog.getProvider(preset.providerId) : null;
+    if (!preset || !meta) {
       validationError = createSettingsError(createMessage('settings.error.preset.notFound'));
       return config;
     }
-    const meta = providerCatalog.getProvider(preset.providerId);
     const entry = (config.providers && config.providers[preset.providerId]) || {};
     if (!isProviderConfigured({ safeStorage }, meta, entry, preset)) {
       validationError = createSettingsError(createMessage('settings.error.preset.notConfigured'));
@@ -966,6 +1122,11 @@ async function applyActivePreset(
 /**
  * Taugt der Eintrag noch als Modell dieses Chats (Issue #211)? Geloescht oder
  * unvollstaendig konfiguriert heisst nein — dann greift der Standard.
+ *
+ * @param {{ llmConfigStore: Pick<import('../ports/llm-config-store-port').LlmConfigStorePort, 'readLLMConfig'>,
+ *   providerCatalog: Pick<import('../ports/provider-catalog-port').ProviderCatalogPort, 'getProvider'>, safeStorage: SafeStorageLike }} deps
+ * @param {unknown} rawPresetId
+ * @returns {Promise<boolean>}
  */
 async function isPresetUsable({ llmConfigStore, providerCatalog, safeStorage }, rawPresetId) {
   if (typeof rawPresetId !== 'string' || !rawPresetId.trim()) return false;
@@ -981,15 +1142,24 @@ async function isPresetUsable({ llmConfigStore, providerCatalog, safeStorage }, 
   return isProviderConfigured({ safeStorage }, meta, entry, preset);
 }
 
-/** Beschriftung einer unvollstaendigen Zeile: ihr Name, sonst der des Anbieters. */
+/**
+ * Beschriftung einer unvollstaendigen Zeile: ihr Name, sonst der des Anbieters.
+ *
+ * @param {ProviderMeta} meta
+ * @param {PresetWire} preset
+ */
 function presetAccessLabel(meta, preset) {
   const name = preset?.connection?.displayName;
   return typeof name === 'string' && name.trim() ? name.trim() : meta.name;
 }
 
 /**
- * @param {object} [preset] Bei `connectionPerPreset` entscheidet die Verbindung
+ * @param {{ safeStorage: SafeStorageLike }} deps
+ * @param {ProviderMeta} meta
+ * @param {StoredEntry} entry
+ * @param {PresetWire} [preset] Bei `connectionPerPreset` entscheidet die Verbindung
  *   des Eintrags, nicht die des Anbieters (Issue #202).
+ * @returns {boolean}
  */
 function isProviderConfigured({ safeStorage }, meta, entry, preset) {
   if (hasPresetConnection(meta)) {

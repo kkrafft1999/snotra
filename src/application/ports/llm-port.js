@@ -16,6 +16,10 @@
  * @property {string} [ollamaThinking]      Ollama's reasoning of an assistant message (#994)
  * @property {{ model: string, blocks: LlmThinkingBlock[] }} [anthropicThinking]  the thinking blocks Anthropic wants back unchanged (#994)
  * @property {unknown} [attachments]       images on a user message (#84)
+ * @property {{ sensitive: true, providerKey: string, targets: Array<{ path: string, version: string|null }> }} [sensitiveMarker]
+ *   a tool message whose content a `read-sensitive` approval bound to one provider endpoint (§4);
+ *   stripped before a request leaves the app
+ * @property {boolean} [redacted]           the content was replaced because the endpoint changed
  *
  * One thinking block of an Anthropic round, kept verbatim: the API checks its signature.
  * @typedef {{ type?: string, thinking?: string, signature?: string, data?: string }} LlmThinkingBlock

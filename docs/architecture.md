@@ -2569,8 +2569,7 @@ check the member names and miss every parameter and return shape.
 **What is checked.** `tsconfig.json` includes `src/application/`, `src/main/`
 and `src/shared/` as a whole, with an `exclude` list of the few files that are
 not typed yet ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)): the
-composition root, `index.js` and the settings and tool-permission IPC
-handlers. Every file the included ones import is checked as well — `checkJs`
+composition root and `index.js`. Every file the included ones import is checked as well — `checkJs`
 checks the whole program. The tests, the renderer and the build scripts are
 outside.
 
@@ -2622,8 +2621,8 @@ compiler reads the local as `null` and rejects every use of it.
 catches a port and its adapter disagreeing — a member, a shape, an argument
 count — and callbacks with the wrong parameters, and it keeps `null` and
 `undefined` out of places that declare a value. `noImplicitAny` is still off
-only while the last files — `chat-engine.js`, the permission core, the sandbox
-service, the policy store and the composition root — are annotated
+only while the last files — the sandbox service and the composition root — are
+annotated
 ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)); every other file
 already passes with it on.
 

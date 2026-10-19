@@ -147,8 +147,7 @@ function expandSecrets(values) {
  * The stores are typed from this side: what is read of each.
  *
  * @param {Object} deps
- * @param {{ readLLMConfig: () => Promise<{ providers?: Record<string, unknown>,
- *   presets?: Array<{ id?: string, providerId: string, connection?: unknown } | null> }> }} deps.llmConfigStore
+ * @param {Pick<import('../ports/llm-config-store-port').LlmConfigStorePort, 'readLLMConfig'>} deps.llmConfigStore
  * @param {import('../ports/provider-secrets-port').ProviderSecretsPort} deps.providerSecrets
  * @param {{ getMcpSecretValues: () => Promise<string[]> }} deps.mcpSecrets
  * @param {{ getWebSearchApiKey: () => Promise<string|null> }} deps.webSearchStore

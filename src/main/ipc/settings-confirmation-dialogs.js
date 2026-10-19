@@ -26,6 +26,7 @@ const EXECUTION_DIALOG_KEYS = Object.freeze({
  * @param {'shellExecutionEnabled'|'pythonExecutionEnabled'} pref
  * @param {ReturnType<typeof import('../../shared/i18n').createTranslator>} t  a translator with `t.locale`
  * @param {string} platform  where there is no sandbox (Windows), the prompt says so
+ * @returns {import('../../application/ports/user-confirmation-port').ConfirmationPrompt}
  */
 function executionSwitchDialog(pref, t, platform) {
   const base = EXECUTION_DIALOG_KEYS[pref];
@@ -66,7 +67,8 @@ function commandLine(command, args) {
 /**
  * @param {{ label: string, command: string, args: string[], cwd: string, envKeys: string[] }} server
  *   what `mcpSettings.launchConfirmation` describes — variable names, never values
- * @param {(key: string, params?: object) => string} t
+ * @param {(key: string, params?: Record<string, unknown>) => string} t
+ * @returns {import('../../application/ports/user-confirmation-port').ConfirmationPrompt}
  */
 function mcpLaunchDialog(server, t) {
   const folder = server.cwd ? `\n${t('settingsDialog.mcpLaunch.folder', { cwd: server.cwd })}` : '';

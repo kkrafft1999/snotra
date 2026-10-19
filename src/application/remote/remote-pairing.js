@@ -42,13 +42,19 @@ const PAIRING_TTL_MS = 5 * 60_000;
 const ACTIVE_STEPS = new Set([STATES.OPENING, STATES.CODE, STATES.CONFIRM]);
 const STATE_REASONS = new Set(Object.values(REASONS));
 
-/** A relay's reason as the state names it; one the state does not know is left out. */
+/**
+ * A relay's reason as the state names it; one the state does not know is left out.
+ * @param {*} error  what the relay port rejected with
+ */
 function reasonOf(error) {
   const reason = error && typeof error === 'object' ? error.reason : null;
   return STATE_REASONS.has(reason) ? reason : null;
 }
 
-/** 404 and 409 from the relay mean the pairing is gone or no longer pending: it ran out. */
+/**
+ * 404 and 409 from the relay mean the pairing is gone or no longer pending: it ran out.
+ * @param {*} error  what the relay port rejected with
+ */
 function isGone(error) {
   return error?.reason === 'not-found' || error?.reason === 'busy';
 }
@@ -118,6 +124,7 @@ function createRemotePairing({
    * @type {PairingAttempt | null}
    */
   let flow = null;
+  /** @type {Set<(state: ReturnType<typeof snapshot>) => void>} */
   const listeners = new Set();
 
   function loadPhone() {
@@ -152,11 +159,15 @@ function createRemotePairing({
     }
   }
 
+  /** @param {PairingAttempt} attempt */
   function isCurrent(attempt) {
     return flow === attempt && !attempt.done;
   }
 
-  /** Lets go of everything a pairing holds: timer, stream, an open sheet, the code. */
+  /**
+   * Lets go of everything a pairing holds: timer, stream, an open sheet, the code.
+   * @param {PairingAttempt} attempt
+   */
   function release(attempt) {
     attempt.done = true;
     attempt.finishing = false;
@@ -189,6 +200,9 @@ function createRemotePairing({
    * Best effort, never thrown: the outcome for the user is already decided.
    * Started at once, not on a later tick, so that a quit right after still
    * sends it before the adapter closes.
+   *
+   * @param {string} what
+   * @param {() => Promise<void>} run
    */
   function tidy(what, run) {
     let pending;
@@ -200,10 +214,16 @@ function createRemotePairing({
     Promise.resolve(pending).catch((error) => log.warn(`[remote] ${what} at the relay failed (${error?.reason || 'error'})`));
   }
 
+  /** @param {PairingAttempt} attempt */
   function cancelAtRelay(attempt) {
-    if (attempt.channelId) tidy('cancelling the pairing', () => relay.cancelPairing(attempt.channelId, attempt.pairingId));
+    const { channelId, pairingId } = attempt;
+    if (channelId && pairingId) tidy('cancelling the pairing', () => relay.cancelPairing(channelId, pairingId));
   }
 
+  /**
+   * @param {string} channelId
+   * @param {import('../ports/remote-relay-port').RemoteSigner} sign
+   */
   function deleteAtRelay(channelId, sign) {
     tidy('deleting the channel', () => relay.deleteChannel(channelId, { sign }));
   }
@@ -221,6 +241,7 @@ function createRemotePairing({
     return true;
   }
 
+  /** @param {PairingAttempt} attempt */
   function expire(attempt) {
     attempt.timer = null;
     if (!isCurrent(attempt) || attempt.finishing) return;
@@ -228,6 +249,10 @@ function createRemotePairing({
     end(attempt, STATES.EXPIRED);
   }
 
+  /**
+   * @param {PairingAttempt} attempt
+   * @param {import('../ports/remote-relay-port').RemoteChannelRecord|null} record
+   */
   function onRecord(attempt, record) {
     if (!isCurrent(attempt) || attempt.claimed) return;
     if (record === null) {
@@ -245,6 +270,10 @@ function createRemotePairing({
     });
   }
 
+  /**
+   * @param {PairingAttempt} attempt
+   * @param {*} error
+   */
   function onWatchError(attempt, error) {
     // Once the claim is in, the stream has done its job.
     if (!isCurrent(attempt) || attempt.claimed) return;
@@ -252,34 +281,42 @@ function createRemotePairing({
     end(attempt, STATES.UNREACHABLE, reasonOf(error) || REASONS.NETWORK);
   }
 
-  /** Steps 25–35: `MAC_P`, the words, the person at the desktop, `MAC_D`. */
+  /**
+   * Steps 25–35: `MAC_P`, the words, the person at the desktop, `MAC_D`.
+   * @param {PairingAttempt} attempt
+   * @param {import('../ports/remote-relay-port').RemoteChannelRecord} record
+   */
   async function confirmClaim(attempt, record) {
-    const claim = {
-      code: attempt.code,
-      channelId: attempt.channelId,
-      desktopKeys: attempt.desktopKeys,
-      phoneKeys: record.phoneKeys,
-    };
-    if (!crypto.isKeyBundle(record.phoneKeys) || !crypto.verifyPhoneMac({ ...claim, macP: record.macP })) {
+    const { code, channelId, desktopKeys, sign } = attempt;
+    const { phoneKeys, macP } = record;
+    // A claim arrives only through the stream `start()` opens after it filled these in.
+    if (code === null || channelId === null || desktopKeys === null || sign === null) {
+      throw new Error('a claim arrived before the pairing was open');
+    }
+    if (!phoneKeys || !macP || !crypto.isKeyBundle(phoneKeys)
+      || !crypto.verifyPhoneMac({ code, channelId, desktopKeys, phoneKeys, macP })) {
       // Keys that are not the ones the person with the code sent (§6).
       cancelAtRelay(attempt);
       end(attempt, STATES.STOPPED, REASONS.MAC);
       return;
     }
+    const claim = { code, channelId, desktopKeys, phoneKeys };
     const replacing = !!phone;
-    attempt.words = crypto.phrase(attempt.desktopKeys, record.phoneKeys);
+    const words = crypto.phrase(desktopKeys, phoneKeys);
+    attempt.words = words;
     attempt.step = STATES.CONFIRM;
     attempt.sheet = new AbortController();
     attempt.watch?.close();
     attempt.watch = null;
     emit();
 
+    /** @type {import('../ports/user-confirmation-port').ConfirmationOutcome} */
     let outcome;
     try {
       outcome = await confirmations.confirm({
         action: CONFIRMATION_ACTIONS.REMOTE_PAIRING,
-        subject: attempt.channelId,
-        prompt: prompt({ words: attempt.words, replacing }),
+        subject: channelId,
+        prompt: prompt({ words, replacing }),
         signal: attempt.sheet.signal,
       });
     } catch (error) {
@@ -289,9 +326,9 @@ function createRemotePairing({
     // Cancelled, expired or replaced while the sheet was open: that path tidied up.
     if (!isCurrent(attempt)) return;
     const allowed = outcome?.confirmed === true
-      && receipts.redeem(outcome.receipt, CONFIRMATION_ACTIONS.REMOTE_PAIRING, attempt.channelId);
+      && receipts.redeem(outcome.receipt, CONFIRMATION_ACTIONS.REMOTE_PAIRING, channelId);
     if (!allowed) {
-      deleteAtRelay(attempt.channelId, attempt.sign);
+      deleteAtRelay(channelId, sign);
       end(attempt, STATES.DENIED);
       return;
     }
@@ -302,26 +339,26 @@ function createRemotePairing({
     attempt.timer = null;
     const macD = crypto.desktopMac(claim);
     try {
-      await relay.confirmPairing(attempt.channelId, macD);
+      await relay.confirmPairing(channelId, macD);
     } catch (error) {
-      deleteAtRelay(attempt.channelId, attempt.sign);
+      deleteAtRelay(channelId, sign);
       end(attempt, isGone(error) ? STATES.EXPIRED : STATES.UNREACHABLE, isGone(error) ? null : reasonOf(error) || REASONS.NETWORK);
       return;
     }
 
     const previous = phone;
-    const next = { channelId: attempt.channelId, keys: { ...record.phoneKeys }, pairedAt: now() };
+    const next = { channelId, keys: { ...phoneKeys }, pairedAt: now() };
     try {
       await identity.savePhone(next);
     } catch (error) {
       log.warn(`[remote] the phone's keys could not be kept (${error?.name || 'error'})`);
-      deleteAtRelay(attempt.channelId, attempt.sign);
+      deleteAtRelay(channelId, sign);
       end(attempt, STATES.STOPPED, REASONS.NOT_SAVED);
       return;
     }
     phone = next;
     // R1: one phone per computer. The old one keeps its access until now.
-    if (previous && previous.channelId !== next.channelId) deleteAtRelay(previous.channelId, attempt.sign);
+    if (previous && previous.channelId !== next.channelId) deleteAtRelay(previous.channelId, sign);
     release(attempt);
     flow = null;
     emit();

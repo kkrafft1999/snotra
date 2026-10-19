@@ -21,7 +21,7 @@ const { PRODUCTION_RELAY } = require('../remote/relay-endpoint');
 
 /**
  * @param {{
- *   app: { getPath: (name: string) => string },
+ *   app: Pick<import('electron').App, 'getPath'>,
  *   safeStorage: any,
  *   safeStorageKey?: { whenDurable: () => Promise<unknown> },
  *   fs: typeof import('fs/promises'),

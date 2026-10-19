@@ -11,20 +11,64 @@ const { createTranslator } = require('../../shared/i18n');
 const { resolveProviderCapabilities } = require('../../shared/contracts/provider-capabilities');
 
 /**
+ * @typedef {import('../ports/provider-catalog-port').ProviderCatalogEntry} ProviderMeta
+ * @typedef {import('../../shared/contracts/settings').PresetWire} PresetWire
+ * @typedef {import('../../shared/contracts/settings').Say} Say
+ * @typedef {{ activeProvider?: string, activePresetId?: string|null, providers?: Record<string, StoredProviderEntry>,
+ *   presets?: PresetWire[] }} PresentedLlmConfig  what of the LLM configuration the state is built from
+ * @typedef {import('./storage-service').JsonObject} StoredProviderEntry  one provider's stored connection, as parsed
+ * @typedef {Record<string, boolean>} ApiKeyDecryptable  provider id (or `preset:<id>`) → whether the stored key decrypts
+ *
+ * What the renderer reads of a provider: the stored connection with the
+ * provider's own defaults filled in. Secrets are never part of it.
+ * @typedef {Object} ProviderView
+ * @property {string} id
+ * @property {string} name
+ * @property {string} builtInName
+ * @property {string} [displayName]
+ * @property {string} [apiStyle]
+ * @property {boolean} [hasExtraHeaders]
+ * @property {boolean} [supportsImages]
+ * @property {boolean} [sendTools]
+ * @property {string} defaultModel
+ * @property {string} defaultBaseUrl
+ * @property {boolean} defaultInsecureTls
+ * @property {string} apiBase
+ * @property {import('../../shared/contracts/provider-capabilities').ProviderCapabilities} capabilities
+ * @property {boolean} optionalApiKey
+ * @property {boolean} configured
+ * @property {boolean} hasKey
+ * @property {boolean} keyUnreadable
+ * @property {string} model
+ * @property {string} baseUrl
+ * @property {boolean} insecureTls
+ * @property {boolean} isActiveChatProvider
+ * @property {boolean} connectionDetail
+ * @property {ReturnType<typeof buildProviderFormView>} form
+ * @property {import('../../shared/contracts/settings').PresetFieldView[]} presetFields
+ */
+
+/**
  * @param {Object} deps
- * @param {any} deps.providerCatalog
+ * @param {import('../ports/provider-catalog-port').ProviderCatalogPort} deps.providerCatalog
  * @param {string} deps.defaultProviderId
  * @param {import('../../shared/contracts/platform-capabilities').PlatformCapabilities|null} [deps.platformCapabilities]
  *   the platform register resolved at start (#1149); it travels next to the
  *   provider capabilities
  */
 function createSettingsPresentationService({ providerCatalog, defaultProviderId, platformCapabilities = null }) {
+  /** @param {string} id */
   function getProvider(id) {
     return providerCatalog.getProvider(id);
   }
 
   // apiKeyDecryptable: { [providerId]: boolean } aus dem Handler; fehlt der
   // Eintrag (z. B. aeltere Aufrufer), gilt ein gespeicherter Key als lesbar.
+  /**
+   * @param {ProviderMeta} meta
+   * @param {StoredProviderEntry} entry
+   * @param {ApiKeyDecryptable} [apiKeyDecryptable]
+   */
   function resolveConfigured(meta, entry, apiKeyDecryptable) {
     const hasKey = meta.fields?.apiKey ? !!entry.apiKeyEnc : false;
     const keyUnreadable = hasKey && apiKeyDecryptable?.[meta.id] === false;
@@ -47,8 +91,12 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
    * Felder des Providers „OpenAI-kompatibel" (Issue #193) fuer die Oberflaeche.
    * Die Zusatz-Header sind ein Geheimnis: Die View sagt nur, **ob** welche
    * gespeichert sind — der Inhalt verlaesst den Main-Prozess nie.
+   *
+   * @param {ProviderMeta} meta
+   * @param {StoredProviderEntry} entry
    */
   function resolveExtendedFields(meta, entry) {
+    /** @type {Pick<ProviderView, 'displayName' | 'apiStyle' | 'hasExtraHeaders' | 'supportsImages' | 'sendTools'>} */
     const out = {};
     if (meta.fields?.displayName) {
       out.displayName = typeof entry.displayName === 'string' ? entry.displayName : '';
@@ -80,6 +128,11 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
    * carries is finished text in the language of the interface, the way the
    * tool catalogue does it (#291); the renderer fetches the state again when
    * the language changes.
+   *
+   * @param {ProviderMeta} meta
+   * @param {StoredProviderEntry} entry
+   * @param {{ chatProviderId?: string, apiKeyDecryptable?: ApiKeyDecryptable, say?: Say }} [options]
+   * @returns {ProviderView}
    */
   function buildProviderView(meta, entry, { chatProviderId, apiKeyDecryptable, say = createTranslator().message } = {}) {
     const provider = getProvider(meta.id) || meta;
@@ -132,8 +185,13 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
    * Nur die unkritischen Felder plus zwei Ja/Nein-Angaben: Der Renderer soll
    * anzeigen und bearbeiten koennen, ohne je einen Schluessel oder einen
    * Zusatz-Header im Klartext zu sehen.
+   *
+   * @param {PresetWire} preset
+   * @param {ProviderMeta|null} provider
+   * @param {ApiKeyDecryptable} [apiKeyDecryptable]
    */
   function buildPresetConnectionView(preset, provider, apiKeyDecryptable) {
+    /** @type {import('../../shared/contracts/settings').PresetConnection} */
     const conn = (preset && typeof preset.connection === 'object' && preset.connection) || {};
     const hasKey = typeof conn.apiKeyEnc === 'string' && conn.apiKeyEnc.length > 0;
     return {
@@ -159,6 +217,13 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
     };
   }
 
+  /**
+   * @param {PresetWire} preset
+   * @param {Record<string, ProviderView>} providerViewsById
+   * @param {Record<string, { baseUrl?: string, insecureTls?: boolean }>} [connectionOverrides]
+   * @param {ApiKeyDecryptable} [apiKeyDecryptable]
+   * @param {Say} [say]
+   */
   function buildPresetView(preset, providerViewsById, connectionOverrides, apiKeyDecryptable, say = createTranslator().message) {
     const providerView = providerViewsById[preset.providerId];
     if (!providerView) return null;
@@ -196,7 +261,7 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
       sublabelStyle: sublabel.style,
       // Vollstaendig ist ein Eintrag mit eigener Verbindung, sobald er eine
       // Server-URL hat; der Schluessel ist bei diesem Anbieter optional.
-      configured: perPreset
+      configured: presetConnection
         ? !!String(presetConnection.baseUrl || '').trim() && !presetConnection.keyUnreadable
         : providerView.configured,
       capabilities,
@@ -205,9 +270,14 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
     };
   }
 
+  /**
+   * @param {PresetWire} preset
+   * @param {ProviderMeta|null} provider
+   */
   function extractPresetOptionFields(preset, provider) {
     const fields = provider?.presentation?.presetFields;
     if (!Array.isArray(fields)) return {};
+    /** @type {Record<string, string>} */
     const out = {};
     for (const field of fields) {
       if (!field?.key) continue;
@@ -219,6 +289,16 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
     return out;
   }
 
+  /**
+   * @param {{
+   *   config: PresentedLlmConfig,
+   *   chatTarget: { providerId: string, model?: string, presetId?: string, providerOptions?: Record<string, unknown> },
+   *   connectionOverrides?: Record<string, { baseUrl?: string, insecureTls?: boolean }>,
+   *   apiKeyDecryptable?: ApiKeyDecryptable,
+   *   locale?: unknown,
+   *   reasoning?: { level?: string|null, levels?: string[], defaultLevel?: string|null }|null,
+   * }} input
+   */
   function buildLlmStateDto({
     config,
     chatTarget,

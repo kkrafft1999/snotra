@@ -29,6 +29,21 @@ const { isMessage } = require('../../shared/contracts/message');
  */
 const SANDBOX_GRANT_KINDS = Object.freeze(['write', 'read', 'network', 'outsideRead', 'outsideWrite']);
 
+/**
+ * @typedef {'write'|'read'|'network'|'outsideRead'|'outsideWrite'} SandboxGrantKind
+ * @typedef {import('../../shared/contracts/tool-permissions').ToolRiskClass} ToolRiskClass
+ * @typedef {import('../../shared/contracts/message').Message} Message
+ */
+
+/**
+ * @param {unknown} value
+ * @returns {value is SandboxGrantKind}
+ */
+function isSandboxGrantKind(value) {
+  return SANDBOX_GRANT_KINDS.includes(value);
+}
+
+/** @param {SessionGrantRequest['targets']} targets */
 function pathsKey(targets) {
   const paths = (Array.isArray(targets) ? targets : [])
     .map((target) => (typeof target === 'string' ? target : target?.path))
@@ -36,6 +51,7 @@ function pathsKey(targets) {
   return [...new Set(paths)].sort().join('\n');
 }
 
+/** @param {SessionGrantRequest['targets']} targets */
 function versionsKey(targets) {
   const versions = (Array.isArray(targets) ? targets : [])
     .map((target) => (target && typeof target === 'object' ? `${target.path}@${target.version ?? ''}` : ''))
@@ -43,7 +59,11 @@ function versionsKey(targets) {
   return versions.sort().join('\n');
 }
 
-/** Klassen, die eine Sitzungsfreigabe überhaupt tragen darf. */
+/**
+ * Klassen, die eine Sitzungsfreigabe überhaupt tragen darf.
+ * @param {unknown} riskClasses
+ * @returns {ToolRiskClass[]|null}
+ */
 function sessionGrantableClasses(riskClasses) {
   const classes = normalizeRiskClasses(riskClasses);
   if (!classes) return null;
@@ -61,11 +81,11 @@ function sessionGrantableClasses(riskClasses) {
  * @property {string|null} chatId
  * @property {string} tool
  * @property {string} targetKey
- * @property {string[]} classes
+ * @property {ToolRiskClass[]} classes
  * @property {string|null} versionKey   sensitive reads only
  * @property {string|null} providerKey  sensitive reads only
- * @property {object|null} scope        the card's sentence, a message object
- * @property {{ kind: string, path: string, file?: boolean }} [sandbox]
+ * @property {Message|null} scope       the card's sentence, a message object
+ * @property {{ kind: SandboxGrantKind, path: string, file?: boolean }} [sandbox]
  * @property {number} grantedAt
  */
 
@@ -79,8 +99,13 @@ function sessionGrantableClasses(riskClasses) {
  * @property {string[]} [riskClasses]
  * @property {string|null} [providerKey]
  * @property {string|null} [chatId]  `grant` only
- * @property {object|null} [scope]   `grant` only
+ * @property {unknown} [scope]   `grant` only; kept when it is a message object
  * @property {{ kind: string, path: string, file?: boolean }|null} [sandbox]  `grant` only
+ */
+
+/**
+ * What `list()` hands out of an approval.
+ * @typedef {ReturnType<ReturnType<typeof createSessionGrants>['list']>[number]} SessionGrantView
  */
 
 /**
@@ -89,9 +114,13 @@ function sessionGrantableClasses(riskClasses) {
 function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now() } = {}) {
   /** @type {SessionGrant[]} */
   let grants = [];
+  /** @type {Set<() => void>} */
   const listeners = new Set();
 
-  /** Replaces the list and tells the listeners, but only when it changed. */
+  /**
+   * Replaces the list and tells the listeners, but only when it changed.
+   * @param {SessionGrant[]} next
+   */
   function replace(next) {
     const changed = next.length !== grants.length;
     grants = next;
@@ -120,7 +149,7 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
     // does not allow a tool call; the shell and Python runs of the chat get
     // it. That is why a connection may be kept for the session here although
     // `external` never is for a call.
-    const sandboxGrant = sandbox && SANDBOX_GRANT_KINDS.includes(sandbox.kind)
+    const sandboxGrant = sandbox && isSandboxGrantKind(sandbox.kind)
       && typeof sandbox.path === 'string' && sandbox.path
       ? { kind: sandbox.kind, path: sandbox.path, ...(sandbox.file === true ? { file: true } : {}) }
       : null;
@@ -177,11 +206,15 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
     replace([]);
   }
 
+  /** @param {string} scopeKey */
   function clearScope(scopeKey) {
     replace(grants.filter((entry) => entry.scopeKey !== scopeKey));
   }
 
-  /** Drops the approvals of one chat — its mode changed, or it was deleted (#320). */
+  /**
+   * Drops the approvals of one chat — its mode changed, or it was deleted (#320).
+   * @param {unknown} chatId
+   */
   function clearChat(chatId) {
     const key = typeof chatId === 'string' && chatId ? chatId : null;
     replace(grants.filter((entry) => entry.chatId !== key));
@@ -191,6 +224,8 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
    * Keeps only the approvals of the given chats: the visible one and those
    * still running in the background (#320). Everything else is a chat the
    * user has left, and leaving a chat ends its approvals (concept §7).
+   *
+   * @param {Iterable<string|null>} chatIds
    */
   function retainChats(chatIds) {
     const keep = new Set(chatIds);
@@ -200,6 +235,9 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
   /**
    * Drops one approval by its id (#447). Revoking only tightens; an id that is
    * unknown or already gone changes nothing. Returns whether one was dropped.
+   *
+   * @param {unknown} id
+   * @returns {boolean}
    */
   function revoke(id) {
     if (typeof id !== 'string' || !id) return false;
@@ -235,9 +273,13 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
    * a run may write in, the protected paths it may read and the hosts it may
    * connect to, for every shell and Python run under this scope — and, for
    * the file tools, what they may use outside the open folder (`outside`).
+   *
+   * @param {string} scopeKey
    */
   function sandboxPaths(scopeKey) {
+    /** @type {Record<'write'|'read'|'network', Set<string>>} */
     const sets = { write: new Set(), read: new Set(), network: new Set() };
+    /** @type {Array<{ path: string, file: boolean, access: 'read'|'write' }>} */
     const outside = [];
     for (const entry of grants) {
       if (!entry.sandbox || entry.scopeKey !== scopeKey) continue;
@@ -251,7 +293,10 @@ function createSessionGrants({ nextId = defaultIdFactory(), now = () => Date.now
     return { writePaths: [...sets.write], readPaths: [...sets.read], hosts: [...sets.network], outside };
   }
 
-  /** Called whenever the set of approvals changes; returns the unsubscribe. */
+  /**
+   * Called whenever the set of approvals changes; returns the unsubscribe.
+   * @param {() => void} listener
+   */
   function onChange(listener) {
     if (typeof listener !== 'function') return () => {};
     listeners.add(listener);

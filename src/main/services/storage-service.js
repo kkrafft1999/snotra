@@ -120,7 +120,7 @@ const EXECUTION_SWITCH_KEYS = ['shellExecutionEnabled', 'pythonExecutionEnabled'
 
 /**
  * @param {object} deps
- * @param {{ getPath: (name: string) => string, getLocale?: () => string }} deps.app
+ * @param {Pick<import('electron').App, 'getPath' | 'getLocale'>} deps.app
  * @param {Pick<import('electron').SafeStorage, 'isEncryptionAvailable' | 'encryptString' | 'decryptString'>} deps.safeStorage
  * @param {Pick<import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability, 'whenDurable' | 'wouldWait'>} [deps.safeStorageKey]
  * @param {typeof import('fs/promises')} deps.fs
@@ -1120,12 +1120,16 @@ function createStorageService({
     return out;
   }
 
-  /** Anzeigeform fuer die Oberflaeche — ohne jedes Geheimnis. */
+  /**
+   * Anzeigeform fuer die Oberflaeche — ohne jedes Geheimnis.
+   *
+   * @returns {Promise<import('../../shared/contracts/mcp').McpServerView[]>}
+   */
   async function readMcpServers() {
-    return (await readMcpStoredServers()).map((server) => ({
-      ...server,
-      env: maskStoredMcpEnv(server.env),
-      ...(isRemoteMcpServer(server) ? { headers: maskStoredMcpHeaders(server.headers) } : {}),
+    return (await readMcpStoredServers()).map(({ env, headers, ...rest }) => ({
+      ...rest,
+      env: maskStoredMcpEnv(env),
+      ...(isRemoteMcpServer(rest) ? { headers: maskStoredMcpHeaders(headers) } : {}),
     }));
   }
 
@@ -1153,12 +1157,14 @@ function createStorageService({
    * der sich nicht entschluesseln laesst (fremder safeStorage-Schluessel nach
    * Nutzerwechsel), faellt weg statt den ganzen Server zu verhindern — der
    * Server startet dann ohne ihn und scheitert sichtbar am eigenen Fehler.
+   *
+   * @returns {Promise<import('../../shared/contracts/mcp').McpServerConfig[]>}
    */
   async function getMcpServersForRuntime() {
-    return (await readMcpStoredServers()).map((server) => ({
-      ...server,
-      env: decryptStoredMap(server.env),
-      ...(isRemoteMcpServer(server) ? { headers: decryptStoredMap(server.headers) } : {}),
+    return (await readMcpStoredServers()).map(({ env, headers, ...rest }) => ({
+      ...rest,
+      env: decryptStoredMap(env),
+      ...(isRemoteMcpServer(rest) ? { headers: decryptStoredMap(headers) } : {}),
     }));
   }
 

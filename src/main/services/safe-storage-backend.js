@@ -30,9 +30,9 @@ const PLAIN_TEXT_BACKENDS = new Set(['basic_text']);
 
 /**
  * @template {SafeStorageLike} T
- * @param {T | null | undefined} safeStorage
+ * @param {T} safeStorage  a missing one (a test) comes back as it is
  * @param {{ platform?: string }} [options]
- * @returns {T | null | undefined}
+ * @returns {T}
  */
 function requireRealEncryption(safeStorage, { platform = process.platform } = {}) {
   if (platform !== 'linux' || !safeStorage) return safeStorage;

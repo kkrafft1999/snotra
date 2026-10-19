@@ -200,7 +200,7 @@ function hasKey(key) {
  * function — the main process builds one per language change in
  * `create-application`, the renderer keeps one in `i18n.js`.
  *
- * @param {unknown} locale
+ * @param {unknown} [locale]  none: the default language
  */
 function createTranslator(locale) {
   const lc = normalizeLocale(locale);

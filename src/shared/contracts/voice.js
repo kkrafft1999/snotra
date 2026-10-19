@@ -32,7 +32,7 @@ const MAX_TRANSCRIPTION_UPLOAD_BYTES = 25 * 1024 * 1024;
  * refused.
  *
  * @param {*} payload  anything; only a buffer or a view on one passes
- * @returns {{ bytes: number } | { error: object }}
+ * @returns {{ bytes: number } | { error: import('./message').Message }}
  */
 function checkTranscriptionPayload(payload) {
   const isBuffer = payload instanceof ArrayBuffer
