@@ -45,8 +45,8 @@ async function mountSettings({ providers, modalDeps, ...overrides } = {}) {
     getUIPrefs: async () => ({ baseSystemPrompt: '', appLocale: 'de', disabledTools: [] }),
     getToolCatalog: async () => ({ tools: [] }),
     getSkillCatalog: async () => ({ skills: [], activeSkills: [] }),
-    getPythonState: async () => ({ enabled: false, tool: 'run_python' }),
-    getShellState: async () => ({ enabled: false, tool: 'shell_execute' }),
+    getPythonState: async () => ({ enabled: false }),
+    getShellState: async () => ({ enabled: false }),
     // The shape main answers with (settings-handlers.js): `hasApiKey`.
     getWebSearchState: async () => ({ available: true, hasApiKey: false, encryptionAvailable: true }),
     getAppVersion: async () => '1.5.3',
@@ -1991,6 +1991,13 @@ test('two tool switches in quick succession both land (CR-B14-09, 7)', async (t)
       writes += 1;
       return structuredClone(store);
     },
+    // The switches find their tool in the catalogue, by what it runs (#1008).
+    getToolCatalog: async () => ({
+      tools: [
+        { name: 'run_python', shortDescription: '', riskClass: 'execute', execution: 'python' },
+        { name: 'shell_execute', shortDescription: '', riskClass: 'execute', execution: 'shell' },
+      ],
+    }),
   });
   t.after(dom.cleanup);
 

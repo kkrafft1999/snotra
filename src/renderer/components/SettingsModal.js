@@ -64,6 +64,7 @@ const {
   SKILL_STATUS,
   DEFAULT_SKILL_SUGGESTION_MODE,
   isSkillSuggestionMode,
+  TOOL_EXECUTION_KINDS,
 } = contracts;
 
 /**
@@ -261,9 +262,6 @@ export function initSettingsModal(deps) {
   const shellSandboxEl = document.getElementById('settings-shell-sandbox');
   const pythonSandboxEl = document.getElementById('settings-python-sandbox');
   let shellReady = false;
-  // The tool behind each switch, as main reports it with the state (#1008).
-  let pythonToolName = '';
-  let shellToolName = '';
   // Last sandbox state main reported with each tool, for redrawing the
   // isolation lines when the workspace switch changes (#357).
   let pythonSandboxState = null;
@@ -1520,6 +1518,11 @@ export function initSettingsModal(deps) {
     renderSkillList();
   }
 
+  /** The tool that starts this kind of process, as the catalogue says (#1008). */
+  function executionToolName(kind) {
+    return settingsToolCatalog.find((tool) => tool?.execution === kind)?.name || '';
+  }
+
   async function loadToolCatalog() {
     try {
       const result = typeof api.getToolCatalog === 'function' ? await api.getToolCatalog() : null;
@@ -1692,8 +1695,6 @@ export function initSettingsModal(deps) {
       state = { loadFailed: true };
     }
     pythonReady = state?.found === true && state?.enabled === true;
-    // The tool behind the switch, as main names it (#1008).
-    if (typeof state?.tool === 'string' && state.tool) pythonToolName = state.tool;
     setPythonStatus(describePythonState(state));
     pythonSandboxState = state?.sandbox || null;
     syncExecutionTools();
@@ -1757,7 +1758,6 @@ export function initSettingsModal(deps) {
       state = { loadFailed: true };
     }
     shellReady = state?.found === true && state?.enabled === true;
-    if (typeof state?.tool === 'string' && state.tool) shellToolName = state.tool;
     setShellStatus(describeShellState(state));
     shellSandboxState = state?.sandbox || null;
     syncExecutionTools();
@@ -2983,14 +2983,16 @@ export function initSettingsModal(deps) {
   // also clears an old tick-off from the tool list, which no longer exists.
   const pythonSwitch = bindPrefSwitch(
     inputPythonEnabled, 'status-python-enabled', 'pythonExecutionEnabled', async (on) => {
-      if (on && pythonToolName) await setToolEnabled(pythonToolName, true);
+      const tool = executionToolName(TOOL_EXECUTION_KINDS.PYTHON);
+      if (on && tool) await setToolEnabled(tool, true);
       await loadPythonState();
       void toolPermissions?.refresh?.();
     }
   );
   const shellSwitch = bindPrefSwitch(
     inputShellEnabled, 'status-shell-enabled', 'shellExecutionEnabled', async (on) => {
-      if (on && shellToolName) await setToolEnabled(shellToolName, true);
+      const tool = executionToolName(TOOL_EXECUTION_KINDS.SHELL);
+      if (on && tool) await setToolEnabled(tool, true);
       await loadShellState();
       void toolPermissions?.refresh?.();
     }

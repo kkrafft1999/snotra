@@ -24,24 +24,16 @@
  * @param {string} deps.enabledPref     the preference that holds the switch
  * @param {string} deps.setup           what is missing with the switch on: the runtime
  * @param {string} deps.switchSetup     what is missing with the switch off: the switch (#773)
- * @param {() => (string|null)} [deps.toolName]  the tool behind the switch, from its descriptor (#1008):
- *   the settings switch it on in the tool list as well, and must not name it themselves
  */
-function createExecutionToolSettings({
-  runnerService, sandboxService, readUIPrefs, enabledPref, setup, switchSetup, toolName = () => null,
-}) {
+function createExecutionToolSettings({ runnerService, sandboxService, readUIPrefs, enabledPref, setup, switchSetup }) {
   let enabled = false;
 
   const settings = {
-    describe: () => {
-      const tool = toolName();
-      return {
-        ...runnerService.describe(),
-        ...(tool ? { tool } : {}),
-        enabled,
-        sandbox: sandboxService.describe(),
-      };
-    },
+    describe: () => ({
+      ...runnerService.describe(),
+      enabled,
+      sandbox: sandboxService.describe(),
+    }),
     async refresh() {
       const prefs = await readUIPrefs();
       enabled = prefs?.[enabledPref] === true;

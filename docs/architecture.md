@@ -195,7 +195,8 @@ The renderer never names a tool. It gets what it shows as fields of payloads it
 already receives (`src/shared/contracts/tool-presentation.js`): `category` on
 every trace entry and tool line, `presentation` (`verb`, `warning`) on the
 approval request, `externalService` on the tool rows of the Security page, and
-`tool` on the state of the two execution switches. The skill a call touched is
+`execution` on the rows of the tool catalogue, by which the settings find the
+tool behind each execution switch. The skill a call touched is
 combined with the category only where the entry is shown, because the engine
 may learn it from the plan after the entry was made (#427). A chat stored
 before #1008 has trace entries without a category; main fills them in from the

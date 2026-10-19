@@ -29,7 +29,6 @@ const { createSessionGrants } = require('../../application/permissions/session-g
 const { PERMISSION_DENIAL_REASONS } = require('../../shared/contracts/tool-permissions');
 const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/workspace-tree');
 const { TOOL_SETUPS } = require('../../shared/contracts/chat-configuration');
-const { TOOL_EXECUTION_KINDS } = require('../../shared/contracts/tool-presentation');
 const { createWorkspaceToolRegistry } = require('../tools/workspace-tool-registry');
 const { createManualLookup, loadVendoredMarkedLexer } = require('../services/manual-lookup');
 const { createMcpService } = require('../services/mcp-service');
@@ -476,8 +475,6 @@ function createApplication({
     enabledPref: 'shellExecutionEnabled',
     setup: TOOL_SETUPS.SHELL,
     switchSetup: TOOL_SETUPS.SHELL_SWITCH,
-    // Asked only once the app runs, after the registry below exists (#1008).
-    toolName: () => toolRegistry.executionToolName(TOOL_EXECUTION_KINDS.SHELL),
   });
 
   // Python execution (#86): a found interpreter and the switch, off by default.
@@ -500,7 +497,6 @@ function createApplication({
     enabledPref: 'pythonExecutionEnabled',
     setup: TOOL_SETUPS.PYTHON,
     switchSetup: TOOL_SETUPS.PYTHON_SWITCH,
-    toolName: () => toolRegistry.executionToolName(TOOL_EXECUTION_KINDS.PYTHON),
   });
 
   // Der Seitenabruf braucht keinen Schluessel und keine Einrichtung; die

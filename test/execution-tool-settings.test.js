@@ -77,20 +77,6 @@ test('the settings describe the runtime, the switch and the sandbox', async () =
   assert.deepEqual(await settings.refresh(), { found: true, path: '/bin/zsh', enabled: true, sandbox: { state: 'ready' } });
 });
 
-test('the settings name the tool behind the switch, as the registry knows it (#1008)', async () => {
-  const { createExecutionToolSettings: create } = require('../src/main/services/execution-tool-settings');
-  const { settings } = create({
-    runnerService: { isAvailable: () => true, describe: () => ({ found: true }), detect: async () => {}, run: async () => ({}) },
-    sandboxService: { describe: () => ({}), detect: async () => {} },
-    readUIPrefs: async () => ({}),
-    enabledPref: 'shellExecutionEnabled',
-    setup: 'shell',
-    switchSetup: 'shell-switch',
-    toolName: () => 'shell_execute',
-  });
-  assert.equal(settings.describe().tool, 'shell_execute');
-});
-
 test('a run goes to the runner service', async () => {
   const { runner, calls } = setup();
   await runner.run({ command: 'ls' });

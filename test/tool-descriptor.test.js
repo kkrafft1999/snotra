@@ -141,9 +141,10 @@ test('the approval card gets verb and warning from the descriptor, nothing else'
 
 test('settings and security read their tool facts from the descriptor', () => {
   const registry = createWorkspaceToolRegistry({ fsService: {} });
-  assert.equal(registry.executionToolName('shell'), 'shell_execute');
-  assert.equal(registry.executionToolName('python'), 'run_python');
-  assert.equal(registry.executionToolName('ruby'), null);
+  const execution = Object.fromEntries(registry.listCatalog({ locale: 'en' }).map((tool) => [tool.name, tool.execution]));
+  assert.equal(execution.shell_execute, 'shell');
+  assert.equal(execution.run_python, 'python');
+  assert.equal(execution.read_file_text, undefined);
   const external = Object.fromEntries(registry.listRiskCatalog({ locale: 'en' }).map((tool) => [tool.name, tool.externalService]));
   assert.equal(external.web_search, 'web-search');
   assert.equal(external.fetch_url, 'fetch-url');

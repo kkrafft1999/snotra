@@ -338,6 +338,9 @@ function createToolRegistry(initialDefinitions = []) {
           description,
           shortDescription,
           riskClass: definition.riskClass,
+          // The process it starts (#1008): the settings find the tool behind
+          // their execution switch by it, without naming the tool.
+          ...(definition.execution ? { execution: definition.execution } : {}),
         };
       });
   }
@@ -512,11 +515,6 @@ function createToolRegistry(initialDefinitions = []) {
     return allDefinitions();
   }
 
-  /** The tool that starts this kind of process (#1008), for its settings switch; null when none does. */
-  function executionToolName(kind) {
-    return allDefinitions().find((definition) => definition.execution === kind)?.name || null;
-  }
-
   /** Definition eines Tools (für Planer und Adapter); null bei unbekanntem Namen. */
   function getDefinition(name) {
     return definitions.get(name) || dynamic.get(name) || null;
@@ -566,7 +564,6 @@ function createToolRegistry(initialDefinitions = []) {
     listRiskCatalog,
     describeOffers,
     listDefinitions,
-    executionToolName,
     getDefinition,
     isSwitchedOff,
     execute,
