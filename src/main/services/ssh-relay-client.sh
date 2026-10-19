@@ -55,22 +55,33 @@ case $host$command$protocol in *"$nl"*) fail 'a line break in an argument' ;; es
 dir=$(mktemp -d "${TMPDIR:-/tmp}/snotra-ssh.XXXXXX") || fail 'no temporary folder for the relay'
 
 # git's stdin goes to the relay after the request; fd 3, because an
-# asynchronous list starts with stdin on /dev/null. When the relay closes,
-# git must see the end of its stream, or a failed sign-in would hang until
-# the timeout while git still holds its end open: so socat closes git's
-# stdout then (`shut-close`; a pipe cannot be shut down half-way), and the
-# shell lets go of it before it waits. -t: after git's last byte, the
-# answer may still take its time. The two never hold the run's stderr: should
-# git end this script first, they must not keep the run open.
+# asynchronous list starts with stdin on /dev/null. -t: after git's last
+# byte, the answer may still take its time.
+#
+# The answer reaches git through one last `cat`, which ends when the relay
+# closes (socat's `shut-close`: a pipe cannot be shut down half-way). Before
+# git's stream ends with it, ssh's error output goes to git's stderr: once
+# git sees the end, it gives up, and the run — and this script with it — may
+# be gone before anything printed later arrived. The shell lets go of git's
+# stdout before it waits, so nothing else holds the stream open. None of
+# these hold the run's stderr longer than they must.
 exec 3<&0
 {
   printf 'SNOTRA-SSH 1\n%s\n%s\n%s\n%s\n%s\n%s\n' "$dir" "$family" "$port" "$host" "$protocol" "$command"
   exec cat <&3
-} 2>/dev/null | socat -t 3600 STDIO,shut-close TCP:127.0.0.1:2222,retry=50,interval=0.1 2>"$dir/relay" &
+} 2>/dev/null | socat -t 3600 STDIO,shut-close TCP:127.0.0.1:2222,retry=50,interval=0.1 2>"$dir/relay" | {
+  cat
+  # socat's own complaints only where the relay gave no answer: after one, a
+  # connection the launcher closed while git still wrote is no news.
+  if [ -s "$dir/status" ]; then cat "$dir/stderr"; else cat "$dir/relay"; fi >&2 2>/dev/null
+} &
 exec >&- 3<&-
+# git ends its SSH command with SIGTERM once it gives up; the exit status
+# still goes back if there is time.
+trap : TERM
+wait
 wait
 
-cat "$dir/relay" "$dir/stderr" >&2 2>/dev/null
 status=$(cat "$dir/status" 2>/dev/null)
 rm -rf "$dir"
 case $status in

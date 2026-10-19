@@ -113,17 +113,16 @@ function snotraOnLogEntry(stream, handler) {
  * one `ssh-relay-client.sh` connects to; it exists only in the run's own
  * network namespace.
  *
- * How the launcher is started decides whether a connection can end:
- * - EXEC, and a shell that `exec`s the launcher: nothing between socat and
- *   the launcher holds the pipes. SYSTEM puts a process of socat's own in
- *   between, which keeps them open after the launcher has closed its end.
- * - `pipes`: the launcher can close its output while it still reads; a
- *   socket pair is one descriptor for both.
- * - `shut-close`: when the run's side ends, the launcher's input is closed —
- *   a pipe cannot be shut down half-way.
- * - socat splits EXEC's command at spaces, so the shell's words are separated
- *   by tabs; an empty IFS and `set -f` keep a space in the launcher's path
- *   from splitting it.
+ * How the launcher is started decides whether a connection can end. With
+ * `nofork` socat's process for the connection becomes the launcher, which
+ * then reads and writes the TCP connection itself: git's end of input
+ * reaches ssh as such, and the connection closes when the launcher ends.
+ * With a socat process in between (EXEC or SYSTEM, socket pair or pipes) one
+ * of the two directions always stayed open after its side had ended, and a
+ * sign-in that failed at once hung until the timeout (#1155). socat splits
+ * EXEC's command at spaces, so the shell's words are separated by tabs; an
+ * empty IFS and `set -f` keep a space in the launcher's path from splitting
+ * it, and `exec` leaves no shell behind.
  *
  * Copied into the runtime as it stands, so it must not use anything from
  * this file; no `!` anywhere and no `,` in the command (the runtime's note
@@ -135,7 +134,7 @@ function snotraOnLogEntry(stream, handler) {
 function snotraSshRelay(socat) {
   return [
     '[ -z "${SNOTRA_SSH_RELAY:-}" ] || ' + socat
-      + " -t 3600 TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr 'EXEC:/bin/sh -c IFS=;set\t-f;exec\t/bin/sh\t$SNOTRA_SSH_RELAY,pipes,shut-close'"
+      + " TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr 'EXEC:/bin/sh -c IFS=;set\t-f;exec\t/bin/sh\t$SNOTRA_SSH_RELAY,nofork'"
       + ' >/dev/null 2>&1 &',
   ];
 }

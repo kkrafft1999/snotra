@@ -200,10 +200,13 @@ const SSH_RELAY_CLIENT_SCRIPT = 'ssh-relay-client.sh';
  * Git's SSH command for a sandboxed run on Linux: the relay's client. Its
  * path travels in its own variable, as in `sshEnvExports()`; the variant
  * tells git to pass the port and GIT_PROTOCOL the way OpenSSH takes them.
+ * `exec`, because git runs the command through `sh -c`, and a shell left
+ * waiting there would hold git's input open after the relay has closed —
+ * a failed sign-in would hang.
  */
 function sshRelayExports(clientPath) {
   return `export SNOTRA_SSH_CLIENT=${quoteArgv([clientPath])} GIT_SSH_VARIANT=ssh `
-    + `GIT_SSH_COMMAND=${quoteArgv(['/bin/sh "$SNOTRA_SSH_CLIENT"'])}`;
+    + `GIT_SSH_COMMAND=${quoteArgv(['exec /bin/sh "$SNOTRA_SSH_CLIENT"'])}`;
 }
 
 /** POSIX single-quoting, so an argv survives the trip through `sh -c`. */

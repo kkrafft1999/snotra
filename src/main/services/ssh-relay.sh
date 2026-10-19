@@ -19,12 +19,10 @@
 # then git's stream. `read` takes the lines a byte at a time, so the stream
 # stays where ssh reads it.
 #
-# However it ends, it ends the same way: output closed first, then the rest
-# of the client's stream read away until the client closes. socat (EXEC
-# with `pipes`) sees the end of the output as such and passes it on, and git
-# sees its connection close. Were this script simply to exit, socat would
-# take it for a dead child and hold the connection open for its whole
-# timeout, while git — its own end still open — waits for more.
+# Its input and output are the TCP connection itself (socat's `nofork`):
+# git's end of input reaches ssh as such, and when this script ends, the
+# connection closes and git sees its end — even while git still has more to
+# say, as after a failed sign-in.
 
 # Programs by absolute PATH entries only, from /: the run's folder is where
 # the relay starts, and a relative entry would find what the run put there.
@@ -39,24 +37,18 @@ unset IFS
 PATH=$paths
 export PATH
 
-finish() {
-  exec >&-
-  cat >/dev/null
-  exit "$1"
-}
-
-IFS= read -r magic || finish 2
-[ "$magic" = 'SNOTRA-SSH 1' ] || finish 2
-IFS= read -r dir || finish 2
+IFS= read -r magic || exit 2
+[ "$magic" = 'SNOTRA-SSH 1' ] || exit 2
+IFS= read -r dir || exit 2
 # The client's own folder from mktemp: errors and the exit status go there.
 # Nothing written there could not be written by the run itself.
-case $dir in /*/snotra-ssh.??????) ;; *) finish 2 ;; esac
-[ -d "$dir" ] && [ ! -L "$dir" ] || finish 2
+case $dir in /*/snotra-ssh.??????) ;; *) exit 2 ;; esac
+[ -d "$dir" ] && [ ! -L "$dir" ] || exit 2
 
 fail() {
   printf 'snotra-ssh-relay: %s\n' "$1" >>"$dir/stderr"
   printf '255\n' >"$dir/status"
-  finish 255
+  exit 255
 }
 
 IFS= read -r family && IFS= read -r port && IFS= read -r host \
@@ -86,4 +78,4 @@ fi
 # off. The checked values reach it as parameters, never as code.
 eval "${GIT_SSH_COMMAND:-ssh -o ControlMaster=no -o ControlPath=none}"' "$@" -- "$host" "$command"' 2>>"$dir/stderr"
 printf '%s\n' "$?" >"$dir/status"
-finish 0
+exit 0

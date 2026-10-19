@@ -99,11 +99,11 @@ test('the relay starts only for a run that names the launcher, and a space in it
     runLine({ SNOTRA_SSH_RELAY: launcher });
     const args = (await fs.readFile(argsFile, 'utf8')).trim().split('\n');
     assert.deepEqual(args, [
-      '-t', '3600', 'TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr',
-      'EXEC:/bin/sh -c IFS=;set\t-f;exec\t/bin/sh\t$SNOTRA_SSH_RELAY,pipes,shut-close',
+      'TCP-LISTEN:2222,bind=127.0.0.1,fork,reuseaddr',
+      'EXEC:/bin/sh -c IFS=;set\t-f;exec\t/bin/sh\t$SNOTRA_SSH_RELAY,nofork',
     ]);
     // What socat runs for each connection, split at its spaces: the launcher, whole.
-    const exec = args[3].slice('EXEC:'.length, args[3].indexOf(',')).split(' ');
+    const exec = args[1].slice('EXEC:'.length, args[1].indexOf(',')).split(' ');
     assert.deepEqual(exec.slice(0, 2), ['/bin/sh', '-c']);
     assert.equal(exec.length, 3, 'one word for the shell, whatever the launcher\'s path');
     const launched = childProcess.spawnSync(exec[0], exec.slice(1), {
@@ -433,7 +433,8 @@ test('git signs in through the agent inside the Linux sandbox, and the key file 
       const ps = childProcess.spawnSync('sh', ['-c',
         'ps -eo pid,ppid,stat,etimes,comm --forest | grep -E "socat|ssh|git|cat|sh$|apply-seccomp|bwrap"; '
         + 'for p in $(pgrep -x socat; pgrep -x ssh; pgrep -x cat); do echo "== $p $(tr "\\0" " " </proc/$p/cmdline | cut -c1-120)"; '
-        + 'ls -l /proc/$p/fd 2>&1 | tail -n +2 | grep -v -E " (142|145) "; done'],
+        + 'ls -l /proc/$p/fd 2>&1 | tail -n +2 | grep -v -E " (142|145) "; done; '
+        + `for f in ${os.tmpdir()}/snotra-sh-*/snotra-ssh.*/*; do echo "== $f"; cat "$f"; done`],
       { encoding: 'utf8' });
       snapshot = `${ps.stdout}${ps.stderr}`;
     }, 20_000);
