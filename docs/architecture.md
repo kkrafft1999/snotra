@@ -1532,7 +1532,7 @@ what is in which menu without starting Electron (`test/application-menu.test.js`
 
 `src/main/providers/` holds one module per provider that fulfils the contract
 `ProviderAdapter` (`listModels`, `streamChatRound`, plus `fields`,
-`presentation`, `capabilities`, `reasoning`). Its typedef lives in
+`presentation`, `capabilities`, `traits`, `reasoning`). Its typedef lives in
 `ports/provider-runtime-port.js`, the port the provider modules are reached
 through; until [#1004](https://github.com/kkrafft1999/snotra/issues/1004) it
 sat in `providers/index.js`, unchecked. Five are registered: `openai`, `anthropic`,
@@ -1562,18 +1562,92 @@ exactly the fields a provider declares (`buildProviderFormView` in
 (`getEffectiveProviderConfig`), and the settings handler writes exactly those
 (`mergeProviderPatchIntoConfigImpl`). Besides `apiKey`, `baseUrl` and
 `insecureTls`, there have been `displayName`, `apiStyle`, `extraHeaders`,
-`supportsImages` and `sendTools` since issue #193.
+`supportsImages` and `sendTools` since issue #193, and `maxOutputTokens` since
+[#931](https://github.com/kkrafft1999/snotra/issues/931): the entry's own output
+limit, sent as `max_tokens` / `max_output_tokens`, `null` for the server's
+default. A provider with that field is also told so in the engine's sentence for
+a cut-off answer — through its trait `outputLimitSetting`, see below.
 
-A provider additionally declares three special cases on the module:
+A provider additionally declares two special cases on the module:
 
 - `optionalApiKey: true` — an empty key is a **valid** state. Otherwise a
   provider with `fields.apiKey` and no key counts as incompletely configured and
   refuses both model listing and sending.
-- `capabilitiesFor(config)` — capabilities that depend on the stored
-  configuration rather than on the adapter. `capabilities` remains the default
-  for providers without this function.
 - `connectionPerPreset: true` — the connection belongs to the **entry**, not to
   the provider (issue #202). See below.
+
+`reasoning` names the levels a chat can choose
+([#725](https://github.com/kkrafft1999/snotra/issues/725),
+[#994](https://github.com/kkrafft1999/snotra/issues/994)): `levels` — a list,
+or a function of the model where the provider's models differ —, `defaultLevel`
+and `appliesTo(model)`. `shared/contracts/reasoning.js` reads it
+(`reasoningLevelsFor`, `reasoningDefaultFor`); the level belongs to the chat,
+not to the entry (#726). A provider without `reasoning` offers no level, and
+declares that as a gap in the register.
+
+### The capability register
+
+What a provider can do is declared in one vocabulary
+([#996](https://github.com/kkrafft1999/snotra/issues/996), AR-21),
+`shared/contracts/provider-capabilities.js`. Each adapter declares its block
+next to its code; `providers/index.js` assembles them
+(`listCapabilityRegister`). Nothing outside the adapters asks *which* provider
+it talks to — adding a provider touches its adapter and the catalogue, not the
+engine and not the settings modal (CORE-3).
+
+Two kinds of entry:
+
+- **`capabilities`** are features a user can miss — today `images` and
+  `reasoningLevels`. Every provider declares every one of them, as
+  `{ supported: true }`, `{ supported: false, reason, issue }` or
+  `{ supported: 'per-connection', setting, reason }`. A gap carries the message
+  key the UI can show and the issue that tracks it — the parity rule of
+  `docs/quality-requirements.md` §3. `images` may name `mediaTypes` where a
+  provider takes fewer than all formats (Gemini: no GIF, #91).
+  `per-connection` follows a boolean setting of the entry's own connection
+  (*Supports images* on an OpenAI-compatible entry).
+- **`traits`** are facts that steer behaviour without being a feature:
+  `runsLocally`, `tokenizerProfile` (`local` or `o200k`, only what was
+  measured, #178), `priceTable` (`litellmProviders`, `keyPrefixes` in LiteLLM's
+  price file, #949). `outputLimitSetting` is not declared — it follows
+  `fields.maxOutputTokens`.
+
+| Provider | `images` | `reasoningLevels` | Traits |
+| --- | --- | --- | --- |
+| `openai` | yes | yes | `o200k`; LiteLLM `openai` |
+| `anthropic` | yes | yes | LiteLLM `anthropic` |
+| `google` | yes, no GIF | yes | LiteLLM `gemini`, prefix `gemini/` |
+| `ollama` | yes | yes | runs locally, `local` |
+| `openai-compatible` | per connection | no — [#1148](https://github.com/kkrafft1999/snotra/issues/1148) | LiteLLM `openrouter`, prefix `openrouter/`; output limit setting |
+
+The declaration is resolved against one entry's configuration where it travels
+on, never re-derived after that:
+
+- **To the renderer** as a DTO: `settings-presentation-service` puts
+  `capabilities` — `{ images, imageMediaTypes?, reasoningLevels, gaps? }` — on
+  every provider view and on every entry view; an entry with its own connection
+  is resolved against that connection. `ChatModelPicker` reads the active
+  entry's DTO; `gaps.images.limitedBy` (`provider` or `connection`) tells the
+  composer whose limit it is (#995).
+- **To the core** in the send bundle (`LlmSendBundle` in
+  `application/ports/llm-port.js`): `provider-llm-adapter` resolves
+  `capabilities` and `traits` for the round's connection. The engine checks
+  attachments against the capabilities and steers by the traits — the history
+  budget (`runsLocally`), the context estimate (`tokenizerProfile`), the
+  cut-off sentence (`outputLimitSetting`).
+- **To the contracts** as parameters: `cost.js` takes the key prefixes and the
+  LiteLLM providers instead of a provider ID; `model-price-service` and
+  `scripts/update-model-prices.js` get them from the register.
+
+`test/provider-capabilities.test.js` fails on an undeclared or unknown
+capability, on a gap without a reason key from the catalogue or without an
+issue, on a `reasoningLevels` that disagrees with `reasoning`, and on a
+provider-ID literal anywhere in `src/application/` or `src/shared/contracts/`.
+
+The register covers providers only. Platform capabilities — Auto mode without a
+keyring, self-update per package format — are still computed per feature;
+[#1149](https://github.com/kkrafft1999/snotra/issues/1149) carries the platform
+half.
 
 Secrets do not leave the main process: the API key and the extra headers are
 stored `safeStorage`-encrypted (`apiKeyEnc`, `extraHeadersEnc`), and the view
@@ -1624,19 +1698,22 @@ idempotent and leaves an already existing connection in place.
 
 ### Local or remote: by host, not by ID
 
-Three places treat local providers differently from cloud providers: the timeout
+Four places treat local providers differently from cloud providers: the timeout
 of the model listing (`modelsTimeoutFor` in `providers/openai-compatible.js`, with
 the limits from `services/request-timeout.js`), the character budget of the
-history (`application/chat/chat-history-trim.js`) and the characters→tokens
-divisor of the context breakdown (`shared/contracts/context-breakdown.js`).
+history (`application/chat/chat-history-trim.js`), the characters→tokens
+divisor of the context breakdown (`shared/contracts/context-breakdown.js`) and
+the price — a local model costs nothing (`services/model-price-service.js`).
 
 Up to issue #193 this hung on a fixed list of provider IDs. The generic provider
 fits into no such list — the same ID serves LM Studio on `localhost` and a
 gateway on the network. The question is therefore answered by
-`shared/contracts/provider-endpoint.js` at the **host of the base URL**; the
-remaining ID entry for `ollama` stays, and the host rule applies in addition.
-(`mlx-lm` left the list with issue #194 — a MLX-LM server on `127.0.0.1` is
-local through its URL.)
+`shared/contracts/provider-endpoint.js` at the **host of the base URL**; `ollama`
+declares `runsLocally` in the register, and the host rule applies in addition.
+`resolveProviderTraits` combines both, so the history budget and the context
+breakdown get a finished `runsLocally` and `tokenizerProfile` and know no
+provider (#996). (`mlx-lm` left the list with issue #194 — a MLX-LM server on
+`127.0.0.1` is local through its URL.)
 
 ## Renderer: what was moved, what stays
 

@@ -224,7 +224,7 @@ function createApplication({
   });
 
   // Prices for the estimated chat cost (#949).
-  const modelPrices = createModelPriceService({ fs, path, app });
+  const modelPrices = createModelPriceService({ fs, path, app, providers: providersModule });
 
   // Bilder eines Chats liegen als Dateien neben der Verlaufsdatei, nicht als
   // Base64 darin (Issue #94).

@@ -134,9 +134,17 @@ module.exports = {
   id: 'openai',
   name: 'OpenAI',
   fields: { apiKey: true },
-  // Sagt, ob *dieser Adapter* Bilder weiterreicht — nicht, ob das gewaehlte
-  // Modell sie versteht (Issue #93).
-  capabilities: { images: true },
+  // What *this adapter* passes on — not whether the chosen model understands
+  // it (#93). The vocabulary is in shared/contracts/provider-capabilities.js.
+  capabilities: {
+    images: { supported: true },
+    reasoningLevels: { supported: true },
+  },
+  traits: {
+    // Measured against o200k (context-breakdown.js, #178).
+    tokenizerProfile: 'o200k',
+    priceTable: { litellmProviders: ['openai'] },
+  },
   defaultModel: 'gpt-5-mini',
   // The levels a chat can choose (#725): all seven, for the models Snotra
   // offers. Which of them a model really takes is not in `/v1/models`; a

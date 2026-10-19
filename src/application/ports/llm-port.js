@@ -43,7 +43,14 @@
  * @property {{ baseUrl?: string } & Object<string, unknown>} config  Per-send snapshot der Provider-Konfiguration
  * @property {string} model
  * @property {string} [providerName]  display name, for messages to the user
- * @property {{ images?: boolean, imageMediaTypes?: string[] }} [capabilities]  what the provider passes on (#93); `imageMediaTypes` where it takes fewer than all image formats (#91)
+ * @property {{ images?: boolean, imageMediaTypes?: string[], reasoningLevels?: boolean,
+ *   gaps?: Object<string, { limitedBy: string, reason: string, issue?: number }> }} [capabilities]
+ *   what the provider passes on, resolved for this connection from the
+ *   capability register (#996, `shared/contracts/provider-capabilities.js`);
+ *   `imageMediaTypes` where it takes fewer than all image formats (#91)
+ * @property {{ runsLocally?: boolean, tokenizerProfile?: string, outputLimitSetting?: boolean }} [traits]
+ *   facts about the provider the engine steers by instead of its ID (#996):
+ *   the history budget, the context estimate, the cut-off sentence
  */
 
 /**

@@ -8,7 +8,6 @@ const {
   TOOL_OUTPUT_PLACEHOLDER,
   clampHistoryCharLimit,
   resolveHistoryCharLimit,
-  isLocalProvider,
   estimateMessageChars,
   estimateTokens,
   trimHistoryMessages,
@@ -29,35 +28,17 @@ test('resolveHistoryCharLimit falls back to the default', () => {
   assert.equal(resolveHistoryCharLimit({ historyCharLimit: 10_000 }), 10_000);
 });
 
-test('resolveHistoryCharLimit uses a tighter default for local providers', () => {
-  assert.equal(resolveHistoryCharLimit({}, 'Ollama'), DEFAULT_LOCAL_HISTORY_CHAR_LIMIT);
-  assert.equal(resolveHistoryCharLimit({}, 'openai'), DEFAULT_HISTORY_CHAR_LIMIT);
+test('resolveHistoryCharLimit uses a tighter default for local models', () => {
+  // Whether the models are local is the provider's trait (#996); which
+  // providers and addresses count is tested in provider-capabilities.test.js.
+  assert.equal(resolveHistoryCharLimit({}, true), DEFAULT_LOCAL_HISTORY_CHAR_LIMIT);
+  assert.equal(resolveHistoryCharLimit({}, false), DEFAULT_HISTORY_CHAR_LIMIT);
   assert.equal(resolveHistoryCharLimit({}, undefined), DEFAULT_HISTORY_CHAR_LIMIT);
   assert.ok(DEFAULT_LOCAL_HISTORY_CHAR_LIMIT < DEFAULT_HISTORY_CHAR_LIMIT);
 });
 
 test('an explicit setting outranks the local default', () => {
-  assert.equal(resolveHistoryCharLimit({ historyCharLimit: 150_000 }, 'ollama'), 150_000);
-});
-
-test('eine Server-URL auf diesem Rechner zaehlt als lokal (#193)', () => {
-  // Der generische Anbieter passt in keine ID-Liste: dieselbe ID bedient
-  // localhost und ein Gateway im Netz.
-  assert.equal(
-    resolveHistoryCharLimit({}, 'openai-compatible', 'http://localhost:1234/v1'),
-    DEFAULT_LOCAL_HISTORY_CHAR_LIMIT
-  );
-  assert.equal(
-    resolveHistoryCharLimit({}, 'openai-compatible', 'https://openrouter.ai/api/v1'),
-    DEFAULT_HISTORY_CHAR_LIMIT
-  );
-  assert.equal(isLocalProvider('openai-compatible', 'http://127.0.0.1:8080/v1'), true);
-  assert.equal(isLocalProvider('openai-compatible', 'https://gw.intern.example/v1'), false);
-  // The retired MLX-LM id is no longer on the list (#194); a MLX-LM server is
-  // local through its URL like any other OpenAI-compatible endpoint.
-  assert.equal(isLocalProvider('mlx-lm'), false);
-  // Die bestehenden IDs bleiben unangetastet — die Host-Regel greift zusaetzlich.
-  assert.equal(isLocalProvider('ollama', 'https://ollama.intern.example'), true);
+  assert.equal(resolveHistoryCharLimit({ historyCharLimit: 150_000 }, true), 150_000);
 });
 
 test('estimateMessageChars counts content and tool_calls arguments', () => {

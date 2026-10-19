@@ -321,11 +321,24 @@ module.exports = {
   // übrigen fünf Anbietern bleibt sie am Anbieter, damit sich etwa der
   // OpenAI-Schlüssel nicht über mehrere Zeilen verteilt.
   connectionPerPreset: true,
-  // Voreinstellung; die tatsächliche Fähigkeit steht in der Konfiguration und
-  // kommt aus `capabilitiesFor`.
-  capabilities: { images: false },
-  capabilitiesFor(config) {
-    return { images: supportsImagesOf(config) };
+  // Images follow the entry's own switch (*Supports images*), since two entries
+  // can point at servers of which only one understands them.
+  capabilities: {
+    images: {
+      supported: 'per-connection',
+      setting: 'supportsImages',
+      reason: 'chat.image.error.connectionWithoutImages',
+    },
+    reasoningLevels: {
+      supported: false,
+      reason: 'provider.capability.reasoningLevels.notBuilt',
+      issue: 1148,
+    },
+  },
+  // Local or remote, and so the history budget, the price and the tokenizer
+  // profile, follow the server address (#193).
+  traits: {
+    priceTable: { litellmProviders: ['openrouter'], keyPrefixes: ['openrouter/'] },
   },
   defaultModel: '',
   defaultBaseUrl: DEFAULT_BASE,

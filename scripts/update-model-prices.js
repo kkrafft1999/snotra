@@ -7,7 +7,8 @@
  *   node scripts/update-model-prices.js file.json  # use a file downloaded before
  *
  * The snapshot keeps only the chat models of the providers Snotra talks to,
- * five prices each (contracts/cost.js, trimLiteLlmPrices). Run it before a
+ * five prices each (contracts/cost.js, trimLiteLlmPrices; which providers,
+ * the capability register says, #996). Run it before a
  * release when prices have moved; the diff shows what changed.
  */
 'use strict';
@@ -15,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const { LITELLM_PRICES_URL, trimLiteLlmPrices } = require('../src/shared/contracts/cost');
+const { litellmPriceProviders } = require('../src/main/providers');
 
 const target = path.join(__dirname, '..', 'src', 'main', 'data', 'model-prices.json');
 
@@ -26,7 +28,7 @@ async function readSource(file) {
 }
 
 async function main() {
-  const trimmed = trimLiteLlmPrices(await readSource(process.argv[2]));
+  const trimmed = trimLiteLlmPrices(await readSource(process.argv[2]), litellmPriceProviders());
   if (!trimmed) throw new Error('The source does not look like LiteLLM\'s price table.');
   const sorted = Object.fromEntries(Object.entries(trimmed.models).sort(([a], [b]) => a.localeCompare(b)));
   const snapshot = {

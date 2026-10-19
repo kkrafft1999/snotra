@@ -509,7 +509,14 @@ module.exports = {
   name: 'Anthropic (Claude)',
   fields: { apiKey: true },
   // translateMessagesToAnthropic maps image attachments (#90).
-  capabilities: { images: true },
+  capabilities: {
+    images: { supported: true },
+    reasoningLevels: { supported: true },
+  },
+  // No tokenizer profile: Anthropic's tokenizer was never measured (#178).
+  traits: {
+    priceTable: { litellmProviders: ['anthropic'] },
+  },
   defaultModel: 'claude-sonnet-4-6',
   // The levels depend on how the model thinks (#994); see thinkingModeOf.
   reasoning: {

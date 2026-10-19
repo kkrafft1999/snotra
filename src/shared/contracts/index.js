@@ -233,10 +233,14 @@ const {
   attachmentsCharCost,
   IMAGE_ATTACHMENT_FORMAT_NAMES,
   providerImageMediaTypes,
-  imageCapabilitiesOf,
   imageFormatNames,
   toDataUrl,
 } = require('./attachments');
+const {
+  PROVIDER_CAPABILITIES,
+  CAPABILITY_LIMITS,
+  resolveProviderCapabilities,
+} = require('./provider-capabilities');
 const {
   TOOL_PERMISSIONS_CONTRACT_VERSION,
   TOOL_RISK_CLASSES,
@@ -531,9 +535,11 @@ module.exports = {
   attachmentsCharCost,
   IMAGE_ATTACHMENT_FORMAT_NAMES,
   providerImageMediaTypes,
-  imageCapabilitiesOf,
   imageFormatNames,
   toDataUrl,
+  PROVIDER_CAPABILITIES,
+  CAPABILITY_LIMITS,
+  resolveProviderCapabilities,
   TOOL_PERMISSIONS_CONTRACT_VERSION,
   TOOL_RISK_CLASSES,
   TOOL_RISK_CLASS_ORDER,

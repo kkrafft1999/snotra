@@ -73,40 +73,47 @@ test('trimLiteLlmPrices keeps the chat models of the known providers and rejects
   for (let i = 0; i < MIN_PRICE_TABLE_MODELS; i += 1) {
     source[`filler-${i}`] = { litellm_provider: 'anthropic', mode: 'chat', input_cost_per_token: 1e-6, output_cost_per_token: 1e-6 };
   }
-  const trimmed = trimLiteLlmPrices(source);
+  const KEPT = ['openai', 'anthropic'];
+  const trimmed = trimLiteLlmPrices(source, KEPT);
   assert.deepEqual(trimmed.models['gpt-x'], { input: 1e-6, output: 2e-6, cacheRead: 1e-7 });
   assert.equal(trimmed.models['dall-e-3'], undefined);
   assert.equal(trimmed.models['bedrock/claude'], undefined);
   assert.equal(trimmed.models['no-output'], undefined);
   assert.equal(trimmed.models.sample_spec, undefined);
   // Too small to be the table, or not a table at all.
-  assert.equal(trimLiteLlmPrices({ 'gpt-x': source['GPT-X'] }), null);
-  assert.equal(trimLiteLlmPrices([]), null);
-  assert.equal(trimLiteLlmPrices('<html>'), null);
+  assert.equal(trimLiteLlmPrices({ 'gpt-x': source['GPT-X'] }, KEPT), null);
+  assert.equal(trimLiteLlmPrices([], KEPT), null);
+  assert.equal(trimLiteLlmPrices('<html>', KEPT), null);
+  // Which LiteLLM providers are kept, the caller says (the register, #996).
+  assert.equal(trimLiteLlmPrices(source, ['openai']), null);
+  assert.equal(trimLiteLlmPrices(source), null);
 });
 
 test('the bundled snapshot is a valid table with the models people use', () => {
   const snapshot = require('../src/main/data/model-prices.json');
   assert.match(snapshot.date, /^\d{4}-\d{2}-\d{2}$/);
   assert.ok(Object.keys(snapshot.models).length >= MIN_PRICE_TABLE_MODELS);
+  const { declaredProviderTraits } = require('../src/shared/contracts/provider-capabilities');
+  const providers = require('../src/main/providers');
   for (const [providerId, model] of [['openai', 'gpt-5'], ['anthropic', 'claude-sonnet-4-5'], ['google', 'gemini-2.5-pro']]) {
-    assert.ok(findModelPrice(snapshot.models, { providerId, model }), `${model} is priced`);
+    const { keyPrefixes } = declaredProviderTraits(providers.getProvider(providerId)).priceTable;
+    assert.ok(findModelPrice(snapshot.models, { keyPrefixes, model }), `${model} is priced`);
   }
 });
 
 test('model IDs are matched with prefix, vendor and date variants', () => {
-  assert.deepEqual(priceKeyCandidates('google', 'models/Gemini-2.5-Pro'), ['gemini-2.5-pro', 'gemini/gemini-2.5-pro']);
-  assert.ok(priceKeyCandidates('openai', 'gpt-x-2026-01-31').includes('gpt-x'));
-  assert.ok(priceKeyCandidates('anthropic', 'claude-x-20260131').includes('claude-x'));
-  assert.ok(priceKeyCandidates('openai-compatible', 'anthropic/claude-x').includes('claude-x'));
-  assert.deepEqual(priceKeyCandidates('openai', ''), []);
+  assert.deepEqual(priceKeyCandidates(['gemini/'], 'models/Gemini-2.5-Pro'), ['gemini-2.5-pro', 'gemini/gemini-2.5-pro']);
+  assert.ok(priceKeyCandidates([], 'gpt-x-2026-01-31').includes('gpt-x'));
+  assert.ok(priceKeyCandidates(undefined, 'claude-x-20260131').includes('claude-x'));
+  assert.ok(priceKeyCandidates(['openrouter/'], 'anthropic/claude-x').includes('claude-x'));
+  assert.deepEqual(priceKeyCandidates([], ''), []);
 
   const models = { 'gpt-x': PRICE, 'gpt-x-2026-01-31': { input: 9, output: 9 }, 'gemini/gemini-y': PRICE };
   // The dated key wins where the table has it; the alias covers the rest.
-  assert.equal(findModelPrice(models, { providerId: 'openai', model: 'gpt-x-2026-01-31' }).key, 'gpt-x-2026-01-31');
-  assert.equal(findModelPrice(models, { providerId: 'openai', model: 'gpt-x-2026-02-28' }).key, 'gpt-x');
-  assert.equal(findModelPrice(models, { providerId: 'google', model: 'gemini-y' }).key, 'gemini/gemini-y');
-  assert.equal(findModelPrice(models, { providerId: 'openai', model: 'unknown' }), null);
+  assert.equal(findModelPrice(models, { model: 'gpt-x-2026-01-31' }).key, 'gpt-x-2026-01-31');
+  assert.equal(findModelPrice(models, { model: 'gpt-x-2026-02-28' }).key, 'gpt-x');
+  assert.equal(findModelPrice(models, { keyPrefixes: ['gemini/'], model: 'gemini-y' }).key, 'gemini/gemini-y');
+  assert.equal(findModelPrice(models, { model: 'unknown' }), null);
 });
 
 test('a round is priced per kind of token', () => {

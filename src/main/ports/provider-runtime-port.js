@@ -85,21 +85,32 @@
  * @property {string} [error]               Fehlertext (schließt message aus).
  * @property {string} [code]                Fehlercode, z. B. NO_API_KEY, NETWORK, HTTP-Status.
  *
+ * @typedef {Object} ProviderCapabilityDeclaration
+ * @property {true|false|'per-connection'} supported
+ * @property {string} [setting]   per-connection: the boolean connection setting it follows
+ * @property {string} [reason]    a gap: the message key the UI can show
+ * @property {number} [issue]     a gap for good (`false`): the issue that tracks it
+ * @property {readonly string[]} [mediaTypes]  images: the formats, where fewer than all (#91)
+ *
  * @typedef {Object} ProviderAdapter
  * @property {string} id
  * @property {string} name
  * @property {{apiKey?: boolean, baseUrl?: boolean, insecureTls?: boolean, displayName?: boolean,
- *   apiStyle?: boolean, extraHeaders?: boolean, supportsImages?: boolean, sendTools?: boolean}} [fields]
+ *   apiStyle?: boolean, extraHeaders?: boolean, supportsImages?: boolean, sendTools?: boolean, maxOutputTokens?: boolean}} [fields]
  *   Welche Konfig-Felder der Provider braucht.
  * @property {boolean} [optionalApiKey] Der Key darf leer bleiben (Issue #193).
  * @property {boolean} [connectionPerPreset] Verbindung gehoert zum Eintrag (Issue #202).
- * @property {(config: ProviderConfig) => {images: boolean, imageMediaTypes?: string[]}} [capabilitiesFor]
- *   Faehigkeiten, die erst aus der Konfiguration folgen statt fest am Adapter zu haengen.
  * @property {string} [defaultModel]
  * @property {string} [defaultBaseUrl]
  * @property {boolean} [defaultInsecureTls]
  * @property {string} [apiBase]            Anzeige-URL der API (Settings-UI).
- * @property {{ images: boolean, imageMediaTypes?: readonly string[] }} [capabilities]  what the provider passes on, when it does not depend on the configuration (#93); `imageMediaTypes` where it takes fewer than all image formats (#91)
+ * @property {Object<string, ProviderCapabilityDeclaration>} capabilities  the provider's entry in
+ *   the capability register (#996): every capability of PROVIDER_CAPABILITIES
+ *   (`shared/contracts/provider-capabilities.js`), each gap with a reason key
+ *   and an issue
+ * @property {{ runsLocally?: boolean, tokenizerProfile?: string,
+ *   priceTable?: { litellmProviders?: string[], keyPrefixes?: string[] } }} [traits]
+ *   facts that steer behaviour without being a feature (#996)
  * @property {{ levels: string[] | ((model: string) => string[]), defaultLevel?: string | ((model: string) => string), appliesTo?: (model: string) => boolean }} [reasoning]
  *   the reasoning levels a chat can choose (#725); per model where the
  *   provider's models differ (#994)

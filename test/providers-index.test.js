@@ -38,10 +38,12 @@ test('jeder Provider deklariert, ob er Bilder weiterreicht', () => {
     ollama: true,
   };
   for (const [id, images] of Object.entries(expected)) {
-    assert.equal(providers.getProvider(id).capabilities.images, images, id);
+    assert.equal(providers.getProvider(id).capabilities.images.supported, images, id);
   }
+  // The rest of the declaration is checked against the register's vocabulary
+  // in provider-capabilities.test.js (#996).
   for (const meta of providers.listProviderMeta()) {
-    assert.equal(typeof meta.capabilities?.images, 'boolean', meta.id);
+    assert.equal(typeof meta.capabilities?.images, 'object', meta.id);
   }
 });
 
@@ -50,14 +52,14 @@ test('jeder Provider deklariert, ob er Bilder weiterreicht', () => {
 test('a provider narrows the image formats only to ones Snotra attaches', () => {
   const { IMAGE_ATTACHMENT_MEDIA_TYPES } = require('../src/shared/contracts/attachments');
   for (const meta of providers.listProviderMeta()) {
-    const own = meta.capabilities?.imageMediaTypes;
+    const own = meta.capabilities?.images?.mediaTypes;
     if (own === undefined) continue;
     assert.ok(own.length > 0, meta.id);
     for (const type of own) assert.ok(IMAGE_ATTACHMENT_MEDIA_TYPES.includes(type), `${meta.id}: ${type}`);
   }
-  assert.deepEqual([...providers.getProvider('google').capabilities.imageMediaTypes],
+  assert.deepEqual([...providers.getProvider('google').capabilities.images.mediaTypes],
     ['image/png', 'image/jpeg', 'image/webp']);
-  assert.equal(providers.getProvider('anthropic').capabilities.imageMediaTypes, undefined);
+  assert.equal(providers.getProvider('anthropic').capabilities.images.mediaTypes, undefined);
 });
 
 test('openai offers its levels to the chat, not as a preset field (#726)', () => {

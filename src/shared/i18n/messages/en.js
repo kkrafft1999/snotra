@@ -1656,6 +1656,7 @@ module.exports = {
   // ── Errors the providers report (#308) ───────────────────────────────────
   // What the provider's API or the network said is quoted as it stands; these
   // are only the sentences Snotra adds itself.
+  'provider.capability.reasoningLevels.notBuilt': 'Snotra does not offer a reasoning level for this provider yet.',
   'provider.error.unknown': 'Unknown provider: {id}.',
   'provider.error.noApiKey': 'No API key stored.',
   'provider.error.noApiKeyFor': 'No API key stored for {provider}.',

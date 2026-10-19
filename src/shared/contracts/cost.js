@@ -39,20 +39,12 @@ const PRICE_SOURCES = Object.freeze({
 /** The token kinds a price distinguishes, in display order. */
 const COST_TOKEN_KINDS = Object.freeze(['input', 'cacheRead', 'cacheWrite', 'output']);
 
-/** LiteLLM providers the snapshot keeps — the ones Snotra talks to. */
-const LITELLM_PROVIDERS = new Set(['openai', 'anthropic', 'gemini', 'openrouter']);
 const LITELLM_MODES = new Set(['chat', 'responses']);
 /**
  * A download with fewer models than this is not the price table, whatever
  * else it is — it never replaces the snapshot.
  */
 const MIN_PRICE_TABLE_MODELS = 50;
-
-/** Model-ID prefixes LiteLLM puts in front of a provider's models. */
-const PROVIDER_KEY_PREFIXES = Object.freeze({
-  google: ['gemini/'],
-  'openai-compatible': ['openrouter/'],
-});
 
 function toPrice(value) {
   const n = Number(value);
@@ -79,15 +71,21 @@ function normalizeModelPrice(raw) {
 
 /**
  * Cuts LiteLLM's price file down to what the app needs: chat models of the
- * providers above, five prices each, keys in lower case. Returns
- * `{ models }`, or null when the input does not look like that file.
+ * LiteLLM providers named — those the capability register lists under the
+ * providers' `priceTable` trait (#996) —, five prices each, keys in lower
+ * case. Returns `{ models }`, or null when the input does not look like that
+ * file.
+ *
+ * @param {unknown} json
+ * @param {Iterable<string>} litellmProviders
  */
-function trimLiteLlmPrices(json) {
+function trimLiteLlmPrices(json, litellmProviders) {
   if (!json || typeof json !== 'object' || Array.isArray(json)) return null;
+  const keep = new Set(litellmProviders || []);
   const models = {};
   for (const [key, entry] of Object.entries(json)) {
     if (!entry || typeof entry !== 'object') continue;
-    if (!LITELLM_PROVIDERS.has(entry.litellm_provider)) continue;
+    if (!keep.has(entry.litellm_provider)) continue;
     if (!LITELLM_MODES.has(entry.mode)) continue;
     const price = normalizeModelPrice({
       input: entry.input_cost_per_token,
@@ -108,12 +106,16 @@ const DATE_SUFFIX = /(?:-\d{4}-\d{2}-\d{2}|-\d{8}|@\d{8})$/;
  * The keys a model may have in the price table, most specific first: the ID
  * as it is, with the provider's prefix, without a vendor prefix
  * (`anthropic/claude-…` on a router) and without a date suffix
- * (`gpt-x-2026-01-01` → `gpt-x`).
+ * (`gpt-x-2026-01-01` → `gpt-x`). `keyPrefixes` are the prefixes LiteLLM puts
+ * in front of the provider's models — its `priceTable` trait (#996).
+ *
+ * @param {readonly string[]|undefined} keyPrefixes
+ * @param {string} model
  */
-function priceKeyCandidates(providerId, model) {
+function priceKeyCandidates(keyPrefixes, model) {
   const raw = typeof model === 'string' ? model.trim().toLowerCase().replace(/^models\//, '') : '';
   if (!raw) return [];
-  const prefixes = PROVIDER_KEY_PREFIXES[providerId] || [];
+  const prefixes = Array.isArray(keyPrefixes) ? keyPrefixes : [];
   const bases = [raw];
   const slash = raw.lastIndexOf('/');
   if (slash >= 0 && slash < raw.length - 1) bases.push(raw.slice(slash + 1));
@@ -133,11 +135,11 @@ function priceKeyCandidates(providerId, model) {
  * `{ key, price }` of the first candidate the table knows, or null.
  *
  * @param {Object<string, object>} models
- * @param {{ providerId?: string, model?: string }} [target]
+ * @param {{ keyPrefixes?: readonly string[], model?: string }} [target]
  */
-function findModelPrice(models, { providerId, model } = {}) {
+function findModelPrice(models, { keyPrefixes, model } = {}) {
   if (!models || typeof models !== 'object') return null;
-  for (const key of priceKeyCandidates(providerId, model)) {
+  for (const key of priceKeyCandidates(keyPrefixes, model)) {
     const price = normalizeModelPrice(models[key]);
     if (price) return { key, price };
   }

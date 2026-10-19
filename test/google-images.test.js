@@ -22,8 +22,8 @@ function translate(messages) {
 }
 
 test('the Google adapter passes images, GIF excepted (#91)', () => {
-  assert.equal(google.capabilities.images, true);
-  assert.deepEqual([...google.capabilities.imageMediaTypes], ['image/png', 'image/jpeg', 'image/webp']);
+  assert.equal(google.capabilities.images.supported, true);
+  assert.deepEqual([...google.capabilities.images.mediaTypes], ['image/png', 'image/jpeg', 'image/webp']);
 });
 
 test('text and image: the inline data comes first, then the text', () => {

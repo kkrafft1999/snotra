@@ -18,7 +18,6 @@
  */
 'use strict';
 
-const { isLocalEndpoint } = require('./provider-endpoint');
 
 // Stamped on a breakdown, which is stored with the chat. Nothing reads it yet;
 // it lets a later shape tell the old stored ones apart.
@@ -109,46 +108,32 @@ const CHARS_PER_TOKEN_PROFILES = Object.freeze({
 /**
  * Ohne Messung kein eigenes Profil.
  *
- * Eingetragen ist nur, wogegen tatsaechlich gemessen wurde. Anthropic und
- * Google bleiben bewusst draussen: Ihre Tokenizer liegen hier nicht vor, und
- * eine geschaetzte Zahl waere derselbe Fehler wie der, den Issue #178
- * behebt — nur mit besserem Gewissen. Sie fallen auf `local` zurueck, das von
- * beiden Profilen das konservativere ist (kleinerer Teiler = mehr geschaetzte
- * Tokens). Wer ein Profil ergaenzt, misst vorher und schreibt Datum und
- * Verfahren wie oben dazu.
+ * Which profile a provider gets is its trait `tokenizerProfile` in the
+ * capability register (#996, provider-capabilities.js) — only what was
+ * actually measured against is declared there. Anthropic und Google bleiben
+ * bewusst draussen: Ihre Tokenizer liegen hier nicht vor, und eine geschaetzte
+ * Zahl waere derselbe Fehler wie der, den Issue #178 behebt — nur mit
+ * besserem Gewissen. Sie fallen auf `local` zurueck, das von beiden Profilen
+ * das konservativere ist (kleinerer Teiler = mehr geschaetzte Tokens). Wer ein
+ * Profil ergaenzt, misst vorher und schreibt Datum und Verfahren wie oben dazu.
  */
 const DEFAULT_CHARS_PER_TOKEN_PROFILE = 'local';
-
-const CHARS_PER_TOKEN_PROFILE_BY_PROVIDER = Object.freeze({
-  openai: 'o200k',
-  ollama: 'local',
-});
 
 /** Rueckwaertskompatibler Name fuer das Standardprofil. */
 const CHARS_PER_TOKEN = CHARS_PER_TOKEN_PROFILES[DEFAULT_CHARS_PER_TOKEN_PROFILE];
 
 /**
- * Profil eines Anbieters. Die Provider-ID ist der Normalfall; eine Server-URL,
- * die auf diesen Rechner zeigt, sticht sie (Issue #193).
+ * The divisors of a profile by its name; the default profile for an unknown
+ * or missing name. The name comes from the provider's traits, which already
+ * weighed in a server address on this machine (#193): there a locally loaded
+ * model answers, and that is what `local` was measured against.
  *
- * Grund: Seit es einen generischen Anbieter gibt, sagt die ID nicht mehr, was
- * am anderen Ende steht — dieselbe ID bedient LM Studio auf `localhost` und
- * ein Gateway im Netz. Zeigt sie auf diesen Rechner, laeuft dort ein lokal
- * geladenes Modell, und das ist genau der Fall, fuer den `local` gemessen ist.
- *
- * Fuer einen **entfernten** OpenAI-kompatiblen Endpunkt gibt es bewusst kein
- * eigenes Profil: Dahinter kann alles stecken, von einem OpenAI-Gateway bis zu
- * Llama bei einem Router. Ohne Messung bleibt es beim konservativeren
- * Standardprofil — dieselbe Regel, die auch Anthropic und Google draussen haelt.
- *
- * @param {string} providerId
- * @param {{ baseUrl?: string }} [endpoint]
+ * @param {string} [profileName]
  */
-function charsPerTokenProfile(providerId, { baseUrl } = {}) {
-  if (isLocalEndpoint(baseUrl)) return CHARS_PER_TOKEN_PROFILES.local;
-  const key =
-    (typeof providerId === 'string' && CHARS_PER_TOKEN_PROFILE_BY_PROVIDER[providerId])
-    || DEFAULT_CHARS_PER_TOKEN_PROFILE;
+function charsPerTokenProfile(profileName) {
+  const key = typeof profileName === 'string' && Object.hasOwn(CHARS_PER_TOKEN_PROFILES, profileName)
+    ? profileName
+    : DEFAULT_CHARS_PER_TOKEN_PROFILE;
   return CHARS_PER_TOKEN_PROFILES[key];
 }
 
@@ -156,8 +141,8 @@ function isContentKind(value) {
   return Object.prototype.hasOwnProperty.call(CHARS_PER_TOKEN, value);
 }
 
-function charsPerToken(contentKind, providerId, options) {
-  const profile = charsPerTokenProfile(providerId, options);
+function charsPerToken(contentKind, profileName) {
+  const profile = charsPerTokenProfile(profileName);
   return isContentKind(contentKind)
     ? profile[contentKind]
     : profile[CONTEXT_CONTENT_KINDS.PROSE];
@@ -170,10 +155,10 @@ function toCount(value) {
 }
 
 /** Schaetzt Tokens aus einer Zeichenzahl. Mindestens 1, solange Zeichen da sind. */
-function estimateTokensFromChars(chars, contentKind, providerId, options) {
+function estimateTokensFromChars(chars, contentKind, profileName) {
   const count = toCount(chars);
   if (count === 0) return 0;
-  return Math.max(1, Math.round(count / charsPerToken(contentKind, providerId, options)));
+  return Math.max(1, Math.round(count / charsPerToken(contentKind, profileName)));
 }
 
 function text(value) {
@@ -260,21 +245,21 @@ function createContextPart({
  * Fall vorliegt. Der Rundungsrest landet bei den groessten Posten, damit die
  * Summe der Zeilen exakt der angezeigten Gesamtzahl entspricht.
  *
- * `providerId` — und bei einem generischen Anbieter die Server-URL — waehlt das
- * Teiler-Profil (Issue #178, #193). Auf die Gesamtzahl hat
+ * `tokenizerProfile` — the provider's trait for this connection — waehlt das
+ * Teiler-Profil (Issue #178, #193, #996). Auf die Gesamtzahl hat
  * es keinen Einfluss — solange skaliert wird, verschiebt ein anderes Profil
  * nur die Gewichte zwischen den Zeilen. Genau darum geht es: Bisher bekam der
  * Block „Tool-Definitionen" bei OpenAI rund 80 % zu viel Gewicht, und Verlauf
  * und Skills entsprechend zu wenig.
  */
-function createContextBreakdown({ parts = [], promptTokens = 0, providerId = '', baseUrl = '' } = {}) {
+function createContextBreakdown({ parts = [], promptTokens = 0, tokenizerProfile = '' } = {}) {
   const usable = (Array.isArray(parts) ? parts : [])
     .map((part) => createContextPart(part))
     .filter((part) => part.chars > 0);
 
   const estimated = usable.map((part) => ({
     ...part,
-    tokens: estimateTokensFromChars(part.chars, part.contentKind, providerId, { baseUrl }),
+    tokens: estimateTokensFromChars(part.chars, part.contentKind, tokenizerProfile),
   }));
   const estimatedTotal = estimated.reduce((sum, part) => sum + part.tokens, 0);
   const real = toCount(promptTokens);
@@ -382,7 +367,6 @@ module.exports = {
   CONTEXT_CONTENT_KINDS,
   CHARS_PER_TOKEN,
   CHARS_PER_TOKEN_PROFILES,
-  CHARS_PER_TOKEN_PROFILE_BY_PROVIDER,
   DEFAULT_CHARS_PER_TOKEN_PROFILE,
   charsPerTokenProfile,
   estimateTokensFromChars,

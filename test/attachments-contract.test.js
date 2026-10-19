@@ -17,7 +17,6 @@ const {
   MAX_IMAGE_ATTACHMENT_BYTES,
   IMAGE_ATTACHMENT_MEDIA_TYPES,
   providerImageMediaTypes,
-  imageCapabilitiesOf,
   imageFormatNames,
 } = require('../src/shared/contracts/attachments');
 
@@ -194,15 +193,6 @@ test('providerImageMediaTypes: all formats without a list, the named ones in con
   assert.deepEqual(
     providerImageMediaTypes({ images: true, imageMediaTypes: ['image/webp', 'image/png', 'image/tiff'] }),
     ['image/png', 'image/webp'],
-  );
-});
-
-test('imageCapabilitiesOf carries imageMediaTypes only where a provider narrows them', () => {
-  assert.deepEqual(imageCapabilitiesOf({ images: true }), { images: true });
-  assert.deepEqual(imageCapabilitiesOf(undefined), { images: false });
-  assert.deepEqual(
-    imageCapabilitiesOf({ images: true, imageMediaTypes: ['image/jpeg', 'image/png'] }),
-    { images: true, imageMediaTypes: ['image/png', 'image/jpeg'] },
   );
 });
 

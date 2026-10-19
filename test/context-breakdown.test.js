@@ -9,7 +9,6 @@ const assert = require('node:assert/strict');
 const {
   CONTEXT_PART_GROUPS,
   CONTEXT_CONTENT_KINDS,
-  CHARS_PER_TOKEN_PROFILE_BY_PROVIDER,
   charsPerTokenProfile,
   estimateTokensFromChars,
   createContextBreakdown,
@@ -137,45 +136,26 @@ test('keine Zeile verschwindet, wenn der Anbieter eine winzige Zahl meldet', () 
 const O200K_TOOL_SCHEMA_CHARS = 17210;
 const O200K_TOOL_SCHEMA_TOKENS = 4154;
 
-test('gleiche Zeichenzahl, je nach Anbieter eine andere Schaetzung (#178)', () => {
+test('gleiche Zeichenzahl, je nach Tokenizer-Profil eine andere Schaetzung (#178)', () => {
   const chars = O200K_TOOL_SCHEMA_CHARS;
-  const lokal = estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'ollama');
-  const openai = estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'openai');
+  const lokal = estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'local');
+  const openai = estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'o200k');
 
   assert.ok(lokal > openai * 1.5, `${lokal} (lokal) muss deutlich ueber ${openai} (OpenAI) liegen`);
-  // Ohne Anbieter bleibt es beim konservativen Standardprofil — genau das, was
+  // Ohne Profil bleibt es beim konservativen Standardprofil — genau das, was
   // alle Aufrufer ohne Anbieter-Kontext (Tests, Altlasten) erwarten duerfen.
   assert.equal(estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON), lokal);
-  // Anthropic und Google haben bewusst kein eigenes Profil: ungemessen faellt
-  // ein Anbieter auf das konservativere zurueck, statt auf eine erfundene Zahl.
-  assert.equal(CHARS_PER_TOKEN_PROFILE_BY_PROVIDER.anthropic, undefined);
-  assert.equal(
-    estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'anthropic'),
-    lokal
-  );
-  assert.deepEqual(charsPerTokenProfile('google'), charsPerTokenProfile('ollama'));
-});
-
-test('eine Server-URL auf diesem Rechner sticht das ID-Profil (#193)', () => {
-  const lokal = charsPerTokenProfile('ollama');
-  // Der generische Anbieter hat kein eigenes ID-Profil; entfernt bleibt es beim
-  // konservativen Standard, lokal gilt das gemessene local-Profil.
-  assert.deepEqual(charsPerTokenProfile('openai-compatible'), lokal);
-  assert.deepEqual(
-    charsPerTokenProfile('openai-compatible', { baseUrl: 'http://localhost:1234/v1' }),
-    lokal
-  );
-  // Auch ein fest verdrahteter Anbieter, den jemand auf localhost zeigen
-  // laesst, spricht dann mit einem lokal geladenen Modell.
-  assert.notDeepEqual(charsPerTokenProfile('openai'), lokal);
-  assert.deepEqual(charsPerTokenProfile('openai', { baseUrl: 'http://127.0.0.1:8080/v1' }), lokal);
+  // An unknown name is no profile either; which providers have none is the
+  // register's business (provider-capabilities.test.js).
+  assert.equal(estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'anthropic'), lokal);
+  assert.deepEqual(charsPerTokenProfile('toString'), charsPerTokenProfile('local'));
 });
 
 test('die OpenAI-Schaetzung trifft die Tokenizer-Messung auf 10 % (#178)', () => {
   const geschaetzt = estimateTokensFromChars(
     O200K_TOOL_SCHEMA_CHARS,
     CONTEXT_CONTENT_KINDS.JSON,
-    'openai'
+    'o200k'
   );
   const abweichung = Math.abs(geschaetzt - O200K_TOOL_SCHEMA_TOKENS) / O200K_TOOL_SCHEMA_TOKENS;
   assert.ok(abweichung <= 0.1, `${geschaetzt} statt ${O200K_TOOL_SCHEMA_TOKENS} (${abweichung})`);
@@ -185,7 +165,7 @@ test('die OpenAI-Schaetzung trifft die Tokenizer-Messung auf 10 % (#178)', () =>
   const alt = estimateTokensFromChars(
     O200K_TOOL_SCHEMA_CHARS,
     CONTEXT_CONTENT_KINDS.JSON,
-    'ollama'
+    'local'
   );
   assert.ok(alt / O200K_TOOL_SCHEMA_TOKENS > 1.5);
 });
@@ -207,8 +187,8 @@ test('das Anbieter-Profil verschiebt Gewichte, nicht die Gesamtzahl (#178)', () 
   ];
   const toolTokens = (breakdown) => breakdown.parts.find((row) => row.id === 'tools').tokens;
 
-  const lokal = createContextBreakdown({ parts, promptTokens: 10000, providerId: 'ollama' });
-  const openai = createContextBreakdown({ parts, promptTokens: 10000, providerId: 'openai' });
+  const lokal = createContextBreakdown({ parts, promptTokens: 10000, tokenizerProfile: 'local' });
+  const openai = createContextBreakdown({ parts, promptTokens: 10000, tokenizerProfile: 'o200k' });
 
   // Skaliert wird weiterhin auf 100 % der echten Zahl — beide Male.
   for (const breakdown of [lokal, openai]) {
