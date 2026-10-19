@@ -77,6 +77,13 @@ function createChatHistoryService({
    * @type {Map<string, import('../../shared/contracts/cost').SessionCost>}
    */
   const pendingCost = new Map();
+  /**
+   * Chats deleted in this run of the app (#981): a turn still under way in one
+   * of them must not write it back.
+   *
+   * @type {Set<string>}
+   */
+  const deletedIds = new Set();
 
   /**
    * @param {unknown} sessionRow
@@ -249,6 +256,7 @@ function createChatHistoryService({
       const id = sanitizeChatId(rawId);
       if (!id) return { ok: false };
       // The chat's file, its entry and every folder pointer to it.
+      deletedIds.add(id);
       await chatHistoryStore.deleteSession(id);
       pendingCost.delete(id);
       await chatAttachments.deleteChat(id);
@@ -322,7 +330,25 @@ function createChatHistoryService({
       title: session.title,
       messages: Array.isArray(session.messages) ? session.messages : [],
       cost: normalizeSessionCost(session.cost),
+      workspaceRoot: chatHistoryStore.normalizeWorkspaceRoot(session.workspaceRoot),
+      ...(session.tokenUsage ? { tokenUsage: session.tokenUsage } : {}),
     };
+  }
+
+  /**
+   * Writes a chat for the conversation service (#981) — the same rules as a
+   * save from the renderer, and never one deleted in this run of the app.
+   *
+   * @param {import('../../application/ports/chat-history-port').ChatToSave} chat
+   * @param {{ markActive?: boolean }} [options]
+   * @returns {Promise<{ ok: boolean, unreadable?: boolean }>}
+   */
+  async function save(chat, { markActive = false } = {}) {
+    const id = sanitizeChatId(chat?.id);
+    if (!id || deletedIds.has(id)) return { ok: false };
+    const saved = /** @type {{ ok: boolean, unreadable?: boolean }} */ (await saveSession({ ...chat, id }));
+    if (saved.ok && markActive) await setActive(id);
+    return saved;
   }
 
   /**
@@ -370,6 +396,7 @@ function createChatHistoryService({
     activate,
     readAttachment,
     load,
+    save,
     addCost,
     setTitle,
   };
