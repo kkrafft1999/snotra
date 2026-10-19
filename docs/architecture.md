@@ -154,6 +154,7 @@ code is.
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
 | **Remote bridge** | `src/main/remote/` | The adapters of the mobile remote (#1114): the protocol's bytes (`pairing-protocol.js`), the keys kept through `safeStorage`, the relay over Firebase's REST interfaces and in memory, the native sheet's wording. Type-checked like `adapters/` |
 | **Main ports** | `src/main/ports/` | 12 interface types for infrastructure (narrow surfaces, no leaks) |
+| **Platforms** | `src/main/platforms/` | What each operating system and packaging variant can do, resolved once at start, see [Platform capabilities](#platform-capabilities) |
 | **Providers** | `src/main/providers/` | Five provider modules and the two shared OpenAI transports behind `providers/index.js`, see [Provider adapters](#provider-adapters) |
 | **Tools** | `src/main/tools/` | The tool registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, the call planner (targets, plan key, sandbox plan, preview) and argument conformance. Business rules, called through the tool adapter |
 | **Services** | `src/main/services/` | 76 modules (~22k lines) and by far the largest layer: storage, file system, sandbox, MCP, updates, skills, watchers, the signed policy store, outside access, program allowances, document text. Most of the backend's logic lives here |
@@ -1694,10 +1695,8 @@ capability, on a gap without a reason key from the catalogue or without an
 issue, on a `reasoningLevels` that disagrees with `reasoning`, and on a
 provider-ID literal anywhere in `src/application/` or `src/shared/contracts/`.
 
-The register covers providers only. Platform capabilities — Auto mode without a
-keyring, self-update per package format — are still computed per feature;
-[#1149](https://github.com/kkrafft1999/snotra/issues/1149) carries the platform
-half.
+Platforms have a register of the same shape — see
+[Platform capabilities](#platform-capabilities).
 
 Secrets do not leave the main process: the API key and the extra headers are
 stored `safeStorage`-encrypted (`apiKeyEnc`, `extraHeadersEnc`), and the view
@@ -1764,6 +1763,70 @@ declares `runsLocally` in the register, and the host rule applies in addition.
 breakdown get a finished `runsLocally` and `tokenizerProfile` and know no
 provider (#996). (`mlx-lm` left the list with issue #194 — a MLX-LM server on
 `127.0.0.1` is local through its URL.)
+
+## Platform capabilities
+
+The twin of the provider register
+([#1149](https://github.com/kkrafft1999/snotra/issues/1149), AR-21):
+what Snotra can do on an operating system is declared in one vocabulary,
+`shared/contracts/platform-capabilities.js`, and once per platform in
+`main/platforms/index.js` — `darwin`, `win32`, `linux`, plus the packaging
+variants that change something. A variant declares only what differs from its
+platform; today that is `linux-package`, a `.deb`, `.rpm` or Snap under `/opt`,
+`/usr` or `/snap`. The AppImage and the extracted folder are plain `linux`.
+
+Every platform declares every capability, as `{ supported: true }`,
+`{ supported: false, reason, issue }` or, for a gap kept on purpose,
+`{ supported: false, reason, permanent: true, rationale }`. An entry that a
+fact of the running system decides says `supported: 'at-start'` and names the
+fact. `reason` is a message key the UI can show.
+
+| Capability | macOS | Windows | Linux | Linux package |
+| --- | --- | --- | --- | --- |
+| `executionSandbox` — shell and Python run isolated (#329) | yes | no — [#990](https://github.com/kkrafft1999/snotra/issues/990) | yes | yes |
+| `sandboxGitSsh` — Git over SSH signs in inside the sandbox (#932) | yes | no — #990 | no — [#1155](https://github.com/kkrafft1999/snotra/issues/1155) | no — #1155 |
+| `selfUpdate` — the app replaces itself (#353) | yes | yes | yes | no, permanent: the package manager owns it |
+| `secureStorage` — keys, Auto and allow rules (#1012) | at start | at start | at start | at start |
+
+`secureStorage` follows `safeStorage.isEncryptionAvailable()`; its gap is
+permanent on every platform, since keys and permanent permissions never fall
+back to plain text — Linux without a keyring and a *Deny* on macOS both end
+there.
+
+**Whether, not how.** Code that decides whether a feature exists reads the
+register: `sandbox-service` (no sandbox off the register; the agent socket and
+the expected SSH reads only where `sandboxGitSsh` holds),
+`program-allowances-service`, the switch-on prompt for an execution tool
+(`settings-confirmation-dialogs.js`), the Security page's overview
+(`tool-permission-handlers.js`) and the installation target of the updater
+(`update-targets.js`). Checks that only pick *how* a platform does something
+stay where they are: paths and case folding, shell and interpreter choice,
+the Windows Job Object and `taskkill`, `rename` retries, menus, key bindings,
+the folder watcher, the default program of a file, the macOS-only `trustd`
+and SSH tunnel of the sandbox.
+
+**Resolved once.** `main/platforms/running-platform.js` resolves the register
+at start, after `app` is ready: the install path picks the variant, `safeStorage`
+gives the fact. The result, `{ executionSandbox, sandboxGitSsh, selfUpdate,
+secureStorage, gaps? }` with `gaps[name] = { reason, issue? | permanent }`,
+travels to the renderer next to the provider capabilities — as
+`platformCapabilities` on the LLM state DTO and on the Security page's
+overview, where `hasNoSandbox()` reads it. Entries the platform alone decides
+can also be asked directly with `platformSupports(platform, name)`; an
+`at-start` entry has no answer there and throws.
+
+What changes while the app runs is a state, not a platform capability: the
+sandbox's self-test, missing Linux packages or blocked user namespaces stay in
+the sandbox status, with their own wording. The security guards in main keep
+reading `safeStorage` live and fail closed; the `encryptionAvailable` fields of
+the settings DTOs stay as they are until the renderer reads `secureStorage`
+from the register instead
+([#1156](https://github.com/kkrafft1999/snotra/issues/1156)).
+
+`test/platform-capabilities.test.js` fails on an undeclared or unknown
+capability, on a gap without a reason key from the catalogue, on a gap with
+neither an issue nor `permanent` and a rationale, and on a `win32` comparison
+in the renderer.
 
 ## Renderer: what was moved, what stays
 

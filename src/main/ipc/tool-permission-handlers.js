@@ -52,6 +52,7 @@ const { menuPath } = require('../../shared/i18n/ui-quotes');
 const { isNarrowing, normalizeAllowancePath } = require('../../shared/contracts/program-allowances');
 const { grantedHosts } = require('../services/sandbox-violations');
 const { describeSecurityOverview } = require('../../application/permissions/security-overview');
+const { resolvePlatform } = require('../platforms');
 const {
   CONFIRMATION_ACTIONS,
   permissionRuleSubject,
@@ -367,6 +368,9 @@ function registerToolPermissionHandlers({
   // Whether a folder is still there (#1119): a missing one is listed as such.
   folderExists = async () => true,
   platform = process.platform,
+  // The platform capability register, resolved at start (#1149): whether
+  // there is a sandbox at all is read from it, not from the platform's name.
+  platformCapabilities = resolvePlatform({ platform }),
   homeDir = '',
 }) {
   if (!toolPolicyStore || !approvals || !sessionGrants) {
@@ -539,13 +543,14 @@ function registerToolPermissionHandlers({
       programs: state.workspaceProgramAllowances?.[root] || [],
       hosts: state.workspaceHosts?.[root] || [],
     })));
-    const sandbox = platform === 'win32'
+    const sandbox = platformCapabilities.executionSandbox === false
       ? { isolated: false, status: 'unavailable', reason: 'platform', platform }
       : described?.sandbox || null;
     return {
       integrity: state.integrity,
       encryptionAvailable: state.encryptionAvailable,
       platform,
+      platformCapabilities,
       homeDir,
       sandbox,
       activeRoot: active,

@@ -7,6 +7,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { importRenderer, setupRendererDom, flush, focusFixup } = require('./helpers/dom.js');
+const { resolvePlatform } = require('../src/main/platforms');
 
 const OPEN = '/Users/u/garden-planner';
 const OTHER = '/Users/u/invoice-tool';
@@ -427,6 +428,8 @@ test('All workspaces: the default for new ones, the programs and hosts everywher
 test('Windows: no switch, no programs or hosts — and the page says why', async (t) => {
   const overview = overviewWith({
     platform: 'win32',
+    // What main sends: the register resolved for Windows (#1149).
+    platformCapabilities: resolvePlatform({ platform: 'win32' }),
     sandbox: { isolated: false, status: 'unavailable', reason: 'platform', platform: 'win32' },
     global: { programs: [], hosts: [] },
   });

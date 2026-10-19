@@ -29,6 +29,8 @@
 
 const { normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { isPathInside } = require('../../shared/runtime/path-inside');
+const { PLATFORM_CAPABILITIES } = require('../../shared/contracts/platform-capabilities');
+const { platformSupports } = require('../platforms');
 const {
   summarizeViolations, describeForModel, widerFolder, widerHost, grantedHosts, parseViolationLine, NETWORK_REASONS,
 } = require('./sandbox-violations');
@@ -550,8 +552,9 @@ function createSandboxService({
 
   /** The ssh-agent's socket, for a run's SSH to sign in with (#932). */
   function agentSocket() {
+    if (!platformSupports(platform, PLATFORM_CAPABILITIES.SANDBOX_GIT_SSH)) return null;
     const socket = env?.SSH_AUTH_SOCK;
-    return platform === 'darwin' && typeof socket === 'string' && path.isAbsolute(socket) ? socket : null;
+    return typeof socket === 'string' && path.isAbsolute(socket) ? socket : null;
   }
 
   /**
@@ -562,7 +565,7 @@ function createSandboxService({
    * any other program reaching for them still shows up.
    */
   function isExpectedSshRead(line) {
-    if (platform !== 'darwin') return false;
+    if (!platformSupports(platform, PLATFORM_CAPABILITIES.SANDBOX_GIT_SSH)) return false;
     const v = parseViolationLine(line);
     return v?.kind === 'read' && v.process === 'ssh' && isPathInside(path, path.join(os.homedir(), '.ssh'), v.target);
   }
@@ -807,7 +810,7 @@ function createSandboxService({
   }
 
   async function runDetection() {
-    if (platform !== 'darwin' && platform !== 'linux') {
+    if (!platformSupports(platform, PLATFORM_CAPABILITIES.EXECUTION_SANDBOX)) {
       state = { status: 'unavailable', reason: SANDBOX_REASONS.PLATFORM, platform };
       return describe();
     }

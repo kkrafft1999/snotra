@@ -24,6 +24,8 @@ const {
 const { parseSimpleCommand } = require('../../shared/runtime/simple-command');
 const { createMessage } = require('../../shared/contracts/message');
 const { quoteArgv } = require('./sandbox-service');
+const { PLATFORM_CAPABILITIES } = require('../../shared/contracts/platform-capabilities');
+const { platformSupports } = require('../platforms');
 
 /**
  * @param {object} deps
@@ -231,7 +233,8 @@ function createProgramAllowances({
    *   | {skipped: {program: string, reason: string}}>}
    */
   async function match({ command, cwd, workspaceRoot = null } = {}) {
-    if (platform === 'win32') return null;
+    // An allowance widens the sandbox; without one there is nothing to widen.
+    if (!platformSupports(platform, PLATFORM_CAPABILITIES.EXECUTION_SANDBOX)) return null;
     const allowances = (await readAllowances(workspaceRoot || null).catch(() => []))
       .map(normalizeProgramAllowance)
       .filter(Boolean);

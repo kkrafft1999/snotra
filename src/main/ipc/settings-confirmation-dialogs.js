@@ -8,6 +8,8 @@
  */
 
 const { menuPath } = require('../../shared/i18n/ui-quotes');
+const { PLATFORM_CAPABILITIES } = require('../../shared/contracts/platform-capabilities');
+const { platformSupports } = require('../platforms');
 
 /** Where the switches live, quoted in the prompt. */
 const EXECUTION_SETTING_PAGE = 'settings.security';
@@ -23,11 +25,11 @@ const EXECUTION_DIALOG_KEYS = Object.freeze({
 /**
  * @param {'shellExecutionEnabled'|'pythonExecutionEnabled'} pref
  * @param {(key: string, params?: object) => string & {}} t  a translator with `t.locale`
- * @param {string} platform  Windows has no sandbox, the prompt says so
+ * @param {string} platform  where there is no sandbox (Windows), the prompt says so
  */
 function executionSwitchDialog(pref, t, platform) {
   const base = EXECUTION_DIALOG_KEYS[pref];
-  const variant = platform === 'win32' ? 'unisolated' : 'sandboxed';
+  const variant = platformSupports(platform, PLATFORM_CAPABILITIES.EXECUTION_SANDBOX) ? 'sandboxed' : 'unisolated';
   return {
     type: 'warning',
     title: t(`${base}.title`),

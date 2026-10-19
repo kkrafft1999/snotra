@@ -19,6 +19,7 @@ const { createShellRunnerService } = require('../src/main/services/shell-runner-
 const { createPythonRunnerService } = require('../src/main/services/python-runner-service');
 const { normalizeToolPresentation } = require('../src/shared/contracts/tool-presentation');
 const { descriptorOf } = require('./helpers/tool-descriptors');
+const { resolvePlatform } = require('../src/main/platforms');
 
 const loadRenderer = (file) =>
   import(pathToFileURL(nodePath.join(__dirname, '..', 'src', 'renderer', 'utils', file)).href);
@@ -346,8 +347,10 @@ test('settings: the sandbox tile of a workspace on Tools › Security — on, of
     assert.equal(describeSandboxTile(overview({ sandbox: pending }), ws(), { autoLabel }).tone, 'on');
   }
 
-  // Windows has no sandbox (#990): the tile says so and offers no switch.
-  const windows = describeSandboxTile(overview({ platform: 'win32', sandbox: null }), ws(), { autoLabel });
+  // Windows has no sandbox (#990): the tile says so and offers no switch. The
+  // platform register says it (#1149), not the platform's name.
+  const noSandbox = { platform: 'win32', platformCapabilities: resolvePlatform({ platform: 'win32' }), sandbox: null };
+  const windows = describeSandboxTile(overview(noSandbox), ws(), { autoLabel });
   assert.deepEqual([windows.switchable, windows.tone, windows.title], [false, 'unavailable', 'No sandbox on Windows']);
   assert.match(windows.body, /^Every command and Python run has your full rights/);
 });

@@ -10,7 +10,15 @@ const {
 const { createTranslator } = require('../../shared/i18n');
 const { resolveProviderCapabilities } = require('../../shared/contracts/provider-capabilities');
 
-function createSettingsPresentationService({ providerCatalog, defaultProviderId }) {
+/**
+ * @param {Object} deps
+ * @param {any} deps.providerCatalog
+ * @param {string} deps.defaultProviderId
+ * @param {import('../../shared/contracts/platform-capabilities').PlatformCapabilities|null} [deps.platformCapabilities]
+ *   the platform register resolved at start (#1149); it travels next to the
+ *   provider capabilities
+ */
+function createSettingsPresentationService({ providerCatalog, defaultProviderId, platformCapabilities = null }) {
   function getProvider(id) {
     return providerCatalog.getProvider(id);
   }
@@ -252,6 +260,7 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId 
       },
       presets,
       providers: providerViews,
+      ...(platformCapabilities ? { platformCapabilities } : {}),
     };
   }
 
