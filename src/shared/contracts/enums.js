@@ -63,8 +63,9 @@ const CHAT_PROGRESS_TYPES = Object.freeze({
    */
   RUN_END: 'run-end',
   /**
-   * Main saved the chat of a run, or could not (#981): `ok`, and `unreadable`
-   * when the history file is there but could not be read (#473, #977).
+   * Main saved the chat of a run, or could not (#981): `ok`, and `problem` —
+   * `unreadable` when the history file is there but could not be read (#473),
+   * `failed` when the write went wrong, null otherwise (#977).
    */
   CHAT_SAVED: 'chat-saved',
   /** Main named the chat after its first answer (#359, #981): `title`. */

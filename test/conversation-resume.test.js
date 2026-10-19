@@ -98,14 +98,8 @@ test('a stored chat is resumed and a turn runs through the core, without Electro
   });
   const conversation = createConversationService({ engine, history: createChatHistoryAdapter(chatHistory) });
 
-  // The front end resumes the stored chat and adds its question.
-  const stored = await chatHistory.load('stored');
-  const messages = [...stored.messages.map(({ role, content }) => ({ role, content })), { role: 'user', content: 'And its population?' }];
-  const result = await conversation.sendTurn({
-    sessionId: 'cli-1',
-    payload: { chatId: 'stored', messages },
-    onEvent: () => {},
-  });
+  // The front end names the chat and sends its question; the core does the rest.
+  const result = await conversation.runTurn({ sessionId: 'cli-1', chatId: 'stored', message: { content: 'And its population?' } });
   assert.equal(result.content, 'About two million.');
   assert.deepEqual(llm.seen[0].filter((line) => !line.startsWith('system:')), [
     'user:What is the capital of France?',
@@ -117,7 +111,11 @@ test('a stored chat is resumed and a turn runs through the core, without Electro
   assert.equal(result.chatCost.models[0].rounds, 1);
   assert.equal((await chatHistory.load('stored')).cost.models[0].rounds, 1);
 
-  // The core names the chat after its first answer, and the name is stored.
-  assert.deepEqual(await conversation.nameChat('stored'), { title: 'Paris facts' });
-  assert.equal((await chatHistory.load('stored')).title, 'Paris facts');
+  // The turn is in the chat on disk, and the core named the chat after it.
+  await conversation.settled();
+  const stored = await chatHistory.load('stored');
+  assert.deepEqual(stored.messages.map((m) => m.content), [
+    'What is the capital of France?', 'Paris.', 'And its population?', 'About two million.',
+  ]);
+  assert.equal(stored.title, 'Paris facts');
 });

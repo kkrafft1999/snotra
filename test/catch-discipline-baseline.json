@@ -137,7 +137,7 @@
     "renderer/components/ChatConfigIndicator.js": 2,
     "renderer/components/ChatHistoryPanel.js": 2,
     "renderer/components/ChatModelPicker.js": 3,
-    "renderer/components/ChatStream.js": 12,
+    "renderer/components/ChatStream.js": 8,
     "renderer/components/FeedbackDialog.js": 6,
     "renderer/components/FileTree.js": 21,
     "renderer/components/InstantSetting.js": 1,

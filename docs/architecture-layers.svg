@@ -89,7 +89,7 @@
 
   <rect x="50" y="252" width="1148" height="58" rx="8" fill="#f8fbff" stroke="#2f6db3" stroke-width="1" stroke-dasharray="4 3"/>
   <text x="62" y="272" font-size="11" font-weight="700" fill="#1c4b82">Normalised view data from main (no provider wire, no tool name logic, no cross-round parsing)</text>
-  <text x="62" y="290" font-size="10.5" fill="#475569">Settings form · tool rows (entry.line) · chat history (title, usage, sanitising) — and still here: run registry, persistence, cost sum (#981)</text>
+  <text x="62" y="290" font-size="10.5" fill="#475569">Settings form · tool rows (entry.line) · chat history (title, usage, sanitising) — the conversation itself is the core's (#981)</text>
   <text x="62" y="306" font-size="10.5" fill="#475569">Legitimate in the renderer: DOM/Markdown (marked+DOMPurify) · local time/a11y · displaying prepared DTO fields — only window.electronAPI + contracts</text>
 
   <!-- ============ PRELOAD BRIDGE ============ -->

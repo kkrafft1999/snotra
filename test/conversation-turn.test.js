@@ -139,7 +139,7 @@ test('a first turn makes the chat: question and answer saved, the chat its folde
   ]);
   assert.equal(stored.workspaceRoot, WORKSPACE, 'a new chat goes under the open folder');
   assert.equal((await chatHistory.listForActiveFolder()).activeChatId, 'new-chat');
-  assert.ok(progress(events, 'chat-saved').length >= 2 && progress(events, 'chat-saved').every((p) => p.ok));
+  assert.ok(progress(events, 'chat-saved').length >= 2 && progress(events, 'chat-saved').every((p) => p.ok && p.problem === null));
 
   await conversation.settled();
   assert.deepEqual(progress(events, 'chat-named'), [{ type: 'chat-named', title: 'Greetings' }]);
@@ -263,4 +263,30 @@ test('a failed turn keeps the question and says why, in the interface\'s words',
   assert.equal(stored.messages.length, 2);
   assert.equal(stored.messages[1].isError, true);
   assert.match(stored.messages[1].content, /^Error: /);
+});
+
+test('a stop pressed while the chat is still being loaded is not lost', async (t) => {
+  const { chatHistory, conversation, llm, turn } = await setup(t, [text('never asked')]);
+  const running = turn('quick', { content: 'Hi' });
+  conversation.stop(7, 'quick');
+  const result = await running;
+  assert.equal(result.cancelled, true);
+  assert.equal(llm.seen.length, 0, 'the model was never asked');
+  assert.deepEqual((await chatHistory.load('quick')).messages.map((m) => m.role), ['user'], 'the question stays');
+});
+
+test('a turn whose saves failed is not lost: the next turn goes on from it and saves all of it (#977)', async (t) => {
+  const { chatHistory, conversation, turn } = await setup(t, [text('First answer.'), text('Second answer.'), text('Name')]);
+  const realSave = chatHistory.save;
+  let failing = true;
+  chatHistory.save = async (chat, options) => (failing ? { ok: false, unreadable: true } : realSave(chat, options));
+  await turn('flaky', { content: 'First question' });
+  assert.equal(await chatHistory.load('flaky'), null, 'nothing reached the disk');
+
+  failing = false;
+  await turn('flaky', { content: 'Second question' });
+  await conversation.settled();
+  assert.deepEqual((await chatHistory.load('flaky')).messages.map((m) => m.content), [
+    'First question', 'First answer.', 'Second question', 'Second answer.',
+  ]);
 });

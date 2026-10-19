@@ -59,11 +59,13 @@ specification must not contradict.
   start, `settings:commitSettings` turns off TLS checks for an entry. Since
   #1104 the first two go through the confirmation port, and the third is
   classified as not loosening (§7.6).
-- **The renderer owns the conversation** ([#981](https://github.com/kkrafft1999/snotra/issues/981)).
-  It sends the whole history with every `chat:send`, which answers only when
-  the run is over; it writes the chat back with `chatHistory:upsert`; it
-  settles runs with the run-end marker and a grace of 10 s (#721). A second
-  front end would have to do all of that again.
+- **The conversation was the renderer's** until [#981](https://github.com/kkrafft1999/snotra/issues/981):
+  it sent the whole history with every `chat:send` and wrote the chat back
+  with `chatHistory:upsert`. Since #981 `chat:send` carries the question and
+  the chat id, and the core's conversation service keeps, saves and names the
+  chat; `chat:send` still answers only when the run is over, and the renderer
+  still settles what it draws with the run-end marker and a grace of 10 s
+  (#721).
 - **The security concept puts local processes running with the user's rights
   outside the protection goal** (§5). A listener on localhost is the first part
   of Snotra that such a process — and a web page in the user's browser — can

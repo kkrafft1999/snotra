@@ -179,8 +179,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getChatHistory: () => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET),
   // A chat's messages, read when it is opened (#985).
   getChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_GET_SESSION, id),
-  upsertChatSession: (session) => ipcRenderer.invoke(REQ.CHAT_HISTORY_UPSERT, session),
-  nameChat: (chatId) => ipcRenderer.invoke(REQ.CHAT_TITLE, { chatId }),
   // The diff of one or more changes to a file, by the ids of their summaries (#348).
   getFileChanges: (ids) => ipcRenderer.invoke(REQ.CHAT_FILE_CHANGES, { ids: Array.isArray(ids) ? ids : [] }),
   deleteChatSession: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_DELETE, id),
@@ -192,9 +190,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Wiederherstellen beim Start oder Ordnerwechsel.
   activateChatSession: (id, activation) =>
     ipcRenderer.invoke(REQ.CHAT_HISTORY_ACTIVATE, id, activation),
-  chat: (messages, options) =>
+  // The question alone — main keeps the chat's history (#981).
+  chat: (message, options) =>
     ipcRenderer.invoke(REQ.CHAT_SEND, {
-      messages,
+      message: {
+        content: typeof message?.content === 'string' ? message.content : '',
+        ...(Array.isArray(message?.attachments) ? { attachments: message.attachments } : {}),
+      },
       selectedPath: options?.selectedPath ?? null,
       selectedIsDirectory: options?.selectedIsDirectory ?? false,
       chatId: typeof options?.chatId === 'string' ? options.chatId : null,

@@ -485,7 +485,6 @@ const chatHistory = initChatHistoryPanel({
   api,
   appStore,
   stopChatVoiceListening: voice.stopChatVoiceListening,
-  persistCurrentChat: chatStream.persistCurrentChat,
   renderChatMessages: chatStream.renderChatMessages,
   updateChatChrome: () => modelPicker.updateChatChrome(),
   onInputChanged: syncChatInputHeight,
