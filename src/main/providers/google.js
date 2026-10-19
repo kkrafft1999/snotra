@@ -1,7 +1,32 @@
+/** @typedef {import('../ports/provider-runtime-port').ProviderAdapter} ProviderAdapter */
+/** @typedef {import('../ports/provider-runtime-port').ChatRoundResult} ChatRoundResult */
+/** @typedef {import('../ports/provider-runtime-port').AssistantMessage} AssistantMessage */
+/** @typedef {import('../../application/ports/llm-port').LlmToolCall} ToolCall */
+/** @typedef {import('../../application/ports/llm-port').LlmMessage} LlmMessage */
+/** @typedef {import('../../application/ports/llm-port').LlmToolDefinition} LlmToolDefinition */
+
+/**
+ * What of a streamed `streamGenerateContent` chunk is read.
+ * @typedef {Object} GeminiPart
+ * @property {unknown} [thought]
+ * @property {unknown} [text]
+ * @property {{ name?: unknown, args?: unknown }} [functionCall]
+ * @property {unknown} [thoughtSignature]
+ *
+ * @typedef {Object} GeminiChunk
+ * @property {unknown} [usageMetadata]
+ * @property {{ blockReason?: unknown }} [promptFeedback]
+ * @property {Array<{ content?: { parts?: GeminiPart[] }, finishReason?: unknown }>} [candidates]
+ *
+ * A turn of the request: `user` or `model`.
+ * @typedef {{ role: string, parts: Array<Record<string, unknown>> }} GeminiContent
+ */
+
 const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
 const { imageAttachmentsOf } = require('../../shared/contracts/attachments');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
+const { isRecord } = require('../../shared/runtime/is-record');
 const { iterSseEvents, describeFetchErrorMessage, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
 const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
@@ -11,10 +36,12 @@ const MODEL_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 // The key goes in a header, not in the URL: URLs end up in proxy logs and
 // error output where headers do not (#541).
+/** @param {string} apiKey */
 function authHeaders(apiKey) {
   return { 'x-goog-api-key': apiKey };
 }
 
+/** @param {unknown} modelOrPath */
 function bareModelId(modelOrPath) {
   const s = String(modelOrPath || '').trim();
   if (s.startsWith('models/')) return s.slice('models/'.length);
@@ -28,12 +55,14 @@ const FILTER_REASONS = new Set([
   'SAFETY', 'RECITATION', 'BLOCKLIST', 'PROHIBITED_CONTENT', 'SPII', 'IMAGE_SAFETY',
 ]);
 
+/** @param {string} finishReason */
 function cutOffOf(finishReason) {
   if (LENGTH_REASONS.has(finishReason)) return FINISH_REASONS.LENGTH;
   if (FILTER_REASONS.has(finishReason)) return FINISH_REASONS.CONTENT_FILTER;
   return null;
 }
 
+/** @param {string} id */
 function isValidModelId(id) {
   return MODEL_ID_PATTERN.test(id);
 }
@@ -52,9 +81,14 @@ function isValidModelId(id) {
  * Older models do not think and must not get a `thinkingConfig` at all.
  * Image and other non-chat variants keep their own default.
  */
+/** @type {Record<string, number>} */
 const THINKING_BUDGETS = { low: 1024, medium: 8192, high: 24576 };
 const NOT_FOR_LEVELS = /image|tts|audio|embedding|live|robotics/;
 
+/**
+ * @param {unknown} model
+ * @returns {{ version: number, tier: string } | null}
+ */
 function geminiModelOf(model) {
   const id = bareModelId(model).toLowerCase();
   const m = /^gemini-(\d+)(?:\.(\d+))?-([a-z]+)/.exec(id);
@@ -62,6 +96,10 @@ function geminiModelOf(model) {
   return { version: Number(m[1]) + (m[2] ? Number(m[2]) / 10 : 0), tier: m[3] };
 }
 
+/**
+ * @param {unknown} model
+ * @returns {string[]}
+ */
 function reasoningLevelsOf(model) {
   const gemini = geminiModelOf(model);
   if (!gemini) return [];
@@ -75,6 +113,10 @@ function reasoningLevelsOf(model) {
 /**
  * The `thinkingConfig` for a level, with the thoughts summarised into the
  * stream — they come as thought parts, which are shown as reasoning.
+ *
+ * @param {unknown} model
+ * @param {string} level
+ * @returns {Record<string, unknown> | null}
  */
 function thinkingConfigFor(model, level) {
   const gemini = geminiModelOf(model);
@@ -83,6 +125,7 @@ function thinkingConfigFor(model, level) {
   return { includeThoughts: true, thinkingLevel: level.toUpperCase() };
 }
 
+/** @type {ProviderAdapter['listModels']} */
 async function listModels(config) {
   try {
     return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
@@ -94,6 +137,7 @@ async function listModels(config) {
   }
 }
 
+/** @type {ProviderAdapter['listModels']} */
 async function listModelsRequest(config) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: createMessage('provider.error.noApiKey') };
@@ -105,13 +149,13 @@ async function listModelsRequest(config) {
   }
   if (!res.ok) return { error: await readErrorMessage(res) };
   const json = await res.json().catch(() => null);
-  if (!json || !Array.isArray(json.models)) {
+  if (!isRecord(json) || !Array.isArray(json.models)) {
     return { error: createMessage('provider.error.unexpectedAnswer.api', { provider: 'Google' }) };
   }
   const models = json.models
-    .filter((m) => Array.isArray(m.supportedGenerationMethods)
+    .filter((/** @type {{ supportedGenerationMethods?: unknown }} */ m) => Array.isArray(m.supportedGenerationMethods)
       && m.supportedGenerationMethods.includes('generateContent'))
-    .map((m) => {
+    .map((/** @type {{ name?: unknown, displayName?: string }} */ m) => {
       const id = bareModelId(m.name);
       return { id, label: m.displayName ? `${m.displayName} (${id})` : id };
     })
@@ -119,8 +163,13 @@ async function listModelsRequest(config) {
   return { models };
 }
 
+/**
+ * @param {LlmToolDefinition[]|undefined} tools
+ * @returns {Array<{ functionDeclarations: Array<Record<string, unknown>> }>|undefined}
+ */
 function translateToolsToGoogle(tools) {
   if (!Array.isArray(tools) || tools.length === 0) return undefined;
+  /** @type {Array<Record<string, unknown>>} */
   const decls = [];
   for (const t of tools) {
     if (!t?.function?.name) continue;
@@ -135,12 +184,18 @@ function translateToolsToGoogle(tools) {
 
 // Gemini's function-declaration schema accepts a subset of JSON Schema.
 // Strip fields that often cause 400 errors.
+/**
+ * @param {unknown} schema
+ * @returns {unknown}
+ */
 function stripUnsupportedSchemaFields(schema) {
   if (!schema || typeof schema !== 'object') return schema;
+  /** @type {Record<string, unknown>} */
   const cleaned = {};
   for (const [k, v] of Object.entries(schema)) {
     if (k === '$schema' || k === 'additionalProperties') continue;
     if (k === 'properties' && v && typeof v === 'object') {
+      /** @type {Record<string, unknown>} */
       const props = {};
       for (const [pk, pv] of Object.entries(v)) {
         props[pk] = stripUnsupportedSchemaFields(pv);
@@ -155,7 +210,12 @@ function stripUnsupportedSchemaFields(schema) {
   return cleaned;
 }
 
+/**
+ * @param {LlmMessage[]} messages
+ * @returns {Map<string, string>}
+ */
 function buildToolCallNameMap(messages) {
+  /** @type {Map<string, string>} */
   const map = new Map();
   for (const m of messages) {
     if (m.role === 'assistant' && Array.isArray(m.tool_calls)) {
@@ -172,6 +232,10 @@ function buildToolCallNameMap(messages) {
  * Turns alternate: a turn of the same role as the one before joins it. That
  * keeps the history valid when an empty answer was left out, and gives the
  * responses to parallel calls one turn, as the API expects them (#540).
+ *
+ * @param {GeminiContent[]} contents
+ * @param {string} role
+ * @param {Array<Record<string, unknown>>} parts
  */
 function pushContent(contents, role, parts) {
   const last = contents[contents.length - 1];
@@ -191,12 +255,16 @@ const GEMINI_IMAGE_MEDIA_TYPES = Object.freeze(['image/png', 'image/jpeg', 'imag
  * Gemini's own examples order them, then the text. An image-only message gets
  * no empty text part. A GIF from an earlier turn — sent while another model
  * was active — is left out rather than failing the whole request (#91).
+ *
+ * @param {LlmMessage} m
+ * @returns {Array<Record<string, unknown>>}
  */
 function userPartsForGoogle(m) {
   const text = typeof m.content === 'string' ? m.content : '';
   const images = imageAttachmentsOf(m)
     .filter((image) => GEMINI_IMAGE_MEDIA_TYPES.includes(image.mediaType.toLowerCase()));
   if (images.length === 0) return [{ text }];
+  /** @type {Array<Record<string, unknown>>} */
   const parts = images.map((image) => ({
     inlineData: { mimeType: image.mediaType.toLowerCase(), data: image.dataBase64 },
   }));
@@ -204,14 +272,19 @@ function userPartsForGoogle(m) {
   return parts;
 }
 
+/**
+ * @param {LlmMessage[]} messages
+ * @returns {{ systemText: string|null, contents: GeminiContent[] }}
+ */
 function translateMessagesToGoogle(messages) {
   const toolNameById = buildToolCallNameMap(messages);
   let systemText = '';
+  /** @type {GeminiContent[]} */
   const contents = [];
 
   for (const m of messages) {
     if (m.role === 'system') {
-      systemText += (systemText ? '\n\n' : '') + (m.content || '');
+      systemText += (systemText ? '\n\n' : '') + (typeof m.content === 'string' ? m.content : '');
       continue;
     }
     if (m.role === 'user') {
@@ -219,6 +292,7 @@ function translateMessagesToGoogle(messages) {
       continue;
     }
     if (m.role === 'assistant') {
+      /** @type {Array<Record<string, unknown>>} */
       const parts = [];
       if (typeof m.content === 'string' && m.content.length > 0) {
         parts.push({ text: m.content });
@@ -244,7 +318,7 @@ function translateMessagesToGoogle(messages) {
       continue;
     }
     if (m.role === 'tool') {
-      const name = toolNameById.get(m.tool_call_id) || 'tool';
+      const name = (m.tool_call_id && toolNameById.get(m.tool_call_id)) || 'tool';
       // functionResponse.response muss ein Objekt sein. Unsere Tools liefern
       // immer JSON; der { result }-Fallback greift nur, falls je ein Tool
       // Plaintext zurückgibt, und verpackt ihn dann API-konform.
@@ -257,6 +331,7 @@ function translateMessagesToGoogle(messages) {
   return { systemText: systemText || null, contents };
 }
 
+/** @type {ProviderAdapter['streamChatRound']} */
 async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: createMessage('provider.error.noApiKey'), code: 'NO_API_KEY' };
@@ -268,6 +343,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
 
   const { systemText, contents } = translateMessagesToGoogle(messages);
   const tooling = translateToolsToGoogle(tools);
+  /** @type {Record<string, unknown>} */
   const body = { contents };
   if (systemText) body.systemInstruction = { parts: [{ text: systemText }] };
   if (tooling) body.tools = tooling;
@@ -296,11 +372,14 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   let textOut = '';
+  /** @type {ToolCall[]} */
   const collectedToolCalls = [];
   // The last chunk of a round carries a finish reason; a stream without one
   // was cut off on the way (#538). A prompt the API blocked has no candidate.
+  /** @type {string|null} */
   let rawFinishReason = null;
   let promptBlocked = false;
+  /** @type {ChatRoundResult['usage']} */
   let usage = null;
   let malformedFunctionCall = false;
 
@@ -308,6 +387,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     for await (const evt of iterSseEvents(reader, abortSignal)) {
       abortIfRequested(abortSignal);
       if (!evt.data) continue;
+      /** @type {GeminiChunk} */
       let payload;
       try { payload = JSON.parse(evt.data); } catch { continue; }
       const nextUsage = normalizeUsage(payload.usageMetadata);
@@ -374,6 +454,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     };
   }
 
+  /** @type {ChatRoundResult['finishReason']} */
   let finishReason = FINISH_REASONS.INCOMPLETE;
   if (promptBlocked) finishReason = FINISH_REASONS.CONTENT_FILTER;
   else if (rawFinishReason) {
@@ -383,6 +464,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     });
   }
 
+  /** @type {AssistantMessage} */
   const message = {
     role: 'assistant',
     content: textOut.length > 0 ? textOut : collectedToolCalls.length ? null : '',
@@ -408,7 +490,9 @@ module.exports = {
   // The levels depend on the model generation (#994); see reasoningLevelsOf.
   reasoning: {
     levels: reasoningLevelsOf,
+    /** @param {string} model */
     defaultLevel: (model) => (reasoningLevelsOf(model).includes('medium') ? 'medium' : 'high'),
+    /** @param {string} model */
     appliesTo: (model) => reasoningLevelsOf(model).length > 0,
   },
   apiBase: API_BASE,

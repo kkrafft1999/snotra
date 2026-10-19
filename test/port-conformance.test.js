@@ -106,11 +106,15 @@ test('every adapter factory names the port it implements', () => {
 test('the type check covers the core, the ports, the contracts and the adapters', () => {
   // tsconfig.json is JSONC; its comments are whole lines.
   const config = JSON.parse(read('tsconfig.json').replace(/^\s*\/\/.*$/gm, ''));
-  for (const dir of ['src/application', 'src/main/ports', 'src/main/adapters', 'src/main/remote', 'src/shared/contracts']) {
-    assert.ok(config.include.includes(`${dir}/**/*.js`), `${dir} fell out of the include list`);
+  // The three source trees are included as a whole (#1098); `exclude` names
+  // the files that are not typed yet, and none of those may be a port,
+  // an adapter or a service that implements one.
+  for (const tree of ['src/application', 'src/main', 'src/shared']) {
+    assert.ok(config.include.includes(`${tree}/**/*.js`), `${tree} fell out of the include list`);
   }
-  for (const file of IMPLEMENTING_SERVICES) {
-    assert.ok(config.include.includes(file), `${file} implements a port and fell out of the include list`);
+  const excluded = new Set(config.exclude || []);
+  for (const file of [...PORT_DIRS.flatMap(jsFiles), ...ADAPTER_DIRS.flatMap(jsFiles), ...IMPLEMENTING_SERVICES]) {
+    assert.ok(!excluded.has(file), `${file} is a port, an adapter or implements a port and fell out of the type check`);
   }
   assert.equal(config.compilerOptions.checkJs, true);
   assert.equal(config.compilerOptions.noEmit, true, 'the app has no build step; tsc must not write files');

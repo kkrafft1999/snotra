@@ -17,7 +17,10 @@
 
 const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0']);
 
-/** Hostname einer Base-URL, ohne eckige Klammern der IPv6-Form. */
+/**
+ * Hostname einer Base-URL, ohne eckige Klammern der IPv6-Form.
+ * @param {unknown} baseUrl
+ */
 function endpointHost(baseUrl) {
   if (typeof baseUrl !== 'string') return '';
   const raw = baseUrl.trim();
@@ -37,7 +40,10 @@ function endpointHost(baseUrl) {
   return host.replace(/^\[|\]$/g, '').trim().toLowerCase();
 }
 
-/** true, wenn die Base-URL auf diesen Rechner zeigt (localhost, Loopback, *.local). */
+/**
+ * true, wenn die Base-URL auf diesen Rechner zeigt (localhost, Loopback, *.local).
+ * @param {unknown} baseUrl
+ */
 function isLocalEndpoint(baseUrl) {
   const host = endpointHost(baseUrl);
   if (!host) return false;

@@ -37,6 +37,7 @@ const IMAGE_FORMATS = Object.freeze(['png', 'jpeg', 'webp']);
 
 const IMAGE_BACKGROUNDS = Object.freeze(['auto', 'opaque', 'transparent']);
 
+/** @type {Readonly<Record<string, string>>} */
 const IMAGE_MIME_BY_FORMAT = Object.freeze({
   png: 'image/png',
   jpeg: 'image/jpeg',
@@ -44,6 +45,7 @@ const IMAGE_MIME_BY_FORMAT = Object.freeze({
 });
 
 /** The file extensions that match a format, the first one preferred. */
+/** @type {Readonly<Record<string, readonly string[]>>} */
 const IMAGE_EXTENSIONS_BY_FORMAT = Object.freeze({
   png: Object.freeze(['.png']),
   jpeg: Object.freeze(['.jpg', '.jpeg']),

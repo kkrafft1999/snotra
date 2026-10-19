@@ -7,25 +7,46 @@ const { LEGACY_LOCALE, isSpeechLanguage, speechLanguageFor } = require('../../sh
 
 const TRANSCRIPTIONS_URL = 'https://api.openai.com/v1/audio/transcriptions';
 
-/** The bytes of an ArrayBuffer or of any view on one — not its element values (#541). */
+/**
+ * The bytes of an ArrayBuffer or of any view on one — not its element values (#541).
+ *
+ * @param {ArrayBuffer|ArrayBufferView} payload
+ */
 function bytesOf(payload) {
   if (ArrayBuffer.isView(payload)) return Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
   return Buffer.from(payload);
 }
 
+/**
+ * @typedef {{ language?: unknown, signal?: AbortSignal, timeoutMs?: number }} TranscribeOptions
+ */
+
+/**
+ * @param {object} deps
+ * @param {typeof fetch} deps.fetchImpl
+ * @param {import('../ports/credential-port').CredentialPort} deps.credentials
+ * @param {string} [deps.speechProviderId]
+ * @param {() => string|Promise<string>} [deps.getAppLocale]
+ */
 function createWhisperService({ fetchImpl, credentials, speechProviderId = 'openai', getAppLocale }) {
   const fetchFn = fetchImpl;
 
+  /** @param {TranscribeOptions} [options] */
   async function resolveLanguage(options) {
-    if (isSpeechLanguage(options?.language)) return options.language;
+    const language = options?.language;
+    if (isSpeechLanguage(language)) return language;
     return speechLanguageFor(getAppLocale ? await getAppLocale() : LEGACY_LOCALE);
   }
 
+  /**
+   * @param {ArrayBuffer|ArrayBufferView} audioBuffer
+   * @param {TranscribeOptions} [options]
+   */
   async function transcribeAudio(audioBuffer, options) {
     // The renderer stops long before this; checked again because the payload
     // crossed IPC and would otherwise be copied twice before Whisper refuses it (#76).
     const checked = checkTranscriptionPayload(audioBuffer);
-    if (checked.error) return { error: checked.error };
+    if ('error' in checked) return { error: checked.error };
     try {
       return await withRequestTimeout((signal) => transcribeRequest(audioBuffer, { ...options, signal }), {
         signal: options?.signal,
@@ -38,6 +59,10 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
 
   // Errors travel as keys (#310), put into words by the voice input; what the
   // API or the network said is quoted as it stands.
+  /**
+   * @param {ArrayBuffer|ArrayBufferView} audioBuffer
+   * @param {TranscribeOptions} options
+   */
   async function transcribeRequest(audioBuffer, options) {
     const apiKey = await credentials.getApiKey(speechProviderId);
     if (!apiKey) {
@@ -53,6 +78,7 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
     const fileName = isWav ? 'voice.wav' : 'voice.webm';
     const mimeType = isWav ? 'audio/wav' : 'audio/webm';
 
+    /** @type {string[]} */
     const fieldParts = [];
     fieldParts.push(
       `--${boundary}\r\nContent-Disposition: form-data; name="model"\r\n\r\nwhisper-1\r\n`
@@ -89,7 +115,8 @@ function createWhisperService({ fetchImpl, credentials, speechProviderId = 'open
     if (!res.ok) return { error: await readErrorMessage(res) };
     const json = await res.json().catch(() => null);
     if (!json) return { error: createMessage('chat.voice.failed') };
-    return { text: json.text || '' };
+    const text = typeof json === 'object' && 'text' in json ? json.text : '';
+    return { text: typeof text === 'string' ? text : '' };
   }
 
   return {

@@ -5,6 +5,8 @@
  * (`regex-search-worker.js`) übertragen werden kann.
  */
 
+/** @typedef {{ line: number, text: string, before: string[], after: string[] }} LineMatch */
+
 /** Obergrenze für die Länge eines modellgelieferten regulären Ausdrucks. */
 const SEARCH_MAX_PATTERN_CHARS = 256;
 /** Zeilen werden nur bis zu dieser Länge gegen das Muster geprüft (Issue #69, ReDoS). */
@@ -17,14 +19,20 @@ const SEARCH_MAX_MATCH_LINE_CHARS = 10000;
  * options: { contextLines, maxMatches, matchLineChars, clipChars }
  *  - matchLineChars: Zeichen, die pro Zeile höchstens gegen das Muster geprüft werden.
  *  - clipChars: Zeichen, die pro Zeile höchstens zurückgegeben werden.
+ *
+ * @param {string} text
+ * @param {RegExp} matcher
+ * @param {{ contextLines: number, maxMatches: number, matchLineChars: number, clipChars: number }} options
+ * @returns {LineMatch[]}
  */
 function collectLineMatches(text, matcher, options) {
   const contextLines = options.contextLines;
   const maxMatches = options.maxMatches;
   const matchLineChars = options.matchLineChars;
   const clipChars = options.clipChars;
-  const clip = (line) => (line.length <= clipChars ? line : `${line.slice(0, clipChars)}…`);
+  const clip = (/** @type {string} */ line) => (line.length <= clipChars ? line : `${line.slice(0, clipChars)}…`);
   const lines = text.split(/\r\n|\r|\n/);
+  /** @type {LineMatch[]} */
   const matches = [];
   for (let i = 0; i < lines.length && matches.length < maxMatches; i++) {
     const line = lines[i];
@@ -49,12 +57,16 @@ function collectLineMatches(text, matcher, options) {
  * Zeitbudget des Workers.
  *
  * @returns {string|null} Fehlertext für das Modell oder null, wenn unauffällig.
+ * @param {string} source
+ * @param {{ maxChars?: number }} [options]
  */
 function validateRegexPattern(source, { maxChars = SEARCH_MAX_PATTERN_CHARS } = {}) {
   if (source.length > maxChars) {
     return `Regular expression too long (${source.length} characters, at most ${maxChars} allowed).`;
   }
+  /** @type {{ hasUnbounded: boolean }[]} */
   const stack = [{ hasUnbounded: false }];
+  /** @type {{ hasUnbounded: boolean } | null} */
   let lastClosedGroup = null;
   let i = 0;
   while (i < source.length) {
@@ -82,12 +94,13 @@ function validateRegexPattern(source, { maxChars = SEARCH_MAX_PATTERN_CHARS } = 
       continue;
     }
     if (c === ')') {
-      const closed = stack.length > 1 ? stack.pop() : { hasUnbounded: false };
+      const closed = (stack.length > 1 ? stack.pop() : undefined) ?? { hasUnbounded: false };
       if (closed.hasUnbounded) stack[stack.length - 1].hasUnbounded = true;
       lastClosedGroup = closed;
       i += 1;
       continue;
     }
+    /** @type {boolean | null} */
     let unbounded = null;
     if (c === '*' || c === '+') {
       unbounded = true;

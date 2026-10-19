@@ -41,6 +41,14 @@ const {
 } = require('../../shared/contracts/html-preview');
 const { isOpenableUrl } = require('../../shared/contracts/links');
 
+/**
+ * @param {WorkspaceFileRead} read
+ * @returns {read is Extract<WorkspaceFileRead, { reason: string }>}
+ */
+function isRefused(read) {
+  return Boolean(read.reason);
+}
+
 const SCHEME_PREFIX = `${HTML_PREVIEW_SCHEME}:`;
 
 // What never leaves the machine. `about:` for `about:blank` frames.
@@ -69,6 +77,7 @@ const NOWHERE_PROXY = 'http://127.0.0.1:9';
 // Window coordinates beyond any screen are no position.
 const MAX_COORDINATE = 100000;
 
+/** @type {Record<string, number>} */
 const STATUS_FOR_REASON = {
   [ERRORS.OUTSIDE_WORKSPACE]: 403,
   [ERRORS.TOO_LARGE]: 413,
@@ -83,12 +92,18 @@ const HTML_PREVIEW_SCHEME_PRIVILEGES = Object.freeze({
   privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
 });
 
+/** @param {unknown} url */
 function schemeOf(url) {
   const match = /^([a-z][a-z0-9+.-]*:)/i.exec(String(url ?? ''));
   return match ? match[1].toLowerCase() : '';
 }
 
-/** The segments of an absolute path as they go into the URL, or null. */
+/**
+ * The segments of an absolute path as they go into the URL, or null.
+ *
+ * @param {string} absPath
+ * @param {string} platform
+ */
 function pathSegments(absPath, platform) {
   if (platform === 'win32') {
     const resolved = nodePath.win32.resolve(absPath);
@@ -100,6 +115,11 @@ function pathSegments(absPath, platform) {
   return nodePath.posix.resolve(absPath).split('/').slice(1).filter(Boolean);
 }
 
+/**
+ * @param {string} host
+ * @param {string} absPath
+ * @param {string} platform
+ */
 function previewUrl(host, absPath, platform) {
   const segments = pathSegments(absPath, platform);
   if (!segments) return null;
@@ -110,6 +130,10 @@ function previewUrl(host, absPath, platform) {
  * `{ host, absPath, fragment }` for a URL of the scheme, null for anything
  * else. `absPath` is null when the path cannot be a file — an encoded
  * separator, or on Windows no drive in front.
+ *
+ * @param {string} rawUrl
+ * @param {string} platform
+ * @returns {{ host: string, absPath: string|null, fragment: string }|null}
  */
 function parsePreviewUrl(rawUrl, platform) {
   let url;
@@ -120,9 +144,15 @@ function parsePreviewUrl(rawUrl, platform) {
   }
   if (url.protocol !== SCHEME_PREFIX) return null;
   const fragment = url.hash ? safeDecode(url.hash.slice(1)) ?? '' : '';
+  /** @type {{ host: string, absPath: string|null, fragment: string }} */
   const base = { host: url.host.toLowerCase(), absPath: null, fragment };
-  const segments = url.pathname.split('/').slice(1).filter(Boolean).map(safeDecode);
-  if (segments.some((segment) => segment === null || /[\\/\0]/.test(segment))) return base;
+  /** @type {string[]} */
+  const segments = [];
+  for (const raw of url.pathname.split('/').slice(1).filter(Boolean)) {
+    const segment = safeDecode(raw);
+    if (segment === null || /[\\/\0]/.test(segment)) return base;
+    segments.push(segment);
+  }
   if (platform === 'win32') {
     const [drive, ...rest] = segments;
     if (!/^[A-Za-z]:$/.test(drive ?? '')) return base;
@@ -131,6 +161,7 @@ function parsePreviewUrl(rawUrl, platform) {
   return { ...base, absPath: `/${segments.join('/')}` };
 }
 
+/** @param {string} text */
 function safeDecode(text) {
   try {
     return decodeURIComponent(text);
@@ -139,6 +170,55 @@ function safeDecode(text) {
   }
 }
 
+/**
+ * What `readWorkspaceFile` answers: the file's bytes, or the reason it is not
+ * shown (a code of HTML_PREVIEW_ERRORS) and, for a file that is too large, its size.
+ *
+ * @typedef {{ buffer: Buffer, stats: { size: number, mtimeMs: number }, reason?: undefined, size?: undefined }
+ *   | { reason: string, size?: number, buffer?: undefined, stats?: undefined }} WorkspaceFileRead
+ */
+
+/**
+ * One open page: the view and everything main knows about what it asked for.
+ *
+ * @typedef {object} PageState
+ * @property {string} host  its own origin, and the id the renderer knows it by
+ * @property {string} root
+ * @property {string} filePath
+ * @property {string} url
+ * @property {Map<string, { size: number, mtimeMs: number }>} resources  every file it loaded, as it was then
+ * @property {Set<string>} missing  files it asked for and did not find
+ * @property {Array<{ url: string, reason: string }>} blocked
+ * @property {Set<string>} blockedKeys
+ * @property {number} blockedTotal
+ * @property {ReturnType<typeof setTimeout>|null} blockedTimer
+ * @property {number} gestureAt  when the last click or key press reached the page, 0 for none
+ * @property {[number, number]|null} restoreScroll
+ * @property {boolean} unresponsive
+ * @property {number} expectedExits  render processes ended on purpose, still to be reported
+ * @property {Promise<unknown>|null} runningCheck
+ * @property {Promise<unknown>|null} queuedCheck
+ * @property {boolean} closed
+ *
+ * @typedef {PageState & { view: import('electron').WebContentsView }} Page
+ */
+
+/**
+ * @param {object} deps
+ * @param {Pick<typeof import('electron').session, 'fromPartition'>} deps.session
+ * @param {typeof import('electron').WebContentsView} deps.WebContentsView
+ * @param {Pick<import('electron').Shell, 'openExternal' | 'openPath'>} deps.shell
+ * @param {() => import('electron').BrowserWindow|null} deps.getMainWindow
+ * @param {() => string|null|undefined} deps.getWorkspaceRoot
+ * @param {(root: string, absPath: string, maxBytes: number) => Promise<WorkspaceFileRead>} deps.readWorkspaceFile
+ * @param {(absPath: string) => Promise<{ absPath?: string, error?: string }>} deps.resolveCheckedWorkspacePath
+ * @param {(absPath: string) => Promise<{ size: number, mtimeMs: number, isFile?: () => boolean }>} deps.stat
+ * @param {(payload: object) => unknown} [deps.push]
+ * @param {string} [deps.platform]
+ * @param {() => number} [deps.now]
+ * @param {() => string} [deps.newHost]
+ * @param {{ warn?: (...args: unknown[]) => void, error?: (...args: unknown[]) => void }} [deps.log]
+ */
 function createHtmlPreviewService({
   session,
   WebContentsView,
@@ -157,9 +237,13 @@ function createHtmlPreviewService({
   log = console,
 }) {
   const path = platform === 'win32' ? nodePath.win32 : nodePath.posix;
+  /** @type {Map<string, Page>} */
   const pages = new Map();
+  /** @type {Map<number, Page>} */
   const pagesByContents = new Map();
+  /** @type {Promise<import('electron').Session>|null} */
   let sessionReady = null;
+  /** @type {import('electron').BrowserWindow|null} */
   let watchedWindow = null;
 
   function setUpSession() {
@@ -171,7 +255,7 @@ function createHtmlPreviewService({
         callback({});
         return;
       }
-      const page = pagesByContents.get(details.webContentsId);
+      const page = details.webContentsId === undefined ? undefined : pagesByContents.get(details.webContentsId);
       if (page) record(page, details.url, scheme === 'file:' ? BLOCK.OUTSIDE_WORKSPACE : BLOCK.NETWORK);
       callback({ cancel: true });
     });
@@ -197,10 +281,11 @@ function createHtmlPreviewService({
 
   // ── What the page gets ──────────────────────────────────────────────────
 
+  /** @param {Request} request */
   async function serve(request) {
     const target = parsePreviewUrl(request.url, platform);
     const page = target ? pages.get(target.host) : null;
-    if (!page) return new Response(null, { status: 404 });
+    if (!target || !page) return new Response(null, { status: 404 });
     if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405 });
     if (!target.absPath) {
       // On Windows `../../..` climbs above the drive: no file path, but the
@@ -209,13 +294,14 @@ function createHtmlPreviewService({
       return new Response(null, { status: 403 });
     }
     const max = isHtmlFileName(target.absPath) ? MAX_HTML_PREVIEW_BYTES : MAX_HTML_ASSET_BYTES;
+    /** @type {WorkspaceFileRead} */
     let read;
     try {
       read = await readWorkspaceFile(page.root, target.absPath, max);
     } catch {
       read = { reason: ERRORS.NOT_FOUND };
     }
-    if (read.reason) {
+    if (isRefused(read)) {
       if (read.reason === ERRORS.NOT_FOUND) page.missing.add(target.absPath);
       record(page, describeLocal(page, target.absPath), blockReasonFor(read.reason));
       return new Response(null, { status: STATUS_FOR_REASON[read.reason] ?? 404 });
@@ -232,13 +318,19 @@ function createHtmlPreviewService({
     });
   }
 
+  /** @param {string} reason */
   function blockReasonFor(reason) {
     if (reason === ERRORS.TOO_LARGE) return BLOCK.TOO_LARGE;
     if (reason === ERRORS.OUTSIDE_WORKSPACE || reason === ERRORS.NO_WORKSPACE) return BLOCK.OUTSIDE_WORKSPACE;
     return BLOCK.NOT_FOUND;
   }
 
-  /** A local path as the notice lists it: relative to the folder, else as it is. */
+  /**
+   * A local path as the notice lists it: relative to the folder, else as it is.
+   *
+   * @param {PageState} page
+   * @param {string} absPath
+   */
   function describeLocal(page, absPath) {
     const relative = path.relative(page.root, absPath);
     const inside = relative && !relative.startsWith('..') && !path.isAbsolute(relative);
@@ -247,6 +339,11 @@ function createHtmlPreviewService({
 
   // ── What the page was refused ───────────────────────────────────────────
 
+  /**
+   * @param {PageState} page
+   * @param {unknown} url
+   * @param {string} reason
+   */
   function record(page, url, reason) {
     const text = String(url ?? '').slice(0, MAX_LISTED_URL_LENGTH);
     const key = `${reason} ${text}`;
@@ -257,6 +354,7 @@ function createHtmlPreviewService({
     scheduleBlockedPush(page);
   }
 
+  /** @param {PageState} page */
   function scheduleBlockedPush(page) {
     if (page.blockedTimer) return;
     page.blockedTimer = setTimeout(() => {
@@ -265,32 +363,43 @@ function createHtmlPreviewService({
     }, BLOCKED_PUSH_DELAY_MS);
   }
 
+  /** @param {PageState} page */
   function pushBlocked(page) {
     if (page.closed) return;
     push({ id: page.host, type: 'blocked', entries: page.blocked.slice(), total: page.blockedTotal });
   }
 
-  /** A new document: what the old one asked for is no longer of interest. */
+  /**
+   * A new document: what the old one asked for is no longer of interest.
+   *
+   * @param {PageState} page
+   */
   function resetDocument(page) {
     page.resources.clear();
     page.missing.clear();
     page.blocked = [];
     page.blockedKeys.clear();
     page.blockedTotal = 0;
-    clearTimeout(page.blockedTimer);
+    if (page.blockedTimer) clearTimeout(page.blockedTimer);
     page.blockedTimer = null;
     pushBlocked(page);
   }
 
   // ── Where the page may go ───────────────────────────────────────────────
 
+  /** @param {PageState} page */
   function consumeGesture(page) {
     const fresh = page.gestureAt > 0 && now() - page.gestureAt <= GESTURE_WINDOW_MS;
     page.gestureAt = 0;
     return fresh;
   }
 
-  /** A link the page wants followed: never inside the view, only after a click. */
+  /**
+   * A link the page wants followed: never inside the view, only after a click.
+   *
+   * @param {PageState} page
+   * @param {string} rawUrl
+   */
   function follow(page, rawUrl) {
     const gesture = consumeGesture(page);
     const target = parsePreviewUrl(rawUrl, platform);
@@ -318,13 +427,17 @@ function createHtmlPreviewService({
     record(page, rawUrl, schemeOf(rawUrl) === 'file:' ? BLOCK.OUTSIDE_WORKSPACE : BLOCK.NETWORK);
   }
 
+  /**
+   * @param {PageState} page
+   * @param {Pick<import('electron').Event<import('electron').WebContentsWillFrameNavigateEventParams>, 'preventDefault'> & { url?: string, isMainFrame?: boolean }} details
+   */
   function onWillFrameNavigate(page, details) {
     const url = details?.url ?? '';
     const target = parsePreviewUrl(url, platform);
     const own = Boolean(target && target.host === page.host && target.absPath);
     if (details?.isMainFrame) {
       // The page reloading itself stays; anything else leaves the view.
-      if (own && target.absPath === page.filePath) return;
+      if (own && target?.absPath === page.filePath) return;
       details.preventDefault?.();
       follow(page, url);
       return;
@@ -339,6 +452,7 @@ function createHtmlPreviewService({
 
   // ── The view ────────────────────────────────────────────────────────────
 
+  /** @param {import('electron').BrowserWindow} win */
   function watchWindow(win) {
     if (watchedWindow === win) return;
     watchedWindow = win;
@@ -354,6 +468,11 @@ function createHtmlPreviewService({
     });
   }
 
+  /**
+   * @param {PageState} page
+   * @param {import('electron').Session} ses
+   * @param {import('electron').BrowserWindow} win
+   */
   function createView(page, ses, win) {
     const view = new WebContentsView({
       webPreferences: {
@@ -402,6 +521,7 @@ function createHtmlPreviewService({
     // The position comes back as soon as the document is parsed, so the page
     // does not show its top while images and fonts load, and once more when
     // everything is in, since they may have moved what lies at that spot.
+    /** @param {[number, number]|null} scroll */
     const restore = (scroll) => {
       if (!scroll) return;
       const [x, y] = scroll;
@@ -436,6 +556,10 @@ function createHtmlPreviewService({
     return view;
   }
 
+  /**
+   * @param {Page} page
+   * @param {{ fragment?: string, scroll?: [number, number]|null }} [options]
+   */
   function load(page, { fragment = '', scroll = null } = {}) {
     let url = page.url;
     if (fragment) {
@@ -455,6 +579,10 @@ function createHtmlPreviewService({
    * Opens `filePath` as a page. Answers `{ ok: true, id, size, mtimeMs }`
    * or `{ ok: false, reason, size? }` with a reason of HTML_PREVIEW_ERRORS.
    */
+  /**
+   * @param {unknown} filePath
+   * @param {{ fragment?: unknown }} [options]
+   */
   async function open(filePath, { fragment = '' } = {}) {
     const root = getWorkspaceRoot();
     if (typeof root !== 'string' || !root) return { ok: false, reason: ERRORS.NO_WORKSPACE };
@@ -462,13 +590,14 @@ function createHtmlPreviewService({
       return { ok: false, reason: ERRORS.NOT_FOUND };
     }
     const absPath = path.resolve(root, filePath);
+    /** @type {WorkspaceFileRead} */
     let checked;
     try {
       checked = await readWorkspaceFile(root, absPath, MAX_HTML_PREVIEW_BYTES);
     } catch {
       checked = { reason: ERRORS.NOT_FOUND };
     }
-    if (checked.reason) {
+    if (isRefused(checked)) {
       return { ok: false, reason: checked.reason, ...(Number.isFinite(checked.size) ? { size: checked.size } : {}) };
     }
     const win = getMainWindow();
@@ -476,12 +605,12 @@ function createHtmlPreviewService({
     const host = newHost();
     const url = previewUrl(host, absPath, platform);
     if (!url) return { ok: false, reason: ERRORS.UNAVAILABLE };
-    const page = {
+    /** @type {PageState} */
+    const state = {
       host,
       root: path.resolve(root),
       filePath: absPath,
       url,
-      view: null,
       resources: new Map(),
       missing: new Set(),
       blocked: [],
@@ -496,10 +625,12 @@ function createHtmlPreviewService({
       queuedCheck: null,
       closed: false,
     };
+    /** @type {Page} */
+    let page;
     try {
       const ses = await ensureSession();
       watchWindow(win);
-      page.view = createView(page, ses, win);
+      page = Object.assign(state, { view: createView(state, ses, win) });
     } catch (err) {
       log.error?.('HTML preview: the view could not be created:', err);
       return { ok: false, reason: ERRORS.UNAVAILABLE };
@@ -510,6 +641,7 @@ function createHtmlPreviewService({
     return { ok: true, id: host, size: checked.stats.size, mtimeMs: checked.stats.mtimeMs };
   }
 
+  /** @param {string} id */
   function livePage(id) {
     const page = pages.get(id);
     if (!page || page.closed) return null;
@@ -524,6 +656,10 @@ function createHtmlPreviewService({
    * Where the view goes, in the renderer's CSS pixels; null hides it. Main
    * turns them into window coordinates with the window's zoom.
    */
+  /**
+   * @param {string} id
+   * @param {Parameters<typeof windowRect>[0]} bounds
+   */
   function setBounds(id, bounds) {
     const page = livePage(id);
     if (!page) return { ok: false };
@@ -537,11 +673,16 @@ function createHtmlPreviewService({
     return { ok: true, visible: true };
   }
 
+  /** @param {{ x?: unknown, y?: unknown, width?: unknown, height?: unknown }|null|undefined} bounds */
   function windowRect(bounds) {
     if (!bounds || typeof bounds !== 'object') return null;
     const { x, y, width, height } = bounds;
-    const sane = (v) => Number.isFinite(v) && v >= 0 && v <= MAX_COORDINATE;
-    if (![x, y, width, height].every(sane) || width < 1 || height < 1) return null;
+    /**
+     * @param {unknown} v
+     * @returns {v is number}
+     */
+    const sane = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_COORDINATE;
+    if (!sane(x) || !sane(y) || !sane(width) || !sane(height) || width < 1 || height < 1) return null;
     const win = getMainWindow();
     const zoom = win && !win.isDestroyed() ? win.webContents.getZoomFactor() : 1;
     const factor = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
@@ -556,7 +697,9 @@ function createHtmlPreviewService({
   }
 
   /** `[x, y]`, null when the page has none, 'stuck' when it does not answer. */
+  /** @param {Page} page */
   async function readScroll(page) {
+    /** @type {ReturnType<typeof setTimeout>|undefined} */
     let timer;
     const timeout = new Promise((resolve) => {
       timer = setTimeout(() => resolve('stuck'), SCROLL_READ_TIMEOUT_MS);
@@ -575,6 +718,7 @@ function createHtmlPreviewService({
    * Loads the page again, where it was scrolled to. A page that does not
    * answer — an endless loop — gets a fresh process instead of a wait.
    */
+  /** @param {string} id */
   async function reload(id) {
     const page = livePage(id);
     if (!page) return { ok: false };
@@ -597,6 +741,7 @@ function createHtmlPreviewService({
     return { ok: true };
   }
 
+  /** @param {string} absPath */
   async function statOrNull(absPath) {
     try {
       const stats = await stat(absPath);
@@ -612,6 +757,7 @@ function createHtmlPreviewService({
    * `{ ok: true, reloaded, size, mtimeMs }`, or `{ ok: false, reason, size? }`
    * when the page itself can no longer be shown.
    */
+  /** @param {string} id */
   function check(id) {
     const page = livePage(id);
     if (!page) return Promise.resolve({ ok: false, reason: ERRORS.UNAVAILABLE });
@@ -632,6 +778,10 @@ function createHtmlPreviewService({
     return page.queuedCheck;
   }
 
+  /**
+   * @param {string} id
+   * @param {Page} page
+   */
   async function compareAndReload(id, page) {
     const own = await statOrNull(page.filePath);
     if (!own) return { ok: false, reason: ERRORS.NOT_FOUND };
@@ -657,6 +807,7 @@ function createHtmlPreviewService({
     return { ok: true, reloaded: changed, size: own.size, mtimeMs: own.mtimeMs };
   }
 
+  /** @param {string} id */
   function focus(id) {
     const page = livePage(id);
     if (!page) return { ok: false };
@@ -664,12 +815,13 @@ function createHtmlPreviewService({
     return { ok: true };
   }
 
+  /** @param {string} id */
   function close(id) {
     const page = pages.get(id);
     if (!page) return { ok: false };
     page.closed = true;
     pages.delete(id);
-    clearTimeout(page.blockedTimer);
+    if (page.blockedTimer) clearTimeout(page.blockedTimer);
     const contents = page.view?.webContents;
     for (const [contentsId, candidate] of pagesByContents) {
       if (candidate === page) pagesByContents.delete(contentsId);
@@ -693,6 +845,7 @@ function createHtmlPreviewService({
   }
 
   /** "Open in browser": the file goes to the system, which picks the browser. */
+  /** @param {unknown} filePath */
   async function openInBrowser(filePath) {
     if (typeof filePath !== 'string' || !isHtmlFileName(filePath)) return { ok: false, reason: ERRORS.NOT_FOUND };
     const checked = await resolveCheckedWorkspacePath(filePath);

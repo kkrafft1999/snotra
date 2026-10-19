@@ -16,7 +16,11 @@
  * schicht bleibt laufzeitneutral und der Block damit testbar.
  */
 
-/** Maschinenname -> gelaeufiger Name. Unbekanntes bleibt unkommentiert. */
+/**
+ * Maschinenname -> gelaeufiger Name. Unbekanntes bleibt unkommentiert.
+ *
+ * @type {Readonly<Record<string, string>>}
+ */
 const PLATFORM_LABELS = Object.freeze({
   darwin: 'macOS',
   win32: 'Windows',
@@ -36,14 +40,19 @@ const WEEKDAYS = Object.freeze([
 /**
  * Tagesdatum in Ortszeit. Bewusst von Hand statt ueber `toISOString()` — das
  * rechnet nach UTC um und liefert am Abend in Mitteleuropa den Folgetag.
+ *
+ * @param {unknown} date
  */
 function formatLocalDate(date) {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
-  const pad = (value) => String(value).padStart(2, '0');
+  const pad = (/** @type {number} */ value) => String(value).padStart(2, '0');
   const iso = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
   return `${WEEKDAYS[date.getDay()]}, ${iso}`;
 }
 
+/**
+ * @param {unknown} value
+ */
 function cleanString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : '';
 }

@@ -10,6 +10,30 @@
 
 const { isMessage } = require('./message');
 const { normalizeToolPresentation } = require('./tool-presentation');
+const { isRecord } = require('../runtime/is-record');
+
+/**
+ * @typedef {import('./message').Message} Message
+ * @typedef {import('./tool-presentation').ToolPresentation} ToolPresentation
+ * @typedef {(typeof TOOL_RISK_CLASSES)[keyof typeof TOOL_RISK_CLASSES]} ToolRiskClass
+ * @typedef {(typeof TOOL_PERMISSION_MODES)[keyof typeof TOOL_PERMISSION_MODES]} ToolPermissionMode
+ * @typedef {(typeof APPROVAL_RESPONSES)[keyof typeof APPROVAL_RESPONSES]} ApprovalResponse
+ * @typedef {(typeof PERMISSION_DENIAL_REASONS)[keyof typeof PERMISSION_DENIAL_REASONS]} PermissionDenialReason
+ * @typedef {(typeof COMMAND_RULE_UNAVAILABLE_REASONS)[keyof typeof COMMAND_RULE_UNAVAILABLE_REASONS]} CommandRuleUnavailableReason
+ * @typedef {'access'|'output'|'sandbox'|'config'} ApprovalCheckpoint
+ */
+
+/**
+ * Whether `value` is one of the values of a frozen enum object.
+ *
+ * @template {string} T
+ * @param {Record<string, T>} enumObject
+ * @param {unknown} value
+ * @returns {value is T}
+ */
+function isEnumValue(enumObject, value) {
+  return Object.values(enumObject).some((entry) => entry === value);
+}
 
 // Stamped on every approval request; the renderer draws no card for another
 // value (`isToolApprovalRequestDto`). Raise it when a card of the old shape
@@ -256,42 +280,67 @@ const PERMISSION_DENIED_TOOL_RESULT_MESSAGES = Object.freeze({
     'The command stopped waiting for the connection before the user decided.',
 });
 
+/**
+ * @param {unknown} value
+ * @returns {value is ToolRiskClass}
+ */
 function isToolRiskClass(value) {
-  return TOOL_RISK_CLASS_ORDER.includes(value);
+  return TOOL_RISK_CLASS_ORDER.some((cls) => cls === value);
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is ToolPermissionMode}
+ */
 function isToolPermissionMode(value) {
-  return Object.values(TOOL_PERMISSION_MODES).includes(value);
+  return isEnumValue(TOOL_PERMISSION_MODES, value);
 }
 
-/** Unbekannte Modi ergeben immer `smart` (Konzept §3). */
+/**
+ * Unbekannte Modi ergeben immer `smart` (Konzept §3).
+ *
+ * @param {unknown} raw
+ * @returns {ToolPermissionMode}
+ */
 function normalizeToolPermissionMode(raw) {
   return isToolPermissionMode(raw) ? raw : DEFAULT_TOOL_PERMISSION_MODE;
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is ApprovalResponse}
+ */
 function isApprovalResponse(value) {
-  return Object.values(APPROVAL_RESPONSES).includes(value);
+  return isEnumValue(APPROVAL_RESPONSES, value);
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {ApprovalResponse|null}
+ */
 function normalizeApprovalResponse(raw) {
   return isApprovalResponse(raw) ? raw : null;
 }
 
 /**
- * @param {any} value
- * @returns {value is string}
+ * @param {unknown} value
+ * @returns {value is PermissionDenialReason}
  */
 function isPermissionDenialReason(value) {
-  return Object.values(PERMISSION_DENIAL_REASONS).includes(value);
+  return isEnumValue(PERMISSION_DENIAL_REASONS, value);
 }
 
 /**
  * Sortierte, deduplizierte Klassenliste. Liefert null, wenn ein Eintrag
  * keine gültige Klasse ist — ein Aufruf mit ungültiger Klasse wird blockiert,
  * nie stillschweigend als `read` behandelt.
+ *
+ * @param {unknown} raw
+ * @returns {ToolRiskClass[]|null}
  */
 function normalizeRiskClasses(raw) {
   if (!Array.isArray(raw)) return null;
+  /** @type {Set<unknown>} */
   const seen = new Set();
   for (const entry of raw) {
     if (!isToolRiskClass(entry)) return null;
@@ -300,6 +349,11 @@ function normalizeRiskClasses(raw) {
   return TOOL_RISK_CLASS_ORDER.filter((cls) => seen.has(cls));
 }
 
+/**
+ * @param {unknown} raw
+ * @param {number} max
+ * @returns {string}
+ */
 function cleanShortString(raw, max) {
   if (typeof raw !== 'string') return '';
   const text = raw.trim();
@@ -314,6 +368,9 @@ function cleanShortString(raw, max) {
  * Pfadmuster einer Regel: `*` innerhalb eines Segments, `**` auch über
  * Unterverzeichnisse (Konzept §7). Trenner werden auf `/` normalisiert,
  * führende `./` und `/` entfernt. Leer oder `.` steht für „alles“ (`**`).
+ *
+ * @param {unknown} raw
+ * @returns {string|null}
  */
 function normalizeRulePathPattern(raw) {
   const text = cleanShortString(raw, MAX_PATH_PATTERN_CHARS);
@@ -350,6 +407,9 @@ const EXPANDING_WORD_START = /(?:^|\s)=/;
  * remembered — too long, empty, starting with an option, or containing a
  * character outside the allowlist. Collapsing spaces is safe precisely
  * because quotes are not allowed: there is nothing a space could be part of.
+ *
+ * @param {unknown} raw
+ * @returns {string|null}
  */
 function normalizeRememberableCommand(raw) {
   if (typeof raw !== 'string') return null;
@@ -363,6 +423,9 @@ function normalizeRememberableCommand(raw) {
 /**
  * Working folder of a command rule, relative to the workspace root with `/`
  * as separator; '' is the root itself. Null for anything that leaves it.
+ *
+ * @param {unknown} raw
+ * @returns {string|null}
  */
 function normalizeCommandCwd(raw) {
   if (raw === undefined || raw === null) return '';
@@ -377,10 +440,16 @@ function normalizeCommandCwd(raw) {
   return cwd;
 }
 
-/** Network domains of a command rule: lower case, each once, sorted. */
+/**
+ * Network domains of a command rule: lower case, each once, sorted.
+ *
+ * @param {unknown} raw
+ * @returns {string[]|null}
+ */
 function normalizeCommandDomains(raw) {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw)) return null;
+  /** @type {Set<string>} */
   const out = new Set();
   for (const entry of raw) {
     const domain = cleanShortString(entry, 253).toLowerCase();
@@ -405,9 +474,31 @@ function normalizeCommandDomains(raw) {
  * `networkDomains`. It is an allow rule for `shell_execute` in exactly one
  * workspace, with no path pattern of its own; anything else is not a command
  * rule and is dropped rather than read as a wider one.
+ *
+ * @typedef {Object} PermissionRuleFields
+ * @property {string} id
+ * @property {'allow'|'deny'} effect
+ * @property {string|null} tool
+ * @property {ToolRiskClass|null} riskClass
+ * @property {string} pathPattern
+ * @property {number} createdAt
+ * @property {string} [command]  a command rule (#121): the remembered command line
+ * @property {string} [cwd]
+ * @property {string[]} [networkDomains]
+ *
+ * A rule is global, or bound to the root of one workspace.
+ * @typedef {PermissionRuleFields & { scope: 'workspace', root: string }} WorkspaceRule
+ * @typedef {PermissionRuleFields & { scope: 'global', root: null }} GlobalRule
+ * @typedef {WorkspaceRule | GlobalRule} PermissionRule
+ *
+ * A command rule is a workspace rule that carries its command, folder and domains.
+ * @typedef {WorkspaceRule & { command: string, cwd: string, networkDomains: string[] }} CommandRule
+ *
+ * @param {unknown} raw
+ * @returns {PermissionRule|null}
  */
 function normalizePermissionRule(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   const id = cleanShortString(raw.id, MAX_RULE_ID_CHARS);
   if (!id) return null;
   const effect = raw.effect;
@@ -433,17 +524,13 @@ function normalizePermissionRule(raw) {
   }
   const pathPattern = normalizeRulePathPattern(raw.pathPattern);
   if (pathPattern === null) return null;
-  const createdAt = Number.isFinite(raw.createdAt) ? Math.round(raw.createdAt) : 0;
-  const rule = {
-    id,
-    effect,
-    scope,
-    root: scope === PERMISSION_RULE_SCOPES.WORKSPACE ? root : null,
-    tool,
-    riskClass,
-    pathPattern,
-    createdAt,
-  };
+  const createdAt =
+    typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? Math.round(raw.createdAt) : 0;
+  const fields = { id, effect, tool, riskClass, pathPattern, createdAt };
+  /** @type {PermissionRule} */
+  const rule = scope === PERMISSION_RULE_SCOPES.WORKSPACE && root
+    ? { ...fields, scope, root }
+    : { ...fields, scope: PERMISSION_RULE_SCOPES.GLOBAL, root: null };
   if (raw.command === undefined || raw.command === null) return rule;
   const command = normalizeRememberableCommand(raw.command);
   const cwd = normalizeCommandCwd(raw.cwd);
@@ -462,14 +549,25 @@ function normalizePermissionRule(raw) {
   return { ...rule, command, cwd, networkDomains };
 }
 
+/**
+ * @param {unknown} rule
+ * @returns {rule is CommandRule}
+ */
 function isCommandRule(rule) {
-  return !!rule && typeof rule === 'object' && typeof rule.command === 'string' && rule.command.length > 0;
+  return isRecord(rule) && typeof rule.command === 'string' && rule.command.length > 0;
 }
 
-/** Bereinigt eine Regelliste; ungültige Einträge fallen weg, IDs sind eindeutig. */
+/**
+ * Bereinigt eine Regelliste; ungültige Einträge fallen weg, IDs sind eindeutig.
+ *
+ * @param {unknown} raw
+ * @returns {PermissionRule[]}
+ */
 function normalizePermissionRules(raw) {
   if (!Array.isArray(raw)) return [];
+  /** @type {PermissionRule[]} */
   const out = [];
+  /** @type {Set<string>} */
   const seen = new Set();
   for (const entry of raw) {
     if (out.length >= MAX_RULES) break;
@@ -481,10 +579,17 @@ function normalizePermissionRules(raw) {
   return out;
 }
 
-/** Nutzerdefinierte sensible Pfadmuster (Konzept §4), z. B. `personal/**`. */
+/**
+ * Nutzerdefinierte sensible Pfadmuster (Konzept §4), z. B. `personal/**`.
+ *
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
 function normalizeSensitivePathPatterns(raw) {
   if (!Array.isArray(raw)) return [];
+  /** @type {string[]} */
   const out = [];
+  /** @type {Set<string>} */
   const seen = new Set();
   for (const entry of raw) {
     if (out.length >= MAX_SENSITIVE_PATH_PATTERNS) break;
@@ -506,6 +611,7 @@ function normalizeSensitivePathPatterns(raw) {
  */
 function createPermissionDeniedToolResult({ reason, message, ruleId, riskClasses } = {}) {
   const safeReason = isPermissionDenialReason(reason) ? reason : PERMISSION_DENIAL_REASONS.POLICY_DENIED;
+  /** @type {PermissionDeniedResult} */
   const out = {
     error: 'permission_denied',
     reason: safeReason,
@@ -520,7 +626,23 @@ function createPermissionDeniedToolResult({ reason, message, ruleId, riskClasses
   return JSON.stringify(out);
 }
 
-/** Erkennt eine von createPermissionDeniedToolResult erzeugte Tool-Ausgabe. */
+/**
+ * The denial a model sees in a tool message (snake_case: it is JSON for the model).
+ *
+ * @typedef {Object} PermissionDeniedResult
+ * @property {'permission_denied'} error
+ * @property {PermissionDenialReason} reason
+ * @property {string} message
+ * @property {string} [rule_id]
+ * @property {ToolRiskClass[]} [risk_classes]
+ */
+
+/**
+ * Erkennt eine von createPermissionDeniedToolResult erzeugte Tool-Ausgabe.
+ *
+ * @param {unknown} output
+ * @returns {PermissionDeniedResult|null}
+ */
 function parsePermissionDeniedToolResult(output) {
   if (typeof output !== 'string') return null;
   try {
@@ -537,11 +659,26 @@ function parsePermissionDeniedToolResult(output) {
 /**
  * Bereinigte Beschreibung eines Zielpfads für Karte und Audit: nur Pfad,
  * Art und Sensitivitätsmarker — nie Inhalte.
+ *
+ * @typedef {Object} ApprovalTarget
+ * @property {string} path
+ * @property {'file'|'directory'|'tree'} kind
+ * @property {boolean} exists
+ * @property {boolean} sensitive
+ * @property {string} [sensitiveReason]
+ * @property {string} [recovery]
+ * @property {string} [version]  the file version the approval binds to
+ * @property {string} [skillName]
+ * @property {string} [skillPath]
+ *
+ * @param {unknown} raw
+ * @returns {ApprovalTarget|null}
  */
 function normalizeApprovalTarget(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   const targetPath = typeof raw.path === 'string' ? raw.path.slice(0, 1024) : '';
   const kind = raw.kind === 'directory' ? 'directory' : raw.kind === 'tree' ? 'tree' : 'file';
+  /** @type {ApprovalTarget} */
   const out = {
     path: targetPath,
     kind,
@@ -571,27 +708,64 @@ function normalizeApprovalTarget(raw) {
  * Every field is optional and checked here, so a caller may hand over what it
  * has; what does not fit is dropped rather than passed on.
  *
+ * @typedef {Object} ApprovalPreview
+ * @property {string} kind
+ * @property {string} text
+ * @property {boolean} truncated
+ * @property {boolean} masked
+ * @property {string} [shell]
+ * @property {boolean} [shellLogin]
+ * @property {string} [cwd]
+ * @property {string} [memoryScope]
+ * @property {string} [stdin]
+ * @property {string[]} [argv]
+ * @property {ApprovalIsolation} [isolation]
+ *
+ * @typedef {Object} ToolApprovalRequestDto
+ * @property {number} contractVersion
+ * @property {string} requestId
+ * @property {string} tool
+ * @property {ToolRiskClass[]} riskClasses
+ * @property {ApprovalTarget[]} targets
+ * @property {string} reason
+ * @property {ToolPermissionMode} mode
+ * @property {boolean} sessionAllowed
+ * @property {Message[]} [reasonParts]
+ * @property {string} [chatId]
+ * @property {ToolPresentation} [presentation]
+ * @property {Message} [sessionScope]
+ * @property {ApprovalCheckpoint} [checkpoint]
+ * @property {SandboxApproval} [sandbox]
+ * @property {true} [workspaceAllowed]
+ * @property {ConfigProposal} [config]
+ * @property {true} [alwaysAllowed]
+ * @property {CommandRuleUnavailableReason} [alwaysUnavailableReason]
+ * @property {string} [sessionScopeLabel]
+ * @property {string} [providerLabel]
+ * @property {ApprovalPreview} [preview]
+ *
  * @param {Object} [request]
  * @param {string} [request.requestId]
  * @param {string} [request.tool]
  * @param {string[]} [request.riskClasses]
- * @param {Array<object>} [request.targets]
+ * @param {Array<unknown>} [request.targets]
  * @param {string} [request.reason]
- * @param {Array<object>} [request.reasonParts]  message descriptors, see `isMessage`
+ * @param {Array<unknown>} [request.reasonParts]  message descriptors, see `isMessage`
  * @param {string} [request.mode]
  * @param {boolean} [request.sessionAllowed]
  * @param {boolean} [request.workspaceAllowed]
  * @param {string} [request.sessionScopeLabel]
- * @param {object} [request.sessionScope]  a message descriptor
+ * @param {unknown} [request.sessionScope]  a message descriptor
  * @param {string} [request.providerLabel]
- * @param {Object} [request.preview]
- * @param {Object} [request.presentation]  the tool's presentation (#1008), see tool-presentation.js
+ * @param {Record<string, unknown>} [request.preview]
+ * @param {import('./tool-presentation').ToolPresentationInput} [request.presentation]  the tool's presentation (#1008), see tool-presentation.js
  * @param {string|null} [request.chatId]
  * @param {boolean} [request.alwaysAllowed]
  * @param {string} [request.alwaysUnavailableReason]
  * @param {string} [request.checkpoint]
- * @param {object} [request.sandbox]
- * @param {object} [request.config]
+ * @param {unknown} [request.sandbox]
+ * @param {unknown} [request.config]
+ * @returns {ToolApprovalRequestDto}
  */
 function createToolApprovalRequestDto({
   requestId,
@@ -616,12 +790,13 @@ function createToolApprovalRequestDto({
   config,
 } = {}) {
   const classes = normalizeRiskClasses(riskClasses) || [];
+  /** @type {ToolApprovalRequestDto} */
   const dto = {
     contractVersion: TOOL_PERMISSIONS_CONTRACT_VERSION,
     requestId: typeof requestId === 'string' ? requestId : '',
     tool: typeof tool === 'string' ? tool.slice(0, MAX_TOOL_NAME_CHARS) : '',
     riskClasses: classes,
-    targets: Array.isArray(targets) ? targets.map(normalizeApprovalTarget).filter(Boolean) : [],
+    targets: Array.isArray(targets) ? targets.map(normalizeApprovalTarget).filter((target) => target !== null) : [],
     reason: typeof reason === 'string' ? reason.slice(0, 400) : '',
     mode: normalizeToolPermissionMode(mode),
     sessionAllowed: sessionAllowed === true,
@@ -643,7 +818,7 @@ function createToolApprovalRequestDto({
   if (isMessage(sessionScope)) dto.sessionScope = sessionScope;
   // Which question the card asks (#792): before a call, about its output, or
   // after a run the sandbox refused something in.
-  if (APPROVAL_CHECKPOINTS.includes(checkpoint)) dto.checkpoint = checkpoint;
+  if (isApprovalCheckpoint(checkpoint)) dto.checkpoint = checkpoint;
   const sandboxView = checkpoint === 'sandbox' ? sanitizeSandboxApproval(sandbox) : null;
   if (sandboxView) dto.sandbox = sandboxView;
   // "For this workspace" on a connection card (#946); the root stays in main.
@@ -654,7 +829,7 @@ function createToolApprovalRequestDto({
   // "Always allow this command in this workspace" (#121): whether the card
   // offers it, and if not, why. The rule itself stays in main.
   if (alwaysAllowed === true) dto.alwaysAllowed = true;
-  else if (Object.values(COMMAND_RULE_UNAVAILABLE_REASONS).includes(alwaysUnavailableReason)) {
+  else if (isEnumValue(COMMAND_RULE_UNAVAILABLE_REASONS, alwaysUnavailableReason)) {
     dto.alwaysUnavailableReason = alwaysUnavailableReason;
   }
   if (typeof sessionScopeLabel === 'string' && sessionScopeLabel) {
@@ -704,15 +879,41 @@ function createToolApprovalRequestDto({
 const APPROVAL_CHECKPOINTS = Object.freeze(['access', 'output', 'sandbox', 'config']);
 
 /**
+ * @param {unknown} value
+ * @returns {value is ApprovalCheckpoint}
+ */
+function isApprovalCheckpoint(value) {
+  return APPROVAL_CHECKPOINTS.some((checkpoint) => checkpoint === value);
+}
+
+/**
  * What a proposal card shows (#774): the catalogue's facts about the skill or
  * tool, and the model's reason as its own, bounded text. Main checked the
  * name against the catalogue before; here it is only bounded.
+ *
+ * @typedef {Object} ConfigProposal
+ * @property {'skill'|'tool'} kind
+ * @property {string} name
+ * @property {boolean} enable
+ * @property {string} [reason]
+ * @property {string} [description]
+ * @property {string} [descriptionKey]
+ * @property {boolean} [descriptionIsData]
+ * @property {'system'|'folder'|'user'} [origin]
+ * @property {string} [mcpServer]
+ * @property {ToolRiskClass[]} [riskClasses]
+ * @property {string} [settingsMenu]
+ *
+ * @param {unknown} raw
+ * @returns {ConfigProposal|null}
  */
 function sanitizeConfigProposal(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   if (raw.kind !== 'skill' && raw.kind !== 'tool') return null;
   if (typeof raw.name !== 'string' || !raw.name.trim() || typeof raw.enable !== 'boolean') return null;
+  /** @param {unknown} value @param {number} max */
   const text = (value, max) => (typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+  /** @type {ConfigProposal} */
   const out = { kind: raw.kind, name: raw.name.trim().slice(0, 128), enable: raw.enable };
   const reason = text(raw.reason, 300);
   if (reason) out.reason = reason;
@@ -747,11 +948,29 @@ const SANDBOX_CARD_KINDS = Object.freeze(['write', 'read', 'network']);
  * `live` marks the card about a connection that waits while the command
  * runs: it carries how long the connection has waited and which hosts the
  * run may already reach, and its run has no exit code yet.
+ *
+ * @typedef {Object} SandboxApproval
+ * @property {boolean} [before]  the card before a file tool reaches outside the open folder
+ * @property {boolean} [live]
+ * @property {number} [waitedMs]  `live`: how long the connection has waited
+ * @property {string[]} [domains]  `live`: the hosts the run may already reach
+ * @property {string} command
+ * @property {{ exitCode: number|null, durationMs: number|null, timedOut: boolean }} run
+ * @property {string} output
+ * @property {Array<{ kind: string, target: string, count: number, folder: boolean, allow: string[],
+ *   sensitive?: true }>} entries
+ * @property {Array<{ kind: string, target: string }>} others  what was refused and cannot be opened
+ * @property {string[]} raw
+ *
+ * @param {unknown} sandbox
+ * @returns {SandboxApproval|null}
  */
 function sanitizeSandboxApproval(sandbox) {
-  if (!sandbox || typeof sandbox !== 'object' || !Array.isArray(sandbox.entries)) return null;
+  if (!isRecord(sandbox) || !Array.isArray(sandbox.entries)) return null;
   const L = SANDBOX_CARD_LIMITS;
+  /** @param {unknown} value @param {number} max */
   const text = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');
+  /** @type {SandboxApproval['entries']} */
   const entries = [];
   for (const raw of sandbox.entries) {
     if (entries.length >= L.ENTRIES) break;
@@ -770,13 +989,17 @@ function sanitizeSandboxApproval(sandbox) {
     });
   }
   if (entries.length === 0) return null;
-  const run = sandbox.run && typeof sandbox.run === 'object' ? sandbox.run : {};
+  /** @type {Record<string, unknown>} */
+  const run = isRecord(sandbox.run) ? sandbox.run : {};
   // The card before a file tool reaches outside the open folder (#792, step 4).
   const before = sandbox.before === true && sandbox.live !== true ? { before: true } : {};
   const live = sandbox.live === true
     ? {
         live: true,
-        waitedMs: Number.isFinite(sandbox.waitedMs) && sandbox.waitedMs >= 0 ? Math.round(sandbox.waitedMs) : 0,
+        waitedMs:
+          typeof sandbox.waitedMs === 'number' && Number.isFinite(sandbox.waitedMs) && sandbox.waitedMs >= 0
+            ? Math.round(sandbox.waitedMs)
+            : 0,
         domains: stringList(sandbox.domains, L.DOMAINS, L.DOMAIN),
       }
     : {};
@@ -785,8 +1008,11 @@ function sanitizeSandboxApproval(sandbox) {
     ...live,
     command: text(sandbox.command, L.COMMAND),
     run: {
-      exitCode: Number.isInteger(run.exitCode) ? run.exitCode : null,
-      durationMs: Number.isFinite(run.durationMs) && run.durationMs >= 0 ? Math.round(run.durationMs) : null,
+      exitCode: typeof run.exitCode === 'number' && Number.isInteger(run.exitCode) ? run.exitCode : null,
+      durationMs:
+        typeof run.durationMs === 'number' && Number.isFinite(run.durationMs) && run.durationMs >= 0
+          ? Math.round(run.durationMs)
+          : null,
       timedOut: run.timedOut === true,
     },
     output: text(sandbox.output, L.OUTPUT),
@@ -799,6 +1025,12 @@ function sanitizeSandboxApproval(sandbox) {
   };
 }
 
+/**
+ * @param {unknown} value
+ * @param {number} maxItems
+ * @param {number} maxChars
+ * @returns {string[]}
+ */
 function stringList(value, maxItems, maxChars) {
   return (Array.isArray(value) ? value : [])
     .filter((entry) => typeof entry === 'string' && entry)
@@ -809,12 +1041,27 @@ function stringList(value, maxItems, maxChars) {
 /** A program allowance on the card (#408): what it adds, or why it stays off. */
 const ALLOWANCE_SKIP_REASONS = new Set(['compound', 'expansion', 'otherFile']);
 
+/**
+ * How an execution tool's run is isolated (#329): the domains it may reach and
+ * the program allowance that applies; or why it is not isolated.
+ *
+ * @typedef {{ isolated: true, domains: string[],
+ *   allowance?: { program: string, path: string, writePaths: string[], trustd: boolean },
+ *   allowanceSkipped?: { program: string, reason: string } }
+ *   | { isolated: false, reason: string, missing: string[] }} ApprovalIsolation
+ */
+
+/**
+ * @param {unknown} isolation
+ * @returns {ApprovalIsolation|null}
+ */
 function sanitizeIsolation(isolation) {
-  if (!isolation || typeof isolation !== 'object') return null;
+  if (!isRecord(isolation)) return null;
   if (isolation.isolated === true) {
+    /** @type {Extract<ApprovalIsolation, { isolated: true }>} */
     const out = { isolated: true, domains: stringList(isolation.domains, 20, 253) };
     const allowance = isolation.allowance;
-    if (allowance && typeof allowance === 'object' && typeof allowance.program === 'string' && allowance.program) {
+    if (isRecord(allowance) && typeof allowance.program === 'string' && allowance.program) {
       out.allowance = {
         program: allowance.program.slice(0, 255),
         path: typeof allowance.path === 'string' ? allowance.path.slice(0, 1024) : '',
@@ -823,8 +1070,8 @@ function sanitizeIsolation(isolation) {
       };
     }
     const skipped = isolation.allowanceSkipped;
-    if (!out.allowance && skipped && typeof skipped === 'object' && typeof skipped.program === 'string'
-      && skipped.program && ALLOWANCE_SKIP_REASONS.has(skipped.reason)) {
+    if (!out.allowance && isRecord(skipped) && typeof skipped.program === 'string'
+      && skipped.program && typeof skipped.reason === 'string' && ALLOWANCE_SKIP_REASONS.has(skipped.reason)) {
       out.allowanceSkipped = { program: skipped.program.slice(0, 255), reason: skipped.reason };
     }
     return out;
@@ -836,10 +1083,13 @@ function sanitizeIsolation(isolation) {
   };
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is ToolApprovalRequestDto}
+ */
 function isToolApprovalRequestDto(value) {
   return (
-    !!value &&
-    typeof value === 'object' &&
+    isRecord(value) &&
     value.contractVersion === TOOL_PERMISSIONS_CONTRACT_VERSION &&
     typeof value.requestId === 'string' &&
     value.requestId.length > 0 &&
@@ -853,12 +1103,16 @@ function isToolApprovalRequestDto(value) {
  * Antwort des Renderers auf eine Anfrage: nur ID und Entscheidung, nie
  * Argumente — and on a sandbox card (#792), which of the offered paths each
  * resource is opened at. Main checks them against what the card offered.
+ *
+ * @param {unknown} raw
+ * @returns {{ requestId: string, response: ApprovalResponse, sandboxPaths?: string[] }|null}
  */
 function normalizeToolApprovalResponse(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   const requestId = typeof raw.requestId === 'string' ? raw.requestId.trim() : '';
   const response = normalizeApprovalResponse(raw.response);
   if (!requestId || requestId.length > 128 || !response) return null;
+  /** @type {{ requestId: string, response: ApprovalResponse, sandboxPaths?: string[] }} */
   const out = { requestId, response };
   if (Array.isArray(raw.sandboxPaths)) {
     out.sandboxPaths = raw.sandboxPaths
@@ -867,6 +1121,18 @@ function normalizeToolApprovalResponse(raw) {
   }
   return out;
 }
+
+/**
+ * @typedef {Object} PermissionAuditEntry
+ * @property {(typeof POLICY_DECISIONS)[keyof typeof POLICY_DECISIONS]} decision
+ * @property {(typeof TOOL_EXECUTION_STATUSES)[keyof typeof TOOL_EXECUTION_STATUSES]} status
+ * @property {ToolPermissionMode} mode
+ * @property {ToolRiskClass[]} riskClasses
+ * @property {(typeof PERMISSION_DECISION_SOURCES)[keyof typeof PERMISSION_DECISION_SOURCES]} [source]
+ * @property {PermissionDenialReason} [reason]
+ * @property {string} [ruleId]
+ * @property {string[]} [targets]
+ */
 
 /**
  * Bereinigter Audit-Eintrag zu einer Entscheidung, wie er in Tool-Zeile und
@@ -881,17 +1147,19 @@ function normalizeToolApprovalResponse(raw) {
  * @param {string} [decision.mode]
  * @param {string} [decision.status]
  * @param {Array<string|{ path: string }>} [decision.targets]
+ * @returns {PermissionAuditEntry}
  */
 function createPermissionAuditEntry({ decision, source, reason, ruleId, riskClasses, mode, status, targets } = {}) {
+  /** @type {PermissionAuditEntry} */
   const out = {
-    decision: Object.values(POLICY_DECISIONS).includes(decision) ? decision : POLICY_DECISIONS.DENY,
-    status: Object.values(TOOL_EXECUTION_STATUSES).includes(status)
+    decision: isEnumValue(POLICY_DECISIONS, decision) ? decision : POLICY_DECISIONS.DENY,
+    status: isEnumValue(TOOL_EXECUTION_STATUSES, status)
       ? status
       : TOOL_EXECUTION_STATUSES.DENIED,
     mode: normalizeToolPermissionMode(mode),
     riskClasses: normalizeRiskClasses(riskClasses) || [],
   };
-  if (Object.values(PERMISSION_DECISION_SOURCES).includes(source)) out.source = source;
+  if (isEnumValue(PERMISSION_DECISION_SOURCES, source)) out.source = source;
   if (isPermissionDenialReason(reason)) out.reason = reason;
   if (typeof ruleId === 'string' && ruleId) out.ruleId = ruleId.slice(0, MAX_RULE_ID_CHARS);
   if (Array.isArray(targets)) {

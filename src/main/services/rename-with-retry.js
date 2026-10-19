@@ -20,13 +20,25 @@
  * on Windows with a locked file.
  */
 
+/**
+ * @typedef {{ platform?: string, attempts?: number, delayMs?: number }} RetryTiming
+ * @typedef {RetryTiming & { sleep?: (ms: number) => Promise<void> }} RetryOptions
+ * @typedef {RetryTiming & { sleep?: (ms: number) => void }} RetrySyncOptions
+ */
+
 const RETRYABLE_CODES = new Set(['EPERM', 'EACCES', 'EBUSY']);
 
+/**
+ * @template T
+ * @param {() => Promise<T>} operation
+ * @param {RetryOptions} [options]
+ * @returns {Promise<T>}
+ */
 async function withTransientRetry(operation, {
   platform = process.platform,
   attempts = 8,
   delayMs = 25,
-  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  sleep = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 } = {}) {
   for (let attempt = 1; ; attempt += 1) {
     try {
@@ -39,11 +51,21 @@ async function withTransientRetry(operation, {
   }
 }
 
-/** Blocks the thread for `ms` without spinning. */
+/**
+ * Blocks the thread for `ms` without spinning.
+ *
+ * @param {number} ms
+ */
 function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 
+/**
+ * @template T
+ * @param {() => T} operation
+ * @param {RetrySyncOptions} [options]
+ * @returns {T}
+ */
 function withTransientRetrySync(operation, {
   platform = process.platform,
   attempts = 8,
@@ -61,18 +83,40 @@ function withTransientRetrySync(operation, {
   }
 }
 
+/**
+ * @param {{ renameSync(from: string, to: string): void }} fs
+ * @param {string} from
+ * @param {string} to
+ * @param {RetrySyncOptions} [options]
+ */
 function renameSyncWithRetry(fs, from, to, options) {
   return withTransientRetrySync(() => fs.renameSync(from, to), options);
 }
 
+/**
+ * @param {{ rename(from: string, to: string): Promise<unknown> }} fs
+ * @param {string} from
+ * @param {string} to
+ * @param {RetryOptions} [options]
+ */
 function renameWithRetry(fs, from, to, options) {
   return withTransientRetry(() => fs.rename(from, to), options);
 }
 
+/**
+ * @param {{ readFile(file: string, encoding: 'utf8'): Promise<string> }} fs
+ * @param {string} file
+ * @param {RetryOptions} [options]
+ */
 function readFileWithRetry(fs, file, options) {
   return withTransientRetry(() => fs.readFile(file, 'utf8'), options);
 }
 
+/**
+ * @param {{ unlink(file: string): Promise<unknown> }} fs
+ * @param {string} file
+ * @param {RetryOptions} [options]
+ */
 function unlinkWithRetry(fs, file, options) {
   return withTransientRetry(() => fs.unlink(file), options);
 }

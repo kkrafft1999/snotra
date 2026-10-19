@@ -2542,17 +2542,13 @@ contracts. TypeScript sources with a build step would check more, but would
 undo the founding decision; a hand-written conformance test per port would
 check the member names and miss every parameter and return shape.
 
-**What is checked.** The include list in `tsconfig.json` is deliberate:
-`src/application/` (the core and its ports), `src/main/ports/`,
-`src/main/adapters/`, `src/main/remote/` and `src/shared/contracts/`, and by
-name the two runner services that implement their port themselves,
-`shell-runner-service.js` and `python-runner-service.js`, and the three files
-the adapters lean on most, `tool-policy-store.js`, `atomic-write.js` and
-`workspace-tool-registry.js`
-([#1098](https://github.com/kkrafft1999/snotra/issues/1098)). Every file these import is
-checked as well — `checkJs` checks the whole program — which pulls in parts of
-`src/main/services/`, `src/main/tools/` and `src/shared/`. The rest of `src/`
-is outside, and so are the tests.
+**What is checked.** `tsconfig.json` includes `src/application/`, `src/main/`
+and `src/shared/` as a whole, with an `exclude` list of the few files that are
+not typed yet ([#1098](https://github.com/kkrafft1999/snotra/issues/1098)): the
+composition root, `index.js` and the settings and tool-permission IPC
+handlers. Every file the included ones import is checked as well — `checkJs`
+checks the whole program. The tests, the renderer and the build scripts are
+outside.
 
 **How a port is held to its adapter.** Three things make the compiler compare
 them, and each is a line of JSDoc:
@@ -2587,14 +2583,11 @@ every port file and fails on any export.
 on a service that is not a port, it either derives the type from the service
 or declares the members it calls itself, from its own side. Derived with
 `ReturnType<typeof …>`, because the module is part of the checked program:
-`ToolRegistry` in `workspace-tool-adapter.js`, `ToolPolicyState` in
-`tool-policy-adapter.js` and `OutsideAccess` in `tool-call-planner.js`. A
-change in the registry or the store reaches every consumer at once, and a call
-the type does not allow fails the check. Written from the consumer's side:
-`FsService` in `tool-call-planner.js`. `fs-service.js` is outside the checked
-set, and deriving the type would pull the whole file in and put about 70
-findings in front of this step; the registry takes its `fsService` as `any`
-for the same reason. The provider modules' `presentation` is typed as
+`ToolRegistry` in `workspace-tool-adapter.js`, `FsService` at the end of
+`fs-service.js`, `ToolPolicyState` in `tool-policy-adapter.js` and
+`OutsideAccess` in `tool-call-planner.js`. A change in the registry, the file
+service or the store reaches every consumer at once, and a call the type does
+not allow fails the check. The provider modules' `presentation` is typed as
 `ProviderPresentation` in `provider-runtime-port.js`, the extras of
 `createMcpAdapter` as `Message` and `ToolDefinition`. A destructured service
 parameter with a `= null` default says `| null` in its JSDoc — otherwise the
@@ -2604,10 +2597,11 @@ compiler reads the local as `null` and rejects every use of it.
 `strictFunctionTypes`, `strictBindCallApply` and `noImplicitThis` on. That
 catches a port and its adapter disagreeing — a member, a shape, an argument
 count — and callbacks with the wrong parameters, and it keeps `null` and
-`undefined` out of places that declare a value. `noImplicitAny` is still off:
-turned on it reports about 1,900 places, most of them unannotated parameters
-in the files the checked set imports, a typing project of its own
-([#1098](https://github.com/kkrafft1999/snotra/issues/1098)).
+`undefined` out of places that declare a value. `noImplicitAny` is still off
+only while the last files — `chat-engine.js`, the permission core, the sandbox
+service, the policy store and the composition root — are annotated
+([#1098](https://github.com/kkrafft1999/snotra/issues/1098)); every other file
+already passes with it on.
 
 **Conventions** that came out of the first run:
 
@@ -2652,7 +2646,7 @@ What a test holds, as of 2026-10-18:
 | `test/application-layer-imports.test.js` | `src/application/` imports only `application/` + `shared/`, no package, no Node built-in |
 | `test/infrastructure-boundaries.test.js` | Storage without a provider-registry leak; store ports without decrypted secrets; MCP settings handlers never reach the decrypting port |
 | `test/adapter-port-shapes.test.js` | Port adapters expose only permitted methods |
-| `npm run typecheck` (`tsc`, run by `npm test`) | The core, the ports, the contracts, the adapters, the two runner services, the policy store, the atomic writer and the tool registry type-check against their JSDoc, with `strictNullChecks`; every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
+| `npm run typecheck` (`tsc`, run by `npm test`) | `src/application/`, `src/main/` and `src/shared/` type-check against their JSDoc, with `strictNullChecks` (the files on the `exclude` list in `tsconfig.json` apart); every adapter against the port it names ([#1004](https://github.com/kkrafft1999/snotra/issues/1004), see [Plain JS, checked by JSDoc](#plain-js-checked-by-jsdoc)) |
 | `test/port-conformance.test.js` | Every port has an implementation that names it, no port file exports a value, the type check is still in the gate (#1004, #1098) |
 | `test/composition-root-wiring.test.js` | `create-application.js` holds wiring only: no branch beyond "was this optional dependency handed in", no loop, comparison, `try`/`catch` or clock, at most 1,000 lines ([#1005](https://github.com/kkrafft1999/snotra/issues/1005)) |
 | `test/catch-discipline.test.js` | Every `catch` in `src/` rethrows, reports, logs or carries a comment why it may stay quiet; every `void call()` in the renderer has a `.catch`. Against a baseline that may only shrink, `test/catch-discipline-baseline.json`, per file and count; it also fails when the baseline lists more than the scan finds, so a fixed site comes off the list in the same change. A heuristic scanner, its limits are in the head of the test ([#1000](https://github.com/kkrafft1999/snotra/issues/1000)) |

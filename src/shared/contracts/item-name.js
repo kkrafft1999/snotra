@@ -55,10 +55,13 @@ const ITEM_FAILURE_REASONS = Object.freeze({
   FAILED: 'failed',
 });
 
+/**
+ * @param {string} text
+ */
 function utf8Length(text) {
   let bytes = 0;
   for (const char of text) {
-    const code = char.codePointAt(0);
+    const code = char.codePointAt(0) ?? 0;
     bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
   }
   return bytes;
@@ -70,7 +73,7 @@ function utf8Length(text) {
  */
 function validateItemName(raw) {
   const name = typeof raw === 'string' ? raw.trim() : '';
-  const refuse = (reason, extra = {}) => ({ ok: false, reason, name, ...extra });
+  const refuse = (/** @type {string} */ reason, /** @type {{ character?: string }} */ extra = {}) => ({ ok: false, reason, name, ...extra });
   if (!name) return refuse(ITEM_NAME_REASONS.EMPTY);
   if (name === '.' || name === '..') return refuse(ITEM_NAME_REASONS.DOTS);
   if (SEPARATORS.test(name)) return refuse(ITEM_NAME_REASONS.SEPARATOR);
@@ -87,6 +90,9 @@ function validateItemName(raw) {
  * Whether two names may be one entry on a file system that folds case or
  * Unicode normalization (APFS, NTFS): `Readme.md` and `README.md`, or `ü`
  * composed and decomposed.
+ *
+ * @param {unknown} a
+ * @param {unknown} b
  */
 function namesFoldEqual(a, b) {
   return String(a).normalize('NFC').toLowerCase() === String(b).normalize('NFC').toLowerCase();

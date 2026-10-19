@@ -3,17 +3,24 @@
  *
  * @typedef {Object} ProviderCatalogEntry
  * @property {string} id
- * @property {string} name
+ * @property {import('./provider-runtime-port').ProviderText} name
  * @property {string} [defaultModel]
  * @property {string} [defaultBaseUrl]
  * @property {boolean} [defaultInsecureTls]
- * @property {{ apiKey?: boolean, baseUrl?: boolean, insecureTls?: boolean }} [fields]
+ * @property {'chat'|'full'} [defaultApiStyle]
+ * @property {boolean} [defaultSupportsImages]
+ * @property {boolean} [defaultSendTools]
+ * @property {import('./provider-runtime-port').ProviderFields} fields
  * @property {import('./provider-runtime-port').ProviderPresentation} [presentation]
  * @property {string} [apiBase]
+ * @property {Object<string, import('./provider-runtime-port').ProviderCapabilityDeclaration>} [capabilities]
+ * @property {boolean} [optionalApiKey]
+ * @property {boolean} [connectionPerPreset]
+ * @property {import('../../shared/contracts/reasoning').ReasoningDeclaration} [reasoning]
  *
  * @typedef {Object} ProviderCatalogPort
  * @property {(id: string) => ProviderCatalogEntry|null} getProvider
- * @property {() => Array<ProviderCatalogEntry & { fields: object }>} listProviderMeta
+ * @property {() => ProviderCatalogEntry[]} listProviderMeta
  * @property {(id: string) => boolean} exists
  */
 

@@ -9,6 +9,11 @@
  * gibt es das App-Menue neben dem Apfel, auf Windows und Linux nicht.
  */
 
+/**
+ * @typedef {import('electron').MenuItemConstructorOptions} MenuItem
+ * @typedef {ReturnType<typeof createTranslator>} Translator
+ */
+
 const { DEFAULT_LOCALE, LOCALES, createTranslator } = require('../../shared/i18n');
 const { manualWebUrl } = require('../../shared/manual/manual-address');
 
@@ -17,6 +22,10 @@ const { manualWebUrl } = require('../../shared/manual/manual-address');
  * denselben Platz: Auf dem Mac gehoert der Eintrag ins App-Menue gleich unter
  * „Ueber“, sonst ins Menue „Ansicht“. Genau einmal — zweimal dasselbe Label in
  * der Leiste hiesse auch `CmdOrCtrl+,` zweimal vergeben.
+ *
+ * @param {() => void} openSettings
+ * @param {Translator} t
+ * @returns {MenuItem}
  */
 function createSettingsItem(openSettings, t) {
   return {
@@ -45,6 +54,21 @@ const MENU_ITEM_IDS = Object.freeze({
  * the fact. `showHiddenFiles` ticks the checkbox of the same name (#436).
  * `onCopyDiagnostics` and `onShowLog` add the two diagnostics items to the
  * Help menu (#978); without them the menu has none.
+ *
+ * @param {object} options
+ * @param {string} options.appName
+ * @param {string} [options.platform]
+ * @param {() => import('electron').BrowserWindow|null} options.getMainWindow
+ * @param {Pick<import('electron').Shell, 'openExternal'>} options.shell
+ * @param {Record<string, string>} options.PUSH
+ * @param {() => unknown} options.onCheckForUpdates
+ * @param {string} [options.locale]
+ * @param {boolean} [options.showHiddenFiles]
+ * @param {(() => unknown)|null} [options.onOpenManual]
+ * @param {((direction: 'back' | 'forward', focusedWindow: import('electron').BaseWindow|undefined) => boolean)|null} [options.routeHistoryStep]
+ * @param {(() => unknown)|null} [options.onCopyDiagnostics]
+ * @param {(() => unknown)|null} [options.onShowLog]
+ * @returns {MenuItem[]}
  */
 function createApplicationMenuTemplate({
   appName,
@@ -66,11 +90,13 @@ function createApplicationMenuTemplate({
   // es kein App-Menue, dort beginnen wir direkt mit Datei/Bearbeiten.
   const isMac = platform === 'darwin';
 
+  /** @param {string} channel */
   const send = (channel) => getMainWindow()?.webContents.send(channel);
   // Der einzige Weg in die Einstellungen ist das Menue — das Zahnrad im
   // Chat-Kopf ist weg, und mit der Chat-Spalte waere es ohnehin weggeschaltet.
   const settingsItem = createSettingsItem(() => send(PUSH.UI_OPEN_SETTINGS), t);
 
+  /** @type {MenuItem} */
   const macAppMenu = {
     label: appName,
     submenu: [
@@ -91,6 +117,7 @@ function createApplicationMenuTemplate({
   // Issue #381: "New Chat" lives where every platform keeps "New" — in the
   // File menu, which the Mac calls "Ablage" in German. Like Cmd/Ctrl+B the
   // shortcut hangs on the item, so it works with the focus anywhere.
+  /** @type {MenuItem} */
   const fileMenu = {
     label: t(isMac ? 'menu.file.mac' : 'menu.file'),
     submenu: [
@@ -102,6 +129,7 @@ function createApplicationMenuTemplate({
     ],
   };
 
+  /** @type {MenuItem} */
   const editMenu = {
     label: t('menu.edit'),
     submenu: [
@@ -123,6 +151,10 @@ function createApplicationMenuTemplate({
     ],
   };
 
+  /** @type {MenuItem[]} */
+  const settingsInView = isMac ? [] : [settingsItem, { type: 'separator' }];
+
+  /** @type {MenuItem} */
   const viewMenu = {
     label: t('menu.view'),
     submenu: [
@@ -189,7 +221,7 @@ function createApplicationMenuTemplate({
         click: () => send(PUSH.UI_TOGGLE_MARKDOWN_SOURCE),
       },
       { type: 'separator' },
-      ...(isMac ? [] : [settingsItem, { type: 'separator' }]),
+      ...settingsInView,
       { role: 'reload', label: t('menu.view.reload') },
       { role: 'forceReload', label: t('menu.view.forceReload') },
       { role: 'toggleDevTools', label: t('menu.view.devTools') },
@@ -202,18 +234,23 @@ function createApplicationMenuTemplate({
     ],
   };
 
+  /** @type {MenuItem[]} */
+  const windowTail = isMac
+    ? [{ type: 'separator' }, { role: 'front', label: t('menu.window.front') }]
+    : [{ role: 'close', label: t('menu.window.close') }];
+
+  /** @type {MenuItem} */
   const windowMenu = {
     label: t('menu.window'),
     role: 'window',
     submenu: [
       { role: 'minimize', label: t('menu.window.minimize') },
       { role: 'zoom', label: t('menu.window.zoom') },
-      ...(isMac
-        ? [{ type: 'separator' }, { role: 'front', label: t('menu.window.front') }]
-        : [{ role: 'close', label: t('menu.window.close') }]),
+      ...windowTail,
     ],
   };
 
+  /** @type {MenuItem} */
   const helpMenu = {
     label: t('menu.help'),
     role: 'help',
@@ -224,7 +261,7 @@ function createApplicationMenuTemplate({
         accelerator: 'F1',
         click: () => {
           if (onOpenManual) onOpenManual();
-          else shell.openExternal(MANUAL_URLS[locale] ?? MANUAL_URLS[DEFAULT_LOCALE]);
+          else shell.openExternal((locale ? MANUAL_URLS[locale] : undefined) ?? MANUAL_URLS[DEFAULT_LOCALE]);
         },
       },
       { type: 'separator' },

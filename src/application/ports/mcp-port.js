@@ -18,8 +18,9 @@
  * @property {string} name — Name wie vom Server gemeldet, ohne Namensraum
  * @property {string} title — Anzeigename, oft leer
  * @property {string} description
- * @property {Object} inputSchema — JSON Schema vom Server, bis auf die
+ * @property {Record<string, unknown>} inputSchema — JSON Schema vom Server, bis auf die
  *   entfernten `title`-Annotationen unverändert (#185)
+ * @property {{ destructiveHint: boolean }} annotations — nur, was die Einstufung verschärfen kann
  */
 
 /**
@@ -28,20 +29,15 @@
  * @typedef {Object} McpToolResult
  * @property {Array<{ type: string, text?: string, [key: string]: unknown }>} content
  * @property {boolean} isError — der Server meldet einen fachlichen Fehler
- * @property {Object} [structuredContent]
+ * @property {unknown} [structuredContent]
  */
 
 /**
- * @typedef {Object} McpConnectionStatus
- * @property {string} serverId
- * @property {string} label
- * @property {string} state — Wert aus MCP_CONNECTION_STATES
- * @property {number} toolCount
- * @property {string} serverName
- * @property {string} serverVersion
- * @property {string} protocolVersion
- * @property {string} error — leer, solange nichts schiefging
- * @property {string} stderr — Auszug der Serverausgabe, erklärt `error`
+ * Statuszeile einer Verbindung; the fields are described with the contract
+ * (`shared/contracts/mcp.js`). `error` is empty as long as nothing went
+ * wrong, and a catalogue message for the sentences Snotra says itself (#338).
+ *
+ * @typedef {import('../../shared/contracts/mcp').McpConnectionStatus} McpConnectionStatus
  */
 
 /**
@@ -49,7 +45,7 @@
  * @property {() => Promise<McpToolDescriptor[]>} listTools — Tools aller
  *   verbundenen Server; ein Server, der nicht startet, liefert keine Tools,
  *   lässt die übrigen aber unberührt
- * @property {(call: { serverId: string, name: string, args?: Object },
+ * @property {(call: { serverId: string, name: string, args?: Record<string, unknown> },
  *   options?: { signal?: AbortSignal, timeoutMs?: number }) => Promise<McpToolResult>} callTool
  * @property {() => McpConnectionStatus[]} describeConnections — synchron, weil
  *   die Statusanzeige nicht auf einen hängenden Server warten darf

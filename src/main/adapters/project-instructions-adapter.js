@@ -37,6 +37,7 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
   const textFiles = createEmbeddedTextFiles({ fs, path });
 
   function homeDir() {
+    /** @type {string|null|undefined} */
     let home;
     try {
       home = os && typeof os.homedir === 'function' ? os.homedir() : null;
@@ -49,8 +50,13 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
     return typeof home === 'string' && home.trim() ? path.resolve(home) : null;
   }
 
-  /** Die Quellen als Paare aus Quelle und absolutem Pfad, in Lesereihenfolge. */
+  /**
+   * Die Quellen als Paare aus Quelle und absolutem Pfad, in Lesereihenfolge.
+   *
+   * @param {unknown} workspaceRoot
+   */
   function chain(workspaceRoot) {
+    /** @type {Array<{ source: string, file: string, root?: string|null }>} */
     const targets = [];
     const root =
       typeof workspaceRoot === 'string' && workspaceRoot.trim() ? path.resolve(workspaceRoot) : null;
@@ -77,6 +83,7 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
     // Opening `~/.snotra` or `~/.agents` itself makes the project file and a
     // global one the same path. The same file twice in the prompt would be
     // paid twice and read like two instructions; the first hit stays.
+    /** @type {Set<string>} */
     const seen = new Set();
     return targets.filter(({ file }) => {
       if (seen.has(file)) return false;
@@ -85,6 +92,7 @@ function createProjectInstructionsAdapter({ fs, path, os, maxChars = MAX_PROJECT
     });
   }
 
+  /** @param {{ source: string, file: string, root?: string|null }} target */
   async function readInstructionFile({ source, file, root = null }) {
     // Fehlend, unlesbar, ein Verzeichnis statt einer Datei, ein Symlink aus
     // dem Ordner hinaus: alles derselbe Normalfall. Eine Anweisungsdatei, die

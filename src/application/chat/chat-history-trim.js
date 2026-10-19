@@ -14,6 +14,8 @@ const {
   clampHistoryCharLimit,
 } = require('../../shared/contracts/settings');
 
+/** @typedef {import('../ports/llm-port').LlmMessage} LlmMessage */
+
 const CHARS_PER_TOKEN = 4;
 const DEFAULT_HISTORY_CHAR_LIMIT = 200_000;
 // Lokale Modelle verarbeiten den Prompt um Groessenordnungen langsamer als
@@ -31,6 +33,8 @@ const TOOL_OUTPUT_PLACEHOLDER = JSON.stringify({
  * `runsLocally` is the provider's trait for this connection
  * (`resolveProviderTraits`): declared by the provider, or a server address on
  * this machine (#193).
+ *
+ * @param {boolean} [runsLocally]
  */
 function defaultHistoryCharLimit(runsLocally) {
   return runsLocally === true
@@ -38,11 +42,18 @@ function defaultHistoryCharLimit(runsLocally) {
     : DEFAULT_HISTORY_CHAR_LIMIT;
 }
 
+/**
+ * @param {{ historyCharLimit?: unknown }|null|undefined} uiPrefs
+ * @param {boolean} [runsLocally]
+ */
 function resolveHistoryCharLimit(uiPrefs, runsLocally) {
   return clampHistoryCharLimit(uiPrefs?.historyCharLimit)
     ?? defaultHistoryCharLimit(runsLocally);
 }
 
+/**
+ * @param {LlmMessage|null|undefined} message
+ */
 function estimateMessageChars(message) {
   if (!message || typeof message !== 'object') return 0;
   let chars = 24; // Rolle + Struktur-Overhead
@@ -68,6 +79,9 @@ function estimateMessageChars(message) {
   return chars;
 }
 
+/**
+ * @param {unknown} messages
+ */
 function estimateMessagesChars(messages) {
   if (!Array.isArray(messages)) return 0;
   let total = 0;
@@ -75,6 +89,9 @@ function estimateMessagesChars(messages) {
   return total;
 }
 
+/**
+ * @param {unknown} messages
+ */
 function estimateTokens(messages) {
   return Math.ceil(estimateMessagesChars(messages) / CHARS_PER_TOKEN);
 }
@@ -83,11 +100,16 @@ function estimateTokens(messages) {
  * Fenstert den vom Renderer uebergebenen Verlauf (nur user/assistant-Texte):
  * von der neuesten Nachricht rueckwaerts, bis das Budget erschoepft ist.
  * Die letzte Nachricht (die aktuelle User-Frage) bleibt immer erhalten.
+ *
+ * @param {LlmMessage[]} messages
+ * @param {number} [charLimit]
+ * @returns {{ messages: LlmMessage[], dropped: number }}
  */
 function trimHistoryMessages(messages, charLimit = DEFAULT_HISTORY_CHAR_LIMIT) {
   if (!Array.isArray(messages) || messages.length === 0) {
     return { messages: [], dropped: 0 };
   }
+  /** @type {LlmMessage[]} */
   const kept = [];
   let used = 0;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -105,6 +127,10 @@ function trimHistoryMessages(messages, charLimit = DEFAULT_HISTORY_CHAR_LIMIT) {
  * Die Ausgaben der juengsten Runde (nach der letzten Assistant-Nachricht)
  * bleiben unangetastet, ebenso alle user/assistant-Nachrichten — die
  * Nachrichtenstruktur (tool_call_id-Paarung) bleibt API-gueltig.
+ *
+ * @param {LlmMessage[]} apiMessages  changed in place
+ * @param {number} [charLimit]
+ * @returns {number} how many outputs were shortened
  */
 function truncateStaleToolOutputs(apiMessages, charLimit = DEFAULT_HISTORY_CHAR_LIMIT) {
   if (!Array.isArray(apiMessages)) return 0;
@@ -131,6 +157,8 @@ function truncateStaleToolOutputs(apiMessages, charLimit = DEFAULT_HISTORY_CHAR_
  * What goes out besides the messages (#169): the tool schemas travel in their
  * own field, and the budget has to see them — the 15 built-ins alone are
  * about 15,000 characters before a single message is written.
+ *
+ * @param {unknown} toolDefs
  */
 function estimateToolDefsChars(toolDefs) {
   if (!Array.isArray(toolDefs) || toolDefs.length === 0) return 0;
@@ -146,6 +174,9 @@ function estimateToolDefsChars(toolDefs) {
 const MIN_TOOL_OUTPUT_CHARS = 2000;
 const TOOL_MESSAGE_OVERHEAD = estimateMessageChars({ role: 'tool', content: '' });
 
+/**
+ * @param {LlmMessage[]} apiMessages
+ */
 function lastAssistantIndex(apiMessages) {
   for (let i = apiMessages.length - 1; i >= 0; i -= 1) {
     if (apiMessages[i]?.role === 'assistant') return i;
@@ -158,6 +189,9 @@ function lastAssistantIndex(apiMessages) {
  * count with the size of the placeholder they are shortened to before the next
  * request — the newest output takes precedence over older ones, the way
  * `truncateStaleToolOutputs` has always treated them.
+ *
+ * @param {LlmMessage[]} apiMessages
+ * @param {number} charLimit
  */
 function toolOutputRoom(apiMessages, charLimit) {
   if (!Array.isArray(apiMessages)) return charLimit - TOOL_MESSAGE_OVERHEAD;
@@ -174,6 +208,10 @@ function toolOutputRoom(apiMessages, charLimit) {
   return charLimit - fixed - TOOL_MESSAGE_OVERHEAD;
 }
 
+/**
+ * @param {string} content
+ * @param {number} keep
+ */
 function shortenedToolOutput(content, keep) {
   // Model channel, so English (#276).
   return JSON.stringify({
@@ -187,6 +225,10 @@ function shortenedToolOutput(content, keep) {
  * Cuts a tool output down to the room left in the budget while it is being
  * appended (#169), instead of waiting for the total to overflow. Returns
  * `null` when the output fits as it is.
+ *
+ * @param {unknown} content
+ * @param {number} room
+ * @returns {{ content: string, originalChars: number, keptChars: number }|null}
  */
 function capToolOutput(content, room) {
   if (typeof content !== 'string') return null;

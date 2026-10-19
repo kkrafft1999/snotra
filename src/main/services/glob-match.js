@@ -40,6 +40,19 @@ const CLASS = 4;
 const GLOBSTAR = Symbol('globstar');
 
 /**
+ * @typedef {{ test: (c: string) => boolean } | { from: number, to: number }} ClassItem
+ * @typedef {{ type: 1, run: number }
+ *   | { type: 2 }
+ *   | { type: 3, ch: string }
+ *   | { type: 4, negated: boolean, items: ClassItem[] }} Token
+ * @typedef {{ tokens: Token[], fixed: number, hasStar: boolean }} Segment
+ * @typedef {Segment | typeof GLOBSTAR} PatternSegment
+ * @typedef {{ dirOnly: boolean, anchored: false, basename: Segment, test: (relPath: string) => boolean }
+ *   | { dirOnly: boolean, anchored: true, segments: PatternSegment[], test: (relPath: string) => boolean }} Glob
+ * @typedef {{ names: string[][], basename: string[] }} PreparedPath
+ */
+
+/**
  * Work one `.gitignore` may cost in one listing, in matching steps. A single
  * match is bounded, but a crafted file multiplies it: 2,000 long rules against
  * 5,000 long names take about eight minutes, and one deep path against 1,000
@@ -82,6 +95,7 @@ function step() {
 }
 
 /** POSIX character classes in the C locale, as git's wildmatch knows them. */
+/** @type {Record<string, (c: string) => boolean>} */
 const POSIX_CLASSES = {
   alnum: (c) => /[A-Za-z0-9]/.test(c),
   alpha: (c) => /[A-Za-z]/.test(c),
@@ -101,6 +115,10 @@ const POSIX_CLASSES = {
  * Reads a bracket expression starting at `chars[start] === '['`. Returns the
  * token and the index behind the closing `]`, or null when the expression is
  * not complete — the caller then takes the `[` literally.
+ *
+ * @param {string[]} chars
+ * @param {number} start
+ * @returns {{ token: Token, next: number } | null}
  */
 function parseBracket(chars, start) {
   let i = start + 1;
@@ -109,6 +127,7 @@ function parseBracket(chars, start) {
     negated = true;
     i += 1;
   }
+  /** @type {ClassItem[]} */
   const items = [];
   let first = true;
   while (i < chars.length) {
@@ -141,17 +160,23 @@ function parseBracket(chars, start) {
         to = chars[i];
         i += 1;
       }
-      items.push({ from: c.codePointAt(0), to: to.codePointAt(0) });
+      items.push({ from: c.codePointAt(0) ?? 0, to: to.codePointAt(0) ?? 0 });
     } else {
-      items.push({ from: c.codePointAt(0), to: c.codePointAt(0) });
+      items.push({ from: c.codePointAt(0) ?? 0, to: c.codePointAt(0) ?? 0 });
     }
   }
   return null;
 }
 
-/** Splits a pattern into segments of tokens, at every `/` outside a bracket expression. */
+/**
+ * Splits a pattern into segments of tokens, at every `/` outside a bracket expression.
+ *
+ * @param {string} pattern
+ * @returns {Token[][]}
+ */
 function tokenize(pattern) {
   const chars = Array.from(pattern);
+  /** @type {Token[][]} */
   const segments = [[]];
   let current = segments[0];
   let i = 0;
@@ -192,19 +217,29 @@ function tokenize(pattern) {
   return segments;
 }
 
-/** A segment's tokens plus what lets a mismatch be ruled out before matching. */
+/**
+ * A segment's tokens plus what lets a mismatch be ruled out before matching.
+ *
+ * @param {Token[]} tokens
+ * @returns {Segment}
+ */
 function prepareSegment(tokens) {
   const fixed = tokens.filter((token) => token.type !== STAR).length;
   return { tokens, fixed, hasStar: fixed < tokens.length };
 }
 
+/**
+ * @param {Token} token
+ * @param {string} ch
+ */
 function matchToken(token, ch) {
   if (token.type === ANY) return true;
   if (token.type === LITERAL) return token.ch === ch;
-  const code = ch.codePointAt(0);
+  if (token.type !== CLASS) return false;
+  const code = ch.codePointAt(0) ?? 0;
   let hit = false;
   for (const item of token.items) {
-    if (item.test ? item.test(ch) : code >= item.from && code <= item.to) {
+    if ('test' in item ? item.test(ch) : code >= item.from && code <= item.to) {
       hit = true;
       break;
     }
@@ -215,6 +250,9 @@ function matchToken(token, ch) {
 /**
  * One segment against one name (an array of characters). Iterative: on a
  * mismatch only the last star takes one more character.
+ *
+ * @param {Segment} segment
+ * @param {string[]} chars
  */
 function matchSegment(segment, chars) {
   if (chars.length < segment.fixed || (!segment.hasStar && chars.length !== segment.fixed)) return false;
@@ -248,7 +286,12 @@ function matchSegment(segment, chars) {
   return p === tokens.length;
 }
 
-/** A list of segments (with GLOBSTAR entries) against a path's segments — the same algorithm one level up. */
+/**
+ * A list of segments (with GLOBSTAR entries) against a path's segments — the same algorithm one level up.
+ *
+ * @param {PatternSegment[]} segments
+ * @param {string[][]} names
+ */
 function matchSegments(segments, names) {
   let p = 0;
   let t = 0;
@@ -279,12 +322,21 @@ function matchSegments(segments, names) {
   return p === segments.length;
 }
 
-/** A path, split once for all the patterns it is tested against. */
+/**
+ * A path, split once for all the patterns it is tested against.
+ *
+ * @param {string} relPath
+ * @returns {PreparedPath}
+ */
 function preparePath(relPath) {
   const names = String(relPath).split('/').map((name) => Array.from(name));
   return { names, basename: names[names.length - 1] };
 }
 
+/**
+ * @param {Glob} glob
+ * @param {PreparedPath} prepared
+ */
 function matchPrepared(glob, prepared) {
   if (!glob.anchored) return matchSegment(glob.basename, prepared.basename);
   return matchSegments(glob.segments, prepared.names);
@@ -296,7 +348,7 @@ function matchPrepared(glob, prepared) {
  * pattern without one matches the name at any depth.
  *
  * @param {string} pattern
- * @returns {{ dirOnly: boolean, anchored: boolean, test: (relPath: string) => boolean }}
+ * @returns {Glob}
  *   `test` takes a POSIX path relative to the root and leaves `dirOnly` to the caller.
  */
 function compileGlob(pattern) {
@@ -309,11 +361,14 @@ function compileGlob(pattern) {
   const anchored = body.includes('/');
   if (body.startsWith('/')) body = body.slice(1);
   const raw = tokenize(body);
-  const glob = { dirOnly, anchored };
+  /** @type {Glob} */
+  let glob;
+  const test = (/** @type {string} */ relPath) => matchPrepared(glob, preparePath(relPath));
   if (!anchored) {
     // A name never contains `/`, so `**` there is just `*`.
-    glob.basename = prepareSegment(raw[0]);
+    glob = { dirOnly, anchored: false, basename: prepareSegment(raw[0]), test };
   } else {
+    /** @type {PatternSegment[]} */
     const segments = raw.map((tokens) =>
       tokens.length === 1 && tokens[0].type === STAR && tokens[0].run >= 2 ? GLOBSTAR : prepareSegment(tokens)
     );
@@ -321,9 +376,8 @@ function compileGlob(pattern) {
     if (segments[segments.length - 1] === GLOBSTAR) {
       segments.splice(segments.length - 1, 0, prepareSegment([{ type: STAR, run: 1 }]));
     }
-    glob.segments = segments;
+    glob = { dirOnly, anchored: true, segments, test };
   }
-  glob.test = (relPath) => matchPrepared(glob, preparePath(relPath));
   return glob;
 }
 
@@ -331,6 +385,8 @@ function compileGlob(pattern) {
  * Drops trailing whitespace unless a backslash escapes it, as git does for
  * spaces (`foo\ ` keeps one). A loop rather than `/\s+$/`, which is
  * quadratic on a long run of blanks that is not at the end.
+ *
+ * @param {string} line
  */
 function trimTrailingBlanks(line) {
   let end = line.length;
@@ -358,6 +414,7 @@ function compileGitignore(text) {
   let source = String(text);
   // git skips a UTF-8 byte order mark; without that the first rule never matches.
   if (source.charCodeAt(0) === 0xfeff) source = source.slice(1);
+  /** @type {Array<{ glob: Glob, negated: boolean }>} */
   const rules = [];
   for (const rawLine of source.split(/\r?\n/)) {
     const line = trimTrailingBlanks(rawLine);
@@ -374,10 +431,12 @@ function compileGitignore(text) {
     rules.push({ glob: compileGlob(body), negated });
   }
   if (!rules.length) return null;
-  const matcher = ({ maxSteps = GITIGNORE_MAX_STEPS, onExhausted } = {}) => {
+  const matcher = (
+    /** @type {{ maxSteps?: number, onExhausted?: () => void }} */ { maxSteps = GITIGNORE_MAX_STEPS, onExhausted } = {},
+  ) => {
     let spent = 0;
     let exhausted = false;
-    return (relPath, isDirectory) => {
+    return (/** @type {string} */ relPath, /** @type {boolean} */ isDirectory) => {
       if (exhausted) return false;
       const before = steps;
       stepLimit = before + (maxSteps - spent);

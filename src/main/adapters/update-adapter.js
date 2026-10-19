@@ -1,6 +1,7 @@
 'use strict';
 
 /**
+ * @param {ReturnType<typeof import('../services/update-service').createUpdateService>} updateService
  * @returns {import('../ports/update-port').UpdatePort}
  */
 function createUpdateAdapter(updateService) {

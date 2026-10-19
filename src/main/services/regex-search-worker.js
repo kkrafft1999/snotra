@@ -25,6 +25,7 @@ parentPort.on('message', ({ id, text, maxMatches }) => {
 `;
 
 class RegexSearchTimeoutError extends Error {
+  /** @param {number} timeBudgetMs */
   constructor(timeBudgetMs) {
     super(
       `The regular expression is too slow: it exceeded its time budget of ${Math.round(timeBudgetMs / 1000)} s. ` +
@@ -40,16 +41,30 @@ class RegexSearchTimeoutError extends Error {
  * @param {object} params
  * @param {string} params.pattern  Regex-Quelltext
  * @param {string} params.flags    Regex-Flags (ohne g/y)
- * @param {object} params.options  { contextLines, matchLineChars, clipChars } für collectLineMatches
+ * @param {{ contextLines: number, matchLineChars: number, clipChars: number }} params.options  für collectLineMatches
  * @param {number} [params.timeBudgetMs]
  */
 function createRegexSearchWorker({ pattern, flags, options, timeBudgetMs = REGEX_SEARCH_DEFAULT_TIME_BUDGET_MS }) {
   const worker = new Worker(WORKER_SOURCE, { eval: true, workerData: { pattern, flags, options } });
   let remainingMs = timeBudgetMs;
   let nextId = 0;
+  /**
+   * The search in flight; there is at most one.
+   * @type {{
+   *   id: number,
+   *   resolve: (matches: import('./search-line-matcher').LineMatch[]) => void,
+   *   reject: (reason: Error) => void,
+   *   timer: ReturnType<typeof setTimeout>,
+   *   startedAt: number,
+   * } | null}
+   */
   let pending = null;
+  /** @type {Error | null} */
   let failure = null;
 
+  /**
+   * @param {(p: NonNullable<typeof pending>) => void} fn
+   */
   function settlePending(fn) {
     const p = pending;
     pending = null;
@@ -58,7 +73,7 @@ function createRegexSearchWorker({ pattern, flags, options, timeBudgetMs = REGEX
     fn(p);
   }
 
-  worker.on('message', (msg) => {
+  worker.on('message', (/** @type {{ id: number, matches: import('./search-line-matcher').LineMatch[] }} */ msg) => {
     if (!pending || msg.id !== pending.id) return;
     settlePending((p) => {
       remainingMs -= Date.now() - p.startedAt;
@@ -70,19 +85,27 @@ function createRegexSearchWorker({ pattern, flags, options, timeBudgetMs = REGEX
     settlePending((p) => p.reject(err));
   });
   worker.on('exit', () => {
-    failure = failure || new Error('The regex worker has stopped.');
-    settlePending((p) => p.reject(failure));
+    const stopped = failure || new Error('The regex worker has stopped.');
+    failure = stopped;
+    settlePending((p) => p.reject(stopped));
   });
 
-  /** Matcht `text` im Worker; wirft RegexSearchTimeoutError, wenn das Budget aufgebraucht ist. */
+  /**
+   * Matcht `text` im Worker; wirft RegexSearchTimeoutError, wenn das Budget aufgebraucht ist.
+   *
+   * @param {string} text
+   * @param {number} maxMatches
+   * @returns {Promise<import('./search-line-matcher').LineMatch[]>}
+   */
   function search(text, maxMatches) {
     if (failure) return Promise.reject(failure);
     if (pending) return Promise.reject(new Error('The regex worker is already busy.'));
     return new Promise((resolve, reject) => {
       const id = ++nextId;
       const timer = setTimeout(() => {
-        failure = new RegexSearchTimeoutError(timeBudgetMs);
-        settlePending((p) => p.reject(failure));
+        const timedOut = new RegexSearchTimeoutError(timeBudgetMs);
+        failure = timedOut;
+        settlePending((p) => p.reject(timedOut));
         worker.terminate();
       }, Math.max(1, remainingMs));
       pending = { id, resolve, reject, timer, startedAt: Date.now() };

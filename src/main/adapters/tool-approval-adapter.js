@@ -19,10 +19,30 @@ const {
   APPROVAL_RESPONSES,
   PERMISSION_DENIAL_REASONS,
   createToolApprovalRequestDto,
+  isApprovalResponse,
   isPermissionDenialReason,
 } = require('../../shared/contracts/tool-permissions');
 const { createMessage } = require('../../shared/contracts/message');
+const { isRecord } = require('../../shared/runtime/is-record');
 
+/**
+ * @typedef {import('../../application/ports/tool-approval-port').ToolApprovalRequest} ToolApprovalRequest
+ * @typedef {import('../../application/ports/tool-approval-port').ToolApprovalOutcome} ToolApprovalOutcome
+ * @typedef {{ once?: Function, isDestroyed?: () => boolean, send?: Function }} ApprovalWindow
+ *
+ * An open request: who asked, for which chat, and how to answer the waiting call.
+ * @typedef {Object} PendingApproval
+ * @property {string|number} sessionId
+ * @property {string|null} chatId
+ * @property {ToolApprovalRequest} request
+ * @property {(outcome: ToolApprovalOutcome) => void} resolve
+ * @property {() => void} cleanup
+ */
+
+/**
+ * @param {unknown} chatId
+ * @returns {string|null}
+ */
 function chatKey(chatId) {
   return typeof chatId === 'string' && chatId ? chatId : null;
 }
@@ -31,6 +51,8 @@ function chatKey(chatId) {
  * Why an aborted request expired: the abort's own reason when it names one
  * (#792 — the command behind a sandbox card gave up waiting), otherwise the
  * general one.
+ *
+ * @param {AbortSignal|undefined} signal
  */
 function abortReason(signal) {
   return isPermissionDenialReason(signal?.reason) ? signal.reason : PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED;
@@ -40,8 +62,12 @@ function abortReason(signal) {
  * The port, plus the side the IPC layer talks to: windows subscribe, the
  * renderer answers, and main lists what is still open.
  *
+ * @param {Object} deps
+ * @param {() => string} deps.randomUUID
+ * @param {{ TOOL_APPROVAL_REQUEST: string, TOOL_APPROVAL_RESOLVED: string }} deps.PUSH
+ * @param {{ warn?: Function }} [deps.log]
  * @returns {import('../../application/ports/tool-approval-port').ToolApprovalPort & {
- *   subscribe: (sessionId: string|number, webContents: { once?: Function, isDestroyed?: () => boolean, send?: Function }) => boolean,
+ *   subscribe: (sessionId: string|number, webContents: ApprovalWindow) => boolean,
  *   unsubscribe: (sessionId: string|number) => void,
  *   respond: (sessionId: string|number, answer?: object) => { ok: boolean, error?: object, response?: string },
  *   getPendingRequest: (sessionId: string|number, requestId: string) => object|null,
@@ -51,11 +77,16 @@ function abortReason(signal) {
  * }}
  */
 function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
-  /** sessionId → webContents (nur angemeldete Fenster). */
+  /** @type {Map<string|number, ApprovalWindow>} sessionId → webContents (nur angemeldete Fenster). */
   const subscribers = new Map();
-  /** requestId → { sessionId, chatId, resolve, request, cleanup } */
+  /** @type {Map<string, PendingApproval>} requestId → the open request */
   const pending = new Map();
 
+  /**
+   * @param {ApprovalWindow|undefined} webContents
+   * @param {string} channel
+   * @param {object} payload
+   */
   function send(webContents, channel, payload) {
     if (!webContents || typeof webContents.send !== 'function') return false;
     if (typeof webContents.isDestroyed === 'function' && webContents.isDestroyed()) return false;
@@ -68,6 +99,10 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
     }
   }
 
+  /**
+   * @param {string} requestId
+   * @param {ToolApprovalOutcome} outcome
+   */
   function settle(requestId, outcome) {
     const entry = pending.get(requestId);
     if (!entry) return false;
@@ -186,15 +221,16 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
      * @param {{ requestId?: string, response?: string, ruleId?: string, sandboxPaths?: string[], workspaceStored?: boolean }} [answer]
      */
     respond(sessionId, { requestId, response, ruleId, sandboxPaths, workspaceStored } = {}) {
-      const entry = pending.get(requestId);
-      if (!entry) return { ok: false, error: createMessage('approval.error.noPending') };
+      const entry = typeof requestId === 'string' ? pending.get(requestId) : undefined;
+      if (!entry || requestId === undefined) return { ok: false, error: createMessage('approval.error.noPending') };
       if (entry.sessionId !== sessionId) return { ok: false, error: createMessage('approval.error.otherWindow') };
-      if (!Object.values(APPROVAL_RESPONSES).includes(response)) {
+      if (!isApprovalResponse(response)) {
         return { ok: false, error: createMessage('approval.error.invalidResponse') };
       }
       // A sandbox card (#792) opens paths: only those it offered, one per
       // resource; anything else is the first offer of that resource.
-      const offered = entry.request?.sandbox?.entries;
+      const sandbox = entry.request?.sandbox;
+      const offered = isRecord(sandbox) ? sandbox.entries : undefined;
       const paths = Array.isArray(offered) && response !== APPROVAL_RESPONSES.DENY
         ? {
             sandboxPaths: offered.map((e, i) => {

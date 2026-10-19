@@ -103,6 +103,9 @@ const SKILL_SUGGESTION_MODES = Object.freeze({
 
 const DEFAULT_SKILL_SUGGESTION_MODE = SKILL_SUGGESTION_MODES.LEXICAL;
 
+/**
+ * @param {unknown} value
+ */
 function isSkillSuggestionMode(value) {
   return Object.values(SKILL_SUGGESTION_MODES).includes(value);
 }

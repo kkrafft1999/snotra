@@ -144,6 +144,8 @@
  * @property {Array<object>} [sandboxLive]  connections decided while the command waited (#792)
  * @property {Array<object>} [sandboxOutside]  paths outside the open folder decided on a card (#792)
  * @property {{ originalChars: number, keptChars: number }} [shortened]  output cut to the budget (#169)
+ * @property {string} [skillPath]  a skill file reached by its absolute path, in the skill's own spelling (#427)
+ * @property {{ outcome?: string }} [configProposal]  how a `propose_config` call ended (#774)
  */
 
 /**
@@ -173,7 +175,7 @@
  *   je Lauf aufgerufen, bevor Systemprompt und Tool-Liste gebaut werden. Darf
  *   nicht werfen — ein nicht erreichbarer Server ist kein Grund, den Chat zu
  *   beenden
- * @property {(options?: ToolListOptions) => Array} getTools
+ * @property {(options?: ToolListOptions) => Array<object>} getTools
  * @property {(options?: ToolListOptions) => string} buildSystemPrompt
  * @property {(name: string) => boolean} [requiresWorkspace]  Tool braucht einen geoeffneten Ordner (Issue #96)
  * @property {(name: string) => boolean} [supportsSkillPaths]  takes `skill:` paths, and so works without a folder while a skill is on (#429)

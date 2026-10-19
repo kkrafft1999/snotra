@@ -20,6 +20,21 @@
  * the model's `search_manual` — both rank the same way.
  */
 
+/**
+ * A token of marked's lexer, as far as the search reads one.
+ *
+ * @typedef {{ type: string, raw?: string, text?: string, depth?: number, tokens?: MarkdownToken[],
+ *   header?: Array<{ tokens: MarkdownToken[] }>, rows?: Array<Array<{ tokens: MarkdownToken[] }>>,
+ *   items?: Array<{ tokens: MarkdownToken[] }> }} MarkdownToken
+ * @typedef {(markdown: string) => MarkdownToken[]} MarkdownLexer
+ *
+ * What a page is split with: marked's lexer and the help window's heading slug.
+ * @typedef {{ lexer: MarkdownLexer, slugify: (text: string) => string }} SplitTools
+ *
+ * A page as the index is built from it.
+ * @typedef {{ slug: string, title?: string, description?: string, chapter?: string|null, markdown?: string }} ManualPageSource
+ */
+
 /** Below this the list would be the whole manual. */
 const MIN_QUERY_LENGTH = 2;
 const MAX_RESULTS = 30;
@@ -38,10 +53,14 @@ const SINCE_MARKER = /\[(?:since|seit) \d+\.\d+(?:\.\d+)?\]\s*/gi;
  * Lower case without accents, `ß` as `ss`, with a map from every folded
  * character back to the original one — so that a match found in the folded
  * text can be marked in the text the reader sees.
+ *
+ * @param {unknown} value
+ * @returns {{ text: string, map: number[] }}
  */
 function fold(value) {
   const source = String(value ?? '');
   let text = '';
+  /** @type {number[]} */
   const map = [];
   for (let i = 0; i < source.length; i += 1) {
     const char = source[i];
@@ -56,7 +75,11 @@ function fold(value) {
   return { text, map };
 }
 
-/** The words of a query, folded; empty when the query is too short to search. */
+/**
+ * The words of a query, folded; empty when the query is too short to search.
+ *
+ * @param {unknown} query
+ */
 function queryTerms(query) {
   const trimmed = String(query ?? '').trim();
   if (trimmed.length < MIN_QUERY_LENGTH) return [];
@@ -65,7 +88,12 @@ function queryTerms(query) {
 
 // ── Index ───────────────────────────────────────────────────────────────────
 
-/** The readable text of inline tokens — what the rendered heading shows. */
+/**
+ * The readable text of inline tokens — what the rendered heading shows.
+ *
+ * @param {MarkdownToken[]|undefined} tokens
+ * @returns {string}
+ */
 function inlineText(tokens) {
   let out = '';
   for (const token of tokens ?? []) {
@@ -77,23 +105,30 @@ function inlineText(tokens) {
   return out;
 }
 
-/** The readable text of a block token, lists and tables included. */
+/**
+ * The readable text of a block token, lists and tables included.
+ *
+ * @param {MarkdownToken} token
+ * @returns {string}
+ */
 function blockText(token) {
   if (token.type === 'space' || token.type === 'hr') return '';
   if (token.type === 'code') return token.text ?? '';
   if (token.type === 'table') {
-    const cells = [...token.header, ...token.rows.flat()];
+    const cells = [...(token.header ?? []), ...(token.rows ?? []).flat()];
     return cells.map((cell) => inlineText(cell.tokens)).join(' · ');
   }
-  if (token.type === 'list') return token.items.map((item) => blocksText(item.tokens)).join(' ');
+  if (token.type === 'list') return (token.items ?? []).map((item) => blocksText(item.tokens)).join(' ');
   if (token.tokens) return inlineText(token.tokens);
   return token.text ?? '';
 }
 
+/** @param {MarkdownToken[]} tokens */
 function blocksText(tokens) {
   return tokens.map(blockText).filter(Boolean).join(' ');
 }
 
+/** @param {string} text */
 function clean(text) {
   return text.replace(SINCE_MARKER, '').replace(/\s+/g, ' ').trim();
 }
@@ -104,13 +139,17 @@ function clean(text) {
  * heading, a null anchor and depth 0. The anchor is the one the help window
  * gives that heading: `slugify` of its text, counted up for repeats.
  *
- * @typedef {{ heading: string, anchor: string | null, depth: number, tokens: any[] }} PageSection
+ * @typedef {{ heading: string, anchor: string | null, depth: number, tokens: MarkdownToken[] }} PageSection
+ *
+ * @param {string|undefined} markdown
+ * @param {SplitTools} tools
  */
 function pageSections(markdown, { lexer, slugify }) {
   /** @type {PageSection[]} */
   const sections = [];
   /** @type {PageSection} */
   let current = { heading: '', anchor: null, depth: 0, tokens: [] };
+  /** @type {Map<string, number>} */
   const seen = new Map();
   for (const token of lexer(markdown ?? '')) {
     if (token.type === 'heading') {
@@ -119,7 +158,7 @@ function pageSections(markdown, { lexer, slugify }) {
       const base = slugify(heading);
       const count = seen.get(base) ?? 0;
       seen.set(base, count + 1);
-      current = { heading, anchor: count === 0 ? base : `${base}-${count}`, depth: token.depth, tokens: [token] };
+      current = { heading, anchor: count === 0 ? base : `${base}-${count}`, depth: token.depth ?? 0, tokens: [token] };
     } else {
       current.tokens.push(token);
     }
@@ -132,6 +171,9 @@ function pageSections(markdown, { lexer, slugify }) {
  * Builds the index from `{ slug, title, description, chapter, markdown }` per
  * page. `lexer` is marked's, `slugify` the heading slug of the help window
  * (`headingSlug`), counted up for repeats the same way it does.
+ *
+ * @param {ManualPageSource[]} pages
+ * @param {SplitTools} tools
  */
 function buildSearchIndex(pages, { lexer, slugify }) {
   return pages.map((page) => ({
@@ -154,9 +196,20 @@ function buildSearchIndex(pages, { lexer, slugify }) {
 
 // ── Search ──────────────────────────────────────────────────────────────────
 
+/**
+ * @typedef {ReturnType<typeof buildSearchIndex>} SearchIndex
+ * @typedef {SearchIndex[number]['sections'][number]} IndexedSection
+ */
+
 const WORD_CHAR = /[\p{L}\p{N}]/u;
 
-/** How a hit at `at` sits in the text — 0 when it does not count. */
+/**
+ * How a hit at `at` sits in the text — 0 when it does not count.
+ *
+ * @param {string} haystack
+ * @param {number} at
+ * @param {string} term
+ */
 function fitAt(haystack, at, term) {
   const startsWord = at === 0 || !WORD_CHAR.test(haystack[at - 1]);
   const endsWord = at + term.length >= haystack.length || !WORD_CHAR.test(haystack[at + term.length]);
@@ -164,7 +217,12 @@ function fitAt(haystack, at, term) {
   return term.length >= MIN_INSIDE_LENGTH ? FIT.inside : 0;
 }
 
-/** The best fit of `term` anywhere in `haystack`, 0 for none. */
+/**
+ * The best fit of `term` anywhere in `haystack`, 0 for none.
+ *
+ * @param {string} haystack
+ * @param {string} term
+ */
 function bestFit(haystack, term) {
   let best = 0;
   for (let at = haystack.indexOf(term); at !== -1 && best < FIT.word; at = haystack.indexOf(term, at + 1)) {
@@ -173,6 +231,10 @@ function bestFit(haystack, term) {
   return best;
 }
 
+/**
+ * @param {IndexedSection} section
+ * @param {string[]} terms
+ */
 function sectionScore(section, terms) {
   let score = 0;
   let matched = 0;
@@ -185,12 +247,19 @@ function sectionScore(section, terms) {
   return { score, matched };
 }
 
-/** Parts of the excerpt: `{ text, match }`, the matches to be marked. */
+/**
+ * Parts of the excerpt: `{ text, match }`, the matches to be marked.
+ *
+ * @param {IndexedSection} section
+ * @param {string[]} terms
+ * @returns {Array<{ text: string, match: boolean }>}
+ */
 function excerptOf(section, terms) {
   const { text } = section;
   const folded = section.folded.text;
   if (!text) return [];
   // Every hit that counts, as ranges in the folded text.
+  /** @type {Array<[number, number]>} */
   const hits = [];
   for (const term of terms) {
     for (let at = folded.text.indexOf(term); at !== -1; at = folded.text.indexOf(term, at + term.length)) {
@@ -212,19 +281,23 @@ function excerptOf(section, terms) {
   }
 
   // The matches, as ranges in the original text, inside the window.
+  /** @type {Array<[number, number]>} */
   const ranges = [];
   for (const [from, to] of hits) {
-    const range = [folded.map[from], folded.map[to - 1] + 1];
-    if (range[0] >= start && range[1] <= end) ranges.push(range);
+    const rangeStart = folded.map[from];
+    const rangeEnd = folded.map[to - 1] + 1;
+    if (rangeStart >= start && rangeEnd <= end) ranges.push([rangeStart, rangeEnd]);
   }
   ranges.sort((a, b) => a[0] - b[0]);
+  /** @type {Array<[number, number]>} */
   const merged = [];
   for (const range of ranges) {
     const last = merged.at(-1);
     if (last && range[0] <= last[1]) last[1] = Math.max(last[1], range[1]);
-    else merged.push([...range]);
+    else merged.push([range[0], range[1]]);
   }
 
+  /** @type {Array<{ text: string, match: boolean }>} */
   const parts = [];
   if (start > 0) parts.push({ text: '… ', match: false });
   let cursor = start;
@@ -242,10 +315,15 @@ function excerptOf(section, terms) {
  * The pages that hold every word of `query`, best first, one entry per page:
  * `{ slug, title, chapter, heading, anchor, excerpt }`. `heading` and `anchor`
  * name the section the words were found in, or are null for the page's intro.
+ *
+ * @param {SearchIndex} index
+ * @param {unknown} query
+ * @param {{ limit?: number }} [options]
  */
 function searchManual(index, query, { limit = MAX_RESULTS } = {}) {
   const terms = queryTerms(query);
   if (terms.length === 0) return [];
+  /** @type {Array<{ slug: string, title: string, chapter: string|null, heading: string|null, anchor: string|null, excerpt: Array<{ text: string, match: boolean }>, score: number }>} */
   const results = [];
   for (const page of index) {
     let score = 0;
@@ -262,7 +340,7 @@ function searchManual(index, query, { limit = MAX_RESULTS } = {}) {
     }
     if (!complete) continue;
 
-    /** @type {{ section: { heading: string, anchor: string | null, [field: string]: any }, matched: number, score: number } | null} */
+    /** @type {{ section: IndexedSection, matched: number, score: number } | null} */
     let best = null;
     for (const section of page.sections) {
       const ranked = sectionScore(section, terms);

@@ -24,7 +24,7 @@ const EXECUTION_DIALOG_KEYS = Object.freeze({
 
 /**
  * @param {'shellExecutionEnabled'|'pythonExecutionEnabled'} pref
- * @param {(key: string, params?: object) => string & {}} t  a translator with `t.locale`
+ * @param {ReturnType<typeof import('../../shared/i18n').createTranslator>} t  a translator with `t.locale`
  * @param {string} platform  where there is no sandbox (Windows), the prompt says so
  */
 function executionSwitchDialog(pref, t, platform) {
@@ -44,11 +44,20 @@ function executionSwitchDialog(pref, t, platform) {
   };
 }
 
-/** An argument as a shell would need it to read as one word. */
+/**
+ * An argument as a shell would need it to read as one word.
+ *
+ * @param {string} arg
+ */
 function quoteArg(arg) {
   return /^[\w@%+=:,./-]+$/.test(arg) ? arg : JSON.stringify(arg);
 }
 
+/**
+ * @param {string} command
+ * @param {unknown} args
+ * @returns {string}
+ */
 function commandLine(command, args) {
   const line = [command, ...(Array.isArray(args) ? args : [])].map(quoteArg).join(' ');
   return line.length > COMMAND_MAX_CHARS ? `${line.slice(0, COMMAND_MAX_CHARS - 1)}…` : line;

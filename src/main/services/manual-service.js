@@ -11,22 +11,44 @@
  */
 
 const { MANUAL_WEB_BASE, manualWebUrl: webUrl } = require('../../shared/manual/manual-address');
-const { DEFAULT_LOCALE, LOCALES } = require('../../shared/i18n/locales');
+const { DEFAULT_LOCALE, isLocale } = require('../../shared/i18n/locales');
 
 const THEMES = Object.freeze(['light', 'dark']);
 const MOTIF = /^[a-z0-9-]+$/;
 
+/**
+ * @param {unknown} locale
+ * @returns {string}
+ */
 function normalizeManualLocale(locale) {
-  return LOCALES.includes(locale) ? locale : DEFAULT_LOCALE;
+  return isLocale(locale) ? locale : DEFAULT_LOCALE;
 }
 
-/** Address of a page on docs.snotra-ai.dev — every language but the root one lives under `/<code>/`. */
+/**
+ * Address of a page on docs.snotra-ai.dev — every language but the root one lives under `/<code>/`.
+ *
+ * @param {unknown} locale
+ * @param {string} [slug]
+ * @param {string} [fragment]
+ */
 function manualWebUrl(locale, slug = 'index', fragment = '') {
   return webUrl(normalizeManualLocale(locale), slug, fragment);
 }
 
-/** @typedef {{ locales: Record<string, { nav?: unknown, pages: Record<string, Record<string, any>> }> }} ManualIndex */
+/**
+ * The bundle's `index.json`. A page's entry carries what the pages list shows
+ * (`title`, `description`, `chapter`) and whatever else the bundler wrote.
+ *
+ * @typedef {{ title?: string, description?: string, chapter?: string|null } & Record<string, unknown>} ManualPageEntry
+ * @typedef {{ locales: Record<string, { nav?: unknown, pages: Record<string, ManualPageEntry> }> }} ManualIndex
+ */
 
+/**
+ * @param {object} deps
+ * @param {Pick<typeof import('fs'), 'readFileSync'>} deps.fs
+ * @param {Pick<typeof import('path'), 'join'>} deps.path
+ * @param {string} deps.bundleDir
+ */
 function createManualService({ fs, path, bundleDir }) {
   /** @type {ManualIndex | null} */
   let index = null;
@@ -40,6 +62,7 @@ function createManualService({ fs, path, bundleDir }) {
     return loaded;
   }
 
+  /** @param {unknown} locale */
   function localeIndex(locale) {
     return loadIndex().locales[normalizeManualLocale(locale)];
   }
@@ -53,11 +76,16 @@ function createManualService({ fs, path, bundleDir }) {
     }
   }
 
+  /** @param {unknown} locale */
   function getIndex(locale) {
     const { nav, pages } = localeIndex(locale);
     return { locale: normalizeManualLocale(locale), nav, pages };
   }
 
+  /**
+   * @param {unknown} locale
+   * @param {unknown} slug
+   */
   function getPage(locale, slug) {
     const normalized = normalizeManualLocale(locale);
     const { pages } = localeIndex(normalized);
@@ -68,12 +96,21 @@ function createManualService({ fs, path, bundleDir }) {
     return { slug, ...pages[slug], markdown };
   }
 
-  /** Every page of a language at once — the search indexes them in the window (#847). */
+  /**
+   * Every page of a language at once — the search indexes them in the window (#847).
+   *
+   * @param {unknown} locale
+   */
   function getAllPages(locale) {
     const normalized = normalizeManualLocale(locale);
     return Object.keys(localeIndex(normalized).pages).map((slug) => getPage(normalized, slug));
   }
 
+  /**
+   * @param {unknown} motif
+   * @param {unknown} locale
+   * @param {unknown} theme
+   */
   function getScreenshot(motif, locale, theme) {
     if (typeof motif !== 'string' || !MOTIF.test(motif)) throw new Error('Invalid screenshot motif.');
     const variant = `${motif}.${normalizeManualLocale(locale)}.${THEMES.includes(theme) ? theme : 'light'}.webp`;

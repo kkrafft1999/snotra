@@ -7,6 +7,20 @@ const { buildDiagnosticsReport } = require('./diagnostics-report');
  * Copy diagnostics and show the log (#978), from the Help menu and from the
  * background-error notice. Both ends call the same two functions, so the
  * clipboard holds the same report whichever way it was asked for.
+ *
+ * @param {object} deps
+ * @param {Pick<import('electron').App, 'getVersion'>} deps.app
+ * @param {Pick<typeof import('os'), 'release' | 'homedir'>} deps.os
+ * @param {{ platform: string, arch: string, versions: Readonly<Record<string, string|undefined>> }} [deps.processInfo]
+ * @param {{ filePath: string, tail: (count: number) => string[] }|null} deps.logFile
+ * @param {{ count?: () => number }|null} [deps.reporter]
+ * @param {Pick<import('electron').Clipboard, 'writeText'>} deps.clipboard
+ * @param {Pick<import('electron').Shell, 'showItemInFolder'>} deps.shell
+ * @param {Pick<import('electron').Dialog, 'showMessageBox'>|null} [deps.dialog]
+ * @param {() => import('electron').BrowserWindow|null} [deps.getMainWindow]
+ * @param {() => string|undefined} [deps.getLocale]
+ * @param {string} [deps.appName]
+ * @param {{ error?: (...args: unknown[]) => void }|null} [deps.log]
  */
 function createDiagnostics({
   app,
@@ -64,6 +78,7 @@ function createDiagnostics({
     const ok = copy();
     if (!dialog) return ok;
     const t = createTranslator(getLocale?.() || DEFAULT_LOCALE);
+    /** @type {import('electron').MessageBoxOptions} */
     const options = ok
       ? {
         type: 'info',

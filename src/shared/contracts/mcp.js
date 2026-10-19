@@ -21,6 +21,11 @@
 
 const { TOOL_RISK_CLASSES } = require('./tool-permissions');
 const { createMessage, isMessage } = require('./message');
+const { isRecord } = require('../runtime/is-record');
+
+/** @typedef {import('./message').Message} Message */
+/** @typedef {Record<string, unknown>} JsonSchema  A JSON Schema as a server sent it. */
+/** @typedef {'env' | 'headers'} SecretMapKindName */
 
 /**
  * Protokollversion, die im `initialize`-Handshake angeboten wird. A server may
@@ -100,6 +105,7 @@ const RESERVED_HEADER_NAMES = Object.freeze([
   'mcp-protocol-version', 'mcp-session-id', 'te', 'trailer', 'transfer-encoding', 'upgrade',
 ]);
 
+/** @param {unknown} value */
 function isValidMcpServerId(value) {
   return (
     typeof value === 'string'
@@ -110,15 +116,27 @@ function isValidMcpServerId(value) {
   );
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is string}
+ */
 function isMcpTransport(value) {
-  return MCP_TRANSPORT_LIST.includes(value);
+  return typeof value === 'string' && MCP_TRANSPORT_LIST.includes(value);
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is string}
+ */
 function isMcpConnectionState(value) {
-  return Object.values(MCP_CONNECTION_STATES).includes(value);
+  return typeof value === 'string' && Object.values(MCP_CONNECTION_STATES).includes(value);
 }
 
-/** Trimmt und kappt; alles, was kein String ist, wird zu ''. */
+/**
+ * Trimmt und kappt; alles, was kein String ist, wird zu ''.
+ * @param {unknown} value
+ * @param {number} maxChars
+ */
 function text(value, maxChars) {
   if (typeof value !== 'string') return '';
   return value.trim().slice(0, maxChars);
@@ -128,6 +146,10 @@ function text(value, maxChars) {
  * Argumentliste: Nicht-Strings fliegen raus statt den ganzen Eintrag
  * ungültig zu machen — ein `null` in einer importierten Liste soll nicht die
  * Konfiguration eines sonst brauchbaren Servers verhindern.
+ *
+ * @param {unknown} raw
+ * @param {Message[]} errors  Collects what is wrong.
+ * @returns {string[]}
  */
 function normalizeArgs(raw, errors) {
   if (raw === undefined || raw === null) return [];
@@ -135,6 +157,7 @@ function normalizeArgs(raw, errors) {
     errors.push(createMessage('mcp.error.argsNotList'));
     return [];
   }
+  /** @type {string[]} */
   const out = [];
   for (const value of raw) {
     if (out.length >= MCP_LIMITS.MAX_ARGS) {
@@ -152,13 +175,18 @@ function normalizeArgs(raw, errors) {
  * Umgebungsvariablen. Werte werden nicht gekürzt-und-gemeldet, sondern still
  * gekappt; ein API-Schlüssel ist nie so lang, und eine Fehlermeldung mit dem
  * Wert darin wäre ein Leck.
+ *
+ * @param {unknown} raw
+ * @param {Message[]} errors
+ * @returns {Object<string, string>}
  */
 function normalizeEnv(raw, errors) {
   if (raw === undefined || raw === null) return {};
-  if (typeof raw !== 'object' || Array.isArray(raw)) {
+  if (!isRecord(raw) || Array.isArray(raw)) {
     errors.push(createMessage('mcp.error.envNotObject'));
     return {};
   }
+  /** @type {Object<string, string>} */
   const out = {};
   let count = 0;
   for (const [key, value] of Object.entries(raw)) {
@@ -184,6 +212,8 @@ function normalizeEnv(raw, errors) {
  * Loopback hosts, the only ones a server may be reached on over plain `http`
  * (#341). A token sent in the clear to any other host is readable on the way;
  * one sent to this machine is not.
+ *
+ * @param {unknown} hostname
  */
 function isLoopbackHost(hostname) {
   const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
@@ -199,7 +229,8 @@ function isLoopbackHost(hostname) {
  * `fetch_url`). Credentials in the URL are refused: they would sit in the
  * configuration in plain text, where a header is stored encrypted.
  *
- * @returns {{ url: string, error: {key: string, params?: object}|null }}
+ * @param {unknown} raw
+ * @returns {{ url: string, error: Message|null }}
  */
 function normalizeMcpServerUrl(raw) {
   const value = typeof raw === 'string' ? raw.trim() : '';
@@ -226,7 +257,10 @@ function normalizeMcpServerUrl(raw) {
   return { url: parsed.href, error: null };
 }
 
-/** Does a header name stay clear of what the transport sets itself? */
+/**
+ * Does a header name stay clear of what the transport sets itself?
+ * @param {unknown} name
+ */
 function isReservedMcpHeaderName(name) {
   return RESERVED_HEADER_NAMES.includes(String(name || '').toLowerCase());
 }
@@ -236,8 +270,10 @@ function isReservedMcpHeaderName(name) {
  * server, headers of a remote one. They are stored and shown the same way
  * (see below); only their names and limits differ.
  */
+/** @type {Readonly<Record<SecretMapKindName, Readonly<{ isValidName: (key: string) => boolean, maxEntries: number, valueMaxChars: number, notObject: string, tooMany: string, nameInvalid: string, valueNotString: string, needsSecretFlag: string }>>>} */
 const SECRET_MAP_KINDS = Object.freeze({
   env: Object.freeze({
+    /** @param {string} key */
     isValidName: (key) => key.length <= MCP_LIMITS.ENV_KEY_MAX_CHARS && ENV_KEY_PATTERN.test(key),
     maxEntries: MCP_LIMITS.MAX_ENV_ENTRIES,
     valueMaxChars: MCP_LIMITS.ENV_VALUE_MAX_CHARS,
@@ -248,6 +284,7 @@ const SECRET_MAP_KINDS = Object.freeze({
     needsSecretFlag: 'mcp.error.envNeedsSecretFlag',
   }),
   headers: Object.freeze({
+    /** @param {string} key */
     isValidName: (key) => key.length <= MCP_LIMITS.HEADER_NAME_MAX_CHARS && HEADER_NAME_PATTERN.test(key),
     maxEntries: MCP_LIMITS.MAX_HEADERS,
     valueMaxChars: MCP_LIMITS.HEADER_VALUE_MAX_CHARS,
@@ -263,6 +300,11 @@ const SECRET_MAP_KINDS = Object.freeze({
  * What a header name or value must not be beyond its syntax: one the
  * transport sets itself, a second spelling of one already there, or a value
  * with a line break or control character, which no HTTP stack sends.
+ *
+ * @param {string} key
+ * @param {unknown} value
+ * @param {Set<string>} seenLower  Lower-cased names already accepted.
+ * @returns {Message|null}
  */
 function headerProblem(key, value, seenLower) {
   if (isReservedMcpHeaderName(key)) return createMessage('mcp.error.headerReserved', { name: key });
@@ -274,15 +316,23 @@ function headerProblem(key, value, seenLower) {
   return null;
 }
 
-/** Runtime headers: flat `{ Name: "value" }`, as the transport sends them. */
+/**
+ * Runtime headers: flat `{ Name: "value" }`, as the transport sends them.
+ *
+ * @param {unknown} raw
+ * @param {Message[]} errors
+ * @returns {Object<string, string>}
+ */
 function normalizeHeaders(raw, errors) {
   const kind = SECRET_MAP_KINDS.headers;
   if (raw === undefined || raw === null) return {};
-  if (typeof raw !== 'object' || Array.isArray(raw)) {
+  if (!isRecord(raw) || Array.isArray(raw)) {
     errors.push(createMessage(kind.notObject));
     return {};
   }
+  /** @type {Object<string, string>} */
   const out = {};
+  /** @type {Set<string>} */
   const seenLower = new Set();
   for (const [key, value] of Object.entries(raw)) {
     if (seenLower.size >= kind.maxEntries) {
@@ -308,9 +358,14 @@ function normalizeHeaders(raw, errors) {
   return out;
 }
 
-/** Namen abgewählter Tools — Dopplungen und Leeres fallen weg. */
+/**
+ * Namen abgewählter Tools — Dopplungen und Leeres fallen weg.
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
 function normalizeDisabledTools(raw) {
   if (!Array.isArray(raw)) return [];
+  /** @type {Set<string>} */
   const seen = new Set();
   for (const value of raw) {
     if (typeof value !== 'string') continue;
@@ -325,10 +380,15 @@ function normalizeDisabledTools(raw) {
  * die Oberflaeche die Auswahl auch dann anzeigen kann, wenn der Server
  * gerade nicht laeuft — bei einem Docker-MCP ist das der Normalfall. Die
  * Reihenfolge bleibt die des Servers.
+ *
+ * @param {unknown} raw
+ * @returns {string[]}
  */
 function normalizeKnownTools(raw) {
   if (!Array.isArray(raw)) return [];
+  /** @type {string[]} */
   const out = [];
+  /** @type {Set<string>} */
   const seen = new Set();
   for (const value of raw) {
     if (typeof value !== 'string') continue;
@@ -345,6 +405,9 @@ function normalizeKnownTools(raw) {
  * The transport an entry asks for. Missing means stdio — that is what every
  * entry stored before #341 is — unless the entry has an address and no
  * command, which only a remote server can be.
+ *
+ * @param {Record<string, unknown>} raw
+ * @returns {unknown}
  */
 function transportOf(raw) {
   if (raw.transport !== undefined && raw.transport !== null) return raw.transport;
@@ -371,6 +434,13 @@ function transportOf(raw) {
  * @property {boolean} enabled
  * @property {string[]} disabledTools
  * @property {string[]} knownTools
+ *
+ * One variable or header as the window sees it: the name and whether it is
+ * secret — the value only where it is not.
+ * @typedef {{ key: string, secret: boolean, hasValue: boolean, value?: string }} McpMaskedEntry
+ *
+ * A saved server as the window sees it: `env` and `headers` masked.
+ * @typedef {Omit<McpServerConfig, 'env' | 'headers'> & { env: McpMaskedEntry[], headers?: McpMaskedEntry[] }} McpServerView
  */
 
 /**
@@ -380,6 +450,7 @@ function transportOf(raw) {
  * @returns {{ ok: boolean, value: McpServerConfig|null, errors: import('./message').Message[] }}
  */
 function validateMcpServerConfig(raw) {
+  /** @type {Message[]} */
   const errors = [];
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return { ok: false, value: null, errors: [createMessage('mcp.error.configNotObject')] };
@@ -409,7 +480,9 @@ function validateMcpServerConfig(raw) {
   // process fields stay in the value, empty, so every reader finds the same
   // shape; a local server has no `url` or `headers` at all.
   let command = '';
+  /** @type {string[]} */
   let args = [];
+  /** @type {Object<string, string>} */
   let env = {};
   let cwd = '';
   /** @type {{ url: string, headers: Object<string, string> } | null} */
@@ -446,7 +519,10 @@ function validateMcpServerConfig(raw) {
   return { ok: errors.length === 0, value: errors.length === 0 ? value : null, errors };
 }
 
-/** Wie validateMcpServerConfig, aber nur der Wert — null, wenn ungültig. */
+/**
+ * Wie validateMcpServerConfig, aber nur der Wert — null, wenn ungültig.
+ * @param {*} raw
+ */
 function normalizeMcpServerConfig(raw) {
   return validateMcpServerConfig(raw).value;
 }
@@ -498,24 +574,30 @@ const SCHEMA_MAX_DEPTH = 32;
  * betreten wie jedes andere — nur eben unter seinem Namen.
  *
  * Arbeitet auf einer Kopie: das Eingabeobjekt gehört dem Aufrufer.
+ *
+ * @param {JsonSchema} node
+ * @param {number} [depth]
+ * @returns {JsonSchema}
  */
 function stripSchemaTitles(node, depth = 0) {
   if (!node || typeof node !== 'object' || Array.isArray(node)) return node;
   if (depth >= SCHEMA_MAX_DEPTH) return node;
 
+  /** @type {JsonSchema} */
   const out = {};
   for (const [key, value] of Object.entries(node)) {
     if (key === 'title') continue;
     if (SCHEMA_KEYWORDS_VALUE.includes(key)) {
       // `items` darf im älteren Entwurf auch eine Liste sein (Tupel-Form).
       out[key] = Array.isArray(value)
-        ? value.map((item) => stripSchemaTitles(item, depth + 1))
-        : stripSchemaTitles(value, depth + 1);
+        ? value.map((item) => stripNested(item, depth + 1))
+        : stripNested(value, depth + 1);
     } else if (SCHEMA_KEYWORDS_LIST.includes(key) && Array.isArray(value)) {
-      out[key] = value.map((item) => stripSchemaTitles(item, depth + 1));
+      out[key] = value.map((item) => stripNested(item, depth + 1));
     } else if (SCHEMA_KEYWORDS_MAP.includes(key) && value && typeof value === 'object' && !Array.isArray(value)) {
+      /** @type {JsonSchema} */
       const map = {};
-      for (const [name, sub] of Object.entries(value)) map[name] = stripSchemaTitles(sub, depth + 1);
+      for (const [name, sub] of Object.entries(value)) map[name] = stripNested(sub, depth + 1);
       out[key] = map;
     } else {
       out[key] = value;
@@ -523,6 +605,28 @@ function stripSchemaTitles(node, depth = 0) {
   }
   return out;
 }
+
+/**
+ * A value at a place where a schema stands: a schema is walked, anything else
+ * (`true`, `false` — JSON Schema allows both) stays as it is.
+ *
+ * @param {unknown} value
+ * @param {number} depth
+ * @returns {unknown}
+ */
+function stripNested(value, depth) {
+  return isRecord(value) && !Array.isArray(value) ? stripSchemaTitles(value, depth) : value;
+}
+
+/**
+ * @typedef {Object} McpToolCatalogEntry
+ * @property {string} serverId
+ * @property {string} name
+ * @property {string} title
+ * @property {string} description
+ * @property {JsonSchema} inputSchema
+ * @property {{ destructiveHint: boolean }} annotations
+ */
 
 /**
  * Ein Eintrag aus `tools/list`. Das `inputSchema` wird bewusst nicht geprüft —
@@ -534,19 +638,23 @@ function stripSchemaTitles(node, depth = 0) {
  * Angefasst wird genau eines: die `title`-Annotationen fallen weg, weil sie
  * bei Pydantic-Servern nur den Feldnamen wiederholen und in jeder Runde
  * mitbezahlt werden (Issue #185, siehe stripSchemaTitles).
+ *
+ * @param {unknown} raw
+ * @param {unknown} serverId
+ * @returns {McpToolCatalogEntry|null}
  */
 function normalizeMcpToolCatalogEntry(raw, serverId) {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  if (!isRecord(raw) || Array.isArray(raw)) return null;
   const name = text(raw.name, MCP_LIMITS.TOOL_NAME_MAX_CHARS);
   if (!name) return null;
-  const schema = raw.inputSchema && typeof raw.inputSchema === 'object' && !Array.isArray(raw.inputSchema)
+  const schema = isRecord(raw.inputSchema) && !Array.isArray(raw.inputSchema)
     ? stripSchemaTitles(raw.inputSchema)
     : { type: 'object', properties: {} };
   // Von den Annotations wird nur uebernommen, was verschaerfen kann — die
   // uebrigen Hinweise (readOnlyHint, idempotentHint, openWorldHint) waeren
   // eine Selbsteinschaetzung des Servers, die seine Einstufung mildert.
   // Genau das soll sie nicht koennen (Entscheidung zu #107).
-  const hints = raw.annotations && typeof raw.annotations === 'object' && !Array.isArray(raw.annotations)
+  const hints = isRecord(raw.annotations) && !Array.isArray(raw.annotations)
     ? raw.annotations
     : null;
   return {
@@ -559,10 +667,17 @@ function normalizeMcpToolCatalogEntry(raw, serverId) {
   };
 }
 
-/** Ganzer Katalog; ungültige Einträge und Dopplungen fallen weg. */
+/**
+ * Ganzer Katalog; ungültige Einträge und Dopplungen fallen weg.
+ * @param {unknown} raw
+ * @param {unknown} serverId
+ * @returns {McpToolCatalogEntry[]}
+ */
 function normalizeMcpToolCatalog(raw, serverId) {
   if (!Array.isArray(raw)) return [];
+  /** @type {McpToolCatalogEntry[]} */
   const out = [];
+  /** @type {Set<string>} */
   const seen = new Set();
   for (const item of raw) {
     if (out.length >= MCP_LIMITS.MAX_TOOLS) break;
@@ -578,6 +693,23 @@ function normalizeMcpToolCatalog(raw, serverId) {
  * Statuszeile einer Verbindung — das, was der Settings-Dialog (#109) anzeigt.
  * `error` und `stderr` gehören zusammen: die Meldung sagt, was schiefging,
  * der stderr-Auszug sagt warum.
+ *
+ * @typedef {Object} McpConnectionStatus
+ * @property {string} serverId
+ * @property {string} label
+ * @property {string} state             an MCP_CONNECTION_STATES value
+ * @property {number} toolCount
+ * @property {string[]} toolNames
+ * @property {string} serverName
+ * @property {string} serverVersion
+ * @property {string} protocolVersion
+ * @property {string|Message} error
+ * @property {string} stderr
+ *
+ * @param {{ serverId?: unknown, label?: unknown, state?: unknown, toolCount?: number,
+ *   toolNames?: unknown, serverName?: unknown, serverVersion?: unknown,
+ *   protocolVersion?: unknown, error?: unknown, stderr?: unknown }} [fields]
+ * @returns {McpConnectionStatus}
  */
 function createMcpConnectionStatus({
   serverId = '',
@@ -633,15 +765,26 @@ const MCP_TOOL_NAME_SEPARATOR = '__';
  */
 const MCP_QUALIFIED_NAME_MAX_CHARS = 64;
 
+/**
+ * @param {string} serverId
+ * @param {string} toolName
+ */
 function qualifiedMcpToolName(serverId, toolName) {
   return `${MCP_TOOL_NAME_PREFIX}${MCP_TOOL_NAME_SEPARATOR}${serverId}${MCP_TOOL_NAME_SEPARATOR}${toolName}`;
 }
 
+/**
+ * @param {unknown} name
+ * @returns {name is string}
+ */
 function isMcpToolName(name) {
   return typeof name === 'string' && name.startsWith(`${MCP_TOOL_NAME_PREFIX}${MCP_TOOL_NAME_SEPARATOR}`);
 }
 
-/** @returns {{ serverId: string, name: string } | null} */
+/**
+ * @param {unknown} qualified
+ * @returns {{ serverId: string, name: string } | null}
+ */
 function parseQualifiedMcpToolName(qualified) {
   if (!isMcpToolName(qualified)) return null;
   const rest = qualified.slice(MCP_TOOL_NAME_PREFIX.length + MCP_TOOL_NAME_SEPARATOR.length);
@@ -653,7 +796,10 @@ function parseQualifiedMcpToolName(qualified) {
   return { serverId, name };
 }
 
-/** Passt der zusammengesetzte Name in die Grenze der Berechtigungsregeln? */
+/**
+ * Passt der zusammengesetzte Name in die Grenze der Berechtigungsregeln?
+ * @param {unknown} qualified
+ */
 function fitsMcpToolNameLimit(qualified) {
   return typeof qualified === 'string' && qualified.length <= MCP_QUALIFIED_NAME_MAX_CHARS;
 }
@@ -673,6 +819,10 @@ function fitsMcpToolNameLimit(qualified) {
 /** @type {readonly string[]} */
 const MCP_BASE_RISK_CLASSES = Object.freeze([TOOL_RISK_CLASSES.EXECUTE, TOOL_RISK_CLASSES.EXTERNAL]);
 
+/**
+ * @param {{ destructiveHint?: unknown } | null | undefined} annotations
+ * @returns {string[]}
+ */
 function mcpRiskClassesFor(annotations) {
   const classes = [...MCP_BASE_RISK_CLASSES];
   if (annotations && typeof annotations === 'object' && annotations.destructiveHint === true) {
@@ -703,15 +853,24 @@ function mcpRiskClassesFor(annotations) {
  * Eingabeform beim Speichern: was die Oberflaeche (#109) schickt. The headers
  * of a remote server (#341) take the same form as `env`, so they go through
  * the same code with their own names and limits.
+ *
+ * @typedef {{ key: string, secret: boolean, value: string|null, keep: boolean }} McpSecretInputEntry
+ *
+ * @param {unknown} raw
+ * @param {SecretMapKindName} kindName
+ * @returns {{ entries: McpSecretInputEntry[], errors: Message[] }}
  */
 function normalizeSecretMapInput(raw, kindName) {
   const kind = SECRET_MAP_KINDS[kindName];
+  /** @type {Message[]} */
   const errors = [];
   if (raw === undefined || raw === null) return { entries: [], errors };
-  if (typeof raw !== 'object' || Array.isArray(raw)) {
+  if (!isRecord(raw) || Array.isArray(raw)) {
     return { entries: [], errors: [createMessage(kind.notObject)] };
   }
+  /** @type {McpSecretInputEntry[]} */
   const entries = [];
+  /** @type {Set<string>} */
   const seenLower = new Set();
   for (const [key, spec] of Object.entries(raw)) {
     if (entries.length >= kind.maxEntries) {
@@ -722,7 +881,7 @@ function normalizeSecretMapInput(raw, kindName) {
       errors.push(createMessage(kind.nameInvalid, { name: key.slice(0, 40) }));
       continue;
     }
-    if (!spec || typeof spec !== 'object' || Array.isArray(spec)) {
+    if (!isRecord(spec) || Array.isArray(spec)) {
       errors.push(createMessage(kind.needsSecretFlag, { name: key }));
       continue;
     }
@@ -750,31 +909,44 @@ function normalizeSecretMapInput(raw, kindName) {
   return { entries, errors };
 }
 
+/** @param {unknown} raw */
 function normalizeMcpEnvInput(raw) {
   return normalizeSecretMapInput(raw, 'env');
 }
 
+/** @param {unknown} raw */
 function normalizeMcpHeadersInput(raw) {
   return normalizeSecretMapInput(raw, 'headers');
 }
 
-/** Gespeicherte Form pruefen — kaputte Eintraege fallen weg statt zu werfen. */
+/**
+ * Gespeicherte Form pruefen — kaputte Eintraege fallen weg statt zu werfen.
+ *
+ * @typedef {{ enc: string } | { value: string }} McpStoredSecret  encrypted, or plain text
+ *
+ * @param {unknown} raw
+ * @param {SecretMapKindName} kindName
+ * @returns {Object<string, McpStoredSecret>}
+ */
 function normalizeStoredSecretMap(raw, kindName) {
   const kind = SECRET_MAP_KINDS[kindName];
+  /** @type {Object<string, McpStoredSecret>} */
   const out = {};
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  if (!isRecord(raw) || Array.isArray(raw)) return out;
   for (const [key, entry] of Object.entries(raw)) {
-    if (!kind.isValidName(key) || !entry || typeof entry !== 'object') continue;
+    if (!kind.isValidName(key) || !isRecord(entry)) continue;
     if (typeof entry.enc === 'string' && entry.enc) out[key] = { enc: entry.enc };
     else if (typeof entry.value === 'string') out[key] = { value: entry.value };
   }
   return out;
 }
 
+/** @param {unknown} raw */
 function normalizeStoredMcpEnv(raw) {
   return normalizeStoredSecretMap(raw, 'env');
 }
 
+/** @param {unknown} raw */
 function normalizeStoredMcpHeaders(raw) {
   return normalizeStoredSecretMap(raw, 'headers');
 }
@@ -782,23 +954,27 @@ function normalizeStoredMcpHeaders(raw) {
 /**
  * Anzeigeform. Der verschluesselte Wert wird nicht etwa entschluesselt und
  * dann maskiert — er wird hier gar nicht erst angefasst.
+ *
+ * @param {Object<string, McpStoredSecret>} normalized
+ * @returns {McpMaskedEntry[]}
  */
 function maskStoredSecretMap(normalized) {
   return Object.keys(normalized)
     .sort()
     .map((key) => {
       const entry = normalized[key];
-      const secret = typeof entry.enc === 'string';
-      return secret
+      return 'enc' in entry
         ? { key, secret: true, hasValue: true }
         : { key, secret: false, hasValue: entry.value.length > 0, value: entry.value };
     });
 }
 
+/** @param {unknown} stored */
 function maskStoredMcpEnv(stored) {
   return maskStoredSecretMap(normalizeStoredMcpEnv(stored));
 }
 
+/** @param {unknown} stored */
 function maskStoredMcpHeaders(stored) {
   return maskStoredSecretMap(normalizeStoredMcpHeaders(stored));
 }
@@ -812,6 +988,17 @@ function maskStoredMcpHeaders(stored) {
  * already taken is refused instead of replacing that server (CR-B14-03). It
  * is not part of the stored configuration. Without it a save replaces by
  * identifier — editing does, and so does the import, which says so.
+ *
+ * @typedef {Object} McpServerInputResult
+ * @property {boolean} ok
+ * @property {McpServerConfig|null} value
+ * @property {McpSecretInputEntry[]} env
+ * @property {McpSecretInputEntry[]} headers
+ * @property {boolean} create
+ * @property {Message[]} errors
+ *
+ * @param {*} raw  the form's payload; only an object can pass
+ * @returns {McpServerInputResult}
  */
 function validateMcpServerInput(raw) {
   const create = raw?.create === true;

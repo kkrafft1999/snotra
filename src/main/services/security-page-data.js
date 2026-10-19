@@ -3,10 +3,28 @@
 const { describeRememberedMcpTools } = require('./mcp-remembered-tools');
 
 /**
+ * @typedef {NonNullable<NonNullable<Parameters<typeof describeRememberedMcpTools>[0]>['servers']>} McpServers
+ */
+
+/**
  * What main reads for Settings › Security (#447, #448) and for the mode pill
  * (#357). Only reading and shaping: the verdicts come from
  * `application/permissions/security-overview.js`, and the IPC handlers in
  * `ipc/tool-permission-handlers.js` put the two together.
+ *
+ * @param {object} deps
+ * @param {Pick<import('../ports/chat-history-store-port').ChatHistoryStorePort,
+ *   'listSessions' | 'normalizeWorkspaceRoot' | 'sessionMatchesWorkspace'>} deps.chatHistoryStore
+ * @param {Pick<import('../ports/ui-prefs-store-port').UiPrefsStorePort, 'readUIPrefs'>} deps.uiPrefsStore
+ * @param {Pick<ReturnType<typeof import('../tools/workspace-tool-registry').createWorkspaceToolRegistry>, 'listRiskCatalog'>} deps.toolRegistry
+ * @param {{ readMcpServers: () => Promise<McpServers> }} deps.mcpConfigStore
+ * @param {Pick<import('../../application/ports/code-execution-port').CodeExecutionPort, 'isAvailable'>} deps.pythonRunner
+ * @param {Pick<import('../../application/ports/shell-execution-port').ShellExecutionPort, 'isAvailable'>} deps.shellRunner
+ * @param {Pick<ReturnType<typeof import('./sandbox-service').createSandboxService>, 'describe' | 'detect'>} deps.sandboxService
+ * @param {Partial<Pick<import('../ports/workspace-folder-store-port').WorkspaceFolderStorePort,
+ *   'getValidatedFolderHistory' | 'getValidatedLastFolder'>>|null} [deps.workspaceFolderStore]
+ * @param {Pick<typeof import('fs/promises'), 'stat'>|null} [deps.fs]
+ * @param {() => void} [deps.onSandboxDetected]
  */
 function createSecurityPageData({
   chatHistoryStore,
@@ -23,14 +41,20 @@ function createSecurityPageData({
   /** Called once a sandbox detection started from here is done. */
   onSandboxDetected = () => {},
 }) {
-  /** Titles of the given chats, for the list of session approvals (#447). */
+  /**
+   * Titles of the given chats, for the list of session approvals (#447).
+   *
+   * @param {Iterable<string>} chatIds
+   */
   async function describeChats(chatIds) {
     const wanted = new Set(chatIds);
+    /** @type {Map<string, string>} */
     const titles = new Map();
     if (wanted.size === 0) return titles;
     for (const session of await chatHistoryStore.listSessions()) {
-      if (session && wanted.has(session.id) && typeof session.title === 'string' && session.title.trim()) {
-        titles.set(session.id, session.title.trim());
+      const id = session?.id;
+      if (typeof id === 'string' && wanted.has(id) && typeof session.title === 'string' && session.title.trim()) {
+        titles.set(id, session.title.trim());
       }
     }
     return titles;
@@ -48,6 +72,7 @@ function createSecurityPageData({
     // MCP tools the registry does not have yet — no run since the start —
     // come from what each server reported last time (#464), so they can be
     // switched off before the first run offers them.
+    /** @type {McpServers} */
     let servers = [];
     try {
       servers = await mcpConfigStore.readMcpServers();
@@ -61,6 +86,8 @@ function createSecurityPageData({
   /**
    * The chats of a workspace with the mode stored for each (#448); `null`
    * where a chat has none and starts on the workspace default.
+   *
+   * @param {unknown} root
    */
   async function describeWorkspaceChats(root) {
     const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(root);
@@ -81,6 +108,7 @@ function createSecurityPageData({
    * not hang on it. Once it is known, `onSandboxDetected` says so.
    */
   async function describeExecutionTools() {
+    /** @type {string[]} */
     let disabledTools = [];
     try {
       const prefs = await uiPrefsStore.readUIPrefs();
@@ -88,6 +116,7 @@ function createSecurityPageData({
     } catch {
       disabledTools = [];
     }
+    /** @type {string[]} */
     const active = [];
     if (pythonRunner.isAvailable() && !disabledTools.includes('run_python')) active.push('run_python');
     if (shellRunner.isAvailable() && !disabledTools.includes('shell_execute')) active.push('shell_execute');
@@ -104,7 +133,9 @@ function createSecurityPageData({
    * when new workspaces start without the sandbox.
    */
   async function listKnownWorkspaces() {
+    /** @type {Set<string>} */
     const roots = new Set();
+    /** @param {unknown} value */
     const add = (value) => {
       if (typeof value === 'string' && value) roots.add(value);
     };
@@ -122,7 +153,11 @@ function createSecurityPageData({
     return [...roots];
   }
 
-  /** Whether a workspace listed on Tools › Security is still a folder (#1119). */
+  /**
+   * Whether a workspace listed on Tools › Security is still a folder (#1119).
+   *
+   * @param {unknown} root
+   */
   async function folderExists(root) {
     if (!fs || typeof root !== 'string' || !root) return true;
     try {

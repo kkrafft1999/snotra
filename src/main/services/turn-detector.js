@@ -48,6 +48,9 @@ function createTurnDetector({
   let turnMs = 0;
   let quietMs = 0;
 
+  /**
+   * @param {number} level  the frame's RMS level
+   */
   function frameEnds(level) {
     const speaking = level > Math.max(MIN_SPEECH_LEVEL, floor * SPEECH_OVER_FLOOR);
     if (speaking) {

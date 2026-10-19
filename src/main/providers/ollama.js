@@ -1,9 +1,28 @@
+/** @typedef {import('../ports/provider-runtime-port').ProviderAdapter} ProviderAdapter */
+/** @typedef {import('../ports/provider-runtime-port').ProviderConfig} ProviderConfig */
+/** @typedef {import('../ports/provider-runtime-port').ChatRoundResult} ChatRoundResult */
+/** @typedef {import('../ports/provider-runtime-port').AssistantMessage} AssistantMessage */
+/** @typedef {NonNullable<AssistantMessage['tool_calls']>[number]} ToolCall */
+/** @typedef {import('../../application/ports/llm-port').LlmMessage} LlmMessage */
+/** @typedef {import('../../application/ports/llm-port').LlmToolDefinition} LlmToolDefinition */
+
+/**
+ * What of one line of Ollama's `/api/chat` stream is read.
+ * @typedef {Object} OllamaChatLine
+ * @property {string} [error]
+ * @property {{ thinking?: unknown, content?: unknown,
+ *   tool_calls?: Array<{ function?: { name?: string, arguments?: unknown } }> }} [message]
+ * @property {boolean} [done]
+ * @property {string} [done_reason]
+ */
+
 const { withRequestTimeout, userMessageOf, LOCAL_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
 const { imageAttachmentsOf } = require('../../shared/contracts/attachments');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
 const { Agent } = require('undici');
 const { fetchVia } = require('../services/dispatcher-fetch');
+const { isRecord } = require('../../shared/runtime/is-record');
 const { iterStreamLines, describeFetchErrorMessage, readErrorMessage, safeJsonParse, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, normalizeUsage, notifyToolCallStart } = require('./stream-helpers');
 
 const DEFAULT_BASE = 'http://localhost:11434';
@@ -13,7 +32,9 @@ const DEFAULT_BASE = 'http://localhost:11434';
 // Zertifikat ignorieren (insecure)" aktiviert hat UND die Ziel-URL https ist.
 // Analog zum Go-Referenz-CLI (Flag --insecure) fuer Server mit selbstsigniertem
 // oder intern signiertem Zertifikat (z.B. https://ollama.intern.example).
+/** @type {Agent|null} */
 let _insecureDispatcher = null;
+/** @type {Set<string>} */
 const _warnedInsecureUrls = new Set();
 
 function getInsecureDispatcher() {
@@ -31,6 +52,10 @@ function destroyInsecureDispatcher() {
   }
 }
 
+/**
+ * @param {string} url
+ * @param {ProviderConfig|null|undefined} config
+ */
 function dispatcherFor(url, config) {
   if (!config?.insecureTls) return undefined;
   if (!url.startsWith('https://')) return undefined;
@@ -41,11 +66,13 @@ function dispatcherFor(url, config) {
   return getInsecureDispatcher();
 }
 
+/** @param {ProviderConfig|null|undefined} config */
 function baseUrlOf(config) {
   const raw = typeof config?.baseUrl === 'string' ? config.baseUrl.trim() : '';
   return (raw || DEFAULT_BASE).replace(/\/$/, '');
 }
 
+/** @type {ProviderAdapter['listModels']} */
 async function listModels(config) {
   try {
     return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
@@ -57,6 +84,7 @@ async function listModels(config) {
   }
 }
 
+/** @type {ProviderAdapter['listModels']} */
 async function listModelsRequest(config) {
   const base = baseUrlOf(config);
   const url = `${base}/api/tags`;
@@ -68,12 +96,12 @@ async function listModelsRequest(config) {
   }
   if (!res.ok) return { error: await readErrorMessage(res) };
   const json = await res.json().catch(() => null);
-  if (!json || !Array.isArray(json.models)) {
+  if (!isRecord(json) || !Array.isArray(json.models)) {
     return { error: createMessage('provider.error.unexpectedAnswer.server', { provider: 'Ollama' }) };
   }
   const models = json.models
-    .map((m) => m && typeof m.name === 'string' ? { id: m.name, label: m.name } : null)
-    .filter(Boolean)
+    .map((/** @type {unknown} */ m) => isRecord(m) && typeof m.name === 'string' ? { id: m.name, label: m.name } : null)
+    .filter((m) => m !== null)
     .sort((a, b) => a.id.localeCompare(b.id));
   return { models };
 }
@@ -101,12 +129,19 @@ const THINK_LEVELS = ['low', 'medium', 'high'];
 // A model that can only think or not: two positions, off and on.
 const THINK_SWITCH = ['none', 'on'];
 
-/** The bare model name: `hf.co/org/qwen3:8b` → `qwen3:8b`, lower case. */
+/**
+ * The bare model name: `hf.co/org/qwen3:8b` → `qwen3:8b`, lower case.
+ * @param {unknown} model
+ */
 function bareModelName(model) {
   const id = String(model ?? '').trim().toLowerCase();
   return id.slice(id.lastIndexOf('/') + 1);
 }
 
+/**
+ * @param {unknown} model
+ * @returns {string[]}
+ */
 function reasoningLevelsOf(model) {
   const name = bareModelName(model);
   if (LEVEL_FAMILIES.test(name)) return THINK_LEVELS;
@@ -114,7 +149,12 @@ function reasoningLevelsOf(model) {
   return [];
 }
 
-/** The `think` value for a level; undefined leaves the model's default. */
+/**
+ * The `think` value for a level; undefined leaves the model's default.
+ * @param {unknown} model
+ * @param {string} level
+ * @returns {string|boolean|undefined}
+ */
 function thinkValueFor(model, level) {
   const levels = reasoningLevelsOf(model);
   if (!levels.includes(level)) return undefined;
@@ -129,12 +169,19 @@ function thinkValueFor(model, level) {
  * Ollama does not read a data URL. Ollama decodes all four formats Snotra
  * attaches (PNG, JPEG, GIF, WebP — checked in its source at v0.40.6), so none
  * is filtered out. Whether the model sees the image depends on the model.
+ *
+ * @param {LlmMessage} m
  */
 function imagesForOllama(m) {
   return imageAttachmentsOf(m).map((image) => image.dataBase64.replace(/^data:[^,]*,/, ''));
 }
 
+/**
+ * @param {LlmMessage[]} messages
+ * @returns {Array<Record<string, unknown>>}
+ */
 function translateMessagesToOllama(messages) {
+  /** @type {Array<Record<string, unknown>>} */
   const out = [];
   for (const m of messages) {
     if (m.role === 'system') {
@@ -142,6 +189,7 @@ function translateMessagesToOllama(messages) {
       continue;
     }
     if (m.role === 'user') {
+      /** @type {Record<string, unknown>} */
       const row = { role: 'user', content: typeof m.content === 'string' ? m.content : '' };
       const images = imagesForOllama(m);
       if (images.length > 0) row.images = images;
@@ -149,6 +197,7 @@ function translateMessagesToOllama(messages) {
       continue;
     }
     if (m.role === 'assistant') {
+      /** @type {Record<string, unknown>} */
       const row = {
         role: 'assistant',
         content: typeof m.content === 'string' ? m.content : '',
@@ -178,6 +227,10 @@ function translateMessagesToOllama(messages) {
   return out;
 }
 
+/**
+ * @param {LlmToolDefinition[]|undefined} tools
+ * @returns {Array<Record<string, unknown>>|undefined}
+ */
 function translateToolsToOllama(tools) {
   if (!Array.isArray(tools) || tools.length === 0) return undefined;
   return tools.map((t) => ({
@@ -190,9 +243,11 @@ function translateToolsToOllama(tools) {
   }));
 }
 
+/** @type {ProviderAdapter['streamChatRound']} */
 async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
   const base = baseUrlOf(config);
   const url = `${base}/api/chat`;
+  /** @type {Record<string, unknown>} */
   const body = {
     model,
     messages: translateMessagesToOllama(messages),
@@ -238,10 +293,13 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   let textOut = '';
   let thinkingOut = '';
+  /** @type {ToolCall[]} */
   const collectedToolCalls = [];
   // A round ends with `done: true`; a stream without it was cut off on the
   // way (#538).
+  /** @type {ChatRoundResult['finishReason']} */
   let finishReason = FINISH_REASONS.INCOMPLETE;
+  /** @type {ChatRoundResult['usage']} */
   let usage = null;
 
   try {
@@ -249,6 +307,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
       abortIfRequested(abortSignal);
       const trimmed = line.trim();
       if (!trimmed) continue;
+      /** @type {OllamaChatLine} */
       let payload;
       try { payload = JSON.parse(trimmed); } catch { continue; }
 
@@ -272,10 +331,11 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
             if (!name) continue;
             const args = tc.function?.arguments;
             const argStr = typeof args === 'string' ? args : JSON.stringify(args ?? {});
+            const parsedArgs = typeof args === 'string' ? safeJsonParse(args, {}) : (args ?? {});
             notifyToolCallStart(callbacks, {
               index: collectedToolCalls.length,
               name,
-              args: typeof args === 'string' ? safeJsonParse(args, {}) : (args ?? {}),
+              args: isRecord(parsedArgs) ? parsedArgs : {},
             });
             collectedToolCalls.push({
               id: `ocall_${collectedToolCalls.length}_${Date.now().toString(36)}`,
@@ -309,6 +369,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     reader.releaseLock?.();
   }
 
+  /** @type {AssistantMessage} */
   const message = {
     role: 'assistant',
     content: textOut.length > 0 ? textOut : collectedToolCalls.length ? null : '',
@@ -338,7 +399,9 @@ module.exports = {
   // Levels for gpt-oss, off and on for the other thinking models (#994).
   reasoning: {
     levels: reasoningLevelsOf,
+    /** @param {string} model */
     defaultLevel: (model) => (reasoningLevelsOf(model) === THINK_SWITCH ? 'on' : 'medium'),
+    /** @param {string} model */
     appliesTo: (model) => reasoningLevelsOf(model).length > 0,
   },
   defaultBaseUrl: DEFAULT_BASE,

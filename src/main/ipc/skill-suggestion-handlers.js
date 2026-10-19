@@ -5,6 +5,12 @@ const { SKILL_SUGGESTION_MODES } = require('../../shared/contracts/enums');
 /**
  * A skill suggested by the model (#125, mode `model`). It runs next to the
  * chat and must never get in its way: every failure ends as "no suggestion".
+ *
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {Pick<ReturnType<typeof import('../services/skill-suggestion-service').createSkillSuggestionService>, 'suggest'>} deps.skillSuggestionService
+ * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore
+ * @param {Record<string, string>} deps.REQ
  */
 function registerSkillSuggestionHandlers({ ipcMain, skillSuggestionService, uiPrefsStore, REQ }) {
   ipcMain.handle(REQ.SKILLS_SUGGEST, async (_event, text) => {

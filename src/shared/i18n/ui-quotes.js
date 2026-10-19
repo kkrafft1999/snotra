@@ -22,6 +22,7 @@ const MENU_SEPARATOR = ' › ';
  * Every path the model may quote, as the chain of catalogue keys that spells
  * it out. Adding one here is what makes `{menu:…}` resolve.
  */
+/** @type {Readonly<Record<string, readonly string[]>>} */
 const MENU_PATHS = Object.freeze({
   settings: ['settings.title'],
   // Since #1119 the three tool pages sit in one group: Tools › Autonomy,
@@ -40,7 +41,12 @@ const MENU_PATHS = Object.freeze({
   'settings.models': ['settings.title', 'settings.nav.models'],
 });
 
-/** One path in one language, e.g. `Settings › Tools › Setup` / `Einstellungen › Tools › Einrichtung`. */
+/**
+ * One path in one language, e.g. `Settings › Tools › Setup` / `Einstellungen › Tools › Einrichtung`.
+ *
+ * @param {string} locale
+ * @param {string} name
+ */
 function menuPath(locale, name) {
   const keys = MENU_PATHS[name];
   if (!keys) return name;
@@ -54,6 +60,10 @@ function menuPath(locale, name) {
  *
  * An unknown name is left standing rather than swallowed: a visible
  * `{menu:settings.tulls}` is found, an empty gap in a sentence is not.
+ *
+ * @param {string} locale
+ * @param {string} text
+ * @returns {string}
  */
 function fillUiQuotes(locale, text) {
   if (typeof text !== 'string') return text;

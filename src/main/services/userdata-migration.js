@@ -33,14 +33,27 @@ const MIGRATED_FILENAMES = [
 // Existiert eine dieser Dateien im Ziel, wurde dort bereits gearbeitet.
 const TARGET_POPULATED_FILENAMES = ['llm-config.json', 'chat-history.json'];
 
-function createUserDataMigration({ fs, path, log = console } = {}) {
+/**
+ * @typedef {{ status: string, copied: string[], skipped: string[], errors: Array<{ file: string|null, message: string }> }} MigrationResult
+ */
+
+/**
+ * @param {object} deps
+ * @param {Pick<typeof import('fs/promises'), 'stat' | 'mkdir' | 'copyFile' | 'open' | 'unlink' | 'rename'>} deps.fs
+ * @param {Pick<typeof import('path'), 'join' | 'resolve'>} deps.path
+ * @param {{ info?: (message: string) => void, warn?: (message: string) => void }} [deps.log]
+ */
+function createUserDataMigration({ fs, path, log = console }) {
   if (!fs || !path) {
     throw new Error('createUserDataMigration requires fs (promises API) and path');
   }
 
+  /** @param {string} msg */
   const info = (msg) => { if (typeof log?.info === 'function') log.info(msg); };
+  /** @param {string} msg */
   const warn = (msg) => { if (typeof log?.warn === 'function') log.warn(msg); };
 
+  /** @param {string} p */
   async function exists(p) {
     try {
       await fs.stat(p);
@@ -50,6 +63,7 @@ function createUserDataMigration({ fs, path, log = console } = {}) {
     }
   }
 
+  /** @param {string} p */
   async function isDirectory(p) {
     try {
       return (await fs.stat(p)).isDirectory();
@@ -58,6 +72,7 @@ function createUserDataMigration({ fs, path, log = console } = {}) {
     }
   }
 
+  /** @param {{ sourceDir: string, targetDir: string, result: MigrationResult, meta?: object }} params */
   async function writeMarker({ sourceDir, targetDir, result, meta }) {
     const marker = {
       version: 1,
@@ -81,13 +96,15 @@ function createUserDataMigration({ fs, path, log = console } = {}) {
   }
 
   /**
-   * @returns {Promise<{status: string, copied: string[], skipped: string[], errors: Array<{file: string|null, message: string}>}>}
+   * @param {{ sourceDir?: string, targetDir?: string, meta?: object, explicitUserDataDir?: boolean }} [options]
+   * @returns {Promise<MigrationResult>}
    *   status: 'copied' | 'skipped-marker' | 'skipped-target-populated'
    *         | 'skipped-no-source' | 'skipped-same-dir'
    *         | 'skipped-explicit-user-data-dir' | 'failed'
    *   Wirft nie; der App-Start darf an der Migration nicht scheitern.
    */
   async function migrateLegacyUserData({ sourceDir, targetDir, meta, explicitUserDataDir = false } = {}) {
+    /** @type {MigrationResult} */
     const result = { status: 'failed', copied: [], skipped: [], errors: [] };
     try {
       // The migration repairs the default folder the rename moved. A folder
@@ -132,7 +149,7 @@ function createUserDataMigration({ fs, path, log = console } = {}) {
           await fs.copyFile(src, path.join(targetDir, name), fsConstants.COPYFILE_EXCL);
           result.copied.push(name);
         } catch (err) {
-          if (err && err.code === 'EEXIST') {
+          if (err instanceof Error && 'code' in err && err.code === 'EEXIST') {
             result.skipped.push(name);
           } else {
             result.errors.push({ file: name, message: err?.message || String(err) });

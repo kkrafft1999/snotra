@@ -58,9 +58,49 @@ const {
   declineConfigProposal,
 } = require('../../shared/contracts/chat-configuration');
 
+/**
+ * What this service remembers of a chat on top of the history (#211, #725, #774).
+ *
+ * @typedef {Object} RememberedSettings
+ * @property {string} [modelPresetId]
+ * @property {string} [toolPermissionMode]
+ * @property {string} [reasoningEffort]
+ * @property {import('../../shared/contracts/chat-configuration').ChatConfigOverrides|null} [configOverrides]
+ */
+
+/**
+ * Drops the oldest entries of a map once it holds more than `limit`.
+ *
+ * @param {Map<string, unknown>} map
+ * @param {number} limit
+ */
+function dropOldest(map, limit) {
+  while (map.size > limit) {
+    const oldest = map.keys().next();
+    if (oldest.done) break;
+    map.delete(oldest.value);
+  }
+}
+
 /** So viele Chats behält der Speicher — deutlich mehr als der Verlauf hält. */
 const MAX_REMEMBERED_CHATS = 500;
 
+/**
+ * @param {object} deps
+ * @param {Pick<import('../ports/chat-history-store-port').ChatHistoryStorePort,
+ *   'withChatHistoryLock' | 'patchSession' | 'getSessionMeta'>} deps.chatHistoryStore
+ * @param {(presetId: string) => unknown} deps.applyPreset
+ * @param {() => Promise<string|null|undefined>} deps.getDefaultPresetId
+ * @param {(presetId: string) => boolean|Promise<boolean>} [deps.isPresetUsable]
+ * @param {(mode: string, options: { chatId: string|null }) => Promise<{ ok?: boolean }|void>} deps.applyMode
+ * @param {() => Promise<string|null>} [deps.getActivePresetId]
+ * @param {() => Promise<string|null>} [deps.getActiveMode]
+ * @param {() => Promise<unknown>} [deps.getWorkspaceMode]
+ * @param {(presetId: string) => Promise<{ presetId?: unknown, reasoningEffort?: unknown }|null>} [deps.getPresetAlias]
+ * @param {(chatId: string) => void} [deps.onChatModeChanged]
+ * @param {(chatId: string|null) => void} [deps.onActivated]
+ * @param {{ warn?: (message: string) => void }|null} [deps.log]
+ */
 function createChatSessionSettings({
   chatHistoryStore,
   applyPreset,
@@ -86,8 +126,9 @@ function createChatSessionSettings({
   onActivated = () => {},
   log = console,
 }) {
+  /** @type {string|null} */
   let currentChatId = null;
-  /** @type {Map<string, {modelPresetId?: string, toolPermissionMode?: string, reasoningEffort?: string}>} */
+  /** @type {Map<string, RememberedSettings>} */
   const remembered = new Map();
   /**
    * The mode a chat had when it left the screen (#320). The store only ever
@@ -106,34 +147,45 @@ function createChatSessionSettings({
   /**
    * What each chat switched beyond the settings (#774), as far as it was
    * read. Every run asks for it; only this service writes it.
-   * @type {Map<string, object|null>}
+   * @type {Map<string, import('../../shared/contracts/chat-configuration').ChatConfigOverrides|null>}
    */
   const storedOverrides = new Map();
-  /** The switch still in progress; the next one waits for it (#559). */
+  /**
+   * The switch still in progress; the next one waits for it (#559).
+   *
+   * @type {Promise<unknown>}
+   */
   let activationQueue = Promise.resolve();
 
+  /**
+   * @param {unknown} raw
+   * @returns {string|null}
+   */
   function normalizeChatId(raw) {
     if (typeof raw !== 'string') return null;
     const trimmed = raw.trim();
     return trimmed ? trimmed.slice(0, 128) : null;
   }
 
+  /**
+   * @param {string} chatId
+   * @param {string} mode
+   */
   function rememberBackgroundMode(chatId, mode) {
     backgroundModes.delete(chatId);
     backgroundModes.set(chatId, mode);
-    while (backgroundModes.size > MAX_REMEMBERED_CHATS) {
-      backgroundModes.delete(backgroundModes.keys().next().value);
-    }
+    dropOldest(backgroundModes, MAX_REMEMBERED_CHATS);
   }
 
+  /**
+   * @param {string} chatId
+   * @param {Partial<RememberedSettings>} patch
+   */
   function rememberLocal(chatId, patch) {
     const previous = remembered.get(chatId) || {};
     remembered.delete(chatId);
     remembered.set(chatId, { ...previous, ...patch });
-    while (remembered.size > MAX_REMEMBERED_CHATS) {
-      const oldest = remembered.keys().next().value;
-      remembered.delete(oldest);
-    }
+    dropOldest(remembered, MAX_REMEMBERED_CHATS);
   }
 
   /**
@@ -141,6 +193,9 @@ function createChatSessionSettings({
    * Ein Chat ohne erste Nachricht hat noch keine Zeile — dessen Wert reist über
    * `valuesFor` mit, wenn der Verlauf ihn zum ersten Mal speichert. Since #985
    * it goes into the history's index alone; the chat's file stays as it is.
+   *
+   * @param {string} chatId
+   * @param {Record<string, unknown>} patch
    */
   async function persist(chatId, patch) {
     try {
@@ -156,6 +211,9 @@ function createChatSessionSettings({
    * What the chat has stored, with this session's changes on top (#558). The
    * local copy only holds what was changed here — on its own it would drop a
    * stored mode the moment the model changed, and the other way round.
+   *
+   * @param {string} chatId
+   * @returns {Promise<RememberedSettings>}
    */
   async function storedValuesFor(chatId) {
     const local = remembered.get(chatId) || {};
@@ -163,10 +221,15 @@ function createChatSessionSettings({
     return { ...(await readStoredValues(chatId)), ...local };
   }
 
+  /**
+   * @param {string} chatId
+   * @returns {Promise<RememberedSettings>}
+   */
   async function readStoredValues(chatId) {
     try {
       const session = await chatHistoryStore.getSessionMeta(chatId);
       if (!session) return {};
+      /** @type {RememberedSettings} */
       const out = {};
       const presetId = chatModelPresetIdForStore(session.modelPresetId);
       if (presetId) out.modelPresetId = presetId;
@@ -180,6 +243,9 @@ function createChatSessionSettings({
     }
   }
 
+  /**
+   * @param {RememberedSettings} values
+   */
   async function resolvePresetFor(values) {
     const wanted = values.modelPresetId;
     if (wanted && (await isPresetUsable(wanted))) return wanted;
@@ -196,6 +262,11 @@ function createChatSessionSettings({
     }
   }
 
+  /**
+   * @param {RememberedSettings} values
+   * @param {string} activation
+   * @param {string} workspaceMode
+   */
   function resolveModeFor(values, activation, workspaceMode) {
     const stored = values.toolPermissionMode;
     if (!stored) return workspaceMode;
@@ -210,6 +281,9 @@ function createChatSessionSettings({
    * A chat stored at "Auto" on a system that lost its encrypted storage
    * (#419): the store refuses "Auto", and the chat runs at the default mode
    * rather than at what the last chat left.
+   *
+   * @param {string} mode
+   * @param {string|null} chatId
    */
   async function applyModeOrDefault(mode, chatId) {
     const result = await applyMode(mode, { chatId });
@@ -222,6 +296,9 @@ function createChatSessionSettings({
    * Chat wird zum aktiven: gespeichertes Modell und gespeicherten Modus
    * anwenden. Liefert, was danach gilt — die Oberfläche liest ihren Stand
    * anschließend ohnehin neu, der Rückgabewert macht es für Tests prüfbar.
+   *
+   * @param {unknown} rawChatId
+   * @param {{ activation?: string }} [options]
    */
   function activate(rawChatId, options) {
     // One switch at a time (#559): each one reads the mode the previous one
@@ -232,6 +309,10 @@ function createChatSessionSettings({
     return run;
   }
 
+  /**
+   * @param {unknown} rawChatId
+   * @param {{ activation?: string }} [options]
+   */
   async function activateNow(rawChatId, { activation = CHAT_ACTIVATION.EXPLICIT } = {}) {
     const chatId = normalizeChatId(rawChatId);
     const previousChatId = currentChatId;
@@ -241,7 +322,7 @@ function createChatSessionSettings({
     if (previousChatId && previousChatId !== chatId && activeMode) {
       rememberBackgroundMode(previousChatId, activeMode);
     }
-    const modeBefore = chatId === previousChatId ? activeMode : backgroundModes.get(chatId) ?? null;
+    const modeBefore = chatId === previousChatId ? activeMode : (chatId ? backgroundModes.get(chatId) : undefined) ?? null;
     if (chatId) backgroundModes.delete(chatId);
     currentChatId = chatId;
     const values = chatId ? await storedValuesFor(chatId) : {};
@@ -270,10 +351,14 @@ function createChatSessionSettings({
   /**
    * A chat from before #726: point it at the entry its old one became, and
    * give it the level that entry had — once, written into its row (#726).
+   *
+   * @param {string} chatId
+   * @param {RememberedSettings} values
    */
   async function adoptAlias(chatId, values) {
     const alias = await readAlias(values.modelPresetId);
     if (!alias) return;
+    /** @type {RememberedSettings} */
     const patch = {};
     const presetId = chatModelPresetIdForStore(alias.presetId);
     if (presetId && presetId !== values.modelPresetId) patch.modelPresetId = presetId;
@@ -286,6 +371,9 @@ function createChatSessionSettings({
     await persist(chatId, patch);
   }
 
+  /**
+   * @param {string|undefined} presetId
+   */
   async function readAlias(presetId) {
     if (!presetId) return null;
     try {
@@ -296,6 +384,10 @@ function createChatSessionSettings({
     }
   }
 
+  /**
+   * @param {(chatId: any) => void} hook
+   * @param {string|null} chatId
+   */
   function notify(hook, chatId) {
     try {
       hook(chatId);
@@ -307,6 +399,8 @@ function createChatSessionSettings({
   /**
    * The mode a run of this chat works under (#320). `null` for the chat on
    * screen — its mode is the one in the store, as it always was.
+   *
+   * @param {unknown} rawChatId
    */
   function modeFor(rawChatId) {
     const chatId = normalizeChatId(rawChatId);
@@ -319,7 +413,11 @@ function createChatSessionSettings({
     backgroundModes.clear();
   }
 
-  /** Ausdrückliche Wahl in der Chat-Leiste oder in den Einstellungen. */
+  /**
+   * Ausdrückliche Wahl in der Chat-Leiste oder in den Einstellungen.
+   *
+   * @param {unknown} rawPresetId
+   */
   async function rememberPreset(rawPresetId) {
     const presetId = chatModelPresetIdForStore(rawPresetId);
     if (!currentChatId || !presetId) return;
@@ -330,6 +428,8 @@ function createChatSessionSettings({
   /**
    * The level chosen for the chat on screen (#725). Main has checked it
    * against the model before; here it is only kept.
+   *
+   * @param {unknown} rawLevel
    */
   async function rememberReasoningEffort(rawLevel) {
     const level = chatReasoningEffortForStore(rawLevel);
@@ -340,24 +440,30 @@ function createChatSessionSettings({
     return true;
   }
 
+  /**
+   * @param {string} chatId
+   * @param {string|null} level
+   */
   function rememberStoredLevel(chatId, level) {
     storedLevels.delete(chatId);
     storedLevels.set(chatId, level);
-    while (storedLevels.size > MAX_REMEMBERED_CHATS) {
-      storedLevels.delete(storedLevels.keys().next().value);
-    }
+    dropOldest(storedLevels, MAX_REMEMBERED_CHATS);
   }
 
   /**
    * The chat's own level, or `null` when it has none; without `chatId`, the
    * chat on screen's. A chat in the background answers with its own as well.
+   *
+   * @param {unknown} [rawChatId]
+   * @returns {Promise<string|null>}
    */
   async function reasoningEffortFor(rawChatId) {
     const chatId = normalizeChatId(rawChatId) || currentChatId;
     if (!chatId) return null;
     const local = remembered.get(chatId)?.reasoningEffort;
     if (local) return local;
-    if (storedLevels.has(chatId)) return storedLevels.get(chatId);
+    const known = storedLevels.get(chatId);
+    if (known !== undefined) return known;
     try {
       const session = await chatHistoryStore.getSessionMeta(chatId);
       // Not saved yet: nothing to remember, the first save may bring a level.
@@ -374,26 +480,31 @@ function createChatSessionSettings({
     }
   }
 
+  /**
+   * @param {string} chatId
+   * @param {import('../../shared/contracts/chat-configuration').ChatConfigOverrides|null} overrides
+   */
   function rememberStoredOverrides(chatId, overrides) {
     storedOverrides.delete(chatId);
     storedOverrides.set(chatId, overrides);
-    while (storedOverrides.size > MAX_REMEMBERED_CHATS) {
-      storedOverrides.delete(storedOverrides.keys().next().value);
-    }
+    dropOldest(storedOverrides, MAX_REMEMBERED_CHATS);
   }
 
   /**
    * The skills and tools a chat switched for itself (#774), or `null`. Unlike
    * the level, it is a chat's own and never the screen's: without a chat
    * there is nothing to look up.
+   *
+   * @param {unknown} rawChatId
+   * @returns {Promise<import('../../shared/contracts/chat-configuration').ChatConfigOverrides|null>}
    */
   async function configOverridesFor(rawChatId) {
     const chatId = normalizeChatId(rawChatId);
     if (!chatId) return null;
-    if (remembered.has(chatId) && Object.hasOwn(remembered.get(chatId), 'configOverrides')) {
-      return remembered.get(chatId).configOverrides;
-    }
-    if (storedOverrides.has(chatId)) return storedOverrides.get(chatId);
+    const own = remembered.get(chatId);
+    if (own && Object.hasOwn(own, 'configOverrides')) return own.configOverrides ?? null;
+    const known = storedOverrides.get(chatId);
+    if (known !== undefined) return known;
     try {
       const session = await chatHistoryStore.getSessionMeta(chatId);
       const overrides = normalizeChatConfigOverrides(session?.configOverrides);
@@ -406,6 +517,10 @@ function createChatSessionSettings({
     }
   }
 
+  /**
+   * @param {string} chatId
+   * @param {import('../../shared/contracts/chat-configuration').ChatConfigOverrides|null} overrides
+   */
   async function writeOverrides(chatId, overrides) {
     rememberLocal(chatId, { configOverrides: overrides });
     rememberStoredOverrides(chatId, overrides);
@@ -413,20 +528,33 @@ function createChatSessionSettings({
     return overrides;
   }
 
-  /** A proposal the user accepted on its card (#774), for that chat only. */
+  /**
+   * A proposal the user accepted on its card (#774), for that chat only.
+   *
+   * @param {unknown} rawChatId
+   * @param {import('../../shared/contracts/chat-configuration').ConfigProposalChange} proposal
+   */
   async function acceptConfigProposal(rawChatId, proposal) {
     const chatId = normalizeChatId(rawChatId);
     if (!chatId) return null;
     return writeOverrides(chatId, applyConfigProposal(await configOverridesFor(chatId), proposal));
   }
 
-  /** A proposal the user declined: the same one is not asked again in this chat. */
+  /**
+   * A proposal the user declined: the same one is not asked again in this chat.
+   *
+   * @param {unknown} rawChatId
+   * @param {import('../../shared/contracts/chat-configuration').ConfigProposalChange} proposal
+   */
   async function declineConfigProposalFor(rawChatId, proposal) {
     const chatId = normalizeChatId(rawChatId);
     if (!chatId) return null;
     return writeOverrides(chatId, declineConfigProposal(await configOverridesFor(chatId), proposal));
   }
 
+  /**
+   * @param {unknown} rawMode
+   */
   async function rememberMode(rawMode) {
     const mode = chatToolPermissionModeForStore(rawMode);
     if (!currentChatId || !mode) return;
@@ -437,6 +565,9 @@ function createChatSessionSettings({
   /**
    * Werte, die der Verlauf beim Speichern übernehmen soll. Quelle ist immer
    * dieser Dienst, nie die Nutzlast des Renderers.
+   *
+   * @param {unknown} rawChatId
+   * @returns {RememberedSettings}
    */
   function valuesFor(rawChatId) {
     const chatId = normalizeChatId(rawChatId);
@@ -444,6 +575,9 @@ function createChatSessionSettings({
     return { ...(remembered.get(chatId) || {}) };
   }
 
+  /**
+   * @param {unknown} rawChatId
+   */
   function forget(rawChatId) {
     const chatId = normalizeChatId(rawChatId);
     if (!chatId) return;

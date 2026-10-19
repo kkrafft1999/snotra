@@ -12,6 +12,12 @@ const { reasoningDefaultFor, reasoningLevelsFor, resolveReasoningLevel } = requi
 const { createCostEntry } = require('../../shared/contracts/cost');
 const { resolveProviderCapabilities, resolveProviderTraits } = require('../../shared/contracts/provider-capabilities');
 
+/** @typedef {import('../ports/provider-runtime-port').ProviderAdapter} ProviderAdapter */
+/** @typedef {import('../ports/provider-runtime-port').ProviderConfig} ProviderConfig */
+/** @typedef {import('../../shared/contracts/llm-target').ChatModelTarget} ChatModelTarget */
+/** @typedef {import('../../application/ports/llm-port').LlmPort} LlmPort */
+/** @typedef {ReturnType<import('../ports/llm-config-store-port').LlmConfigStorePort['resolveChatModelTarget']>} RawChatTarget */
+
 /**
  * `reasoningLevelFor(chatId)` answers with the chat's own reasoning level, or
  * nothing (#725); without `chatId` it asks for the chat on screen.
@@ -33,6 +39,10 @@ function createProviderLlmAdapter({
   // Prices for the estimated chat cost (#949); without it no round is priced.
   modelPrices = null,
 }) {
+  /**
+   * @param {RawChatTarget} raw
+   * @param {ProviderAdapter|null} provider
+   */
   function resolveProviderOptions(raw, provider) {
     if (raw.providerOptions && typeof raw.providerOptions === 'object') {
       return filterDeclaredPresetOptions(raw.providerOptions, provider);
@@ -43,12 +53,16 @@ function createProviderLlmAdapter({
   /**
    * The level belongs to the chat (#725): a field of the target, set only
    * when the model takes a level. Entries carry none since #726.
+   *
+   * @param {RawChatTarget} raw
+   * @param {string|null} ownLevel
+   * @returns {ChatModelTarget}
    */
   function toTarget(raw, ownLevel) {
     const provider = providerRuntime.getProvider(raw.providerId);
     const model = typeof raw.model === 'string' ? raw.model.trim() : '';
     const providerOptions = resolveProviderOptions(raw, provider);
-    const levelModel = model || provider?.defaultModel;
+    const levelModel = model || provider?.defaultModel || '';
     const reasoningEffort = resolveReasoningLevel({
       levels: reasoningLevelsFor(provider, levelModel),
       own: ownLevel,
@@ -65,12 +79,22 @@ function createProviderLlmAdapter({
     });
   }
 
-  /** Verbindungsquelle einer Runde: der Eintrag, sonst der Anbieter. */
+  /**
+   * Verbindungsquelle einer Runde: der Eintrag, sonst der Anbieter.
+   * @param {ChatModelTarget} target
+   */
   function scopeOf(target) {
     return target?.presetId ? { presetId: target.presetId } : {};
   }
 
+  /**
+   * @param {ProviderConfig|null|undefined} baseConfig
+   * @param {ChatModelTarget} target
+   * @param {ProviderAdapter} provider
+   * @returns {ProviderConfig & Record<string, unknown>}
+   */
   function mergeProviderConfig(baseConfig, target, provider) {
+    /** @type {ProviderConfig & Record<string, unknown>} */
     const merged = { ...(baseConfig || {}) };
     const opts = filterDeclaredPresetOptions(target.providerOptions, provider);
     for (const [key, value] of Object.entries(opts || {})) {
@@ -83,10 +107,20 @@ function createProviderLlmAdapter({
     return merged;
   }
 
+  /**
+   * @param {ChatModelTarget} target
+   * @param {ProviderAdapter} provider
+   * @param {ProviderConfig|null|undefined} baseConfig
+   * @returns {string}
+   */
   function resolveModel(target, provider, baseConfig) {
-    return target.model || baseConfig?.model || provider.defaultModel;
+    return target.model || baseConfig?.model || provider.defaultModel || '';
   }
 
+  /**
+   * @param {ProviderAdapter} provider
+   * @param {ProviderConfig} config
+   */
   function providerDisplayName(provider, config) {
     const custom = typeof config?.displayName === 'string' ? config.displayName.trim() : '';
     return custom || provider.name;
@@ -94,7 +128,7 @@ function createProviderLlmAdapter({
 
   /**
    * `chatId`: the chat the round is for; without it, the chat on screen.
-   * @param {{ chatId?: string }} [params]
+   * @type {LlmPort['resolveChatTarget']}
    */
   async function resolveChatTarget({ chatId } = {}) {
     const config = await llmConfigStore.readLLMConfig();
@@ -109,6 +143,7 @@ function createProviderLlmAdapter({
     return toTarget(raw, await readOwnLevel(chatId));
   }
 
+  /** @param {string} [chatId] */
   async function readOwnLevel(chatId) {
     try {
       return (await reasoningLevelFor(chatId)) || null;
@@ -118,6 +153,7 @@ function createProviderLlmAdapter({
     }
   }
 
+  /** @type {LlmPort['validateTarget']} */
   async function validateTarget(target, { forSend = false } = {}) {
     const provider = providerRuntime.getProvider(target.providerId);
     if (!provider) {
@@ -150,8 +186,11 @@ function createProviderLlmAdapter({
     return null;
   }
 
+  /** @type {LlmPort['prepareSendBundle']} */
   async function prepareSendBundle(target) {
     const provider = providerRuntime.getProvider(target.providerId);
+    // `validateTarget` refuses an unknown provider before a round starts.
+    if (!provider) throw new Error(`Unknown provider "${target.providerId}".`);
     const baseConfig = await providerSecrets.getEffectiveProviderConfig(
       target.providerId,
       scopeOf(target)
@@ -224,6 +263,9 @@ function createProviderLlmAdapter({
   /**
    * Prices one round with the model that served it (#949). A failure here
    * must never cost the user the answer, so it only drops the estimate.
+   *
+   * @param {{ providerId: string, model: string, config: ProviderConfig,
+   *   usage: { prompt: number, completion: number, total: number } }} round
    */
   async function priceRound({ providerId, model, config, usage }) {
     try {
@@ -238,6 +280,7 @@ function createProviderLlmAdapter({
   }
 
   // Which provider it was is in the bubble already; the sentence names none.
+  /** @param {unknown} err */
   function formatRoundError(err) {
     return describeFetchErrorMessage(err);
   }

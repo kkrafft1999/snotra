@@ -1,6 +1,18 @@
 'use strict';
 
 /**
+ * @typedef {ReturnType<typeof import('../services/storage-service').createStorageService>} StorageService
+ *
+ * The two MCP ports are told apart by what they leave out: the secrets stay
+ * with the second (the infrastructure-boundaries test reads the first one's
+ * text for exactly that).
+ * @typedef {Pick<StorageService, 'readMcpServers' | 'saveMcpServer' | 'deleteMcpServer'
+ *   | 'updateMcpServerKnownTools' | 'clearMcpServerDisabledTools'>} McpConfigStore
+ * @typedef {Pick<StorageService, 'getMcpServersForRuntime' | 'getMcpSecretValues'>} McpSecretsStore
+ */
+
+/**
+ * @param {StorageService} storage
  * @returns {import('../ports/llm-config-store-port').LlmConfigStorePort}
  */
 function createLlmConfigStorePort(storage) {
@@ -14,6 +26,7 @@ function createLlmConfigStorePort(storage) {
 }
 
 /**
+ * @param {StorageService} storage
  * @returns {import('../ports/ui-prefs-store-port').UiPrefsStorePort}
  */
 function createUiPrefsStorePort(storage) {
@@ -24,6 +37,7 @@ function createUiPrefsStorePort(storage) {
 }
 
 /**
+ * @param {StorageService} storage
  * @returns {import('../ports/chat-history-store-port').ChatHistoryStorePort}
  */
 function createChatHistoryStorePort(storage) {
@@ -49,7 +63,12 @@ function createChatHistoryStorePort(storage) {
   };
 }
 
-/** Schluessel des Web-Such-Dienstes (Issue #63) — eigene Datei, kein LLM-Anbieter. */
+/**
+ * Schluessel des Web-Such-Dienstes (Issue #63) — eigene Datei, kein LLM-Anbieter.
+ *
+ * @param {StorageService} storage
+ * @returns {Pick<StorageService, 'hasWebSearchApiKey' | 'getWebSearchApiKey' | 'setWebSearchApiKey'>}
+ */
 function createWebSearchStorePort(storage) {
   return {
     hasWebSearchApiKey: (...args) => storage.hasWebSearchApiKey(...args),
@@ -62,6 +81,9 @@ function createWebSearchStorePort(storage) {
  * MCP-Serverliste fuer Oberflaeche und Handler (Issue #108). Bewusst OHNE die
  * entschluesselnden Zugriffe: was an den Renderer geht, soll gar nicht erst
  * die Moeglichkeit haben, an ein Geheimnis zu kommen.
+ *
+ * @param {StorageService} storage
+ * @returns {McpConfigStore}
  */
 function createMcpConfigStorePort(storage) {
   return {
@@ -77,6 +99,9 @@ function createMcpConfigStorePort(storage) {
  * Das entschluesselnde Gegenstueck — nur fuer den Dienst, der die Prozesse
  * startet, und fuer den Abgleich gegen Tool-Ausgaben (Konzept §5). Geht nie
  * an den Renderer.
+ *
+ * @param {StorageService} storage
+ * @returns {McpSecretsStore}
  */
 function createMcpSecretsPort(storage) {
   return {
@@ -86,6 +111,7 @@ function createMcpSecretsPort(storage) {
 }
 
 /**
+ * @param {StorageService} storage
  * @returns {import('../ports/workspace-folder-store-port').WorkspaceFolderStorePort}
  */
 function createWorkspaceFolderStorePort(storage) {

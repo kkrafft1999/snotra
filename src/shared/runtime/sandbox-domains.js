@@ -29,8 +29,13 @@ const MAX_DOMAIN_CHARS = 253;
 const DOMAIN_PATTERN = /^(\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(:\d{1,5})?$/;
 const IP_LITERAL = /^[\d.]+(:\d+)?$/;
 
+/**
+ * @param {unknown} list
+ * @returns {string[]}
+ */
 function normalizeDomains(list) {
   if (!Array.isArray(list)) return [];
+  /** @type {string[]} */
   const out = [];
   const seen = new Set();
   for (const raw of list) {
@@ -62,8 +67,13 @@ const PACKAGE_INSTALLS = Object.freeze([
   },
 ]);
 
+/**
+ * @param {unknown} command
+ * @returns {string[]}
+ */
 function suggestDomains(command) {
   const text = typeof command === 'string' ? command : '';
+  /** @type {string[]} */
   const out = [];
   for (const entry of PACKAGE_INSTALLS) {
     if (entry.pattern.test(text)) out.push(...entry.domains);
@@ -77,6 +87,10 @@ function suggestDomains(command) {
  * its command; a Python program gets what it declares and nothing else — its
  * description says "no pip install", and a subprocess inside the script is
  * not something to guess about.
+ *
+ * @param {string | undefined} execution  One of `TOOL_EXECUTION_KINDS`.
+ * @param {{ network_domains?: unknown, command?: unknown } | null | undefined} args
+ * @returns {string[]}
  */
 function resolveNetworkDomains(execution, args) {
   const declared = Array.isArray(args?.network_domains) ? args.network_domains : [];
@@ -87,6 +101,11 @@ function resolveNetworkDomains(execution, args) {
 /**
  * The domains of one run with a program allowance (#408): the allowance's
  * first, so the cap never pushes out what the user set, then the call's own.
+ *
+ * @param {string | undefined} execution
+ * @param {{ network_domains?: unknown, command?: unknown } | null | undefined} args
+ * @param {{ domains?: string[], writePaths?: string[], trustd?: boolean } | null | undefined} allowance  A program allowance.
+ * @returns {string[]}
  */
 function resolveRunDomains(execution, args, allowance) {
   const declared = resolveNetworkDomains(execution, args);

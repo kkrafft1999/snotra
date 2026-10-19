@@ -10,11 +10,19 @@ const TRANSCRIPTION_TIMEOUT_MS = 120_000;
 // words (#308), `message` is for logs and stack traces only. Since #310 nothing
 // shows `message` to the user any more — model listing and transcription both
 // go through `userMessageOf`.
+/**
+ * @param {string} text
+ * @param {import('../../shared/contracts/message').Message} userMessage
+ */
 function abortReason(text, userMessage) {
   return Object.assign(new Error(text), { userMessage });
 }
 
-/** What to show for a failed request: the key if there is one, else the text. */
+/**
+ * What to show for a failed request: the key if there is one, else the text.
+ * @param {{ userMessage?: string | import('../../shared/contracts/message').Message, message?: string } | null | undefined} err
+ * @returns {string | import('../../shared/contracts/message').Message | undefined}
+ */
 function userMessageOf(err) {
   return err?.userMessage || err?.message;
 }
@@ -32,7 +40,9 @@ async function withRequestTimeout(operation, { timeoutMs, signal }) {
   const abort = () => controller.abort(
     abortReason('Request cancelled.', createMessage('provider.error.cancelled'))
   );
-  let rejectAbort;
+  /** @type {(reason: unknown) => void} */
+  let rejectAbort = () => {};
+  /** @type {Promise<never>} */
   const aborted = new Promise((_, reject) => { rejectAbort = reject; });
   const onAbort = () => rejectAbort(controller.signal.reason);
   controller.signal.addEventListener('abort', onAbort, { once: true });

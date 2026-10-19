@@ -19,6 +19,9 @@
 
 const { MCP_TRANSPORTS } = require('../../shared/contracts/mcp');
 
+/** @typedef {import('../../shared/contracts/mcp').McpServerConfig} McpServerConfig */
+/** @typedef {import('../../shared/contracts/mcp').McpSecretInputEntry} McpSecretInputEntry */
+
 /**
  * A stored server as far as its launch goes. `env` names each variable with
  * whether its value is secret; a plain value comes with it.
@@ -32,12 +35,14 @@ const { MCP_TRANSPORTS } = require('../../shared/contracts/mcp');
  */
 
 /**
- * @param {{ transport: string, command?: string, args?: string[], cwd?: string|null, env?: object }|null} stored
+ * @param {{ transport: string, command?: string, args?: string[], cwd?: string|null,
+ *   env?: Record<string, { enc?: unknown, value?: unknown } | null | undefined> }|null|undefined} stored
  *   a server as the store keeps it: env values `{ enc }` or `{ value }`
  * @returns {McpLaunchBefore|null}
  */
 function launchBeforeFromStored(stored) {
   if (!stored) return null;
+  /** @type {McpLaunchBefore['env']} */
   const env = {};
   for (const [key, entry] of Object.entries(stored.env || {})) {
     env[key] = typeof entry?.enc === 'string'
@@ -48,12 +53,14 @@ function launchBeforeFromStored(stored) {
 }
 
 /**
- * @param {{ transport: string, command?: string, args?: string[], cwd?: string|null, env?: object[] }|null} listed
+ * @param {{ transport: string, command?: string, args?: string[], cwd?: string|null,
+ *   env?: import('../../shared/contracts/mcp').McpMaskedEntry[] }|null|undefined} listed
  *   a server as the window sees it: env a masked list of `{ key, secret, value? }`
  * @returns {McpLaunchBefore|null}
  */
 function launchBeforeFromListed(listed) {
   if (!listed) return null;
+  /** @type {McpLaunchBefore['env']} */
   const env = {};
   for (const entry of Array.isArray(listed.env) ? listed.env : []) {
     if (!entry || typeof entry.key !== 'string') continue;
@@ -64,13 +71,21 @@ function launchBeforeFromListed(listed) {
   return { transport: listed.transport, command: listed.command, args: listed.args, cwd: listed.cwd, env };
 }
 
+/**
+ * @param {unknown} a
+ * @param {unknown} b
+ */
 function sameList(a, b) {
   const left = Array.isArray(a) ? a : [];
   const right = Array.isArray(b) ? b : [];
   return left.length === right.length && left.every((item, i) => item === right[i]);
 }
 
-/** Whether one variable of the save leaves the stored one as it was. */
+/**
+ * Whether one variable of the save leaves the stored one as it was.
+ * @param {McpSecretInputEntry} entry
+ * @param {McpLaunchBefore['env'][string]} before
+ */
 function sameEnvEntry(entry, before) {
   if (entry.keep) return true;
   // A secret typed in again counts as new: the stored one cannot be compared
@@ -83,9 +98,9 @@ function sameEnvEntry(entry, before) {
 /**
  * Whether storing this server lets a command run that nobody confirmed.
  *
- * @param {{ transport: string, command: string, args: string[], cwd: string|null }|null} value
+ * @param {McpServerConfig|null} value
  *   the validated server (`validateMcpServerInput(...).value`)
- * @param {{ key: string, secret: boolean, value: string|null, keep?: boolean }[]} envEntries
+ * @param {McpSecretInputEntry[]} envEntries
  * @param {McpLaunchBefore|null} before  the server stored under the same id
  */
 function mcpLaunchNeedsConfirmation(value, envEntries, before) {
@@ -104,11 +119,17 @@ function mcpLaunchNeedsConfirmation(value, envEntries, before) {
  * The subject the receipt is bound to: the server and everything it starts.
  * A secret goes into it as typed; the subject lives only in memory, for the
  * minute between the click and the write.
+ *
+ * @param {McpServerConfig|null} value
+ * @param {McpSecretInputEntry[]} envEntries
  */
 function mcpLaunchSubject(value, envEntries) {
-  const env = (Array.isArray(envEntries) ? envEntries : [])
-    .map((entry) => [entry.key, entry.secret === true, entry.keep ? null : entry.value])
-    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  /** @type {Array<[string, boolean, string|null]>} */
+  const env = [];
+  for (const entry of Array.isArray(envEntries) ? envEntries : []) {
+    env.push([entry.key, entry.secret === true, entry.keep ? null : entry.value]);
+  }
+  env.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
   return JSON.stringify([value?.id, value?.command, value?.args || [], value?.cwd || '', env]);
 }
 

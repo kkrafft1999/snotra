@@ -7,6 +7,26 @@
  */
 
 const { SKILL_SOURCES } = require('./skills');
+const { isRecord } = require('../runtime/is-record');
+
+/**
+ * Where the user changes a setting: a `{menu:…}` name of `ui-quotes.js`, the
+ * settings panel, and the heading it opens on.
+ *
+ * @typedef {Object} SettingsPlace
+ * @property {string} menu
+ * @property {string} panel
+ * @property {string|null} target
+ */
+
+/**
+ * One switch a proposal asks for.
+ *
+ * @typedef {Object} ConfigProposalChange
+ * @property {string} kind  a `CONFIG_PROPOSAL_KINDS` value
+ * @property {string} name
+ * @property {boolean} enable
+ */
 
 /** The model's read-only view of the configuration. */
 const GET_CONFIGURATION_TOOL = 'get_configuration';
@@ -68,6 +88,8 @@ const TOOL_SETUPS = Object.freeze({
  * Where the user changes it, as a `{menu:…}` name of `ui-quotes.js` plus the
  * heading the settings open on. Setups that no setting fixes (no shell on
  * the system) have none.
+ *
+ * @type {Readonly<Record<string, SettingsPlace>>}
  */
 const SETUP_PLACES = Object.freeze({
   [TOOL_SETUPS.PYTHON_SWITCH]: { menu: 'settings.security', panel: 'security', target: null },
@@ -78,7 +100,9 @@ const SETUP_PLACES = Object.freeze({
   [TOOL_SETUPS.MCP]: { menu: 'settings.tools', panel: 'tools', target: 'heading-mcp-servers' },
 });
 
+/** @type {SettingsPlace} */
 const SWITCHED_OFF_PLACE = Object.freeze({ menu: 'settings.security', panel: 'security', target: null });
+/** @type {SettingsPlace} */
 const SKILLS_PLACE = Object.freeze({ menu: 'settings.skills', panel: 'skills', target: null });
 
 /**
@@ -86,6 +110,7 @@ const SKILLS_PLACE = Object.freeze({ menu: 'settings.skills', panel: 'skills', t
  * does — a missing folder is opened, not configured.
  *
  * @param {{ reason?: string | null, setup?: string | null }} [offer]
+ * @returns {SettingsPlace|null}
  */
 function toolSettingsPlace({ reason = null, setup = null } = {}) {
   if (reason === TOOL_OFFER_REASONS.SWITCHED_OFF) return SWITCHED_OFF_PLACE;
@@ -104,19 +129,33 @@ const CONFIG_TOOL_GROUPS = Object.freeze({
   OTHER: 'other',
 });
 
-/** Whether a value is one of the groups; a descriptor names its own (#1008). */
+/**
+ * Whether a value is one of the groups; a descriptor names its own (#1008).
+ *
+ * @param {unknown} value
+ */
 function isConfigToolGroup(value) {
-  return Object.values(CONFIG_TOOL_GROUPS).includes(value);
+  return Object.values(CONFIG_TOOL_GROUPS).some((group) => group === value);
 }
 
-/** The three places a skill comes from, as the model is told. */
+/**
+ * The three places a skill comes from, as the model is told.
+ *
+ * @param {unknown} source
+ * @returns {'system'|'folder'|'user'}
+ */
 function skillOrigin(source) {
   if (source === SKILL_SOURCES.SYSTEM) return 'system';
   if (source === SKILL_SOURCES.WORKSPACE_AGENTS) return 'folder';
   return 'user';
 }
 
-/** Cut a description for the model and the popover, at a word where one is near. */
+/**
+ * Cut a description for the model and the popover, at a word where one is near.
+ *
+ * @param {unknown} text
+ * @param {number} [max]
+ */
 function clipConfigDescription(text, max = MAX_CONFIG_DESCRIPTION_CHARS) {
   const flat = String(text || '').replace(/\s+/g, ' ').trim();
   if (flat.length <= max) return flat;
@@ -125,8 +164,16 @@ function clipConfigDescription(text, max = MAX_CONFIG_DESCRIPTION_CHARS) {
   return `${(space > max * 0.6 ? cut.slice(0, space) : cut).trimEnd()}…`;
 }
 
+/** @type {Array<'tools'|'skills'>} */
+const OVERRIDE_KINDS = ['tools', 'skills'];
+
+/**
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
 function cleanOverrideNames(raw) {
   if (!Array.isArray(raw)) return [];
+  /** @type {string[]} */
   const names = raw
     .filter((name) => typeof name === 'string' && name.trim() && name.length <= 128)
     .map((name) => name.trim());
@@ -144,19 +191,23 @@ function cleanOverrideNames(raw) {
  * @property {{ on?: string[], off?: string[] }} [skills]
  * @property {string[]} [declined]  `proposalKey`s of the proposals the user declined
  *
- * @param {*} raw  anything; only an object can pass
+ * @param {unknown} raw  anything; only an object can pass
  * @returns {ChatConfigOverrides|null}
  */
 function normalizeChatConfigOverrides(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
+  /** @type {ChatConfigOverrides} */
   const out = {};
-  for (const kind of ['tools', 'skills']) {
-    const on = cleanOverrideNames(raw[kind]?.on);
-    const off = cleanOverrideNames(raw[kind]?.off).filter((name) => !on.includes(name));
+  for (const kind of OVERRIDE_KINDS) {
+    const lists = isRecord(raw[kind]) ? raw[kind] : {};
+    const on = cleanOverrideNames(lists.on);
+    const off = cleanOverrideNames(lists.off).filter((name) => !on.includes(name));
     if (on.length || off.length) {
-      out[kind] = {};
-      if (on.length) out[kind].on = on;
-      if (off.length) out[kind].off = off;
+      /** @type {{ on?: string[], off?: string[] }} */
+      const entry = {};
+      if (on.length) entry.on = on;
+      if (off.length) entry.off = off;
+      out[kind] = entry;
     }
   }
   const declined = cleanOverrideNames(raw.declined);
@@ -164,7 +215,11 @@ function normalizeChatConfigOverrides(raw) {
   return Object.keys(out).length ? out : null;
 }
 
-/** The key a declined proposal is remembered by: same kind, name and direction. */
+/**
+ * The key a declined proposal is remembered by: same kind, name and direction.
+ *
+ * @param {ConfigProposalChange} proposal
+ */
 function proposalKey({ kind, name, enable }) {
   return `${kind}:${enable ? 'on' : 'off'}:${name}`;
 }
@@ -172,6 +227,10 @@ function proposalKey({ kind, name, enable }) {
 /**
  * The tools switched off in a chat: the settings' list, without what the chat
  * switched on and with what it switched off.
+ *
+ * @param {unknown} disabledTools
+ * @param {ChatConfigOverrides|null|undefined} overrides
+ * @returns {string[]}
  */
 function effectiveDisabledTools(disabledTools, overrides) {
   const base = Array.isArray(disabledTools) ? disabledTools : [];
@@ -183,18 +242,29 @@ function effectiveDisabledTools(disabledTools, overrides) {
 /**
  * The overrides after one accepted proposal. Switching back to what the
  * settings say drops the entry instead of recording it twice.
+ *
+ * @param {unknown} overrides
+ * @param {ConfigProposalChange} proposal
+ * @returns {ChatConfigOverrides|null}
  */
 function applyConfigProposal(overrides, { kind, name, enable }) {
   const key = kind === CONFIG_PROPOSAL_KINDS.SKILL ? 'skills' : 'tools';
   const current = normalizeChatConfigOverrides(overrides) || {};
   const lists = { on: [...(current[key]?.on || [])], off: [...(current[key]?.off || [])] };
-  const [add, drop] = enable ? ['on', 'off'] : ['off', 'on'];
+  const add = enable ? 'on' : 'off';
+  const drop = enable ? 'off' : 'on';
   if (lists[drop].includes(name)) lists[drop] = lists[drop].filter((entry) => entry !== name);
   else if (!lists[add].includes(name)) lists[add].push(name);
   return normalizeChatConfigOverrides({ ...current, [key]: lists });
 }
 
-/** The overrides with one more declined proposal. */
+/**
+ * The overrides with one more declined proposal.
+ *
+ * @param {unknown} overrides
+ * @param {ConfigProposalChange} proposal
+ * @returns {ChatConfigOverrides|null}
+ */
 function declineConfigProposal(overrides, proposal) {
   const current = normalizeChatConfigOverrides(overrides) || {};
   return normalizeChatConfigOverrides({ ...current, declined: [...(current.declined || []), proposalKey(proposal)] });

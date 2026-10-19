@@ -60,7 +60,7 @@
     "main/services/python-runner-service.js": 3,
     "main/services/raw-fs.js": 1,
     "main/services/read-regular-file.js": 2,
-    "main/services/realtime-transcription-service.js": 3,
+    "main/services/realtime-transcription-service.js": 2,
     "main/services/remembered-ui-prefs.js": 2,
     "main/services/sandbox-service.js": 9,
     "main/services/sandbox-violations.js": 1,

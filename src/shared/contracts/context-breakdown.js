@@ -18,6 +18,45 @@
  */
 'use strict';
 
+const { isRecord } = require('../runtime/is-record');
+
+/** @typedef {'system'|'skills'|'tools'|'history'} ContextPartGroup */
+/** @typedef {'prose'|'markdown'|'json'} ContextContentKind */
+/** @typedef {Readonly<Record<ContextContentKind, number>>} CharsPerTokenProfile  divisor per content kind */
+
+/**
+ * A building block of the prompt as it is stored and shown. `labelKey`,
+ * `detailKey` and `params` stand in for a finished sentence (#290, #293).
+ *
+ * @typedef {Object} ContextPart
+ * @property {string} id
+ * @property {ContextPartGroup} group
+ * @property {string} label
+ * @property {string} detail
+ * @property {number} chars
+ * @property {ContextContentKind} contentKind
+ * @property {string} [labelKey]
+ * @property {string} [detailKey]
+ * @property {Object<string, unknown>} [params]
+ * @property {string} [skillName]
+ * @property {number} [count]
+ */
+
+/**
+ * A part with its tokens: estimated, or scaled to the provider's real count.
+ *
+ * @typedef {ContextPart & { tokens: number, share: number }} ContextPartRow
+ */
+
+/**
+ * @typedef {Object} ContextBreakdown
+ * @property {number} version
+ * @property {number} promptTokens  the provider's real count
+ * @property {number} estimatedTokens  the sum of the estimates
+ * @property {boolean} scaled  whether the rows were scaled to `promptTokens`
+ * @property {number} total
+ * @property {ContextPartRow[]} parts
+ */
 
 // Stamped on a breakdown, which is stored with the chat. Nothing reads it yet;
 // it lets a later shape tell the old stored ones apart.
@@ -31,6 +70,7 @@ const CONTEXT_PART_GROUPS = Object.freeze({
   HISTORY: 'history',
 });
 
+/** @type {readonly ContextPartGroup[]} */
 const CONTEXT_PART_GROUP_ORDER = Object.freeze([
   CONTEXT_PART_GROUPS.SYSTEM,
   CONTEXT_PART_GROUPS.SKILLS,
@@ -38,6 +78,7 @@ const CONTEXT_PART_GROUP_ORDER = Object.freeze([
   CONTEXT_PART_GROUPS.HISTORY,
 ]);
 
+/** @type {Readonly<Record<ContextPartGroup, string>>} */
 const CONTEXT_PART_GROUP_LABEL_KEYS = Object.freeze({
   [CONTEXT_PART_GROUPS.SYSTEM]: 'context.group.system',
   [CONTEXT_PART_GROUPS.SKILLS]: 'context.group.skills',
@@ -73,7 +114,7 @@ const CONTEXT_CONTENT_KINDS = Object.freeze({
  * Messverfahren fuer beide Profile: denselben Text einmal zaehlen
  * (`text.length`) und einmal durch den Tokenizer schicken, Quotient bilden.
  */
-const CHARS_PER_TOKEN_PROFILES = Object.freeze({
+const CHARS_PER_TOKEN_PROFILES = /** @type {Readonly<Record<string, CharsPerTokenProfile>>} */ (Object.freeze({
   /**
    * Lokale Modelle (MLX-LM, Ollama), gemessen gegen Qwen am 2026-09-18
    * (Issue #169). Deutscher Fliesstext und Markdown liegen nahe an der
@@ -103,7 +144,7 @@ const CHARS_PER_TOKEN_PROFILES = Object.freeze({
     [CONTEXT_CONTENT_KINDS.MARKDOWN]: 3.8,
     [CONTEXT_CONTENT_KINDS.JSON]: 4.1,
   }),
-});
+}));
 
 /**
  * Ohne Messung kein eigenes Profil.
@@ -129,6 +170,7 @@ const CHARS_PER_TOKEN = CHARS_PER_TOKEN_PROFILES[DEFAULT_CHARS_PER_TOKEN_PROFILE
  * model answers, and that is what `local` was measured against.
  *
  * @param {string} [profileName]
+ * @returns {CharsPerTokenProfile}
  */
 function charsPerTokenProfile(profileName) {
   const key = typeof profileName === 'string' && Object.hasOwn(CHARS_PER_TOKEN_PROFILES, profileName)
@@ -137,10 +179,18 @@ function charsPerTokenProfile(profileName) {
   return CHARS_PER_TOKEN_PROFILES[key];
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is ContextContentKind}
+ */
 function isContentKind(value) {
-  return Object.prototype.hasOwnProperty.call(CHARS_PER_TOKEN, value);
+  return typeof value === 'string' && Object.hasOwn(CHARS_PER_TOKEN, value);
 }
 
+/**
+ * @param {unknown} contentKind
+ * @param {string} [profileName]
+ */
 function charsPerToken(contentKind, profileName) {
   const profile = charsPerTokenProfile(profileName);
   return isContentKind(contentKind)
@@ -148,19 +198,27 @@ function charsPerToken(contentKind, profileName) {
     : profile[CONTEXT_CONTENT_KINDS.PROSE];
 }
 
+/** @param {unknown} value */
 function toCount(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.round(n);
 }
 
-/** Schaetzt Tokens aus einer Zeichenzahl. Mindestens 1, solange Zeichen da sind. */
+/**
+ * Schaetzt Tokens aus einer Zeichenzahl. Mindestens 1, solange Zeichen da sind.
+ *
+ * @param {unknown} chars
+ * @param {unknown} contentKind
+ * @param {string} [profileName]
+ */
 function estimateTokensFromChars(chars, contentKind, profileName) {
   const count = toCount(chars);
   if (count === 0) return 0;
   return Math.max(1, Math.round(count / charsPerToken(contentKind, profileName)));
 }
 
+/** @param {unknown} value */
 function text(value) {
   return typeof value === 'string' ? value : '';
 }
@@ -190,7 +248,7 @@ function shortPathDetail(shortPath, { inFolder = false, truncated = false, guard
  *
  * @typedef {Object} ContextPartInput
  * @property {string} [id]
- * @property {string} [group]        a CONTEXT_PART_GROUPS value
+ * @property {string} [group]        a CONTEXT_PART_GROUPS value, anything else counts as `system`
  * @property {string} [label]
  * @property {string} [labelKey]
  * @property {string} [detail]
@@ -202,6 +260,7 @@ function shortPathDetail(shortPath, { inFolder = false, truncated = false, guard
  * @property {number} [count]
  *
  * @param {ContextPartInput} [input]
+ * @returns {ContextPart}
  */
 function createContextPart({
   id,
@@ -216,9 +275,10 @@ function createContextPart({
   skillName = '',
   count,
 } = {}) {
+  /** @type {ContextPart} */
   const part = {
     id: text(id) || text(label) || text(labelKey),
-    group: CONTEXT_PART_GROUP_ORDER.includes(group) ? group : CONTEXT_PART_GROUPS.SYSTEM,
+    group: CONTEXT_PART_GROUP_ORDER.find((known) => known === group) ?? CONTEXT_PART_GROUPS.SYSTEM,
     label: text(label),
     detail: text(detail),
     chars: toCount(chars),
@@ -251,9 +311,9 @@ function createContextPart({
  * nur die Gewichte zwischen den Zeilen. Genau darum geht es: Bisher bekam der
  * Block „Tool-Definitionen" bei OpenAI rund 80 % zu viel Gewicht, und Verlauf
  * und Skills entsprechend zu wenig.
- */
-/**
- * @param {{ parts?: Array<object>, promptTokens?: number, tokenizerProfile?: string }} [input]
+ *
+ * @param {{ parts?: Array<ContextPartInput>, promptTokens?: number, tokenizerProfile?: string }} [input]
+ * @returns {ContextBreakdown}
  */
 function createContextBreakdown({ parts = [], promptTokens = 0, tokenizerProfile = '' } = {}) {
   const usable = (Array.isArray(parts) ? parts : [])
@@ -312,23 +372,26 @@ function createContextBreakdown({ parts = [], promptTokens = 0, tokenizerProfile
 /**
  * Defensive Annahme im Renderer: Der Wert kommt ueber IPC und wird wie jede
  * fremde Eingabe geprueft, statt ihm zu glauben.
+ *
+ * @param {unknown} raw
+ * @returns {ContextBreakdown|null}
  */
 function normalizeContextBreakdown(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   const parts = Array.isArray(raw.parts) ? raw.parts : [];
   if (parts.length === 0) return null;
   const promptTokens = toCount(raw.promptTokens);
   const estimatedTokens = toCount(raw.estimatedTokens);
   const scaled = raw.scaled === true && promptTokens > 0;
   const total = scaled ? promptTokens : estimatedTokens;
-  const rows = parts
-    .map((part) => {
-      const normalized = createContextPart(part);
-      const tokens = toCount(part?.tokens);
-      if (tokens === 0) return null;
-      return { ...normalized, tokens, share: total > 0 ? tokens / total : 0 };
-    })
-    .filter(Boolean);
+  /** @type {ContextPartRow[]} */
+  const rows = [];
+  for (const part of parts) {
+    const normalized = createContextPart(part);
+    const tokens = toCount(part?.tokens);
+    if (tokens === 0) continue;
+    rows.push({ ...normalized, tokens, share: total > 0 ? tokens / total : 0 });
+  }
   if (rows.length === 0) return null;
   return {
     version: CONTEXT_BREAKDOWN_VERSION,
@@ -344,9 +407,12 @@ function normalizeContextBreakdown(raw) {
  * Anzeige-Reihenfolge: Gruppen in fester Folge, innerhalb einer Gruppe der
  * teuerste Posten zuerst — die Frage lautet „was kostet am meisten", nicht
  * „was kam zuerst". Gruppen ohne Zeilen fallen weg.
+ *
+ * @param {{ parts?: ContextPartRow[], total?: number }|null|undefined} breakdown
  */
 function groupContextParts(breakdown) {
   const parts = Array.isArray(breakdown?.parts) ? breakdown.parts : [];
+  const whole = breakdown?.total ?? 0;
   return CONTEXT_PART_GROUP_ORDER.map((group) => {
     const rows = parts
       .filter((part) => part.group === group)
@@ -356,7 +422,7 @@ function groupContextParts(breakdown) {
       group,
       labelKey: CONTEXT_PART_GROUP_LABEL_KEYS[group],
       tokens,
-      share: breakdown?.total > 0 ? tokens / breakdown.total : 0,
+      share: whole > 0 ? tokens / whole : 0,
       parts: rows,
     };
   }).filter((entry) => entry.parts.length > 0);

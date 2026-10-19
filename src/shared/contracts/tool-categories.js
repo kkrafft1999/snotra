@@ -39,11 +39,16 @@ const TOOL_CATEGORIES = Object.freeze({
   OTHER: 'other',
 });
 
+/** @type {Set<unknown>} */
 const CATEGORY_VALUES = new Set(Object.values(TOOL_CATEGORIES));
 
 /**
- * @param {any} value
- * @returns {value is string}
+ * @typedef {(typeof TOOL_CATEGORIES)[keyof typeof TOOL_CATEGORIES]} ToolCategory
+ */
+
+/**
+ * @param {unknown} value
+ * @returns {value is ToolCategory}
  */
 function isToolCategory(value) {
   return CATEGORY_VALUES.has(value);
@@ -54,6 +59,10 @@ function isToolCategory(value) {
  * descriptor, #1008) and the skill the call touched. Skill goes before the
  * kind of tool: that a file came out of a skill folder matters more to the
  * user than which read tool fetched it.
+ *
+ * @param {unknown} toolCategory
+ * @param {unknown} skill
+ * @returns {ToolCategory}
  */
 function entryToolCategory(toolCategory, skill) {
   const category = isToolCategory(toolCategory) ? toolCategory : TOOL_CATEGORIES.OTHER;
@@ -69,6 +78,9 @@ function entryToolCategory(toolCategory, skill) {
  * filled in on entries loaded from before; the skill is combined with it here
  * because the engine may learn it after the entry was made (#427). Without
  * tool and skill an entry has none (sessions stored before #60).
+ *
+ * @param {{ tool?: unknown, skill?: unknown, category?: unknown } | null | undefined} entry
+ * @returns {ToolCategory | null}
  */
 function toolCategoryForEntry(entry) {
   if (!entry || typeof entry !== 'object') return null;

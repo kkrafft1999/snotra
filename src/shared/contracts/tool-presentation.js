@@ -55,21 +55,37 @@ const TOOL_EXECUTION_KINDS = Object.freeze({
   PYTHON: 'python',
 });
 
+/** @type {Set<unknown>} */
 const VERBS = new Set(Object.values(TOOL_APPROVAL_VERBS));
+/** @type {Set<unknown>} */
 const WARNINGS = new Set(Object.values(TOOL_APPROVAL_WARNINGS));
+/** @type {Set<unknown>} */
 const EXTERNAL_SERVICES = new Set(Object.values(TOOL_EXTERNAL_SERVICES));
 
+/** @param {unknown} value */
 function isToolApprovalVerb(value) {
   return VERBS.has(value);
 }
 
+/** @param {unknown} value */
 function isToolApprovalWarning(value) {
   return WARNINGS.has(value);
 }
 
+/** @param {unknown} value */
 function isToolExternalService(value) {
   return EXTERNAL_SERVICES.has(value);
 }
+
+/**
+ * @typedef {{ category: string, verb?: string, warning?: string }} ToolPresentation
+ * @typedef {{
+ *   category?: string,
+ *   verb?: string,
+ *   warning?: string,
+ *   approval?: { verb?: string, warning?: string },
+ * }} ToolPresentationInput
+ */
 
 /**
  * The presentation of a tool as it travels to the renderer, from a
@@ -78,16 +94,11 @@ function isToolExternalService(value) {
  * category falls back to `other`, so a card for a tool without a descriptor
  * (an MCP tool) still has one.
  *
- * @param {{
- *   category?: string,
- *   verb?: string,
- *   warning?: string,
- *   approval?: { verb?: string, warning?: string },
- * }|null|undefined} raw
- * @returns {{ category: string, verb?: string, warning?: string }}
+ * @param {ToolPresentationInput|null|undefined} raw
+ * @returns {ToolPresentation}
  */
 function normalizeToolPresentation(raw) {
-  /** @type {{ category: string, verb?: string, warning?: string }} */
+  /** @type {ToolPresentation} */
   const out = { category: isToolCategory(raw?.category) ? raw.category : TOOL_CATEGORIES.OTHER };
   const nested = raw?.approval && typeof raw.approval === 'object' ? raw.approval : null;
   const verb = nested ? nested.verb : raw?.verb;

@@ -5,6 +5,7 @@
  */
 'use strict';
 
+/** @param {string} s */
 function escapeRegExp(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

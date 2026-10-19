@@ -12,6 +12,7 @@ const google = require('./google');
 const ollama = require('./ollama');
 const openaiCompatible = require('./openai-compatible');
 
+/** @type {Record<string, ProviderAdapter>} */
 const PROVIDERS = {
   openai,
   anthropic,
@@ -21,11 +22,16 @@ const PROVIDERS = {
 };
 const PROVIDER_ORDER = ['openai', 'anthropic', 'google', 'ollama', 'openai-compatible'];
 
+/**
+ * @param {unknown} id
+ * @returns {ProviderAdapter|null}
+ */
 function getProvider(id) {
   // Own keys only: `toString` or `constructor` are no providers (#562).
   return typeof id === 'string' && Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : null;
 }
 
+/** @returns {import('../ports/provider-runtime-port').ProviderMeta[]} */
 function listProviderMeta() {
   return PROVIDER_ORDER.map((id) => {
     const p = PROVIDERS[id];

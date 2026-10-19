@@ -14,6 +14,22 @@
  */
 'use strict';
 
+/**
+ * @typedef {Object} ContentRule
+ * @property {string} id
+ * @property {RegExp} regex
+ * @property {number[]} [valueGroups]  capture groups that hold the assigned value
+ * @property {number} [quotedGroup]  the group that means the value was quoted
+ */
+
+/**
+ * A finding: the rule and the line, never the value.
+ *
+ * @typedef {Object} SensitiveFinding
+ * @property {string} rule
+ * @property {number} line
+ */
+
 const SENSITIVE_CONTENT_RULES_VERSION = 1;
 
 /** Standardbegrenzung: größere Texte gelten als „nicht prüfbar“ (Konzept §4). */
@@ -38,6 +54,7 @@ const CREDENTIAL_KEYS =
 // ausgeschriebene Aufforderungen („your-api-key“, „changeme“, „example“).
 const PLACEHOLDER_VALUE = /^(?:<[^>]*>|\$\{[^}]*\}|\{\{[^}]*\}\}|%[^%]*%|[x*•]{4,}|(?:your|my|the)[-_ ]?\S*|change[-_ ]?me\S*|example\S*|placeholder\S*|todo\S*|xxx+\S*|dummy\S*|sample\S*|null|none|undefined|true|false)$/i;
 
+/** @type {readonly ContentRule[]} */
 const CONTENT_RULES = Object.freeze([
   {
     id: 'private-key-header',
@@ -98,6 +115,11 @@ const CONTENT_RULES = Object.freeze([
   },
 ]);
 
+/**
+ * @param {ContentRule} rule
+ * @param {ReadonlyArray<string|undefined>} groups  the match with the whole match first
+ * @returns {{ value: string, quoted: boolean }|null}
+ */
 function extractAssignmentValue(rule, groups) {
   if (!rule.valueGroups) return null;
   for (const group of rule.valueGroups) {
@@ -108,6 +130,10 @@ function extractAssignmentValue(rule, groups) {
   return null;
 }
 
+/**
+ * @param {string} text
+ * @param {number} index
+ */
 function lineNumberAt(text, index) {
   let line = 1;
   for (let i = 0; i < index && i < text.length; i += 1) {
@@ -116,6 +142,9 @@ function lineNumberAt(text, index) {
   return line;
 }
 
+/**
+ * @param {unknown} value
+ */
 function isPlaceholderValue(value) {
   const trimmed = String(value ?? '').trim();
   if (!trimmed) return true;
@@ -131,6 +160,9 @@ const DOTTED_IDENTIFIER = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+$/;
  * Anführungszeichen machen eine Zeichenkette glaubhaft; ohne sie (.env-Stil)
  * muss der Wert eine Ziffer enthalten oder lang sein, damit gewöhnlicher
  * Code (`token = getToken`) nicht bei jedem Lesen anschlägt.
+ *
+ * @param {unknown} value
+ * @param {{ quoted: boolean }} options
  */
 function looksLikeSecretValue(value, { quoted }) {
   const trimmed = String(value ?? '').trim();
@@ -144,10 +176,15 @@ function looksLikeSecretValue(value, { quoted }) {
  * Prüft einen Text. Liefert `{ sensitive, findings: [{ rule, line }], scannable }`.
  * `scannable = false` heißt: zu groß oder kein Text — der Aufrufer darf dann
  * keine ungeprüften Inhalte ausgeben.
+ *
+ * @param {unknown} rawText
+ * @param {{ maxChars?: number }} [options]
+ * @returns {{ sensitive: boolean, findings: SensitiveFinding[], scannable: boolean }}
  */
 function scanSensitiveContent(rawText, { maxChars = DEFAULT_SCAN_LIMIT_CHARS } = {}) {
   if (typeof rawText !== 'string') return { sensitive: false, findings: [], scannable: false };
   if (rawText.length > maxChars) return { sensitive: false, findings: [], scannable: false };
+  /** @type {SensitiveFinding[]} */
   const findings = [];
   for (const rule of CONTENT_RULES) {
     const regex = new RegExp(rule.regex.source, rule.regex.flags);
@@ -169,6 +206,8 @@ function scanSensitiveContent(rawText, { maxChars = DEFAULT_SCAN_LIMIT_CHARS } =
 /**
  * Maskiert erkannte Werte für UI-Vorschauen und Audit (Konzept §4/§9). Der
  * Text bleibt lesbar, die Geheimnisse verschwinden.
+ *
+ * @param {unknown} rawText
  */
 function maskSensitiveContent(rawText) {
   if (typeof rawText !== 'string' || !rawText) return '';
@@ -215,12 +254,15 @@ const PERCENT_ESCAPE = /%([0-9A-Fa-f]{2})/g;
  * list of fixed strings cannot hold — a base64 or hex value wrapped over
  * several lines, and a URL that escapes only some characters, or escapes
  * letters and digits too.
+ *
+ * @param {string} text
+ * @returns {string[]}
  */
 function ownSecretViews(text) {
   const views = [text];
   const unwrapped = text.replace(LINE_BREAKS, '');
   if (unwrapped !== text) views.push(unwrapped);
-  const decoded = text.replace(PERCENT_ESCAPE, (_escape, hex) => String.fromCharCode(parseInt(hex, 16)));
+  const decoded = text.replace(PERCENT_ESCAPE, (/** @type {string} */ _escape, /** @type {string} */ hex) => String.fromCharCode(parseInt(hex, 16)));
   if (decoded !== text) views.push(decoded);
   return views;
 }
@@ -229,10 +271,14 @@ function ownSecretViews(text) {
  * Whether the text contains one of the app's own secrets (configured provider
  * keys and the like, concept §5) — in any form on the list, in any of the
  * views above. Only compares, prints nothing.
+ *
+ * @param {unknown} rawText
+ * @param {unknown} secrets
  */
 function containsOwnSecret(rawText, secrets) {
   if (typeof rawText !== 'string' || !rawText) return false;
   if (!Array.isArray(secrets)) return false;
+  /** @type {string[]} */
   const needles = [];
   for (const secret of secrets) {
     if (typeof secret !== 'string') continue;
@@ -263,6 +309,9 @@ function containsOwnSecret(rawText, secrets) {
  * Masking works on the text as it is, so it covers every form on the list —
  * the encoded ones included (#993) — but not the views of containsOwnSecret:
  * a value wrapped over several lines, or escaped in a way of its own, stays.
+ *
+ * @param {unknown} rawText
+ * @param {unknown} secrets
  */
 function redactOwnSecrets(rawText, secrets) {
   if (typeof rawText !== 'string' || !rawText) return typeof rawText === 'string' ? rawText : '';
@@ -270,6 +319,7 @@ function redactOwnSecrets(rawText, secrets) {
   let text = rawText;
   // Lange Geheimnisse zuerst: sonst zerschneidet ein kurzes, das in einem
   // langen steckt, dessen Treffer und laesst den Rest stehen.
+  /** @type {string[]} */
   const needles = secrets
     .filter((secret) => typeof secret === 'string' && secret.trim().length >= 8)
     .map((secret) => secret.trim())

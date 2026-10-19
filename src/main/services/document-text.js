@@ -27,8 +27,27 @@ const MAX_OFFICE_TOTAL_BYTES = 200 * 1024 * 1024;
 /** More numbers than this in `pages` is not a selection any more. */
 const MAX_SELECTED_UNITS = 2000;
 
+/** @type {Record<string, string>} */
 const UNIT_LABELS = { pdf: 'Page', pptx: 'Slide' };
 
+/**
+ * What the tool answers: the keys the model reads (`content`, `truncated`,
+ * `next_start_character`, ...), or `error` with a sentence it can act on.
+ *
+ * @typedef {{ error?: string, format?: string, title?: string } & Record<string, unknown>} DocumentAnswer
+ *
+ * What a page- or slide-wise document offers: its size and the text of one unit.
+ * @typedef {{ format: string, unitCount: number, readUnit: (number: number) => Promise<string> }} UnitSource
+ *
+ * The arguments of the tool, as the model passed them.
+ * @typedef {{ pages?: unknown, sheet?: unknown, range?: unknown, startCharacter?: unknown, maxCharacters?: unknown }} DocumentRequest
+ */
+
+/**
+ * @param {Uint8Array} bytes
+ * @param {number[]} signature
+ * @param {number} [at]
+ */
 function startsWith(bytes, signature, at = 0) {
   if (bytes.length < at + signature.length) return false;
   return signature.every((byte, i) => bytes[at + i] === byte);
@@ -38,6 +57,9 @@ function startsWith(bytes, signature, at = 0) {
  * 'pdf', 'ooxml', 'cfb' (the old binary Office format — and every
  * password-protected Office file, which is an encrypted ZIP inside one) or
  * null. The name does not count, the first bytes do.
+ *
+ * @param {Buffer} bytes
+ * @returns {'pdf'|'ooxml'|'cfb'|null}
  */
 function detectDocumentFormat(bytes) {
   const head = bytes.subarray(0, 1024);
@@ -47,9 +69,17 @@ function detectDocumentFormat(bytes) {
   return null;
 }
 
-/** "3", "2-5", "1-3,8,10-" (to the end) → page numbers, or `{ error }`. */
+/**
+ * "3", "2-5", "1-3,8,10-" (to the end) → page numbers, or `{ error }`.
+ *
+ * @param {unknown} raw
+ * @param {number} count
+ * @param {string} label
+ * @returns {{ numbers: number[], error?: undefined } | { error: string, numbers?: undefined }}
+ */
 function parsePageSelection(raw, count, label) {
   const text = String(raw).replace(/\s+/g, '');
+  /** @type {Set<number>} */
   const numbers = new Set();
   for (const part of text.split(',')) {
     const match = /^(\d+)(?:-(\d*))?$/.exec(part);
@@ -74,8 +104,13 @@ function parsePageSelection(raw, count, label) {
   return { numbers: [...numbers].sort((a, b) => a - b) };
 }
 
-/** [1, 2, 3, 7, 9, 10] → "1-3,7,9-10". */
+/**
+ * [1, 2, 3, 7, 9, 10] → "1-3,7,9-10".
+ *
+ * @param {number[]} numbers
+ */
 function compactRanges(numbers) {
+  /** @type {string[]} */
   const parts = [];
   for (let i = 0; i < numbers.length; i += 1) {
     let j = i;
@@ -86,14 +121,23 @@ function compactRanges(numbers) {
   return parts.join(',');
 }
 
+/** @param {DocumentRequest} request */
 function readWindow(request) {
-  const start = Number.isInteger(request.startCharacter) && request.startCharacter > 0 ? request.startCharacter : 0;
-  let max = Number.isFinite(request.maxCharacters) ? Math.floor(request.maxCharacters) : DOCUMENT_TEXT_DEFAULT_MAX_CHARS;
+  const { startCharacter, maxCharacters } = request;
+  const start = typeof startCharacter === 'number' && Number.isInteger(startCharacter) && startCharacter > 0 ? startCharacter : 0;
+  let max = typeof maxCharacters === 'number' && Number.isFinite(maxCharacters) ? Math.floor(maxCharacters) : DOCUMENT_TEXT_DEFAULT_MAX_CHARS;
   max = Math.min(Math.max(DOCUMENT_TEXT_MIN_CHARS, max), DOCUMENT_TEXT_MAX_CHARS);
   return { start, max };
 }
 
-/** Cuts the window out of `full` and says how to go on. */
+/**
+ * Cuts the window out of `full` and says how to go on.
+ *
+ * @param {string} full
+ * @param {{ start: number, max: number }} window
+ * @param {{ complete: boolean }} state
+ * @returns {DocumentAnswer}
+ */
 function sliceWindow(full, { start, max }, { complete }) {
   if (start > 0 && start >= full.length && complete) {
     return { error: `start_character ${start} lies beyond the end of the text (${full.length} characters).` };
@@ -101,6 +145,7 @@ function sliceWindow(full, { start, max }, { complete }) {
   const end = start + max;
   const truncated = full.length > end || !complete;
   let content = full.slice(start, end);
+  /** @type {DocumentAnswer} */
   const out = {};
   if (start > 0) out.start_character = start;
   if (complete) out.total_characters = full.length;
@@ -117,21 +162,29 @@ function sliceWindow(full, { start, max }, { complete }) {
  * Page- or slide-wise documents: read unit by unit, and stop as soon as the
  * window is full — the 300th page of a manual is not parsed for the first 16 000
  * characters of it.
+ *
+ * @param {UnitSource} source
+ * @param {DocumentRequest} request
+ * @param {{ start: number, max: number }} window
+ * @returns {Promise<DocumentAnswer>}
  */
 async function sliceUnits(source, request, window) {
   const label = UNIT_LABELS[source.format];
   const count = source.unitCount;
+  /** @type {number[]} */
   let numbers;
   if (request.pages !== undefined && request.pages !== null && String(request.pages).trim()) {
     const selection = parsePageSelection(request.pages, count, label);
-    if (selection.error) return { error: selection.error };
+    if (selection.error !== undefined) return { error: selection.error };
     numbers = selection.numbers;
   } else {
     numbers = Array.from({ length: count }, (_, i) => i + 1);
   }
 
   const needed = window.start + window.max + 1;
+  /** @type {string[]} */
   const chunks = [];
+  /** @type {Array<{ number: number, from: number, to: number, empty: boolean }>} */
   const spans = [];
   let length = 0;
   let complete = true;
@@ -152,6 +205,7 @@ async function sliceUnits(source, request, window) {
 
   const windowEnd = window.start + window.max;
   const shown = spans.filter((span) => span.from < windowEnd && span.to > window.start);
+  /** @type {DocumentAnswer} */
   const out = { [source.format === 'pptx' ? 'slide_count' : 'page_count']: count };
   if (shown.length) out[source.format === 'pptx' ? 'slides' : 'pages'] = compactRanges(shown.map((span) => span.number));
   if (source.format === 'pdf' && shown.length && shown.every((span) => span.empty)) {
@@ -160,7 +214,12 @@ async function sliceUnits(source, request, window) {
   return { ...out, ...sliced };
 }
 
+/**
+ * @param {string} format
+ * @param {DocumentRequest} request
+ */
 function rejectForeignArguments(format, request) {
+  /** @param {unknown} value */
   const has = (value) => value !== undefined && value !== null && String(value).trim() !== '';
   if (format !== 'xlsx' && (has(request.sheet) || has(request.range))) {
     return 'sheet and range apply to XLSX workbooks only.';
@@ -178,8 +237,9 @@ function rejectForeignArguments(format, request) {
  * `{ error }` with a sentence the model can act on.
  *
  * @param {Buffer} bytes
- * @param {{ pages?, sheet?, range?, startCharacter?, maxCharacters? }} request
- * @param {{ openPdf: (data: Uint8Array) => Promise<object> }} deps
+ * @param {DocumentRequest} request
+ * @param {{ openPdf: (data: Uint8Array) => Promise<import('./pdf-text').PdfSource> }} deps
+ * @returns {Promise<DocumentAnswer>}
  */
 async function extractDocumentText(bytes, request, { openPdf }) {
   const kind = detectDocumentFormat(bytes);
@@ -202,11 +262,13 @@ async function extractDocumentText(bytes, request, { openPdf }) {
     try {
       return withTitle(pdf.title, { format: 'pdf', ...(await sliceUnits(pdf, request, window)) });
     } finally {
-      await pdf.close?.();
+      await pdf.close();
     }
   }
 
+  /** @type {ReturnType<typeof openZip>} */
   let zip;
+  /** @type {ReturnType<typeof detectOfficeFormat>} */
   let format;
   try {
     zip = openZip(bytes, { maxEntryBytes: MAX_OFFICE_PART_BYTES, maxTotalBytes: MAX_OFFICE_TOTAL_BYTES });
@@ -228,7 +290,8 @@ async function extractDocumentText(bytes, request, { openPdf }) {
     }
     if (format === 'xlsx') {
       const sheet = extractXlsx(zip, { sheet: request.sheet, range: request.range });
-      if (sheet.error) return { error: sheet.error };
+      if ('error' in sheet) return { error: sheet.error };
+      /** @type {DocumentAnswer} */
       const out = { format, sheets: sheet.sheets, sheet: sheet.sheet };
       if (sheet.dimension) out.dimension = sheet.dimension;
       if (request.range !== undefined && request.range !== null && String(request.range).trim()) {
@@ -242,6 +305,7 @@ async function extractDocumentText(bytes, request, { openPdf }) {
     const doc = extractDocx(zip);
     const sliced = sliceWindow(doc.text, window, { complete: true });
     if (sliced.error) return sliced;
+    /** @type {DocumentAnswer} */
     const out = { format, ...sliced };
     if (!doc.text) out.hint = 'The document contains no text.';
     return withTitle(doc.title, out);
@@ -251,7 +315,13 @@ async function extractDocumentText(bytes, request, { openPdf }) {
   }
 }
 
-/** The title goes right after the format, and only when there is one. */
+/**
+ * The title goes right after the format, and only when there is one.
+ *
+ * @param {string|null|undefined} title
+ * @param {DocumentAnswer} result
+ * @returns {DocumentAnswer}
+ */
 function withTitle(title, result) {
   if (!title || result.error) return result;
   const { format, ...rest } = result;

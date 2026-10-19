@@ -29,10 +29,11 @@
  * One message, ready to travel.
  *
  * @param {string} key      Dotted catalogue key, e.g. `mcp.error.idMissing`.
- * @param {object} [params] Values for the `{placeholders}` in that entry.
+ * @param {Record<string, unknown>} [params] Values for the `{placeholders}` in that entry.
  * @returns {Message}
  */
 function createMessage(key, params) {
+  /** @type {Message} */
   const out = { key: typeof key === 'string' ? key : '' };
   // An empty `params` would survive every structured clone and every JSON
   // round trip for nothing — the common message has no placeholders at all.

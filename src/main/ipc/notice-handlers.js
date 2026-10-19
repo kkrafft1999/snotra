@@ -5,6 +5,15 @@
  * before the window exists wait in `notices` until the renderer lists them;
  * later ones are pushed as they come. The renderer names a notice only by its
  * id — which file to show in the file manager is decided here.
+ *
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {ReturnType<typeof import('../services/app-notices').createAppNotices>} deps.notices
+ * @param {Record<string, string>} deps.REQ
+ * @param {Record<string, string>} deps.PUSH
+ * @param {() => (import('electron').BrowserWindow|null)} deps.getMainWindow
+ * @param {Pick<import('electron').Shell, 'showItemInFolder'>|null} [deps.shell]
+ * @param {string} [deps.platform]
  */
 function registerNoticeHandlers({ ipcMain, notices, REQ, PUSH, getMainWindow, shell = null, platform = process.platform }) {
   notices.subscribe((event) => {

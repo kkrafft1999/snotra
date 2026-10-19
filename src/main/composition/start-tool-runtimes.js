@@ -17,6 +17,7 @@
 async function startToolRuntimes({ runtimes, onSettled = () => {}, log = console }) {
   // `then(start)` also turns a synchronous throw into a rejection of its own.
   const results = await Promise.allSettled(runtimes.map(({ start }) => Promise.resolve().then(start)));
+  /** @type {string[]} */
   const failed = [];
   results.forEach((result, index) => {
     if (result.status !== 'rejected') return;

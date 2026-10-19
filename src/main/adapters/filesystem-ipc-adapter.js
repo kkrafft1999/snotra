@@ -10,6 +10,9 @@ const { createTranslator } = require('../../shared/i18n');
  * renderer looks its words up by: no right to read it (a volume of another
  * user, a folder macOS privacy settings keep closed), gone in the meantime,
  * or anything else. 'refused' — outside the workspace — comes from boundPath().
+ *
+ * @param {{ code?: string } | null | undefined} err
+ * @returns {'permission' | 'missing' | 'failed'}
  */
 function unreadableReason(err) {
   if (err?.code === 'EACCES' || err?.code === 'EPERM') return 'permission';
@@ -18,6 +21,18 @@ function unreadableReason(err) {
 }
 
 /**
+ * A path checked against the open folder: the absolute path, or why it is refused.
+ * @typedef {{ absPath: string, error?: undefined, reason?: undefined }
+ *   | { error: string, reason: 'refused' | 'permission' | 'missing' | 'failed', absPath?: undefined }} BoundPath
+ */
+
+/**
+ * @param {object} deps
+ * @param {import('../services/fs-service').FsService} deps.fsService
+ * @param {() => string | null} deps.getActiveWorkspaceRoot
+ * @param {Pick<typeof LIMITS, 'MAX_IMPORT_ENTRIES' | 'MAX_IMPORT_TOTAL_BYTES'>} [deps.limits]
+ * @param {ReturnType<typeof createSensitivePathMatcher>} [deps.sensitivePathMatcher]
+ * @param {() => string | undefined} [deps.getLocale]
  * @returns {import('../ports/filesystem-port').FilesystemPort}
  */
 function createFilesystemIpcAdapter({
@@ -36,10 +51,15 @@ function createFilesystemIpcAdapter({
   // lexically or through a link. A path component without read permission
   // or a dangling link is what its error says, and without a workspace
   // nothing can be read at all.
+  /**
+   * @param {unknown} absPath
+   * @returns {Promise<BoundPath>}
+   */
   async function boundPath(absPath) {
     const workspaceRoot = getActiveWorkspaceRoot();
     const result = await fsService.assertPathAccessibleInWorkspace(workspaceRoot, absPath);
-    if (!result.error) return result;
+    if (result.error === undefined) return result;
+    /** @type {'refused' | 'permission' | 'missing' | 'failed'} */
     let reason = 'refused';
     if (!workspaceRoot) reason = 'failed';
     else if (result.code) reason = unreadableReason(result);
@@ -58,6 +78,7 @@ function createFilesystemIpcAdapter({
   // below), because it needs the real path as well as the written one (#646).
   // Which paths arrive here at all is bound in the preload: it resolves the
   // dropped File objects itself, so page script cannot name a source.
+  /** @param {unknown} sourcePaths */
   function checkImportSources(sourcePaths) {
     const sources = Array.isArray(sourcePaths)
       ? sourcePaths.filter((p) => typeof p === 'string' && p.trim())
@@ -73,18 +94,23 @@ function createFilesystemIpcAdapter({
   }
 
   // Grenzen und Symlink-/Geheimnis-Filter für den rekursiven Lauf im Service.
+  /** @type {import('../services/fs-service').ImportOptions} */
   const importOptions = {
     maxEntries: limits.MAX_IMPORT_ENTRIES,
     maxTotalBytes: limits.MAX_IMPORT_TOTAL_BYTES,
-    isSensitiveName: (name) => sensitivePathMatcher.isSensitivePath(name),
-    classifySourcePath: (sourcePath) => sensitivePathMatcher.classifyPath(sourcePath),
+    isSensitiveName: (/** @type {string} */ name) => sensitivePathMatcher.isSensitivePath(name),
+    classifySourcePath: (/** @type {string} */ sourcePath) => sensitivePathMatcher.classifyPath(sourcePath),
   };
 
+  /**
+   * @param {unknown} sourcePaths
+   * @param {unknown} destDir
+   */
   async function prepareImport(sourcePaths, destDir) {
     const checked = checkImportSources(sourcePaths);
-    if (checked.error) return { error: checked.error };
+    if (checked.error !== undefined) return { error: checked.error };
     const dest = await boundPath(destDir);
-    if (dest.error) return { error: dest.error };
+    if (dest.error !== undefined) return { error: dest.error };
     return { sources: checked.sources, destDir: dest.absPath };
   }
 
@@ -95,7 +121,7 @@ function createFilesystemIpcAdapter({
     // tree can say so in its place instead of drawing it empty.
     async readDirectory(dirPath, options) {
       const { absPath, error, reason } = await boundPath(dirPath);
-      if (error) {
+      if (error !== undefined) {
         console.error('readDirectory denied:', error);
         return { entries: [], hidden: 0, unreadable: reason };
       }
@@ -115,9 +141,9 @@ function createFilesystemIpcAdapter({
     },
     async moveItem(sourcePath, destDir) {
       const source = await boundPath(sourcePath);
-      if (source.error) return { error: source.error };
+      if (source.error !== undefined) return { error: source.error };
       const dest = await boundPath(destDir);
-      if (dest.error) return { error: dest.error };
+      if (dest.error !== undefined) return { error: dest.error };
       try {
         return await fsService.moveItem(source.absPath, dest.absPath);
       } catch (err) {
@@ -129,15 +155,16 @@ function createFilesystemIpcAdapter({
     // keeps it from leaving the folder — no separators, no `..`.
     async createItem(parentDir, name, kind) {
       const parent = await boundPath(parentDir);
-      if (parent.error) return { error: parent.error, reason: parent.reason };
+      if (parent.error !== undefined) return { error: parent.error, reason: parent.reason };
       return fsService.createItem(parent.absPath, name, kind);
     },
     async renameItem(itemPath, newName) {
       const source = await boundPath(itemPath);
-      if (source.error) return { error: source.error, reason: source.reason };
+      if (source.error !== undefined) return { error: source.error, reason: source.reason };
       // The open folder itself has no row to rename, and renaming it from
       // under the app would leave everything pointing at the old name.
-      if (path.resolve(getActiveWorkspaceRoot()) === source.absPath) {
+      const workspaceRoot = getActiveWorkspaceRoot();
+      if (workspaceRoot && path.resolve(workspaceRoot) === source.absPath) {
         return { error: 'The workspace folder itself', reason: 'root' };
       }
       return fsService.renameItem(source.absPath, newName);
@@ -145,7 +172,7 @@ function createFilesystemIpcAdapter({
     // Zählt einen Import, ohne etwas zu schreiben (#101).
     async inspectImport(sourcePaths, destDir) {
       const prepared = await prepareImport(sourcePaths, destDir);
-      if (prepared.error) return { error: prepared.error };
+      if (prepared.error !== undefined) return { error: prepared.error };
       try {
         return await fsService.inspectImportSources(prepared.sources, prepared.destDir, importOptions);
       } catch (err) {
@@ -154,7 +181,7 @@ function createFilesystemIpcAdapter({
     },
     async importItems(sourcePaths, destDir) {
       const prepared = await prepareImport(sourcePaths, destDir);
-      if (prepared.error) return { error: prepared.error };
+      if (prepared.error !== undefined) return { error: prepared.error };
       try {
         return await fsService.importExternalItems(prepared.sources, prepared.destDir, importOptions);
       } catch (err) {
@@ -200,10 +227,10 @@ function createFilesystemIpcAdapter({
     // above, plus 'too-large'.
     async readFilePreview(filePath) {
       const { absPath, error, reason } = await boundPath(filePath);
-      if (error) return { error, reason };
+      if (error !== undefined) return { error, reason };
       try {
         const result = await fsService.readFilePreview(absPath);
-        if (!result?.error) return result;
+        if (result.error === undefined) return result;
         // The two refusals the service answers instead of throwing: a file
         // over the preview limit, which brings its size along, and a path
         // that is no regular file (a folder, a pipe, #643).
@@ -225,7 +252,7 @@ function createFilesystemIpcAdapter({
         return { error: 'Outside the open folder.', reason: 'refused' };
       }
       const target = await fsService.resolveWorkspacePathForAccess(workspaceRoot, rel);
-      if (target.error) return { error: target.error, reason: 'refused' };
+      if (target.error !== undefined) return { error: target.error, reason: 'refused' };
       try {
         return await fsService.writeFileFromUser(target.absPath, content, {
           root: target.root,

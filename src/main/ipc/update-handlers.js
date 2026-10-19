@@ -1,5 +1,13 @@
 'use strict';
 
+/**
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {import('../ports/update-port').UpdatePort} deps.updates
+ * @param {Record<string, string>} deps.REQ
+ * @param {Record<string, string>} deps.PUSH
+ * @param {() => (import('electron').BrowserWindow|null)} deps.getMainWindow
+ */
 function registerUpdateHandlers({ ipcMain, updates, REQ, PUSH, getMainWindow }) {
   ipcMain.handle(REQ.UPDATE_GET_VERSION, async () => ({
     version: updates.getCurrentVersion(),

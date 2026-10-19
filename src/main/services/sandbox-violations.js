@@ -60,9 +60,21 @@ const NETWORK_REASONS = Object.freeze({
 const UNASKED_REASON = 'permission prompt failed';
 
 /**
- * @param {string} line  one violation line as the runtime stored it
- * @returns {{kind: string, target: string, operation: string, process?: string, reason?: string, observed?: boolean}|null}
- *   `observed`: a Linux write attempt the runtime filtered against its start lists only
+ * One refusal. `observed`: a Linux write attempt the runtime filtered against
+ * its start lists only.
+ *
+ * @typedef {{ kind: string, target: string, operation: string, process?: string, reason?: string,
+ *   observed?: boolean }} Violation
+ *
+ * @typedef {{ kind: string, target: string, count: number, folder?: boolean, operations: string[],
+ *   reason?: string }} ViolationEntry
+ *
+ * @typedef {{ entries: ViolationEntry[], moreEntries: number, total: number, raw: string[] }} ViolationSummary
+ */
+
+/**
+ * @param {unknown} line  one violation line as the runtime stored it
+ * @returns {Violation|null}
  */
 function parseViolationLine(line) {
   const text = String(line ?? '').trim();
@@ -99,11 +111,20 @@ function parseViolationLine(line) {
   return { kind: KINDS.OTHER, target: '', operation: text };
 }
 
-/** `mkdir -p` names the folders it makes with a slash at the end; the path is the same. */
+/**
+ * `mkdir -p` names the folders it makes with a slash at the end; the path is the same.
+ *
+ * @param {string} p
+ * @returns {string}
+ */
 function withoutTrailingSlash(p) {
   return p.length > 1 ? p.replace(/\/+$/, '') || '/' : p;
 }
 
+/**
+ * @param {string} url
+ * @returns {string}
+ */
 function hostOfUrl(url) {
   try {
     const u = new URL(url);
@@ -113,7 +134,12 @@ function hostOfUrl(url) {
   }
 }
 
-/** Folders many programs share: a group that only has one of these in common is not one program's. */
+/**
+ * Folders many programs share: a group that only has one of these in common is not one program's.
+ *
+ * @param {unknown} homeDir
+ * @returns {Set<string>}
+ */
 function broadFolders(homeDir) {
   const home = trimSlash(homeDir);
   const shared = ['/', '/Users', '/home', '/private', '/private/var', '/private/var/folders', '/private/tmp',
@@ -131,6 +157,10 @@ function broadFolders(homeDir) {
  * (#792): the program's cache folder instead of one version's subfolder.
  * Null where that would be a folder many programs share, the home folder or
  * something above it.
+ *
+ * @param {unknown} target
+ * @param {unknown} [homeDir]
+ * @returns {string|null}
  */
 function widerFolder(target, homeDir = '') {
   const parent = parentOf(trimSlash(target));
@@ -161,6 +191,9 @@ const IPV4 = /^\d{1,3}(?:\.\d{1,3}){3}$/;
  * little wider" (#792): `*.pytorch.org` for `download.pytorch.org`. Null for
  * an address, a host directly under a top-level domain (`*.org` is not a
  * program's domain) and the shared domains above.
+ *
+ * @param {unknown} host
+ * @returns {string|null}
  */
 function widerHost(host) {
   const h = String(host || '').toLowerCase();
@@ -187,8 +220,12 @@ const MAX_GRANTED_HOSTS = 20;
 /**
  * What of a list of hosts a run may be given (#792). A wildcard only as the
  * card offers it: one level above a host, never a shared domain.
+ *
+ * @param {unknown} list
+ * @returns {string[]}
  */
 function grantedHosts(list) {
+  /** @type {string[]} */
   const out = [];
   for (const raw of Array.isArray(list) ? list : []) {
     if (typeof raw !== 'string') continue;
@@ -201,19 +238,26 @@ function grantedHosts(list) {
   return out;
 }
 
+/** @param {unknown} p */
 function trimSlash(p) {
   const s = String(p || '');
   return s.length > 1 ? s.replace(/\/+$/, '') : s;
 }
 
+/** @param {string} p */
 function parentOf(p) {
   const i = p.lastIndexOf('/');
   return i <= 0 ? '/' : p.slice(0, i);
 }
 
+/**
+ * @param {string} a
+ * @param {string} b
+ */
 function commonFolder(a, b) {
   const pa = a.split('/');
   const pb = b.split('/');
+  /** @type {string[]} */
   const out = [];
   for (let i = 0; i < Math.min(pa.length, pb.length) && pa[i] === pb[i]; i += 1) out.push(pa[i]);
   return out.join('/') || '/';
@@ -223,9 +267,14 @@ function commonFolder(a, b) {
  * Folds written paths into groups that share a folder below the broad ones.
  * Returns `{ target, folder, count }`: `folder` is true when the target is a
  * folder that stands for several written paths.
+ *
+ * @param {string[]} paths
+ * @param {unknown} [homeDir]
+ * @returns {Array<{ target: string, folder: boolean, count: number }>}
  */
 function groupWrites(paths, homeDir) {
   const broad = broadFolders(homeDir);
+  /** @type {Array<{ target: string, folder: boolean, count: number }>} */
   const groups = [];
   for (const path of [...new Set(paths)].sort()) {
     const g = groups.find((x) => !broad.has(commonFolder(x.folder ? x.target : parentOf(x.target), parentOf(path))));
@@ -255,12 +304,7 @@ function groupWrites(paths, homeDir) {
  *
  * @param {string[]} lines  the run's violation lines, oldest first
  * @param {{homeDir?: string, isPermittedWrite?: (path: string, operation: string) => boolean}} [options]
- * @returns {null | {
- *   entries: Array<{kind: string, target: string, count: number, folder?: boolean, operations: string[], reason?: string}>,
- *   moreEntries: number,
- *   total: number,
- *   raw: string[],
- * }}
+ * @returns {ViolationSummary|null}
  */
 function summarizeViolations(lines, { homeDir = '', isPermittedWrite } = {}) {
   const list = (Array.isArray(lines) ? lines : []).map((l) => String(l ?? '').trim()).filter(Boolean);
@@ -268,10 +312,18 @@ function summarizeViolations(lines, { homeDir = '', isPermittedWrite } = {}) {
   const permitted = typeof isPermittedWrite === 'function' ? isPermittedWrite : () => false;
   const parsed = list.map(parseViolationLine).map((p) => (p?.observed && permitted(p.target, p.operation) ? null : p));
 
+  /** @type {ViolationEntry[]} */
   const entries = [];
+  /** @type {Map<string, ViolationEntry>} */
   const byKey = new Map();
   // `count` is the number of paths a write group stands for, and the number
   // of refusals for everything else.
+  /**
+   * @param {string} kind
+   * @param {string} target
+   * @param {string} operation
+   * @param {{ count?: number, folder?: boolean, reason?: string }} [options]
+   */
   const add = (kind, target, operation, { count = 1, ...extra } = {}) => {
     const key = `${kind}\u0000${target}`;
     let e = byKey.get(key);
@@ -286,12 +338,18 @@ function summarizeViolations(lines, { homeDir = '', isPermittedWrite } = {}) {
   };
 
   const writes = parsed.filter((p) => p !== null).filter((p) => p.kind === KINDS.WRITE);
+  /** @type {Map<string, Set<string>>} */
   const writeOps = new Map();
   for (const w of writes) {
-    if (!writeOps.has(w.target)) writeOps.set(w.target, new Set());
-    writeOps.get(w.target).add(w.operation);
+    let operations = writeOps.get(w.target);
+    if (!operations) {
+      operations = new Set();
+      writeOps.set(w.target, operations);
+    }
+    operations.add(w.operation);
   }
   for (const g of groupWrites(writes.map((w) => w.target), homeDir)) {
+    /** @type {Set<string>} */
     const ops = new Set();
     for (const [path, set] of writeOps) {
       if (path === g.target || (g.folder && path.startsWith(`${g.target}/`))) set.forEach((o) => ops.add(o));
@@ -306,6 +364,7 @@ function summarizeViolations(lines, { homeDir = '', isPermittedWrite } = {}) {
   }
   if (entries.length === 0) return null;
 
+  /** @type {string[]} */
   const order = [KINDS.WRITE, KINDS.READ, KINDS.NETWORK, KINDS.DIRECT];
   entries.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind));
   const relevant = list.filter((l, i) => parsed[i] && parsed[i].kind !== KINDS.OTHER);
@@ -321,10 +380,12 @@ function summarizeViolations(lines, { homeDir = '', isPermittedWrite } = {}) {
  * What the model reads about the refusals, in place of the runtime's raw
  * violation lines: one line per resource, then what to do.
  *
- * @param {ReturnType<typeof summarizeViolations>} summary
+ * @param {ViolationSummary|null|undefined} summary
+ * @returns {string}
  */
 function describeForModel(summary) {
   if (!summary || summary.entries.length === 0) return '';
+  /** @type {Record<string, string>} */
   const label = {
     [KINDS.WRITE]: 'write outside the workspace',
     [KINDS.READ]: 'read of a protected location',

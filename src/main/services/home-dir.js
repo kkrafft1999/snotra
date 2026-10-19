@@ -17,11 +17,13 @@ const path = require('path');
 
 const HOME_DIR_ENV = 'SNOTRA_HOME_DIR';
 
+/** @param {NodeJS.ProcessEnv} [env] */
 function homeDirOverride(env = process.env) {
   const raw = typeof env?.[HOME_DIR_ENV] === 'string' ? env[HOME_DIR_ENV].trim() : '';
   return raw && path.isAbsolute(raw) ? path.resolve(raw) : null;
 }
 
+/** @param {{ env?: NodeJS.ProcessEnv, homedir?: () => string }} [options] */
 function resolveHomeDir({ env = process.env, homedir = os.homedir } = {}) {
   return homeDirOverride(env) ?? homedir();
 }
@@ -29,6 +31,11 @@ function resolveHomeDir({ env = process.env, homedir = os.homedir } = {}) {
 /**
  * An `os` whose `homedir()` honours the override; everything else is the given
  * one. Without an override the given `os` comes back unchanged.
+ *
+ * @template {object} T
+ * @param {T} baseOs
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {T}
  */
 function withHomeDir(baseOs, env = process.env) {
   const override = homeDirOverride(env);

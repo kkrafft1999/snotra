@@ -11,6 +11,7 @@ const { PUSH_CHANNELS: PUSH } = require('../shared/ipc-channels');
 
 const projectRoot = path.resolve(__dirname, '..', '..');
 
+/** @type {import('electron').BrowserWindow|null} */
 let mainWindow = null;
 
 // Waehrend des Betriebs wird entprellt gesichert: Ziehen am Fensterrand feuert
@@ -60,6 +61,8 @@ function windowStateStore() {
  * Der Zustand beim Start: der zuletzt eingestellte, gegen die heutigen
  * Bildschirme geprueft (Issue #209). Ohne gespeicherten Zustand die
  * Standardgroesse aus Issue #208.
+ *
+ * @param {Pick<ReturnType<typeof createWindowStateStore>, 'read'>} store
  */
 function startupWindowState(store) {
   try {
@@ -78,6 +81,9 @@ function startupWindowState(store) {
  * Gesichert wird immer die Groesse *unter* Maximierung und Vollbild
  * (`getNormalBounds()`), sonst kaeme ein entmaximiertes Fenster spaeter
  * bildschirmfuellend zurueck.
+ *
+ * @param {import('electron').BrowserWindow} window
+ * @returns {import('./window-state').WindowState|null}
  */
 function captureWindowState(window) {
   if (window.isDestroyed() || window.isMinimized()) return null;
@@ -131,6 +137,7 @@ function createWindow() {
     window.setTitle(windowTitle(title, app.getVersion()));
   });
 
+  /** @type {ReturnType<typeof setTimeout>|null} */
   let saveTimer = null;
   const saveLater = () => {
     if (saveTimer !== null) clearTimeout(saveTimer);
@@ -140,9 +147,12 @@ function createWindow() {
       if (state) store.write(state);
     }, STATE_SAVE_DELAY_MS);
   };
-  for (const event of ['resize', 'move', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) {
-    window.on(event, saveLater);
-  }
+  window.on('resize', saveLater);
+  window.on('move', saveLater);
+  window.on('maximize', saveLater);
+  window.on('unmaximize', saveLater);
+  window.on('enter-full-screen', saveLater);
+  window.on('leave-full-screen', saveLater);
   // Beim Schliessen sofort: nach dem Fenster ist der Prozess unter Umstaenden
   // weg, ein entprellter Schreibvorgang kaeme nie an.
   window.on('close', () => {

@@ -29,6 +29,39 @@ const {
 } = require('../../shared/contracts/skills');
 const { renameWithRetry } = require('./rename-with-retry');
 
+/**
+ * A skill as the scan keeps it, with its body (the catalogue leaves it out).
+ *
+ * @typedef {Object} ScannedSkill
+ * @property {string} name
+ * @property {string} description
+ * @property {import('../../shared/contracts/skills').SkillSource} source
+ * @property {import('../../shared/contracts/skills').SkillStatus} status
+ * @property {string} path  the skill's folder
+ * @property {string|import('../../shared/contracts/message').Message} detail
+ * @property {string} body
+ * @property {boolean} [truncated]  the body was cut at the limit
+ */
+
+/**
+ * Which skills are switched on: the global list and, per folder, that
+ * folder's own (#576).
+ *
+ * @typedef {Object} SkillSwitches
+ * @property {string|null} [workspaceRoot]
+ * @property {string[]|null} [activeSkills]  `null` means the default set
+ * @property {Record<string, string[]>|null} [activeWorkspaceSkills]
+ */
+
+/**
+ * Why `planMakeGlobal` or `makeGlobal` refuses; the caller words it.
+ *
+ * @typedef {{ error: 'not-found'|'no-workspace'|'no-home' }} MakeGlobalRefusal
+ *
+ * What making a skill global would do (#764).
+ * @typedef {{ error?: undefined, name: string, from: string, to: string, conflict: boolean }} MakeGlobalPlan
+ */
+
 const SKILL_FILE = 'SKILL.md';
 /** Schutz vor versehentlich riesigen Verzeichnissen. */
 const MAX_SKILLS_PER_DIRECTORY = 200;
@@ -40,13 +73,16 @@ const MAX_SKILLS_PER_DIRECTORY = 200;
  *
  * Only the app's own skills. A folder skill is somebody else's text and is
  * passed through exactly as it stands.
+ *
+ * @param {ScannedSkill} skill
+ * @param {string|null|undefined} locale
  */
 function withMenuPaths(skill, locale) {
   if (skill.source !== SKILL_SOURCES.SYSTEM) return skill;
   return {
     ...skill,
-    description: fillUiQuotes(locale, skill.description),
-    body: fillUiQuotes(locale, skill.body),
+    description: fillUiQuotes(locale ?? '', skill.description),
+    body: fillUiQuotes(locale ?? '', skill.body),
   };
 }
 
@@ -62,10 +98,19 @@ function bundledSystemSkillsDir({ app, path }) {
   return typeof app?.getAppPath === 'function' ? path.join(app.getAppPath(), 'system-skills') : null;
 }
 
+/**
+ * @param {{
+ *   fs: typeof import('fs/promises'),
+ *   path: typeof import('path'),
+ *   os?: typeof import('os'),
+ *   systemSkillsDir?: string|null,
+ *   maxSkillBodyChars?: number,
+ * }} deps
+ */
 function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBodyChars = MAX_SKILL_BODY_CHARS }) {
   if (!fs || !path) throw new TypeError('createSkillsService benötigt fs und path.');
 
-  /** @type {Map<string, Promise<{ skills: Array<object> }>>} */
+  /** @type {Map<string, Promise<{ skills: ScannedSkill[] }>>} */
   const scanCache = new Map();
 
   function homeDir() {
@@ -76,7 +121,11 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     }
   }
 
+  /**
+   * @param {unknown} workspaceRoot
+   */
   function sourceDirectories(workspaceRoot) {
+    /** @type {Array<{ source: ScannedSkill['source'], dir: string }>} */
     const dirs = [];
     if (systemSkillsDir) {
       dirs.push({ source: SKILL_SOURCES.SYSTEM, dir: systemSkillsDir });
@@ -95,6 +144,11 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     return dirs;
   }
 
+  /**
+   * @param {ScannedSkill['source']} source
+   * @param {string} dir
+   * @returns {Promise<ScannedSkill[]>}
+   */
   async function readSkillDirectory(source, dir) {
     let entries;
     try {
@@ -111,6 +165,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
       .filter((entry) => !entry.name.startsWith('.'))
       .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
       .slice(0, MAX_SKILLS_PER_DIRECTORY);
+    /** @type {ScannedSkill[]} */
     const found = [];
     for (const entry of visible) {
       const dirName = entry.name;
@@ -125,6 +180,13 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     return found;
   }
 
+  /**
+   * @param {ScannedSkill['source']} source
+   * @param {string} name
+   * @param {string} skillDir
+   * @param {ScannedSkill['detail']} detail
+   * @returns {ScannedSkill}
+   */
   function invalidSkill(source, name, skillDir, detail) {
     return {
       name,
@@ -137,6 +199,12 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     };
   }
 
+  /**
+   * @param {ScannedSkill['source']} source
+   * @param {string} dirName
+   * @param {string} skillDir
+   * @returns {Promise<ScannedSkill>}
+   */
   async function readSkillFolder(source, dirName, skillDir) {
     const filePath = path.join(skillDir, SKILL_FILE);
     let raw;
@@ -163,7 +231,12 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     };
   }
 
+  /**
+   * @param {unknown} workspaceRoot
+   * @returns {Promise<{ skills: ScannedSkill[] }>}
+   */
   async function scanAll(workspaceRoot) {
+    /** @type {ScannedSkill[]} */
     const collected = [];
     for (const { source, dir } of sourceDirectories(workspaceRoot)) {
       collected.push(...(await readSkillDirectory(source, dir)));
@@ -171,6 +244,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
 
     // Erster Treffer eines Namens gewinnt; die Quellen kommen bereits in
     // Prioritätsreihenfolge. Ungültige Einträge verdrängen nichts.
+    /** @type {Map<string, ScannedSkill>} */
     const winners = new Map();
     for (const skill of collected) {
       if (skill.status === SKILL_STATUS.INVALID) continue;
@@ -179,7 +253,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     for (const skill of collected) {
       if (skill.status === SKILL_STATUS.INVALID) continue;
       const winner = winners.get(skill.name);
-      if (winner !== skill) {
+      if (winner && winner !== skill) {
         skill.status = SKILL_STATUS.SHADOWED;
         skill.detail = createMessage('skills.shadowedBy', { path: winner.path });
       }
@@ -188,14 +262,25 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     return { skills: collected };
   }
 
+  /**
+   * @param {unknown} workspaceRoot
+   */
   function cacheKey(workspaceRoot) {
     return typeof workspaceRoot === 'string' && workspaceRoot.trim() ? path.resolve(workspaceRoot) : '';
   }
 
+  /**
+   * @param {unknown} workspaceRoot
+   * @returns {Promise<{ skills: ScannedSkill[] }>}
+   */
   function scan(workspaceRoot) {
     const key = cacheKey(workspaceRoot);
-    if (!scanCache.has(key)) scanCache.set(key, scanAll(workspaceRoot));
-    return scanCache.get(key);
+    let scanned = scanCache.get(key);
+    if (!scanned) {
+      scanned = scanAll(workspaceRoot);
+      scanCache.set(key, scanned);
+    }
+    return scanned;
   }
 
   /** Cache verwerfen — für „Skills neu laden“ in den Einstellungen. */
@@ -207,6 +292,8 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
    * Voreinstellung: System-Skills sind an, Ordner-Skills nicht. Ordner-Skills
    * sind fremder Inhalt (Prompt-Injection) und werden nur nach ausdrücklicher
    * Auswahl in den Systemprompt übernommen.
+   *
+   * @param {ScannedSkill[]} skills
    */
   function defaultActiveNames(skills) {
     return skills
@@ -214,11 +301,20 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
       .map((skill) => skill.name);
   }
 
+  /**
+   * @param {ScannedSkill[]} skills
+   * @param {string[]|null|undefined} activeSkills
+   */
   function resolveActiveNames(skills, activeSkills) {
     return Array.isArray(activeSkills) ? activeSkills : defaultActiveNames(skills);
   }
 
-  /** The names switched on for this folder's own skills (#576). */
+  /**
+   * The names switched on for this folder's own skills (#576).
+   *
+   * @param {unknown} workspaceRoot
+   * @param {Record<string, string[]>|null|undefined} activeWorkspaceSkills
+   */
   function workspaceActiveNames(workspaceRoot, activeWorkspaceSkills) {
     const key = cacheKey(workspaceRoot);
     if (!key || !activeWorkspaceSkills || typeof activeWorkspaceSkills !== 'object') return [];
@@ -234,6 +330,10 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
    * would hand the user's choice to any skill that happens to win the name —
    * a cloned repository with `.agents/skills/<name>` would take over the
    * user's own global skill.
+   *
+   * @param {ScannedSkill[]} skills
+   * @param {SkillSwitches} switches
+   * @returns {(skill: ScannedSkill) => boolean}
    */
   function switchedOn(skills, { workspaceRoot, activeSkills, activeWorkspaceSkills }) {
     const global = new Set(resolveActiveNames(skills, activeSkills));
@@ -243,6 +343,10 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
       && (skill.source === SKILL_SOURCES.WORKSPACE_AGENTS ? workspace : global).has(skill.name);
   }
 
+  /**
+   * @param {SkillSwitches & { locale?: string|null }} [options]
+   * @returns {Promise<{ skills: Array<Omit<import('../../shared/contracts/skills').SkillSummary, 'builtin'>> }>}
+   */
   async function listCatalog({
     workspaceRoot = null,
     activeSkills = null,
@@ -269,6 +373,8 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
    * `invokedSkills` sind die per `/name` im Chat aufgerufenen Skills
    * (Issue #124). Sie kommen zusätzlich zur dauerhaften Auswahl dazu und
    * gelten nur für diesen Verlauf.
+   *
+   * @param {SkillSwitches & { invokedSkills?: string[]|null, locale?: string|null }} [options]
    */
   async function getActiveSkills({
     workspaceRoot = null,
@@ -308,6 +414,8 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
    * and a global name whose skill is shadowed or missing here. Otherwise
    * saving in a folder whose own skill shadows a global one would switch the
    * global one off everywhere.
+   *
+   * @param {SkillSwitches & { selected?: string[] }} [options]
    */
   async function bindSelection({
     workspaceRoot = null,
@@ -318,7 +426,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     const { skills } = await scan(workspaceRoot);
     const chosen = new Set(Array.isArray(selected) ? selected : []);
     const usable = skills.filter((skill) => skill.status === SKILL_STATUS.AVAILABLE);
-    const isWorkspace = (skill) => skill.source === SKILL_SOURCES.WORKSPACE_AGENTS;
+    const isWorkspace = (/** @type {ScannedSkill} */ skill) => skill.source === SKILL_SOURCES.WORKSPACE_AGENTS;
     const decidedHere = new Set(usable.filter((skill) => !isWorkspace(skill)).map((skill) => skill.name));
 
     const global = resolveActiveNames(skills, activeSkills).filter((name) => !decidedHere.has(name));
@@ -326,6 +434,7 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
       if (!isWorkspace(skill) && chosen.has(skill.name)) global.push(skill.name);
     }
 
+    /** @type {Record<string, string[]>} */
     const perFolder = {};
     if (activeWorkspaceSkills && typeof activeWorkspaceSkills === 'object') {
       for (const [root, names] of Object.entries(activeWorkspaceSkills)) perFolder[root] = names;
@@ -345,6 +454,9 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
     return home ? path.join(home, '.snotra', 'skills') : null;
   }
 
+  /**
+   * @param {string} target
+   */
   async function pathExists(target) {
     try {
       await fs.lstat(target);
@@ -361,9 +473,12 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
    * usable skill of the open folder qualifies — the name comes from the
    * renderer and is looked up in the catalogue, never joined into a path
    * unchecked. `error` is a reason code; the caller words it.
+   *
+   * @param {{ workspaceRoot?: string|null, name?: string }} [request]
+   * @returns {Promise<MakeGlobalRefusal | MakeGlobalPlan>}
    */
   async function planMakeGlobal({ workspaceRoot = null, name } = {}) {
-    if (!isValidSkillName(name)) return { error: 'not-found' };
+    if (typeof name !== 'string' || !isValidSkillName(name)) return { error: 'not-found' };
     const key = cacheKey(workspaceRoot);
     if (!key) return { error: 'no-workspace' };
     const { skills } = await scan(workspaceRoot);
@@ -380,6 +495,10 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
    * Moves a workspace skill to `~/.snotra/skills/<name>/` (#764). A name that
    * is taken there is refused, never overwritten. Across volumes `rename`
    * fails with EXDEV; then the folder is copied and the original removed.
+   *
+   * @param {{ workspaceRoot?: string|null, name?: string }} [request]
+   * @returns {Promise<MakeGlobalRefusal | { error: 'conflict', from: string, to: string }
+   *   | { error?: undefined, ok: true, from: string, to: string }>}
    */
   async function makeGlobal({ workspaceRoot = null, name } = {}) {
     const plan = await planMakeGlobal({ workspaceRoot, name });
@@ -405,6 +524,8 @@ function createSkillsService({ fs, path, os, systemSkillsDir = null, maxSkillBod
    * global list. A skill that was on here stays on — now everywhere, which is
    * what making it global asks for. One that was off stays off. `null` when
    * nothing changes.
+   *
+   * @param {SkillSwitches & { name?: string }} [options]
    */
   async function switchOnAfterMakeGlobal({
     workspaceRoot = null,

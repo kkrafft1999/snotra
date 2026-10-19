@@ -33,6 +33,10 @@ require(workerData.entry).runInWorker(parentPort, workerData);
  * hand `url + name` to `fs.readFile`, which takes a string as a path, never as
  * a URL) that ends in `/` — pdf.js refuses anything else, `\` included. Windows
  * reads `C:\app\cmaps/name.bcmap` without complaint.
+ *
+ * @param {string} pdfjsDir
+ * @param {string} folder
+ * @param {Pick<typeof import('path'), 'join'>} [pathImpl]
  */
 function pdfjsDataUrl(pdfjsDir, folder, pathImpl = path) {
   return `${pathImpl.join(pdfjsDir, folder)}/`;
@@ -41,6 +45,9 @@ function pdfjsDataUrl(pdfjsDir, folder, pathImpl = path) {
 /**
  * The part that runs inside the worker. Loads pdf.js only when a PDF comes —
  * a DOCX never pays for it.
+ *
+ * @param {import('worker_threads').MessagePort} port
+ * @param {{ pdfjsDir: string }} data
  */
 function runInWorker(port, { pdfjsDir }) {
   const { pathToFileURL } = require('url');
@@ -56,7 +63,9 @@ function runInWorker(port, { pdfjsDir }) {
     try {
       // Handing pdf.js its worker module up front keeps it from starting
       // another one: inside this thread it runs the parser in place.
-      globalThis.pdfjsWorker = await import(pathToFileURL(path.join(pdfjsDir, 'pdf.worker.min.mjs')).href);
+      Object.assign(globalThis, {
+        pdfjsWorker: await import(pathToFileURL(path.join(pdfjsDir, 'pdf.worker.min.mjs')).href),
+      });
       return await import(pathToFileURL(path.join(pdfjsDir, 'pdf.min.mjs')).href);
     } finally {
       console.log = log;
@@ -64,11 +73,11 @@ function runInWorker(port, { pdfjsDir }) {
     }
   }
 
-  port.once('message', async ({ bytes, request }) => {
+  port.once('message', async (/** @type {{ bytes: Uint8Array, request: import('./document-text').DocumentRequest }} */ { bytes, request }) => {
     try {
       const buffer = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
       const result = await extractDocumentText(buffer, request, {
-        openPdf: async (data) => openPdf(data, {
+        openPdf: async (/** @type {Uint8Array} */ data) => openPdf(data, {
           pdfjs: await loadPdfjs(),
           cMapUrl: pdfjsDataUrl(pdfjsDir, 'cmaps'),
           standardFontDataUrl: pdfjsDataUrl(pdfjsDir, 'standard_fonts'),
@@ -87,7 +96,14 @@ function runInWorker(port, { pdfjsDir }) {
  * @param {number} [params.timeBudgetMs]
  */
 function createDocumentTextExtractor({ pdfjsDir, timeBudgetMs = DOCUMENT_TEXT_TIME_BUDGET_MS }) {
-  /** `{ ...result }` or `{ error }`; never throws. */
+  /**
+   * `{ ...result }` or `{ error }`; never throws.
+   *
+   * @param {Uint8Array} bytes
+   * @param {import('./document-text').DocumentRequest} request
+   * @param {{ abortSignal?: AbortSignal }} [options]
+   * @returns {Promise<import('./document-text').DocumentAnswer>}
+   */
   function extract(bytes, request, { abortSignal } = {}) {
     if (abortSignal?.aborted) return Promise.resolve({ error: 'The extraction was cancelled.' });
     return new Promise((resolve) => {
@@ -100,6 +116,7 @@ function createDocumentTextExtractor({ pdfjsDir, timeBudgetMs = DOCUMENT_TEXT_TI
         resourceLimits: { maxOldGenerationSizeMb: WORKER_HEAP_MB },
       });
       let settled = false;
+      /** @param {import('./document-text').DocumentAnswer} result */
       const finish = (result) => {
         if (settled) return;
         settled = true;

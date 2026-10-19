@@ -21,13 +21,23 @@
 const MAX_EDIT_DISTANCE = 1000;
 
 /**
+ * @typedef {'equal' | 'delete' | 'insert'} DiffOp
+ * @typedef {{ op: DiffOp, count: number }} DiffRun
+ */
+
+/**
  * Splits text into lines without their endings. A final line ending does not
  * start an empty last line; `trailingNewline` says whether there was one.
  * `endings` holds each line's own ending ('' for a last line without one).
+ *
+ * @param {unknown} text
+ * @returns {{ lines: string[], endings: string[], trailingNewline: boolean }}
  */
 function splitLines(text) {
   const source = typeof text === 'string' ? text : '';
+  /** @type {string[]} */
   const lines = [];
+  /** @type {string[]} */
   const endings = [];
   const pattern = /\r\n|\r|\n/g;
   let start = 0;
@@ -45,7 +55,13 @@ function splitLines(text) {
   return { lines, endings, trailingNewline };
 }
 
-/** Appends `count` of `op`, merging with the run before it. */
+/**
+ * Appends `count` of `op`, merging with the run before it.
+ *
+ * @param {DiffRun[]} segments
+ * @param {DiffOp} op
+ * @param {number} count
+ */
 function pushRun(segments, op, count) {
   if (count <= 0) return;
   const last = segments[segments.length - 1];
@@ -56,6 +72,11 @@ function pushRun(segments, op, count) {
 /**
  * The shortest edit script between two line arrays of the middle part, as
  * runs, or null when it needs more than `maxD` edits.
+ *
+ * @param {number[]} a
+ * @param {number[]} b
+ * @param {number} maxD
+ * @returns {DiffRun[] | null}
  */
 function myersRuns(a, b, maxD) {
   const n = a.length;
@@ -64,10 +85,12 @@ function myersRuns(a, b, maxD) {
   const offset = max + 1;
   const v = new Int32Array(2 * max + 3);
   // trace[d] holds V[-d..d] after step d — a band, so memory is O(D²).
+  /** @type {Int32Array[]} */
   const trace = [];
   let found = -1;
   for (let d = 0; d <= Math.min(max, maxD); d += 1) {
     for (let k = -d; k <= d; k += 2) {
+      /** @type {number} */
       let x;
       if (k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])) x = v[offset + k + 1];
       else x = v[offset + k - 1] + 1;
@@ -88,12 +111,13 @@ function myersRuns(a, b, maxD) {
   if (found < 0) return null;
 
   // Walk back from the end; the ops come out in reverse.
+  /** @type {DiffOp[]} */
   const reversed = [];
   let x = n;
   let y = m;
   for (let d = found; d > 0; d -= 1) {
     const prev = trace[d - 1];
-    const at = (k) => prev[k + d - 1];
+    const at = (/** @type {number} */ k) => prev[k + d - 1];
     const k = x - y;
     const down = k === -d || (k !== d && at(k - 1) < at(k + 1));
     const prevK = down ? k + 1 : k - 1;
@@ -117,6 +141,7 @@ function myersRuns(a, b, maxD) {
     x -= 1;
     y -= 1;
   }
+  /** @type {DiffRun[]} */
   const runs = [];
   for (let i = reversed.length - 1; i >= 0; i -= 1) pushRun(runs, reversed[i], 1);
   return runs;
@@ -126,13 +151,19 @@ function myersRuns(a, b, maxD) {
  * Diffs two line arrays. Returns runs `{ op: 'equal'|'delete'|'insert', count }`
  * in order — deletions of a change before its insertions — and whether the
  * search gave up (`approximate`).
+ *
+ * @param {string[]} before
+ * @param {string[]} after
+ * @param {{ maxEditDistance?: number }} [options]
+ * @returns {{ segments: DiffRun[], approximate: boolean }}
  */
 function diffLines(before, after, { maxEditDistance = MAX_EDIT_DISTANCE } = {}) {
   const a = Array.isArray(before) ? before : [];
   const b = Array.isArray(after) ? after : [];
   // Integers compare faster than strings, and a long line is compared once.
+  /** @type {Map<string, number>} */
   const ids = new Map();
-  const idOf = (line) => {
+  const idOf = (/** @type {string} */ line) => {
     let id = ids.get(line);
     if (id === undefined) {
       id = ids.size;
@@ -156,6 +187,7 @@ function diffLines(before, after, { maxEditDistance = MAX_EDIT_DISTANCE } = {}) 
   const midA = ai.slice(prefix, ai.length - suffix);
   const midB = bi.slice(prefix, bi.length - suffix);
 
+  /** @type {DiffRun[]} */
   const segments = [];
   pushRun(segments, 'equal', prefix);
   let approximate = false;
@@ -179,8 +211,12 @@ function diffLines(before, after, { maxEditDistance = MAX_EDIT_DISTANCE } = {}) 
 /**
  * Myers may yield insert-then-delete within one change; the view reads
  * better with what went first. Swaps neighbouring insert/delete runs.
+ *
+ * @param {DiffRun[]} segments
+ * @returns {DiffRun[]}
  */
 function orderChanges(segments) {
+  /** @type {DiffRun[]} */
   const out = [];
   let i = 0;
   while (i < segments.length) {
@@ -202,7 +238,11 @@ function orderChanges(segments) {
   return out;
 }
 
-/** Lines added and removed, from the runs. */
+/**
+ * Lines added and removed, from the runs.
+ *
+ * @param {DiffRun[]} segments
+ */
 function countChanges(segments) {
   let added = 0;
   let removed = 0;

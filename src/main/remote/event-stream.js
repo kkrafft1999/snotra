@@ -22,6 +22,7 @@ async function readEventStream(body, onEvent, { maxEventChars = MAX_EVENT_CHARS 
   const decoder = new TextDecoder();
   let buffer = '';
   let type = '';
+  /** @type {string[]} */
   let data = [];
   let size = 0;
 
@@ -32,6 +33,7 @@ async function readEventStream(body, onEvent, { maxEventChars = MAX_EVENT_CHARS 
     size = 0;
   }
 
+  /** @param {string} text */
   function line(text) {
     if (text === '') {
       dispatch();
@@ -48,6 +50,7 @@ async function readEventStream(body, onEvent, { maxEventChars = MAX_EVENT_CHARS 
     else if (field === 'data') data.push(value);
   }
 
+  /** @param {boolean} final */
   function drain(final) {
     for (;;) {
       const match = LINE_END.exec(buffer);

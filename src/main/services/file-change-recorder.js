@@ -41,11 +41,47 @@ const UNAVAILABLE = Object.freeze({
 
 const UTF8 = new TextDecoder('utf-8');
 
+/**
+ * What the chat line needs of a change, without any content.
+ * @typedef {object} ChangeSummary
+ * @property {string} id
+ * @property {string} relativePath
+ * @property {string} status  One of `FILE_CHANGE_STATUS`.
+ * @property {boolean} created
+ * @property {number} added
+ * @property {number} removed
+ */
+
+/**
+ * One recorded write, content included — `before` and `after` are null for a
+ * file past the size limit.
+ * @typedef {object} ChangeEntry
+ * @property {string} id
+ * @property {number} sequence
+ * @property {string} relativePath
+ * @property {string} absPath
+ * @property {Buffer | null} before
+ * @property {Buffer | null} after
+ * @property {boolean} created
+ * @property {boolean} tooLarge
+ * @property {number} beforeBytes
+ * @property {number} afterBytes
+ * @property {string} afterHash
+ * @property {ChangeSummary} [summary]
+ */
+
+/**
+ * @param {Buffer} buffer
+ */
 function sha256(buffer) {
   return createHash('sha256').update(buffer).digest('hex');
 }
 
-/** The line ending a text uses: 'crlf', 'lf', 'cr', 'mixed' or null for none. */
+/**
+ * The line ending a text uses: 'crlf', 'lf', 'cr', 'mixed' or null for none.
+ *
+ * @param {string[]} endings
+ */
 function dominantEnding(endings) {
   const kinds = new Set(endings.filter(Boolean));
   if (kinds.size === 0) return null;
@@ -57,6 +93,10 @@ function dominantEnding(endings) {
 /**
  * Compares two snapshots. `before` is null for a file the call created.
  * `limits.maxLines` bounds the diff; the sizes are what the store measured.
+ *
+ * @param {Buffer | null} before  `null` for a file that did not exist.
+ * @param {Buffer} after
+ * @param {{ maxLines?: number }} [options]
  */
 function analyze(before, after, { maxLines = DEFAULT_MAX_LINES } = {}) {
   const created = before === null;
@@ -110,7 +150,13 @@ function analyze(before, after, { maxLines = DEFAULT_MAX_LINES } = {}) {
   };
 }
 
-/** What the chat line needs of a change, without any content. */
+/**
+ * What the chat line needs of a change, without any content.
+ *
+ * @param {ChangeEntry} entry
+ * @param {{ status: string, created: boolean, added: number, removed: number }} analysis
+ * @returns {ChangeSummary}
+ */
 function summaryOf(entry, analysis) {
   return {
     id: entry.id,
@@ -122,20 +168,37 @@ function summaryOf(entry, analysis) {
   };
 }
 
+/**
+ * @param {object} [options]
+ * @param {typeof import('fs/promises') | null} [options.fs]  Only to see whether a file changed since.
+ * @param {number} [options.maxBytesPerFile]
+ * @param {number} [options.budgetBytes]
+ * @param {number} [options.maxLines]
+ * @param {string} [options.bootId]
+ */
 function createFileChangeRecorder({
-  fs,
+  fs = null,
   maxBytesPerFile = DEFAULT_MAX_BYTES_PER_FILE,
   budgetBytes = DEFAULT_BUDGET_BYTES,
   maxLines = DEFAULT_MAX_LINES,
   bootId = randomBytes(4).toString('hex'),
 } = {}) {
-  /** id → entry, oldest first (Map keeps insertion order). */
+  /**
+   * id → entry, oldest first (Map keeps insertion order).
+   * @type {Map<string, ChangeEntry>}
+   */
   const entries = new Map();
-  /** Ids that were dropped for memory, so they can be told apart. */
+  /**
+   * Ids that were dropped for memory, so they can be told apart.
+   * @type {Set<unknown>}
+   */
   const evicted = new Set();
   let sequence = 0;
   let heldBytes = 0;
 
+  /**
+   * @param {ChangeEntry} entry
+   */
   function bytesOf(entry) {
     return (entry.before?.length || 0) + (entry.after?.length || 0);
   }
@@ -154,15 +217,18 @@ function createFileChangeRecorder({
    * for a new file; a file too large to read before has `before: null` and
    * its size in `beforeBytes`. `after` is what was written.
    * Returns the summary for the chat line.
+   *
+   * @param {{ relativePath: string, absPath: string, before?: Buffer | null, beforeBytes?: number | null, after: Buffer | string }} change
    */
   function record({ relativePath, absPath, before = null, beforeBytes = null, after }) {
     sequence += 1;
     const id = `${bootId}-${sequence}`;
     const afterBuffer = Buffer.isBuffer(after) ? after : Buffer.from(String(after ?? ''), 'utf8');
-    const beforeTooLarge = before === null && Number.isFinite(beforeBytes);
+    const beforeTooLarge = before === null && typeof beforeBytes === 'number' && Number.isFinite(beforeBytes);
     const tooLarge = beforeTooLarge
       || (before && before.length > maxBytesPerFile)
       || afterBuffer.length > maxBytesPerFile;
+    /** @type {ChangeEntry} */
     const entry = {
       id,
       sequence,
@@ -178,7 +244,7 @@ function createFileChangeRecorder({
     };
     const analysis = entry.tooLarge
       ? tooLargeAnalysis(entry, entry)
-      : analyze(entry.created ? null : entry.before, entry.after, { maxLines });
+      : analyze(before, afterBuffer, { maxLines });
     entry.summary = summaryOf(entry, analysis);
     entries.set(id, entry);
     heldBytes += bytesOf(entry);
@@ -186,6 +252,10 @@ function createFileChangeRecorder({
     return entry.summary;
   }
 
+  /**
+   * @param {ChangeEntry} first
+   * @param {ChangeEntry} last
+   */
   function tooLargeAnalysis(first, last) {
     return {
       status: STATUS.TOO_LARGE,
@@ -199,6 +269,9 @@ function createFileChangeRecorder({
     };
   }
 
+  /**
+   * @param {unknown} id
+   */
   function unavailableReason(id) {
     if (evicted.has(id)) return UNAVAILABLE.EVICTED;
     if (typeof id === 'string' && !id.startsWith(`${bootId}-`) && /^[0-9a-f]+-\d+$/.test(id)) {
@@ -207,12 +280,16 @@ function createFileChangeRecorder({
     return UNAVAILABLE.UNKNOWN;
   }
 
-  /** Has the file on disk moved on from what the last change wrote? */
+  /**
+   * Has the file on disk moved on from what the last change wrote?
+   *
+   * @param {ChangeEntry} entry
+   */
   async function changedSince(entry) {
     if (!fs || !entry.absPath) return null;
     try {
       const read = await readRegularFile(fs, entry.absPath, { maxBytes: Math.max(entry.afterBytes, 1) });
-      if (read.notFile || read.tooLarge) return 'changed';
+      if (read.notFile || read.tooLarge || !read.buffer) return 'changed';
       return sha256(read.buffer) === entry.afterHash ? null : 'changed';
     } catch (err) {
       return err && err.code === 'ENOENT' ? 'deleted' : null;
@@ -223,6 +300,8 @@ function createFileChangeRecorder({
    * The change made by `ids` — one call, or several to the same file, which
    * are combined: the content before the first against the content after the
    * last. Resolves to `{ ok: true, … }` or `{ ok: false, reason }`.
+   *
+   * @param {unknown} ids
    */
   async function describe(ids) {
     if (!Array.isArray(ids) || ids.length === 0 || ids.length > MAX_IDS_PER_REQUEST) {
@@ -239,7 +318,7 @@ function createFileChangeRecorder({
     const last = found[found.length - 1];
     if (found.some((entry) => entry.absPath !== first.absPath)) return { ok: false, reason: 'invalid' };
 
-    const analysis = first.tooLarge || last.tooLarge
+    const analysis = first.tooLarge || last.tooLarge || !last.after
       ? tooLargeAnalysis(first, last)
       : analyze(first.created ? null : first.before, last.after, { maxLines });
     return {

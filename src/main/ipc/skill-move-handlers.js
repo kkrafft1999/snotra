@@ -4,11 +4,11 @@ const { createTranslator } = require('../../shared/i18n');
 const { CONFIRMATION_ACTIONS, createRefusingConfirmation } = require('../../application/permissions/user-confirmation');
 
 /** The reason codes of `planMakeGlobal`/`makeGlobal`, as catalogue keys. */
-const ERROR_KEYS = Object.freeze({
+const ERROR_KEYS = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
   'not-found': 'skills.makeGlobal.error.notFound',
   'no-workspace': 'skills.makeGlobal.error.noWorkspace',
   'no-home': 'skills.makeGlobal.error.noHome',
-});
+}));
 
 /**
  * "Make global" for a workspace skill (#764). The renderer only names the
@@ -20,6 +20,18 @@ const ERROR_KEYS = Object.freeze({
  *
  * The confirmation goes through the user-confirmation port (#980); `dialog`
  * is left with the error notices.
+ *
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {Record<string, string>} deps.REQ
+ * @param {Pick<ReturnType<typeof import('../services/skills-service').createSkillsService>,
+ *   'planMakeGlobal' | 'makeGlobal' | 'switchOnAfterMakeGlobal'>} deps.skillsService
+ * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore
+ * @param {() => string|null} [deps.getActiveWorkspaceRoot]
+ * @param {Pick<import('electron').Dialog, 'showMessageBox'>|null} [deps.dialog]
+ * @param {import('../../application/ports/user-confirmation-port').UserConfirmationPort} [deps.confirmations]
+ * @param {() => (import('electron').BrowserWindow|null)} [deps.getMainWindow]
+ * @param {() => string|null} [deps.getLocale]
  */
 function registerSkillMoveHandlers({
   ipcMain,
@@ -32,11 +44,21 @@ function registerSkillMoveHandlers({
   getMainWindow = () => null,
   getLocale = () => null,
 }) {
+  /**
+   * @param {import('electron').MessageBoxOptions} options
+   */
   function showMessageBox(options) {
+    // The handler below answers before it gets here when there is no dialog.
+    if (!dialog) throw new Error('No dialog to show.');
     const win = getMainWindow();
     return win && !win.isDestroyed() ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options);
   }
 
+  /**
+   * @param {ReturnType<typeof createTranslator>} t
+   * @param {string} message
+   * @param {string} detail
+   */
   async function tell(t, message, detail) {
     await showMessageBox({ type: 'error', buttons: [t('skills.makeGlobal.ok')], noLink: true, message, detail });
   }

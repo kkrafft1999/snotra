@@ -125,33 +125,75 @@ const EXHAUSTED_WATCH_ERRORS = new Set(['ENOSPC', 'EMFILE', 'ENFILE', 'ENOMEM'])
 const WATCH_LIMIT_ERROR_CODE = 'WATCH_DIRECTORY_LIMIT';
 
 /**
+ * What a watch gives back: `close()`, and usually `on('error', …)`.
+ * @typedef {{ close: () => void, on?(event: string, listener: (...args: any[]) => void): unknown }} WatchHandle
+ */
+
+/**
+ * @typedef {(eventType: string, filename?: string | Buffer | null) => void} WatchListener
+ */
+
+/**
+ * The part of `fs.watch` the service uses.
+ * @typedef {(dir: string, options: { recursive: boolean }, listener: WatchListener) => WatchHandle} WatchFn
+ */
+
+/**
+ * One folder to watch, with the number of ancestors that watch along.
+ * @typedef {{ dir: string, fallbackLevels?: number }} WatchTargetSpec
+ */
+
+/**
+ * @typedef {{ directories: string[], complete: boolean }} DirectoryChange
+ */
+
+/**
+ * A folder of the folder-by-folder watch, and whether its subfolders are
+ * watched too.
+ * @typedef {{ watcher: WatchHandle, recursive: boolean }} FolderEntry
+ */
+
+/**
+ * @typedef {Parameters<typeof createDirectoryWatcher>[0]} DirectoryWatcherOptions
+ */
+
+/**
  * @param {object} options
- * @param {Function} options.watch `fs.watch` (injizierbar für Tests).
- * @param {object} options.path Pfad-Modul (posix in Tests, nativ im Betrieb).
- * @param {(root: string|null) => Array<string|{dir: string, fallbackLevels?: number}>} options.resolveTargets
+ * @param {WatchFn} options.watch `fs.watch` (injizierbar für Tests).
+ * @param {import('path').PlatformPath} options.path Pfad-Modul (posix in Tests, nativ im Betrieb).
+ * @param {(root: string|null) => Array<string | WatchTargetSpec>} options.resolveTargets
  *   Welche Verzeichnisse für diesen Workspace-Root beobachtet werden.
- * @param {(payload: {directories: string[], complete: boolean}) => void} options.onChange
+ * @param {(payload: DirectoryChange) => void} options.onChange
  *   Meldung nach dem Entprellen. `directories` sind die betroffenen **Ordner**
  *   (nicht die Dateien); `complete: false` heißt „da war noch mehr, das sich
  *   keinem Ordner zuordnen ließ“ — dann muss der Empfänger gröber neu laden.
- * @param {(relativePath: string, targetDir: string) => boolean} [options.ignores]
+ * @param {((relativePath: string, targetDir: string) => boolean) | null} [options.ignores]
  *   Rauschfilter für Ereignisse **innerhalb** eines Ziels.
- * @param {(relativePath: string, targetDir: string) => string|null} [options.changedDirectoryFor]
+ * @param {((relativePath: string, targetDir: string) => string | null) | null} [options.changedDirectoryFor]
  *   Welcher Ordner gilt als betroffen? Vorgabe ist der Elternordner des
  *   gemeldeten Eintrags; `null` bedeutet „nicht zuzuordnen“.
- * @param {(error: Error, dir: string) => void} [options.onError] A watch that
+ * @param {((error: Error, dir: string) => void) | null} [options.onError] A watch that
  *   failed, with the folder it failed on.
  * @param {string} [options.platform] `process.platform` unless a test says
  *   otherwise. On `'linux'` a target is watched folder by folder instead of
  *   with `recursive: true` (#648).
- * @param {{ readdir: Function, lstat: Function }} [options.fs] `fs/promises`
+ * @param {Pick<typeof import('fs').promises, 'readdir' | 'lstat'> | null} [options.fs] `fs/promises`
  *   unless given — only the folder-by-folder watch lists and checks folders.
- * @param {(relativeDir: string, targetDir: string) => 'recursive'|'flat'|'skip'} [options.folderPolicy]
+ * @param {((relativeDir: string, targetDir: string) => 'recursive'|'flat'|'skip') | null} [options.folderPolicy]
  *   Folder by folder only: whether a folder below the target is watched with
  *   its subfolders (the default), on its own (`'flat'`), or not at all, and
  *   nothing below it either (`'skip'`).
  * @param {number} [options.maxWatchedDirectories] Folder by folder only: how
  *   many folders one target may hold a watch on.
+ * @param {number} [options.fallbackLevels] How many ancestors of a target watch
+ *   along, unless the target names its own.
+ * @param {number} [options.debounceMs]
+ * @param {number} [options.maxWaitMs]
+ * @param {number} [options.retryMs]
+ * @param {number} [options.startRecheckMs]
+ * @param {typeof setTimeout} [options.setTimeoutImpl]
+ * @param {typeof clearTimeout} [options.clearTimeoutImpl]
+ * @param {() => number} [options.nowImpl]
  */
 function createDirectoryWatcher({
   watch,
@@ -181,27 +223,46 @@ function createDirectoryWatcher({
   }
   if (typeof onChange !== 'function') throw new TypeError('createDirectoryWatcher benötigt onChange.');
 
-  /** @type {Array<{ watcher: object, dir: string, isTarget: boolean }>} */
+  /** @type {Array<{ watcher: WatchHandle, dir: string, isTarget: boolean }>} */
   let slots = [];
+  /** @type {string | null} */
   let currentRoot = null;
+  /** @type {ReturnType<typeof setTimeout> | null} */
   let debounceTimer = null;
-  /** Zeitpunkt des ersten noch nicht gemeldeten Ereignisses. */
+  /**
+   * Zeitpunkt des ersten noch nicht gemeldeten Ereignisses.
+   * @type {number | null}
+   */
   let pendingSince = null;
   /** Hat eines der gesammelten Ereignisse einen Neuaufbau verlangt? */
   let pendingRebuild = false;
-  /** Betroffene Ordner seit der letzten Meldung. */
+  /**
+   * Betroffene Ordner seit der letzten Meldung.
+   * @type {Set<string>}
+   */
   let pendingDirectories = new Set();
   /** Gab es ein Ereignis, das sich keinem Ordner zuordnen ließ? */
   let pendingUnattributed = false;
-  /** Läuft nur, solange ein Ziel fehlt (Wiedervorlage, #155). */
+  /**
+   * Läuft nur, solange ein Ziel fehlt (Wiedervorlage, #155).
+   * @type {ReturnType<typeof setTimeout> | null}
+   */
   let retryTimer = null;
-  /** The one report a moment after the watchers were opened (#478). */
+  /**
+   * The one report a moment after the watchers were opened (#478).
+   * @type {ReturnType<typeof setTimeout> | null}
+   */
   let startRecheckTimer = null;
   let closed = false;
   /** Each folder gets a watch of its own instead of `recursive: true` (#648). */
   const watchesByFolder = platform === 'linux';
 
-  /** Die Ziele in einheitlicher Form — Zeichenkette oder Objekt ist erlaubt. */
+  /**
+   * Die Ziele in einheitlicher Form — Zeichenkette oder Objekt ist erlaubt.
+   *
+   * @param {string | null | undefined} workspaceRoot
+   * @returns {Array<{ dir: string, fallbackLevels: number }>}
+   */
   function targets(workspaceRoot) {
     const list = resolveTargets(workspaceRoot ?? null) || [];
     const seen = new Set();
@@ -211,11 +272,14 @@ function createDirectoryWatcher({
       if (typeof dir !== 'string' || !dir || seen.has(dir)) continue;
       seen.add(dir);
       const levels = typeof entry === 'object' && entry !== null ? entry.fallbackLevels : undefined;
-      normalized.push({ dir, fallbackLevels: Number.isInteger(levels) ? levels : fallbackLevels });
+      normalized.push({ dir, fallbackLevels: typeof levels === 'number' && Number.isInteger(levels) ? levels : fallbackLevels });
     }
     return normalized;
   }
 
+  /**
+   * @param {WatchHandle} watcher
+   */
   function closeQuietly(watcher) {
     try {
       watcher.close();
@@ -229,6 +293,9 @@ function createDirectoryWatcher({
     slots = [];
   }
 
+  /**
+   * @param {{ rebuild: boolean, directory?: string | null }} change
+   */
   function notifyLater({ rebuild, directory = null }) {
     if (closed) return;
     // Ein Neuaufbau darf nicht verloren gehen, nur weil danach noch
@@ -272,6 +339,9 @@ function createDirectoryWatcher({
    * Projektverzeichnis wäre sonst jede angelegte Datei ein Anlass. Ohne
    * Dateinamen (den liefert nicht jede Plattform) bleibt es bei „lieber einmal
    * zu viel“.
+   *
+   * @param {string | Buffer | null | undefined} filename
+   * @param {string | null} expectedChild
    */
   function concernsUs(filename, expectedChild) {
     if (!expectedChild || !filename) return true;
@@ -284,6 +354,10 @@ function createDirectoryWatcher({
    * Eintrags — bei `sub/datei.txt` also `<ziel>/sub`, bei einem gelöschten
    * Unterordner dessen Elternordner. Genau das braucht ein Empfänger, der
    * einen Verzeichnis-Inhalt neu liest.
+   *
+   * @param {string} relativePath
+   * @param {string} targetDir
+   * @returns {string | null}
    */
   function changedDirectory(relativePath, targetDir) {
     if (typeof changedDirectoryFor === 'function') {
@@ -300,6 +374,8 @@ function createDirectoryWatcher({
    * einen Wächter, der nie etwas meldet — statt ENOENT zu werfen wie unter
    * macOS und Windows (nachgemessen 2026-09-17, Node 24.21 auf Linux). Ein
    * flacher Wächter wirft dagegen überall.
+   *
+   * @param {string} dir
    */
   function probeWatchable(dir) {
     const probe = watch(dir, { recursive: false }, () => {});
@@ -335,15 +411,28 @@ function createDirectoryWatcher({
    *
    * Returns something shaped like an `fs.watch` watcher: `on('error')` reaches
    * the watch on the target itself, `close()` ends all of them.
+   *
+   * @param {string} rootDir
+   * @param {WatchListener} handler
+   * @returns {WatchHandle}
    */
   function openDirectoryTree(rootDir, handler) {
     const fsApi = fs ?? require('fs').promises;
-    /** Watched folders by absolute path: `{ watcher, recursive }`. */
+    /**
+     * Watched folders by absolute path: `{ watcher, recursive }`.
+     * @type {Map<string, FolderEntry>}
+     */
     const folders = new Map();
-    /** Folders still to be listed, breadth first. */
+    /**
+     * Folders still to be listed, breadth first.
+     * @type {Array<{ absDir: string, relDir: string, announce: boolean }>}
+     */
     const queue = [];
     let walking = false;
-    /** Names being checked after a rename, and whether another one came in meanwhile. */
+    /**
+     * Names being checked after a rename, and whether another one came in meanwhile.
+     * @type {Map<string, { again: boolean }>}
+     */
     const checking = new Map();
     /** The cap or the kernel's limit was reached — no further folder is watched until one goes. */
     let full = false;
@@ -351,10 +440,18 @@ function createDirectoryWatcher({
 
     const reportIncomplete = () => notifyLater({ rebuild: false });
 
+    /**
+     * @param {string} relDir
+     * @param {string} name
+     */
     function joinRelative(relDir, name) {
       return relDir ? path.join(relDir, name) : name;
     }
 
+    /**
+     * @param {Error} error
+     * @param {string} dir
+     */
     function stopGrowing(error, dir) {
       if (!full) {
         full = true;
@@ -364,7 +461,11 @@ function createDirectoryWatcher({
       reportIncomplete();
     }
 
-    /** Drops the watch on a folder and on everything below it. */
+    /**
+     * Drops the watch on a folder and on everything below it.
+     *
+     * @param {string} absDir
+     */
     function dropFolder(absDir) {
       const prefix = absDir.endsWith(path.sep) ? absDir : `${absDir}${path.sep}`;
       let dropped = false;
@@ -381,6 +482,13 @@ function createDirectoryWatcher({
       if (dropped && folders.size < maxWatchedDirectories) full = false;
     }
 
+    /**
+     * @param {string} absDir
+     * @param {string} relDir
+     * @param {FolderEntry} entry
+     * @param {string} eventType
+     * @param {string | Buffer | null | undefined} filename
+     */
     function onFolderEvent(absDir, relDir, entry, eventType, filename) {
       if (treeClosed || folders.get(absDir) !== entry) return;
       const name = filename == null ? '' : String(filename);
@@ -405,6 +513,13 @@ function createDirectoryWatcher({
       onChildEvent(absDir, relDir, entry, eventType, name);
     }
 
+    /**
+     * @param {string} absDir
+     * @param {string} relDir
+     * @param {FolderEntry} entry
+     * @param {string} eventType
+     * @param {string} name
+     */
     function onChildEvent(absDir, relDir, entry, eventType, name) {
       const relPath = joinRelative(relDir, name);
       handler(eventType, relPath);
@@ -413,6 +528,11 @@ function createDirectoryWatcher({
       if (eventType === 'rename' && entry.recursive) checkName(path.join(absDir, name), relPath);
     }
 
+    /**
+     * @param {string} absDir
+     * @param {string} relDir
+     * @param {boolean} announce
+     */
     function addFolder(absDir, relDir, announce) {
       if (treeClosed || folders.has(absDir)) return;
       const policy = typeof folderPolicy === 'function' ? folderPolicy(relDir, rootDir) : 'recursive';
@@ -422,14 +542,17 @@ function createDirectoryWatcher({
         return;
       }
       if (folders.size >= maxWatchedDirectories) {
-        const error = new Error(`Not watching more than ${maxWatchedDirectories} folders below ${rootDir}.`);
-        error.code = WATCH_LIMIT_ERROR_CODE;
+        const error = Object.assign(
+          new Error(`Not watching more than ${maxWatchedDirectories} folders below ${rootDir}.`),
+          { code: WATCH_LIMIT_ERROR_CODE },
+        );
         stopGrowing(error, absDir);
         return;
       }
-      const entry = { watcher: null, recursive: policy !== 'flat' };
+      /** @type {WatchHandle} */
+      let watcher;
       try {
-        entry.watcher = watch(absDir, { recursive: false }, (eventType, filename) =>
+        watcher = watch(absDir, { recursive: false }, (eventType, filename) =>
           onFolderEvent(absDir, relDir, entry, eventType, filename));
       } catch (error) {
         if (QUIET_FOLDER_WATCH_ERRORS.has(error?.code)) return;
@@ -441,8 +564,9 @@ function createDirectoryWatcher({
         reportIncomplete();
         return;
       }
-      if (typeof entry.watcher.on === 'function') {
-        entry.watcher.on('error', (error) => {
+      const entry = { watcher, recursive: policy !== 'flat' };
+      if (typeof watcher.on === 'function') {
+        watcher.on('error', (/** @type {Error} */ error) => {
           if (treeClosed || folders.get(absDir) !== entry) return;
           onError?.(error, absDir);
           dropFolder(absDir);
@@ -460,6 +584,9 @@ function createDirectoryWatcher({
      * drop its watch if it was one. One check per name at a time, and one more
      * when another rename came in meanwhile — so the last check sees the last
      * state, however the `lstat` calls overtake each other.
+     *
+     * @param {string} absPath
+     * @param {string} relPath
      */
     function checkName(absPath, relPath) {
       const running = checking.get(absPath);
@@ -473,6 +600,7 @@ function createDirectoryWatcher({
         try {
           while (state.again && !treeClosed) {
             state.again = false;
+            /** @type {import('fs').Stats | null} */
             let stats = null;
             try {
               stats = await fsApi.lstat(absPath);
@@ -492,6 +620,11 @@ function createDirectoryWatcher({
       })().catch((error) => onError?.(error, absPath));
     }
 
+    /**
+     * @param {string} absDir
+     * @param {string} relDir
+     * @param {boolean} announce
+     */
     function enqueue(absDir, relDir, announce) {
       queue.push({ absDir, relDir, announce });
       if (walking) return;
@@ -502,7 +635,9 @@ function createDirectoryWatcher({
     async function walk() {
       try {
         while (queue.length > 0 && !treeClosed) {
-          const { absDir, relDir, announce } = queue.shift();
+          const next = queue.shift();
+          if (!next) break;
+          const { absDir, relDir, announce } = next;
           const entry = folders.get(absDir);
           if (!entry) continue;
           let dirents;
@@ -536,15 +671,15 @@ function createDirectoryWatcher({
 
     // The target itself is watched right away: a missing one throws here, as
     // `fs.watch` does everywhere, and the chain climbs to its ancestor.
-    const rootEntry = { watcher: null, recursive: true };
-    rootEntry.watcher = watch(rootDir, { recursive: false }, (eventType, filename) =>
+    const rootWatcher = watch(rootDir, { recursive: false }, (eventType, filename) =>
       onFolderEvent(rootDir, '', rootEntry, eventType, filename));
+    const rootEntry = { watcher: rootWatcher, recursive: true };
     folders.set(rootDir, rootEntry);
     enqueue(rootDir, '', false);
 
     return {
       on(event, listener) {
-        if (typeof rootEntry.watcher.on === 'function') rootEntry.watcher.on(event, listener);
+        if (typeof rootWatcher.on === 'function') rootWatcher.on(event, listener);
         return this;
       },
       close() {
@@ -567,6 +702,10 @@ function createDirectoryWatcher({
    *
    * On Linux the recursive watch is Node's emulation, and the target is
    * watched folder by folder instead (#648).
+   *
+   * @param {string} dir
+   * @param {WatchListener} handler
+   * @returns {WatchHandle}
    */
   function openTargetWatcher(dir, handler) {
     if (watchesByFolder) return openDirectoryTree(dir, handler);
@@ -583,9 +722,12 @@ function createDirectoryWatcher({
    * Beobachtet das Ziel **und** seine vorhandenen Vorfahren. Nicht
    * entweder-oder: Das Ziel sieht die Arbeit darin, die Vorfahren sehen das
    * Ziel selbst entstehen und vergehen.
+   *
+   * @param {{ dir: string, fallbackLevels: number }} target
    */
   function watchChain({ dir: targetDir, fallbackLevels: levels }) {
     let dir = targetDir;
+    /** @type {string | null} */
     let expectedChild = null;
     for (let level = 0; level <= levels; level += 1) {
       const isTarget = dir === targetDir;
@@ -597,6 +739,7 @@ function createDirectoryWatcher({
         if (isTarget) probeWatchable(dir);
         // Unterhalb des Ziels zählt jede Ebene. Ein Wächter darüber wartet nur
         // auf ein einzelnes Pfadstück und bleibt flach.
+        /** @type {WatchListener} */
         const handler = (_eventType, filename) => {
           if (!isTarget) {
             if (!concernsUs(filename, childName)) return;
@@ -655,6 +798,8 @@ function createDirectoryWatcher({
    * dem es zuvor gescheitert ist — das erspart eine zweite Dateisystem-
    * Abhängigkeit und prüft genau das, worauf es ankommt: nicht nur, ob der
    * Pfad existiert, sondern ob er sich beobachten lässt.
+   *
+   * @param {string} dir
    */
   function targetReachable(dir) {
     try {
@@ -713,6 +858,9 @@ function createDirectoryWatcher({
     }, startRecheckMs);
   }
 
+  /**
+   * @param {string | null | undefined} workspaceRoot
+   */
   function build(workspaceRoot) {
     closeSlots();
     currentRoot = workspaceRoot ?? null;
@@ -725,6 +873,8 @@ function createDirectoryWatcher({
    * Auf einen Workspace umschalten (`null` = keiner offen). Alte Watcher
    * werden dabei geschlossen — sonst bliebe bei jedem Ordnerwechsel ein
    * Handle zurück.
+   *
+   * @param {string | null | undefined} workspaceRoot
    */
   function watchWorkspace(workspaceRoot) {
     if (closed) return;

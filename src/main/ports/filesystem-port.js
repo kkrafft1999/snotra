@@ -4,8 +4,17 @@
  * Lists every member `adapters/filesystem-ipc-adapter.js` provides (#650);
  * `test/filesystem-port-typedef.test.js` holds the two together.
  *
+ * One row of a folder listing. A symlink also carries what it points at (#945)
+ * and whether that lies outside the open folder.
+ * @typedef {{ name: string, path: string, isDirectory: boolean, size: number, modified: number,
+ *   isSymlink?: boolean, linkTarget?: string, linkKind?: string, linkOutside?: boolean }} DirectoryEntry
+ *
+ * What an import counts, and what it leaves out (#101, #646).
+ * @typedef {{ dirs: number, files: number, bytes: number, skippedSymlinks: number,
+ *   skippedSensitive: number, skippedOther: number }} ImportCounts
+ *
  * @typedef {Object} FilesystemPort
- * @property {(dirPath: string, options?: {showHidden?: boolean}) => Promise<{entries: Array, hidden: number, unreadable?: 'permission'|'missing'|'refused'|'failed'}>} readDirectory
+ * @property {(dirPath: string, options?: {showHidden?: boolean}) => Promise<{entries: DirectoryEntry[], hidden: number, unreadable?: 'permission'|'missing'|'refused'|'failed'}>} readDirectory
  *   `hidden` counts the entries cut off after the first READ_DIRECTORY_MAX_ENTRIES (#76);
  *   it has nothing to do with `showHidden`, which lists dot files as well (#436).
  *   `unreadable` is set, with no entries, when the folder could not be listed (#639):
@@ -18,14 +27,14 @@
  * @property {(itemPath: string, newName: string) => Promise<{ok: true, path: string, unchanged?: boolean}|{error: string, reason: string, character?: string}>} renameItem
  *   In its own folder; a case-only rename on APFS or NTFS goes through. The workspace
  *   folder itself is refused with reason 'root'.
- * @property {(sourcePaths: string[], destDir: string) => Promise<object>} inspectImport
+ * @property {(sourcePaths: string[], destDir: string) => Promise<{error: string, ok?: undefined} | (ImportCounts & {ok: true, error?: undefined, destDir: string, targets: Array<{source: string, targetPath: string, kind: 'file'|'directory'}>})>} inspectImport
  *   Counts an import from outside the workspace without writing (#101). The sources
  *   are what the preload resolved from dropped File objects, never a path the page
  *   names (#646); only the target is bound to the workspace.
- * @property {(sourcePaths: string[], destDir: string) => Promise<object>} importItems
+ * @property {(sourcePaths: string[], destDir: string) => Promise<{error: string, copied?: string[], ok?: undefined} | (ImportCounts & {ok: true, error?: undefined, copied: string[]})>} importItems
  *   Copies them, all or nothing; the handler confirms natively before.
- * @property {(options?: {showHidden?: boolean}) => Promise<{entries: Array, truncated: boolean, error?: string}>} listWorkspacePaths
- * @property {(filePath: string) => Promise<{absPath: string} | {error: string}>} resolveCheckedWorkspacePath
+ * @property {(options?: {showHidden?: boolean}) => Promise<{entries: Array<{path: string, kind: 'directory'|'file'}>, truncated: boolean, error?: string}>} listWorkspacePaths
+ * @property {(filePath: string) => Promise<{absPath: string, error?: undefined} | {error: string, reason?: string, absPath?: undefined}>} resolveCheckedWorkspacePath
  *   Checks an absolute path against the real workspace (realpath), exactly as sent.
  *   Not fs-service's `resolveWorkspacePath`, which joins a relative path lexically.
  * @property {(filePath: string) => Promise<{content: string, size: number, modified: number}|{error: string, reason: 'refused'|'missing'|'permission'|'too-large'|'failed', size?: number}>} readFilePreview
