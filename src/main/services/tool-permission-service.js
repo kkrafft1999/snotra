@@ -104,7 +104,7 @@ const {
  * @param {Pick<ReturnType<typeof import('../../application/permissions/session-grants').createSessionGrants>,
  *   'list' | 'count' | 'clear' | 'clearChat' | 'revoke'>} deps.sessionGrants
  * @param {() => string|null} [deps.getActiveWorkspaceRoot]
- * @param {Pick<ReturnType<typeof import('./chat-session-settings').createChatSessionSettings>,
+ * @param {Pick<ReturnType<typeof import('../../application/chat/chat-session-settings').createChatSessionSettings>,
  *   'getCurrentChatId' | 'rememberMode' | 'forgetBackgroundModes'>|null} [deps.chatSessionSettings]
  * @param {() => unknown} [deps.getLocale]
  * @param {SecurityPageData['describeExecutionTools']|null} [deps.describeExecutionTools]

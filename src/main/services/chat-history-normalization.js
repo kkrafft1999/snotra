@@ -23,9 +23,7 @@ const { normalizeSessionCost } = require('../../shared/contracts/cost');
 const { createMessage, isMessage } = require('../../shared/contracts/message');
 const { normalizeChatConfigOverrides } = require('../../shared/contracts/chat-configuration');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
-const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
 const { isToolCategory } = require('../../shared/contracts/tool-categories');
-const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
 const { isRecord } = require('../../shared/runtime/is-record');
 
 /**
@@ -193,44 +191,13 @@ const { isRecord } = require('../../shared/runtime/is-record');
  * @typedef {SessionRowInput & { id: string, updatedAt: number }} SessionRow
  */
 
-/** @type {readonly string[]} */
-const TOOL_PERMISSION_MODE_VALUES = Object.freeze(Object.values(TOOL_PERMISSION_MODES));
-
-/**
- * Modell und Freigabemodus eines Chats (Issue #211). Beides ist optional: Ein
- * Verlauf aus einer aelteren Version kennt die Felder nicht, und ein Chat ohne
- * eigene Wahl soll auch keine bekommen — er faellt auf den Standard zurueck.
- *
- * @param {unknown} raw
- */
-function chatModelPresetIdForStore(raw) {
-  if (typeof raw !== 'string') return undefined;
-  const trimmed = raw.trim();
-  return trimmed ? trimmed.slice(0, 128) : undefined;
-}
-
-/**
- * Nur die drei bekannten Modi. Ein unbekannter Wert wird verworfen statt auf
- * `smart` normalisiert: „nichts gespeichert“ und „ausdruecklich intelligent“
- * sind derselbe Lauf, aber nicht dieselbe Aussage — und ein zugespielter Wert
- * darf hier auf keinen Fall zu einer Freigabe werden.
- *
- * @param {unknown} raw
- */
-function chatToolPermissionModeForStore(raw) {
-  if (typeof raw !== 'string') return undefined;
-  return TOOL_PERMISSION_MODE_VALUES.includes(raw) ? raw : undefined;
-}
-
-/**
- * The chat's reasoning level (#725), optional like the two above. Whether the
- * model takes it is decided when a round starts, not here.
- *
- * @param {unknown} raw
- */
-function chatReasoningEffortForStore(raw) {
-  return normalizeReasoningLevel(raw);
-}
+// A chat's own model, mode and level (#211, #725) are read by the session
+// settings in the core as well (#982), so they live in the contracts.
+const {
+  chatModelPresetIdForStore,
+  chatToolPermissionModeForStore,
+  chatReasoningEffortForStore,
+} = require('../../shared/contracts/chat-session-fields');
 
 /**
  * Bild-Teil in einem Array-Content — die Formen, in denen Anbieter und Renderer

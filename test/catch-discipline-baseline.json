@@ -33,7 +33,7 @@
     "main/services/chat-configuration-service.js": 1,
     "main/services/chat-history-normalization.js": 2,
     "main/services/chat-history-store.js": 6,
-    "main/services/chat-session-settings.js": 6,
+    "application/chat/chat-session-settings.js": 6,
     "main/services/directory-watcher.js": 2,
     "main/services/document-text-worker.js": 1,
     "main/services/embedded-text-file.js": 4,

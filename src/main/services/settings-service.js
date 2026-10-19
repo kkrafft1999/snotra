@@ -47,7 +47,7 @@ const {
  * @typedef {import('../../shared/contracts/settings').ProviderPatch} ProviderPatch
  * @typedef {import('../../shared/contracts/settings').PresetConnectionPatch} PresetConnectionPatch
  *
- * @typedef {Pick<ReturnType<typeof import('./chat-session-settings').createChatSessionSettings>,
+ * @typedef {Pick<ReturnType<typeof import('../../application/chat/chat-session-settings').createChatSessionSettings>,
  *   'reasoningEffortFor' | 'rememberReasoningEffort' | 'rememberPreset'>} SettingsChatSession
  * @typedef {Pick<ReturnType<typeof import('./skills-service').createSkillsService>, 'bindSelection'>} SettingsSkillBinding
  * @typedef {Pick<ReturnType<typeof import('./image-generation-settings').createImageGenerationSettings>, 'refresh'>} SettingsImageGeneration

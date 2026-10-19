@@ -6,7 +6,7 @@
  *
  * Where the overrides are kept (the chat's row in the history) and how a
  * proposal is checked against the catalogue is known only to main
- * (`services/chat-session-settings.js`, `services/chat-configuration-service.js`).
+ * (`application/chat/chat-session-settings.js`, `services/chat-configuration-service.js`).
  */
 
 /**

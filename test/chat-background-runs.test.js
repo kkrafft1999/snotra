@@ -4,7 +4,7 @@ const path = require('path');
 const { createChatEngine } = require('../src/application/chat/chat-engine');
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
 const { createToolApprovalAdapter } = require('../src/main/adapters/tool-approval-adapter');
-const { createChatSessionSettings, CHAT_ACTIVATION } = require('../src/main/services/chat-session-settings');
+const { createChatSessionSettings, CHAT_ACTIVATION } = require('../src/application/chat/chat-session-settings');
 const { createChatApplication } = require('../src/main/composition/create-chat-application');
 const { formatLine: formatToolDisplayLine } = require('./helpers/tool-descriptors');
 
