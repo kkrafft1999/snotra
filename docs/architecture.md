@@ -124,9 +124,10 @@ imports.
   `src/main/services/` alone. The tool registry, the planner, the tool
   descriptors, the skill selection and the chat session settings moved in with
   [#982](https://github.com/kkrafft1999/snotra/issues/982), the chat
-  configuration and the program-allowance matching with #1172; the policy
-  rules still sit in `src/main/` — the
-  list is in [Business rules outside the core](#business-rules-outside-the-core-982).
+  configuration, the program-allowance matching, the policy rules and what the
+  security page reads with
+  [#1172](https://github.com/kkrafft1999/snotra/issues/1172) — the list is in
+  [Business rules outside the core](#business-rules-outside-the-core-982).
 - The conversation itself — runs, persistence — is the renderer's, see
   [Renderer](#renderer-what-was-moved-what-stays)
   ([#981](https://github.com/kkrafft1999/snotra/issues/981)).
@@ -142,7 +143,7 @@ moves to ([#982](https://github.com/kkrafft1999/snotra/issues/982), one pull
 request per module). A module moves when it can do without Node built-ins and
 packages — `test/application-layer-imports.test.js` holds that — and takes
 what touches the machine as an injected port. Inventory of 2026-10-19; the
-rows still open are tracked in
+last rows moved with
 [#1172](https://github.com/kkrafft1999/snotra/issues/1172):
 
 | Rule | Current place | Target | State |
@@ -158,7 +159,7 @@ rows still open are tracked in
 | A chat's model, mode, reasoning level and switched skills and tools; the fallback to "Smart" when "Auto" is refused | `src/application/chat/chat-session-settings.js` | — | moved; keeps them in the chat history through a typedef of its own (`ChatSettingsStore`); the stored fields are normalized in `shared/contracts/chat-session-fields.js` for it and for the history |
 | Which skills and tools a chat has, and the check of a proposal to change them (#773, #774) | `src/application/chat/chat-configuration-service.js`, with `src/application/tools/mcp-remembered-tools.js` | — | moved (#1172); reads the skill catalogue through a typedef of its own (`SkillCatalog`) |
 | Whether a program allowance covers a command (#408) | `src/application/permissions/program-allowance-match.js` | — | moved (#1172); finding a program on the PATH, real paths and checking folders stay in `services/program-allowances-service.js`, which hands them in; `quoteArgv` moved to `shared/runtime/quote-argv.js` |
-| The scopes, merging and loosening rules of the policy | `src/main/services/tool-policy-store.js` | the rules to `src/application/permissions/` next to `tool-policy.js`; the signed file stays in main | open |
+| What the policy holds and what survives a failed check: its shape, the normalising of a file, the fail-safe that keeps only what tightens, the version approvals bind to | `src/application/permissions/tool-policy-rules.js` | — | moved (#1172); which hosts a card may open moved with it to `shared/runtime/granted-hosts.js`. The signed file, the key and the changes — each loosening redeemed against a receipt of the user-confirmation port — stay in `services/tool-policy-store.js` |
 | What Settings › Security and the mode pill read | `src/application/permissions/security-page-data.js` | — | moved (#1172); reads the chat list, the recent folders and the sandbox state through typedefs of its own |
 
 ## Layers
@@ -178,7 +179,7 @@ code is.
 | **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
 | **Application tools** | `src/application/tools/` | The tools (#982): the registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, `generate_image`, the call planner (arguments, targets, plan key, sandbox plan, preview), argument conformance and the roots a grant opens. Called through the tool adapter. Only through injected services, see [Business rules outside the core](#business-rules-outside-the-core-982) |
 | **Application skills** | `src/application/skills/` | Which skills are switched on and where a switch is bound (#576, #982), and the model's skill suggestion (#125, #1172); the scan that finds them is `services/skills-service.js` |
-| **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content, the overview the Security page reads and what it reads from (`security-page-data.js`, #1172). No Electron, no file system of its own; the heart of [`security-concept.md`](./security-concept.md) |
+| **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content, the policy's own rules (`tool-policy-rules.js`, #1172), whether a program allowance covers a command (`program-allowance-match.js`, #1172), the overview the Security page reads and what it reads from (`security-page-data.js`, #1172). No Electron, no file system of its own; the heart of [`security-concept.md`](./security-concept.md) |
 | **Application ports** | `src/application/ports/` | 23 typedef files, the contracts between the core and main — see [Ports](#ports) |
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
 | **Electron adapters** | `src/main/electron/` | What talks to Electron's APIs below the shell (#983): the secret store over `safeStorage`, system notifications, the push to the window, the native confirmation, the application and file context menus, the HTML preview's views, diagnostics and the crash dialog. `test/electron-free-main.test.js` keeps these names out of `services/` and `adapters/` |
