@@ -757,8 +757,10 @@ function createCore({
     homeDir: os.homedir(),
   });
 
-  // Pairing a phone as the mobile remote (#1114). Nothing of it runs before
-  // the user starts a pairing (R7); its Allow comes from the user-confirmation port.
+  // Pairing a phone as the mobile remote (#1114), and the channel to it (#1192).
+  // Nothing of it runs before the user starts a pairing or the application
+  // starts it with a phone already paired (R7); its Allow comes from the
+  // user-confirmation port.
   const remote = createRemoteBridge({
     userDataPath,
     secretStore,
@@ -769,6 +771,7 @@ function createCore({
     confirmations,
     receipts: { redeem: confirmationReceipts.redeem },
     getLocale: getAppLocale,
+    getAppVersion,
     relay: remoteRelay,
   });
 
@@ -794,7 +797,8 @@ function createCore({
     // with this process.
     shellRunnerService.disposeSync();
     pythonRunnerService.disposeSync();
-    // A pairing still running is cancelled at the relay (#1114).
+    // A pairing still running is cancelled at the relay (#1114), the
+    // presence record of the channel deleted (#1192).
     remote.dispose();
     // The proxy servers live in this process and go with it; this only
     // tidies up what the runtime keeps on disk.

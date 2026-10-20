@@ -2,7 +2,8 @@
 
 // The keys of the mobile remote (#1114) never appear in a log, an IPC payload
 // or a crash report: the desktop's private keys, the relay's tokens, and the
-// pairing code outside the one state that shows it.
+// pairing code outside the one state that shows it — and, since the channel
+// (#1192), neither the session keys nor what a message said.
 //
 // The pairing runs as main wires it — createRemoteBridge, the IPC handlers,
 // the native confirmation adapter — through every way it can end; everything
@@ -33,6 +34,7 @@ const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ip
 const protocol = require('../src/main/remote/pairing-protocol');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createFakeDialog, createFakeSafeStorage, createLog, createPhone, tempDir } = require('./helpers/remote-pairing');
+const { HELLO, createChannelPhone } = require('./helpers/remote-channel');
 
 /** Main as it is wired, with everything the outside world could see captured. */
 function wiredMain(t, { relay, dir = tempDir(t) } = {}) {
@@ -207,7 +209,8 @@ test('the identity handed out can be printed and serialized without its key', as
   // The signer works, and is the only way to the key.
   const message = Buffer.from('snotra');
   assert.equal(protocol.verifySignature(identity.keys.sign, message, identity.sign(message)), true);
-  assert.deepEqual(Object.keys(identity).sort(), ['keys', 'sign']);
+  assert.equal(Buffer.from(identity.agree(identity.keys.agree)).length, 32, 'the agreement works');
+  assert.deepEqual(Object.keys(identity).sort(), ['agree', 'keys', 'sign']);
   assert.ok(Object.isFrozen(identity));
 });
 
@@ -243,5 +246,64 @@ test('relay tokens never reach a log, an IPC payload or a crash report', async (
   assertAbsent(JSON.stringify(main.ipc), secrets, 'an IPC payload');
   assertAbsent(main.log.lines.join('\n'), secrets, 'the log');
   assertAbsent(main.diagnosticsReport(), secrets, 'the diagnostics report');
+  assert.equal(main.reporter.count(), 0);
+});
+
+test('the channel\'s session keys and messages never reach a log, an IPC payload or a crash report', async (t) => {
+  const relay = createInMemoryRelayAdapter({ relayHost: 'relay.test' });
+  const main = wiredMain(t, { relay });
+  const phone = createPhone();
+  await main.invoke(REQ.REMOTE_PAIR_START);
+  const shown = await main.until('code');
+  const channelId = await phone.claim(relay, shown.code.display);
+  await main.until('confirm');
+  main.dialog.open()[0].allow();
+  await main.until('paired');
+
+  await main.bridge.start();
+  const until = async (predicate, what) => {
+    const deadline = Date.now() + 3000;
+    for (;;) {
+      const value = await predicate();
+      if (value) return value;
+      if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`);
+      await new Promise((resolve) => setTimeout(resolve, 2));
+    }
+  };
+  await until(() => relay.inspect.nodes(channelId)?.presence.desktop, 'presence');
+  const desktopKeys = (await main.bridge.pairing.getState()) && relay.inspect.record(channelId).desktopKeys;
+  const mobile = createChannelPhone(relay, phone, channelId, desktopKeys);
+  const sessionKeys = [];
+  const SECRET_TEXT = `secret-plaintext-${nodeCrypto.randomBytes(8).toString('hex')}`;
+
+  // Two sessions: one ended by a bad tag, one that stands — and the window learns it.
+  await mobile.handshake({ until });
+  sessionKeys.push(mobile.keys);
+  await mobile.send(HELLO);
+  await until(() => mobile.receive().length, 'the first answer');
+  await mobile.send(null, { counter: 1, sealed: Buffer.alloc(40, 1).toString('base64url') });
+  await until(() => main.log.lines.some((line) => line.includes('starts over (tag)')), 'the start-over logged');
+  await mobile.handshake({ until });
+  sessionKeys.push(mobile.keys);
+  await mobile.send(HELLO);
+  await until(() => main.lastState()?.phone?.connected === true, 'connected in the window');
+  await mobile.send({ jsonrpc: '2.0', id: 2, method: 'message.send', params: { chatId: 'c', text: SECRET_TEXT, clientMessageId: 'm' } });
+  const answers = [];
+  await until(() => {
+    answers.push(...mobile.receive());
+    return answers.some(({ message }) => message.error?.data.reason === 'unavailable');
+  }, 'the stand-in\'s answer');
+
+  main.bridge.dispose();
+  await until(() => relay.inspect.nodes(channelId)?.presence.desktop === null, 'presence deleted on quit');
+
+  const secrets = sessionKeys.flatMap((keys) => [keys.toDesktop, keys.toPhone].flatMap((key) => [key.toString('hex'), key.toString('base64'), key.toString('base64url')]));
+  secrets.push(SECRET_TEXT);
+  const logText = main.log.lines.join('\n');
+  assertAbsent(JSON.stringify(main.ipc), secrets, 'an IPC payload');
+  assertAbsent(logText, secrets, 'the log');
+  assertAbsent(main.diagnosticsReport(), secrets, 'the diagnostics report');
+  assertAbsent(util.inspect(main.bridge, { depth: 10, showHidden: true }), secrets, 'the bridge, printed');
+  assertAbsent(logText, [channelId, mobile.sid], 'the log');
   assert.equal(main.reporter.count(), 0);
 });

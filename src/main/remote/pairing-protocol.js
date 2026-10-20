@@ -420,6 +420,7 @@ module.exports = {
   displayCode,
   drawSecret,
   fromB64u,
+  publicKeyOf,
   isCanonicalCode,
   isKeyBundle,
   keyBundleBytes,

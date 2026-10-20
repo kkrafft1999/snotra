@@ -82,10 +82,12 @@ decided in [`remote-interface.md`](./remote-interface.md)
 two transports, a listener on loopback and the blind relay; a small catalogue
 of methods instead of the IPC channels; and a *connection* with a kind in
 place of the `webContents` id as the session that runs, events and approvals
-are keyed by. The first piece of it is built: the desktop's half of pairing a
-phone ([#1114](https://github.com/kkrafft1999/snotra/issues/1114)), see
-[The remote bridge: pairing a phone](#the-remote-bridge-pairing-a-phone). It
-talks to the relay only once the user starts a pairing.
+are keyed by. The first pieces of it are built: the desktop's half of pairing a
+phone ([#1114](https://github.com/kkrafft1999/snotra/issues/1114)) and of the
+encrypted channel to it ([#1192](https://github.com/kkrafft1999/snotra/issues/1192)),
+see [The remote bridge: pairing a phone](#the-remote-bridge-pairing-a-phone).
+It talks to the relay only once the user starts a pairing, or at start when a
+phone is paired.
 
 ## Direction of dependencies
 
@@ -178,14 +180,14 @@ code is.
 | **Shared presentation** | `src/shared/presentation/` | `tool-display.js`: the lines of the tool log, by the key and target a tool's descriptor names. For main adapters and tests; not imported by the core |
 | **Shared files** | `src/shared/ipc-channels.js`, `src/shared/manual-channels.js`, `src/shared/limits.js` | Channel names of both windows and the limits that several sides need |
 | **Application core** | `src/application/chat/` | Chat engine (round and tool loop, abort, usage and cost), history trimming, the prompt blocks for environment, memory and project instructions, and the best-effort injection flags on tool results (`injection-detector.js` behind `ports/injection-flag-port.js`, #1011), and a chat's own settings — model, mode, reasoning level, switched skills and tools (`chat-session-settings.js`, #982). Only through injected ports |
-| **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
+| **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. The channel to it (#1192): when to connect, which handshake to answer, what happens to an envelope, when a connection stands. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
 | **Application tools** | `src/application/tools/` | The tools (#982): the registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, `generate_image`, the call planner (arguments, targets, plan key, sandbox plan, preview), argument conformance and the roots a grant opens. Called through the tool adapter. Only through injected services, see [Business rules outside the core](#business-rules-outside-the-core-982) |
 | **Application skills** | `src/application/skills/` | Which skills are switched on and where a switch is bound (#576, #982), and the model's skill suggestion (#125, #1172); the scan that finds them is `services/skills-service.js` |
 | **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content, the policy's own rules (`tool-policy-rules.js`, #1172), whether a program allowance covers a command (`program-allowance-match.js`, #1172), the overview the Security page reads and what it reads from (`security-page-data.js`, #1172). No Electron, no file system of its own; the heart of [`security-concept.md`](./security-concept.md) |
 | **Application ports** | `src/application/ports/` | 23 typedef files, the contracts between the core and main — see [Ports](#ports) |
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
 | **Electron adapters** | `src/main/electron/` | What talks to Electron's APIs below the shell (#983): the secret store over `safeStorage`, system notifications, the push to the window, the native confirmation, the application and file context menus, the HTML preview's views, diagnostics and the crash dialog. `test/electron-free-main.test.js` keeps these names out of `services/` and `adapters/` |
-| **Remote bridge** | `src/main/remote/` | The adapters of the mobile remote (#1114): the protocol's bytes (`pairing-protocol.js`), the keys kept through `safeStorage`, the relay over Firebase's REST interfaces and in memory, the native sheet's wording. Type-checked like `adapters/` |
+| **Remote bridge** | `src/main/remote/` | The adapters of the mobile remote (#1114, #1192): the protocol's bytes (`pairing-protocol.js`, `channel-protocol.js`), the keys kept through `safeStorage`, the relay over Firebase's REST interfaces and in memory, the native sheet's wording. Type-checked like `adapters/` |
 | **Main ports** | `src/main/ports/` | 12 interface types for infrastructure (narrow surfaces, no leaks) |
 | **Platforms** | `src/main/platforms/` | What each operating system and packaging variant can do, resolved once at start, see [Platform capabilities](#platform-capabilities) |
 | **Providers** | `src/main/providers/` | Five provider modules and the two shared OpenAI transports behind `providers/index.js`, see [Provider adapters](#provider-adapters) |
@@ -252,9 +254,10 @@ engine (`llm`, `tool`, `chat-preferences`, `workspace-path`, `skill`,
 the tool registry calls, in the core since
 [#982](https://github.com/kkrafft1999/snotra/issues/982); and
 `user-confirmation` is what main's IPC handlers ask before anything loosens
-([#980](https://github.com/kkrafft1999/snotra/issues/980)); the three
-`remote-*` ports are what the pairing of the mobile remote decides over
-([#1114](https://github.com/kkrafft1999/snotra/issues/1114)); and `secret-store`,
+([#980](https://github.com/kkrafft1999/snotra/issues/980)); the five
+`remote-*` ports are what the pairing and the channel of the mobile remote
+decide over ([#1114](https://github.com/kkrafft1999/snotra/issues/1114),
+[#1192](https://github.com/kkrafft1999/snotra/issues/1192)); and `secret-store`,
 `notification` and `event-push` are what a host hands main's services instead
 of Electron — the keychain, the system's notifications, the push to the window
 ([#983](https://github.com/kkrafft1999/snotra/issues/983)). `memory`'s
@@ -309,20 +312,31 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   how a proposal is checked sit behind the port
   (`application/chat/chat-session-settings.js`, `application/chat/chat-configuration-service.js`,
   in the core since #982 and #1172), which `main/adapters/config-proposal-adapter.js` hands on
-- `remote-relay-port` — the blind relay of the mobile remote as the desktop's
-  pairing sees it (#1114): open a pairing, follow the channel, confirm, cancel,
-  delete. Channels and pairings are named by id only; tokens, challenges and
-  proofs stay in the adapter, which signs through a function the core hands
-  in. `main/remote/firebase-relay-adapter.js` speaks Firebase's REST
-  interfaces, `main/remote/in-memory-relay-adapter.js` keeps the relay's rules
-  in memory for the tests
+- `remote-relay-port` — the blind relay of the mobile remote as the desktop
+  sees it: for pairing (#1114) open a pairing, follow the channel, confirm,
+  cancel, delete; for the channel (#1192) `openChannel`, which fetches and
+  renews the token, follows the four nodes of part 2 and writes handshake 2,
+  envelopes and presence. Channels and pairings are named by id only; tokens,
+  challenges and proofs stay in the adapter, which signs through a function
+  the core hands in. `main/remote/firebase-relay-adapter.js` speaks Firebase's
+  REST interfaces, `main/remote/in-memory-relay-adapter.js` keeps the relay's
+  rules in memory for the tests
 - `remote-identity-port` — the desktop's long-term P-256 keys and the one
   paired phone, kept through `safeStorage` by
-  `main/remote/identity-store-adapter.js`. The core gets the public points and
-  a signer, never a private key
+  `main/remote/identity-store-adapter.js`. The core gets the public points, a
+  signer and the channel's long-term agreement (`ss`), never a private key
 - `remote-pairing-crypto-port` — the pairing code, `MAC_P` and `MAC_D` and the
   safety phrase of `remote-protocol.md` part 1, computed by
   `main/remote/pairing-protocol.js` and proven against its test vectors
+- `remote-channel-crypto-port` — the answer to a handshake, the session keys
+  and the envelopes of `remote-protocol.md` part 2 (#1192), computed by
+  `main/remote/channel-protocol.js` and proven against
+  `remote-protocol/channel-v1.json`. The session keys stay inside the session
+  object it hands out
+- `remote-message-layer-port` — where the channel hands every request after
+  `session.hello`: the dispatcher of `remote-interface.md` §10 (#1194). Until
+  it exists, `application/remote/remote-message-stand-in.js` answers every
+  request with `unavailable`
 - `secret-store-port` — the one root of every secret kept at rest (#983):
   provider keys and the other own secrets, the chat history, the key that signs
   the tool policy, the remote's keys. `services/storage-service.js`,
@@ -3471,11 +3485,13 @@ The desktop's half of pairing the phone of the mobile remote
 ([#1114](https://github.com/kkrafft1999/snotra/issues/1114), phase 1 of
 [#1081](https://github.com/kkrafft1999/snotra/issues/1081)): phases 1, 3 and
 5 of [`remote-pairing-sequence.svg`](./remote-pairing-sequence.svg), with the
-bytes of [`remote-protocol.md`](./remote-protocol.md) part 1. The channel
-itself — tokens on every start, presence, the handshake, the encrypted
-envelopes of part 2 — is not built yet, and neither is the panel
+bytes of [`remote-protocol.md`](./remote-protocol.md) part 1 — and the
+channel to the paired phone of part 2
+([#1192](https://github.com/kkrafft1999/snotra/issues/1192)), see
+[The channel](#the-channel) below. The panel
 *Settings › Remote access* ([#1110](https://github.com/kkrafft1999/snotra/issues/1110))
-that drives it.
+that drives it is not built yet, and neither is the dispatcher behind the
+channel ([#1194](https://github.com/kkrafft1999/snotra/issues/1194)).
 
 **Where the pieces are.**
 
@@ -3487,7 +3503,8 @@ that drives it.
 | Computations | `remote-pairing-crypto-port`; `main/remote/pairing-protocol.js` | Code, MACs, phrase and proofs, written from the spec and held to `remote-protocol/pairing-v1.json` by `test/remote-pairing-protocol.test.js` |
 | *Allow* | `user-confirmation-port`, action `remote-pairing` | The native sheet (`main/remote/pairing-prompt.js` words it), redeemed against the receipt registry like every other loosening |
 | Window | `main/ipc/remote-handlers.js`, `remote:*` channels | Start, cancel, remove, read the state; every change pushed. Normalized by `contracts/remote/pairing-state.js` on the way out |
-| Wiring | `main/composition/create-remote-bridge.js` | Puts the above together for `createApplication()` |
+| Channel | `application/remote/remote-channel.js`; `remote-channel-crypto-port`, `main/remote/channel-protocol.js` | Part 2: connecting, presence, handshake, envelopes, `session.hello` — see [The channel](#the-channel) |
+| Wiring | `main/composition/create-remote-bridge.js` | Puts the above together for `createApplication()`, which starts the channel |
 
 **The flow.** *Start* creates the identity keys on first use, opens a pairing
 at the relay (`POST /v1/challenges`, `POST /v1/pairings`, signed), builds the
@@ -3520,7 +3537,8 @@ relay as far as it can be reached.
 
 **What the window sees.** The panel's eleven states (#1110) map onto the
 contract's: `empty` (1), `opening` and `code` (2), `confirm` (3), `paired` (4
-and 5, told apart by `phone.connected`, which stays false until part 2), the
+and 5, told apart by `phone.connected`, true while a session with the phone
+stands), the
 panel's own questions *Replace phone?* and *Remove phone?* (6, 7), `expired`
 (8), `stopped` (9), `unreachable` (10) and `denied` (11).
 
@@ -3528,6 +3546,52 @@ panel's own questions *Replace phone?* and *Remove phone?* (6, 7), `expired`
 relay; it is empty until the relay exists (snotra-promotion, phase 2 of #1081),
 so a pairing ends in `unreachable` with the reason `not-configured`. The panel
 ships only together with a relay.
+
+### The channel
+
+The desktop's half of `remote-protocol.md` part 2 (§12–§19,
+[#1192](https://github.com/kkrafft1999/snotra/issues/1192)). The decisions
+are in `application/remote/remote-channel.js`, the bytes in
+`main/remote/channel-protocol.js`, the relay's side in the relay port's
+`openChannel`.
+
+- **Connecting.** `createApplication()` starts it; with no phone paired
+  nothing happens (R7). With one, the relay adapter fetches a token (§5.9),
+  follows `meta`, `to-desktop`, `handshake/phone` and `presence/phone` by
+  REST streaming, and renews the token five minutes before it runs out and on
+  `auth_revoked`. A link that fails is opened again after a pause that
+  doubles from 2 to 60 seconds (five minutes after a refusal). Pairing,
+  replacing or removing a phone makes the channel follow at once.
+- **Presence.** `presence/desktop` every 30 seconds while the streams stand,
+  deleted when the app quits. The phone's own record is read and never taken
+  for a connection.
+- **Handshake and keys.** Every new handshake 1 ends the session before it
+  and gets handshake 2 — a fresh X25519 key and the highest shared version,
+  or `protocol-unsupported`. `ss` comes from the identity store's `agree`,
+  the rest from `channel-protocol.js`; the ephemeral key is gone once the
+  keys are derived, and the session keys are overwritten when it ends.
+- **Envelopes.** The receive rules of §16 row by row: deliver in order, hold
+  up to 32 ahead for 5 seconds, drop replays, start over on a gap, a jump or a
+  bad tag; every envelope is deleted once handled, those of other sessions
+  too. A session ends after 24 hours or 2³² envelopes.
+- **`session.hello`** mints the connection (`kind: "relay"`) and only then
+  does the phone count as connected — pushed to the window as
+  `phone.connected`. Any other method before it gets `connection-unknown`;
+  `session.bye` ends the session. Every other request goes to the
+  message-layer port — the stand-in answers `unavailable` until the
+  dispatcher (#1194) takes its place. Errors have the shape of
+  `remote-interface.md` §6.3 (`contracts/remote/rpc-errors.js`), worded in
+  the connection's language.
+- **A vanishing `meta`** ends the channel whatever the other streams show,
+  and the phone is forgotten: the relay removed the channel, so the phone
+  disconnected itself.
+
+Tests: `test/remote-channel-protocol.test.js` (the bytes against the
+vectors), `test/remote-channel.test.js` (the core against the in-memory relay,
+every row of §16), `test/remote-firebase-channel.test.js` (token, streams and
+writes over a fake `fetch`), and `test/remote-key-leak.test.js`, which now
+also holds the session keys and what a message said out of every log, IPC
+payload and diagnostics report.
 
 ## Hooks
 

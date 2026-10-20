@@ -14,10 +14,17 @@
  *
  * Like the real relay it never sees the pairing secret, and it cannot check
  * `MAC_P`: it stores what the phone sent.
+ *
+ * Part 2 (#1192): a paired channel's handshake, presence and outbox nodes,
+ * with the relay's rules — only while paired, each side in its own outbox,
+ * never overwriting a record. `phone` writes handshake 1, sets its presence,
+ * sends and takes envelopes; `inspect.dropLinks` fails the desktop's streams
+ * as a lost network would.
  */
 
 const nodeCrypto = require('node:crypto');
 const protocol = require('./pairing-protocol');
+const { counterKey } = require('./channel-protocol');
 const { RELAY_REASONS, RemoteRelayError } = require('./relay-error');
 
 /**
@@ -37,6 +44,15 @@ const { RELAY_REASONS, RemoteRelayError } = require('./relay-error');
  * @typedef {{ channelId: string, expiresAt: number, claimed: boolean }} PairingRecord
  *
  * @typedef {{ onRecord: (record: RemoteChannelRecord|null) => void, onError: (error: Error) => void }} WatchHandlers
+ *
+ * The nodes of part 2 (§12–§15) under a paired channel; envelopes by sid, then by 16-hex-digit counter.
+ * @typedef {Object} ChannelNodes
+ * @property {{ phone: import('../../application/ports/remote-relay-port').RemotePhoneHandshake|null, desktop: object|null }} handshake
+ * @property {{ phone: { online: true, since: number }|null, desktop: { lastSeen: number }|null }} presence
+ * @property {Map<string, Map<string, string>>} toDesktop
+ * @property {Map<string, Map<string, string>>} toPhone
+ *
+ * @typedef {{ handlers: import('../../application/ports/remote-relay-port').RemoteChannelHandlers, closed: boolean }} LinkEntry
  */
 
 const CHALLENGE_TTL_MS = 60_000;
@@ -53,6 +69,12 @@ const PAIRING_TTL_MS = 5 * 60_000;
  * }) => Promise<{ channelId: string }>} claim  §5.5
  * @property {(channelId: string) => ({ status: string, macD: string|null } | null)} read  what the phone may read (§5.10)
  * @property {(channelId: string) => Promise<void>} deleteChannel  *Disconnect* on the phone (§5.8)
+ * @property {(channelId: string, record: import('../../application/ports/remote-relay-port').RemotePhoneHandshake) => Promise<void>} writeHandshake  handshake 1 (§13)
+ * @property {(channelId: string) => (object | null)} readHandshake  handshake 2, as the desktop wrote it
+ * @property {(channelId: string, online: boolean) => Promise<void>} setPresence  `presence/phone`
+ * @property {(channelId: string) => ({ lastSeen: number } | null)} readPresence  `presence/desktop`
+ * @property {(channelId: string, sid: string, counter: number, c: string) => Promise<void>} sendEnvelope  into `to-desktop`
+ * @property {(channelId: string) => { sid: string, counter: number, c: string }[]} takeEnvelopes  reads and deletes `to-phone`
  */
 
 /**
@@ -64,6 +86,9 @@ const PAIRING_TTL_MS = 5 * 60_000;
  * @property {(reachable: boolean) => void} setReachable  `false`: every call fails with `network`
  * @property {() => void} sweep  the relay's scheduled clean-up
  * @property {() => number} watchers  streams still followed
+ * @property {(channelId: string) => (object | null)} nodes  a copy of the channel's part-2 nodes
+ * @property {() => number} links  channels the desktop follows
+ * @property {(reason?: string) => void} dropLinks  every channel stream fails, as when the network goes
  */
 
 /**
@@ -110,6 +135,18 @@ function createInMemoryRelayAdapter({
    * @type {Map<string, Set<WatchHandlers>>}
    */
   const watchers = new Map();
+  /**
+   * channelId → the nodes of part 2
+   *
+   * @type {Map<string, ChannelNodes>}
+   */
+  const nodes = new Map();
+  /**
+   * channelId → the desktop's channel links
+   *
+   * @type {Map<string, Set<LinkEntry>>}
+   */
+  const links = new Map();
   /** @type {string[]} */
   const calls = [];
   let reachable = true;
@@ -189,7 +226,9 @@ function createInMemoryRelayAdapter({
     if (!channels.delete(channelId)) return;
     for (const [pairingId, pairing] of pairings) if (pairing.channelId === channelId) pairings.delete(pairingId);
     desktopTokens.delete(channelId);
+    nodes.delete(channelId);
     notify(channelId);
+    toLinks(channelId, (entry) => entry.handlers.onMeta(null));
   }
 
   /** The scheduled clean-up: expired pairings go, and their channel unless it is paired. */
@@ -319,10 +358,145 @@ function createInMemoryRelayAdapter({
     dropChannel(channelId);
   }
 
+  // ---------------------------------------------------------------- part 2: the channel (#1192)
+
+  /**
+   * @param {string} channelId
+   * @returns {ChannelNodes}
+   */
+  function nodesOf(channelId) {
+    let entry = nodes.get(channelId);
+    if (!entry) {
+      entry = { handshake: { phone: null, desktop: null }, presence: { phone: null, desktop: null }, toDesktop: new Map(), toPhone: new Map() };
+      nodes.set(channelId, entry);
+    }
+    return entry;
+  }
+
+  /**
+   * The relay's rules for part 2 (§13, §15): only while the channel is paired.
+   * @param {string} channelId
+   */
+  function requirePaired(channelId) {
+    if (!reachable) fail(RELAY_REASONS.NETWORK);
+    const channel = channels.get(channelId);
+    if (!channel) fail(RELAY_REASONS.NOT_FOUND);
+    if (channel.status !== 'paired') fail(RELAY_REASONS.REFUSED);
+    return nodesOf(channelId);
+  }
+
+  /**
+   * Streams deliver later, as over the network.
+   * @param {string} channelId
+   * @param {(link: LinkEntry) => void} deliver
+   */
+  function toLinks(channelId, deliver) {
+    for (const entry of links.get(channelId) || []) queueMicrotask(() => { if (!entry.closed) deliver(entry); });
+  }
+
+  /**
+   * @param {Map<string, Map<string, string>>} outbox
+   * @param {string} sid
+   * @param {number} counter
+   * @param {string} c
+   */
+  function create(outbox, sid, counter, c) {
+    if (!/^[0-9a-f]{16}$/.test(sid) || !Number.isSafeInteger(counter) || counter < 0 || typeof c !== 'string') fail(RELAY_REASONS.INVALID_REQUEST);
+    const key = counterKey(counter);
+    let bySid = outbox.get(sid);
+    if (!bySid) {
+      bySid = new Map();
+      outbox.set(sid, bySid);
+    }
+    // A side creates records in its outbox and never overwrites one (§15).
+    if (bySid.has(key)) fail(RELAY_REASONS.REFUSED);
+    bySid.set(key, c);
+  }
+
+  /**
+   * @param {string} channelId
+   * @param {import('../../application/ports/remote-relay-port').RemoteChannelHandlers} handlers
+   * @returns {import('../../application/ports/remote-relay-port').RemoteChannelLink}
+   */
+  function openChannel(channelId, handlers) {
+    /** @type {LinkEntry} */
+    const entry = { handlers, closed: false };
+    const close = () => {
+      entry.closed = true;
+      links.get(channelId)?.delete(entry);
+    };
+    /** @param {string} name */
+    const guarded = (name) => {
+      calls.push(name);
+      if (entry.closed) fail(RELAY_REASONS.UNAUTHORIZED);
+      return requirePaired(channelId);
+    };
+    /** @type {import('../../application/ports/remote-relay-port').RemoteChannelLink} */
+    const link = {
+      async writeHandshake(record) {
+        guarded('writeHandshake').handshake.desktop = structuredClone(record);
+      },
+      async writeEnvelope(sid, counter, c) {
+        const target = guarded('writeEnvelope');
+        create(target.toPhone, sid, counter, c);
+      },
+      async deleteEnvelope(sid, counter) {
+        const target = guarded('deleteEnvelope');
+        const bySid = target.toDesktop.get(sid);
+        bySid?.delete(counterKey(counter));
+        if (bySid && bySid.size === 0) target.toDesktop.delete(sid);
+      },
+      async writePresence() {
+        guarded('writePresence').presence.desktop = { lastSeen: now() };
+      },
+      async deletePresence() {
+        guarded('deletePresence').presence.desktop = null;
+      },
+      close,
+    };
+    try {
+      reach('openChannel');
+      const channel = channels.get(channelId);
+      if (!channel) fail(RELAY_REASONS.NOT_FOUND);
+      // §5.9: the token, proven against the key the relay stored for the desktop.
+      const challenge = takeChallenge(issueChallenge());
+      prove(channel.desktopKeys.sign, protocol.tokenMessage(challenge, channelId, protocol.ROLES.DESKTOP), handlers.sign);
+      if (channel.status !== 'paired') fail(RELAY_REASONS.REFUSED);
+    } catch (error) {
+      queueMicrotask(() => {
+        if (entry.closed) return;
+        entry.closed = true;
+        handlers.onError(error);
+      });
+      return link;
+    }
+    let set = links.get(channelId);
+    if (!set) {
+      set = new Set();
+      links.set(channelId, set);
+    }
+    set.add(entry);
+    const target = nodesOf(channelId);
+    queueMicrotask(() => {
+      if (entry.closed) return;
+      handlers.onMeta(desktopView(channelId));
+      if (entry.closed) return;
+      handlers.onPhoneHandshake(target.handshake.phone ? structuredClone(target.handshake.phone) : null);
+      handlers.onPhonePresence(!!target.presence.phone);
+      for (const [sid, bySid] of target.toDesktop) {
+        for (const [key, c] of bySid) if (!entry.closed) handlers.onEnvelope({ sid, counter: Number.parseInt(key, 16), c });
+      }
+      if (!entry.closed) handlers.onLive();
+    });
+    return link;
+  }
+
   /** The desktop's streams and tokens end with it, as the Firebase adapter's do; the relay's records stay. */
   function close() {
     watchers.clear();
     desktopTokens.clear();
+    for (const set of links.values()) for (const entry of set) entry.closed = true;
+    links.clear();
   }
 
   /** @type {InMemoryRelayPhone} */
@@ -362,6 +536,39 @@ function createInMemoryRelayAdapter({
       if (!channels.has(channelId)) fail(RELAY_REASONS.NOT_FOUND);
       dropChannel(channelId);
     },
+    async writeHandshake(channelId, record) {
+      const target = requirePaired(channelId);
+      target.handshake.phone = structuredClone(record);
+      toLinks(channelId, (entry) => entry.handlers.onPhoneHandshake(structuredClone(record)));
+    },
+    readHandshake(channelId) {
+      const record = nodes.get(channelId)?.handshake.desktop;
+      return record ? structuredClone(record) : null;
+    },
+    async setPresence(channelId, online) {
+      const target = requirePaired(channelId);
+      target.presence.phone = online ? { online: true, since: now() } : null;
+      toLinks(channelId, (entry) => entry.handlers.onPhonePresence(!!online));
+    },
+    readPresence(channelId) {
+      const record = nodes.get(channelId)?.presence.desktop;
+      return record ? { ...record } : null;
+    },
+    async sendEnvelope(channelId, sid, counter, c) {
+      const target = requirePaired(channelId);
+      create(target.toDesktop, sid, counter, c);
+      toLinks(channelId, (entry) => entry.handlers.onEnvelope({ sid, counter, c }));
+    },
+    takeEnvelopes(channelId) {
+      const target = nodes.get(channelId);
+      if (!target) return [];
+      const out = [];
+      for (const [sid, bySid] of target.toPhone) {
+        for (const [key, c] of bySid) out.push({ sid, counter: Number.parseInt(key, 16), c });
+      }
+      target.toPhone.clear();
+      return out.sort((a, b) => (a.sid === b.sid ? a.counter - b.counter : a.sid < b.sid ? -1 : 1));
+    },
   };
 
   /** @type {InMemoryRelayInspection} */
@@ -376,9 +583,26 @@ function createInMemoryRelayAdapter({
     setReachable: (value) => { reachable = value === true; },
     sweep,
     watchers: () => [...watchers.values()].reduce((sum, set) => sum + set.size, 0),
+    nodes: (channelId) => {
+      const target = nodes.get(channelId);
+      if (!target) return null;
+      const plain = (/** @type {Map<string, Map<string, string>>} */ outbox) => Object.fromEntries([...outbox].map(([sid, bySid]) => [sid, Object.fromEntries(bySid)]));
+      return structuredClone({ handshake: target.handshake, presence: target.presence, toDesktop: plain(target.toDesktop), toPhone: plain(target.toPhone) });
+    },
+    links: () => [...links.values()].reduce((sum, set) => sum + set.size, 0),
+    dropLinks: (reason = RELAY_REASONS.NETWORK) => {
+      for (const set of links.values()) {
+        for (const entry of set) {
+          entry.closed = true;
+          const { handlers } = entry;
+          queueMicrotask(() => handlers.onError(new RemoteRelayError(reason)));
+        }
+      }
+      links.clear();
+    },
   };
 
-  return { openPairing, watchChannel, confirmPairing, cancelPairing, deleteChannel, close, phone, inspect };
+  return { openPairing, watchChannel, confirmPairing, cancelPairing, deleteChannel, openChannel, close, phone, inspect };
 }
 
 module.exports = { createInMemoryRelayAdapter, PAIRING_TTL_MS };

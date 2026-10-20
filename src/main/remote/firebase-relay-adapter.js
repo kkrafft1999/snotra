@@ -16,11 +16,18 @@
  * an error, not in a log line. What the relay answers is checked for its
  * shape before the core sees it; anything else is `invalid-response`.
  *
+ * Part 2 (#1192): `openChannel` holds the desktop's token for a paired
+ * channel, renews it before it runs out and on `auth_revoked`, follows the
+ * four nodes of §12, and writes silently (`print=silent`) — the database
+ * would otherwise echo every envelope back.
+ *
  * Building the adapter does nothing. The first request goes out when the user
- * starts a pairing or removes a phone (R7).
+ * starts a pairing or removes a phone, or when the channel is started with a
+ * phone paired (R7).
  */
 
 const { readEventStream } = require('./event-stream');
+const { counterKey } = require('./channel-protocol');
 const { RELAY_REASONS, RemoteRelayError, reasonForStatus, toRelayError } = require('./relay-error');
 const protocol = require('./pairing-protocol');
 
@@ -32,6 +39,19 @@ const MAX_TOKEN_CHARS = 8 * 1024;
 /** A stream that fails this many times in a row, without one good connection between, is given up. */
 const STREAM_ATTEMPTS = 3;
 const STREAM_RETRY_MS = 1_000;
+/** The nodes the desktop follows in part 2 (§12). */
+const CHANNEL_NODES = 4;
+
+/** An ID token is renewed this long before it runs out (§12), and never sooner than the floor after the last one. */
+const TOKEN_RENEW_MARGIN_MS = 5 * 60_000;
+const TOKEN_RENEW_FLOOR_MS = 30_000;
+/**
+ * The inbox may hold envelopes of up to 256 KiB plaintext each, base64url in
+ * JSON, several at once in the first `put`; every other node is small.
+ */
+const INBOX_MAX_EVENT_CHARS = 4 * 1024 * 1024;
+const HEX16 = /^[0-9a-f]{16}$/;
+const MAX_EPHEMERAL_CHARS = 64;
 
 const PAIRING_ID = new RegExp(`^[${protocol.ALPHABET}]{4}$`);
 const PATH_PART = /^[A-Za-z0-9_-]+$/;
@@ -143,6 +163,40 @@ function channelRecordOf(tree) {
 }
 
 /**
+ * Handshake 1 (§13) from the database's tree; `null` when there is none or it
+ * is not one — the shape only, the key is the crypto port's question.
+ *
+ * @param {unknown} tree
+ * @returns {import('../../application/ports/remote-relay-port').RemotePhoneHandshake | null}
+ */
+function phoneHandshakeOf(tree) {
+  if (!isRecord(tree) || !Array.isArray(tree.v) || typeof tree.e !== 'string' || tree.e.length > MAX_EPHEMERAL_CHARS) return null;
+  const v = tree.v;
+  if (v.length === 0 || v.length > 16 || !v.every((n) => Number.isInteger(n) && n >= 1 && n <= 255)) return null;
+  return { v: [...v], e: tree.e };
+}
+
+/**
+ * The envelopes of an inbox (§15), from `{ sid: { counter: { c, at } } }`; anything else is left out.
+ * @param {unknown} tree
+ * @returns {import('../../application/ports/remote-relay-port').RemoteEnvelope[]}
+ */
+function envelopesOf(tree) {
+  /** @type {import('../../application/ports/remote-relay-port').RemoteEnvelope[]} */
+  const out = [];
+  if (!isRecord(tree)) return out;
+  for (const [sid, bySid] of Object.entries(tree)) {
+    if (!HEX16.test(sid) || !isRecord(bySid)) continue;
+    for (const [key, record] of Object.entries(bySid)) {
+      if (!HEX16.test(key) || !isRecord(record) || typeof record.c !== 'string') continue;
+      const counter = Number.parseInt(key, 16);
+      if (Number.isSafeInteger(counter)) out.push({ sid, counter, c: record.c });
+    }
+  }
+  return out.sort((a, b) => (a.sid === b.sid ? a.counter - b.counter : a.sid < b.sid ? -1 : 1));
+}
+
+/**
  * Applies a `put` (replace) or `patch` (merge the children) at a path of the
  * database's tree. Path parts and keys are checked, so a relay cannot reach
  * `__proto__`; a change at a path that fails the check leaves the tree as it
@@ -198,6 +252,8 @@ function applyAt(tree, path, data, merge) {
  *   fetchImpl?: typeof fetch,
  *   now?: () => number,
  *   wait?: (ms: number, signal: AbortSignal) => Promise<void>,
+ *   setTimer?: (fn: () => void, ms: number) => unknown,
+ *   clearTimer?: (timer: unknown) => void,
  *   timeoutMs?: number,
  * }} deps  without an `endpoint` every call fails with `not-configured`
  * @returns {import('../../application/ports/remote-relay-port').RemoteRelayPort}
@@ -207,6 +263,8 @@ function createFirebaseRelayAdapter({
   fetchImpl = globalThis.fetch,
   now = () => Date.now(),
   wait = defaultWait,
+  setTimer = (fn, ms) => setTimeout(fn, ms),
+  clearTimer = (timer) => clearTimeout(/** @type {any} */ (timer)),
   timeoutMs = REQUEST_TIMEOUT_MS,
 }) {
   /**
@@ -219,6 +277,11 @@ function createFirebaseRelayAdapter({
    * @type {Set<AbortController>}
    */
   const streams = new Set();
+  /**
+   * every channel link still open (part 2)
+   * @type {Set<() => void>}
+   */
+  const links = new Set();
 
   /** The endpoint, or `not-configured` when there is none. */
   function requireEndpoint() {
@@ -268,8 +331,11 @@ function createFirebaseRelayAdapter({
     }
   }
 
-  /** §5.1: the relay's custom token becomes an ID token through the Identity Toolkit. */
-  /** @param {unknown} customToken */
+  /**
+   * §5.1: the relay's custom token becomes an ID token through the Identity Toolkit.
+   * @param {unknown} customToken
+   * @returns {Promise<{ idToken: string, expiresInMs: number }>}
+   */
   async function signIn(customToken) {
     if (typeof customToken !== 'string' || !customToken || customToken.length > MAX_TOKEN_CHARS) {
       throw new RemoteRelayError(RELAY_REASONS.INVALID_RESPONSE);
@@ -283,7 +349,10 @@ function createFirebaseRelayAdapter({
     if (typeof idToken !== 'string' || !idToken || idToken.length > MAX_TOKEN_CHARS) {
       throw new RemoteRelayError(RELAY_REASONS.INVALID_RESPONSE);
     }
-    return idToken;
+    // The Identity Toolkit names the lifetime in seconds, as a string; an hour when it does not.
+    const seconds = Number(isRecord(answer) ? answer.expiresIn : undefined);
+    const expiresInMs = Number.isFinite(seconds) && seconds > 0 ? Math.min(seconds, 3600) * 1000 : 3_600_000;
+    return { idToken, expiresInMs };
   }
 
   /** §5.2: a challenge, as the bytes every proof signs. */
@@ -306,7 +375,7 @@ function createFirebaseRelayAdapter({
     const answer = await call(relayUrl('/tokens'), {
       body: { challenge: text, channelId, role: protocol.ROLES.DESKTOP, proof: protocol.toB64u(proof) },
     });
-    const idToken = await signIn(isRecord(answer) ? answer.token : undefined);
+    const { idToken } = await signIn(isRecord(answer) ? answer.token : undefined);
     tokens.set(channelId, idToken);
     return idToken;
   }
@@ -332,7 +401,7 @@ function createFirebaseRelayAdapter({
       || typeof fields.expiresAt !== 'number' || !Number.isFinite(fields.expiresAt)) {
       throw new RemoteRelayError(RELAY_REASONS.INVALID_RESPONSE);
     }
-    tokens.set(channelId, await signIn(fields.token));
+    tokens.set(channelId, (await signIn(fields.token)).idToken);
     return { channelId, pairingId: fields.pairingId, expiresAt: fields.expiresAt, relayHost: requireEndpoint().relayHost };
   }
 
@@ -428,6 +497,234 @@ function createFirebaseRelayAdapter({
     return { close: stop };
   }
 
+  /**
+   * Part 2 (§12): the desktop's token for a paired channel, the four nodes it
+   * follows — `meta`, `to-desktop`, `handshake/phone`, `presence/phone` —
+   * and its writes. The token is renewed before it runs out and on
+   * `auth_revoked`; it never leaves this closure.
+   *
+   * @type {RemoteRelayPort['openChannel']}
+   */
+  function openChannel(channelId, handlers) {
+    const controller = new AbortController();
+    streams.add(controller);
+    let closed = false;
+    /** @type {string | null} */
+    let idToken = null;
+    /** @type {Promise<string> | null} */
+    let renewing = null;
+    /** @type {unknown} */
+    let renewTimer = null;
+    /** The nodes whose stream has delivered since it last (re)connected. */
+    const liveNodes = new Set();
+
+    function close() {
+      if (closed) return;
+      closed = true;
+      controller.abort();
+      streams.delete(controller);
+      links.delete(close);
+      if (renewTimer !== null) clearTimer(renewTimer);
+      renewTimer = null;
+      idToken = null;
+    }
+
+    /** @param {unknown} error */
+    function fail(error) {
+      if (closed) return;
+      close();
+      handlers.onError(toRelayError(error));
+    }
+
+    /** §5.9 and the Identity Toolkit; one renewal at a time. */
+    function renew() {
+      renewing ??= (async () => {
+        const { text, bytes } = await challenge();
+        const proof = handlers.sign(protocol.tokenMessage(bytes, channelId, protocol.ROLES.DESKTOP));
+        const answer = await call(relayUrl('/tokens'), {
+          body: { challenge: text, channelId, role: protocol.ROLES.DESKTOP, proof: protocol.toB64u(proof) },
+        });
+        const signedIn = await signIn(isRecord(answer) ? answer.token : undefined);
+        if (closed) throw new RemoteRelayError(RELAY_REASONS.NETWORK);
+        idToken = signedIn.idToken;
+        if (renewTimer !== null) clearTimer(renewTimer);
+        renewTimer = setTimer(() => {
+          renewTimer = null;
+          renew().catch(fail);
+        }, Math.max(TOKEN_RENEW_FLOOR_MS, signedIn.expiresInMs - TOKEN_RENEW_MARGIN_MS));
+        return signedIn.idToken;
+      })().finally(() => { renewing = null; });
+      return renewing;
+    }
+
+    async function currentToken() {
+      if (renewing) return renewing;
+      return idToken ?? renew();
+    }
+
+    /**
+     * One node, followed across dropped connections, as `watchChannel` follows `meta`.
+     * @param {string} name  the node under the channel
+     * @param {(tree: unknown) => boolean | void} onTree  true once the channel is gone for good
+     * @param {number} [maxEventChars]
+     */
+    async function follow(name, onTree, maxEventChars) {
+      let failures = 0;
+      while (!closed) {
+        let failure = new RemoteRelayError(RELAY_REASONS.NETWORK);
+        let used = null;
+        try {
+          used = await currentToken();
+          if (closed) return;
+          if (!endpoint) throw new RemoteRelayError(RELAY_REASONS.NOT_CONFIGURED);
+          liveNodes.delete(name);
+          const url = databaseNodeUrl(endpoint.databaseUrl, `channels/${channelId}/${name}`, used);
+          const response = await fetchImpl(url, { headers: { Accept: 'text/event-stream' }, signal: controller.signal });
+          if (!response.ok || !response.body) throw new RemoteRelayError(reasonForStatus(response.status), { status: response.status });
+          /** @type {unknown} */
+          let tree;
+          let gone = false;
+          await readEventStream(response.body, ({ type, data }) => {
+            if (gone || closed) return;
+            if (type === 'put' || type === 'patch') {
+              failures = 0;
+              let change;
+              try {
+                change = JSON.parse(data);
+              } catch {
+                // An event that is no JSON changes nothing; the next full put repairs the copy.
+                return;
+              }
+              if (!isRecord(change) || typeof change.path !== 'string') return;
+              tree = applyAt(tree, change.path, change.data, type === 'patch');
+              if (!liveNodes.has(name)) {
+                liveNodes.add(name);
+                if (liveNodes.size === CHANNEL_NODES) queueMicrotask(() => { if (!closed) handlers.onLive(); });
+              }
+              gone = onTree(tree) === true;
+              // The database keeps the stream open; the link ends here, every stream with it.
+              if (gone) queueMicrotask(close);
+            } else if (type === 'cancel') {
+              // The rules took the node away: `meta` gone is the end of the channel (§12.2).
+              if (name === 'meta') {
+                gone = true;
+                handlers.onMeta(null);
+                queueMicrotask(close);
+              } else {
+                throw new RemoteRelayError(RELAY_REASONS.REFUSED);
+              }
+            } else if (type === 'auth_revoked') {
+              throw new RemoteRelayError(RELAY_REASONS.UNAUTHORIZED);
+            }
+          }, maxEventChars ? { maxEventChars } : undefined);
+          if (gone) {
+            close();
+            return;
+          }
+        } catch (error) {
+          if (closed) return;
+          failure = toRelayError(error);
+        }
+        failures += 1;
+        if (failure.reason === RELAY_REASONS.UNAUTHORIZED && failures < STREAM_ATTEMPTS) {
+          // §12: on `auth_revoked` renew — once per token, whichever stream notices first.
+          try {
+            if (idToken === used) await renew();
+          } catch (error) {
+            fail(error);
+            return;
+          }
+          continue;
+        }
+        const transient = failure.reason === RELAY_REASONS.NETWORK || failure.reason === RELAY_REASONS.UNAVAILABLE;
+        if (!transient || failures >= STREAM_ATTEMPTS) {
+          fail(failure);
+          return;
+        }
+        await wait(STREAM_RETRY_MS * failures, controller.signal);
+      }
+    }
+
+    /** @type {Set<string>} */
+    const reported = new Set();
+    let handshakeSeen = /** @type {string|undefined} */ (undefined);
+    let presenceSeen = /** @type {boolean|undefined} */ (undefined);
+    const nodes = [
+      follow('meta', (tree) => {
+        const record = channelRecordOf(tree);
+        if (record === undefined) return false;
+        handlers.onMeta(record);
+        return record === null;
+      }),
+      follow('to-desktop', (tree) => {
+        const present = new Set();
+        for (const envelope of envelopesOf(tree)) {
+          const id = `${envelope.sid}/${counterKey(envelope.counter)}`;
+          present.add(id);
+          if (reported.has(id)) continue;
+          reported.add(id);
+          handlers.onEnvelope(envelope);
+        }
+        for (const id of reported) if (!present.has(id)) reported.delete(id);
+      }, INBOX_MAX_EVENT_CHARS),
+      follow('handshake/phone', (tree) => {
+        const record = phoneHandshakeOf(tree);
+        const key = JSON.stringify(record);
+        if (key === handshakeSeen) return;
+        handshakeSeen = key;
+        handlers.onPhoneHandshake(record);
+      }),
+      follow('presence/phone', (tree) => {
+        const online = tree !== null && tree !== undefined;
+        if (online === presenceSeen) return;
+        presenceSeen = online;
+        handlers.onPhonePresence(online);
+      }),
+    ];
+    for (const node of nodes) node.catch(fail);
+    links.add(close);
+
+    /**
+     * One write under the channel, silent (`print=silent`, 204): the database
+     * would otherwise echo an envelope back. A refused token is renewed once.
+     *
+     * @param {string} nodePath
+     * @param {'PUT'|'DELETE'} method
+     * @param {unknown} [body]
+     */
+    async function write(nodePath, method, body) {
+      if (closed) throw new RemoteRelayError(RELAY_REASONS.UNAUTHORIZED);
+      const { databaseUrl } = requireEndpoint();
+      for (let attempt = 0; ; attempt += 1) {
+        const used = await currentToken();
+        const url = new URL(databaseNodeUrl(databaseUrl, `channels/${channelId}/${nodePath}`, used));
+        url.searchParams.set('print', 'silent');
+        try {
+          await call(url.href, { method, body });
+          return;
+        } catch (error) {
+          if (attempt > 0 || closed || !(error instanceof RemoteRelayError) || error.reason !== RELAY_REASONS.UNAUTHORIZED) throw error;
+          if (idToken === used) await renew();
+        }
+      }
+    }
+
+    /** @param {string} sid @param {number} counter */
+    const envelopeKey = (sid, counter) => {
+      if (!HEX16.test(sid) || !Number.isSafeInteger(counter) || counter < 0) throw new RemoteRelayError(RELAY_REASONS.INVALID_REQUEST);
+      return `${sid}/${counterKey(counter)}`;
+    };
+
+    return {
+      writeHandshake: (record) => write('handshake/desktop', 'PUT', record),
+      writeEnvelope: async (sid, counter, c) => write(`to-phone/${envelopeKey(sid, counter)}`, 'PUT', { c, at: { '.sv': 'timestamp' } }),
+      deleteEnvelope: async (sid, counter) => write(`to-desktop/${envelopeKey(sid, counter)}`, 'DELETE'),
+      writePresence: () => write('presence/desktop', 'PUT', { lastSeen: { '.sv': 'timestamp' } }),
+      deletePresence: () => write('presence/desktop', 'DELETE'),
+      close,
+    };
+  }
+
   /** @type {RemoteRelayPort['confirmPairing']} */
   async function confirmPairing(channelId, macD) {
     await call(relayUrl(`/channels/${channelId}/confirm`), { body: { macD }, idToken: tokenFor(channelId) });
@@ -461,12 +758,22 @@ function createFirebaseRelayAdapter({
   }
 
   function close() {
+    for (const closeLink of [...links]) closeLink();
     for (const controller of streams) controller.abort();
     streams.clear();
     tokens.clear();
   }
 
-  return { openPairing, watchChannel, confirmPairing, cancelPairing, deleteChannel, close };
+  return { openPairing, watchChannel, confirmPairing, cancelPairing, deleteChannel, openChannel, close };
 }
 
-module.exports = { createFirebaseRelayAdapter, applyAt, channelRecordOf, databaseNodeUrl, STREAM_ATTEMPTS };
+module.exports = {
+  createFirebaseRelayAdapter,
+  applyAt,
+  channelRecordOf,
+  databaseNodeUrl,
+  envelopesOf,
+  phoneHandshakeOf,
+  STREAM_ATTEMPTS,
+  TOKEN_RENEW_MARGIN_MS,
+};

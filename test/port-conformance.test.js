@@ -31,6 +31,8 @@ const IMPLEMENTING_SERVICES = [
   'src/main/electron/window-push.js',
   // Pure logic, so it lives in the core and is the engine's default (#1011).
   'src/application/chat/injection-detector.js',
+  // What stands behind the channel's message layer until the dispatcher exists (#1192, #1194).
+  'src/application/remote/remote-message-stand-in.js',
 ];
 
 /** Adapter factories that implement no port: stores and helpers main uses directly. */

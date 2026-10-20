@@ -121,6 +121,14 @@ function createPhone() {
     code: null,
     desktopPoints: null,
     sign: (message) => nodeCrypto.sign('sha256', message, { key: pairs.sign.privateKey, dsaEncoding: 'ieee-p1363' }),
+    /** The phone's long-term agreement with a desktop's agree point (`ss`, protocol §14). */
+    agree: (pointB64u) => {
+      const jwk = pairs.agree.privateKey.export({ format: 'jwk' });
+      const ecdh = nodeCrypto.createECDH('prime256v1');
+      ecdh.setPrivateKey(bytes(jwk.d));
+      return ecdh.computeSecret(bytes(pointB64u));
+    },
+    points,
 
     /** Steps 15–22: read the typed key, look the pairing up, claim it with MAC_P. */
     /**

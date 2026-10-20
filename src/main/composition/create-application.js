@@ -271,6 +271,8 @@ function createApplication({
   });
   // Pairing a phone as the mobile remote (#1114); its Allow comes from the native dialog.
   registerRemoteHandlers({ ipcMain, pairing: core.remote.pairing, pushToWindow, REQ, PUSH });
+  // With a phone paired, the channel connects now (#1192); without one nothing happens.
+  void core.remote.start();
 
   const runUpdateCheck = createUpdateCheck({
     updates,
