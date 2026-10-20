@@ -21,12 +21,15 @@ const { resolveProviderCapabilities, resolveProviderTraits } = require('../../sh
 /**
  * `reasoningLevelFor(chatId)` answers with the chat's own reasoning level, or
  * nothing (#725); without `chatId` it asks for the chat on screen.
+ * `presetFor(chatId)` names the chat's own model entry when it is not the
+ * chat on screen (#1194), or nothing: the active entry applies.
  *
  * @param {Object} deps
  * @param {import('../ports/provider-runtime-port').ProviderRuntimePort} deps.providerRuntime
  * @param {import('../ports/llm-config-store-port').LlmConfigStorePort} deps.llmConfigStore
  * @param {import('../ports/provider-secrets-port').ProviderSecretsPort} deps.providerSecrets
  * @param {(chatId?: string) => Promise<string|null>} [deps.reasoningLevelFor]
+ * @param {(chatId?: string) => Promise<string|null>} [deps.presetFor]
  * @param {{ resolve: (model: { providerId: string, model: string, baseUrl?: string }) => Promise<{ price: object|null, priceSource: string|null }>,
  *   tableInfo: () => Promise<{ date: string, origin: string }|null> }|null} [deps.modelPrices]
  * @returns {import('../../application/ports/llm-port').LlmPort}
@@ -36,6 +39,7 @@ function createProviderLlmAdapter({
   llmConfigStore,
   providerSecrets,
   reasoningLevelFor = async () => null,
+  presetFor = async () => null,
   // Prices for the estimated chat cost (#949); without it no round is priced.
   modelPrices = null,
 }) {
@@ -132,7 +136,9 @@ function createProviderLlmAdapter({
    */
   async function resolveChatTarget({ chatId } = {}) {
     const config = await llmConfigStore.readLLMConfig();
-    const raw = llmConfigStore.resolveChatModelTarget(config);
+    // A chat off screen keeps its own model rather than the screen's (§7.3).
+    const own = await readOwnPreset(chatId);
+    const raw = llmConfigStore.resolveChatModelTarget(own ? { ...config, activePresetId: own } : config);
     const provider = providerRuntime.getProvider(raw.providerId);
     if (!provider) {
       return createChatErrorResult({
@@ -141,6 +147,18 @@ function createProviderLlmAdapter({
       });
     }
     return toTarget(raw, await readOwnLevel(chatId));
+  }
+
+  /** @param {string} [chatId] */
+  async function readOwnPreset(chatId) {
+    if (!chatId) return null;
+    try {
+      const presetId = await presetFor(chatId);
+      return typeof presetId === 'string' && presetId ? presetId : null;
+    } catch {
+      // A history that cannot be read costs the chat its own entry, not the round: the active one applies.
+      return null;
+    }
   }
 
   /** @param {string} [chatId] */

@@ -340,7 +340,7 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   object it hands out
 - `remote-message-layer-port` — where the channel hands every request after
   `session.hello`: `application/remote/remote-dispatcher.js`, the methods of
-  `remote-interface.md` §10 step 1 (#1194). Without a desktop wired,
+  `remote-interface.md` §10 steps 1 and 2 so far (#1194). Without a desktop wired,
   `application/remote/remote-message-stand-in.js` answers every request with
   `unavailable`
 - `remote-release-port` — which workspaces a remote may see, each under a
@@ -349,9 +349,13 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   receipt for `remote-workspace`
 - `remote-desktop-port` — what the dispatcher reads of the desktop: known
   and open workspaces, stored chats, running chats, open cards, and the
-  turns' events by chat (#1194). `main/remote/desktop-adapter.js`, fed by
-  `main/services/remote-activity.js`, which `ipc/chat-handlers.js` and the
-  workspace switch publish to
+  turns' events by chat (#1194) — and what it asks of it: a turn through the
+  conversation service under a session `remote:<connection>`, a stop of a
+  chat's turn whoever started it, a chat's configuration.
+  `main/remote/desktop-adapter.js`, fed by `main/services/remote-activity.js`,
+  which `ipc/chat-handlers.js`, the remote turns and the workspace switch
+  publish to. A remote session has no cards of its own yet: the tool approval
+  adapter offers its requests to the window (`answeredByWindow`)
 - `secret-store-port` — the one root of every secret kept at rest (#983):
   provider keys and the other own secrets, the chat history, the key that signs
   the tool policy, the remote's keys. `services/storage-service.js`,
@@ -3519,9 +3523,9 @@ channel ([#1194](https://github.com/kkrafft1999/snotra/issues/1194)).
 | *Allow* | `user-confirmation-port`, action `remote-pairing` | The native sheet (`main/remote/pairing-prompt.js` words it), redeemed against the receipt registry like every other loosening |
 | Window | `main/ipc/remote-handlers.js`, `remote:*` channels | Start, cancel, remove, read the state; every change pushed. Normalized by `contracts/remote/pairing-state.js` on the way out |
 | Channel | `application/remote/remote-channel.js`; `remote-channel-crypto-port`, `main/remote/channel-protocol.js` | Part 2: connecting, presence, handshake, envelopes, `session.hello` — see [The channel](#the-channel) |
-| Dispatcher | `application/remote/remote-dispatcher.js`, `application/remote/remote-display.js`; `remote-message-layer-port` | The methods and events of `remote-interface.md` §8, step 1 so far (#1194): workspaces, chats and their messages read only, a running turn's events to the connections following its chat, deltas batched every 150 ms on the relay. No path, tool argument or chat outside the release reaches a connection |
+| Dispatcher | `application/remote/remote-dispatcher.js`, `application/remote/remote-display.js`; `remote-message-layer-port` | The methods and events of `remote-interface.md` §8, steps 1 and 2a so far (#1194): workspaces, chats and their messages read only, a running turn's events to the connections following its chat, deltas batched every 150 ms on the relay; `chat.new`, `message.send` (once per `clientMessageId`), `run.abort`, `chat.configuration`, writing only in the workspace open at the desktop. No path, tool argument or chat outside the release reaches a connection |
 | Release list | `remote-release-port`; `main/remote/release-store-adapter.js`, action `remote-workspace` | `remote-release.json`: one `safeStorage` ciphertext of the workspaces opened to the phone and the id each folder goes by. Opening one takes a receipt; the switch is #1195 |
-| Desktop reads | `remote-desktop-port`; `main/remote/desktop-adapter.js`, `main/services/remote-activity.js` | The chat history and folder list read only, the engine's running chats, the open cards; the turns' events published from `ipc/chat-handlers.js` and the workspace switch from `workspace-activation.js` |
+| Desktop side | `remote-desktop-port`; `main/remote/desktop-adapter.js`, `main/services/remote-activity.js` | The chat history and folder list read only, the engine's running chats, the open cards; the turns' events published from `ipc/chat-handlers.js` and the workspace switch from `workspace-activation.js`. A remote turn goes through the conversation service with its own chat's model, mode and level (`chat-session-settings.js` `presetFor`, `runModeFor`), its cards to the window |
 | Wiring | `main/composition/create-remote-bridge.js` | Puts the above together for `createApplication()`, which starts the channel |
 
 **The flow.** *Start* creates the identity keys on first use, opens a pairing

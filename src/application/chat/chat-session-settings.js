@@ -145,7 +145,8 @@ function createChatSessionSettings({
    * The mode a chat had when it left the screen (#320). The store only ever
    * holds the visible chat's mode; a run that goes on in the background keeps
    * the one it was started under instead of borrowing the next chat's.
-   * @type {Map<string, string>}
+   * `null` after "Reset all permissions": that chat follows the store again.
+   * @type {Map<string, string|null>}
    */
   const backgroundModes = new Map();
   /**
@@ -419,9 +420,44 @@ function createChatSessionSettings({
     return backgroundModes.get(chatId) ?? null;
   }
 
+  /**
+   * The mode a run of this chat works under, also for a chat that has not
+   * been on screen since the app started — one a phone writes in (#1194,
+   * `docs/remote-interface.md` §7.3). `null` for the chat on screen and for
+   * one reset to the store, as in `modeFor`. Any other chat runs with its
+   * stored mode as an automatic restore would give it: a stored "Auto"
+   * counts only after an explicit switch at the desktop (#567), so it falls
+   * back to the workspace's default here (decided 2026-10-20).
+   *
+   * @param {unknown} rawChatId
+   * @returns {Promise<string|null>}
+   */
+  async function runModeFor(rawChatId) {
+    const chatId = normalizeChatId(rawChatId);
+    if (!chatId || chatId === currentChatId) return null;
+    if (backgroundModes.has(chatId)) return backgroundModes.get(chatId) ?? null;
+    return resolveModeFor(await storedValuesFor(chatId), CHAT_ACTIVATION.AUTO, await readWorkspaceMode());
+  }
+
+  /**
+   * The model entry a run of this chat works with (#1194, §7.3): the chat's
+   * own for any chat but the one on screen — whose entry is the active one —
+   * so that a chat left while its turn runs, or written in from a phone,
+   * does not borrow the screen's model. `null` for the chat on screen. A chat
+   * whose entry is gone or no longer set up gets the default, as on screen.
+   *
+   * @param {unknown} rawChatId
+   * @returns {Promise<string|null>}
+   */
+  async function presetFor(rawChatId) {
+    const chatId = normalizeChatId(rawChatId);
+    if (!chatId || chatId === currentChatId) return null;
+    return resolvePresetFor(await storedValuesFor(chatId));
+  }
+
   /** "Reset all permissions" puts every chat back to the store's mode. */
   function forgetBackgroundModes() {
-    backgroundModes.clear();
+    for (const chatId of backgroundModes.keys()) backgroundModes.set(chatId, null);
   }
 
   /**
@@ -611,6 +647,8 @@ function createChatSessionSettings({
     valuesFor,
     forget,
     modeFor,
+    runModeFor,
+    presetFor,
     forgetBackgroundModes,
     getCurrentChatId: () => currentChatId,
   };

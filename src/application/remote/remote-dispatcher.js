@@ -1,16 +1,22 @@
 'use strict';
 
 /**
- * The remote dispatcher (#1194): step 1 of `docs/remote-interface.md` §10 —
- * watching. It stands behind the channel's message-layer port, so that a
- * request a connection sends after `session.hello` becomes a call on the
- * desktop, and what happens there becomes an event for the connections that
- * follow the chat.
+ * The remote dispatcher (#1194): steps 1 and 2 of `docs/remote-interface.md`
+ * §10 — watching and writing. It stands behind the channel's message-layer
+ * port, so that a request a connection sends after `session.hello` becomes a
+ * call on the desktop, and what happens there becomes an event for the
+ * connections that follow the chat.
  *
  * - **Methods** (§8.1): `workspaces.list`, `chats.list`, `chat.open`,
- *   `chat.more`, `chat.close`, in a table per kind; anything else is
- *   `unknown-method`, a method the kind may not call `refused`. The channel
- *   answers `session.hello` and `session.bye` itself.
+ *   `chat.more`, `chat.close` to watch; `chat.new`, `message.send`,
+ *   `run.abort`, `chat.configuration` to write — in a table per kind;
+ *   anything else is `unknown-method`, a method the kind may not call
+ *   `refused`. The channel answers `session.hello` and `session.bye` itself.
+ * - **Writing** happens only in the workspace open at the desktop: a turn's
+ *   tools work there, under its sandbox and rules, so a chat of another
+ *   released workspace is `refused` until the desktop has switched (step 2c,
+ *   `workspace.activate`). A turn runs with its own chat's model, mode and
+ *   level (§7.3), and a repeated `clientMessageId` starts nothing.
  * - **Visibility** (§7.5): a connection sees the workspaces of the release
  *   list that the desktop still knows, by `workspaceId`, and only their
  *   chats. A chat outside them is `not-found`, exactly as an unknown one.
@@ -19,11 +25,13 @@
  *   opens, `state` again when it changes; `chat.delta`, `chat.tool-line` and
  *   `chat.progress` to the connections subscribed to their chat — deltas
  *   batched per chat when the transport asks for it (protocol §17);
- *   `session.resync` when an event could not be delivered, and
- *   `session.closing` when the desktop ends the connections.
+ *   `chat.message` when a question another front end asked is saved,
+ *   `chat.updated` when a chat got its name; `session.resync` when an event
+ *   could not be delivered, and `session.closing` when the desktop ends the
+ *   connections.
  *
- * Read only: nothing here writes a chat, switches the workspace or changes
- * the chat on the desktop's screen. Steps 2 and 3 add the methods that do.
+ * Nothing here switches the workspace or changes the chat on the desktop's
+ * screen. Step 3 adds the approvals.
  */
 
 const { remoteRpcError } = require('../../shared/contracts/remote/rpc-errors');
@@ -46,6 +54,9 @@ const MESSAGES_MAX = 100;
 const SUBSCRIPTIONS_MAX = 32;
 const CHAT_ID_MAX = 128;
 const CURSOR_MAX = 256;
+const CLIENT_MESSAGE_ID_MAX = 64;
+/** How many `clientMessageId`s are remembered, and chats made by `chat.new` not written yet. */
+const REMEMBERED_MAX = 500;
 
 /** A request the dispatcher refuses, with the reason of §6.3. */
 class Refusal extends Error {
@@ -66,6 +77,15 @@ function limitOf(value, fallback, max) {
   if (value === undefined) return fallback;
   if (!Number.isInteger(value) || /** @type {number} */ (value) < 1 || /** @type {number} */ (value) > max) throw new Refusal('invalid-params');
   return /** @type {number} */ (value);
+}
+
+/**
+ * Keeps a map to its newest `max` entries.
+ * @param {Map<unknown, unknown>} map
+ * @param {number} max
+ */
+function trim(map, max) {
+  while (map.size > max) map.delete(map.keys().next().value);
 }
 
 /** @param {unknown} value */
@@ -120,6 +140,7 @@ const newestFirst = (/** @type {{ updatedAt: number, chatId: string }} */ a, /**
  *   desktop: import('../ports/remote-desktop-port').RemoteDesktopPort,
  *   releases: import('../ports/remote-release-port').RemoteReleasePort,
  *   word: (locale: string, message: import('../../shared/contracts/message').Message) => string,
+ *   randomUUID?: () => string,
  *   deltaBatchMs?: number,
  *   setTimer?: (fn: () => void, ms: number) => unknown,
  *   clearTimer?: (timer: unknown) => void,
@@ -131,6 +152,7 @@ function createRemoteDispatcher({
   desktop,
   releases,
   word,
+  randomUUID = () => globalThis.crypto.randomUUID(),
   deltaBatchMs = 0,
   setTimer = (fn, ms) => setTimeout(fn, ms),
   clearTimer = (timer) => clearTimeout(/** @type {any} */ (timer)),
@@ -140,6 +162,29 @@ function createRemoteDispatcher({
   const open = new Map();
   /** @type {Array<() => void>} */
   let unsubscribe = [];
+  /**
+   * Chats made by `chat.new` that no question has been saved in yet: id →
+   * the root they will be kept under. Shared by every connection, so that a
+   * client that reconnects can still write the first question.
+   * @type {Map<string, string>}
+   */
+  const newChats = new Map();
+  /**
+   * What a `message.send` answered, by kind and `clientMessageId`, so that a
+   * repeat answers again and starts nothing (§8.1) — also on a new connection.
+   * @type {Map<string, { chatId: string, runId: string, messageId: string }>}
+   */
+  const sent = new Map();
+  /**
+   * The turns a remote front end started, by run: who started it, for the
+   * mark on `chat.message`, until `run-end`.
+   * @type {Map<string, { connectionId: string, kind: string, client: string }>}
+   */
+  const remoteRuns = new Map();
+  /** @type {Set<string>} the chats whose turn a remote started and that have not ended yet */
+  const startedChats = new Set();
+  /** @type {Set<string>} chat and run whose question went out as `chat.message` */
+  const announced = new Set();
 
   // ---------------------------------------------------------------- what a connection may see
 
@@ -182,6 +227,25 @@ function createRemoteDispatcher({
     if (!chat || chat.root === null || !byRoot.has(chat.root)) throw new Refusal('not-found');
     return chat;
   }
+
+  /**
+   * A chat the connection may write in: a visible one, or one `chat.new`
+   * made, kept under a released workspace — and that workspace the one open
+   * at the desktop, where the turn's tools work (§7.3, R6).
+   * @param {unknown} rawId
+   * @returns {Promise<{ chatId: string, root: string, messageCount: number }>}
+   */
+  async function writableChat(rawId) {
+    const chatId = chatIdOf(rawId);
+    const [chat, { byRoot }] = await Promise.all([desktop.loadChat(chatId), visible()]);
+    const root = chat ? chat.root : newChats.get(chatId) ?? null;
+    if (root === null || !byRoot.has(root)) throw new Refusal('not-found');
+    if (root !== desktop.activeWorkspace()) throw new Refusal('refused');
+    return { chatId, root, messageCount: chat ? chat.messages.length : 0 };
+  }
+
+  /** @param {string} chatId */
+  const isBusy = (chatId) => startedChats.has(chatId) || desktop.runningChats().has(chatId) || desktop.awaitingApproval().has(chatId);
 
   // ---------------------------------------------------------------- events
 
@@ -267,6 +331,38 @@ function createRemoteDispatcher({
   /** @type {Set<string>} the chats whose turn this dispatcher has seen under way */
   const seenRunning = new Set();
 
+  /**
+   * @param {string} chatId
+   * @param {string|null} runId
+   */
+  const runKey = (chatId, runId) => `${chatId}\u0000${runId ?? ''}`;
+
+  /**
+   * A turn's first save holds its question (#981): the connections that
+   * follow the chat — all but the one that asked — get it as `chat.message`
+   * (§8.2), with the mark of the front end that asked when it was a remote.
+   * @param {string} chatId
+   * @param {string|null} runId
+   */
+  function onSaved(chatId, runId) {
+    newChats.delete(chatId);
+    const key = runKey(chatId, runId);
+    if (announced.has(key)) return;
+    announced.add(key);
+    const origin = runId !== null ? remoteRuns.get(runId) : undefined;
+    const followers = () => [...open.values()].filter((entry) => entry.subscriptions.has(chatId) && entry.connection.id !== origin?.connectionId);
+    if (followers().length === 0) return;
+    desktop.loadChat(chatId).then((chat) => {
+      const messages = chat ? chat.messages : [];
+      let index = messages.length - 1;
+      while (index >= 0 && messages[index]?.role !== 'user') index -= 1;
+      if (index < 0) return;
+      const message = display.displayMessage(messages[index], index);
+      if (origin) message.origin = { kind: origin.kind, client: origin.client };
+      for (const entry of followers()) emit(entry, 'chat.message', { chatId, message });
+    }).catch((error) => log.warn(`[remote] a question could not be read (${error?.name || 'error'})`));
+  }
+
   /** @param {import('../ports/remote-desktop-port').RemoteDesktopActivity} activity */
   function onActivity(activity) {
     if (activity.kind === 'workspace') {
@@ -276,9 +372,24 @@ function createRemoteDispatcher({
     const { chatId, runId, type } = activity;
     const payload = isRecord(activity.payload) ? activity.payload : {};
     if (typeof chatId !== 'string' || !chatId) return;
+    // What the conversation service says of the chat, not of the turn (#981).
+    if (type === 'progress' && payload.type === 'chat-saved') {
+      if (payload.ok === true) onSaved(chatId, runId);
+      return;
+    }
+    if (type === 'progress' && payload.type === 'chat-named') {
+      if (typeof payload.title === 'string' && payload.title) {
+        for (const entry of open.values()) {
+          if (entry.subscriptions.has(chatId)) emit(entry, 'chat.updated', { chatId, title: payload.title });
+        }
+      }
+      return;
+    }
     // A turn that starts or ends changes `state`.
     if (type === 'progress' && payload.type === 'run-end') {
       seenRunning.delete(chatId);
+      announced.delete(runKey(chatId, runId));
+      if (runId !== null && remoteRuns.delete(runId)) startedChats.delete(chatId);
       refreshState();
     } else if (!seenRunning.has(chatId)) {
       seenRunning.add(chatId);
@@ -327,6 +438,10 @@ function createRemoteDispatcher({
     for (const stop of unsubscribe) stop();
     unsubscribe = [];
     seenRunning.clear();
+    announced.clear();
+    // Their `run-end` is no longer heard; whether they still run, the desktop says.
+    remoteRuns.clear();
+    startedChats.clear();
   }
 
   // ---------------------------------------------------------------- methods
@@ -414,6 +529,95 @@ function createRemoteDispatcher({
       async run(entry, params) {
         unsubscribeChat(entry, chatIdOf(params.chatId));
         return {};
+      },
+    },
+
+    // ---- step 2: writing (§8.1) — only in the workspace open at the desktop
+
+    'chat.new': {
+      kinds: ['local', 'relay'],
+      async run(_entry, params) {
+        const { byId } = await visible();
+        const active = desktop.activeWorkspace();
+        let root = active;
+        if (params.workspaceId !== undefined) {
+          root = typeof params.workspaceId === 'string' ? byId.get(params.workspaceId) ?? null : null;
+          if (root === null) throw new Refusal('not-found');
+        } else if (active === null || ![...byId.values()].includes(active)) {
+          throw new Refusal('not-found');
+        }
+        // A new chat is kept under the open workspace (#981): another one has to be switched to first.
+        if (root !== active) throw new Refusal('refused');
+        // Nothing is written yet: the chat exists once its first question is saved.
+        const chatId = randomUUID();
+        newChats.set(chatId, /** @type {string} */ (root));
+        trim(newChats, REMEMBERED_MAX);
+        return { chatId };
+      },
+    },
+
+    'message.send': {
+      kinds: ['local', 'relay'],
+      async run(entry, params) {
+        const { clientMessageId, text } = params;
+        if (typeof clientMessageId !== 'string' || !clientMessageId || clientMessageId.length > CLIENT_MESSAGE_ID_MAX) throw new Refusal('invalid-params');
+        if (typeof text !== 'string' || !text.trim()) throw new Refusal('invalid-params');
+        if (text.length > LIMITS.maxTextChars) throw new Refusal('too-large');
+        const key = `${entry.connection.kind}\u0000${clientMessageId}`;
+        const before = sent.get(key);
+        if (before) {
+          // The same message again — a reply that got lost: answered as before, nothing starts.
+          if (before.chatId !== params.chatId) throw new Refusal('invalid-params');
+          return { runId: before.runId, messageId: before.messageId };
+        }
+        const chat = await writableChat(params.chatId);
+        if (isBusy(chat.chatId)) throw new Refusal('busy');
+        const runId = randomUUID();
+        const answer = { runId, messageId: display.messageId(chat.messageCount) };
+        // Known before the turn starts, so that a second send cannot slip in while it loads.
+        startedChats.add(chat.chatId);
+        remoteRuns.set(runId, { connectionId: entry.connection.id, kind: entry.connection.kind, client: entry.connection.client?.name || '' });
+        let started;
+        try {
+          started = await desktop.startTurn({ connectionId: entry.connection.id, chatId: chat.chatId, text, runId });
+        } catch (error) {
+          remoteRuns.delete(runId);
+          startedChats.delete(chat.chatId);
+          throw error;
+        }
+        if (!started.ok) {
+          remoteRuns.delete(runId);
+          startedChats.delete(chat.chatId);
+          throw new Refusal('unavailable');
+        }
+        sent.set(key, { chatId: chat.chatId, ...answer });
+        trim(sent, REMEMBERED_MAX);
+        return answer;
+      },
+    },
+
+    'run.abort': {
+      kinds: ['local', 'relay'],
+      async run(_entry, params) {
+        const chatId = chatIdOf(params.chatId);
+        // A chat outside what the connection sees is unknown to it, running or not (§7.5).
+        if (!newChats.has(chatId)) await visibleChat(chatId);
+        return { aborted: desktop.stopChat(chatId) };
+      },
+    },
+
+    'chat.configuration': {
+      kinds: ['local', 'relay'],
+      async run(_entry, params) {
+        const chat = await visibleChat(params.chatId);
+        const configuration = await desktop.chatConfiguration(chat.chatId, /** @type {string} */ (chat.root));
+        return {
+          model: { label: configuration.model.label },
+          mode: configuration.mode,
+          ...(configuration.reasoning ? { reasoning: configuration.reasoning } : {}),
+          skills: configuration.skills,
+          tools: configuration.tools,
+        };
       },
     },
   };

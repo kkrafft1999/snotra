@@ -341,3 +341,24 @@ test('a new turn in a chat whose turn still runs stops that one first', async (t
   await conversation.settled();
   assert.deepEqual((await chatHistory.load('replaced')).messages.map((m) => m.content), ['One', 'Working', 'Two', 'Replacement.']);
 });
+
+test('stopChat stops the turn of a chat whichever front end started it (#1194)', async (t) => {
+  const model = modelReached();
+  const { chatHistory, conversation, turn } = await setup(t, [
+    async (params) => {
+      params.callbacks.onTextDelta('Partly');
+      model.reached();
+      await new Promise((resolve) => params.abortSignal?.addEventListener('abort', resolve, { once: true }));
+      return { cancelled: true, message: { role: 'assistant', content: '' } };
+    },
+  ]);
+  assert.equal(conversation.stopChat('remote-stop'), false, 'nothing runs yet');
+  // Started by the window (session 7); stopped without naming it, as a phone does.
+  const running = turn('remote-stop', { content: 'Go' });
+  await model.promise;
+  assert.equal(conversation.stopChat('remote-stop'), true);
+  const result = await running;
+  assert.equal(result.cancelled, true);
+  assert.equal(conversation.stopChat('remote-stop'), false, 'it ended');
+  assert.deepEqual((await chatHistory.load('remote-stop')).messages.map((m) => m.content), ['Go', 'Partly']);
+});

@@ -33,8 +33,9 @@ const { createOwnSecretsAdapter } = require('../adapters/own-secrets-adapter');
  * @param {import('../../application/ports/tool-approval-port').ToolApprovalPort|null} [deps.approvals]
  * @param {ReturnType<typeof createSessionGrants>} [deps.sessionGrants]
  * @param {NonNullable<Parameters<typeof createWorkspaceToolAdapter>[1]>} [deps.toolAdapterDeps]
- * @param {(chatId: string) => string|null} [deps.resolveChatMode]
+ * @param {(chatId: string) => string|null|Promise<string|null>} [deps.resolveChatMode]
  * @param {(chatId?: string) => Promise<string|null>} [deps.resolveReasoningLevel]
+ * @param {(chatId?: string) => Promise<string|null>} [deps.resolveChatPreset]  the model entry of a chat off screen (#1194)
  * @param {(run: { sessionId: string|number, chatId: string|null }) => void} [deps.onRunSettled]
  * @param {import('../../application/ports/config-proposal-port').ConfigProposalPort|null} [deps.configProposals]
  * @param {Parameters<typeof createProviderLlmAdapter>[0]['modelPrices']} [deps.modelPrices]
@@ -61,6 +62,7 @@ function createChatApplication({
   resolveChatMode = () => null,
   // The chat's own reasoning level (#725); `null` when it has none.
   resolveReasoningLevel = async () => null,
+  resolveChatPreset = async () => null,
   // Called when a run ends, so that main can drop what only lived for it.
   onRunSettled = () => {},
   // What a chat switched for itself, and the model's proposals (#774).
@@ -73,6 +75,7 @@ function createChatApplication({
     llmConfigStore,
     providerSecrets,
     reasoningLevelFor: resolveReasoningLevel,
+    presetFor: resolveChatPreset,
     modelPrices,
   });
   const tools = createWorkspaceToolAdapter(toolRegistry, toolAdapterDeps);

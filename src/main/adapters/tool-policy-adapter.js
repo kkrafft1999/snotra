@@ -20,7 +20,7 @@ const {
  *
  * @param {{
  *   toolPolicyStore: { read: () => Promise<ToolPolicyState> },
- *   resolveChatMode?: (chatId: string) => string|null,
+ *   resolveChatMode?: (chatId: string) => string|null|Promise<string|null>,
  * }} deps  `resolveChatMode` gives the mode of a chat that is running in the
  *   background (#320); `null` means "the store's mode applies"
  * @returns {import('../../application/ports/tool-policy-port').ToolPolicyPort}
@@ -33,7 +33,7 @@ function createToolPolicyAdapter({ toolPolicyStore, resolveChatMode = () => null
       // nothing; the engine stops tools on a throw (concept §3, #512).
       if (state.integrity === INTEGRITY.UNREADABLE) throw new Error('The permission rules could not be read.');
       return {
-        mode: modeForRun(state, chatId, resolveChatMode),
+        mode: await modeForRun(state, chatId, resolveChatMode),
         rules: state.rules,
         sensitivePathPatterns: state.sensitivePathPatterns,
         policyVersion: state.policyVersion,
@@ -58,16 +58,16 @@ function createToolPolicyAdapter({ toolPolicyStore, resolveChatMode = () => null
  *
  * @param {ToolPolicyState} state
  * @param {string | null} chatId
- * @param {(chatId: string) => string | null} resolveChatMode
- * @returns {import('../../shared/contracts/tool-permissions').ToolPermissionMode}
+ * @param {(chatId: string) => string | null | Promise<string | null>} resolveChatMode
+ * @returns {Promise<import('../../shared/contracts/tool-permissions').ToolPermissionMode>}
  */
-function modeForRun(state, chatId, resolveChatMode) {
+async function modeForRun(state, chatId, resolveChatMode) {
   if (state.integrity !== 'ok' && state.integrity !== 'missing') return state.mode;
   if (!chatId) return state.mode;
   /** @type {string | null} */
   let remembered = null;
   try {
-    remembered = resolveChatMode(chatId);
+    remembered = await resolveChatMode(chatId);
   } catch {
     remembered = null;
   }
