@@ -225,6 +225,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // A turn another front end started, a phone's (#1194): the window follows it.
+  onChatTurnStarted: (callback) => {
+    const channel = PUSH.CHAT_TURN_STARTED;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // Live voice input (#859). The renderer numbers its recordings; main opens
   // the connection and holds the key.
   startVoice: (id) => ipcRenderer.invoke(REQ.VOICE_START, { id }),

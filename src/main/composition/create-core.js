@@ -7,6 +7,7 @@ const nodeChildProcess = require('child_process');
 const { createStorageService } = require('../services/storage-service');
 const { createRemoteActivity } = require('../services/remote-activity');
 const { createRemoteDesktopAdapter, isRemoteSessionId } = require('../remote/desktop-adapter');
+const { createWindowFollower } = require('../remote/window-follow');
 const { createModelPriceService } = require('../services/model-price-service');
 const { createChatAttachmentStore } = require('../services/chat-attachment-store');
 const { createFsService } = require('../services/fs-service');
@@ -809,6 +810,8 @@ function createCore({
         chatSkillNames: [],
         overrides: await chatSessionSettings.configOverridesFor(chatId),
       }),
+      // The window shows a phone's turn as it runs (#1194, step 2b).
+      followInWindow: createWindowFollower({ push: pushToWindow, PUSH }),
     }),
     normalizeRoot: (root) => storage.normalizeWorkspaceRoot(root),
   });

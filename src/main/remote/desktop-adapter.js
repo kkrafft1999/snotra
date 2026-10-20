@@ -58,10 +58,12 @@ const isChatId = (chatId) => typeof chatId === 'string' && chatId.length > 0;
  *   chatMode?: (chatId: string) => Promise<string>,
  *   reasoningFor?: (chatId: string) => Promise<string|null>,
  *   describeConfiguration?: (input: { chatId: string, workspaceRoot: string }) => Promise<{ skills?: any[], tools?: any[] }>,
+ *   followInWindow?: (event: { chatId: string, runId: string, type: string, payload: Record<string, unknown> }) => void,
  *   log?: { warn: (...args: unknown[]) => void },
  * }} deps  `normalizeRoot` the chat history's, so that folders compare alike everywhere;
  *   `conversation` and `llm` for the turns of step 2, `chatMode`, `reasoningFor` and
- *   `describeConfiguration` for a chat's configuration
+ *   `describeConfiguration` for a chat's configuration; `followInWindow` hands a remote turn's
+ *   events to the window, which did not start it (step 2b), `turn-started` first
  * @returns {import('../../application/ports/remote-desktop-port').RemoteDesktopPort}
  */
 function createRemoteDesktopAdapter({
@@ -77,6 +79,7 @@ function createRemoteDesktopAdapter({
   chatMode = async () => 'smart',
   reasoningFor = async () => null,
   describeConfiguration = async () => ({ skills: [], tools: [] }),
+  followInWindow = () => {},
   log = console,
 }) {
   return {
@@ -116,16 +119,34 @@ function createRemoteDesktopAdapter({
     subscribe: (listener) => activity.subscribe(listener),
 
     async startTurn({ connectionId, chatId, text, runId }) {
+      /** @param {Parameters<typeof followInWindow>[0]} event */
+      const tellWindow = (event) => {
+        try {
+          followInWindow(event);
+        } catch (error) {
+          // The window not following never holds up the turn.
+          log.warn(`[remote] the window could not follow a remote turn (${error?.name || 'error'})`);
+        }
+      };
       if (!conversation || !llm) return { ok: false, reason: 'unavailable' };
       // No provider set up for this chat's model: refused before anything is written (§8.1).
       const target = await llm.resolveChatTarget({ chatId });
       if (isError(target) || (await llm.validateTarget(/** @type {any} */ (target), { forSend: true }))) {
         return { ok: false, reason: 'unavailable' };
       }
+      let inWindow = false;
       /** @param {{ type?: string, payload?: unknown }} event */
       const publish = (event) => {
         if (!event?.type || !TURN_EVENTS.has(event.type)) return;
-        activity.publishRun({ chatId, runId, type: event.type, payload: event.payload && typeof event.payload === 'object' ? event.payload : {} });
+        const payload = event.payload && typeof event.payload === 'object' ? /** @type {Record<string, unknown>} */ (event.payload) : {};
+        activity.publishRun({ chatId, runId, type: event.type, payload });
+        // The first save that went through holds the question (#981): from
+        // then on the window shows the turn, as one of its own (step 2b).
+        if (!inWindow && payload.type === 'chat-saved' && payload.ok === true) {
+          inWindow = true;
+          tellWindow({ chatId, runId, type: 'turn-started', payload: { content: text } });
+        }
+        if (inWindow) tellWindow({ chatId, runId, type: event.type, payload });
       };
       // Not awaited: the answer is the accepted turn (§6.5); its end is `run-end`.
       void conversation.runTurn({
