@@ -2,11 +2,13 @@
  * RemoteDesktop port (#1194): what the remote dispatcher reads of the
  * desktop for step 1 of `docs/remote-interface.md` §10 — the known
  * workspaces, the one that is open, the stored chats, which of them run, and
- * the events of a running turn by chat.
+ * the events of a running turn by chat — and, for step 2, what it asks the
+ * desktop to do: run a turn, stop one, describe a chat's configuration.
  *
- * Read only. Paths cross this port, since the release list is kept by root;
- * they stop at the dispatcher, which hands out ids (§7.5). Nothing here
- * changes the chat on the desktop's screen.
+ * Paths cross this port, since the release list is kept by root; they stop
+ * at the dispatcher, which hands out ids (§7.5). Nothing here changes the
+ * chat on the desktop's screen: a turn runs with its own chat's model, mode
+ * and level (§7.3).
  */
 
 /**
@@ -47,6 +49,31 @@
  * @property {() => ReadonlySet<string>} runningChats  the ids of the chats whose turn is under way
  * @property {() => ReadonlySet<string>} awaitingApproval  the ids of the chats with a card open
  * @property {(listener: (activity: RemoteDesktopActivity) => void) => () => void} subscribe
+ * @property {(turn: RemoteTurn) => Promise<{ ok: true } | { ok: false, reason: 'unavailable' }>} startTurn
+ *   starts a turn in the open workspace and answers once it is accepted; its events, and a
+ *   `run-end` after its last one, arrive through `subscribe` under `turn.runId`
+ * @property {(chatId: string) => boolean} stopChat  stops the chat's turn, whoever started it; false when none ran
+ * @property {(chatId: string, root: string) => Promise<RemoteChatConfiguration>} chatConfiguration
+ */
+
+/**
+ * A turn a remote front end asks for (§8.1 `message.send`): the text only,
+ * never a history, a path or a model.
+ * @typedef {Object} RemoteTurn
+ * @property {string} connectionId  the front end's connection, which the turn is kept under
+ * @property {string} chatId
+ * @property {string} text
+ * @property {string} runId
+ */
+
+/**
+ * What a chat runs with (§8.1 `chat.configuration`), read only.
+ * @typedef {Object} RemoteChatConfiguration
+ * @property {{ label: string }} model
+ * @property {string} mode
+ * @property {string|null} reasoning
+ * @property {Array<{ name: string, state: string }>} skills
+ * @property {Array<{ name: string, on: boolean }>} tools
  */
 
 module.exports = {};

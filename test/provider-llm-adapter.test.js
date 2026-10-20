@@ -593,3 +593,36 @@ test('adapter leaves a round without usage unpriced, and a failing price lookup 
   assert.equal(counted.cost.entry.usd, null);
   assert.equal(counted.cost.entry.tokens.input, 10);
 });
+
+test('a chat off screen is resolved with its own model entry, the chat on screen with the active one (#1194)', async () => {
+  const seen = [];
+  const llm = createProviderLlmAdapter({
+    ...makeAdapterDeps({
+      llmConfigStore: {
+        readLLMConfig: async () => ({ activePresetId: 'on-screen' }),
+        resolveChatModelTarget: (config) => {
+          seen.push(config.activePresetId);
+          return { providerId: 'test', model: `model-${config.activePresetId}`, reasoningEffort: null };
+        },
+      },
+    }),
+    presetFor: async (chatId) => (chatId === 'chat-off' ? 'its-own' : null),
+  });
+  assert.equal((await llm.resolveChatTarget({ chatId: 'chat-off' })).model, 'model-its-own');
+  assert.equal((await llm.resolveChatTarget({ chatId: 'chat-on' })).model, 'model-on-screen');
+  assert.equal((await llm.resolveChatTarget()).model, 'model-on-screen');
+  assert.deepEqual(seen, ['its-own', 'on-screen', 'on-screen']);
+});
+
+test('a failing lookup of the chat\'s entry costs the round nothing: the active entry applies (#1194)', async () => {
+  const llm = createProviderLlmAdapter({
+    ...makeAdapterDeps({
+      llmConfigStore: {
+        readLLMConfig: async () => ({ activePresetId: 'on-screen' }),
+        resolveChatModelTarget: (config) => ({ providerId: 'test', model: `model-${config.activePresetId}`, reasoningEffort: null }),
+      },
+    }),
+    presetFor: async () => { throw new Error('history unreadable'); },
+  });
+  assert.equal((await llm.resolveChatTarget({ chatId: 'chat-off' })).model, 'model-on-screen');
+});

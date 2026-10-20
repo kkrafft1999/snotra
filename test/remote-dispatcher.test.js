@@ -1,10 +1,11 @@
 'use strict';
 
-// The remote dispatcher (#1194), step 1 of docs/remote-interface.md §10:
-// the read-only methods of §8.1 and the events of §8.2 against a fake
-// desktop and release list — what a connection may see (§7.5), how a method
-// is refused (§6.3), and that nothing it is told carries a path, a tool
-// argument or a chat it may not see.
+// The remote dispatcher (#1194), steps 1 and 2 of docs/remote-interface.md
+// §10: the methods of §8.1 and the events of §8.2 against a fake desktop and
+// release list — what a connection may see (§7.5), how a method is refused
+// (§6.3), that nothing it is told carries a path, a tool argument or a chat
+// it may not see, and that it writes only in the workspace open at the
+// desktop, once per clientMessageId.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -28,7 +29,7 @@ const chat = (chatId, root, updatedAt, messages = [], title = `Chat ${chatId}`) 
 
 function fakeDesktop({ known = [ALPHA, BETA, HIDDEN], active = ALPHA, chats = [] } = {}) {
   const listeners = new Set();
-  const state = { known, active, chats, running: new Set(), awaiting: new Set(), loads: [] };
+  const state = { known, active, chats, running: new Set(), awaiting: new Set(), loads: [], turns: [], stops: [], available: true };
   return {
     state,
     port: {
@@ -48,6 +49,22 @@ function fakeDesktop({ known = [ALPHA, BETA, HIDDEN], active = ALPHA, chats = []
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
+      startTurn: async (turn) => {
+        if (!state.available) return { ok: false, reason: 'unavailable' };
+        state.turns.push(turn);
+        return { ok: true };
+      },
+      stopChat: (chatId) => {
+        state.stops.push(chatId);
+        return state.running.has(chatId);
+      },
+      chatConfiguration: async (chatId, root) => ({
+        model: { label: `model of ${chatId}` },
+        mode: 'smart',
+        reasoning: root === ALPHA ? 'high' : null,
+        skills: [{ name: 'docs', state: 'on' }],
+        tools: [{ name: 'shell_execute', on: false }],
+      }),
     },
     emit: (activity) => { for (const listener of listeners) listener(activity); },
     listeners,
@@ -100,10 +117,12 @@ function manualTimers() {
  */
 async function setup({ desktop = fakeDesktop(), releases = fakeReleases(), kind = 'relay', deltaBatchMs = 0, timers = manualTimers(), open = true } = {}) {
   const warnings = [];
+  let uuids = 0;
   const dispatcher = createRemoteDispatcher({
     desktop: desktop.port,
     releases: releases.port,
     word: translateMessage,
+    randomUUID: () => `uuid-${(uuids += 1)}`,
     deltaBatchMs,
     setTimer: timers.setTimer,
     clearTimer: timers.clearTimer,
@@ -133,10 +152,13 @@ const noPaths = (value) => {
   for (const root of [ALPHA, BETA, HIDDEN, '/home/user']) assert.ok(!text.includes(root), `a path in ${text}`);
 };
 
-test('session.hello learns the read-only methods, no approval answers and the limits', async () => {
+test('session.hello learns the methods to watch and to write, no approval answers and the limits', async () => {
   const { dispatcher, connection } = await setup({ open: false });
   assert.deepEqual(dispatcher.describe(connection), {
-    methods: ['workspaces.list', 'chats.list', 'chat.open', 'chat.more', 'chat.close'],
+    methods: [
+      'workspaces.list', 'chats.list', 'chat.open', 'chat.more', 'chat.close',
+      'chat.new', 'message.send', 'run.abort', 'chat.configuration',
+    ],
     approvalResponses: [],
     limits: { ...DISPATCHER_LIMITS },
   });
@@ -257,7 +279,7 @@ test('a chat outside the release answers exactly as one that does not exist', as
 
 test('unknown methods, other kinds and stale connections are refused in the shape of §6.3', async () => {
   const { call, dispatcher, connection } = await setup();
-  assertError(await call('message.send', { chatId: 'a1', text: 'hi' }), 'unknown-method');
+  assertError(await call('approval.respond', { requestId: 'r1', response: 'allow-once' }), 'unknown-method');
   assertError(await call('toString'), 'unknown-method');
   assertError(await call('__proto__'), 'unknown-method');
   const window = await setup({ kind: 'desktop' });
@@ -409,4 +431,170 @@ test('chat.open never changes the chat on the desktop\'s screen', async () => {
   // The fake port has no way to activate a chat; the dispatcher only loaded it.
   assert.deepEqual(desktop.state.loads, ['a1']);
   assert.equal(desktop.state.active, ALPHA);
+});
+
+// ---------------------------------------------------------------- step 2: writing
+
+const turnChats = () => [
+  chat('a1', ALPHA, 300, [{ role: 'user', content: 'first' }, { role: 'assistant', content: 'answer' }]),
+  chat('b1', BETA, 200, [{ role: 'user', content: 'in beta' }]),
+  chat('h1', HIDDEN, 100, [{ role: 'user', content: 'hidden' }]),
+];
+
+test('message.send starts a turn in a chat of the open workspace and answers with its run and message', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  const answer = await call('message.send', { chatId: 'a1', text: 'next question', clientMessageId: 'c-1' });
+  assert.deepEqual(answer.result, { runId: 'uuid-1', messageId: 'm2' });
+  // The text and the chat, never a history, a path or a model (§8.1).
+  assert.deepEqual(desktop.state.turns, [{ connectionId: 'conn-1', chatId: 'a1', text: 'next question', runId: 'uuid-1' }]);
+});
+
+test('a repeated clientMessageId answers again and starts nothing, also on another connection', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call, dispatcher, connection } = await setup({ desktop });
+  const first = await call('message.send', { chatId: 'a1', text: 'once', clientMessageId: 'c-1' });
+  const again = await call('message.send', { chatId: 'a1', text: 'once', clientMessageId: 'c-1' });
+  assert.deepEqual(again.result, first.result);
+  const other = { ...connection, id: 'conn-2' };
+  dispatcher.open(other, { send: () => true });
+  const reconnected = await dispatcher.handle(other, { id: 1, method: 'message.send', params: { chatId: 'a1', text: 'once', clientMessageId: 'c-1' } });
+  assert.deepEqual(reconnected.result, first.result);
+  assert.equal(desktop.state.turns.length, 1);
+  // The same id for another chat is a client's mistake, not a repeat.
+  assertError(await call('message.send', { chatId: 'b1', text: 'once', clientMessageId: 'c-1' }), 'invalid-params');
+});
+
+test('message.send is refused outside the open workspace and unknown outside the released ones', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  // BETA is released but not open at the desktop: its tools would work elsewhere (§7.3).
+  assertError(await call('message.send', { chatId: 'b1', text: 'hi', clientMessageId: 'c-1' }), 'refused');
+  // HIDDEN is not released: exactly as an unknown chat (§7.5).
+  const hidden = await call('message.send', { chatId: 'h1', text: 'hi', clientMessageId: 'c-2' });
+  assertError(hidden, 'not-found');
+  assert.deepEqual(hidden.error, (await call('message.send', { chatId: 'nope', text: 'hi', clientMessageId: 'c-3' })).error);
+  desktop.state.active = BETA;
+  assert.ok((await call('message.send', { chatId: 'b1', text: 'hi', clientMessageId: 'c-4' })).result);
+  assert.deepEqual(desktop.state.turns.map((t) => t.chatId), ['b1']);
+});
+
+test('message.send is busy while the chat runs or waits, and checks its params', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  desktop.state.running.add('a1');
+  assertError(await call('message.send', { chatId: 'a1', text: 'hi', clientMessageId: 'c-1' }), 'busy');
+  desktop.state.running.clear();
+  desktop.state.awaiting.add('a1');
+  assertError(await call('message.send', { chatId: 'a1', text: 'hi', clientMessageId: 'c-2' }), 'busy');
+  desktop.state.awaiting.clear();
+  assertError(await call('message.send', { chatId: 'a1', text: '   ', clientMessageId: 'c-3' }), 'invalid-params');
+  assertError(await call('message.send', { chatId: 'a1', text: 'hi' }), 'invalid-params');
+  assertError(await call('message.send', { chatId: 'a1', text: 'hi', clientMessageId: 'x'.repeat(65) }), 'invalid-params');
+  assertError(await call('message.send', { chatId: 'a1', text: 'x'.repeat(DISPATCHER_LIMITS.maxTextChars + 1), clientMessageId: 'c-4' }), 'too-large');
+  assert.equal(desktop.state.turns.length, 0);
+});
+
+test('a second send waits for the first turn of a chat to end, and no provider means unavailable', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  const first = await call('message.send', { chatId: 'a1', text: 'one', clientMessageId: 'c-1' });
+  // The desktop has not reported the turn as running yet; the dispatcher knows it started it.
+  assertError(await call('message.send', { chatId: 'a1', text: 'two', clientMessageId: 'c-2' }), 'busy');
+  desktop.emit({ kind: 'run', chatId: 'a1', runId: first.result.runId, type: 'progress', payload: { type: 'run-end' } });
+  desktop.state.available = false;
+  assertError(await call('message.send', { chatId: 'a1', text: 'two', clientMessageId: 'c-2' }), 'unavailable');
+  desktop.state.available = true;
+  // A refused send is not remembered: the same id may try again.
+  assert.ok((await call('message.send', { chatId: 'a1', text: 'two', clientMessageId: 'c-2' })).result);
+});
+
+test('chat.new makes a chat in the open workspace that the first send writes into', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  const made = await call('chat.new');
+  assert.deepEqual(made.result, { chatId: 'uuid-1' });
+  assert.deepEqual((await call('chat.new', { workspaceId: 'id-alpha' })).result, { chatId: 'uuid-2' });
+  assertError(await call('chat.new', { workspaceId: 'id-beta' }), 'refused');
+  assertError(await call('chat.new', { workspaceId: 'id-unknown' }), 'not-found');
+  const sent = await call('message.send', { chatId: 'uuid-1', text: 'hello', clientMessageId: 'c-1' });
+  assert.deepEqual(sent.result, { runId: 'uuid-3', messageId: 'm0' });
+  // Not written yet, so not listed either.
+  assert.deepEqual((await call('chats.list')).result.chats.map((c) => c.chatId), ['a1', 'b1']);
+});
+
+test('chat.new is not-found while the open workspace is not released', async () => {
+  const desktop = fakeDesktop({ active: HIDDEN });
+  const { call } = await setup({ desktop });
+  assertError(await call('chat.new'), 'not-found');
+});
+
+test('run.abort stops the turn of a visible chat, and a hidden one is unknown', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  desktop.state.running.add('b1');
+  // Stopping is never a loosening: also in a released workspace not open at the desktop.
+  assert.deepEqual((await call('run.abort', { chatId: 'b1' })).result, { aborted: true });
+  assert.deepEqual((await call('run.abort', { chatId: 'a1' })).result, { aborted: false });
+  assertError(await call('run.abort', { chatId: 'h1' }), 'not-found');
+  assert.deepEqual(desktop.state.stops, ['b1', 'a1']);
+});
+
+test('chat.configuration describes a visible chat, read only and without paths', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  const answer = await call('chat.configuration', { chatId: 'a1' });
+  assert.deepEqual(answer.result, {
+    model: { label: 'model of a1' },
+    mode: 'smart',
+    reasoning: 'high',
+    skills: [{ name: 'docs', state: 'on' }],
+    tools: [{ name: 'shell_execute', on: false }],
+  });
+  assert.equal('reasoning' in (await call('chat.configuration', { chatId: 'b1' })).result, false);
+  assertError(await call('chat.configuration', { chatId: 'h1' }), 'not-found');
+  noPaths(answer);
+});
+
+test('a saved question goes to the other followers as chat.message, marked when a remote asked', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call, dispatcher, connection, named } = await setup({ desktop });
+  const otherEvents = [];
+  const other = { ...connection, id: 'conn-2', client: { name: 'cli', version: '2' } };
+  dispatcher.open(other, { send: (event) => { otherEvents.push(event); return true; } });
+  await call('chat.open', { chatId: 'a1' });
+  await dispatcher.handle(other, { id: 1, method: 'chat.open', params: { chatId: 'a1' } });
+
+  const sent = await call('message.send', { chatId: 'a1', text: 'from the phone', clientMessageId: 'c-1' });
+  desktop.state.chats[0].messages.push({ role: 'user', content: 'from the phone' }, { role: 'assistant', content: '' });
+  desktop.emit({ kind: 'run', chatId: 'a1', runId: sent.result.runId, type: 'progress', payload: { type: 'chat-saved', ok: true, problem: null } });
+  // The next save of the same turn announces nothing again.
+  desktop.emit({ kind: 'run', chatId: 'a1', runId: sent.result.runId, type: 'progress', payload: { type: 'chat-saved', ok: true, problem: null } });
+  await settle();
+  assert.deepEqual(named('chat.message'), [], 'the connection that asked knows its question');
+  const told = otherEvents.filter((e) => e.method === 'chat.message').map((e) => e.params);
+  assert.deepEqual(told, [{
+    chatId: 'a1',
+    message: { messageId: 'm2', role: 'user', text: 'from the phone', origin: { kind: 'relay', client: 'test' } },
+  }]);
+
+  // A question asked at the desktop reaches both, without a mark.
+  desktop.state.chats[0].messages.push({ role: 'user', content: 'from the desktop' });
+  desktop.emit({ kind: 'run', chatId: 'a1', runId: 'desk-1', type: 'progress', payload: { type: 'chat-saved', ok: true, problem: null } });
+  // A save that did not go through announces nothing.
+  desktop.emit({ kind: 'run', chatId: 'a1', runId: 'desk-2', type: 'progress', payload: { type: 'chat-saved', ok: false, problem: 'failed' } });
+  await settle();
+  assert.deepEqual(named('chat.message'), [{ chatId: 'a1', message: { messageId: 'm4', role: 'user', text: 'from the desktop' } }]);
+});
+
+test('a chat that got its name is chat.updated for its followers, and stays out of the turn events', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call, named, events } = await setup({ desktop });
+  await call('chat.open', { chatId: 'a1' });
+  const before = events.length;
+  desktop.emit({ kind: 'run', chatId: 'a1', runId: 'r1', type: 'progress', payload: { type: 'chat-named', title: 'Trip planning' } });
+  desktop.emit({ kind: 'run', chatId: 'b1', runId: 'r2', type: 'progress', payload: { type: 'chat-named', title: 'Not followed' } });
+  await settle();
+  assert.deepEqual(named('chat.updated'), [{ chatId: 'a1', title: 'Trip planning' }]);
+  assert.deepEqual(events.slice(before).map((e) => e.method), ['chat.updated'], 'no state, no progress');
 });

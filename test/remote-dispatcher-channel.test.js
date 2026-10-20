@@ -69,10 +69,13 @@ async function phoneSession(t) {
   return { fixture, harness, mobile, emit, received, next, request };
 }
 
-test('over the channel, the phone learns the methods of step 1 and the state, and reads a chat', async (t) => {
+test('over the channel, the phone learns the methods of steps 1 and 2 and the state, and reads a chat', async (t) => {
   const ctx = await phoneSession(t);
   const hello = await ctx.next((m) => m.id === 1, 'the answer to session.hello');
-  assert.deepEqual(hello.result.methods, ['session.hello', 'session.bye', 'workspaces.list', 'chats.list', 'chat.open', 'chat.more', 'chat.close']);
+  assert.deepEqual(hello.result.methods, [
+    'session.hello', 'session.bye', 'workspaces.list', 'chats.list', 'chat.open', 'chat.more', 'chat.close',
+    'chat.new', 'message.send', 'run.abort', 'chat.configuration',
+  ]);
   assert.deepEqual(hello.result.approvalResponses, []);
 
   const welcome = await ctx.next((m) => m.method === 'session.welcome', 'session.welcome');

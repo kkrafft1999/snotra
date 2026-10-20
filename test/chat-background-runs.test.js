@@ -303,7 +303,7 @@ test('open cards can be discarded per chat and outside a set of chats', async ()
 
 // --- Mode per chat -----------------------------------------------------------
 
-function makeSettings({ sessions = [] } = {}) {
+function makeSettings({ sessions = [], workspaceMode = null, usable = () => true } = {}) {
   const store = { version: 3, activeByWorkspace: {}, sessions: [...sessions] };
   const find = (id) => store.sessions.find((s) => s && s.id === id) || null;
   let activeMode = 'smart';
@@ -325,6 +325,8 @@ function makeSettings({ sessions = [] } = {}) {
     },
     applyPreset: async () => {},
     getDefaultPresetId: async () => 'preset-a',
+    isPresetUsable: usable,
+    getWorkspaceMode: async () => workspaceMode,
     applyMode: async (mode) => { activeMode = mode; },
     getActiveMode: async () => activeMode,
     onChatModeChanged: (chatId) => changed.push(chatId),
@@ -356,6 +358,46 @@ test('a chat leaving the screen keeps its mode for its run; the chat on screen r
 
   settings.forgetBackgroundModes();
   assert.equal(settings.modeFor('chat-b'), null, 'after "reset all" every chat follows the store again');
+  assert.equal(await settings.runModeFor('chat-b'), null, 'a run of it as well');
+});
+
+test('a chat not on screen since launch runs with its stored mode, but a stored "Auto" only after the desktop chose it (#1194)', async () => {
+  const sessions = [
+    { id: 'chat-a', messages: [], toolPermissionMode: 'ask-all' },
+    { id: 'chat-auto', messages: [], toolPermissionMode: 'auto' },
+    { id: 'chat-none', messages: [] },
+  ];
+  const { settings } = makeSettings({ sessions });
+  assert.equal(await settings.runModeFor('chat-a'), 'ask-all');
+  assert.equal(await settings.runModeFor('chat-auto'), 'smart', 'a phone cannot bring a stored "Auto" back (#567)');
+  assert.equal(await settings.runModeFor('chat-none'), 'smart');
+  assert.equal(settings.modeFor('chat-a'), null, 'what the screen logic says is unchanged');
+
+  // A workspace whose default was confirmed as "Auto" at the desktop gives it (#413).
+  const confirmed = makeSettings({ sessions, workspaceMode: 'auto' });
+  assert.equal(await confirmed.settings.runModeFor('chat-auto'), 'auto');
+  assert.equal(await confirmed.settings.runModeFor('chat-a'), 'ask-all');
+
+  // Left at "Auto" at the desktop in this session: the desktop decided, it stays.
+  const left = makeSettings({ sessions });
+  await left.settings.activate('chat-auto', { activation: CHAT_ACTIVATION.EXPLICIT });
+  await left.settings.activate('chat-a');
+  assert.equal(await left.settings.runModeFor('chat-auto'), 'auto');
+  assert.equal(await left.settings.runModeFor('chat-a'), null, 'on screen: the store applies');
+});
+
+test('a chat off screen runs with its own model entry, the default when that is gone (#1194)', async () => {
+  const sessions = [
+    { id: 'chat-a', messages: [], modelPresetId: 'preset-x' },
+    { id: 'chat-gone', messages: [], modelPresetId: 'preset-gone' },
+    { id: 'chat-none', messages: [] },
+  ];
+  const { settings } = makeSettings({ sessions, usable: (id) => id !== 'preset-gone' });
+  assert.equal(await settings.presetFor('chat-a'), 'preset-x');
+  assert.equal(await settings.presetFor('chat-gone'), 'preset-a');
+  assert.equal(await settings.presetFor('chat-none'), 'preset-a');
+  await settings.activate('chat-a');
+  assert.equal(await settings.presetFor('chat-a'), null, 'on screen: the active entry applies');
 });
 
 test('switching chats voids nothing by itself; a chat whose own mode changes loses its approvals', async () => {

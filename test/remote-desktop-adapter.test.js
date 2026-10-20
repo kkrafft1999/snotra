@@ -70,3 +70,104 @@ test('the activity the handlers publish reaches a subscriber, and a broken one s
     { kind: 'workspace' },
   ]);
 });
+
+// ---------------------------------------------------------------- step 2: what the dispatcher asks of the desktop
+
+const { remoteSessionId, isRemoteSessionId } = require('../src/main/remote/desktop-adapter');
+
+function writer({ target = { providerId: 'p', model: 'gpt-x' }, invalid = null, turn } = {}) {
+  const activity = createRemoteActivity({ log: { warn: () => {} } });
+  const runs = [];
+  const stops = [];
+  const heard = [];
+  activity.subscribe((event) => heard.push(event));
+  const adapter = createRemoteDesktopAdapter({
+    chatHistory: { listForRoots: async () => [], loadForDisplay: async () => null },
+    workspaceFolderStore: { getValidatedFolderHistory: async () => [] },
+    getActiveWorkspaceRoot: () => A,
+    normalizeRoot,
+    runningChatIds: () => [],
+    listPendingApprovals: () => [],
+    activity,
+    conversation: {
+      runTurn: async (input) => {
+        runs.push(input);
+        if (turn) return turn(input);
+        return {};
+      },
+      stopChat: (chatId) => { stops.push(chatId); return chatId === 'running'; },
+    },
+    llm: {
+      resolveChatTarget: async () => target,
+      validateTarget: async () => invalid,
+    },
+    chatMode: async (chatId) => (chatId === 'c-ask' ? 'ask-all' : 'smart'),
+    reasoningFor: async () => 'low',
+    describeConfiguration: async ({ workspaceRoot }) => ({
+      skills: [{ name: 'docs', state: 'on', description: 'secret text' }, { nope: true }],
+      tools: [{ name: 'read_file', on: true, schema: { a: 1 } }, { name: 'shell_execute', on: false }],
+      root: workspaceRoot,
+    }),
+    log: { warn: () => {} },
+  });
+  return { adapter, runs, stops, heard };
+}
+
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('a remote turn runs under a session of its own, in the open workspace, and ends with run-end', async () => {
+  const { adapter, runs, heard } = writer({
+    turn: ({ onEvent }) => {
+      onEvent({ type: 'delta', payload: { text: 'Hi' } });
+      onEvent({ type: 'secret', payload: { apiKey: 'x' } });
+      return {};
+    },
+  });
+  assert.deepEqual(await adapter.startTurn({ connectionId: 'conn-1', chatId: 'c1', text: 'Hello', runId: 'run-1' }), { ok: true });
+  await settle();
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0].sessionId, 'remote:conn-1');
+  assert.equal(runs[0].workspaceRoot, A, 'the open workspace, never one a request names');
+  assert.deepEqual(runs[0].message, { content: 'Hello' });
+  assert.deepEqual(heard, [
+    { kind: 'run', chatId: 'c1', runId: 'run-1', type: 'delta', payload: { text: 'Hi' } },
+    { kind: 'run', chatId: 'c1', runId: 'run-1', type: 'progress', payload: { type: 'run-end' } },
+  ], 'only the turn\'s own events, and its end');
+});
+
+test('a turn that throws still ends with run-end', async () => {
+  const { adapter, heard } = writer({ turn: async () => { throw new Error('lost'); } });
+  await adapter.startTurn({ connectionId: 'conn-1', chatId: 'c1', text: 'Hello', runId: 'run-2' });
+  await settle();
+  await settle();
+  assert.deepEqual(heard.map((e) => e.payload.type), ['run-end']);
+});
+
+test('no provider for the chat\'s model means unavailable, and nothing runs', async () => {
+  const unknown = writer({ target: { error: { key: 'provider.error.unknown' }, code: 'INVALID' } });
+  assert.deepEqual(await unknown.adapter.startTurn({ connectionId: 'c', chatId: 'c1', text: 'x', runId: 'r' }), { ok: false, reason: 'unavailable' });
+  const noKey = writer({ invalid: { error: { key: 'provider.error.noKey' }, code: 'AUTH' } });
+  assert.deepEqual(await noKey.adapter.startTurn({ connectionId: 'c', chatId: 'c1', text: 'x', runId: 'r' }), { ok: false, reason: 'unavailable' });
+  assert.equal(unknown.runs.length + noKey.runs.length, 0);
+});
+
+test('stopChat and the configuration go through, the configuration without descriptions or schemas', async () => {
+  const { adapter, stops } = writer();
+  assert.equal(adapter.stopChat('running'), true);
+  assert.equal(adapter.stopChat('idle'), false);
+  assert.deepEqual(stops, ['running', 'idle']);
+  assert.deepEqual(await adapter.chatConfiguration('c-ask', A), {
+    model: { label: 'gpt-x' },
+    mode: 'ask-all',
+    reasoning: 'low',
+    skills: [{ name: 'docs', state: 'on' }],
+    tools: [{ name: 'read_file', on: true }, { name: 'shell_execute', on: false }],
+  });
+});
+
+test('remote sessions are told apart from every window', () => {
+  assert.equal(remoteSessionId('conn-9'), 'remote:conn-9');
+  assert.equal(isRemoteSessionId('remote:conn-9'), true);
+  assert.equal(isRemoteSessionId(3), false);
+  assert.equal(isRemoteSessionId('conn-9'), false);
+});

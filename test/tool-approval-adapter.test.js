@@ -124,3 +124,31 @@ test('unsubscribe verwirft offene Anfragen mit Grund fehlende UI', async () => {
   assert.equal((await pending).reason, 'no_approval_ui');
   assert.equal(adapter.isAvailable(1), false);
 });
+
+test('a front end without cards has its requests answered in the window, and only there (#1194)', async () => {
+  let counter = 0;
+  const adapter = createToolApprovalAdapter({
+    randomUUID: () => `req-${(counter += 1)}`,
+    PUSH,
+    log: { warn() {} },
+    answeredByWindow: (sessionId) => String(sessionId).startsWith('remote:'),
+  });
+  // No window yet: the request expires, as for any front end without a card.
+  assert.equal(adapter.isAvailable('remote:conn-1'), false);
+  assert.equal(adapter.isAvailable('other'), false, 'only the front ends named stand behind the window');
+
+  const wc = makeWebContents();
+  adapter.subscribe(1, wc);
+  assert.equal(adapter.isAvailable('remote:conn-1'), true);
+  const pending = adapter.requestApproval({ sessionId: 'remote:conn-1', request: { ...REQUEST, chatId: 'chat-phone' } });
+  assert.equal(wc.sent[0].channel, PUSH.TOOL_APPROVAL_REQUEST);
+  assert.equal(adapter.listPending(1).length, 1, 'kept under the window');
+  assert.equal(adapter.respond('remote:conn-1', { requestId: 'req-1', response: 'allow-once' }).ok, false, 'the front end itself cannot answer it');
+  assert.deepEqual(adapter.respond(1, { requestId: 'req-1', response: 'allow-once' }), { ok: true, response: 'allow-once' });
+  assert.equal((await pending).response, 'allow-once');
+
+  // The window goes away: its cards go with it, the phone's as well.
+  const later = adapter.requestApproval({ sessionId: 'remote:conn-1', request: REQUEST });
+  wc.destroy();
+  assert.equal((await later).invalidated, true);
+});
