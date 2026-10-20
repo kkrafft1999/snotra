@@ -37,7 +37,7 @@ const { registerPreviewHistoryMenuHandlers } = require('../ipc/preview-history-m
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
 const { registerRemoteHandlers } = require('../ipc/remote-handlers');
-const { createRemoteReleaseSettings } = require('../remote/release-settings');
+const { createRemoteReleaseSettings } = require('../services/remote-release-settings');
 const { createCore } = require('./create-core');
 
 /**

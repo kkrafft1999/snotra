@@ -303,7 +303,7 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   a workspace to the phone is one as well (`remote-workspace`, subject the
   root, #1194): `main/remote/release-store-adapter.js` refuses a release
   without it; the switch that asks is #1195, in
-  `main/remote/release-settings.js` behind `remote:release:get|set`. Two
+  `main/services/remote-release-settings.js` behind `remote:release:get|set`. Two
   settings redeem receipts in `services/storage-service.js` (#1104):
   `shell_execute` or `run_python` switched on (`shell-execution`,
   `python-execution`) — `updateUIPrefs` leaves a switch off that comes

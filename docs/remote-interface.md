@@ -678,8 +678,8 @@ the attacker model.
    `application/remote/remote-dispatcher.js` behind the channel, the release
    list in `main/remote/release-store-adapter.js` (a workspace opens only
    with a receipt for `remote-workspace`; the switch on *Settings › Tools ›
-   Security* asks for it, #1195, in `main/remote/release-settings.js`), the desktop's
-   reads in `main/remote/desktop-adapter.js`. `session.welcome`'s `seq` is
+   Security* asks for it, #1195, in `main/services/remote-release-settings.js`),
+   the desktop's reads in `main/remote/desktop-adapter.js`. `session.welcome`'s `seq` is
    the dispatcher's count of its events, 0 for the welcome; on the relay
    `session.resync` follows an event the channel could not carry. The local
    transport is not built.
