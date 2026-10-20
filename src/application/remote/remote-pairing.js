@@ -95,7 +95,9 @@ function isGone(error) {
  *   setTimer?: (fn: () => void, ms: number) => unknown,
  *   clearTimer?: (timer: unknown) => void,
  *   log?: { warn: (...args: unknown[]) => void },
- * }} deps  `receipts` is the half of the registry that redeems; without it nothing is ever allowed
+ *   connection?: { isConnected: () => boolean },
+ * }} deps  `receipts` is the half of the registry that redeems; without it nothing is ever allowed.
+ *   `connection` is the channel (#1192): whether a session with the paired phone stands.
  */
 function createRemotePairing({
   relay,
@@ -108,6 +110,7 @@ function createRemotePairing({
   setTimer = (fn, ms) => setTimeout(fn, ms),
   clearTimer = (timer) => clearTimeout(/** @type {any} */ (timer)),
   log = console,
+  connection = { isConnected: () => false },
 }) {
   /**
    * The paired phone as kept: { channelId, keys, pairedAt }
@@ -140,7 +143,7 @@ function createRemotePairing({
     return normalizeRemotePairingState({
       state: step,
       encryptionAvailable: identity.isAvailable(),
-      phone: phone ? { pairedAt: phone.pairedAt, connected: false } : null,
+      phone: phone ? { pairedAt: phone.pairedAt, connected: connection.isConnected() === true } : null,
       code: flow && step === STATES.CODE ? { display: flow.display, qr: flow.qr, expiresAt: flow.expiresAt } : null,
       words: flow && step === STATES.CONFIRM ? flow.words : null,
       replacing: !!flow && ACTIVE_STEPS.has(step) && !!phone,
@@ -491,6 +494,27 @@ function createRemotePairing({
     return normalizeRemotePairingResult({ ok: true, relayDeleted });
   }
 
+  /**
+   * The relay removed the channel of the paired phone (#1192, protocol §12.2) —
+   * the phone disconnected itself: forgotten here as well. A pairing running
+   * meanwhile goes on; it replaces a phone that is gone already.
+   *
+   * @param {string} channelId
+   */
+  async function forgetChannel(channelId) {
+    await loadPhone();
+    if (!phone || phone.channelId !== channelId) return;
+    try {
+      await identity.forgetPhone();
+    } catch (error) {
+      log.warn(`[remote] the phone could not be forgotten (${error?.name || 'error'})`);
+      return;
+    }
+    if (phone?.channelId !== channelId) return;
+    phone = null;
+    emit();
+  }
+
   async function getState() {
     await loadPhone();
     return snapshot();
@@ -509,7 +533,7 @@ function createRemotePairing({
     relay.close();
   }
 
-  return { start, cancel, unpair, getState, subscribe, dispose };
+  return { start, cancel, unpair, forgetChannel, getState, subscribe, dispose, notifyConnection: emit };
 }
 
 module.exports = { createRemotePairing, PAIRING_TTL_MS };

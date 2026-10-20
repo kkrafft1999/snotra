@@ -17,8 +17,8 @@
  * them; *Replace phone?* (6) and *Remove phone?* (7) are questions the panel
  * asks itself while main stays in `paired`. *Paired, connected* (4) and
  * *Paired, phone offline* (5) are both `paired`, told apart by
- * `phone.connected` — which stays false until the channel (part 2 of the
- * protocol) is built and a session stands.
+ * `phone.connected` — true while a session of the channel stands, from the
+ * phone's `session.hello` on (#1192).
  */
 const REMOTE_PAIRING_STATES = Object.freeze({
   /** 1 — no phone paired and no pairing running. Nothing has reached the relay (R7). */

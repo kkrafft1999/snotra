@@ -3,16 +3,18 @@
  * remote, and the one phone it is paired with (R1) — docs/remote-protocol.md
  * §3, steps 3–4 and 33 of docs/remote-pairing-sequence.svg.
  *
- * The private keys never leave the adapter. The core gets the public bundle
- * and a function that signs; it cannot read, copy or log the key behind it.
- * The adapter keeps everything through `safeStorage`; without real
- * encryption it keeps nothing and `isAvailable()` says so (#1012).
+ * The private keys never leave the adapter. The core gets the public bundle,
+ * a function that signs and one that agrees (#1192); it cannot read, copy or
+ * log the keys behind them. The adapter keeps everything through
+ * `safeStorage`; without real encryption it keeps nothing and
+ * `isAvailable()` says so (#1012).
  */
 
 /**
  * @typedef {Object} RemoteIdentity
  * @property {import('./remote-relay-port').RemoteKeyBundle} keys  the public points
  * @property {import('./remote-relay-port').RemoteSigner} sign
+ * @property {import('./remote-channel-crypto-port').RemoteAgreer} agree  the channel's `ss` (protocol §14, #1192)
  */
 
 /**

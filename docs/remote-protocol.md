@@ -21,9 +21,11 @@ flow it details is drawn in [`remote-pairing-sequence.svg`](./remote-pairing-seq
 were decided by the owner on 2026-10-18 ([§10](#10-decisions)).
 
 The desktop's half of part 1 is built (#1114, in `src/main/remote/` and
-`src/application/remote/`); the relay is built in snotra-promotion
+`src/application/remote/`), and so is its half of part 2 (#1192) — the
+messages after `session.hello` are answered by a stand-in until the
+dispatcher exists (#1194); the relay is built in snotra-promotion
 ([snotra-promotion#165](https://github.com/kkrafft1999/snotra-promotion/issues/165));
-the app and part 2 are not yet. A relay is held to part 1 by the conformance
+the app is not yet. A relay is held to part 1 by the conformance
 runner in [`e2e/remote/`](../e2e/remote/README.md) (#1135) — here against a
 stand-in, in snotra-promotion's CI against the emulator. The
 reference implementation that pins the bytes is
@@ -610,7 +612,9 @@ the long-term keys and the channel id of the pairing vectors and adds:
 Nothing in the channel is random once the ephemeral keys are fixed, so
 `test/remote-protocol-channel-vectors.test.js` compares the whole file with
 what `node scripts/remote-protocol-channel-vectors.js` writes, and recomputes
-every value with Node's `crypto`. The app loads the ephemeral keys with
+every value with Node's `crypto`. The bridge's own implementation,
+`src/main/remote/channel-protocol.js`, is held to the same file by
+`test/remote-channel-protocol.test.js`. The app loads the ephemeral keys with
 `Curve25519.KeyAgreement.PrivateKey(rawRepresentation:)`.
 
 ## 19. Why not Noise KK

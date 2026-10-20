@@ -88,15 +88,23 @@ function phoneOf(raw) {
 }
 
 /**
- * What the core gets: the public points, and a signer whose key stays in here.
+ * What the core gets: the public points, a signer and the long-term
+ * agreement of the channel (`ss`, protocol §14) — the keys stay in here.
  * @param {{ sign: KeyPair, agree: KeyPair }} identity
  */
 function identityHandle(identity) {
   const signKey = identity.sign.privateKey;
+  const agreeKey = identity.agree.privateKey;
   return Object.freeze({
     keys: Object.freeze({ sign: protocol.toB64u(identity.sign.point), agree: protocol.toB64u(identity.agree.point) }),
     /** @param {Uint8Array} message */
     sign: (message) => nodeCrypto.sign('sha256', Buffer.from(message), { key: signKey, dsaEncoding: 'ieee-p1363' }),
+    /** @param {string} otherAgreePoint  base64url; the shared point's x-coordinate, 32 bytes */
+    agree: (otherAgreePoint) => {
+      const publicKey = protocol.publicKeyOf(protocol.fromB64u(otherAgreePoint, protocol.POINT_BYTES));
+      if (!publicKey) throw new TypeError('remote pairing: not a P-256 point');
+      return nodeCrypto.diffieHellman({ privateKey: agreeKey, publicKey });
+    },
   });
 }
 
