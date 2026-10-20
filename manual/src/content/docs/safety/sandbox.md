@@ -29,7 +29,7 @@ Commands run in your login shell on macOS and Linux (zsh, bash …), with the `P
 
 ![Settings › Tools › Security: on the left the list — All workspaces with 1 program and 1 host, then the workspaces garden-planner (open, 1 program · 2 hosts), invoice-tool (Sandbox off, struck-through amber shield) and old-project (Folder missing). On the right garden-planner: the tile "Sandbox active" with its switch, below it "Programs with more room".](screenshots/tool-security.webp)
 
-**The list on the left** starts with *All workspaces*, followed by every folder that has a sandbox setting or an allowance of its own, and the open one, marked *open*. Each entry says how it stands, in shape and in words: a shield with what it allows beyond the sandbox (*1 program · 2 hosts*, or *Sandbox on · nothing extra*), the struck-through amber shield with *Sandbox off*, or *Folder missing* for a folder that is no longer there. A folder that is not open can be checked and changed all the same; a change applies the next time a run starts there.
+**The list on the left** starts with *All workspaces*, followed by every folder that has a sandbox setting or an allowance of its own, every folder open to your phone, and the open one, marked *open*. Each entry says how it stands, in shape and in words: a shield with what it allows beyond the sandbox (*1 program · 2 hosts*, or *Sandbox on · nothing extra*), the struck-through amber shield with *Sandbox off*, or *Folder missing* for a folder that is no longer there. A folder that is not open can be checked and changed all the same; a change applies the next time a run starts there.
 
 **A workspace** shows, from top to bottom:
 
@@ -37,6 +37,7 @@ Commands run in your login shell on macOS and Linux (zsh, bash …), with the `P
 - *Programs with more room*: its own, and those for all workspaces, marked *All workspaces*,
 - *Hosts kept open*: its own, and those for all workspaces, marked the same way,
 - *Reset sandbox for this workspace*,
+- [since 1.28] *Phone*, with the switch *Access from your phone*: see [Open a folder to your phone](../tools-and-security/#open-a-folder-to-your-phone),
 - for the open workspace only, *This session*: what cards allowed *For this session* in its chats.
 
 What applies everywhere is shown in every workspace, but changed only under *All workspaces*: the marker *All workspaces* next to it leads there. While the sandbox of a workspace is off, its allowances rest, and the page says so.

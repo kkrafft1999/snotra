@@ -37,6 +37,7 @@ const { registerPreviewHistoryMenuHandlers } = require('../ipc/preview-history-m
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
 const { registerRemoteHandlers } = require('../ipc/remote-handlers');
+const { createRemoteReleaseSettings } = require('../services/remote-release-settings');
 const { createCore } = require('./create-core');
 
 /**
@@ -271,7 +272,23 @@ function createApplication({
     PUSH,
   });
   // Pairing a phone as the mobile remote (#1114); its Allow comes from the native dialog.
-  registerRemoteHandlers({ ipcMain, pairing: core.remote.pairing, pushToWindow, REQ, PUSH });
+  // Next to it the workspaces open to the phone (#1195); opening one is confirmed natively too.
+  registerRemoteHandlers({
+    ipcMain,
+    pairing: core.remote.pairing,
+    releaseSettings: createRemoteReleaseSettings({
+      releases: core.remote.releases,
+      pairing: core.remote.pairing,
+      confirmations: core.confirmations,
+      normalizeRoot: (root) => core.storage.normalizeWorkspaceRoot(root),
+      getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+      listKnownWorkspaces: core.securityPageData.listKnownWorkspaces,
+      getLocale: core.getAppLocale,
+    }),
+    pushToWindow,
+    REQ,
+    PUSH,
+  });
   // With a phone paired, the channel connects now (#1192); without one nothing happens.
   void core.remote.start();
 

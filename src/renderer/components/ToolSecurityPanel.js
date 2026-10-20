@@ -15,7 +15,9 @@ import {
  * Settings › Tools › Security (#1119): the sandbox of every workspace, and
  * what applies in all of them. Decided on 2026-10-18 from the mockup of the
  * issue — layout 2: the workspaces on the left, starting with All
- * workspaces, the details of the chosen one on the right.
+ * workspaces, the details of the chosen one on the right. Below a
+ * workspace's sandbox sits its *Access from your phone* (#1195), and a
+ * folder open to the phone is listed even without a sandbox setting.
  *
  * Main computes the state (`api.getSandboxOverview`) and decides every
  * change; this panel draws it. A workspace can be checked and changed
@@ -34,6 +36,7 @@ const ICONS = Object.freeze({
   clock: `<svg width="14" height="14" ${SVG}><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>`,
   info: `<svg width="16" height="16" ${SVG}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>`,
   trash: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  phone: `<svg width="14" height="14" ${SVG}><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/></svg>`,
   missing: `<svg width="16" height="16" ${SVG}><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M9.5 11.5l5 4M14.5 11.5l-5 4"/></svg>`,
 });
 
@@ -94,6 +97,13 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
   let hostForm = null;
   /** What to focus after the next draw, by `data-focus` key. */
   let pendingFocus = null;
+  /**
+   * The workspaces open to the phone (#1195): `{ available, paired, released }`
+   * with `released` a Set of roots — or null where the window has no remote.
+   */
+  let phone = null;
+  let unsubscribePhone = null;
+  const canSwitchPhone = typeof api?.remote?.getReleases === 'function' && typeof api?.remote?.setReleased === 'function';
 
   // ── Feedback ───────────────────────────────────────────────────────────
 
@@ -455,6 +465,53 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
     return card;
   }
 
+  /**
+   * Access from your phone (#1195): whether the paired phone sees this
+   * folder's chats. A card of its own below the sandbox — it is no part of
+   * isolating a run. Opening is confirmed natively by main, closing applies
+   * at once; without real encryption it cannot be opened at all.
+   */
+  function phoneCard(root) {
+    const card = el('div', 'settings-tools-card settings-sandbox-card settings-sandbox-card--phone');
+    const titleId = uid('settings-sandbox-phone-title');
+    const title = el('h3', 'settings-sandbox-head__title', t('toolSecurity.phone'));
+    title.id = titleId;
+    card.setAttribute('aria-labelledby', titleId);
+    card.append(scopeHead(ICONS.phone, title));
+    const focusKey = `phone:${root}`;
+    const released = phone.released.has(root);
+    const row = el('div', 'settings-switch-row');
+    const inputId = uid('settings-sandbox-phone');
+    const label = el('label', 'settings-switch-row__label', t('toolSecurity.phone.toggle'));
+    label.htmlFor = inputId;
+    const input = el('input', 'ds-switch');
+    input.type = 'checkbox';
+    input.setAttribute('role', 'switch');
+    input.id = inputId;
+    input.checked = released;
+    input.dataset.focus = focusKey;
+    input.dataset.action = 'phone';
+    const hint = el('p', 'settings-sandbox-block__hint', t('toolSecurity.phone.hint'));
+    hint.id = `${inputId}-hint`;
+    const described = [hint.id];
+    const notes = [];
+    if (!phone.available) notes.push(t('toolSecurity.phone.unavailable'));
+    else if (!phone.paired) notes.push(t('toolSecurity.phone.noPhone'));
+    const noteEls = notes.map((text, index) => {
+      const note = el('p', 'settings-sandbox-block__hint', text);
+      note.id = `${inputId}-note-${index}`;
+      described.push(note.id);
+      return note;
+    });
+    input.setAttribute('aria-describedby', described.join(' '));
+    // Busy, or opening not possible: marked rather than disabled, so the
+    // focus stays and the reason can be read (CR-B14-07). Closing always works.
+    if (busy.has(focusKey) || (!phone.available && !released)) input.setAttribute('aria-disabled', 'true');
+    row.append(label, statusSlot(focusKey), input);
+    card.append(row, hint, ...noteEls);
+    return card;
+  }
+
   // ── The two kinds of detail ────────────────────────────────────────────
 
   function workspaceDetail(root) {
@@ -479,13 +536,15 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
       const foot = el('div', 'settings-sandbox-block__foot');
       foot.append(remove);
       card.append(foot);
-      return [card];
+      // A folder that is gone can still be closed to the phone, never opened.
+      return phone?.released.has(detail.root) ? [card, phoneCard(detail.root)] : [card];
     }
+    const phoneCards = phone ? [phoneCard(detail.root)] : [];
     card.append(el('p', 'settings-sandbox-sub', detail.sub));
     card.append(sandboxTile(detail));
     if (detail.noSandbox) {
       card.append(notice(t('toolSecurity.windows.title'), t('toolSecurity.windows.body')));
-      return [card];
+      return [card, ...phoneCards];
     }
     card.append(programsBlock({
       own: detail.programs,
@@ -511,7 +570,7 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
       focusKey: `reset-ws:${detail.root}`,
       statusKey: `reset-ws:${detail.root}`,
     }));
-    const out = [card];
+    const out = [card, ...phoneCards];
     if (Array.isArray(detail.sessionGrants) && detail.sessionGrants.length > 0) out.push(sessionCard(detail.sessionGrants));
     return out;
   }
@@ -609,7 +668,7 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
   }
 
   function renderList() {
-    const items = describeWorkspaceList(overview, selected);
+    const items = describeWorkspaceList(overview, selected, { released: phone?.released || new Set() });
     const top = el('ul', 'settings-sandbox-list__group');
     top.append(listButton(items[0]));
     const nodes = [top];
@@ -655,13 +714,12 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
 
   async function refresh() {
     const seq = ++requestSeq;
-    let next;
-    try {
-      next = await api.getSandboxOverview();
-    } catch {
-      // Said below, in the page's error line: the state could not be read.
-      next = null;
-    }
+    const [next, nextPhone] = await Promise.all([
+      Promise.resolve().then(() => api.getSandboxOverview()).catch(() => null /* said below, in the page's error line */),
+      canSwitchPhone
+        ? Promise.resolve().then(() => api.remote.getReleases()).catch(() => null /* without it the page shows no phone switch */)
+        : null,
+    ]);
     // A slower answer to an older request must not overwrite a newer one.
     if (seq !== requestSeq) return;
     if (!next || !Array.isArray(next.workspaces)) {
@@ -669,10 +727,13 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
       return;
     }
     overview = next;
+    phone = nextPhone && Array.isArray(nextPhone.released)
+      ? { available: nextPhone.available === true, paired: nextPhone.paired === true, released: new Set(nextPhone.released) }
+      : null;
     selected = selected === null ? defaultSelection(overview) : validSelection(overview, selected);
     // A form for a scope that is gone goes with it.
     if (hostForm && hostForm.scope !== ALL_WORKSPACES && !overview.workspaces.some((ws) => ws.root === hostForm.scope)) hostForm = null;
-    const key = JSON.stringify({ overview, selected, hostScope: hostForm?.scope || null });
+    const key = JSON.stringify({ overview, phone: nextPhone, selected, hostScope: hostForm?.scope || null });
     if (key === drawnKey && !pendingFocus) return;
     drawnKey = key;
     render();
@@ -744,6 +805,21 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
     const enabled = input.checked;
     pendingFocus = focusKey;
     await run(focusKey, () => toolPermissions.setWorkspaceSandbox(enabled, root), focusKey);
+    pendingFocus = focusKey;
+    drawnKey = '';
+    await refresh();
+  }
+
+  async function onPhoneSwitch(input) {
+    const root = scopeRoot();
+    const focusKey = input.dataset.focus;
+    if (input.getAttribute('aria-disabled') === 'true' || !root) {
+      input.checked = !input.checked;
+      return;
+    }
+    const released = input.checked;
+    pendingFocus = focusKey;
+    await run(focusKey, () => api.remote.setReleased(root, released), focusKey);
     pendingFocus = focusKey;
     drawnKey = '';
     await refresh();
@@ -984,6 +1060,7 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
     if (!input) return;
     if (input.dataset.action === 'sandbox') onSandboxSwitch(input).catch(failed);
     else if (input.dataset.action === 'new-workspaces') onNewWorkspaces(input).catch(failed);
+    else if (input.dataset.action === 'phone') onPhoneSwitch(input).catch(failed);
   });
 
   detailEl.addEventListener('submit', (event) => {
@@ -998,6 +1075,12 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
     isOpen = true;
     if (!unsubscribe && typeof toolPermissions.subscribe === 'function') {
       unsubscribe = toolPermissions.subscribe(() => {
+        if (isOpen) refresh().catch(failed);
+      });
+    }
+    // Opened or closed elsewhere — or a phone paired or removed (#1195).
+    if (!unsubscribePhone && typeof api?.remote?.onReleasesChanged === 'function') {
+      unsubscribePhone = api.remote.onReleasesChanged(() => {
         if (isOpen) refresh().catch(failed);
       });
     }
@@ -1016,6 +1099,8 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
     allowanceDialog?.close?.();
     if (typeof unsubscribe === 'function') unsubscribe();
     unsubscribe = null;
+    if (typeof unsubscribePhone === 'function') unsubscribePhone();
+    unsubscribePhone = null;
   }
 
   /**

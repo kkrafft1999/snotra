@@ -775,6 +775,31 @@ const MOTIFS = {
     },
   },
 
+  /**
+   * Access from your phone (#1195): the demo project opened to the phone on
+   * Settings › Tools › Security, the list saying so, no phone paired yet.
+   */
+  'phone-access': {
+    async setUp({ app, page }) {
+      // The system dialog that confirms the opening answers "yes".
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({ response: 0 });
+      });
+      await openSettingsPanel(app, page, 'sandbox');
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('input[data-action="phone"]'))), { what: 'the phone switch' });
+      await page.click('input[data-action="phone"]');
+      await poll(() => page.evaluate(() => document.querySelector('input[data-action="phone"]')?.checked === true
+        && !document.querySelector('.settings-instant-status.is-visible')), { what: 'opened to the phone, "Saved" gone', timeoutMs: 5000 });
+      await page.evaluate(() => {
+        document.activeElement?.blur();
+        const wrap = document.querySelector('.settings-dialog__panel-wrap');
+        wrap.scrollTop = document.querySelector('.settings-sandbox-card--phone').offsetTop - 240;
+      });
+      await pause(200);
+      return clipAround(page, SETTINGS_PANEL, 0);
+    },
+  },
+
   /** Settings › Tools › Autonomy for the demo project, shell commands on. */
   'tools-and-security': {
     prefs: { shellExecutionEnabled: true },
