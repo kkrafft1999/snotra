@@ -10,13 +10,16 @@
  *
  * - the relay's endpoints of docs/remote-protocol.md §5 under `/v1`;
  * - the Identity Toolkit's `accounts:signInWithCustomToken` under `/identitytoolkit/v1`;
- * - the Realtime Database's REST interface under `/db`, reads only, with the
- *   read rules of §5.10 and §12 and REST streaming for `meta`. Its URL carries
- *   `?ns=`, as the emulator's does, so that clients keep the database's query.
+ * - the Realtime Database's REST interface under `/db`: reads, writes and
+ *   deletes under a channel with the rules of §5.10, §12, §13 and §15 — the
+ *   same conditions as snotra-promotion's `relay/database.rules.json` — the
+ *   server's timestamp, and REST streaming of any node a side may read. Its
+ *   URL carries `?ns=`, as the emulator's does, so that clients keep the
+ *   database's query.
  *
  * Its proofs are checked with the bridge's protocol code; the reference phone
  * computes them with scripts/remote-protocol-vectors.js. It is no model of
- * Firebase beyond what part 1 of the protocol needs.
+ * Firebase beyond what the protocol needs.
  *
  * `faults` breaks one promise of the spec on purpose, so that a test can see
  * the runner notice it.
@@ -27,9 +30,17 @@ const nodeCrypto = require('node:crypto');
 const protocol = require('../../src/main/remote/pairing-protocol');
 
 const MAX_BODY_BYTES = 4096;
+/** The database takes more than the endpoints: an envelope carries up to 256 KiB (§15). */
+const MAX_DATABASE_BODY_BYTES = 512 * 1024;
 const CHALLENGE_TTL_MS = 60_000;
 const PAIRING_TTL_MS = 5 * 60_000;
 const NAMESPACE = 'stand-in';
+const HEX16 = /^[0-9a-f]{16}$/;
+const EPHEMERAL = /^[A-Za-z0-9_-]{43}$/;
+const SEALED = /^[A-Za-z0-9_-]+$/;
+/** b64u of the smallest and the largest sealed envelope: 1 byte plus tag, 256 KiB plus tag. */
+const SEALED_MIN_CHARS = 23;
+const SEALED_MAX_CHARS = 349_547;
 
 /** The faults a test can switch on. */
 const FAULTS = Object.freeze({
@@ -37,6 +48,52 @@ const FAULTS = Object.freeze({
   SECOND_CLAIM: 'second-claim',
   /** The phone may read its inbox before the channel is `paired`. */
   EARLY_INBOX: 'early-inbox',
+  /** A sender may overwrite an envelope it wrote before. */
+  OVERWRITE_ENVELOPE: 'overwrite-envelope',
+});
+
+/** @param {unknown} value */
+const isTree = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
+
+/** @param {unknown} value  the placeholder for the server's time, which the rules compare with `now` */
+const isServerTime = (value) => isTree(value) && Object.keys(/** @type {object} */ (value)).length === 1
+  && /** @type {Record<string, unknown>} */ (value)['.sv'] === 'timestamp';
+
+/**
+ * @param {unknown} value
+ * @param {string[]} required
+ * @param {Record<string, (child: unknown) => boolean>} children  every child allowed, and its check
+ */
+function shaped(value, required, children) {
+  if (!isTree(value)) return false;
+  const tree = /** @type {Record<string, unknown>} */ (value);
+  if (!required.every((key) => key in tree)) return false;
+  return Object.entries(tree).every(([key, child]) => children[key]?.(child) === true);
+}
+
+/** @param {unknown} v  a protocol version (§13) */
+const isVersion = (v) => Number.isInteger(v) && /** @type {number} */ (v) >= 1 && /** @type {number} */ (v) <= 255;
+/** @param {unknown} list  at most ten versions, as the rules' `$index` allows */
+const isVersionList = (list) => Array.isArray(list) && list.length > 0 && list.length <= 10 && list.every(isVersion);
+/** @param {unknown} e */
+const isEphemeral = (e) => typeof e === 'string' && EPHEMERAL.test(e);
+
+/** What each record of part 2 may hold — the `.validate` rules of the relay. */
+const VALID = Object.freeze({
+  /** @param {unknown} value */
+  envelope: (value) => shaped(value, ['c', 'at'], {
+    c: (c) => typeof c === 'string' && c.length >= SEALED_MIN_CHARS && c.length <= SEALED_MAX_CHARS && SEALED.test(c),
+    at: isServerTime,
+  }),
+  /** @param {unknown} value */
+  phoneHandshake: (value) => shaped(value, ['v', 'e'], { v: isVersionList, e: isEphemeral }),
+  /** @param {unknown} value */
+  desktopHandshake: (value) => shaped(value, ['v', 'e'], { v: isVersion, e: isEphemeral })
+    || shaped(value, ['v', 'error'], { v: isVersionList, error: (error) => error === 'protocol-unsupported' }),
+  /** @param {unknown} value */
+  desktopPresence: (value) => shaped(value, ['lastSeen'], { lastSeen: isServerTime }),
+  /** @param {unknown} value */
+  phonePresence: (value) => shaped(value, ['online', 'since'], { online: (online) => online === true, since: isServerTime }),
 });
 
 class HttpError extends Error {
@@ -70,23 +127,41 @@ function createRelayStandIn({
   const challenges = new Map();
   /** @type {Map<string, { channelId: string, expiresAt: number, claimed: boolean }>} */
   const pairings = new Map();
-  /** @type {Map<string, { meta: Record<string, unknown> }>} */
+  /** Each channel's tree: `meta`, the relay's, and the nodes of part 2, the clients'. */
+  /** @type {Map<string, { meta: Record<string, unknown>, [node: string]: unknown }>} */
   const channels = new Map();
   /** @type {Map<string, { ch: string, role: string }>} custom token → claims */
   const customTokens = new Map();
   /** @type {Map<string, { ch: string, role: string }>} ID token → claims */
   const idTokens = new Map();
-  /** @type {Map<string, Set<(meta: Record<string, unknown> | null) => void>>} channelId → meta listeners */
-  const listeners = new Map();
-  /** @type {Set<http.ServerResponse>} */
+  /**
+   * The open streams: who follows which node, and what it was sent last.
+   * @type {Set<{ res: http.ServerResponse, claims: { ch: string, role: string }, parts: string[], last: string }>}
+   */
   const streams = new Set();
 
   const token = () => nodeCrypto.randomBytes(24).toString('base64url');
 
-  /** @param {string} channelId */
+  /**
+   * Tells every stream of the channel what changed under its node, in the
+   * order the streams were opened. A stream whose read the rules no longer
+   * allow gets `cancel` and ends, as the database's does.
+   *
+   * @param {string} channelId
+   */
   function changed(channelId) {
-    const meta = channels.get(channelId)?.meta ?? null;
-    for (const listener of listeners.get(channelId) ?? []) listener(meta && structuredClone(meta));
+    for (const follower of streams) {
+      if (follower.parts[1] !== channelId) continue;
+      if (!mayRead(follower.claims, follower.parts)) {
+        follower.res.end('event: cancel\ndata: null\n\n');
+        streams.delete(follower);
+        continue;
+      }
+      const text = JSON.stringify(valueAt(follower.parts));
+      if (text === follower.last) continue;
+      follower.last = text;
+      follower.res.write(`event: put\ndata: ${JSON.stringify({ path: '/', data: JSON.parse(text) })}\n\n`);
+    }
   }
 
   function sweep() {
@@ -276,22 +351,66 @@ function createRelayStandIn({
 
   // ------------------------------------------------------------ the database
 
+  /** The sides' own nodes of part 2: who writes them, who reads them. */
+  const OWN_NODES = Object.freeze({
+    desktop: Object.freeze({ inbox: 'to-desktop', outbox: 'to-phone', other: 'phone' }),
+    phone: Object.freeze({ inbox: 'to-phone', outbox: 'to-desktop', other: 'desktop' }),
+  });
+
+  /** @param {string} channelId */
+  const isPaired = (channelId) => channels.get(channelId)?.meta.status === 'paired';
+
   /**
-   * The read rules of §5.10 and §12: `meta` for both sides, each side's own
-   * inbox and the other side's handshake and presence — for the phone only
-   * once the channel is `paired` — and never the channel node itself.
+   * The read rules of §5.10 and §12: `meta` for both sides; each side's own
+   * inbox and the other side's handshake and presence, once the channel is
+   * `paired`; never the channel node itself.
    *
    * @param {{ ch: string, role: string }} claims
    * @param {string[]} parts
    */
   function mayRead(claims, parts) {
     if (parts[0] !== 'channels' || parts[1] !== claims.ch || parts.length < 3) return false;
-    const node = parts.slice(2, 4).join('/');
     if (parts[2] === 'meta') return true;
-    if (claims.role === 'desktop') return ['to-desktop', 'handshake/phone', 'presence/phone'].some((n) => node.startsWith(n));
-    const status = channels.get(claims.ch)?.meta.status;
-    if (status !== 'paired' && !broken.has(FAULTS.EARLY_INBOX)) return false;
-    return ['to-phone', 'handshake/desktop', 'presence/desktop'].some((n) => node.startsWith(n));
+    const own = OWN_NODES[/** @type {'desktop'|'phone'} */ (claims.role)];
+    if (!own) return false;
+    if (!isPaired(claims.ch) && !(claims.role === 'phone' && broken.has(FAULTS.EARLY_INBOX))) return false;
+    if (parts[2] === own.inbox) return true;
+    return (parts[2] === 'handshake' || parts[2] === 'presence') && parts[3] === own.other;
+  }
+
+  /**
+   * The write rules of §12, §13 and §15, with what each record may hold. A
+   * write of `null` deletes; the rules' `.validate` does not apply to it.
+   *
+   * @param {{ ch: string, role: string }} claims
+   * @param {string[]} parts
+   * @param {unknown} value
+   */
+  function mayWrite(claims, parts, value) {
+    if (parts[0] !== 'channels' || parts[1] !== claims.ch || !isPaired(claims.ch)) return false;
+    const own = OWN_NODES[/** @type {'desktop'|'phone'} */ (claims.role)];
+    if (!own) return false;
+    const [, , node, sid, counter, ...deeper] = parts;
+    if (deeper.length) return false;
+    const deleting = value === null;
+    if ((node === 'handshake' || node === 'presence') && counter === undefined) {
+      if (sid !== claims.role) return false;
+      if (deleting) return true;
+      if (node === 'presence') return claims.role === 'desktop' ? VALID.desktopPresence(value) : VALID.phonePresence(value);
+      return claims.role === 'desktop' ? VALID.desktopHandshake(value) : VALID.phoneHandshake(value);
+    }
+    if (node === own.inbox) {
+      // The receiver deletes what it handled, or a whole ended session.
+      return deleting && sid !== undefined;
+    }
+    if (node === own.outbox && sid !== undefined && counter !== undefined) {
+      // The sender creates, once, and never overwrites or deletes.
+      if (deleting || !HEX16.test(sid) || !HEX16.test(counter)) return false;
+      const exists = valueAt(parts) !== null;
+      if (exists && !broken.has(FAULTS.OVERWRITE_ENVELOPE)) return false;
+      return VALID.envelope(value);
+    }
+    return false;
   }
 
   /** @param {string[]} parts */
@@ -299,9 +418,48 @@ function createRelayStandIn({
     /** @type {unknown} */
     let node = channels.get(parts[1]) ?? null;
     for (const part of parts.slice(2)) {
-      node = node && typeof node === 'object' ? /** @type {Record<string, unknown>} */ (node)[part] ?? null : null;
+      node = isTree(node) ? /** @type {Record<string, unknown>} */ (node)[part] ?? null : null;
     }
     return node === null ? null : structuredClone(node);
+  }
+
+  /**
+   * The server's time in place of its placeholder.
+   * @param {unknown} value
+   * @returns {unknown}
+   */
+  function resolve(value) {
+    if (isServerTime(value)) return now();
+    if (Array.isArray(value)) return value.map(resolve);
+    if (!isTree(value)) return value;
+    return Object.fromEntries(Object.entries(/** @type {object} */ (value)).map(([key, child]) => [key, resolve(child)]));
+  }
+
+  /**
+   * Sets a node under the channel; `null` deletes it, and parents left empty go with it.
+   * @param {string[]} parts
+   * @param {unknown} value
+   */
+  function setAt(parts, value) {
+    const channel = /** @type {Record<string, unknown>} */ (channels.get(parts[1]));
+    /** @type {Array<[Record<string, unknown>, string]>} */
+    const trail = [];
+    let node = channel;
+    for (const part of parts.slice(2, -1)) {
+      if (!isTree(node[part])) {
+        if (value === null) return;
+        node[part] = {};
+      }
+      trail.push([node, part]);
+      node = /** @type {Record<string, unknown>} */ (node[part]);
+    }
+    const last = /** @type {string} */ (parts.at(-1));
+    if (value === null) delete node[last];
+    else node[last] = value;
+    for (const [parent, key] of trail.reverse()) {
+      const child = /** @type {Record<string, unknown>} */ (parent[key]);
+      if (Object.keys(child).length === 0) delete parent[key];
+    }
   }
 
   /**
@@ -309,26 +467,30 @@ function createRelayStandIn({
    * @param {http.ServerResponse} res
    * @param {URL} url
    */
-  function database(req, res, url) {
+  async function database(req, res, url) {
     if (url.searchParams.get('ns') !== NAMESPACE) return send(res, 404, { error: 'Namespace not found' });
-    if (req.method !== 'GET' || !url.pathname.endsWith('.json')) return send(res, 405, { error: 'Read only' });
+    if (!url.pathname.endsWith('.json')) return send(res, 400, { error: 'Not a node' });
     const parts = url.pathname.slice('/db/'.length, -'.json'.length).split('/').filter(Boolean);
     const claims = idTokens.get(url.searchParams.get('auth') ?? '');
+
+    if (req.method === 'PUT' || req.method === 'DELETE') {
+      const value = req.method === 'DELETE' ? null : await readBody(req, { limit: MAX_DATABASE_BODY_BYTES, anyJson: true });
+      if (!claims || !channels.has(parts[1] ?? '') || !mayWrite(claims, parts, value)) return send(res, 401, { error: 'Permission denied' });
+      const stored = resolve(value);
+      setAt(parts, stored);
+      changed(parts[1]);
+      return url.searchParams.get('print') === 'silent' ? send(res, 204) : send(res, 200, stored);
+    }
+    if (req.method !== 'GET') return send(res, 405, { error: 'Not supported by the stand-in' });
     if (!claims || !mayRead(claims, parts)) return send(res, 401, { error: 'Permission denied' });
 
     if (!String(req.headers.accept).includes('text/event-stream')) return send(res, 200, valueAt(parts));
-    if (parts.length !== 3 || parts[2] !== 'meta') return send(res, 400, { error: 'The stand-in streams meta only' });
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' });
-    streams.add(res);
-    const put = (/** @type {unknown} */ data) => res.write(`event: put\ndata: ${JSON.stringify({ path: '/', data })}\n\n`);
-    put(valueAt(parts));
-    let set = listeners.get(parts[1]);
-    if (!set) listeners.set(parts[1], set = new Set());
-    set.add(put);
-    res.on('close', () => {
-      set.delete(put);
-      streams.delete(res);
-    });
+    const text = JSON.stringify(valueAt(parts));
+    const follower = { res, claims, parts, last: text };
+    streams.add(follower);
+    res.write(`event: put\ndata: ${JSON.stringify({ path: '/', data: JSON.parse(text) })}\n\n`);
+    res.on('close', () => streams.delete(follower));
   }
 
   /**
@@ -346,20 +508,21 @@ function createRelayStandIn({
 
   /**
    * @param {http.IncomingMessage} req
+   * @param {{ limit?: number, anyJson?: boolean }} [options]  `anyJson` takes any JSON value, as the database does
    * @returns {Promise<any>}
    */
-  async function readBody(req) {
+  async function readBody(req, { limit = MAX_BODY_BYTES, anyJson = false } = {}) {
     const chunks = [];
     let total = 0;
     for await (const chunk of req) {
       total += chunk.length;
-      if (total > MAX_BODY_BYTES) throw new HttpError(413, 'too-large');
+      if (total > limit) throw new HttpError(413, 'too-large');
       chunks.push(chunk);
     }
-    if (total === 0) return {};
+    if (total === 0) return anyJson ? null : {};
     try {
       const parsed = JSON.parse(Buffer.concat(chunks).toString('utf8'));
-      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw invalid();
+      if (!anyJson && (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))) throw invalid();
       return parsed;
     } catch {
       throw invalid();
@@ -370,7 +533,7 @@ function createRelayStandIn({
     const url = new URL(req.url ?? '/', 'http://stand-in');
     try {
       sweep();
-      if (url.pathname.startsWith('/db/')) return database(req, res, url);
+      if (url.pathname.startsWith('/db/')) return await database(req, res, url);
       if (url.pathname === '/identitytoolkit/v1/accounts:signInWithCustomToken' && req.method === 'POST') {
         const body = await readBody(req);
         if (url.searchParams.get('key') !== apiKey) return send(res, 400, { error: { message: 'API key not valid' } });
@@ -409,7 +572,7 @@ function createRelayStandIn({
       };
     },
     async stop() {
-      for (const res of streams) res.end();
+      for (const { res } of streams) res.end();
       server.closeAllConnections();
       await new Promise((resolve) => server.close(() => resolve(undefined)));
     },

@@ -25,9 +25,10 @@ The desktop's half of part 1 is built (#1114, in `src/main/remote/` and
 messages after `session.hello` are answered by a stand-in until the
 dispatcher exists (#1194); the relay is built in snotra-promotion
 ([snotra-promotion#165](https://github.com/kkrafft1999/snotra-promotion/issues/165));
-the app is not yet. A relay is held to part 1 by the conformance
+the app is not yet. A relay is held to parts 1 and 2 by the conformance
 runner in [`e2e/remote/`](../e2e/remote/README.md) (#1135) — here against a
-stand-in, in snotra-promotion's CI against the emulator. The
+stand-in, in snotra-promotion's CI against the emulator — and the desktop's
+channel to the reference phone by `test/remote-channel-end-to-end.test.js`. The
 reference implementation that pins the bytes is
 [`scripts/remote-protocol-vectors.js`](../scripts/remote-protocol-vectors.js);
 the bridge and the app implement the same functions on their own and prove
