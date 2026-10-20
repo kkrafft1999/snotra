@@ -6,7 +6,7 @@ const nodeChildProcess = require('child_process');
 
 const { createStorageService } = require('../services/storage-service');
 const { createRemoteActivity } = require('../services/remote-activity');
-const { createRemoteDesktopAdapter } = require('../remote/desktop-adapter');
+const { createRemoteDesktopAdapter, isRemoteSessionId } = require('../remote/desktop-adapter');
 const { createModelPriceService } = require('../services/model-price-service');
 const { createChatAttachmentStore } = require('../services/chat-attachment-store');
 const { createFsService } = require('../services/fs-service');
@@ -220,7 +220,12 @@ function createCore({
     uiPrefsPath: storage.getUIPrefsPath(),
     confirmationReceipts: { redeem: confirmationReceipts.redeem },
   });
-  const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH });
+  const approvals = createToolApprovalAdapter({
+    randomUUID: () => crypto.randomUUID(),
+    PUSH,
+    // A phone's turn shows its cards in the window until the phone can answer them (#1194).
+    answeredByWindow: isRemoteSessionId,
+  });
   const sessionGrants = createSessionGrants({ nextId: () => crypto.randomUUID() });
 
   // Modell und Freigabemodus gehoeren zum Chat (Issue #211). Gesetzt wird
@@ -610,7 +615,7 @@ function createCore({
   // geaenderte AGENTS.md wirkt damit ab der naechsten Nachricht.
   const projectInstructions = createProjectInstructionsAdapter({ fs, path, os });
 
-  const { engine: chatEngine, llm: chatLlm } = createChatApplication({
+  const { engine: chatEngine, llm: chatLlm, toolPolicy: chatToolPolicy } = createChatApplication({
     llmConfigStore,
     providerRuntime,
     providerSecrets,
@@ -625,8 +630,10 @@ function createCore({
     toolPolicyStore,
     approvals,
     sessionGrants,
-    // A run in the background keeps the mode of its own chat (#320).
-    resolveChatMode: (chatId) => chatSessionSettings.modeFor(chatId),
+    // A run off screen keeps the mode and the model of its own chat (#320),
+    // also one a phone started in a chat not opened since launch (#1194).
+    resolveChatMode: (chatId) => chatSessionSettings.runModeFor(chatId),
+    resolveChatPreset: (chatId) => chatSessionSettings.presetFor(chatId),
     resolveReasoningLevel: (chatId) => chatSessionSettings.reasoningEffortFor(chatId),
     modelPrices,
     // A run that ended off screen takes its approvals with it.
@@ -780,7 +787,9 @@ function createCore({
     getLocale: getAppLocale,
     getAppVersion,
     relay: remoteRelay,
-    // What the phone may read of the desktop (#1194): chats of the released workspaces, read only.
+    // What the phone may read of the desktop and ask of it (#1194): chats of
+    // the released workspaces, and turns in them through the conversation
+    // service, with each chat's own model, mode and level (§7.3).
     desktop: createRemoteDesktopAdapter({
       chatHistory,
       workspaceFolderStore,
@@ -789,6 +798,17 @@ function createCore({
       runningChatIds: () => chatEngine.runningChatIds(),
       listPendingApprovals: () => approvals.listPending(),
       activity: remoteActivity,
+      conversation,
+      llm: chatLlm,
+      // The mode a run of the chat would read, through the same adapter.
+      chatMode: async (chatId) => (await /** @type {NonNullable<typeof chatToolPolicy>} */ (chatToolPolicy).read({ chatId })).mode,
+      reasoningFor: (chatId) => chatSessionSettings.reasoningEffortFor(chatId),
+      describeConfiguration: async ({ chatId, workspaceRoot }) => chatConfiguration.describe({
+        workspaceRoot,
+        // The skills a chat called with "/name" only its window knows.
+        chatSkillNames: [],
+        overrides: await chatSessionSettings.configOverridesFor(chatId),
+      }),
     }),
     normalizeRoot: (root) => storage.normalizeWorkspaceRoot(root),
   });

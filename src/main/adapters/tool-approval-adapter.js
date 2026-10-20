@@ -68,6 +68,8 @@ function abortReason(signal) {
  * @param {() => string} deps.randomUUID
  * @param {{ TOOL_APPROVAL_REQUEST: string, TOOL_APPROVAL_RESOLVED: string }} deps.PUSH
  * @param {{ warn?: Function }} [deps.log]
+ * @param {(sessionId: string|number) => boolean} [deps.answeredByWindow]  a front end without cards of its
+ *   own whose requests the app window answers — a phone's turn before it can answer them (#1194)
  * @returns {import('../../application/ports/tool-approval-port').ToolApprovalPort & {
  *   subscribe: (sessionId: string|number, target: ApprovalWindow) => boolean,
  *   unsubscribe: (sessionId: string|number) => void,
@@ -80,11 +82,30 @@ function abortReason(signal) {
  *   pendingCount: () => number,
  * }}
  */
-function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
+function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredByWindow = () => false }) {
   /** @type {Map<string|number, ApprovalWindow>} sessionId → push target (nur angemeldete Fenster). */
   const subscribers = new Map();
   /** @type {Map<string, PendingApproval>} requestId → the open request */
   const pending = new Map();
+
+  /**
+   * The session whose window answers a request of `sessionId`: its own, or —
+   * for a front end without cards (#1194) — the window that subscribed
+   * last. In the desktop app the window counts as subscribed to every chat
+   * of its workspace (`docs/remote-interface.md` §7.4). The request is then
+   * kept under the window's session, so that only it can answer.
+   *
+   * @param {string|number} sessionId
+   */
+  function answeringSession(sessionId) {
+    if (subscribers.has(sessionId) || !answeredByWindow(sessionId)) return sessionId;
+    let last = sessionId;
+    for (const [id, target] of subscribers) {
+      if (typeof target.isDestroyed === 'function' && target.isDestroyed()) continue;
+      last = id;
+    }
+    return last;
+  }
 
   /**
    * @param {ApprovalWindow|undefined} target
@@ -183,7 +204,8 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
       subscribers.delete(sessionId);
       invalidateSession(sessionId, PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI);
     },
-    isAvailable(sessionId) {
+    isAvailable(requestedBy) {
+      const sessionId = answeringSession(requestedBy);
       const target = subscribers.get(sessionId);
       if (!target) return false;
       if (typeof target.isDestroyed === 'function' && target.isDestroyed()) {
@@ -192,7 +214,8 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console }) {
       }
       return true;
     },
-    requestApproval({ sessionId, request, abortSignal }) {
+    requestApproval({ sessionId: requestedBy, request, abortSignal }) {
+      const sessionId = answeringSession(requestedBy);
       const target = subscribers.get(sessionId);
       if (!this.isAvailable(sessionId)) {
         return Promise.resolve({ invalidated: true, reason: PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI, requestId: '' });

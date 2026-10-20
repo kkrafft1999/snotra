@@ -507,8 +507,8 @@ release list, **2** #981, **3** #980.
 | `chat.more` | `{ chatId, before, limit? ≤100 }` → `{ messages: DisplayMessage[], before? }` | `not-found` | L R | 1 | `chatHistory:getSession` |
 | `chat.close` | `{ chatId }` → `{}` — ends the subscription | — | L R | 1 | — |
 | `workspace.activate` | `{ workspaceId }` → `{ workspaceId }` — the path comes from the release list, never from the client | `not-found`, `busy` (a run in the current workspace works or waits, R6) | L R | 2 | `settings:activateFolder` |
-| `chat.new` | `{ workspaceId? }` → `{ chatId }` | `not-found` | L R | 2 | — (today the renderer makes chats and upserts them) |
-| `message.send` | `{ chatId, text ≤maxTextChars, clientMessageId ≤64 }` → `{ runId, messageId }` — a repeated `clientMessageId` answers again and starts nothing | `not-found`, `busy` (the chat is running), `too-large`, `unavailable` (no provider set up) | L R | 2 | `chat:send` — the text and the chat id, not the history |
+| `chat.new` | `{ workspaceId? }` → `{ chatId }` — nothing is written until the first `message.send`; without `workspaceId`, the open workspace | `not-found`, `refused` (a workspace other than the one open at the desktop) | L R | 2 | — (today the renderer makes chats and upserts them) |
+| `message.send` | `{ chatId, text ≤maxTextChars, clientMessageId ≤64 }` → `{ runId, messageId }` — a repeated `clientMessageId` answers again and starts nothing, also on a new connection; `messageId` names the question | `not-found`, `refused` (the chat's workspace is not the one open at the desktop: its tools would work there — `workspace.activate` first), `busy` (the chat is running or waits for a card), `too-large`, `unavailable` (no provider set up for the chat's model) | L R | 2 | `chat:send` — the text and the chat id, not the history |
 | `run.abort` | `{ chatId }` → `{ aborted: bool }` | `not-found` | L R | 2 | `chat:abort` |
 | `chat.configuration` | `{ chatId }` → `{ model: { label }, mode: 'smart'\|'ask-all'\|'auto', reasoning?: string, skills: [{ name, state }], tools: [{ name, on }] }` — read only | `not-found` | L R | 2 | `chat:getConfiguration`, per chat instead of "the chat on screen" |
 | `approval.list` | `{ chatId? }` → `{ requests: ApprovalRequest[] }` | `not-found` | L R | 3 | `toolApproval:listPending` |
@@ -548,8 +548,8 @@ answers this connection may give. `sessionAllowed`, `alwaysAllowed`,
 | `chat.delta` | `{ chatId, runId, text }` | 1 | `chat:delta` |
 | `chat.tool-line` | `{ chatId, runId, callIndex, phase: 'pending'\|'start'\|'done', tool, line, permission?, changes?: [{ relativePath, status, added, removed }] }` — no `args`, no `schema` | 1 | `chat:tool-line` |
 | `chat.progress` | `{ chatId, runId, type: 'phase'\|'reasoning'\|'workspace'\|'permission'\|'run-end', … }` — the fields of each type as in [`chat.js`](../src/shared/contracts/chat.js) | 1 | `chat:progress` |
-| `chat.message` | `{ chatId, message: DisplayMessage }` — a message another front end wrote | 2 | — |
-| `chat.updated` | `{ chatId, title?, cost?, configurationChanged?: true }` | 2 | `toolPermissions:changed`, `skills:changed`, in part |
+| `chat.message` | `{ chatId, message: DisplayMessage }` — a message another front end wrote: a turn's question once it is saved, to every follower but the connection that asked, with `origin` when a remote asked | 2 | — |
+| `chat.updated` | `{ chatId, title?, cost?, configurationChanged?: true }` — so far `title`, when a chat got its name | 2 | `toolPermissions:changed`, `skills:changed`, in part |
 | `approval.request` | `ApprovalRequest` | 3 | `toolApproval:request` |
 | `approval.resolved` | `{ requestId, chatId, response: string\|null, invalidated: bool, reason: string\|null, by?: { kind, client } }` | 3 | `toolApproval:resolved` |
 | `session.resync` | `{ reason }` — the gap could not be filled; open the chats again | 1 | — |
@@ -684,7 +684,17 @@ the attacker model.
    transport is not built.
 2. **Write.** `message.send`, `chat.new`, `run.abort`, `workspace.activate`,
    `chat.configuration` — after #981, which also has to answer a turn with its
-   own chat's model and mode instead of the screen's (§7.3).
+   own chat's model and mode instead of the screen's (§7.3). *Built for the
+   relay so far* (#1194, step 2a): every method but `workspace.activate`,
+   writing only in the workspace open at the desktop. A turn goes through
+   the conversation service under a session `remote:<connection>`; any run
+   off screen — a phone's, or a chat left while its turn runs — takes its
+   own chat's model entry and mode (`chat-session-settings.js`: `presetFor`,
+   `runModeFor`). A stored *Auto* counts there only after an explicit switch
+   at the desktop, as on an automatic restore (#567; decided 2026-10-20).
+   Until step 3 the window answers a remote turn's cards. Still to come: the
+   window following a turn it did not start (2b), and `workspace.activate`
+   with the desktop's notice (2c).
 3. **Decide.** The approval methods and events — after #980.
 4. **Relay.** The relay transport under the same dispatcher (phases 1–3 of
    #1081). A headless process serving the protocol needs #983 as well.

@@ -296,6 +296,22 @@ function createConversationService({ engine, history, describeError = (error) =>
   }
 
   /**
+   * Stops the turn of a chat, whichever front end started it (#1194): a
+   * phone stops a turn begun at the desktop as well as its own
+   * (`docs/remote-interface.md` §7.3). It settles as far as it had come.
+   *
+   * @param {string} chatId
+   * @returns {boolean} whether a turn was under way
+   */
+  function stopChat(chatId) {
+    const last = typeof chatId === 'string' && chatId ? lastTurn.get(chatId) : undefined;
+    if (!last || last.done) return false;
+    last.turn.stopped = true;
+    engine.abort(last.sessionId, chatId);
+    return true;
+  }
+
+  /**
    * The front end went away under its turns — a reload, a crash (#979). They
    * stop, and what was saved after their last finished step stays, marked as
    * cut off; nothing of them is written any more.
@@ -341,7 +357,7 @@ function createConversationService({ engine, history, describeError = (error) =>
     while (background.size > 0) await Promise.all([...background]);
   }
 
-  return { runTurn, stop, abandon, nameChat, settled };
+  return { runTurn, stop, stopChat, abandon, nameChat, settled };
 }
 
 module.exports = { createConversationService, titleSource };
