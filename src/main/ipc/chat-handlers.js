@@ -7,7 +7,7 @@ const { createMessage } = require('../../shared/contracts/message');
  * @param {object} deps
  * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
  * @param {Pick<ReturnType<typeof import('../../application/chat/conversation-service').createConversationService>,
- *   'runTurn' | 'stop' | 'abandon'>} deps.conversation
+ *   'runTurn' | 'stop' | 'stopChat' | 'abandon'>} deps.conversation
  *   the turn and the chat it belongs to (#981)
  * @param {Record<string, string>} deps.REQ
  * @param {Record<string, string>} deps.PUSH
@@ -83,6 +83,8 @@ function registerChatHandlers({
   ipcMain.on(REQ.CHAT_ABORT, (event, payload) => {
     const chatId = payload?.chatId == null ? undefined : sanitizeChatId(payload.chatId);
     conversation.stop(event.sender.id, chatId);
+    // The window stops a turn it follows as well — a phone's (#1194).
+    if (chatId) conversation.stopChat(chatId);
   });
 
   // The renderer names changes by the ids main gave it; it gets back the

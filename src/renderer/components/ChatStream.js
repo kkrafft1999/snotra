@@ -1192,6 +1192,128 @@ export function initChatStream({
   }
 
   /**
+   * A turn this window did not start — one a phone sent (#1194) — has saved
+   * its question. The window follows it as one of its own: the question and
+   * a streaming answer go into the chat, and the turn's events, which arrive
+   * on the same channels, find their run. Main keeps the chat (#981), so
+   * there is no reply to settle on: the run ends with its `run-end`, and the
+   * chat on screen is then drawn from what main saved.
+   */
+  function onTurnStarted(payload) {
+    const chatId = typeof payload?.chatId === 'string' && payload.chatId ? payload.chatId : null;
+    const runId = typeof payload?.runId === 'string' && payload.runId ? payload.runId : null;
+    if (!chatId || !runId || deletedChats.has(chatId)) return;
+    // A run of this window in the chat: main does not let a second one in.
+    if (isRunning(appStore.chatRuns.get(chatId))) {
+      toolLogDebug.record('turn-started ignored', { chatId, runId });
+      return;
+    }
+    const userMessage = { role: 'user', content: typeof payload.content === 'string' ? payload.content : '' };
+    const assistantMessage = {
+      role: 'assistant',
+      content: '',
+      toolTrace: [],
+      pendingToolLines: [],
+      reasoningText: '',
+      streaming: true,
+      phase: 'waiting',
+      thinkingSince: Date.now(),
+    };
+    const onScreen = chatId === appStore.currentChatId && !canAttachChat(chatId);
+    const run = {
+      chatId,
+      runId,
+      // A remote turn works in the folder open at the desktop (#1194).
+      toolRoot: appStore.rootPath,
+      assistantMessage,
+      aborted: false,
+      settled: false,
+      discarded: false,
+      followed: true,
+      chat: onScreen ? null : {
+        id: chatId,
+        workspaceRoot: null,
+        messages: [userMessage, assistantMessage],
+        title: '',
+        tokenUsage: null,
+        contextBreakdown: null,
+        cost: null,
+      },
+    };
+    if (onScreen) appStore.chatMessages.push(userMessage, assistantMessage);
+    appStore.chatRuns.set(chatId, run);
+    expectRunEnd(run);
+    run.ended.then(() => settleFollowedRun(run)).catch((error) => console.error('[chat] a followed turn did not settle:', error));
+    approvalCards?.beginRun(chatId, assistantMessage);
+    syncChatInFlight();
+    syncElapsedTicker();
+    notifyRunsChanged();
+    if (onScreen) renderChatMessages({ follow: true });
+    else fillFollowedChat(run, userMessage).catch((error) => console.error('[chat] a followed chat could not be filled in:', error));
+  }
+
+  /**
+   * A followed turn in a chat off screen carries its chat, so that opening it
+   * shows the turn running (#320): the messages before the question come
+   * from what main saved, put in front of the turn in place — the chat may be
+   * on screen by the time they arrive.
+   */
+  async function fillFollowedChat(run, userMessage) {
+    let session = null;
+    try {
+      session = (await api.getChatSession(run.chatId))?.session;
+    } catch (error) {
+      // The turn still shows; only what came before it is missing.
+      toolLogDebug.record('followed chat not read', { chatId: run.chatId, message: error?.message || String(error) });
+      return;
+    }
+    if (!session || !Array.isArray(session.messages) || appStore.chatRuns.get(run.chatId) !== run) return;
+    let question = session.messages.length - 1;
+    while (question >= 0 && session.messages[question]?.role !== 'user') question -= 1;
+    const before = question >= 0 ? session.messages.slice(0, question) : session.messages;
+    const messages = run.chat ? run.chat.messages : appStore.chatMessages;
+    if (messages.indexOf(userMessage) !== 0) return;
+    messages.splice(0, 0, ...before);
+    if (run.chat) {
+      run.chat.workspaceRoot = session.workspaceRoot || null;
+      run.chat.title = session.title || '';
+      run.chat.tokenUsage = session.tokenUsage ?? null;
+      run.chat.cost = session.cost ?? null;
+    } else if (isOnScreen(run)) {
+      renderChatMessages({ follow: true });
+    }
+  }
+
+  /** A followed turn ended: its run goes, and the chat on screen shows what main saved. */
+  async function settleFollowedRun(run) {
+    run.settled = true;
+    const last = run.assistantMessage;
+    last.streaming = false;
+    last.phase = 'idle';
+    delete last.pendingToolLines;
+    delete last.thinkingSince;
+    delete last.toolRunning;
+    delete last.runningCallIndex;
+    delete last.permissionNote;
+    if (appStore.chatRuns.get(run.chatId) !== run) return;
+    const onScreen = isOnScreen(run);
+    appStore.chatRuns.delete(run.chatId);
+    syncChatInFlight();
+    syncElapsedTicker();
+    approvalCards?.retainChats?.(liveChatIds());
+    notifyRunsChanged();
+    // Off screen, the chat opens from main's copy next time.
+    if (!onScreen || pageUnloading) return;
+    const session = (await api.getChatSession(run.chatId))?.session;
+    // Switched away meanwhile, or a new turn began: that one shows.
+    if (!session || !Array.isArray(session.messages) || appStore.currentChatId !== run.chatId || appStore.chatRuns.has(run.chatId)) return;
+    appStore.chatMessages = session.messages;
+    setChatTokenUsage(session.tokenUsage, { cost: session.cost });
+    renderChatMessages({ follow: true });
+    if (session.title) showChatName(run.chatId, session.title);
+  }
+
+  /**
    * The result of a run comes back as the reply to its invoke, its events as
    * pushes — and the reply can overtake them (#721). Settling on the reply
    * alone turned every event still on its way into a late one: dropped as
@@ -1493,6 +1615,9 @@ export function initChatStream({
   }
   if (typeof api.onChatProgress === 'function') {
     api.onChatProgress((p) => toolLogDebug.guard('chat:progress', () => onChatProgress(p), p?.type));
+  }
+  if (typeof api.onChatTurnStarted === 'function') {
+    api.onChatTurnStarted((payload) => toolLogDebug.guard('chat:turn-started', () => onTurnStarted(payload)));
   }
 
   function abortChatRequest() {

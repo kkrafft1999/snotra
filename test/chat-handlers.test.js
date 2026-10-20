@@ -910,3 +910,30 @@ test('a window is watched once, however many turns it sends (#979)', async () =>
   assert.equal(sender.listenerCount('render-process-gone'), 1);
   assert.equal(sender.listenerCount('destroyed'), 1);
 });
+
+test('CHAT_ABORT with a chat also stops a turn the window only follows, a phone\'s (#1194)', () => {
+  const calls = [];
+  const ipcMain = makeIpcMain();
+  registerChatHandlers({
+    ipcMain,
+    conversation: {
+      runTurn: async () => ({}),
+      stop: (sessionId, chatId) => calls.push(['stop', sessionId, chatId]),
+      stopChat: (chatId) => { calls.push(['stopChat', chatId]); return true; },
+      abandon: () => {},
+    },
+    REQ,
+    PUSH,
+  });
+  const abort = ipcMain.onHandlers.get(REQ.CHAT_ABORT);
+  abort({ sender: { id: 7 } }, { chatId: 'chat-phone' });
+  abort({ sender: { id: 7 } }, {});
+  abort({ sender: { id: 7 } }, { chatId: '   ' });
+  assert.deepEqual(calls, [
+    ['stop', 7, 'chat-phone'],
+    ['stopChat', 'chat-phone'],
+    // Without a chat it stays the window's own runs; an unusable id names none (#532).
+    ['stop', 7, undefined],
+    ['stop', 7, null],
+  ]);
+});

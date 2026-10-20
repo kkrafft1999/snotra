@@ -75,7 +75,7 @@ test('the activity the handlers publish reaches a subscriber, and a broken one s
 
 const { remoteSessionId, isRemoteSessionId } = require('../src/main/remote/desktop-adapter');
 
-function writer({ target = { providerId: 'p', model: 'gpt-x' }, invalid = null, turn } = {}) {
+function writer({ target = { providerId: 'p', model: 'gpt-x' }, invalid = null, turn, windowSeen = [] } = {}) {
   const activity = createRemoteActivity({ log: { warn: () => {} } });
   const runs = [];
   const stops = [];
@@ -108,9 +108,10 @@ function writer({ target = { providerId: 'p', model: 'gpt-x' }, invalid = null, 
       tools: [{ name: 'read_file', on: true, schema: { a: 1 } }, { name: 'shell_execute', on: false }],
       root: workspaceRoot,
     }),
+    followInWindow: (event) => windowSeen.push(event),
     log: { warn: () => {} },
   });
-  return { adapter, runs, stops, heard };
+  return { adapter, runs, stops, heard, windowSeen };
 }
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -170,4 +171,59 @@ test('remote sessions are told apart from every window', () => {
   assert.equal(isRemoteSessionId('remote:conn-9'), true);
   assert.equal(isRemoteSessionId(3), false);
   assert.equal(isRemoteSessionId('conn-9'), false);
+});
+
+test('the window follows a remote turn from its saved question on, and hears its end (step 2b)', async () => {
+  const { adapter, windowSeen } = writer({
+    turn: ({ onEvent }) => {
+      // Before the question is saved there is nothing in the chat to follow.
+      onEvent({ type: 'progress', payload: { type: 'phase', phase: 'waiting' } });
+      onEvent({ type: 'progress', payload: { type: 'chat-saved', ok: false, problem: 'failed' } });
+      onEvent({ type: 'progress', payload: { type: 'chat-saved', ok: true, problem: null } });
+      onEvent({ type: 'delta', payload: { text: 'Hi' } });
+      onEvent({ type: 'progress', payload: { type: 'chat-saved', ok: true, problem: null } });
+      return {};
+    },
+  });
+  await adapter.startTurn({ connectionId: 'conn-1', chatId: 'c1', text: 'Hello', runId: 'run-1' });
+  await settle();
+  assert.deepEqual(windowSeen.map((e) => [e.type, e.payload.type || e.payload.text || e.payload.content]), [
+    ['turn-started', 'Hello'],
+    ['progress', 'chat-saved'],
+    ['delta', 'Hi'],
+    ['progress', 'chat-saved'],
+    ['progress', 'run-end'],
+  ]);
+  for (const event of windowSeen) assert.equal(event.chatId, 'c1') ;
+});
+
+test('a window that cannot follow does not hold up the turn', async () => {
+  const activity = createRemoteActivity({ log: { warn: () => {} } });
+  const warnings = [];
+  const heard = [];
+  activity.subscribe((event) => heard.push(event.type));
+  const adapter = createRemoteDesktopAdapter({
+    chatHistory: { listForRoots: async () => [], loadForDisplay: async () => null },
+    workspaceFolderStore: { getValidatedFolderHistory: async () => [] },
+    getActiveWorkspaceRoot: () => A,
+    normalizeRoot,
+    runningChatIds: () => [],
+    listPendingApprovals: () => [],
+    activity,
+    conversation: {
+      runTurn: async ({ onEvent }) => {
+        onEvent({ type: 'progress', payload: { type: 'chat-saved', ok: true } });
+        onEvent({ type: 'delta', payload: { text: 'on' } });
+        return {};
+      },
+      stopChat: () => false,
+    },
+    llm: { resolveChatTarget: async () => ({ model: 'm' }), validateTarget: async () => null },
+    followInWindow: () => { throw new Error('window gone'); },
+    log: { warn: (line) => warnings.push(String(line)) },
+  });
+  await adapter.startTurn({ connectionId: 'c', chatId: 'c1', text: 'x', runId: 'r' });
+  await settle();
+  assert.deepEqual(heard, ['progress', 'delta', 'progress'], 'the remote still hears every event');
+  assert.ok(warnings.length > 0 && warnings.every((w) => w === '[remote] the window could not follow a remote turn (Error)'));
 });

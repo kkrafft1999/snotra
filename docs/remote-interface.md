@@ -570,6 +570,7 @@ listed together where they share their class.
 | --- | --- | --- |
 | `chatHistory:get`, `chatHistory:getSession` | mapped: `chats.list`, `chat.open`, `chat.more` | Read only; display DTOs instead of stored rows |
 | `chat:delta`, `chat:tool-line`, `chat:progress` (push) | mapped: `chat.delta`, `chat.tool-line`, `chat.progress` | Published by chat to subscribers, without raw tool arguments |
+| `chat:turn-started` (push) | desktop | The window following a turn another front end started (#1194, step 2b); the remote side hears of it as `chat.message` |
 | `settings:getFolderHistory`, `settings:getLastFolder` | mapped: `workspaces.list` | Names and ids, never paths |
 | `update:getVersion` | mapped: `session.hello` | — |
 | `settings:activateFolder` | mapped in step 2: `workspace.activate` | By id, and refused during a run (R6) |
@@ -693,9 +694,12 @@ the attacker model.
    own chat's model entry and mode (`chat-session-settings.js`: `presetFor`,
    `runModeFor`). A stored *Auto* counts there only after an explicit switch
    at the desktop, as on an automatic restore (#567; decided 2026-10-20).
-   Until step 3 the window answers a remote turn's cards. Still to come: the
-   window following a turn it did not start (2b), and `workspace.activate`
-   with the desktop's notice (2c).
+   Until step 3 the window answers a remote turn's cards. The window follows
+   a remote turn as one of its own (step 2b): `main/remote/window-follow.js`
+   sends `chat:turn-started` once the question is saved, then the turn's
+   events on the window's own channels; the window settles it at `run-end`
+   from what main saved, and its stop button stops it. Still to come:
+   `workspace.activate` with the desktop's notice (2c).
 3. **Decide.** The approval methods and events — after #980.
 4. **Relay.** The relay transport under the same dispatcher (phases 1–3 of
    #1081). A headless process serving the protocol needs #983 as well.

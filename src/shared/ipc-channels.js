@@ -295,6 +295,12 @@ const PUSH_CHANNELS = Object.freeze({
   CHAT_DELTA: 'chat:delta',
   CHAT_TOOL_LINE: 'chat:tool-line',
   CHAT_PROGRESS: 'chat:progress',
+  /**
+   * A turn the window did not start — a phone's (#1194) — has saved its
+   * question: `{ chatId, runId, content }`. Its events follow on the three
+   * channels above, under that `runId`, up to its `run-end`.
+   */
+  CHAT_TURN_STARTED: 'chat:turn-started',
   /** The transcript of a recording so far (#859): `{ id, turns }` or `{ id, error }`. */
   VOICE_TRANSCRIPT: 'voice:transcript',
   /** A notice for the window (#1001): a normalized notice, see contracts/notices.js. */

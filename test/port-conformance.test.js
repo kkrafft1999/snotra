@@ -44,6 +44,8 @@ const NOT_A_PORT = new Set([
   'createMcpSecretsPort',
   'createGuardedLookup',
   'createUpdateCheck',
+  // The window's half of a remote turn (#1194): a push mapping the desktop adapter is handed.
+  'createWindowFollower',
 ]);
 
 function read(rel) {

@@ -356,7 +356,9 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   `main/remote/desktop-adapter.js`, fed by `main/services/remote-activity.js`,
   which `ipc/chat-handlers.js`, the remote turns and the workspace switch
   publish to. A remote session has no cards of its own yet: the tool approval
-  adapter offers its requests to the window (`answeredByWindow`)
+  adapter offers its requests to the window (`answeredByWindow`), and the
+  window follows its turns through `main/remote/window-follow.js`
+  (`chat:turn-started`, then the turn's events)
 - `secret-store-port` — the one root of every secret kept at rest (#983):
   provider keys and the other own secrets, the chat history, the key that signs
   the tool policy, the remote's keys. `services/storage-service.js`,
