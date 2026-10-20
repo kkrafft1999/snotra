@@ -2,15 +2,19 @@
 
 /**
  * The reference phone of the mobile remote (#1135, phase 3 of #1081): the
- * phone's half of docs/remote-protocol.md part 1 over the relay's real
- * interface — HTTP to the relay's endpoints, the Identity Toolkit for an ID
- * token, the Realtime Database's REST interface for what the phone may read.
+ * phone's half of docs/remote-protocol.md over the relay's real interface —
+ * HTTP to the relay's endpoints, the Identity Toolkit for an ID token, the
+ * Realtime Database's REST interface for what the phone reads and writes.
+ * Part 1 pairs; part 2 connects (§12), shakes hands (§13, §14) and exchanges
+ * envelopes (§15, §17).
  *
- * It computes what it sends with the reference implementation in
- * scripts/remote-protocol-vectors.js, not with the bridge's code in
- * src/main/remote/: what the phone sends and what the desktop checks come from
- * two implementations, as they will with the iPhone app. It needs nothing but
- * this repository and Node 24 — `node:crypto` and `fetch`.
+ * It computes what it sends with the reference implementations in
+ * scripts/remote-protocol-vectors.js and scripts/remote-protocol-channel-vectors.js,
+ * not with the bridge's code in src/main/remote/: what the phone sends and
+ * what the desktop checks come from two implementations, as they will with
+ * the iPhone app. It needs nothing but this repository and Node 24 —
+ * `node:crypto` and `fetch`. The iPhone app follows its nodes through the
+ * Firebase SDK; this phone streams them by REST, as the desktop does.
  *
  * Every call answers or throws a RelayAnswer with the HTTP status and the
  * relay's `reason`. Tokens stay in this object: no error, no message and no
@@ -19,8 +23,16 @@
 
 const nodeCrypto = require('node:crypto');
 const ref = require('../../scripts/remote-protocol-vectors');
+const channelRef = require('../../scripts/remote-protocol-channel-vectors');
+const { readEventStream } = require('../../src/main/remote/event-stream');
 
 const REQUEST_TIMEOUT_MS = 15_000;
+/** How long the phone waits for something to show in one of its streams. */
+const WAIT_MS = 10_000;
+/** What the rules take as the server's time (§12, §15). */
+const SERVER_TIME = Object.freeze({ '.sv': 'timestamp' });
+/** The nodes the phone follows once paired (§12), `meta` first. */
+const PHONE_NODES = Object.freeze(['meta', 'to-phone', 'handshake/desktop', 'presence/desktop']);
 
 const b64u = (/** @type {Uint8Array} */ bytes) => Buffer.from(bytes).toString('base64url');
 const fromB64u = (/** @type {string} */ text) => Buffer.from(text, 'base64url');
@@ -116,11 +128,50 @@ function createKeys() {
     return Buffer.concat([Buffer.from([4]), fromB64u(String(jwk.x)), fromB64u(String(jwk.y))]);
   };
   const points = { sign: point(pairs.sign.publicKey), agree: point(pairs.agree.publicKey) };
+  const agreeScalar = fromB64u(String(pairs.agree.privateKey.export({ format: 'jwk' }).d));
   return {
     points,
     bundle: { sign: b64u(points.sign), agree: b64u(points.agree) },
     sign: (/** @type {Uint8Array} */ message) => nodeCrypto.sign('sha256', message, { key: pairs.sign.privateKey, dsaEncoding: 'ieee-p1363' }),
+    /** `ss` of §14 with the other side's agree point, base64url as the bridge's identity port takes it. */
+    agree: (/** @type {string} */ otherAgreePoint) => channelRef.staticShared(agreeScalar, fromB64u(otherAgreePoint)),
   };
+}
+
+/** A counter or a session id as it names an envelope: 16 lower-case hex digits (§15). */
+const hex16 = (/** @type {number} */ counter) => counter.toString(16).padStart(16, '0');
+
+/** @param {unknown} value */
+const isTree = (value) => !!value && typeof value === 'object' && !Array.isArray(value);
+
+/**
+ * A `put` (replace) or `patch` (merge the children) of the database's stream,
+ * applied at its path; an empty object becomes null, as in the database.
+ *
+ * @param {unknown} tree
+ * @param {string} path
+ * @param {unknown} data
+ * @param {boolean} merge
+ * @returns {unknown}
+ */
+function applyAt(tree, path, data, merge) {
+  const [head, ...rest] = String(path).split('/').filter(Boolean);
+  /** @type {Record<string, unknown>} */
+  let next;
+  if (head === undefined) {
+    if (!merge || !isTree(data)) return data;
+    next = isTree(tree) ? { ...tree } : {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value === null) delete next[key];
+      else next[key] = value;
+    }
+  } else {
+    next = isTree(tree) ? { ...tree } : {};
+    const child = applyAt(next[head], rest.join('/'), data, merge);
+    if (child === null || child === undefined) delete next[head];
+    else next[head] = child;
+  }
+  return Object.keys(next).length ? next : null;
 }
 
 /**
@@ -133,7 +184,7 @@ function createKeys() {
  */
 
 /**
- * @param {RelayConfig & { fetchImpl?: typeof fetch, timeoutMs?: number }} config
+ * @param {RelayConfig & { fetchImpl?: typeof fetch, timeoutMs?: number, waitMs?: number }} config
  */
 function createReferencePhone({
   relayUrl,
@@ -143,6 +194,7 @@ function createReferencePhone({
   appCheckToken,
   fetchImpl = globalThis.fetch,
   timeoutMs = REQUEST_TIMEOUT_MS,
+  waitMs = WAIT_MS,
 }) {
   const keys = createKeys();
   /** @type {string|null} */
@@ -150,6 +202,16 @@ function createReferencePhone({
   /** What the phone learned while pairing: the code, the channel, the desktop's keys. */
   /** @type {{ code: string, pairingId: string, channelId: string, desktopKeys: { sign: string, agree: string } } | null} */
   let pairing = null;
+  /** The streams of part 2, by node; empty until `connect()`. */
+  /** @type {Map<string, ReturnType<typeof followNode>>} */
+  const streams = new Map();
+  /** A handshake 1 written and not answered yet: its ephemeral key, its versions, the answer it found before. */
+  /** @type {{ ephemeral: Buffer, publicKey: Buffer, offered: number[], before: string } | null} */
+  let offer = null;
+  /** The session the last handshake made (§14), or null. */
+  /** @type {{ toDesktop: Buffer, toPhone: Buffer, sid: Buffer, next: number, out: number } | null} */
+  let session = null;
+  let requests = 0;
 
   /**
    * A call to the relay that has to answer `expect`; anything else throws.
@@ -196,6 +258,132 @@ function createReferencePhone({
   function requirePairing() {
     if (!pairing) throw new Error('the phone has not looked a pairing up');
     return pairing;
+  }
+
+  /**
+   * How a node of the channel is named in what fails: ids become placeholders.
+   * @param {string} relative
+   */
+  const nodeName = (relative) => `/channels/{channelId}/${relative.replace(/[0-9a-f]{16}/g, (_, at) => (at === relative.indexOf('/') + 1 ? '{sid}' : '{counter}'))}`;
+
+  /**
+   * One node under the channel, streamed by REST (`Accept: text/event-stream`)
+   * with the phone's ID token, kept as a copy that `until` waits on.
+   *
+   * @param {string} relative
+   */
+  function followNode(relative) {
+    const { channelId } = requirePairing();
+    if (!idToken) throw new Error('the phone holds no token');
+    const what = `the phone's stream of ${nodeName(relative)}`;
+    const controller = new AbortController();
+    /** @type {unknown} */
+    let tree = null;
+    let live = false;
+    /** @type {Error|null} */
+    let failure = null;
+    /** @type {Set<() => void>} */
+    const waiters = new Set();
+    const wake = () => { for (const waiter of waiters) waiter(); };
+    (async () => {
+      const response = await fetchImpl(databaseNodeUrl(databaseUrl, `channels/${channelId}/${relative}`, idToken), {
+        headers: { Accept: 'text/event-stream' }, redirect: 'error', signal: controller.signal,
+      });
+      if (!response.ok || !response.body) {
+        let body;
+        try { body = JSON.parse(await response.text()); } catch { body = null; }
+        throw new RelayAnswer(what, response.status, reasonOf(body));
+      }
+      await readEventStream(response.body, ({ type, data }) => {
+        if (type === 'put' || type === 'patch') {
+          const change = JSON.parse(data);
+          tree = applyAt(tree, change.path, change.data, type === 'patch');
+          live = true;
+        } else if (type === 'cancel' || type === 'auth_revoked') {
+          failure = new RelayAnswer(what, 200, type);
+        }
+        wake();
+      }, { maxEventChars: 1024 * 1024 });
+      if (!controller.signal.aborted) failure ??= new RelayAnswer(what, 200, 'the stream ended');
+      wake();
+    })().catch((error) => {
+      if (controller.signal.aborted) return;
+      failure = error instanceof RelayAnswer ? error : new RelayAnswer(what, null, 'no connection');
+      wake();
+    });
+    return {
+      get value() { return tree; },
+      /**
+       * The node's value once `predicate` holds for it.
+       * @param {(value: any) => boolean} predicate
+       * @param {string} expected  what the wait is for, for the message
+       */
+      until(predicate, expected) {
+        return new Promise((resolve, reject) => {
+          const done = () => {
+            clearTimeout(timer);
+            waiters.delete(check);
+          };
+          const check = () => {
+            if (live && predicate(tree)) {
+              done();
+              resolve(tree);
+            } else if (failure) {
+              done();
+              reject(failure);
+            }
+          };
+          const timer = setTimeout(() => {
+            done();
+            reject(new RelayAnswer(what, 200, `${expected} did not show within ${waitMs} ms`));
+          }, waitMs);
+          waiters.add(check);
+          check();
+        });
+      },
+      close: () => controller.abort(),
+    };
+  }
+
+  /** @param {string} relative */
+  function stream(relative) {
+    const found = streams.get(relative);
+    if (!found) throw new Error('the phone has not connected');
+    return found;
+  }
+
+  /**
+   * One write under the channel, silent (`print=silent`) as the desktop's are:
+   * `{ status }`, whatever the database answered. `null` deletes.
+   *
+   * @param {string} relative
+   * @param {unknown} value
+   */
+  async function writeNode(relative, value) {
+    const { channelId } = requirePairing();
+    if (!idToken) throw new Error('the phone holds no token');
+    const url = new URL(databaseNodeUrl(databaseUrl, `channels/${channelId}/${relative}`, idToken));
+    url.searchParams.set('print', 'silent');
+    const method = value === null ? 'DELETE' : 'PUT';
+    const answer = await exchange(fetchImpl, `${method} ${nodeName(relative)}.json`, url.href, {
+      method, body: value === null ? undefined : value, timeoutMs,
+    });
+    return { status: answer.status, reason: reasonOf(answer.body) };
+  }
+
+  /**
+   * The same write, which has to succeed.
+   * @param {string} relative
+   * @param {unknown} value
+   */
+  async function put(relative, value) {
+    const { status, reason } = await writeNode(relative, value);
+    if (status !== 200 && status !== 204) throw new RelayAnswer(`${value === null ? 'DELETE' : 'PUT'} ${nodeName(relative)}.json`, status, reason);
+  }
+
+  function requireSession() {
+    if (!session) throw new Error('the phone has no session');
+    return session;
   }
 
   const phone = {
@@ -327,8 +515,150 @@ function createReferencePhone({
      * @param {{ body?: unknown, rawBody?: string, appCheck?: boolean, expect?: number }} [options]
      */
     call: (method, route, options) => relay(method, route, options),
+
+    // ---------------------------------------------------------------- part 2
+
+    /**
+     * A write under the channel that may be refused — for the rules: `{ status, reason }`.
+     * `null` deletes.
+     */
+    write: writeNode,
+
+    /**
+     * §12 steps 1 and 2: a fresh token, then the four nodes the phone follows.
+     * Resolves once each stream has delivered its first value.
+     */
+    async connect() {
+      await phone.refreshToken();
+      phone.closeStreams();
+      for (const node of PHONE_NODES) streams.set(node, followNode(node));
+      await Promise.all(PHONE_NODES.map((node) => stream(node).until(() => true, 'a first value')));
+    },
+
+    /** The phone's copy of a node it follows. */
+    stream,
+
+    /** Stops following; the session's keys stay. */
+    closeStreams() {
+      for (const follower of streams.values()) follower.close();
+      streams.clear();
+    },
+
+    /** §12.3: the phone's presence record, stamped by the server — or gone, as `onDisconnect` would leave it. */
+    setPresence: () => put('presence/phone', { online: true, since: SERVER_TIME }),
+    clearPresence: () => put('presence/phone', null),
+
+    /**
+     * Handshake 1 (§13): a fresh X25519 key and the versions on offer.
+     * @param {{ offered?: number[], ephemeral?: Buffer }} [options]  `ephemeral` the raw private key, fixed in a test
+     */
+    async offer({ offered = [1], ephemeral = nodeCrypto.randomBytes(32) } = {}) {
+      const publicKey = channelRef.x25519Public(ephemeral);
+      // A desktop that answers the same twice writes nothing new; what counts
+      // is an answer that differs from the one there before.
+      offer = { ephemeral, publicKey, offered: [...offered], before: JSON.stringify(stream('handshake/desktop').value) };
+      session = null;
+      await put('handshake/phone', { v: offered, e: b64u(publicKey) });
+      return { e: b64u(publicKey) };
+    },
+
+    /**
+     * Handshake 2 (§13) and the session keys (§14): `{ v, sid }` for a
+     * session, `{ error, v }` for a version nobody shares.
+     */
+    async answer() {
+      if (!offer) throw new Error('the phone has offered no handshake');
+      const { ephemeral, publicKey, offered, before } = offer;
+      const record = await stream('handshake/desktop').until(
+        (value) => value !== null && JSON.stringify(value) !== before,
+        'the desktop\'s answer to handshake 1',
+      );
+      offer = null;
+      if (record.error !== undefined) {
+        if (record.error !== 'protocol-unsupported' || !Array.isArray(record.v)) {
+          throw new RelayAnswer('handshake 2', 200, `not an answer: ${JSON.stringify(record)}`);
+        }
+        return { error: record.error, v: record.v };
+      }
+      const desktopEphemeral = typeof record.e === 'string' ? fromB64u(record.e) : Buffer.alloc(0);
+      if (!offered.includes(record.v) || desktopEphemeral.length !== 32) {
+        throw new RelayAnswer('handshake 2', 200, `not an answer to ${JSON.stringify(offered)}: ${JSON.stringify(record)}`);
+      }
+      const { channelId, desktopKeys } = requirePairing();
+      const desktopPoints = { sign: fromB64u(desktopKeys.sign), agree: fromB64u(desktopKeys.agree) };
+      const ss = keys.agree(desktopKeys.agree);
+      const ee = channelRef.x25519Shared(ephemeral, desktopEphemeral);
+      const th = channelRef.transcriptHash({
+        channelId: fromB64u(channelId),
+        desktopKeys: desktopPoints,
+        phoneKeys: keys.points,
+        offered,
+        phoneEphemeral: publicKey,
+        chosen: record.v,
+        desktopEphemeral,
+      });
+      const derived = channelRef.sessionKeys(ss, ee, th);
+      session = { toDesktop: derived.toDesktop, toPhone: derived.toPhone, sid: Buffer.from(derived.sid), next: 0, out: 0 };
+      return { v: record.v, sid: session.sid.toString('hex') };
+    },
+
+    /** The session's id, 16 hex digits — or null. */
+    sid: () => (session ? session.sid.toString('hex') : null),
+
+    /**
+     * One envelope to the desktop (§15): the next counter, sealed with
+     * `k_to-desktop`. `tamper` flips a bit of the tag.
+     *
+     * @param {unknown} message  JSON-RPC, or a string sent as it is
+     * @param {{ tamper?: boolean }} [options]
+     */
+    async send(message, { tamper = false } = {}) {
+      const s = requireSession();
+      const counter = s.out;
+      s.out += 1;
+      const plaintext = typeof message === 'string' ? message : JSON.stringify(message);
+      const sealed = channelRef.seal(s.toDesktop, s.sid, channelRef.DIRECTION.toDesktop, counter, plaintext);
+      if (tamper) sealed[sealed.length - 1] ^= 1;
+      const path = `to-desktop/${s.sid.toString('hex')}/${hex16(counter)}`;
+      await put(path, { c: b64u(sealed), at: SERVER_TIME });
+      return { counter, path, record: { c: b64u(sealed), at: SERVER_TIME } };
+    },
+
+    /**
+     * The desktop's next envelope (§15, §16), opened with `k_to-phone` and
+     * deleted once read; the message as JSON.
+     */
+    async receive() {
+      const s = requireSession();
+      const sid = s.sid.toString('hex');
+      const key = hex16(s.next);
+      const inbox = await stream('to-phone').until((tree) => typeof tree?.[sid]?.[key]?.c === 'string', `envelope ${s.next} of the session`);
+      const plaintext = channelRef.open(s.toPhone, s.sid, channelRef.DIRECTION.toPhone, s.next, fromB64u(inbox[sid][key].c));
+      if (plaintext === null) throw new RelayAnswer(`envelope ${s.next} from the desktop`, 200, 'it does not open (§15)');
+      s.next += 1;
+      await put(`to-phone/${sid}/${key}`, null);
+      try {
+        return JSON.parse(plaintext);
+      } catch {
+        throw new RelayAnswer(`envelope ${s.next - 1} from the desktop`, 200, 'not JSON (§17)');
+      }
+    },
+
+    /**
+     * A JSON-RPC request and its answer (§17).
+     * @param {string} method
+     * @param {Record<string, unknown>} [params]
+     */
+    async request(method, params = {}) {
+      requests += 1;
+      const id = `ref-${requests}`;
+      await phone.send({ jsonrpc: '2.0', id, method, params });
+      const reply = await phone.receive();
+      if (reply?.jsonrpc !== '2.0' || reply.id !== id) throw new RelayAnswer(`the answer to ${method}`, 200, `another message: ${JSON.stringify(reply)}`);
+      return reply;
+    },
   };
   return phone;
 }
 
-module.exports = { createReferencePhone, createKeys, databaseNodeUrl, RelayAnswer };
+module.exports = { createReferencePhone, createKeys, databaseNodeUrl, hex16, RelayAnswer, SERVER_TIME };

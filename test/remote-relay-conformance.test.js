@@ -55,6 +55,16 @@ test('a relay that keeps the spec passes every step, and nothing is left streami
     'disconnect: the desktop\'s stream sees meta vanish (§5.8)',
     'rules: the same challenge is refused the second time (§5.2)',
     'rules: a body over 4 KiB is refused (§5.1)',
+    'channel: before paired the phone cannot write its handshake (§13)',
+    'channel: the phone sees the desktop\'s presence, stamped by the server (§12)',
+    'channel: the phone sees protocol-unsupported with the desktop\'s versions (§13)',
+    'channel: both sides derive the same session (§14)',
+    'channel: the phone\'s inbox carries the answer, and it opens (§15, §17)',
+    'channel: an envelope is never overwritten (§15)',
+    'channel: an envelope without the server\'s time is refused (§15)',
+    'channel again: the new session has an id of its own (§14)',
+    'channel: the desktop sees the phone\'s presence gone (§12)',
+    'channel: the desktop\'s stream sees meta vanish (§5.8)',
   ]) {
     assert.ok(passed.includes(step), `missing step: ${step}`);
   }
@@ -87,6 +97,15 @@ test('a relay that opens the phone\'s inbox before paired fails on that step', a
   });
 });
 
+test('a relay that lets a sender overwrite an envelope fails on that step', async (t) => {
+  const { config } = await standIn(t, [FAULTS.OVERWRITE_ENVELOPE]);
+  const { runConformance } = await runner();
+  await assert.rejects(runConformance(config), {
+    step: 'channel: an envelope is never overwritten (§15)',
+    message: /expected the database to refuse .*got HTTP 204/,
+  });
+});
+
 test('a relay nobody answers on fails on the first step, without a stack', async () => {
   const { runConformance } = await runner();
   await assert.rejects(runConformance({
@@ -114,7 +133,7 @@ test('the command line takes flags or the environment, prints each step and exit
   assert.equal(stderr, '');
   assert.equal(code, 0);
   assert.match(stdout, /^ok {4}pair: the desktop opens a pairing/m);
-  assert.match(stdout, /conforms to docs\/remote-protocol\.md part 1: \d+ steps/);
+  assert.match(stdout, /conforms to docs\/remote-protocol\.md parts 1 and 2: \d+ steps/);
   // Tokens never reach the output, not even inside a URL.
   assert.doesNotMatch(stdout, /auth=|Bearer|idToken/);
 });

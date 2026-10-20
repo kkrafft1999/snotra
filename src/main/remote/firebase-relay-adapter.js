@@ -501,7 +501,9 @@ function createFirebaseRelayAdapter({
    * Part 2 (§12): the desktop's token for a paired channel, the four nodes it
    * follows — `meta`, `to-desktop`, `handshake/phone`, `presence/phone` —
    * and its writes. The token is renewed before it runs out and on
-   * `auth_revoked`; it never leaves this closure.
+   * `auth_revoked`; it never leaves this closure. A `meta` that vanishes ends
+   * the link — noticed on its own stream, or by reading it once when another
+   * node is taken away, whichever comes first.
    *
    * @type {RemoteRelayPort['openChannel']}
    */
@@ -517,6 +519,17 @@ function createFirebaseRelayAdapter({
     let renewTimer = null;
     /** The nodes whose stream has delivered since it last (re)connected. */
     const liveNodes = new Set();
+    let metaVanished = false;
+
+    /**
+     * `meta` to the core; that it vanished is said once, whichever stream noticed.
+     * @param {import('../../application/ports/remote-relay-port').RemoteChannelRecord | null} record
+     */
+    function reportMeta(record) {
+      if (metaVanished) return;
+      if (record === null) metaVanished = true;
+      handlers.onMeta(record);
+    }
 
     function close() {
       if (closed) return;
@@ -563,6 +576,22 @@ function createFirebaseRelayAdapter({
     }
 
     /**
+     * Whether `meta` is gone, read once. A stream of another node is taken
+     * away (`cancel`) when the channel goes, and may hear of it before the
+     * stream of `meta` does — the database does not order them (§12.2).
+     */
+    async function metaGone() {
+      try {
+        const used = await currentToken();
+        const { databaseUrl } = requireEndpoint();
+        return (await call(databaseNodeUrl(databaseUrl, `channels/${channelId}/meta`, used), { method: 'GET' })) === null;
+      } catch {
+        // Unreadable is not gone: the refusal stands.
+        return false;
+      }
+    }
+
+    /**
      * One node, followed across dropped connections, as `watchChannel` follows `meta`.
      * @param {string} name  the node under the channel
      * @param {(tree: unknown) => boolean | void} onTree  true once the channel is gone for good
@@ -573,6 +602,7 @@ function createFirebaseRelayAdapter({
       while (!closed) {
         let failure = new RemoteRelayError(RELAY_REASONS.NETWORK);
         let used = null;
+        let cancelled = false;
         try {
           used = await currentToken();
           if (closed) return;
@@ -608,9 +638,10 @@ function createFirebaseRelayAdapter({
               // The rules took the node away: `meta` gone is the end of the channel (§12.2).
               if (name === 'meta') {
                 gone = true;
-                handlers.onMeta(null);
+                reportMeta(null);
                 queueMicrotask(close);
               } else {
+                cancelled = true;
                 throw new RemoteRelayError(RELAY_REASONS.REFUSED);
               }
             } else if (type === 'auth_revoked') {
@@ -624,6 +655,15 @@ function createFirebaseRelayAdapter({
         } catch (error) {
           if (closed) return;
           failure = toRelayError(error);
+        }
+        if (cancelled) {
+          const vanished = await metaGone();
+          if (closed) return;
+          if (vanished) {
+            reportMeta(null);
+            close();
+            return;
+          }
         }
         failures += 1;
         if (failure.reason === RELAY_REASONS.UNAUTHORIZED && failures < STREAM_ATTEMPTS) {
@@ -653,7 +693,7 @@ function createFirebaseRelayAdapter({
       follow('meta', (tree) => {
         const record = channelRecordOf(tree);
         if (record === undefined) return false;
-        handlers.onMeta(record);
+        reportMeta(record);
         return record === null;
       }),
       follow('to-desktop', (tree) => {

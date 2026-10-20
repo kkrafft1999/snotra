@@ -41,6 +41,8 @@ function fakeDatabase({ identity, tokenStatus = 200 }) {
   const challenges = new Set();
   let issued = 0;
   const writeStatus = { next: [] };
+  /** What a plain read of `meta` finds — the adapter reads it when another node is taken away. */
+  const metaRead = { value: { status: 'paired' } };
   async function fetchImpl(url, init = {}) {
     const parsed = new URL(url);
     const method = init.method || 'GET';
@@ -66,6 +68,7 @@ function fakeDatabase({ identity, tokenStatus = 200 }) {
     }
     if (parsed.host === 'db.test') {
       const node = parsed.pathname.replace(`/channels/${CHANNEL_ID}/`, '').replace(/\.json$/, '');
+      if (method === 'GET' && init.headers?.Accept !== 'text/event-stream') return json(200, node === 'meta' ? metaRead.value : null);
       if (method === 'GET') {
         let controller;
         const entry = {
@@ -92,6 +95,7 @@ function fakeDatabase({ identity, tokenStatus = 200 }) {
     requests,
     streams,
     writeStatus,
+    metaRead,
     issued: () => issued,
     open: (node) => streams.filter((s) => s.node === node && s.open),
     writes: () => requests.filter((r) => r.host === 'db.test' && r.method !== 'GET'),
@@ -253,6 +257,32 @@ test('a meta that vanishes ends the link, whatever the other streams show', asyn
   assert.equal(ctx.seen.errors.length, 0);
   await assert.rejects(ctx.link.writePresence(), { reason: 'unauthorized' });
   assert.equal(ctx.clock.queue.length, 0, 'no renewal is left behind');
+});
+
+test('a node taken away while meta is gone ends the link as a vanished meta does (§12.2)', async (t) => {
+  const ctx = setup(t);
+  await standUp(ctx);
+  // The channel went; this stream hears of it before the stream of meta.
+  ctx.db.metaRead.value = null;
+  ctx.db.open('to-desktop')[0].send('cancel', null);
+  await until(() => ctx.seen.meta.length === 2, 'meta gone');
+  assert.equal(ctx.seen.meta[1], null);
+  await until(() => ctx.db.streams.every((s) => !s.open), 'every stream closed');
+  // Read once besides its stream, under the channel's token.
+  const metaGets = ctx.db.requests.filter((r) => r.method === 'GET' && r.path === `/channels/${CHANNEL_ID}/meta.json`);
+  assert.equal(metaGets.length, 2);
+  assert.ok(metaGets.every((r) => r.query.get('auth') === 'id-1'));
+  assert.equal(ctx.seen.errors.length, 0);
+  assert.equal(ctx.clock.queue.length, 0, 'no renewal is left behind');
+});
+
+test('a node taken away while meta stands is a refusal', async (t) => {
+  const ctx = setup(t);
+  await standUp(ctx);
+  ctx.db.open('handshake/phone')[0].send('cancel', null);
+  await until(() => ctx.seen.errors.length === 1, 'onError');
+  assert.equal(ctx.seen.errors[0].reason, 'refused');
+  assert.equal(ctx.seen.meta.length, 1);
 });
 
 test('a token the relay refuses ends the link with its reason', async (t) => {
