@@ -5,8 +5,9 @@
  * paired phone (#1192). The core's decisions in `src/application/remote/`
  * with the adapters of `src/main/remote/` — the relay, the keys kept through
  * the secret store, the protocol's computations — the desktop's
- * user-confirmation adapter for the *Allow* (#980), and the stand-in behind
- * the channel's message-layer port until the dispatcher exists (#1194).
+ * user-confirmation adapter for the *Allow* (#980), and behind the channel's
+ * message-layer port the dispatcher with the release list (#1194) — or the
+ * stand-in, when no desktop is handed in.
  *
  * Building it starts nothing: no key is created, no request goes out, no
  * stream is opened. `start()` connects the channel — and only when a phone
@@ -15,6 +16,7 @@
 
 const nodeCrypto = require('node:crypto');
 const { createRemoteChannel } = require('../../application/remote/remote-channel');
+const { createRemoteDispatcher } = require('../../application/remote/remote-dispatcher');
 const { createRemoteMessageStandIn } = require('../../application/remote/remote-message-stand-in');
 const { createRemotePairing } = require('../../application/remote/remote-pairing');
 const { translateMessage } = require('../../shared/i18n');
@@ -25,6 +27,10 @@ const { createRemoteIdentityStore } = require('../remote/identity-store-adapter'
 const { pairingPrompt } = require('../remote/pairing-prompt');
 const { createRemotePairingCryptoAdapter } = require('../remote/pairing-protocol');
 const { PRODUCTION_RELAY } = require('../remote/relay-endpoint');
+const { createRemoteReleaseStore } = require('../remote/release-store-adapter');
+
+/** Streamed text goes to the phone in one envelope per chat every 150 ms (protocol §17). */
+const RELAY_DELTA_BATCH_MS = 150;
 
 /**
  * @param {{
@@ -40,9 +46,12 @@ const { PRODUCTION_RELAY } = require('../remote/relay-endpoint');
  *   getAppVersion?: () => string,
  *   relay?: import('../../application/ports/remote-relay-port').RemoteRelayPort | null,
  *   messages?: import('../../application/ports/remote-message-layer-port').RemoteMessageLayerPort | null,
+ *   desktop?: import('../../application/ports/remote-desktop-port').RemoteDesktopPort | null,
+ *   normalizeRoot?: (root: unknown) => string|null,
  *   log?: { warn: (...args: unknown[]) => void },
  * }} deps  `relay` replaces the Firebase relay — the in-memory one in tests;
- *   `messages` replaces the stand-in behind the channel
+ *   `desktop` is what the dispatcher reads, and `normalizeRoot` the chat history's naming of a folder —
+ *   without a desktop the stand-in answers; `messages` replaces either
  */
 function createRemoteBridge({
   userDataPath,
@@ -57,12 +66,21 @@ function createRemoteBridge({
   getAppVersion = () => '0.0.0',
   relay = null,
   messages = null,
+  desktop = null,
+  normalizeRoot = (root) => (typeof root === 'string' && root.trim() ? path.resolve(root.trim()) : null),
   log = console,
 }) {
   const relayPort = relay || createFirebaseRelayAdapter({ endpoint: PRODUCTION_RELAY, fetchImpl: fetchImpl || globalThis.fetch });
   const identity = createRemoteIdentityStore({
     safeStorage: secretStore, safeStorageKey, fs, path, dir: userDataPath, writeFileAtomic, log,
   });
+  // Which workspaces the phone may see (§7.5); a release takes a receipt of the native dialog.
+  const releases = createRemoteReleaseStore({
+    safeStorage: secretStore, safeStorageKey, receipts, normalizeRoot, fs, path, dir: userDataPath, writeFileAtomic, log,
+  });
+  const dispatcher = desktop
+    ? createRemoteDispatcher({ desktop, releases, word: translateMessage, deltaBatchMs: RELAY_DELTA_BATCH_MS, log })
+    : null;
   /** @type {ReturnType<typeof createRemoteChannel> | null} */
   let channel = null;
   const pairing = createRemotePairing({
@@ -79,7 +97,7 @@ function createRemoteBridge({
     relay: relayPort,
     identity,
     crypto: createRemoteChannelCryptoAdapter(),
-    messages: messages || createRemoteMessageStandIn({ word: translateMessage }),
+    messages: messages || dispatcher || createRemoteMessageStandIn({ word: translateMessage }),
     word: translateMessage,
     appVersion: getAppVersion,
     newConnectionId: () => nodeCrypto.randomBytes(16).toString('base64url'),
@@ -96,6 +114,7 @@ function createRemoteBridge({
   return {
     pairing,
     channel,
+    releases,
     /** Connects the channel when a phone is paired. */
     start() {
       if (started.value) return Promise.resolve();
@@ -103,7 +122,9 @@ function createRemoteBridge({
       return channel.start();
     },
     dispose() {
-      // The presence record goes while the relay link still holds its token.
+      // The phone hears that the desktop quits before its session ends (§8.2);
+      // the presence record goes while the relay link still holds its token.
+      if (!messages) dispatcher?.closeAll('quit');
       channel.dispose();
       pairing.dispose();
     },

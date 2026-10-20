@@ -46,6 +46,8 @@ const CONFIRMATION_ACTIONS = Object.freeze({
   SKILL_MAKE_GLOBAL: 'skill-make-global',
   /** A phone let in as the mobile remote, after comparing the six words (#1114) — subject: the channel id. */
   REMOTE_PAIRING: 'remote-pairing',
+  /** A workspace opened to the paired phone, its chats readable there (#1194) — subject: the root. */
+  REMOTE_WORKSPACE: 'remote-workspace',
   /** `shell_execute` switched on (#1104) — subject: ''. */
   SHELL_EXECUTION: 'shell-execution',
   /** `run_python` switched on (#1104) — subject: ''. */

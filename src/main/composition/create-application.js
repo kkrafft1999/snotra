@@ -257,6 +257,7 @@ function createApplication({
     PUSH,
     getActiveWorkspaceRoot,
     fileChangeRecorder: core.fileChangeRecorder,
+    publishRunEvent: core.remoteActivity.publishRun,
   });
   registerToolPermissionHandlers({
     ipcMain,

@@ -33,6 +33,8 @@ const IMPLEMENTING_SERVICES = [
   'src/application/chat/injection-detector.js',
   // What stands behind the channel's message layer until the dispatcher exists (#1192, #1194).
   'src/application/remote/remote-message-stand-in.js',
+  // What stands there since (#1194): the dispatcher of the read-only methods.
+  'src/application/remote/remote-dispatcher.js',
 ];
 
 /** Adapter factories that implement no port: stores and helpers main uses directly. */
