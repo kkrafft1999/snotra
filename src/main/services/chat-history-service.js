@@ -170,6 +170,35 @@ function createChatHistoryService({
     return chatHistoryStore.normalizeSessionForLoad(session, { toolCategoryOf });
   }
 
+  // --- Reading for the remote front ends (#1194) ----------------------------
+  // Which folders a remote may see is the release list's word; these only
+  // read, and never touch the chat on the desktop's screen.
+
+  /**
+   * The rows of every chat kept under one of `roots`, without messages.
+   * @param {unknown[]} roots
+   */
+  async function listForRoots(roots) {
+    const wanted = (Array.isArray(roots) ? roots : [])
+      .map((root) => chatHistoryStore.normalizeWorkspaceRoot(root))
+      .filter((root) => root !== null);
+    if (wanted.length === 0) return [];
+    return (await chatHistoryStore.listSessions())
+      .filter((s) => wanted.some((root) => chatHistoryStore.sessionMatchesWorkspace(s, root)))
+      .map((s) => chatHistoryStore.normalizeSessionMetaForList(s))
+      .filter(Boolean);
+  }
+
+  /**
+   * One chat with its messages as the window loads it, in whichever folder it is kept.
+   * @param {unknown} rawId
+   */
+  async function loadForDisplay(rawId) {
+    const id = sanitizeChatId(rawId);
+    const session = id ? await chatHistoryStore.getSession(id) : null;
+    return session ? chatHistoryStore.normalizeSessionForLoad(session, { toolCategoryOf }) : null;
+  }
+
   /**
    * Saves a chat as the renderer holds it. Model, mode, level and overrides
    * are main's word, the time stamp is set here, and the oldest chats beyond
@@ -390,6 +419,8 @@ function createChatHistoryService({
   return {
     listForActiveFolder,
     getSession,
+    listForRoots,
+    loadForDisplay,
     saveSession,
     deleteSession,
     setActive,

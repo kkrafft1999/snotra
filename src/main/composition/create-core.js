@@ -5,6 +5,8 @@ const nodeCrypto = require('crypto');
 const nodeChildProcess = require('child_process');
 
 const { createStorageService } = require('../services/storage-service');
+const { createRemoteActivity } = require('../services/remote-activity');
+const { createRemoteDesktopAdapter } = require('../remote/desktop-adapter');
 const { createModelPriceService } = require('../services/model-price-service');
 const { createChatAttachmentStore } = require('../services/chat-attachment-store');
 const { createFsService } = require('../services/fs-service');
@@ -288,6 +290,9 @@ function createCore({
   // And for the skill scans: set once the skill service exists (#578).
   let dropSkillScans = () => {};
 
+  // The turns' events and the workspace switches the remote front ends follow (#1194).
+  const remoteActivity = createRemoteActivity();
+
   const noteWorkspaceOpened = createWorkspaceSandboxDefault({ toolPolicyStore, onChanged: () => notifyToolPermissionsChanged() });
 
   // Einziger Weg, auf dem der aktive Workspace gesetzt wird (Issue #68).
@@ -317,6 +322,8 @@ function createCore({
       // A folder opened for the first time while new workspaces start
       // without the sandbox gets that setting (#1119).
       noteWorkspaceOpened(root);
+      // A phone following the desktop hears which workspace is open (#1194).
+      remoteActivity.workspaceChanged();
     },
   });
 
@@ -773,6 +780,17 @@ function createCore({
     getLocale: getAppLocale,
     getAppVersion,
     relay: remoteRelay,
+    // What the phone may read of the desktop (#1194): chats of the released workspaces, read only.
+    desktop: createRemoteDesktopAdapter({
+      chatHistory,
+      workspaceFolderStore,
+      getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+      normalizeRoot: (root) => storage.normalizeWorkspaceRoot(root),
+      runningChatIds: () => chatEngine.runningChatIds(),
+      listPendingApprovals: () => approvals.listPending(),
+      activity: remoteActivity,
+    }),
+    normalizeRoot: (root) => storage.normalizeWorkspaceRoot(root),
   });
 
   // A card granted for the session, a chat left, a rule changed: the settings
@@ -808,6 +826,7 @@ function createCore({
   return {
     // What the IPC handlers of a front end are registered on.
     os,
+    remoteActivity,
     notices,
     secretStore,
     safeStorageKey,

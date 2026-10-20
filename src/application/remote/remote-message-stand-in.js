@@ -1,12 +1,11 @@
 'use strict';
 
 /**
- * What stands behind the channel's message-layer port until the dispatcher
- * of `docs/remote-interface.md` §10 step 1 exists (#1194): every request is
- * answered with `unavailable`, and `session.hello` offers no method beyond
- * `session.bye`. Decided on #1192 (2026-10-20): the channel can then be built
- * and proven end to end, and the dispatcher plugs into the same port later
- * without the channel changing.
+ * What stands behind the channel's message-layer port when no desktop is
+ * wired — the channel's own tests, a bridge built without one: every request
+ * is answered with `unavailable`, and `session.hello` offers no method beyond
+ * `session.bye`. Decided on #1192 (2026-10-20), when it stood in for the
+ * dispatcher (#1194) that has taken its place in the app since.
  */
 
 const { remoteRpcError } = require('../../shared/contracts/remote/rpc-errors');

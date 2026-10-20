@@ -726,6 +726,53 @@ test('CHAT_SEND sends the run-end marker also when the run throws (#721)', async
   assert.deepEqual(sent.slice(0, -1).map((s) => s.payload.type), ['chat-saved', 'chat-saved']);
 });
 
+test('every event of a turn, its end included, reaches the remote front ends too (#1194)', async () => {
+  const ipcMain = makeIpcMain();
+  const chatEngine = {
+    send: async ({ onEvent }) => {
+      onEvent({ type: 'delta', payload: { text: 'hi' } });
+      return { content: 'hi' };
+    },
+  };
+  const published = [];
+  registerChatHandlers({
+    ipcMain, chatEngine, conversation: conversationFor(chatEngine), REQ, PUSH,
+    publishRunEvent: (event) => published.push(event),
+  });
+  // A window that is gone: the remote still hears of the run.
+  const { event } = makeFakeEvent(7);
+  event.sender.isDestroyed = () => true;
+
+  await ipcMain.handlers.get(REQ.CHAT_SEND)(event, { message: { content: 'Hi' }, chatId: 'chat-a', runId: 'run-1' });
+
+  assert.ok(published.length >= 2);
+  for (const entry of published) {
+    assert.equal(entry.chatId, 'chat-a');
+    assert.equal(entry.runId, 'run-1');
+  }
+  assert.deepEqual(published.at(-1), { chatId: 'chat-a', runId: 'run-1', type: 'progress', payload: { type: 'run-end' } });
+});
+
+test('a remote front end that throws does not stop the window\'s run (#1194)', async () => {
+  const ipcMain = makeIpcMain();
+  const chatEngine = { send: async () => ({ content: 'hi' }) };
+  registerChatHandlers({
+    ipcMain, chatEngine, conversation: conversationFor(chatEngine), REQ, PUSH,
+    publishRunEvent: () => { throw new Error('remote broke'); },
+  });
+  const { event, sent } = makeFakeEvent(7);
+  const errors = [];
+  const original = console.error;
+  console.error = (...args) => errors.push(args);
+  try {
+    await ipcMain.handlers.get(REQ.CHAT_SEND)(event, { message: { content: 'Hi' }, chatId: 'chat-a', runId: 'run-1' });
+  } finally {
+    console.error = original;
+  }
+  assert.deepEqual(sent.at(-1).payload, { type: 'run-end', chatId: 'chat-a', runId: 'run-1' });
+  assert.ok(errors.length > 0);
+});
+
 test('CHAT_ABORT with a chat stops only that chat; the window\'s other run goes on', async () => {
   const releases = [];
   const provider = {

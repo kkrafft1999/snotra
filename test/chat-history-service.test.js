@@ -111,3 +111,21 @@ test('the active chat pointer, a delete and an attachment read', async (t) => {
   assert.ok(deletedAttachments.includes('c1'));
   assert.deepEqual(await chatHistory.deleteSession('   '), { ok: false });
 });
+
+test('the remote reads chats by folder, open or not, and never touches the chat on screen (#1194)', async (t) => {
+  const { chatHistory } = await setup(t, { maxChatSessions: 5 });
+  const folderB = path.resolve('/work/b');
+  await chatHistory.saveSession({ id: 'in-a', title: 'A', messages: turn('a') });
+  await chatHistory.saveSession({ id: 'in-b', title: 'B', messages: turn('b'), workspaceRoot: folderB });
+
+  assert.deepEqual((await chatHistory.listForRoots([folderB])).map((row) => row.id), ['in-b']);
+  assert.deepEqual((await chatHistory.listForRoots([])), []);
+  assert.deepEqual((await chatHistory.listForRoots([path.resolve('/work/a'), folderB])).map((row) => row.id).sort(), ['in-a', 'in-b']);
+
+  const loaded = await chatHistory.loadForDisplay('in-b');
+  assert.equal(loaded.workspaceRoot, folderB);
+  assert.deepEqual(loaded.messages.map((m) => m.content), ['b', 're: b']);
+  assert.equal(await chatHistory.getSession('in-b'), null, 'the window still sees only its open folder');
+  assert.equal(await chatHistory.loadForDisplay('nope'), null);
+  assert.equal((await chatHistory.listForActiveFolder()).activeChatId, null, 'reading set no chat active');
+});

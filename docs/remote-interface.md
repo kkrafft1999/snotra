@@ -522,9 +522,13 @@ does.
 concept §7): `{ messageId, role: 'user'|'assistant', text: Markdown,
 toolLines?: [{ line, tool, status }], attachments?: [{ kind: 'image',
 placeholder: true, name? }], origin?: { kind, client }, interrupted?: bool,
-createdAt? }`. Tool lines are worded by
+createdAt? }`. Tool lines are the lines the desktop shows, worded by
 [`tool-display.js`](../src/shared/presentation/tool-display.js) in the
-connection's language; no tool arguments, no schemas, no tool results.
+desktop's language — the history keeps no arguments to word a stored line
+again, and a chat should not mix two languages (decided 2026-10-20, #1194);
+no tool arguments, no schemas, no tool results. `messageId` is `m<index>`,
+the message's place in the chat, and `before` in `chat.more` is such an id.
+The history keeps no time per message, so `createdAt` is left out for now.
 
 **`ApprovalRequest`** — the card's DTO (`createToolApprovalRequestDto`,
 `contractVersion: 1`) as the connection's kind may see it: `requestId`,
@@ -670,7 +674,14 @@ the attacker model.
 
 1. **Watch.** The remote dispatcher, the local transport, the release list,
    and the read-only methods and events. Needs none of the prerequisites; a
-   CLI can follow a chat from here on.
+   CLI can follow a chat from here on. *Built for the relay* (#1194):
+   `application/remote/remote-dispatcher.js` behind the channel, the release
+   list in `main/remote/release-store-adapter.js` (a workspace opens only
+   with a receipt for `remote-workspace`; the switch is #1195), the desktop's
+   reads in `main/remote/desktop-adapter.js`. `session.welcome`'s `seq` is
+   the dispatcher's count of its events, 0 for the welcome; on the relay
+   `session.resync` follows an event the channel could not carry. The local
+   transport is not built.
 2. **Write.** `message.send`, `chat.new`, `run.abort`, `workspace.activate`,
    `chat.configuration` — after #981, which also has to answer a turn with its
    own chat's model and mode instead of the screen's (§7.3).

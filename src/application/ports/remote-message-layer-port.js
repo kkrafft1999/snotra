@@ -3,11 +3,12 @@
  * opened. The channel owns `session.hello` and `session.bye` — the first is
  * the key confirmation of docs/remote-protocol.md §14 and mints the
  * connection — and passes every other request of a standing connection here,
- * as `docs/remote-interface.md` §10 step 1 will answer it: the dispatcher,
- * the release list and the methods of §8.1 (#1194).
+ * as `docs/remote-interface.md` §10 answers it: `remote-dispatcher.js` with
+ * the release list and the methods of §8.1 (#1194), step 1 so far.
  *
- * Until that exists, `remote-message-stand-in.js` sits behind the port and
- * answers every request with `unavailable` (decided on #1192, 2026-10-20).
+ * `remote-message-stand-in.js` answers every request with `unavailable`
+ * (decided on #1192, 2026-10-20); it stands there when no desktop is wired,
+ * and holds the channel's own tests apart from the dispatcher.
  */
 
 /**

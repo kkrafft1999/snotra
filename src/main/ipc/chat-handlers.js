@@ -13,6 +13,7 @@ const { createMessage } = require('../../shared/contracts/message');
  * @param {Record<string, string>} deps.PUSH
  * @param {() => string|null} [deps.getActiveWorkspaceRoot]
  * @param {Pick<ReturnType<typeof import('../services/file-change-recorder').createFileChangeRecorder>, 'describe'>|null} [deps.fileChangeRecorder]
+ * @param {(event: { chatId: string|null, runId: string|null, type?: string, payload?: unknown }) => void} [deps.publishRunEvent]
  */
 function registerChatHandlers({
   ipcMain,
@@ -21,6 +22,8 @@ function registerChatHandlers({
   PUSH,
   getActiveWorkspaceRoot = () => null,
   fileChangeRecorder = null,
+  // Every event of a turn goes to the remote front ends as well (#1194), whichever window runs it.
+  publishRunEvent = () => {},
 }) {
   if (!conversation) throw new Error('registerChatHandlers requires the conversation service.');
 
@@ -41,8 +44,15 @@ function registerChatHandlers({
    */
   const forwardEvent = (webContents, event, route) => {
     const channel = event?.type ? eventChannels[event.type] : undefined;
-    if (!channel || !webContents || webContents.isDestroyed() || typeof webContents.send !== 'function') return;
+    if (!channel) return;
     const payload = event.payload && typeof event.payload === 'object' ? event.payload : {};
+    try {
+      publishRunEvent({ ...route, type: event.type, payload });
+    } catch (error) {
+      // A remote that cannot follow never holds up the window's run.
+      console.error('[chat] a turn\'s event did not reach the remote front ends:', error);
+    }
+    if (!webContents || webContents.isDestroyed() || typeof webContents.send !== 'function') return;
     webContents.send(channel, { ...payload, ...route });
   };
 
