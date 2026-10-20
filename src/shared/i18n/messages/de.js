@@ -865,6 +865,13 @@ module.exports = {
   'toolSecurity.newWs': 'Neue Workspaces',
   'toolSecurity.newWs.toggle': 'Sandbox in neuen Workspaces an',
   'toolSecurity.newWs.hint': 'Für Ordner, die du zum ersten Mal öffnest. Bestehende Workspaces behalten ihre Einstellung; Ausschalten bestätigst du im Systemdialog.',
+  // Zugriff vom Handy (#1195): ein Schalter pro Workspace, auf Tools › Sicherheit.
+  'toolSecurity.phone': 'Handy',
+  'toolSecurity.phone.toggle': 'Zugriff vom Handy',
+  'toolSecurity.phone.hint': 'Dein gekoppeltes Handy sieht die Chats in diesem Ordner: Es kann ihnen folgen, in ihnen schreiben und Freigabeanfragen mit „Einmal erlauben“ oder „Ablehnen“ beantworten. Einen Schutz lockern kann es nie. Das Öffnen bestätigst du im Systemdialog, das Schließen gilt sofort.',
+  'toolSecurity.phone.noPhone': 'Noch ist kein Handy gekoppelt. Sobald du eins koppelst, sieht es die Ordner, die du hier öffnest.',
+  'toolSecurity.phone.unavailable': 'Hier nicht verfügbar: Der Schlüsselbund des Systems verschlüsselt nicht, also lässt sich für das Handy nichts speichern.',
+  'toolSecurity.meta.phone': '{meta} · Handy',
   'toolSecurity.base': 'Was die Sandbox immer tut',
   'toolSecurity.base.hint': 'Fest eingebaut; keine Einstellung ändert das.',
   'toolSecurity.base.closed': 'Immer geschlossen',

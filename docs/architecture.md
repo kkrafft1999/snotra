@@ -302,7 +302,8 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   `AbortSignal` when the pairing expires or is cancelled meanwhile. Opening
   a workspace to the phone is one as well (`remote-workspace`, subject the
   root, #1194): `main/remote/release-store-adapter.js` refuses a release
-  without it; the switch that asks is #1195. Two
+  without it; the switch that asks is #1195, in
+  `main/remote/release-settings.js` behind `remote:release:get|set`. Two
   settings redeem receipts in `services/storage-service.js` (#1104):
   `shell_execute` or `run_python` switched on (`shell-execution`,
   `python-execution`) — `updateUIPrefs` leaves a switch off that comes
@@ -3520,7 +3521,7 @@ channel ([#1194](https://github.com/kkrafft1999/snotra/issues/1194)).
 | Window | `main/ipc/remote-handlers.js`, `remote:*` channels | Start, cancel, remove, read the state; every change pushed. Normalized by `contracts/remote/pairing-state.js` on the way out |
 | Channel | `application/remote/remote-channel.js`; `remote-channel-crypto-port`, `main/remote/channel-protocol.js` | Part 2: connecting, presence, handshake, envelopes, `session.hello` — see [The channel](#the-channel) |
 | Dispatcher | `application/remote/remote-dispatcher.js`, `application/remote/remote-display.js`; `remote-message-layer-port` | The methods and events of `remote-interface.md` §8, step 1 so far (#1194): workspaces, chats and their messages read only, a running turn's events to the connections following its chat, deltas batched every 150 ms on the relay. No path, tool argument or chat outside the release reaches a connection |
-| Release list | `remote-release-port`; `main/remote/release-store-adapter.js`, action `remote-workspace` | `remote-release.json`: one `safeStorage` ciphertext of the workspaces opened to the phone and the id each folder goes by. Opening one takes a receipt; the switch is #1195 |
+| Release list | `remote-release-port`; `main/remote/release-store-adapter.js`, action `remote-workspace` | `remote-release.json`: one `safeStorage` ciphertext of the workspaces opened to the phone and the id each folder goes by. Opening one takes a receipt; the switch *Access from your phone* on Tools › Security asks for it (#1195) |
 | Desktop reads | `remote-desktop-port`; `main/remote/desktop-adapter.js`, `main/services/remote-activity.js` | The chat history and folder list read only, the engine's running chats, the open cards; the turns' events published from `ipc/chat-handlers.js` and the workspace switch from `workspace-activation.js` |
 | Wiring | `main/composition/create-remote-bridge.js` | Puts the above together for `createApplication()`, which starts the channel |
 

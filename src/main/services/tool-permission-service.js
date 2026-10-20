@@ -115,6 +115,7 @@ const {
  * @param {SecurityPageData['describeWorkspaceChats']} [deps.describeWorkspaceChats]
  * @param {SecurityPageData['listKnownWorkspaces']} [deps.listKnownWorkspaces]
  * @param {SecurityPageData['folderExists']} [deps.folderExists]
+ * @param {() => Promise<string[]>} [deps.listRemoteWorkspaces]
  * @param {string} [deps.platform]
  * @param {import('../../shared/contracts/platform-capabilities').PlatformCapabilities} [deps.platformCapabilities]
  * @param {string} [deps.homeDir]
@@ -146,6 +147,9 @@ function createToolPermissionService({
   listKnownWorkspaces = async () => [],
   // Whether a folder is still there (#1119): a missing one is listed as such.
   folderExists = async () => true,
+  // The folders open to the paired phone (#1195): Tools › Security lists
+  // them too, so that one can be closed there without opening it.
+  listRemoteWorkspaces = async () => [],
   platform = process.platform,
   // The platform capability register, resolved at start (#1149): whether
   // there is a sandbox at all is read from it, not from the platform's name.
@@ -288,6 +292,24 @@ function createToolPermissionService({
   }
 
   /**
+   * Every workspace Tools › Security lists besides the open one: those with
+   * a sandbox setting, and those open to the phone (#1195).
+   *
+   * @param {PolicyState} state
+   * @returns {Promise<string[]>}
+   */
+  async function listedRootsOf(state) {
+    /** @type {string[]} */
+    let remote = [];
+    try {
+      remote = (await listRemoteWorkspaces()) || [];
+    } catch {
+      // Without the release list the page still lists every sandbox setting.
+    }
+    return [...new Set([...sandboxRootsOf(state), ...remote.filter((root) => typeof root === 'string' && root)])];
+  }
+
+  /**
    * The workspace a sandbox setting is changed for (#1119): the open one
    * when the renderer names none — or one the policy holds a sandbox
    * setting for already, so a workspace can be checked and cleaned up
@@ -303,7 +325,7 @@ function createToolPermissionService({
     if (typeof raw !== 'string') return null;
     if (raw === active) return raw;
     try {
-      return sandboxRootsOf(await toolPolicyStore.read()).includes(raw) ? raw : null;
+      return (await listedRootsOf(await toolPolicyStore.read())).includes(raw) ? raw : null;
     } catch {
       // Rules that cannot be read name no workspace: nothing is changed then.
       return null;
@@ -332,7 +354,7 @@ function createToolPermissionService({
     ]);
     /** @type {Set<string|null>} */
     const chatIds = new Set((Array.isArray(chats) ? chats : []).map((chat) => chat.id));
-    const others = sandboxRootsOf(state).filter((root) => root !== active)
+    const others = (await listedRootsOf(state)).filter((root) => root !== active)
       .sort((a, b) => (a.split(/[\\/]/).pop() ?? '').localeCompare(b.split(/[\\/]/).pop() ?? '') || a.localeCompare(b));
     const roots = active ? [active, ...others] : others;
     const workspaces = await Promise.all(roots.map(async (root) => ({

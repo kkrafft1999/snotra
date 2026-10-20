@@ -52,8 +52,28 @@ Die Zeile *Sensible Daten lesen* listet die eingebauten Muster — `.env*`, `*.p
 - ***Workspace-Regeln zurücksetzen*** löscht die Sperren und Erlaubnisse nur des geöffneten Ordners, schließt die für ihn offen gehaltenen Hosts, entfernt seine eigenen Programmfreigaben, schaltet seine Sandbox wieder ein und setzt seinen Standardmodus zurück auf *Intelligent*.
 - ***Alle Berechtigungen zurücksetzen*** löscht jede Regel, deine eigenen sensiblen Muster, jede Freigabe pro Programm, jeden offen gehaltenen Host und jede Sitzungsfreigabe, schaltet die Sandbox überall wieder ein — auch für neue Workspaces — und stellt *Intelligent* wieder her, auch als Standard jedes Ordners. Das fragt immer in einem Systemdialog nach, der aufzählt, welcher Schutz dabei wegfällt.
 
+## Einen Ordner fürs Handy öffnen
+
+[seit 1.28] Ein gekoppeltes Handy sieht nur die Ordner, die du dafür öffnest; jeder Ordner ist zuerst geschlossen. Ein Ordner mit sensiblem Material bleibt für das Handy unsichtbar, auch wenn ein anderer offen ist. Der Schalter liegt unter *Einstellungen › Tools › Sicherheit*, einmal pro Workspace.
+
+### Schritte
+
+1. Öffne *Einstellungen › Tools › Sicherheit* und wähle den Ordner in der Liste links. Er muss in Snotra nicht geöffnet sein: Die Liste zeigt den geöffneten Ordner und jeden Ordner mit einer eigenen Einstellung.
+2. Schalte unter *Handy* den Schalter *Zugriff vom Handy* ein.
+3. Bestätige im Systemdialog mit *Für Handy öffnen*. *Abbrechen* ist vorausgewählt, Enter oder Escape öffnen also nichts.
+
+![Einstellungen › Tools › Sicherheit für den Ordner gartenplaner: In der Liste links steht beim Eintrag „Sandbox an · nichts extra · Handy“. Rechts, unter der Sandbox, die Karte Handy mit dem eingeschalteten Schalter „Zugriff vom Handy“, dem Satz, was das Handy dort kann, und dem Hinweis, dass noch kein Handy gekoppelt ist.](screenshots/phone-access.webp)
+
+### Was passiert
+
+- Das Handy listet den Ordner und kann seinen Chats folgen, in ihnen schreiben und Freigabeanfragen mit *Einmal erlauben* oder *Ablehnen* beantworten. Einen Schutz lockern kann es nie: keine dauerhafte Freigabe, kein *Auto*, keine abgeschaltete Sandbox.
+- Der Eintrag des Ordners in der Liste zeigt *· Handy*.
+- **Ausschalten gilt sofort** und fragt nichts. Der Ordner verschwindet vom Handy, und was das Handy dort verfolgt hat, endet. Arbeitet Snotra am Computer gerade in diesem Ordner, bleibt es dort; nur die Sicht des Handys ändert sich.
+- Ohne gekoppeltes Handy lässt sich der Ordner trotzdem öffnen; die Karte sagt dann, dass noch kein Handy gekoppelt ist, und ein Handy, das du später koppelst, sieht ihn.
+
 ## Wenn es nicht klappt
 
 - **Die Seite sagt *Kein Workspace offen*.** Sie zeigt dann, was in jedem Ordner gilt, bis du einen öffnest. Regeln für *Dieser Workspace* brauchen einen geöffneten Ordner.
 - **Eine Zeile steht auf *Aus*.** Kein Tool dieser Art ist eingeschaltet, oder eine Sperre erfasst jeden Pfad.
 - **Die Seite meldet, die Berechtigungsdatei sei beschädigt oder verändert.** Snotra läuft dann in *Intelligent*, oder in *Immer fragen*, wenn das eingestellt war; Erlaubnisse werden verworfen, Sperren bleiben in Kraft. Richte ein, was du brauchst, neu ein.
+- **Der Schalter *Zugriff vom Handy* lässt sich nicht einschalten.** Der Schlüsselbund des Systems verschlüsselt hier nicht — etwa unter Linux ohne Schlüsselbunddienst —, also lässt sich für das Handy nichts speichern. Die Karte sagt das.

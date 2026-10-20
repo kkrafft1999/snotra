@@ -80,9 +80,14 @@ export function validSelection(overview, selected) {
 /**
  * The list: All workspaces first, then every workspace with its state in
  * shape and words — shield and counts, "Sandbox on · nothing extra", or the
- * struck-through amber shield with "Sandbox off".
+ * struck-through amber shield with "Sandbox off". `released` the roots open
+ * to the phone (#1195), which say so after their state.
+ *
+ * @param {any} overview
+ * @param {string|null} selected
+ * @param {{ released?: Set<string> }} [options]
  */
-export function describeWorkspaceList(overview, selected) {
+export function describeWorkspaceList(overview, selected, { released = new Set() } = {}) {
   const none = hasNoSandbox(overview);
   const global = globalOf(overview);
   const workspaces = workspacesOf(overview);
@@ -112,6 +117,8 @@ export function describeWorkspaceList(overview, selected) {
       tone = 'off';
       meta = t('toolSecurity.meta.off');
     }
+    // Open to the phone (#1195): said in words next to the sandbox state.
+    if (released.has(ws.root)) meta = t('toolSecurity.meta.phone', { meta });
     items.push({
       key: ws.root,
       kind: 'workspace',

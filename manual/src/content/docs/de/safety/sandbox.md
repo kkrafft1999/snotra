@@ -29,7 +29,7 @@ Befehle laufen unter macOS und Linux in deiner Login-Shell (zsh, bash …), mit 
 
 ![Einstellungen › Tools › Sicherheit: links die Liste — Alle Workspaces mit 1 Programm und 1 Host, darunter die Workspaces gartenplaner (offen, 1 Programm · 2 Hosts), altes-projekt (Ordner fehlt) und rechnungs-tool (Sandbox aus, durchgestrichenes Schild in Bernstein). Rechts gartenplaner: die Kachel „Sandbox aktiv“ mit ihrem Schalter, darunter „Programme mit mehr Spielraum“.](screenshots/tool-security.webp)
 
-**Die Liste links** beginnt mit *Alle Workspaces*, gefolgt von jedem Ordner, der eine eigene Sandbox-Einstellung oder Freigabe hat, und dem geöffneten, markiert mit *offen*. Jeder Eintrag sagt in Form und Worten, wie er steht: ein Schild mit dem, was er über die Sandbox hinaus erlaubt (*1 Programm · 2 Hosts* oder *Sandbox an · nichts extra*), das durchgestrichene Schild in Bernstein mit *Sandbox aus* oder *Ordner fehlt* für einen Ordner, den es nicht mehr gibt. Auch einen Ordner, der gerade nicht offen ist, kannst du prüfen und ändern; die Änderung gilt beim nächsten Lauf dort.
+**Die Liste links** beginnt mit *Alle Workspaces*, gefolgt von jedem Ordner, der eine eigene Sandbox-Einstellung oder Freigabe hat, jedem Ordner, der für dein Handy offen ist, und dem geöffneten, markiert mit *offen*. Jeder Eintrag sagt in Form und Worten, wie er steht: ein Schild mit dem, was er über die Sandbox hinaus erlaubt (*1 Programm · 2 Hosts* oder *Sandbox an · nichts extra*), das durchgestrichene Schild in Bernstein mit *Sandbox aus* oder *Ordner fehlt* für einen Ordner, den es nicht mehr gibt. Auch einen Ordner, der gerade nicht offen ist, kannst du prüfen und ändern; die Änderung gilt beim nächsten Lauf dort.
 
 **Ein Workspace** zeigt von oben nach unten:
 
@@ -37,6 +37,7 @@ Befehle laufen unter macOS und Linux in deiner Login-Shell (zsh, bash …), mit 
 - *Programme mit mehr Spielraum*: seine eigenen und die für alle Workspaces, markiert mit *Alle Workspaces*,
 - *Offen gehaltene Hosts*: seine eigenen und die für alle Workspaces, ebenso markiert,
 - *Sandbox dieses Workspace zurücksetzen*,
+- [seit 1.28] *Handy* mit dem Schalter *Zugriff vom Handy*: siehe [Einen Ordner fürs Handy öffnen](../tools-and-security/#einen-ordner-fürs-handy-öffnen),
 - nur beim geöffneten Workspace *Diese Sitzung*: was Karten in seinen Chats *Für diese Sitzung* freigegeben haben.
 
 Was überall gilt, steht in jedem Workspace mit da, geändert wird es aber nur unter *Alle Workspaces*: Die Markierung *Alle Workspaces* daneben führt dorthin. Solange die Sandbox eines Workspace aus ist, ruhen seine Freigaben, und die Seite sagt das.

@@ -38,7 +38,7 @@ function overviewWith(patch = {}) {
   };
 }
 
-async function mount({ overview = overviewWith(), answers = {}, chosen = { ok: true, path: CACHE }, open = true } = {}) {
+async function mount({ overview = overviewWith(), answers = {}, chosen = { ok: true, path: CACHE }, open = true, phone = null } = {}) {
   const dom = setupRendererDom();
   const { setLocale } = await importRenderer('i18n.js');
   setLocale('en', { force: true });
@@ -138,6 +138,25 @@ async function mount({ overview = overviewWith(), answers = {}, chosen = { ok: t
     },
     chooseAllowanceFolder: async () => chosen,
   };
+  // The workspaces open to the phone (#1195), held like the overview.
+  let releases = phone ? clone(phone) : null;
+  const releaseListeners = new Set();
+  if (releases) {
+    api.remote = {
+      getReleases: async () => clone(releases),
+      async setReleased(root, released) {
+        sent.push(['phone', root, released]);
+        await flush();
+        const result = answer('phone');
+        if (result.ok) {
+          releases.released = released ? [...releases.released, root] : releases.released.filter((entry) => entry !== root);
+          releaseListeners.forEach((fn) => fn());
+        }
+        return result;
+      },
+      onReleasesChanged: (fn) => { releaseListeners.add(fn); return () => releaseListeners.delete(fn); },
+    };
+  }
   const dialog = initProgramAllowanceDialog({ api, toolPermissions });
   const panel = initToolSecurityPanel({ api, toolPermissions, allowanceDialog: dialog });
   if (open) await panel.open();
@@ -148,7 +167,11 @@ async function mount({ overview = overviewWith(), answers = {}, chosen = { ok: t
   const detail = () => $('settings-sandbox-detail');
   const focus = (key) => [...doc.querySelectorAll('[data-focus]')].find((node) => node.dataset.focus === key);
   const overlayOpen = () => !$('program-allowance-overlay').classList.contains('hidden');
-  return { dom, doc, panel, sent, $, listItem, detail, focus, overlayOpen, setOverview: (next) => { current = clone(next); notify(); } };
+  return {
+    dom, doc, panel, sent, $, listItem, detail, focus, overlayOpen,
+    setOverview: (next) => { current = clone(next); notify(); },
+    setReleases: (next) => { releases = clone(next); releaseListeners.forEach((fn) => fn()); },
+  };
 }
 
 // ── The list ────────────────────────────────────────────────────────────────
@@ -587,4 +610,99 @@ test('reveal: the open workspace chosen and its switch focused; the programs on 
   await flush();
   assert.equal(await page.panel.reveal('sandbox'), true);
   assert.equal(page.doc.activeElement, page.$('settings-sandbox-detail-title'));
+});
+
+// ── Access from your phone (#1195) ──────────────────────────────────────────
+
+const NO_PHONE = { available: true, paired: false, released: [] };
+const PAIRED = { available: true, paired: true, released: [] };
+
+test('a window without the remote shows no phone switch', async (t) => {
+  const page = await mount();
+  t.after(page.dom.cleanup);
+  assert.equal(page.focus(`phone:${OPEN}`), undefined);
+});
+
+test('every workspace starts closed to the phone; without a paired phone the card says so', async (t) => {
+  const page = await mount({ phone: NO_PHONE });
+  t.after(page.dom.cleanup);
+  const input = page.focus(`phone:${OPEN}`);
+  assert.equal(input.checked, false);
+  assert.equal(input.getAttribute('role'), 'switch');
+  assert.equal(input.getAttribute('aria-disabled'), null, 'it can be opened before a phone is paired');
+  const described = input.getAttribute('aria-describedby').split(' ').map((id) => page.$(id).textContent);
+  assert.match(described[0], /can never loosen a protection/);
+  assert.match(described[1], /No phone is paired yet/);
+  assert.equal(page.doc.querySelector(`label[for="${input.id}"]`).textContent, 'Access from your phone');
+});
+
+test('opening a folder that is not open sends its root; the list says it, the focus stays', async (t) => {
+  const page = await mount({ phone: PAIRED });
+  t.after(page.dom.cleanup);
+  page.listItem(OTHER).click();
+  await flush();
+  const input = () => page.focus(`phone:${OTHER}`);
+  assert.equal(input().getAttribute('aria-describedby').split(' ').length, 1, 'with a paired phone, no note');
+  input().focus();
+  input().checked = true;
+  input().dispatchEvent(new page.dom.window.Event('change', { bubbles: true }));
+  assert.equal(input().getAttribute('aria-disabled'), 'true', 'marked while main asks');
+  await wait(5);
+  await flush();
+  assert.deepEqual(page.sent, [['phone', OTHER, true]]);
+  focusFixup(page.doc);
+  assert.equal(page.doc.activeElement, input());
+  assert.equal(input().checked, true);
+  assert.equal(page.listItem(OTHER).querySelector('.settings-sandbox-ws__meta').textContent, 'Sandbox on · nothing extra · phone');
+  assert.equal(page.detail().querySelector(`[data-status-for="phone:${OTHER}"]`).textContent, 'Saved');
+});
+
+test('a cancelled dialog puts the phone switch back without a word; a refusal says why', async (t) => {
+  const refusal = { ok: false, error: { key: 'remote.release.error.notSaved' } };
+  const page = await mount({ phone: PAIRED, answers: { phone: [{ ok: false, code: 'cancelled' }, refusal] } });
+  t.after(page.dom.cleanup);
+  const input = () => page.focus(`phone:${OPEN}`);
+  for (const attempt of [1, 2]) {
+    input().checked = true;
+    input().dispatchEvent(new page.dom.window.Event('change', { bubbles: true }));
+    await wait(5);
+    await flush();
+    assert.equal(input().checked, false);
+    if (attempt === 1) assert.equal(page.$('settings-sandbox-error').classList.contains('hidden'), true);
+  }
+  assert.equal(page.$('settings-sandbox-error').textContent, 'The setting could not be saved.');
+});
+
+test('without encryption a folder cannot be opened, but one that is open can be closed', async (t) => {
+  const page = await mount({ phone: { available: false, paired: true, released: [OTHER] } });
+  t.after(page.dom.cleanup);
+  const open = page.focus(`phone:${OPEN}`);
+  assert.equal(open.getAttribute('aria-disabled'), 'true');
+  assert.match(page.$(open.getAttribute('aria-describedby').split(' ')[1]).textContent, /does not encrypt/);
+  open.checked = true;
+  open.dispatchEvent(new page.dom.window.Event('change', { bubbles: true }));
+  await flush();
+  assert.equal(page.focus(`phone:${OPEN}`).checked, false);
+  assert.deepEqual(page.sent, [], 'nothing asked of main');
+
+  page.listItem(OTHER).click();
+  await flush();
+  const other = () => page.focus(`phone:${OTHER}`);
+  assert.equal(other().getAttribute('aria-disabled'), null);
+  other().checked = false;
+  other().dispatchEvent(new page.dom.window.Event('change', { bubbles: true }));
+  await wait(5);
+  await flush();
+  assert.deepEqual(page.sent, [['phone', OTHER, false]]);
+});
+
+test('a change made elsewhere — or a phone paired — is drawn at once', async (t) => {
+  const page = await mount({ phone: NO_PHONE });
+  t.after(page.dom.cleanup);
+  page.setReleases({ available: true, paired: true, released: [OPEN] });
+  await wait(5);
+  await flush();
+  const input = page.focus(`phone:${OPEN}`);
+  assert.equal(input.checked, true);
+  assert.equal(input.getAttribute('aria-describedby').split(' ').length, 1);
 });

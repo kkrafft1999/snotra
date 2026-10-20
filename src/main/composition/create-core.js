@@ -759,6 +759,8 @@ function createCore({
     describeWorkspaceChats: securityPageData.describeWorkspaceChats,
     listKnownWorkspaces: securityPageData.listKnownWorkspaces,
     folderExists: securityPageData.folderExists,
+    // Read on demand only, so `remote` below is there by then (#1195).
+    listRemoteWorkspaces: async () => (await remote.releases.list()).map((entry) => entry.root),
     platform: process.platform,
     platformCapabilities,
     homeDir: os.homedir(),
