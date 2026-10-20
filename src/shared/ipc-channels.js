@@ -241,6 +241,13 @@ const REQUEST_CHANNELS = Object.freeze({
   REMOTE_PAIR_START: 'remote:pair:start',
   REMOTE_PAIR_CANCEL: 'remote:pair:cancel',
   REMOTE_UNPAIR: 'remote:unpair',
+  /**
+   * Which workspaces are open to the paired phone (#1195): read, and one
+   * opened or closed by its root. Opening is confirmed by main in a native
+   * dialog (#980); changes arrive over PUSH_CHANNELS.REMOTE_RELEASE_CHANGED.
+   */
+  REMOTE_RELEASE_GET: 'remote:release:get',
+  REMOTE_RELEASE_SET: 'remote:release:set',
 
   CHAT_HISTORY_GET: 'chatHistory:get',
   /** One chat with its messages, when it is opened; the list has none (#985). */
@@ -296,6 +303,8 @@ const PUSH_CHANNELS = Object.freeze({
   NOTICE_WITHDRAWN: 'notices:withdrawn',
   /** The pairing state changed (#1114): a normalized state, see contracts/remote/pairing-state.js. */
   REMOTE_STATE: 'remote:state',
+  /** A workspace was opened to the phone or closed again (#1195); no payload, the window reads again. */
+  REMOTE_RELEASE_CHANGED: 'remote:release:changed',
   UPDATE_AVAILABLE: 'update:available',
   /** Fortschritt des laufenden Update-Downloads (Issue #232). */
   UPDATE_PROGRESS: 'update:progress',

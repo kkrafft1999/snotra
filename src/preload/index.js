@@ -283,6 +283,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on(PUSH.REMOTE_STATE, listener);
       return () => ipcRenderer.removeListener(PUSH.REMOTE_STATE, listener);
     },
+    // The workspaces open to the phone (#1195). Opening one is asked by main
+    // in a native dialog; the root is checked there against the known folders.
+    getReleases: () => ipcRenderer.invoke(REQ.REMOTE_RELEASE_GET),
+    setReleased: (root, released) => ipcRenderer.invoke(REQ.REMOTE_RELEASE_SET, root ?? null, released),
+    onReleasesChanged: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on(PUSH.REMOTE_RELEASE_CHANGED, listener);
+      return () => ipcRenderer.removeListener(PUSH.REMOTE_RELEASE_CHANGED, listener);
+    },
   },
 
   // The error path (#978): what the window's global handlers caught goes to
