@@ -452,7 +452,10 @@ one place at registration that no handler can forget.
    (`no_approval_ui`). In the desktop app the window counts as subscribed to
    every chat of its workspace, so this happens only headless or when the
    window is gone; headless, the last connection's 30 s grace covers a
-   reconnect.
+   reconnect. *As built (#1194):* a card still needs the window to go out —
+   a phone's turn included —, and a phone that follows the chat is offered
+   it besides; without a window it expires, until a headless process
+   (#983) changes that.
 
 ### 7.5 What a connection may see
 
@@ -511,8 +514,8 @@ release list, **2** #981, **3** #980.
 | `message.send` | `{ chatId, text ≤maxTextChars, clientMessageId ≤64 }` → `{ runId, messageId }` — a repeated `clientMessageId` answers again and starts nothing, also on a new connection; `messageId` names the question | `not-found`, `refused` (the chat's workspace is not the one open at the desktop: its tools would work there — `workspace.activate` first), `busy` (the chat is running or waits for a card), `too-large`, `unavailable` (no provider set up for the chat's model) | L R | 2 | `chat:send` — the text and the chat id, not the history |
 | `run.abort` | `{ chatId }` → `{ aborted: bool }` | `not-found` | L R | 2 | `chat:abort` |
 | `chat.configuration` | `{ chatId }` → `{ model: { label }, mode: 'smart'\|'ask-all'\|'auto', reasoning?: string, skills: [{ name, state }], tools: [{ name, on }] }` — read only | `not-found` | L R | 2 | `chat:getConfiguration`, per chat instead of "the chat on screen" |
-| `approval.list` | `{ chatId? }` → `{ requests: ApprovalRequest[] }` | `not-found` | L R | 3 | `toolApproval:listPending` |
-| `approval.respond` | `{ requestId, response: 'allow-once'\|'deny', sandboxPaths?: string[] }` → `{ response }` — `sandboxPaths` only as a choice among the card's offers | `not-found` (not open, or not this connection's chat), `refused` (an option beyond the kind's) | L R | 3 | `toolApproval:respond` |
+| `approval.list` | `{ chatId? }` → `{ requests: ApprovalRequest[] }` — the open cards of the chats the connection may see | `not-found`, `refused` (the connection did not declare `approvals`) | L R | 3 | `toolApproval:listPending` |
+| `approval.respond` | `{ requestId, response: 'allow-once'\|'deny', sandboxPaths?: (string\|null)[] }` → `{ response }` — `sandboxPaths` only as a choice among the card's offers, named as the card showed them | `not-found` (not open, or not a chat this connection follows), `refused` (an option or a path beyond the kind's, or no `approvals` capability), `invalid-params` | L R | 3 | `toolApproval:respond` |
 
 `toolApproval:subscribe` has no method of its own: declaring `approvals` in
 `session.hello` and subscribing to a chat with `chat.open` together do what it
@@ -581,14 +584,14 @@ listed together where they share their class.
 | `toolApproval:subscribe`, `toolApproval:listPending`, `toolApproval:respond` | after #980: `session.hello` capability with `chat.open`, `approval.list`, `approval.respond` | Answers only *allow once* and *deny*; loosening stays with the confirmation port |
 | `toolApproval:request`, `toolApproval:resolved` (push) | after #980: `approval.request`, `approval.resolved` | — |
 | `toolPermissions:changed`, `skills:changed` (push) | after #981: folded into `chat.updated` | A remote client cares about its chat's configuration, not the settings page |
-| `chatHistory:upsert`, `chat:title` | **never**: the core persists and titles the chat (#981) | Remote front ends do not write chat rows; the window stops doing it too |
+| *chatHistory:upsert*, *chat:title* — removed with #981 | **never**: the core persists and titles the chat (#981) | Remote front ends do not write chat rows; the window no longer does either |
 | `chatHistory:setActive`, `chatHistory:activate` | desktop | The desktop's own screen state; `activate` switches the global preset and mode |
 | `chatHistory:delete` | desktop, for now ([O6](#11-open-decisions)) | Destructive |
 | `chatHistory:readAttachment` | later, as `attachment.read` | Images are placeholders in the first version ([§6.4](#64-binary-payloads)) |
 | `chat:file-changes` | later | The diff of what the agent changed; useful to a local client, not needed first |
-| `toolPermissions:setMode`, `addRule`, `removeRule`, `setSensitivePaths`, `resetWorkspaceRules`, `resetAll`, `setWorkspaceSandbox`, `setWorkspaceMode`, `setProgramAllowance` | desktop, **never** remote | Loosening (§7.6) |
-| `toolPermissions:clearSessionGrants`, `revokeSessionGrant`, `removeWorkspaceHost`, `removeProgramAllowance` | desktop | They only tighten and could be offered later; nothing needs them first |
-| `toolPermissions:getState`, `getSecurityOverview`, `resolveProgram`, `chooseAllowanceFolder` | desktop | The settings page's view; a folder dialog |
+| `toolPermissions:setMode`, `addRule`, `removeRule`, `setSensitivePaths`, `resetWorkspaceRules`, `resetAll`, `setWorkspaceSandbox`, `setWorkspaceMode`, `setProgramAllowance`, `addHosts`, `setNewWorkspaceSandbox`, `resetWorkspaceSandbox`, `resetSandboxEverywhere` | desktop, **never** remote | Loosening (§7.6), or a reset that can undo a tightening |
+| `toolPermissions:clearSessionGrants`, `revokeSessionGrant`, `removeWorkspaceHost`, `removeGlobalHost`, `removeProgramAllowance` | desktop | They only tighten and could be offered later; nothing needs them first |
+| `toolPermissions:getState`, `getSecurityOverview`, `getSandboxOverview`, `resolveProgram`, `chooseAllowanceFolder` | desktop | The settings page's view; a folder dialog |
 | `settings:setUIPrefs`, `settings:commitSettings`, `settings:saveMcpServer`, `settings:deleteMcpServer`, `settings:reloadMcpServers`, `settings:testMcpServer`, `settings:setWebSearchApiKey` | desktop, **never** remote | Secrets come in here; the execution switches and a local MCP command are confirmed through the port (§7.6, #1104) |
 | `settings:getLLMState`, `setActivePreset`, `setReasoningEffort`, `listModels`, `cancelModels`, `getUIPrefs`, `getToolCatalog`, `getMcpCatalog`, `getWebSearchState`, `getImageGenerationState`, `listImageModels`, `cancelImageModels`, `getPythonState`, `getShellState`, `getSkillCatalog`, `reloadSkills`, `getMemory`, `forgetMemory`, `removeFolderFromHistory` | desktop | The settings window. Choosing a chat's model from a phone is [O6](#11-open-decisions); it needs the per-chat model of #981 first |
 | `skills:suggest` | desktop | A helper of the window's composer |
@@ -609,6 +612,7 @@ listed together where they share their class.
 | `update:check`, `ignoreVersion`, `download`, `cancelDownload`, `discardDownload`, `install`, `update:available`, `update:progress` (push) | desktop | Updating the app is the desktop's business |
 | `feedback:getDiagnostics`, `feedback:send` | desktop | The feedback form |
 | `remote:getState`, `remote:pair:start`, `remote:pair:cancel`, `remote:unpair`, `remote:state` (push) | desktop, **never** remote | Pairing and removing the phone (#1114); a phone must not be able to pair another or remove itself through the protocol, and the *Allow* is the confirmation port's |
+| `remote:release:get`, `remote:release:set`, `remote:release:changed` (push) | desktop, **never** remote | Which workspaces the phone sees (#1195): opening one is a loosening with a receipt, and a phone must not widen what it may see |
 | `voice:start`, `voice:audio`, `voice:stop`, `voice:cancel`, `voice:transcript` (push), `whisper:transcribe`, `whisper:cancel` | desktop | The microphone belongs to the window; a phone has its own dictation |
 | all eleven `ui:*` pushes and `ui:preview-history-choice` | desktop | Menu items and shortcuts of the window |
 | all `manual:*` channels | desktop | The manual window; it is also published at docs.snotra-ai.dev |
@@ -705,7 +709,18 @@ the attacker model.
    its menu, or answers `unsaved` while the file on show has unsaved
    changes; without a window main opens it itself. A switch that happened
    posts the notice `remote-workspace-switched` with the folder's name.
-3. **Decide.** The approval methods and events — after #980.
+3. **Decide.** The approval methods and events — after #980. *Built for
+   the relay* (#1194): the tool approval adapter tells who it offered a
+   card and who answered it (`observe`), and takes a remote's answer through
+   `respondFromRemote` — *allow once* or *deny*, and on a sandbox card only
+   paths it offered; anything wider is `refused`. A connection that declared
+   `approvals` gets the cards of the chats it follows (`approval.request`,
+   in `chat.open` as `pendingApprovals`) worded in its language, paths
+   inside the workspace relative to it, without the session scope, the
+   command rule or *for this workspace*; `approval.resolved` names who
+   answered. The first valid answer wins, the window's included. Every IPC
+   channel is classified in §8.3, and `test/remote-interface-catalogue.test.js`
+   keeps it so.
 4. **Relay.** The relay transport under the same dispatcher (phases 1–3 of
    #1081). A headless process serving the protocol needs #983 as well.
 

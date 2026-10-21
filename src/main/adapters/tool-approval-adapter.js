@@ -42,6 +42,23 @@ const { isRecord } = require('../../shared/runtime/is-record');
  */
 
 /**
+ * Who answered a card (`docs/remote-interface.md` §7.4): the window, or a
+ * remote front end by its kind and the name it gave.
+ * @typedef {{ kind: string, client?: string }} ApprovalAnswerer
+ *
+ * What a remote front end hears of the cards (#1194, step 3): a card that
+ * went out, as its DTO, and a card that was settled — by whom, when it was
+ * answered rather than voided.
+ * @typedef {{ type: 'request', chatId: string|null, dto: object }
+ *   | { type: 'resolved', requestId: string, chatId: string|null, response: string|null, invalidated: boolean,
+ *       reason: string|null, by: ApprovalAnswerer|null }} ApprovalEvent
+ */
+
+/** The answers a remote front end may give (§7.4): nothing that stores or widens. */
+/** @type {Set<string>} */
+const REMOTE_RESPONSES = new Set([APPROVAL_RESPONSES.ALLOW_ONCE, APPROVAL_RESPONSES.DENY]);
+
+/**
  * @param {unknown} chatId
  * @returns {string|null}
  */
@@ -80,6 +97,9 @@ function abortReason(signal) {
  *   invalidateAll: (reason?: string) => void,
  *   listPending: (sessionId?: string|number) => Array<object>,
  *   pendingCount: () => number,
+ *   observe: (listener: (event: ApprovalEvent) => void) => () => void,
+ *   respondFromRemote: (requestId: unknown, answer: { response?: unknown, sandboxPaths?: unknown }, by: ApprovalAnswerer) =>
+ *     { ok: true, response: string } | { ok: false, reason: 'not-found' | 'refused' },
  * }}
  */
 function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredByWindow = () => false }) {
@@ -87,6 +107,20 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
   const subscribers = new Map();
   /** @type {Map<string, PendingApproval>} requestId → the open request */
   const pending = new Map();
+  /** @type {Set<(event: ApprovalEvent) => void>} */
+  const observers = new Set();
+
+  /** @param {ApprovalEvent} event */
+  function tell(event) {
+    for (const observer of observers) {
+      try {
+        observer(event);
+      } catch (error) {
+        // A remote that cannot follow never holds up a card.
+        log?.warn?.(`[tool-approval] an observer failed: ${error?.message || error}`);
+      }
+    }
+  }
 
   /**
    * The session whose window answers a request of `sessionId`: its own, or —
@@ -127,12 +161,22 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
   /**
    * @param {string} requestId
    * @param {ToolApprovalOutcome} outcome
+   * @param {ApprovalAnswerer} [by]  who answered; the window unless a remote did
    */
-  function settle(requestId, outcome) {
+  function settle(requestId, outcome, by = { kind: 'desktop' }) {
     const entry = pending.get(requestId);
     if (!entry) return false;
     pending.delete(requestId);
     entry.cleanup?.();
+    tell({
+      type: 'resolved',
+      requestId,
+      chatId: entry.chatId,
+      response: outcome.invalidated ? null : outcome.response ?? null,
+      invalidated: outcome.invalidated === true,
+      reason: outcome.reason || null,
+      by: outcome.invalidated ? null : by,
+    });
     const target = subscribers.get(entry.sessionId);
     if (target) {
       send(target, PUSH.TOOL_APPROVAL_RESOLVED, {
@@ -237,7 +281,9 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
         const dto = createToolApprovalRequestDto({ ...request, requestId });
         if (!send(target, PUSH.TOOL_APPROVAL_REQUEST, dto)) {
           settle(requestId, { invalidated: true, reason: PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI });
+          return;
         }
+        tell({ type: 'request', chatId: chatKey(request?.chatId), dto });
       });
     },
     /**
@@ -301,6 +347,43 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
     },
     pendingCount() {
       return pending.size;
+    },
+    /** @param {(event: ApprovalEvent) => void} listener */
+    observe(listener) {
+      observers.add(listener);
+      return () => { observers.delete(listener); };
+    },
+    /**
+     * An answer from a remote front end (#1194, step 3; §7.4): only *allow
+     * once* or *deny* — anything beyond is refused, not quietly made smaller —
+     * and on a sandbox card only paths the card offered. Whether the front
+     * end may answer for this chat at all, its dispatcher decided.
+     *
+     * @param {unknown} requestId
+     * @param {{ response?: unknown, sandboxPaths?: unknown }} answer
+     * @param {ApprovalAnswerer} by
+     */
+    respondFromRemote(requestId, { response, sandboxPaths } = {}, by) {
+      const entry = typeof requestId === 'string' ? pending.get(requestId) : undefined;
+      if (!entry || typeof requestId !== 'string') return { ok: false, reason: 'not-found' };
+      if (typeof response !== 'string' || !REMOTE_RESPONSES.has(response)) return { ok: false, reason: 'refused' };
+      const sandbox = entry.request?.sandbox;
+      const offered = isRecord(sandbox) && Array.isArray(sandbox.entries) ? sandbox.entries : null;
+      if (sandboxPaths !== undefined) {
+        if (!offered || !Array.isArray(sandboxPaths) || sandboxPaths.length > offered.length) return { ok: false, reason: 'refused' };
+        if (sandboxPaths.some((chosen, i) => chosen != null && (typeof chosen !== 'string' || !offered[i].allow.includes(chosen)))) {
+          return { ok: false, reason: 'refused' };
+        }
+      }
+      const paths = offered && response !== APPROVAL_RESPONSES.DENY
+        ? { sandboxPaths: offered.map((e, i) => {
+          // Checked above: a chosen path is one the card offered.
+          const chosen = Array.isArray(sandboxPaths) ? /** @type {string|null|undefined} */ (sandboxPaths[i]) : null;
+          return chosen ?? e.allow[0];
+        }) }
+        : {};
+      settle(requestId, { response: /** @type {import('../../shared/contracts/tool-permissions').ApprovalResponse} */ (response), ...paths }, by);
+      return { ok: true, response };
     },
   };
 }

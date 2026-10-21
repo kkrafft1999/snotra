@@ -779,6 +779,9 @@ function createCore({
   // Nothing of it runs before the user starts a pairing or the application
   // starts it with a phone already paired (R7); its Allow comes from the
   // user-confirmation port.
+  // The cards a phone follows, and who answered them (#1194, step 3).
+  approvals.observe((event) => remoteActivity.publishApproval(event));
+
   // The phone opens another folder through the window (#1194, step 2c); its answer comes over IPC.
   const remoteWorkspaceSwitch = createWindowWorkspaceSwitch({ push: pushToWindow, PUSH, randomUUID: () => crypto.randomUUID() });
 
@@ -804,6 +807,8 @@ function createCore({
       normalizeRoot: (root) => storage.normalizeWorkspaceRoot(root),
       runningChatIds: () => chatEngine.runningChatIds(),
       listPendingApprovals: () => approvals.listPending(),
+      // A phone answers a card with allow once or deny only (#1194, step 3).
+      respondToApproval: (requestId, answer, by) => approvals.respondFromRemote(requestId, answer, by),
       activity: remoteActivity,
       conversation,
       llm: chatLlm,

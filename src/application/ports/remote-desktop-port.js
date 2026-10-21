@@ -35,9 +35,13 @@
 /**
  * What happened on the desktop that a remote front end may have to hear of:
  * an event of a running turn — `delta`, `tool-line` or `progress`, the
- * payload as the window gets it — or a switch of the open workspace.
+ * payload as the window gets it —, a switch of the open workspace, or a card
+ * that went out or was settled (step 3), the card as the window's DTO.
  * @typedef {{ kind: 'run', chatId: string, runId: string|null, type: string, payload: Record<string, unknown> }
- *   | { kind: 'workspace' }} RemoteDesktopActivity
+ *   | { kind: 'workspace' }
+ *   | { kind: 'approval', type: 'request', chatId: string|null, dto: Record<string, unknown> }
+ *   | { kind: 'approval', type: 'resolved', requestId: string, chatId: string|null, response: string|null,
+ *       invalidated: boolean, reason: string|null, by: { kind: string, client?: string } | null }} RemoteDesktopActivity
  */
 
 /**
@@ -48,6 +52,10 @@
  * @property {(chatId: string) => Promise<RemoteStoredChat|null>} loadChat  in whichever folder it is kept
  * @property {() => ReadonlySet<string>} runningChats  the ids of the chats whose turn is under way
  * @property {() => ReadonlySet<string>} awaitingApproval  the ids of the chats with a card open
+ * @property {() => Array<Record<string, unknown>>} pendingApprovals  the open cards, as the window's DTOs
+ * @property {(requestId: unknown, answer: { response?: unknown, sandboxPaths?: unknown }, by: { kind: string, client?: string }) =>
+ *   { ok: true, response: string } | { ok: false, reason: 'not-found' | 'refused' }} respondToApproval
+ *   only *allow once* or *deny*, and on a sandbox card only paths it offered (§7.4)
  * @property {(listener: (activity: RemoteDesktopActivity) => void) => () => void} subscribe
  * @property {(turn: RemoteTurn) => Promise<{ ok: true } | { ok: false, reason: 'unavailable' }>} startTurn
  *   starts a turn in the open workspace and answers once it is accepted; its events, and a

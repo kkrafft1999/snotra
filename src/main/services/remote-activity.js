@@ -42,6 +42,16 @@ function createRemoteActivity({ log = console } = {}) {
     workspaceChanged() {
       if (listeners.size) tell({ kind: 'workspace' });
     },
+    /**
+     * A card went out or was settled (#1194, step 3), as the tool approval
+     * adapter observes it.
+     * @param {{ type: 'request', chatId: string|null, dto: object }
+     *   | { type: 'resolved', requestId: string, chatId: string|null, response: string|null, invalidated: boolean,
+     *       reason: string|null, by: { kind: string, client?: string } | null }} event
+     */
+    publishApproval(event) {
+      if (listeners.size) tell(/** @type {any} */ ({ kind: 'approval', ...event }));
+    },
     /** @param {(activity: import('../../application/ports/remote-desktop-port').RemoteDesktopActivity) => void} listener */
     subscribe(listener) {
       listeners.add(listener);
