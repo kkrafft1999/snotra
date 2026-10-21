@@ -13,7 +13,7 @@ import { settingsPageName } from '../utils/settings-pages.js';
 import { initSecurityPanel } from './SecurityPanel.js';
 import { initSettingsHelp } from './SettingsHelp.js';
 import { initModelPricesSettings } from './ModelPricesSettings.js';
-import { initRemoteAccessSettings } from './RemoteAccessSettings.js';
+import { initRemoteAccessSettings, initRemoteSectionVisibility } from './RemoteAccessSettings.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -173,6 +173,13 @@ export function initSettingsModal(deps) {
     root: document.getElementById('settings-remote-body'),
     api,
     openPanel: (panelKey) => (panelKey === 'sandbox' ? openSandboxPage() : activateSettingsPanel(panelKey)),
+  });
+  // Shown in developer mode, or while a phone is paired (#1213).
+  initRemoteSectionVisibility({
+    api,
+    tab: document.getElementById('tab-settings-remote'),
+    leave: () => activateSettingsPanel('models'),
+    isActive: () => activePanelKey === 'remote',
   });
   const panelHelpButton = document.getElementById('btn-settings-panel-help');
   const settingsNavTabs = [...document.querySelectorAll('.settings-nav-item[role="tab"]')];
@@ -2706,8 +2713,10 @@ export function initSettingsModal(deps) {
     // The list turns into a row below 640 px, so both arrow axes move.
     tab.addEventListener('keydown', (e) => {
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      const i = settingsNavTabs.indexOf(tab);
-      const n = settingsNavTabs.length;
+      // A section shown only in developer mode (#1213) is skipped while hidden.
+      const shown = settingsNavTabs.filter((candidate) => !candidate.hidden);
+      const i = shown.indexOf(tab);
+      const n = shown.length;
       let next;
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (i + 1) % n;
       else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = (i - 1 + n) % n;
@@ -2715,7 +2724,7 @@ export function initSettingsModal(deps) {
       else if (e.key === 'End') next = n - 1;
       else return;
       e.preventDefault();
-      const target = settingsNavTabs[next];
+      const target = shown[next];
       activateSettingsPanel(target.dataset.settingsPanel);
       target.focus();
     });

@@ -37,6 +37,7 @@ const { registerPreviewHistoryMenuHandlers } = require('../ipc/preview-history-m
 const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
 const { registerRemoteHandlers } = require('../ipc/remote-handlers');
+const { registerDeveloperModeHandlers } = require('../ipc/developer-mode-handlers');
 const { createRemoteReleaseSettings } = require('../services/remote-release-settings');
 const { createCore } = require('./create-core');
 
@@ -273,6 +274,7 @@ function createApplication({
   });
   // Pairing a phone as the mobile remote (#1114); its Allow comes from the native dialog.
   // Next to it the workspaces open to the phone (#1195); opening one is confirmed natively too.
+  registerDeveloperModeHandlers({ ipcMain, developerMode: core.developerMode, pushToWindow, REQ, PUSH });
   registerRemoteHandlers({
     ipcMain,
     pairing: core.remote.pairing,

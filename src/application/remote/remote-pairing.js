@@ -96,11 +96,12 @@ function isGone(error) {
  *   clearTimer?: (timer: unknown) => void,
  *   log?: { warn: (...args: unknown[]) => void },
  *   connection?: { isConnected: () => boolean },
- *   open?: boolean,
+ *   open?: boolean | (() => boolean),
  * }} deps  `receipts` is the half of the registry that redeems; without it nothing is ever allowed.
  *   `connection` is the channel (#1192): whether a session with the paired phone stands.
  *   `open` false keeps pairing closed (#1110): `start` refuses with `locked` before anything
- *   reaches the relay; cancelling and removing a phone still work.
+ *   reaches the relay; cancelling and removing a phone still work. A function is asked each
+ *   time — developer mode opens it (#1213); `refresh()` after it changed.
  */
 function createRemotePairing({
   relay,
@@ -116,6 +117,7 @@ function createRemotePairing({
   connection = { isConnected: () => false },
   open = true,
 }) {
+  const isOpen = typeof open === 'function' ? open : () => open !== false;
   /**
    * The paired phone as kept: { channelId, keys, pairedAt }
    * @type {import('../ports/remote-identity-port').RemotePairedPhone | null}
@@ -152,7 +154,7 @@ function createRemotePairing({
       words: flow && step === STATES.CONFIRM ? flow.words : null,
       replacing: !!flow && ACTIVE_STEPS.has(step) && !!phone,
       reason: flow?.reason ?? null,
-      locked: !open,
+      locked: !isOpen(),
     });
   }
 
@@ -375,7 +377,7 @@ function createRemotePairing({
   /** Steps 3–11. A running pairing is stopped first; a phone paired already stays until *Allow*. */
   async function start() {
     // Not open yet (#1110): refused here, whatever the window shows — nothing reaches the relay.
-    if (!open) return normalizeRemotePairingResult({ ok: false, reason: REASONS.LOCKED });
+    if (!isOpen()) return normalizeRemotePairingResult({ ok: false, reason: REASONS.LOCKED });
     if (!identity.isAvailable()) return normalizeRemotePairingResult({ ok: false, reason: REASONS.ENCRYPTION_UNAVAILABLE });
     if (!stopFlow()) return normalizeRemotePairingResult({ ok: false, reason: REASONS.BUSY });
 
@@ -540,7 +542,16 @@ function createRemotePairing({
     relay.close();
   }
 
-  return { start, cancel, unpair, forgetChannel, getState, subscribe, dispose, notifyConnection: emit };
+  /**
+   * Whether pairing is open changed (#1213): the state says so, and a pairing
+   * under way while it closed stops — one past *Allow* is let finish.
+   */
+  function refresh() {
+    if (!isOpen() && flow && !flow.done) stopFlow();
+    emit();
+  }
+
+  return { start, cancel, unpair, forgetChannel, getState, subscribe, dispose, notifyConnection: emit, refresh };
 }
 
 module.exports = { createRemotePairing, PAIRING_TTL_MS };

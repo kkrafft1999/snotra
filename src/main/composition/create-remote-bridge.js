@@ -50,9 +50,11 @@ const RELAY_DELTA_BATCH_MS = 150;
  *   desktop?: import('../../application/ports/remote-desktop-port').RemoteDesktopPort | null,
  *   normalizeRoot?: (root: unknown) => string|null,
  *   pairingOpen?: boolean,
+ *   developerMode?: { isOn: () => boolean, subscribe: (listener: () => void) => unknown } | null,
  *   log?: { warn: (...args: unknown[]) => void },
  * }} deps  `relay` replaces the Firebase relay — the in-memory one in tests;
  *   `pairingOpen` whether a phone may be paired — this build's `PAIRING_OPEN` (#1110), tests open it;
+ *   `developerMode` opens it as well while it is on (#1213);
  *   `desktop` is what the dispatcher reads, and `normalizeRoot` the chat history's naming of a folder —
  *   without a desktop the stand-in answers; `messages` replaces either
  */
@@ -72,6 +74,7 @@ function createRemoteBridge({
   desktop = null,
   normalizeRoot = (root) => (typeof root === 'string' && root.trim() ? path.resolve(root.trim()) : null),
   pairingOpen = PAIRING_OPEN,
+  developerMode = null,
   log = console,
 }) {
   const relayPort = relay || createFirebaseRelayAdapter({ endpoint: PRODUCTION_RELAY, fetchImpl: fetchImpl || globalThis.fetch });
@@ -96,8 +99,12 @@ function createRemoteBridge({
     prompt: pairingPrompt(getLocale),
     log,
     connection: { isConnected: () => channel?.isConnected() === true },
-    open: pairingOpen,
+    // Open in this build, or while developer mode is on (#1213); asked at every start.
+    open: () => pairingOpen === true || developerMode?.isOn() === true,
   });
+  // Developer mode switched or read: the panel learns whether pairing is open,
+  // and a pairing under way stops once it closes (#1213).
+  developerMode?.subscribe(() => pairing.refresh());
   channel = createRemoteChannel({
     relay: relayPort,
     identity,

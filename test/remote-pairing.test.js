@@ -418,3 +418,20 @@ test('closed (#1110): a phone paired before can still be removed', async (t) => 
   assert.equal((await closed.pairing.unpair()).ok, true);
   assert.equal((await closed.pairing.getState()).state, 'empty');
 });
+
+test('developer mode (#1213): pairing follows whether it is open, and a running one stops when it closes', async (t) => {
+  let open = false;
+  const f = createPairingFixture(t, { open: () => open });
+  assert.deepEqual(await f.pairing.start(), { ok: false, reason: 'locked' });
+  open = true;
+  f.pairing.refresh();
+  assert.equal((await f.pairing.getState()).locked, false);
+  assert.deepEqual(await f.pairing.start(), { ok: true });
+  await f.stateIs('code');
+  open = false;
+  f.pairing.refresh();
+  const state = await f.pairing.getState();
+  assert.equal(state.state, 'empty');
+  assert.equal(state.locked, true);
+  await f.until(() => f.relay.inspect.channelIds().length === 0, 'the channel deleted');
+});

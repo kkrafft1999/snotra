@@ -12658,3 +12658,9 @@ select.modal-input {
   .ra-device { grid-template-columns: auto minmax(0, 1fr); }
   .ra-device__actions { grid-column: 1 / -1; justify-content: flex-start; }
 }
+/* The Developer chip on a settings section shown in developer mode (#1213). */
+.settings-nav-chip { display: inline-flex; align-items: center; margin-left: 6px; padding: 0 6px; border-radius: 999px;
+  font-size: var(--ds-font-size-xs); font-weight: 600; vertical-align: 1px; background: var(--ds-blue-soft); color: var(--ds-blue-strong); }
+.settings-nav-chip[hidden] { display: none; }
+/* A section shown only in developer mode or with a phone paired (#1213), in every layout of the nav. */
+.settings-nav-item[hidden] { display: none; }

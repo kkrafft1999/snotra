@@ -827,6 +827,9 @@ function normalizeUiPrefs(raw) {
     // Hidden files in the tree (#436): off by default, so nothing changes for
     // anyone who does not look for the switch. Hence `=== true`.
     showHiddenFiles: data.showHiddenFiles === true,
+    // Developer mode (#1213): off unless switched on with its shortcut. Not
+    // in the patch below — only main's own toggle writes it.
+    developerMode: data.developerMode === true,
     baseSystemPrompt,
     appLocale,
     // `allowWorkspaceWrite` (bis v1.3.1) wird bewusst nicht mehr übernommen: das

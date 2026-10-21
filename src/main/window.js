@@ -4,6 +4,7 @@ const { createRendererNavigationHandler, RENDERER_URL } = require('./permissions
 const { isOpenableUrl } = require('./ipc/shell-handlers');
 const { resolveWindowBounds, createWindowStateStore } = require('./window-state');
 const { createHiddenFilesShortcutHandler } = require('./services/hidden-files-shortcut');
+const { createDeveloperModeShortcutHandler } = require('./services/developer-mode-shortcut');
 const { createPreviewHistoryShortcutHandler } = require('./services/preview-history-shortcut');
 const { windowTitle } = require('./services/window-title');
 const { createRendererErrorForwarder } = require('./services/renderer-console');
@@ -199,6 +200,10 @@ function createWindow() {
   // with the focus in the chat input as well — like a menu accelerator would.
   window.webContents.on('before-input-event', createHiddenFilesShortcutHandler({
     onToggle: () => window.webContents.send(PUSH.UI_TOGGLE_HIDDEN_FILES),
+  }));
+  // Developer mode (#1213), the same way: the window asks main to switch it.
+  window.webContents.on('before-input-event', createDeveloperModeShortcutHandler({
+    onToggle: () => window.webContents.send(PUSH.UI_TOGGLE_DEVELOPER_MODE),
   }));
   // Back and forward in the preview (#822), the same way and for the same
   // reason: by the physical key, and with the focus anywhere in the window.

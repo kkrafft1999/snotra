@@ -1,6 +1,6 @@
 'use strict';
 
-const { NOTICE_KINDS, REMOTE_WORKSPACE_SWITCHED_NOTICE_ID, normalizeNotice } = require('../../shared/contracts/notices');
+const { NOTICE_KINDS, REMOTE_WORKSPACE_SWITCHED_NOTICE_ID, DEVELOPER_MODE_NOTICE_ID, normalizeNotice } = require('../../shared/contracts/notices');
 
 /**
  * The notices of this start (#1001, the notice channel of #978).
@@ -114,4 +114,28 @@ function postRemoteWorkspaceSwitch(notices, folder) {
   notices.post({ id: REMOTE_WORKSPACE_SWITCHED_NOTICE_ID, kind: NOTICE_KINDS.REMOTE_WORKSPACE_SWITCHED, folder });
 }
 
-module.exports = { createAppNotices, postStoreFileEvent, postRemoteWorkspaceSwitch };
+/**
+ * Developer mode was switched with its shortcut (#1213): the notice says
+ * which way, so that the shortcut does not go unnoticed.
+ *
+ * @param {{ post: (input: unknown) => unknown }} notices
+ * @param {boolean} on
+ */
+function postDeveloperModeNotice(notices, on) {
+  notices.post({ id: DEVELOPER_MODE_NOTICE_ID, kind: NOTICE_KINDS.DEVELOPER_MODE, on });
+}
+
+/**
+ * The listener for developer mode: a notice when it was switched, none when
+ * it was only read at start.
+ *
+ * @param {{ post: (input: unknown) => unknown }} notices
+ * @returns {(on: boolean, how: 'loaded' | 'switched') => void}
+ */
+function developerModeNotices(notices) {
+  return (on, how) => {
+    if (how === 'switched') postDeveloperModeNotice(notices, on);
+  };
+}
+
+module.exports = { createAppNotices, postStoreFileEvent, postRemoteWorkspaceSwitch, postDeveloperModeNotice, developerModeNotices };

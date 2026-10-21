@@ -225,6 +225,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // Developer mode (#1213): read, switch with its shortcut, follow.
+  developerMode: {
+    get: () => ipcRenderer.invoke(REQ.DEVELOPER_MODE_GET),
+    toggle: () => ipcRenderer.invoke(REQ.DEVELOPER_MODE_TOGGLE),
+    // ⌘⌥⇧D / Ctrl+Alt+Shift+D, caught by main before the page sees the key.
+    onShortcut: (callback) => {
+      const listener = () => callback();
+      ipcRenderer.on(PUSH.UI_TOGGLE_DEVELOPER_MODE, listener);
+      return () => ipcRenderer.removeListener(PUSH.UI_TOGGLE_DEVELOPER_MODE, listener);
+    },
+    onChange: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on(PUSH.DEVELOPER_MODE_CHANGED, listener);
+      return () => ipcRenderer.removeListener(PUSH.DEVELOPER_MODE_CHANGED, listener);
+    },
+  },
   // The phone asks to open another folder (#1194); the window answers with the outcome.
   onWorkspaceSwitchRequested: (callback) => {
     const channel = PUSH.WORKSPACE_SWITCH_REQUESTED;

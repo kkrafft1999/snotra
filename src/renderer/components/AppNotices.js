@@ -47,6 +47,13 @@ const WORDING = Object.freeze({
     tone: 'error',
     help: 'notice.backgroundError',
   },
+  // Developer mode (#1213): which way it was switched, and what it opens.
+  [NOTICE_KINDS.DEVELOPER_MODE]: {
+    heading: (notice) => t(notice.on ? 'notice.developerMode.on' : 'notice.developerMode.off'),
+    text: (notice) => t(notice.on ? 'notice.developerMode.on.text' : 'notice.developerMode.off.text'),
+    tone: 'info',
+    help: null,
+  },
   // No help link until the manual has its remote access chapter (#1110).
   [NOTICE_KINDS.REMOTE_WORKSPACE_SWITCHED]: {
     heading: () => t('notice.remoteWorkspaceSwitched'),
