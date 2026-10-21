@@ -19,6 +19,7 @@ const {
   normalizeRemotePairingResult,
   normalizeRemotePairingState,
 } = require('../../shared/contracts/remote/pairing-state');
+const { withQrModules } = require('../remote/pairing-qr');
 
 /**
  * @param {{
@@ -40,9 +41,11 @@ const {
  *   window's answer to a folder the phone asked to open (#1194)
  */
 function registerRemoteHandlers({ ipcMain, pairing, releaseSettings = null, workspaceSwitch = null, pushToWindow, REQ, PUSH }) {
-  pairing.subscribe((state) => pushToWindow(PUSH.REMOTE_STATE, normalizeRemotePairingState(state)));
+  // The QR code is drawn here and goes along as modules: the window only paints it (#1110).
+  const forWindow = (/** @type {unknown} */ state) => normalizeRemotePairingState(withQrModules(normalizeRemotePairingState(state)));
+  pairing.subscribe((state) => pushToWindow(PUSH.REMOTE_STATE, forWindow(state)));
 
-  ipcMain.handle(REQ.REMOTE_GET_STATE, async () => normalizeRemotePairingState(await pairing.getState()));
+  ipcMain.handle(REQ.REMOTE_GET_STATE, async () => forWindow(await pairing.getState()));
   ipcMain.handle(REQ.REMOTE_PAIR_START, async () => normalizeRemotePairingResult(await pairing.start()));
   ipcMain.handle(REQ.REMOTE_PAIR_CANCEL, async () => normalizeRemotePairingResult(await pairing.cancel()));
   ipcMain.handle(REQ.REMOTE_UNPAIR, async () => normalizeRemotePairingResult(await pairing.unpair()));

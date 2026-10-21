@@ -13,6 +13,7 @@ import { settingsPageName } from '../utils/settings-pages.js';
 import { initSecurityPanel } from './SecurityPanel.js';
 import { initSettingsHelp } from './SettingsHelp.js';
 import { initModelPricesSettings } from './ModelPricesSettings.js';
+import { initRemoteAccessSettings } from './RemoteAccessSettings.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -24,7 +25,8 @@ import { initModelPricesSettings } from './ModelPricesSettings.js';
 // workspace default mode; Tools › Security (#1119) applies everything at
 // once. MCP is no section of its own since #767: its servers sit on
 // Tool setup, whose hint names them.
-const IMMEDIATE_PANELS = new Set(['security', 'sandbox', 'memory']);
+// Remote access (#1110): pairing and removing a phone take effect at once.
+const IMMEDIATE_PANELS = new Set(['security', 'sandbox', 'memory', 'remote']);
 
 /**
  * The hint in the footer depends on the section. Since issue #297 memory is
@@ -43,7 +45,7 @@ const APPLY_HINT_KEYS = {
 // `security` is Tools › Autonomy (once "Tools & security"), `sandbox` is
 // Tools › Security (#1119), `tools` is Tools › Setup with the MCP servers
 // (#767); the keys stayed so that links and ids did not move.
-const SETTINGS_NAV_KEYS = ['models', 'security', 'sandbox', 'tools', 'skills', 'memory', 'general'];
+const SETTINGS_NAV_KEYS = ['models', 'security', 'sandbox', 'tools', 'skills', 'memory', 'remote', 'general'];
 
 /** Disclosure arrow of the skill rows (#98); turns by CSS. */
 const CHEVRON_ICON_HTML =
@@ -165,6 +167,12 @@ export function initSettingsModal(deps) {
       model: preset.model,
       baseUrl: preset.connection?.baseUrl || findProviderView(preset.providerId)?.defaultBaseUrl || '',
     })),
+  });
+  // The phone of the mobile remote (#1110), drawn from main's pairing state.
+  const remoteAccessSettings = initRemoteAccessSettings({
+    root: document.getElementById('settings-remote-body'),
+    api,
+    openPanel: (panelKey) => (panelKey === 'sandbox' ? openSandboxPage() : activateSettingsPanel(panelKey)),
   });
   const panelHelpButton = document.getElementById('btn-settings-panel-help');
   const settingsNavTabs = [...document.querySelectorAll('.settings-nav-item[role="tab"]')];
@@ -1878,6 +1886,9 @@ export function initSettingsModal(deps) {
     if (activePanelKey === 'security' && !modalSettings.classList.contains('hidden')) void securityPanel.refresh();
     if (activePanelKey === 'sandbox' && !modalSettings.classList.contains('hidden')) toolSecurityPanel.open().catch(reportSandboxPageFailure);
     if (activePanelKey === 'tools' && !modalSettings.classList.contains('hidden')) listImageModelsOnce();
+    if (activePanelKey === 'remote' && !modalSettings.classList.contains('hidden')) {
+      remoteAccessSettings.open().catch((error) => console.error('[settings] the remote access panel could not be drawn:', error));
+    }
     const applyHint = document.getElementById('settings-apply-hint');
     if (applyHint) {
       let hintKey = APPLY_HINT_KEYS.deferred;

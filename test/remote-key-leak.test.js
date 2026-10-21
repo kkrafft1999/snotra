@@ -48,6 +48,8 @@ function wiredMain(t, { relay, dir = tempDir(t) } = {}) {
   const ipcMain = createMockIpcMain();
   const ipc = [];
   const bridge = createRemoteBridge({
+    // Pairing is closed in this build until the phone's side is out (#1110); these tests pair.
+    pairingOpen: true,
     userDataPath: dir,
     secretStore: safeStorage,
     fs: fsp,
@@ -181,7 +183,7 @@ test('the identity keys never reach a log, an IPC payload or a crash report', as
   assertAbsent(logText, channelIds, 'the log');
 
   // And nothing but the fields of the contract.
-  const allowed = new Set(['state', 'encryptionAvailable', 'phone', 'code', 'words', 'replacing', 'reason', 'ok', 'relayDeleted']);
+  const allowed = new Set(['state', 'encryptionAvailable', 'phone', 'code', 'words', 'replacing', 'reason', 'locked', 'ok', 'relayDeleted']);
   for (const { channel, payload } of main.ipc) {
     for (const key of Object.keys(payload)) assert.ok(allowed.has(key), `${channel} carries ${key}`);
     if (payload.phone) assert.deepEqual(Object.keys(payload.phone).sort(), ['connected', 'pairedAt']);

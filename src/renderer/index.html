@@ -623,6 +623,10 @@
             <span data-i18n="settings.nav.memory">Memory</span>
             <span class="settings-nav-item__desc" data-i18n="settings.nav.memory.desc">What Snotra keeps across chats</span>
           </button>
+          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-remote" id="tab-settings-remote" data-settings-panel="remote">
+            <span data-i18n="settings.nav.remote">Remote access</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.remote.desc">Your chats on your iPhone</span>
+          </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-general" id="tab-settings-general" data-settings-panel="general">
             <span data-i18n="settings.nav.general">General</span>
             <span class="settings-nav-item__desc" data-i18n="settings.nav.general.desc">Appearance, text, behaviour</span>
@@ -1085,6 +1089,16 @@
               </p>
             </div>
             <div id="settings-memory-scopes"></div>
+          </section>
+
+          <!-- Settings › Remote access (#1110): drawn by RemoteAccessSettings.js from main's pairing state. -->
+          <section class="settings-panel" id="panel-settings-remote" role="tabpanel" aria-labelledby="tab-settings-remote" hidden>
+            <p class="settings-form-hint" data-i18n="settings.remote.intro">Follow your chats from your iPhone when you are away from this computer, write in them and answer approvals. The chats stay here; the phone only shows them, end-to-end encrypted through a relay that cannot read them.</p>
+            <details class="settings-note ra-relay-note">
+              <summary class="settings-note__summary"><span data-i18n="settings.remote.relay.summary">What the relay can see — and what it can’t.</span></summary>
+              <div class="settings-note__body"><p data-i18n="settings.remote.relay.body">It sees that a connection exists, when each side is online, the size and time of each packet and both IP addresses — never what a chat says. Nothing connects and nothing goes to the relay until you pair a phone.</p></div>
+            </details>
+            <div id="settings-remote-body"></div>
           </section>
 
           <section class="settings-panel" id="panel-settings-general" role="tabpanel" aria-labelledby="tab-settings-general" hidden>

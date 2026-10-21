@@ -117,6 +117,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "0.0.79",
+    "qrcode-generator": "^2.0.4",
     "undici": "^8.12.2"
   },
   "devDependencies": {
@@ -134,6 +135,7 @@
     "electron": "^44.7.2",
     "esbuild": "^0.28.2",
     "happy-dom": "^21.0.1",
+    "jsqr": "^1.4.0",
     "marked": "^18.1.1",
     "pdfjs-dist": "^6.4.299",
     "playwright-core": "^1.64.1",

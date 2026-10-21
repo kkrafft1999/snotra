@@ -305,6 +305,8 @@ test('wired as the bridge: the panel learns the connection, and a channel the ph
   const dialog = createFakeDialog();
   const registry = createConfirmationReceipts();
   const bridge = createRemoteBridge({
+    // Pairing is closed in this build until the phone's side is out (#1110); these tests pair.
+    pairingOpen: true,
     userDataPath: tempDir(t),
     secretStore: createFakeSafeStorage(),
     fs: fsp,

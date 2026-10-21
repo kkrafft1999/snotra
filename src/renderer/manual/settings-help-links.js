@@ -42,6 +42,10 @@ export const SETTINGS_HELP = Object.freeze({
     slug: 'customising/memory',
     title: { en: 'Let Snotra remember', de: 'Snotra etwas merken lassen' },
   },
+  'panel.remote': {
+    slug: 'customising/remote-access',
+    title: { en: 'Follow your chats from your phone', de: 'Deine Chats vom Handy aus verfolgen' },
+  },
   'panel.general': {
     slug: 'customising/settings',
     section: { en: 'The section General', de: 'Der Bereich Allgemein' },
