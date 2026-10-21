@@ -59,11 +59,16 @@ const isChatId = (chatId) => typeof chatId === 'string' && chatId.length > 0;
  *   reasoningFor?: (chatId: string) => Promise<string|null>,
  *   describeConfiguration?: (input: { chatId: string, workspaceRoot: string }) => Promise<{ skills?: any[], tools?: any[] }>,
  *   followInWindow?: (event: { chatId: string, runId: string, type: string, payload: Record<string, unknown> }) => void,
+ *   switchInWindow?: (root: string) => Promise<import('./window-workspace-switch').WindowSwitchOutcome>,
+ *   activateKnownFolder?: (root: string) => Promise<string|null>,
+ *   onSwitched?: (root: string) => void,
  *   log?: { warn: (...args: unknown[]) => void },
  * }} deps  `normalizeRoot` the chat history's, so that folders compare alike everywhere;
  *   `conversation` and `llm` for the turns of step 2, `chatMode`, `reasoningFor` and
  *   `describeConfiguration` for a chat's configuration; `followInWindow` hands a remote turn's
- *   events to the window, which did not start it (step 2b), `turn-started` first
+ *   events to the window, which did not start it (step 2b), `turn-started` first;
+ *   `switchInWindow` asks the window to open a folder, `activateKnownFolder` opens it when there
+ *   is no window, `onSwitched` tells the desktop it happened (step 2c)
  * @returns {import('../../application/ports/remote-desktop-port').RemoteDesktopPort}
  */
 function createRemoteDesktopAdapter({
@@ -80,6 +85,9 @@ function createRemoteDesktopAdapter({
   reasoningFor = async () => null,
   describeConfiguration = async () => ({ skills: [], tools: [] }),
   followInWindow = () => {},
+  switchInWindow = async () => 'no-window',
+  activateKnownFolder = async () => null,
+  onSwitched = () => {},
   log = console,
 }) {
   return {
@@ -164,6 +172,15 @@ function createRemoteDesktopAdapter({
     },
 
     stopChat: (chatId) => (conversation ? conversation.stopChat(chatId) : false),
+
+    async activateWorkspace(root) {
+      let outcome = await switchInWindow(root);
+      // No window to ask, nothing on show to settle: main opens it itself.
+      if (outcome === 'no-window') outcome = (await activateKnownFolder(root)) ? 'switched' : 'refused';
+      if (outcome !== 'switched') return { ok: false, reason: outcome };
+      onSwitched(root);
+      return { ok: true };
+    },
 
     async chatConfiguration(chatId, root) {
       const [target, mode, reasoning, described] = await Promise.all([

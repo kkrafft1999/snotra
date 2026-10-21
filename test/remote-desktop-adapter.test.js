@@ -227,3 +227,34 @@ test('a window that cannot follow does not hold up the turn', async () => {
   assert.deepEqual(heard, ['progress', 'delta', 'progress'], 'the remote still hears every event');
   assert.ok(warnings.length > 0 && warnings.every((w) => w === '[remote] the window could not follow a remote turn (Error)'));
 });
+
+test('a folder the phone asks for opens through the window, and the desktop is told (step 2c)', async () => {
+  const activity = createRemoteActivity({ log: { warn: () => {} } });
+  const asked = [];
+  const told = [];
+  const direct = [];
+  let windowAnswer = 'switched';
+  const adapter = createRemoteDesktopAdapter({
+    chatHistory: { listForRoots: async () => [], loadForDisplay: async () => null },
+    workspaceFolderStore: { getValidatedFolderHistory: async () => [] },
+    getActiveWorkspaceRoot: () => A,
+    normalizeRoot,
+    runningChatIds: () => [],
+    listPendingApprovals: () => [],
+    activity,
+    switchInWindow: async (root) => { asked.push(root); return windowAnswer; },
+    activateKnownFolder: async (root) => { direct.push(root); return root === B ? B : null; },
+    onSwitched: (root) => told.push(root),
+  });
+  assert.deepEqual(await adapter.activateWorkspace(B), { ok: true });
+  windowAnswer = 'unsaved';
+  assert.deepEqual(await adapter.activateWorkspace(B), { ok: false, reason: 'unsaved' });
+  windowAnswer = 'no-answer';
+  assert.deepEqual(await adapter.activateWorkspace(B), { ok: false, reason: 'no-answer' });
+  assert.deepEqual(direct, [], 'with a window, main never switches underneath it');
+  // No window: main opens a known folder itself.
+  windowAnswer = 'no-window';
+  assert.deepEqual(await adapter.activateWorkspace(B), { ok: true });
+  assert.deepEqual(await adapter.activateWorkspace(path.resolve('/work/unknown')), { ok: false, reason: 'refused' });
+  assert.deepEqual(told, [B, B], 'only a switch that happened is told');
+});

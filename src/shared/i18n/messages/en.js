@@ -497,6 +497,8 @@ module.exports = {
   'notice.backgroundError': 'Something went wrong in the background.',
   'notice.backgroundError.text.one': 'Snotra ran into an error it did not expect. It keeps running, and the details are in the log file. If something does not work as it should, copy the diagnostics into a bug report.',
   'notice.backgroundError.text.other': 'Snotra ran into {count} errors it did not expect. It keeps running, and the details are in the log file. If something does not work as it should, copy the diagnostics into a bug report.',
+  'notice.remoteWorkspaceSwitched': 'Switched from your phone',
+  'notice.remoteWorkspaceSwitched.text': 'Your phone opened the folder “{folder}”.',
   'notice.backgroundError.copy': 'Copy diagnostics',
   'notice.backgroundError.copied': 'Copied',
   'notice.backgroundError.copyFailed': 'Could not copy',

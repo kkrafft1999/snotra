@@ -74,7 +74,7 @@ test('over the channel, the phone learns the methods of steps 1 and 2 and the st
   const hello = await ctx.next((m) => m.id === 1, 'the answer to session.hello');
   assert.deepEqual(hello.result.methods, [
     'session.hello', 'session.bye', 'workspaces.list', 'chats.list', 'chat.open', 'chat.more', 'chat.close',
-    'chat.new', 'message.send', 'run.abort', 'chat.configuration',
+    'workspace.activate', 'chat.new', 'message.send', 'run.abort', 'chat.configuration',
   ]);
   assert.deepEqual(hello.result.approvalResponses, []);
 

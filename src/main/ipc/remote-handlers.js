@@ -32,18 +32,22 @@ const {
  *     setReleased: (root: unknown, released: unknown) => Promise<unknown>,
  *     subscribe: (listener: () => void) => unknown,
  *   } | null,
+ *   workspaceSwitch?: { answer: (payload: unknown) => void } | null,
  *   pushToWindow: (channel: string, payload?: unknown) => boolean,
  *   REQ: Record<string, string>,
  *   PUSH: Record<string, string>,
- * }} deps  without `releaseSettings` only the pairing is registered
+ * }} deps  without `releaseSettings` only the pairing is registered; `workspaceSwitch` takes the
+ *   window's answer to a folder the phone asked to open (#1194)
  */
-function registerRemoteHandlers({ ipcMain, pairing, releaseSettings = null, pushToWindow, REQ, PUSH }) {
+function registerRemoteHandlers({ ipcMain, pairing, releaseSettings = null, workspaceSwitch = null, pushToWindow, REQ, PUSH }) {
   pairing.subscribe((state) => pushToWindow(PUSH.REMOTE_STATE, normalizeRemotePairingState(state)));
 
   ipcMain.handle(REQ.REMOTE_GET_STATE, async () => normalizeRemotePairingState(await pairing.getState()));
   ipcMain.handle(REQ.REMOTE_PAIR_START, async () => normalizeRemotePairingResult(await pairing.start()));
   ipcMain.handle(REQ.REMOTE_PAIR_CANCEL, async () => normalizeRemotePairingResult(await pairing.cancel()));
   ipcMain.handle(REQ.REMOTE_UNPAIR, async () => normalizeRemotePairingResult(await pairing.unpair()));
+  // The window's answer to a folder the phone asked to open (#1194).
+  if (workspaceSwitch) ipcMain.on(REQ.WORKSPACE_SWITCH_ANSWER, (_event, answer) => workspaceSwitch.answer(answer));
 
   if (!releaseSettings) return;
   // A pairing that comes or goes changes the line under the switch as well.

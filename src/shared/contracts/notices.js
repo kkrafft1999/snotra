@@ -17,10 +17,16 @@ const NOTICE_KINDS = Object.freeze({
   STORE_NOT_SAVED: 'store-not-saved',
   /** Errors nobody caught, in main or in the window (#978); one notice counts them all. */
   BACKGROUND_ERROR: 'background-error',
+  /** The phone opened another folder at the desktop (#1194): the folder's name, never its path. */
+  REMOTE_WORKSPACE_SWITCHED: 'remote-workspace-switched',
 });
 
 /** The one id of the background-error notice: a second error counts up instead of stacking. */
 const BACKGROUND_ERROR_NOTICE_ID = 'background-error';
+/** The one id of the phone's switch notice: a second switch replaces the first. */
+const REMOTE_WORKSPACE_SWITCHED_NOTICE_ID = 'remote-workspace-switched';
+/** How long a folder's name in a notice may be. */
+const NOTICE_FOLDER_MAX = 255;
 
 /**
  * The stores that keep an unreadable file aside (#473, #557, #561, #566), by
@@ -58,6 +64,9 @@ const NOTICE_STORE_IDS = Object.freeze([...new Set([...Object.values(NOTICE_STOR
  * The background-error notice is `{ id, kind, count, location, canReveal }`:
  * how many errors this start has caught so far, and the log file they went to.
  *
+ * The phone's switch notice is `{ id, kind, folder, location: null,
+ * canReveal: false }`: the name of the folder the phone opened (#1194).
+ *
  * @param {unknown} input
  */
 function normalizeNotice(input) {
@@ -66,6 +75,11 @@ function normalizeNotice(input) {
   if (typeof id !== 'string' || !id) return null;
   if (!Object.values(NOTICE_KINDS).some((known) => known === kind)) return null;
   const at = typeof location === 'string' && location ? location : null;
+  if (kind === NOTICE_KINDS.REMOTE_WORKSPACE_SWITCHED) {
+    const { folder } = input;
+    if (typeof folder !== 'string' || !folder || folder.length > NOTICE_FOLDER_MAX) return null;
+    return { id, kind, folder, location: null, canReveal: false };
+  }
   if (kind === NOTICE_KINDS.BACKGROUND_ERROR) {
     const { count } = input;
     if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 1) return null;
@@ -80,6 +94,7 @@ function normalizeNotice(input) {
 module.exports = {
   NOTICE_KINDS,
   BACKGROUND_ERROR_NOTICE_ID,
+  REMOTE_WORKSPACE_SWITCHED_NOTICE_ID,
   NOTICE_STORES,
   NOTICE_STORE_IDS,
   CHAT_SESSION_NOTICE_STORE,

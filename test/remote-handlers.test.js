@@ -153,3 +153,16 @@ test('createApplication wires the pairing, and nothing reaches the relay before 
   assert.deepEqual(relay.inspect.calls(), []);
   await assert.rejects(fs.stat(path.join(dir, 'remote-pairing.json')), { code: 'ENOENT' });
 });
+
+test('the window\'s answer to a folder the phone asked for reaches the switch, and only with one wired (#1194)', () => {
+  const pairing = { getState: async () => ({}), start: async () => ({}), cancel: async () => ({}), unpair: async () => ({}), subscribe: () => {} };
+  const bare = createMockIpcMain();
+  registerRemoteHandlers({ ipcMain: bare, pairing, pushToWindow: () => true, REQ, PUSH });
+  assert.equal(bare.handlers.has(REQ.WORKSPACE_SWITCH_ANSWER), false);
+
+  const ipcMain = createMockIpcMain();
+  const answers = [];
+  registerRemoteHandlers({ ipcMain, pairing, workspaceSwitch: { answer: (payload) => answers.push(payload) }, pushToWindow: () => true, REQ, PUSH });
+  ipcMain.invoke(REQ.WORKSPACE_SWITCH_ANSWER, { requestId: 'r1', outcome: 'switched' });
+  assert.deepEqual(answers, [{ requestId: 'r1', outcome: 'switched' }]);
+});

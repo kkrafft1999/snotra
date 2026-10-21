@@ -739,6 +739,8 @@ export function createFileViewHost({
     revalidate,
     close,
     settleUnsaved,
+    /** Unsaved changes in the file on show, without asking or saving (#1194). */
+    hasUnsaved: () => !!current?.instance && current.dirty === true,
     /** Back to the welcome screen without asking — for a caller that already settled. */
     clear: showWelcome,
     runCommand,

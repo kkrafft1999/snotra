@@ -8,6 +8,7 @@ const { createStorageService } = require('../services/storage-service');
 const { createRemoteActivity } = require('../services/remote-activity');
 const { createRemoteDesktopAdapter, isRemoteSessionId } = require('../remote/desktop-adapter');
 const { createWindowFollower } = require('../remote/window-follow');
+const { createWindowWorkspaceSwitch } = require('../remote/window-workspace-switch');
 const { createModelPriceService } = require('../services/model-price-service');
 const { createChatAttachmentStore } = require('../services/chat-attachment-store');
 const { createFsService } = require('../services/fs-service');
@@ -87,7 +88,7 @@ const { translateMessage } = require('../../shared/i18n');
 const { createChatHistoryAdapter } = require('../adapters/chat-history-adapter');
 const { createChatSessionSettings } = require('../../application/chat/chat-session-settings');
 const { createFeedbackService, osVersionReader, resolveFeedbackEndpoint } = require('../services/feedback-service');
-const { createAppNotices, postStoreFileEvent } = require('../services/app-notices');
+const { createAppNotices, postStoreFileEvent, postRemoteWorkspaceSwitch } = require('../services/app-notices');
 const { createChatConfigurationService } = require('../../application/chat/chat-configuration-service');
 const { createChatApplication } = require('./create-chat-application');
 const { startToolRuntimes } = require('./start-tool-runtimes');
@@ -778,6 +779,9 @@ function createCore({
   // Nothing of it runs before the user starts a pairing or the application
   // starts it with a phone already paired (R7); its Allow comes from the
   // user-confirmation port.
+  // The phone opens another folder through the window (#1194, step 2c); its answer comes over IPC.
+  const remoteWorkspaceSwitch = createWindowWorkspaceSwitch({ push: pushToWindow, PUSH, randomUUID: () => crypto.randomUUID() });
+
   const remote = createRemoteBridge({
     userDataPath,
     secretStore,
@@ -814,6 +818,10 @@ function createCore({
       }),
       // The window shows a phone's turn as it runs (#1194, step 2b).
       followInWindow: createWindowFollower({ push: pushToWindow, PUSH }),
+      // And opens the folder the phone asks for, saying so in a notice (step 2c).
+      switchInWindow: (root) => remoteWorkspaceSwitch.switchTo(root),
+      activateKnownFolder: (root) => workspaceActivation.activateKnownFolder(root),
+      onSwitched: (root) => postRemoteWorkspaceSwitch(notices, path.basename(root)),
     }),
     normalizeRoot: (root) => storage.normalizeWorkspaceRoot(root),
   });
@@ -900,6 +908,7 @@ function createCore({
     conversation,
     toolPermissions,
     remote,
+    remoteWorkspaceSwitch,
     notifyToolPermissionsChanged,
     dispose,
     /** The quit waits for this before the process ends (#679). */

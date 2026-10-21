@@ -506,7 +506,7 @@ release list, **2** #981, **3** #980.
 | `chat.open` | `{ chatId, limit? ≤100 }` → `{ chatId, title, state, messages: DisplayMessage[], before?, runId?, pendingApprovals: ApprovalRequest[] }` — subscribes; never changes the chat on the desktop's screen | `not-found` | L R | 1 (live state of a running turn and `pendingApprovals`: 2, 3) | `chatHistory:getSession`, without `chatHistory:activate` |
 | `chat.more` | `{ chatId, before, limit? ≤100 }` → `{ messages: DisplayMessage[], before? }` | `not-found` | L R | 1 | `chatHistory:getSession` |
 | `chat.close` | `{ chatId }` → `{}` — ends the subscription | — | L R | 1 | — |
-| `workspace.activate` | `{ workspaceId }` → `{ workspaceId }` — the path comes from the release list, never from the client | `not-found`, `busy` (a run in the current workspace works or waits, R6) | L R | 2 | `settings:activateFolder` |
+| `workspace.activate` | `{ workspaceId }` → `{ workspaceId }` — the path comes from the release list, never from the client; the window opens it as from its menu and says so in a notice | `not-found` (also when the window could not open it), `busy` with `data.why`: `running` (a turn works or waits, R6) or `unsaved-changes` (the file on show at the desktop has unsaved changes — refused without a dialog, decided 2026-10-20); `busy` without `why` when the window did not answer in time | L R | 2 | `settings:activateFolder` |
 | `chat.new` | `{ workspaceId? }` → `{ chatId }` — nothing is written until the first `message.send`; without `workspaceId`, the open workspace | `not-found`, `refused` (a workspace other than the one open at the desktop) | L R | 2 | — (today the renderer makes chats and upserts them) |
 | `message.send` | `{ chatId, text ≤maxTextChars, clientMessageId ≤64 }` → `{ runId, messageId }` — a repeated `clientMessageId` answers again and starts nothing, also on a new connection; `messageId` names the question | `not-found`, `refused` (the chat's workspace is not the one open at the desktop: its tools would work there — `workspace.activate` first), `busy` (the chat is running or waits for a card), `too-large`, `unavailable` (no provider set up for the chat's model) | L R | 2 | `chat:send` — the text and the chat id, not the history |
 | `run.abort` | `{ chatId }` → `{ aborted: bool }` | `not-found` | L R | 2 | `chat:abort` |
@@ -571,6 +571,7 @@ listed together where they share their class.
 | `chatHistory:get`, `chatHistory:getSession` | mapped: `chats.list`, `chat.open`, `chat.more` | Read only; display DTOs instead of stored rows |
 | `chat:delta`, `chat:tool-line`, `chat:progress` (push) | mapped: `chat.delta`, `chat.tool-line`, `chat.progress` | Published by chat to subscribers, without raw tool arguments |
 | `chat:turn-started` (push) | desktop | The window following a turn another front end started (#1194, step 2b); the remote side hears of it as `chat.message` |
+| `workspace:switch-requested` (push), `workspace:switch-answer` | desktop | The window opening the folder `workspace.activate` asked for, and its outcome (#1194, step 2c) |
 | `settings:getFolderHistory`, `settings:getLastFolder` | mapped: `workspaces.list` | Names and ids, never paths |
 | `update:getVersion` | mapped: `session.hello` | — |
 | `settings:activateFolder` | mapped in step 2: `workspace.activate` | By id, and refused during a run (R6) |
@@ -698,8 +699,12 @@ the attacker model.
    a remote turn as one of its own (step 2b): `main/remote/window-follow.js`
    sends `chat:turn-started` once the question is saved, then the turn's
    events on the window's own channels; the window settles it at `run-end`
-   from what main saved, and its stop button stops it. Still to come:
-   `workspace.activate` with the desktop's notice (2c).
+   from what main saved, and its stop button stops it. `workspace.activate`
+   (step 2c) goes through the window as well
+   (`main/remote/window-workspace-switch.js`): it opens the folder as from
+   its menu, or answers `unsaved` while the file on show has unsaved
+   changes; without a window main opens it itself. A switch that happened
+   posts the notice `remote-workspace-switched` with the folder's name.
 3. **Decide.** The approval methods and events — after #980.
 4. **Relay.** The relay transport under the same dispatcher (phases 1–3 of
    #1081). A headless process serving the protocol needs #983 as well.

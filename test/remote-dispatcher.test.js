@@ -29,7 +29,7 @@ const chat = (chatId, root, updatedAt, messages = [], title = `Chat ${chatId}`) 
 
 function fakeDesktop({ known = [ALPHA, BETA, HIDDEN], active = ALPHA, chats = [] } = {}) {
   const listeners = new Set();
-  const state = { known, active, chats, running: new Set(), awaiting: new Set(), loads: [], turns: [], stops: [], available: true };
+  const state = { known, active, chats, running: new Set(), awaiting: new Set(), loads: [], turns: [], stops: [], available: true, switches: [], switchOutcome: 'switched' };
   return {
     state,
     port: {
@@ -57,6 +57,12 @@ function fakeDesktop({ known = [ALPHA, BETA, HIDDEN], active = ALPHA, chats = []
       stopChat: (chatId) => {
         state.stops.push(chatId);
         return state.running.has(chatId);
+      },
+      activateWorkspace: async (root) => {
+        state.switches.push(root);
+        if (state.switchOutcome !== 'switched') return { ok: false, reason: state.switchOutcome };
+        state.active = root;
+        return { ok: true };
       },
       chatConfiguration: async (chatId, root) => ({
         model: { label: `model of ${chatId}` },
@@ -157,7 +163,7 @@ test('session.hello learns the methods to watch and to write, no approval answer
   assert.deepEqual(dispatcher.describe(connection), {
     methods: [
       'workspaces.list', 'chats.list', 'chat.open', 'chat.more', 'chat.close',
-      'chat.new', 'message.send', 'run.abort', 'chat.configuration',
+      'workspace.activate', 'chat.new', 'message.send', 'run.abort', 'chat.configuration',
     ],
     approvalResponses: [],
     limits: { ...DISPATCHER_LIMITS },
@@ -597,4 +603,62 @@ test('a chat that got its name is chat.updated for its followers, and stays out 
   await settle();
   assert.deepEqual(named('chat.updated'), [{ chatId: 'a1', title: 'Trip planning' }]);
   assert.deepEqual(events.slice(before).map((e) => e.method), ['chat.updated'], 'no state, no progress');
+});
+
+// ---------------------------------------------------------------- step 2c: switching the open workspace
+
+test('workspace.activate opens a released workspace at the desktop, by id', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call, named } = await setup({ desktop });
+  const answer = await call('workspace.activate', { workspaceId: 'id-beta' });
+  assert.deepEqual(answer.result, { workspaceId: 'id-beta' });
+  assert.deepEqual(desktop.state.switches, [BETA], 'the path from the release list, never from the client');
+  // The open one again is no switch at all.
+  assert.deepEqual((await call('workspace.activate', { workspaceId: 'id-beta' })).result, { workspaceId: 'id-beta' });
+  assert.equal(desktop.state.switches.length, 1);
+  // Writing follows the switch.
+  assert.ok((await call('message.send', { chatId: 'b1', text: 'now here', clientMessageId: 'c-1' })).result);
+  noPaths(named('state'));
+});
+
+test('workspace.activate refuses an unknown or hidden workspace and bad params', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  assertError(await call('workspace.activate', { workspaceId: 'id-hidden' }), 'not-found');
+  assertError(await call('workspace.activate', {}), 'invalid-params');
+  assertError(await call('workspace.activate', { workspaceId: 42 }), 'invalid-params');
+  assert.deepEqual(desktop.state.switches, []);
+});
+
+test('workspace.activate is busy while a turn works or waits (R6), and says why', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  desktop.state.running.add('a1');
+  const running = await call('workspace.activate', { workspaceId: 'id-beta' });
+  assertError(running, 'busy');
+  assert.equal(running.error.data.why, 'running');
+  desktop.state.running.clear();
+  desktop.state.awaiting.add('a1');
+  assertError(await call('workspace.activate', { workspaceId: 'id-beta' }), 'busy');
+  desktop.state.awaiting.clear();
+  // A turn the phone just started counts before the desktop reports it.
+  await call('message.send', { chatId: 'a1', text: 'go', clientMessageId: 'c-1' });
+  assertError(await call('workspace.activate', { workspaceId: 'id-beta' }), 'busy');
+  assert.deepEqual(desktop.state.switches, []);
+});
+
+test('workspace.activate passes on what the window answered', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  desktop.state.switchOutcome = 'unsaved';
+  const unsaved = await call('workspace.activate', { workspaceId: 'id-beta' });
+  assertError(unsaved, 'busy');
+  assert.equal(unsaved.error.data.why, 'unsaved-changes', 'a file with unsaved changes is open at the desktop');
+  desktop.state.switchOutcome = 'refused';
+  assertError(await call('workspace.activate', { workspaceId: 'id-beta' }), 'not-found');
+  desktop.state.switchOutcome = 'no-answer';
+  const silent = await call('workspace.activate', { workspaceId: 'id-beta' });
+  assertError(silent, 'busy');
+  assert.equal('why' in silent.error.data, false);
+  assert.equal(desktop.state.active, ALPHA, 'nothing switched');
 });
