@@ -3526,7 +3526,9 @@ channel ([#1194](https://github.com/kkrafft1999/snotra/issues/1194)).
 | Keys | `remote-identity-port`; `main/remote/identity-store-adapter.js` | `remote-pairing.json` in the user data folder: one `safeStorage` ciphertext holding the two private keys and the paired phone. In memory the keys are `KeyObject`s inside a closure; the core gets public points and a signer |
 | Computations | `remote-pairing-crypto-port`; `main/remote/pairing-protocol.js` | Code, MACs, phrase and proofs, written from the spec and held to `remote-protocol/pairing-v1.json` by `test/remote-pairing-protocol.test.js` |
 | *Allow* | `user-confirmation-port`, action `remote-pairing` | The native sheet (`main/remote/pairing-prompt.js` words it), redeemed against the receipt registry like every other loosening |
-| Window | `main/ipc/remote-handlers.js`, `remote:*` channels | Start, cancel, remove, read the state; every change pushed. Normalized by `contracts/remote/pairing-state.js` on the way out |
+| Window | `main/ipc/remote-handlers.js`, `remote:*` channels | Start, cancel, remove, read the state; every change pushed. Normalized by `contracts/remote/pairing-state.js` on the way out; the QR code is drawn in main (`main/remote/pairing-qr.js`, `qrcode-generator`) and goes along as modules |
+| Panel | `renderer/components/RemoteAccessSettings.js` | *Settings › Remote access* (#1110): the eleven states below, from main's state; *Allow* stays the system dialog's |
+| Lock | `main/remote/pairing-lock.js` | `PAIRING_OPEN`: pairing is closed in this build until the phone's side is out (decided 2026-10-21). `start` refuses with `locked` before anything reaches the relay, the state says `locked: true`, and the panel shows *Pair a phone* disabled with why. Removing a phone still works |
 | Channel | `application/remote/remote-channel.js`; `remote-channel-crypto-port`, `main/remote/channel-protocol.js` | Part 2: connecting, presence, handshake, envelopes, `session.hello` — see [The channel](#the-channel) |
 | Dispatcher | `application/remote/remote-dispatcher.js`, `application/remote/remote-display.js`; `remote-message-layer-port` | The methods and events of `remote-interface.md` §8, steps 1 to 3 (#1194): the cards of followed chats, answered with *allow once* or *deny* only; workspaces, chats and their messages read only, a running turn's events to the connections following its chat, deltas batched every 150 ms on the relay; `chat.new`, `message.send` (once per `clientMessageId`), `run.abort`, `chat.configuration`, writing only in the workspace open at the desktop. No path, tool argument or chat outside the release reaches a connection |
 | Release list | `remote-release-port`; `main/remote/release-store-adapter.js`, action `remote-workspace` | `remote-release.json`: one `safeStorage` ciphertext of the workspaces opened to the phone and the id each folder goes by. Opening one takes a receipt; the switch *Access from your phone* on Tools › Security asks for it (#1195) |
@@ -3569,10 +3571,11 @@ stands), the
 panel's own questions *Replace phone?* and *Remove phone?* (6, 7), `expired`
 (8), `stopped` (9), `unreachable` (10) and `denied` (11).
 
-**Not configured yet.** `main/remote/relay-endpoint.js` names the production
-relay; it is empty until the relay exists (snotra-promotion, phase 2 of #1081),
-so a pairing ends in `unreachable` with the reason `not-configured`. The panel
-ships only together with a relay.
+**The relay and the lock.** `main/remote/relay-endpoint.js` names the
+production relay, `relay.snotra-ai.dev`; its web API key comes into the build
+from the secret `SNOTRA_RELAY_API_KEY` (#1193). A build without it ends a
+pairing in `unreachable` with the reason `not-configured`. Pairing itself is
+closed by `main/remote/pairing-lock.js` until the phone's side is out.
 
 ### The channel
 

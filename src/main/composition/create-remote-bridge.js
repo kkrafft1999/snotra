@@ -26,6 +26,7 @@ const { createFirebaseRelayAdapter } = require('../remote/firebase-relay-adapter
 const { createRemoteIdentityStore } = require('../remote/identity-store-adapter');
 const { pairingPrompt } = require('../remote/pairing-prompt');
 const { createRemotePairingCryptoAdapter } = require('../remote/pairing-protocol');
+const { PAIRING_OPEN } = require('../remote/pairing-lock');
 const { PRODUCTION_RELAY } = require('../remote/relay-endpoint');
 const { createRemoteReleaseStore } = require('../remote/release-store-adapter');
 
@@ -48,8 +49,10 @@ const RELAY_DELTA_BATCH_MS = 150;
  *   messages?: import('../../application/ports/remote-message-layer-port').RemoteMessageLayerPort | null,
  *   desktop?: import('../../application/ports/remote-desktop-port').RemoteDesktopPort | null,
  *   normalizeRoot?: (root: unknown) => string|null,
+ *   pairingOpen?: boolean,
  *   log?: { warn: (...args: unknown[]) => void },
  * }} deps  `relay` replaces the Firebase relay — the in-memory one in tests;
+ *   `pairingOpen` whether a phone may be paired — this build's `PAIRING_OPEN` (#1110), tests open it;
  *   `desktop` is what the dispatcher reads, and `normalizeRoot` the chat history's naming of a folder —
  *   without a desktop the stand-in answers; `messages` replaces either
  */
@@ -68,6 +71,7 @@ function createRemoteBridge({
   messages = null,
   desktop = null,
   normalizeRoot = (root) => (typeof root === 'string' && root.trim() ? path.resolve(root.trim()) : null),
+  pairingOpen = PAIRING_OPEN,
   log = console,
 }) {
   const relayPort = relay || createFirebaseRelayAdapter({ endpoint: PRODUCTION_RELAY, fetchImpl: fetchImpl || globalThis.fetch });
@@ -92,6 +96,7 @@ function createRemoteBridge({
     prompt: pairingPrompt(getLocale),
     log,
     connection: { isConnected: () => channel?.isConnected() === true },
+    open: pairingOpen,
   });
   channel = createRemoteChannel({
     relay: relayPort,

@@ -174,6 +174,7 @@ function tempDir(t) {
  * @param {boolean} [options.encryption]
  * @param {object} [options.confirmations]  replaces the native adapter
  * @param {string} [options.locale]
+ * @param {boolean} [options.open]  false: pairing closed, as in this build until #1110 opens it
  */
 function createPairingFixture(t, {
   dir = tempDir(t),
@@ -182,6 +183,7 @@ function createPairingFixture(t, {
   encryption = true,
   confirmations = null,
   locale = 'en',
+  open = true,
 } = {}) {
   const sharedRelay = relay || createInMemoryRelayAdapter({ relayHost: 'relay.test', now: clock.now });
   const dialog = createFakeDialog();
@@ -200,6 +202,7 @@ function createPairingFixture(t, {
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
     log,
+    open,
   });
   const states = [];
   pairing.subscribe((state) => states.push(state));

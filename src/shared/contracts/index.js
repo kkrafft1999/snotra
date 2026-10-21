@@ -350,6 +350,12 @@ const {
   NOTICE_STORE_IDS,
   normalizeNotice,
 } = require('./notices');
+// Settings › Remote access (#1110) draws main's pairing state.
+const {
+  REMOTE_PAIRING_STATES,
+  REMOTE_PAIRING_REASONS,
+  normalizeRemotePairingState,
+} = require('./remote/pairing-state');
 
 module.exports = {
   createMessage,
@@ -651,4 +657,7 @@ module.exports = {
   NOTICE_STORES,
   NOTICE_STORE_IDS,
   normalizeNotice,
+  REMOTE_PAIRING_STATES,
+  REMOTE_PAIRING_REASONS,
+  normalizeRemotePairingState,
 };

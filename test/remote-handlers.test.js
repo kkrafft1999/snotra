@@ -46,7 +46,19 @@ test('the state contract lets the facts through and nothing else', () => {
     words: null,
     replacing: true,
     reason: null,
+    locked: false,
   });
+});
+
+test('the state contract takes a QR code\'s modules only as a square of a QR code\'s size, and the lock (#1110)', () => {
+  const square = (n) => Array.from({ length: n }, (_, i) => (i % 2 ? '1' : '0').repeat(n));
+  const code = (modules) => normalizeRemotePairingState({ state: 'code', code: { ...CODE, modules } }).code;
+  assert.deepEqual(code(square(29)).modules, square(29));
+  for (const bad of [square(20), square(30), [...square(29).slice(1), '2'.repeat(29)], square(29).map((r, i) => (i ? r : r.slice(1))), 'x', null]) {
+    assert.equal('modules' in code(bad), false);
+  }
+  assert.equal(normalizeRemotePairingState({ state: 'empty', locked: true }).locked, true);
+  assert.equal(normalizeRemotePairingState({ state: 'empty', locked: 'yes' }).locked, false);
 });
 
 test('the state contract: a code only while it is shown, words only while confirming', () => {
@@ -111,7 +123,7 @@ test('the handlers: four requests without arguments, and a push per change', asy
   listener({ state: 'paired', phone: { pairedAt: 1, connected: false, keys: 'x' } });
   assert.deepEqual(pushed, [{
     channel: 'remote:state',
-    payload: { state: 'paired', encryptionAvailable: false, phone: { pairedAt: 1, connected: false }, code: null, words: null, replacing: false, reason: null },
+    payload: { state: 'paired', encryptionAvailable: false, phone: { pairedAt: 1, connected: false }, code: null, words: null, replacing: false, reason: null, locked: false },
   }]);
 });
 
@@ -148,8 +160,9 @@ test('createApplication wires the pairing, and nothing reaches the relay before 
   const state = await ipcMain.invoke(REQ.REMOTE_GET_STATE);
   assert.equal(state.state, 'empty');
   assert.equal(state.encryptionAvailable, false);
-  // Without real encryption no key may be kept, so no pairing starts.
-  assert.deepEqual(await ipcMain.invoke(REQ.REMOTE_PAIR_START), { ok: false, reason: 'encryption-unavailable' });
+  // Pairing is closed in this build (#1110): refused before anything reaches the relay.
+  assert.equal(state.locked, true);
+  assert.deepEqual(await ipcMain.invoke(REQ.REMOTE_PAIR_START), { ok: false, reason: 'locked' });
   assert.deepEqual(relay.inspect.calls(), []);
   await assert.rejects(fs.stat(path.join(dir, 'remote-pairing.json')), { code: 'ENOENT' });
 });

@@ -1,6 +1,6 @@
 ---
 title: Find your way around the settings
-description: The six sections of the settings, what takes effect at once and what on Apply, and what the section General holds.
+description: The seven sections of the settings, what takes effect at once and what on Apply, and what the section General holds.
 sidebar:
   order: 1
 ---
@@ -21,6 +21,7 @@ Everything you can set up in Snotra is in one place: the settings. They open ove
 | *Tools › Setup* | The Python interpreter, the web search key, the image model and the MCP servers. See [Set up the built-in tools](../built-in-tools/) and [Connect an MCP server](../mcp-servers/). |
 | *Skills* | The skills the model works with. See [Use skills](../skills/). |
 | *Memory* | What Snotra remembers across chats. See [Let Snotra remember](../memory/). |
+| *Remote access* | [since 1.28] Your chats on your iPhone — not open yet. See [Follow your chats from your phone](../remote-access/). |
 | *General* | Instructions for every chat, the look, the language — see below. |
 
 [since 1.26] *Autonomy*, *Security* and *Setup* sit together under the heading *Tools*; the heading itself is not a section.
@@ -32,7 +33,7 @@ Everything you can set up in Snotra is in one place: the settings. They open ove
 The line at the bottom of each section says it, because it differs:
 
 - *Models* and *Skills* take effect when you click *Apply*. *Close* without *Apply* leaves them as they were.
-- *Tools › Autonomy*, *Tools › Security* and *Memory* take effect at once.
+- *Tools › Autonomy*, *Tools › Security*, *Memory* and *Remote access* take effect at once.
 - In *Tools › Setup*, a key is saved with its own button and an MCP server at once; the interpreter and the image model wait for *Apply*.
 - In *General*, switches, the appearance and the language take effect at once; the text fields wait for *Apply*.
 

@@ -103,6 +103,13 @@
   --ds-warning-bg: rgba(145, 91, 0, 0.10);
   --ds-warning-border: rgba(145, 91, 0, 0.35);
 
+  /* ── Pairing QR code (#1110) ────────────────────────────────────────────────
+   * The plate the pairing code is drawn on stays light in both themes: a
+   * phone's camera reads dark modules on light far more reliably, and light
+   * modules on dark not at all with many readers. */
+  --ds-qr-plate: #FFFFFF;
+  --ds-qr-ink: #111111;        /* 18.9:1 on the plate */
+
   /* ── Diff (#348) ─────────────────────────────────────────────────────────────
    * "Show changes": added lines on a blue ground, removed ones on a grey one.
    * No green, no red — decided with a mockup on 2026-10-02. The `+`/`−` sign
@@ -351,6 +358,10 @@
   --ds-warning: #F2B45A;       /* 4.8:1 on its tint over the composer, 7.1:1 on --ds-surface */
   --ds-warning-bg: rgba(242, 180, 90, 0.12);
   --ds-warning-border: rgba(242, 180, 90, 0.35);
+
+  /* The QR plate stays light in dark mode (#1110). */
+  --ds-qr-plate: #FFFFFF;
+  --ds-qr-ink: #111111;
 
   /* Diff (#348): --ds-text-primary 8:1 on the added ground, --ds-blue 5.7:1;
    * --ds-text-secondary 4.6:1 on the removed one. */

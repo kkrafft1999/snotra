@@ -96,8 +96,11 @@ function isGone(error) {
  *   clearTimer?: (timer: unknown) => void,
  *   log?: { warn: (...args: unknown[]) => void },
  *   connection?: { isConnected: () => boolean },
+ *   open?: boolean,
  * }} deps  `receipts` is the half of the registry that redeems; without it nothing is ever allowed.
  *   `connection` is the channel (#1192): whether a session with the paired phone stands.
+ *   `open` false keeps pairing closed (#1110): `start` refuses with `locked` before anything
+ *   reaches the relay; cancelling and removing a phone still work.
  */
 function createRemotePairing({
   relay,
@@ -111,6 +114,7 @@ function createRemotePairing({
   clearTimer = (timer) => clearTimeout(/** @type {any} */ (timer)),
   log = console,
   connection = { isConnected: () => false },
+  open = true,
 }) {
   /**
    * The paired phone as kept: { channelId, keys, pairedAt }
@@ -148,6 +152,7 @@ function createRemotePairing({
       words: flow && step === STATES.CONFIRM ? flow.words : null,
       replacing: !!flow && ACTIVE_STEPS.has(step) && !!phone,
       reason: flow?.reason ?? null,
+      locked: !open,
     });
   }
 
@@ -369,6 +374,8 @@ function createRemotePairing({
 
   /** Steps 3–11. A running pairing is stopped first; a phone paired already stays until *Allow*. */
   async function start() {
+    // Not open yet (#1110): refused here, whatever the window shows — nothing reaches the relay.
+    if (!open) return normalizeRemotePairingResult({ ok: false, reason: REASONS.LOCKED });
     if (!identity.isAvailable()) return normalizeRemotePairingResult({ ok: false, reason: REASONS.ENCRYPTION_UNAVAILABLE });
     if (!stopFlow()) return normalizeRemotePairingResult({ ok: false, reason: REASONS.BUSY });
 
