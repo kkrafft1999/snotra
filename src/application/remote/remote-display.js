@@ -9,6 +9,7 @@
  * arguments, schemas, results, sandbox details or reasoning of stored turns.
  */
 
+const { isMessage } = require('../../shared/contracts/message');
 const { isRecord } = require('../../shared/runtime/is-record');
 
 /** The `progress` types a remote hears of; `chat-saved` and `chat-named` stay with the window. */
@@ -155,4 +156,80 @@ function progressEvent(payload) {
   }
 }
 
-module.exports = { displayMessage, messageId, messageIndex, messagePage, progressEvent, toolLineEvent };
+/**
+ * A path as a remote is shown it: inside the workspace relative to it, with
+ * `/` between the parts; outside it as the card names it — that place is
+ * what is being approved (§8.1 `ApprovalRequest`).
+ * @param {string|null} root
+ * @param {unknown} value
+ */
+function inWorkspace(root, value) {
+  if (typeof value !== 'string') return '';
+  if (!root) return value;
+  if (value === root) return '.';
+  for (const sep of ['/', '\\']) {
+    const prefix = root.endsWith(sep) ? root : `${root}${sep}`;
+    if (value.startsWith(prefix)) return value.slice(prefix.length).split('\\').join('/') || '.';
+  }
+  return value;
+}
+
+/**
+ * A card as a remote front end sees it (#1194, step 3; §8.1
+ * `ApprovalRequest`): what is being decided — the tool, the targets, the
+ * reason in the connection's language, the preview masked as on the desktop,
+ * a sandbox card's offers — and `options`, the answers this connection may
+ * give. Nothing of what a wider answer would store: no session scope, no
+ * command rule, no "for this workspace".
+ *
+ * @param {Record<string, unknown>} dto  the window's card
+ * @param {{ root: string|null, word: (message: import('../../shared/contracts/message').Message) => string, options: string[] }} context
+ */
+function approvalRequest(dto, { root, word, options }) {
+  const parts = Array.isArray(dto.reasonParts) ? dto.reasonParts.filter(isMessage) : [];
+  /** @type {Record<string, unknown>} */
+  const out = {
+    requestId: text(dto.requestId),
+    chatId: text(dto.chatId),
+    tool: text(dto.tool),
+    riskClasses: Array.isArray(dto.riskClasses) ? dto.riskClasses.filter((c) => typeof c === 'string') : [],
+    targets: (Array.isArray(dto.targets) ? dto.targets : []).filter(isRecord).map((target) => ({
+      path: inWorkspace(root, target.path),
+      kind: text(target.kind),
+      exists: target.exists === true,
+      sensitive: target.sensitive === true,
+      ...(typeof target.sensitiveReason === 'string' ? { sensitiveReason: target.sensitiveReason } : {}),
+    })),
+    reason: parts.length ? parts.map((part) => word(part)).join(' ') : text(dto.reason),
+    ...(parts.length ? { reasonParts: parts } : {}),
+    checkpoint: text(dto.checkpoint),
+    options: [...options],
+  };
+  if (isRecord(dto.preview)) {
+    const preview = dto.preview;
+    /** @type {Record<string, unknown>} */
+    const shown = { kind: text(preview.kind), text: text(preview.text), truncated: preview.truncated === true, masked: preview.masked === true };
+    for (const key of ['shell', 'memoryScope', 'stdin']) if (typeof preview[key] === 'string') shown[key] = preview[key];
+    if (typeof preview.cwd === 'string') shown.cwd = inWorkspace(root, preview.cwd);
+    if (Array.isArray(preview.argv)) shown.argv = preview.argv.filter((a) => typeof a === 'string');
+    out.preview = shown;
+  }
+  if (isRecord(dto.sandbox) && Array.isArray(dto.sandbox.entries)) {
+    const sandbox = dto.sandbox;
+    out.sandbox = {
+      entries: /** @type {unknown[]} */ (sandbox.entries).filter(isRecord).map((entry) => ({
+        kind: text(entry.kind),
+        target: inWorkspace(root, entry.target),
+        count: Number.isInteger(entry.count) ? entry.count : 1,
+        folder: entry.folder === true,
+        allow: Array.isArray(entry.allow) ? entry.allow.map((p) => inWorkspace(root, p)) : [],
+        ...(entry.sensitive === true ? { sensitive: true } : {}),
+      })),
+      ...(Array.isArray(sandbox.domains) ? { domains: sandbox.domains.filter((d) => typeof d === 'string') } : {}),
+    };
+  }
+  if (isRecord(dto.config)) out.config = dto.config;
+  return out;
+}
+
+module.exports = { approvalRequest, displayMessage, inWorkspace, messageId, messageIndex, messagePage, progressEvent, toolLineEvent };

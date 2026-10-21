@@ -29,7 +29,7 @@ const chat = (chatId, root, updatedAt, messages = [], title = `Chat ${chatId}`) 
 
 function fakeDesktop({ known = [ALPHA, BETA, HIDDEN], active = ALPHA, chats = [] } = {}) {
   const listeners = new Set();
-  const state = { known, active, chats, running: new Set(), awaiting: new Set(), loads: [], turns: [], stops: [], available: true, switches: [], switchOutcome: 'switched' };
+  const state = { known, active, chats, running: new Set(), awaiting: new Set(), loads: [], turns: [], stops: [], available: true, switches: [], switchOutcome: 'switched', cards: [], answers: [] };
   return {
     state,
     port: {
@@ -57,6 +57,15 @@ function fakeDesktop({ known = [ALPHA, BETA, HIDDEN], active = ALPHA, chats = []
       stopChat: (chatId) => {
         state.stops.push(chatId);
         return state.running.has(chatId);
+      },
+      pendingApprovals: () => state.cards.map((card) => ({ ...card })),
+      respondToApproval: (requestId, answer, by) => {
+        state.answers.push({ requestId, answer, by });
+        const card = state.cards.find((c) => c.requestId === requestId);
+        if (!card) return { ok: false, reason: 'not-found' };
+        if (!['allow-once', 'deny'].includes(answer.response)) return { ok: false, reason: 'refused' };
+        state.cards = state.cards.filter((c) => c !== card);
+        return { ok: true, response: answer.response };
       },
       activateWorkspace: async (root) => {
         state.switches.push(root);
@@ -121,7 +130,7 @@ function manualTimers() {
  * A dispatcher on fakes, with one connection open whose events are recorded.
  * @param {object} [options]
  */
-async function setup({ desktop = fakeDesktop(), releases = fakeReleases(), kind = 'relay', deltaBatchMs = 0, timers = manualTimers(), open = true } = {}) {
+async function setup({ desktop = fakeDesktop(), releases = fakeReleases(), kind = 'relay', deltaBatchMs = 0, timers = manualTimers(), open = true, capabilities = [] } = {}) {
   const warnings = [];
   let uuids = 0;
   const dispatcher = createRemoteDispatcher({
@@ -134,7 +143,7 @@ async function setup({ desktop = fakeDesktop(), releases = fakeReleases(), kind 
     clearTimer: timers.clearTimer,
     log: { warn: (line) => warnings.push(String(line)) },
   });
-  const connection = Object.freeze({ id: 'conn-1', kind, client: { name: 'test', version: '1' }, locale: DEFAULT_LOCALE, capabilities: [] });
+  const connection = Object.freeze({ id: 'conn-1', kind, client: { name: 'test', version: '1' }, locale: DEFAULT_LOCALE, capabilities });
   const events = [];
   const outlet = { accept: true, send: (event) => { events.push(event); return outlet.accept; } };
   if (open) dispatcher.open(connection, outlet);
@@ -158,14 +167,15 @@ const noPaths = (value) => {
   for (const root of [ALPHA, BETA, HIDDEN, '/home/user']) assert.ok(!text.includes(root), `a path in ${text}`);
 };
 
-test('session.hello learns the methods to watch and to write, no approval answers and the limits', async () => {
+test('session.hello learns the methods to watch, write and decide, the answers to a card and the limits', async () => {
   const { dispatcher, connection } = await setup({ open: false });
   assert.deepEqual(dispatcher.describe(connection), {
     methods: [
       'workspaces.list', 'chats.list', 'chat.open', 'chat.more', 'chat.close',
+      'approval.list', 'approval.respond',
       'workspace.activate', 'chat.new', 'message.send', 'run.abort', 'chat.configuration',
     ],
-    approvalResponses: [],
+    approvalResponses: ['allow-once', 'deny'],
     limits: { ...DISPATCHER_LIMITS },
   });
   assert.deepEqual(dispatcher.describe({ ...connection, kind: 'desktop' }).methods, [], 'the window keeps IPC');
@@ -285,7 +295,7 @@ test('a chat outside the release answers exactly as one that does not exist', as
 
 test('unknown methods, other kinds and stale connections are refused in the shape of §6.3', async () => {
   const { call, dispatcher, connection } = await setup();
-  assertError(await call('approval.respond', { requestId: 'r1', response: 'allow-once' }), 'unknown-method');
+  assertError(await call('approval.withdraw', { requestId: 'r1' }), 'unknown-method');
   assertError(await call('toString'), 'unknown-method');
   assertError(await call('__proto__'), 'unknown-method');
   const window = await setup({ kind: 'desktop' });
@@ -661,4 +671,115 @@ test('workspace.activate passes on what the window answered', async () => {
   assertError(silent, 'busy');
   assert.equal('why' in silent.error.data, false);
   assert.equal(desktop.state.active, ALPHA, 'nothing switched');
+});
+
+// ---------------------------------------------------------------- step 3: cards
+
+/** A card as the window's DTO has it: absolute paths, a reason as descriptors, the wider options. */
+const card = (requestId, chatId, root, extra = {}) => ({
+  contractVersion: 1,
+  requestId,
+  chatId,
+  tool: 'write_file_text',
+  riskClasses: ['write'],
+  targets: [{ path: `${root}/notes/todo.md`, kind: 'file', exists: true, sensitive: false }],
+  reason: 'fallback',
+  reasonParts: [createMessage('approval.reason.askAll')],
+  mode: 'smart',
+  sessionAllowed: true,
+  alwaysAllowed: true,
+  sessionScopeLabel: 'this chat',
+  checkpoint: 'access',
+  preview: { kind: 'diff', text: '+ milk', truncated: false, masked: false, cwd: `${root}/notes` },
+  ...extra,
+});
+
+test('a connection that takes cards gets those of its chats, with only allow once and deny, and no paths of the workspace', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  desktop.state.cards = [card('r1', 'a1', ALPHA), card('r2', 'b1', BETA), card('r3', 'h1', HIDDEN)];
+  const { call } = await setup({ desktop, capabilities: ['approvals'] });
+  const opened = await call('chat.open', { chatId: 'a1' });
+  const [shown] = opened.result.pendingApprovals;
+  assert.equal(opened.result.pendingApprovals.length, 1);
+  assert.deepEqual(shown.options, ['allow-once', 'deny']);
+  assert.deepEqual(shown.targets, [{ path: 'notes/todo.md', kind: 'file', exists: true, sensitive: false }]);
+  assert.equal(shown.preview.cwd, 'notes');
+  assert.equal(typeof shown.reason, 'string');
+  for (const wider of ['sessionAllowed', 'alwaysAllowed', 'sessionScopeLabel', 'workspaceAllowed', 'mode']) {
+    assert.equal(wider in shown, false, `${wider} is not offered to a remote`);
+  }
+  noPaths(opened.result);
+
+  const listed = await call('approval.list');
+  assert.deepEqual(listed.result.requests.map((r) => r.requestId).sort(), ['r1', 'r2'], 'not the card of a hidden workspace');
+  assert.deepEqual((await call('approval.list', { chatId: 'b1' })).result.requests.map((r) => r.requestId), ['r2']);
+  assertError(await call('approval.list', { chatId: 'h1' }), 'not-found');
+});
+
+test('a connection without the approvals capability sees no cards and cannot answer', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  desktop.state.cards = [card('r1', 'a1', ALPHA)];
+  const { call } = await setup({ desktop });
+  assert.deepEqual((await call('chat.open', { chatId: 'a1' })).result.pendingApprovals, []);
+  assertError(await call('approval.list'), 'refused');
+  assertError(await call('approval.respond', { requestId: 'r1', response: 'allow-once' }), 'refused');
+  assert.deepEqual(desktop.state.answers, []);
+});
+
+test('approval.respond answers a card of a followed chat, naming the connection; anything wider is refused (SEC-6)', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  desktop.state.cards = [card('r1', 'a1', ALPHA), card('r2', 'b1', BETA)];
+  const { call } = await setup({ desktop, capabilities: ['approvals'] });
+  await call('chat.open', { chatId: 'a1' });
+
+  // Not followed: not this connection's card (§7.4).
+  assertError(await call('approval.respond', { requestId: 'r2', response: 'allow-once' }), 'not-found');
+  assertError(await call('approval.respond', { requestId: 'gone', response: 'deny' }), 'not-found');
+  for (const wider of ['allow-session', 'allow-always', 'allow-workspace']) {
+    assertError(await call('approval.respond', { requestId: 'r1', response: wider }), 'refused');
+  }
+  assertError(await call('approval.respond', { requestId: 'r1' }), 'invalid-params');
+  assertError(await call('approval.respond', { requestId: 'r1', response: 'deny', sandboxPaths: 'all' }), 'invalid-params');
+
+  const answered = await call('approval.respond', { requestId: 'r1', response: 'allow-once' });
+  assert.deepEqual(answered.result, { response: 'allow-once' });
+  assert.deepEqual(desktop.state.answers.at(-1), {
+    requestId: 'r1', answer: { response: 'allow-once', sandboxPaths: undefined }, by: { kind: 'relay', client: 'test' },
+  });
+});
+
+test('a sandbox card is answered with the offers as the connection saw them', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  desktop.state.cards = [card('r1', 'a1', ALPHA, {
+    checkpoint: 'sandbox',
+    sandbox: { entries: [{ kind: 'write', target: `${ALPHA}/build/out`, count: 2, folder: true, allow: [`${ALPHA}/build/out`, `${ALPHA}/build`] }] },
+  })];
+  const { call } = await setup({ desktop, capabilities: ['approvals'] });
+  const opened = await call('chat.open', { chatId: 'a1' });
+  assert.deepEqual(opened.result.pendingApprovals[0].sandbox.entries[0].allow, ['build/out', 'build']);
+  await call('approval.respond', { requestId: 'r1', response: 'allow-once', sandboxPaths: ['build'] });
+  assert.deepEqual(desktop.state.answers.at(-1).answer.sandboxPaths, [`${ALPHA}/build`], 'back to the path the card holds');
+});
+
+test('cards that go out and are settled reach the connections that follow the chat and take cards', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call, named, dispatcher, connection } = await setup({ desktop, capabilities: ['approvals'] });
+  const otherEvents = [];
+  dispatcher.open({ ...connection, id: 'conn-2', capabilities: [] }, { send: (e) => { otherEvents.push(e); return true; } });
+  await call('chat.open', { chatId: 'a1' });
+  await dispatcher.handle({ ...connection, id: 'conn-2', capabilities: [] }, { id: 1, method: 'chat.open', params: { chatId: 'a1' } });
+
+  desktop.emit({ kind: 'approval', type: 'request', chatId: 'a1', dto: card('r1', 'a1', ALPHA) });
+  desktop.emit({ kind: 'approval', type: 'request', chatId: 'b1', dto: card('r2', 'b1', BETA) });
+  desktop.emit({ kind: 'approval', type: 'resolved', requestId: 'r1', chatId: 'a1', response: 'allow-once', invalidated: false, reason: null, by: { kind: 'desktop' } });
+  desktop.emit({ kind: 'approval', type: 'resolved', requestId: 'r9', chatId: 'a1', response: null, invalidated: true, reason: 'request_invalidated', by: null });
+  await settle();
+
+  assert.deepEqual(named('approval.request').map((r) => [r.requestId, r.options]), [['r1', ['allow-once', 'deny']]]);
+  assert.deepEqual(named('approval.resolved'), [
+    { requestId: 'r1', chatId: 'a1', response: 'allow-once', invalidated: false, reason: null, by: { kind: 'desktop' } },
+    { requestId: 'r9', chatId: 'a1', response: null, invalidated: true, reason: 'request_invalidated' },
+  ]);
+  assert.equal(otherEvents.some((e) => e.method.startsWith('approval.')), false, 'a connection without the capability hears of no card');
+  noPaths(named('approval.request'));
 });

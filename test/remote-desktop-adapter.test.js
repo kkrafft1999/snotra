@@ -258,3 +258,25 @@ test('a folder the phone asks for opens through the window, and the desktop is t
   assert.deepEqual(await adapter.activateWorkspace(path.resolve('/work/unknown')), { ok: false, reason: 'refused' });
   assert.deepEqual(told, [B, B], 'only a switch that happened is told');
 });
+
+test('cards reach the dispatcher as the activity of the desktop, and a phone\'s answer goes to the cards (step 3)', () => {
+  const activity = createRemoteActivity({ log: { warn: () => {} } });
+  const heard = [];
+  const answers = [];
+  activity.subscribe((event) => heard.push(event));
+  const adapter = createRemoteDesktopAdapter({
+    chatHistory: { listForRoots: async () => [], loadForDisplay: async () => null },
+    workspaceFolderStore: { getValidatedFolderHistory: async () => [] },
+    getActiveWorkspaceRoot: () => A,
+    normalizeRoot,
+    runningChatIds: () => [],
+    listPendingApprovals: () => [{ requestId: 'r1', chatId: 'c1' }],
+    respondToApproval: (requestId, answer, by) => { answers.push([requestId, answer, by]); return { ok: true, response: 'deny' }; },
+    activity,
+  });
+  activity.publishApproval({ type: 'request', chatId: 'c1', dto: { requestId: 'r1' } });
+  assert.deepEqual(heard, [{ kind: 'approval', type: 'request', chatId: 'c1', dto: { requestId: 'r1' } }]);
+  assert.deepEqual(adapter.pendingApprovals(), [{ requestId: 'r1', chatId: 'c1' }]);
+  assert.deepEqual(adapter.respondToApproval('r1', { response: 'deny' }, { kind: 'relay' }), { ok: true, response: 'deny' });
+  assert.deepEqual(answers, [['r1', { response: 'deny' }, { kind: 'relay' }]]);
+});

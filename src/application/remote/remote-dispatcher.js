@@ -30,8 +30,13 @@
  *   could not be delivered, and `session.closing` when the desktop ends the
  *   connections.
  *
- * Nothing here switches the workspace or changes the chat on the desktop's
- * screen. Step 3 adds the approvals.
+ * - **Cards** (step 3, §7.4): a connection that declared `approvals` in
+ *   `session.hello` gets the cards of the chats it follows
+ *   (`approval.request`, `approval.resolved` naming who answered) and may
+ *   answer them with *allow once* or *deny* — anything beyond is `refused`,
+ *   not made smaller. The first valid answer wins, the window's included.
+ *
+ * Nothing here changes the chat on the desktop's screen.
  */
 
 const { remoteRpcError } = require('../../shared/contracts/remote/rpc-errors');
@@ -40,6 +45,10 @@ const { isRecord } = require('../../shared/runtime/is-record');
 const display = require('./remote-display');
 
 /** What `session.hello` names as this message layer's limits (§8.1). */
+/** The answers to a card a remote front end may give (§7.4): nothing that stores or widens. */
+const APPROVAL_RESPONSES = Object.freeze(['allow-once', 'deny']);
+const REQUEST_ID_MAX = 128;
+
 const LIMITS = Object.freeze({
   maxRequestBytes: 256 * 1024,
   maxTextChars: 100_000,
@@ -137,6 +146,7 @@ const newestFirst = (/** @type {{ updatedAt: number, chatId: string }} */ a, /**
  * @property {Map<string, { runId: string|null, text: string, timer: unknown }>} deltas  text not sent yet, by chat
  * @property {string|null} lastState  what `state` said last, to say it again only when it changed
  * @property {boolean} resyncing
+ * @property {boolean} approvals  it declared the `approvals` capability: it is offered the cards of its chats
  */
 
 /**
@@ -373,6 +383,10 @@ function createRemoteDispatcher({
       refreshState();
       return;
     }
+    if (activity.kind === 'approval') {
+      onApproval(activity);
+      return;
+    }
     const { chatId, runId, type } = activity;
     const payload = isRecord(activity.payload) ? activity.payload : {};
     if (typeof chatId !== 'string' || !chatId) return;
@@ -427,6 +441,56 @@ function createRemoteDispatcher({
       }
     }
   }
+
+  /**
+   * A card went out or was settled (§7.4): the connections that follow its
+   * chat and take cards hear of it; `state` says the chat waits, or no more.
+   * @param {Extract<import('../ports/remote-desktop-port').RemoteDesktopActivity, { kind: 'approval' }>} activity
+   */
+  function onApproval(activity) {
+    refreshState();
+    const { chatId } = activity;
+    if (typeof chatId !== 'string' || !chatId) return;
+    for (const entry of open.values()) {
+      if (!entry.approvals || !entry.subscriptions.has(chatId)) continue;
+      // What the card is about comes after the text streamed before it.
+      flushDelta(entry, chatId);
+      if (activity.type === 'request') {
+        emit(entry, 'approval.request', cardFor(entry, activity.dto, /** @type {string} */ (entry.subscriptions.get(chatId))));
+      } else {
+        emit(entry, 'approval.resolved', {
+          requestId: activity.requestId,
+          chatId,
+          response: activity.response,
+          invalidated: activity.invalidated,
+          reason: activity.reason,
+          ...(activity.by ? { by: activity.by } : {}),
+        });
+      }
+    }
+  }
+
+  /**
+   * A card in the shape a connection sees it, with the answers it may give.
+   * @param {Open} entry
+   * @param {Record<string, unknown>} dto
+   * @param {string|null} root
+   */
+  const cardFor = (entry, dto, root) => display.approvalRequest(dto, {
+    root,
+    word: (message) => word(entry.connection.locale, message),
+    options: entry.approvals ? [...APPROVAL_RESPONSES] : [],
+  });
+
+  /**
+   * The open cards of a chat the connection may see.
+   * @param {Open} entry
+   * @param {string} chatId
+   * @param {string} root
+   */
+  const cardsOf = (entry, chatId, root) => desktop.pendingApprovals()
+    .filter((dto) => dto.chatId === chatId)
+    .map((dto) => cardFor(entry, dto, root));
 
   function listen() {
     if (unsubscribe.length) return;
@@ -511,8 +575,7 @@ function createRemoteDispatcher({
           title: titleOf(entry.connection, chat.title),
           state: chatState(chat.chatId, desktop.runningChats(), desktop.awaitingApproval()),
           ...display.messagePage(chat.messages, chat.messages.length, limit),
-          // The cards of a chat arrive with step 3 (#980).
-          pendingApprovals: [],
+          pendingApprovals: entry.approvals ? cardsOf(entry, chat.chatId, /** @type {string} */ (chat.root)) : [],
         };
       },
     },
@@ -533,6 +596,53 @@ function createRemoteDispatcher({
       async run(entry, params) {
         unsubscribeChat(entry, chatIdOf(params.chatId));
         return {};
+      },
+    },
+
+    // ---- step 3: cards (§7.4) — allow once or deny, from a connection that takes them
+
+    'approval.list': {
+      kinds: ['local', 'relay'],
+      async run(entry, params) {
+        if (!entry.approvals) throw new Refusal('refused');
+        const { byRoot } = await visible();
+        if (params.chatId !== undefined) {
+          const chat = await visibleChat(params.chatId);
+          return { requests: cardsOf(entry, chat.chatId, /** @type {string} */ (chat.root)) };
+        }
+        const pending = desktop.pendingApprovals();
+        const chatIds = [...new Set(pending.map((dto) => dto.chatId).filter((id) => typeof id === 'string'))];
+        const roots = new Map((await Promise.all(chatIds.map((id) => desktop.loadChat(/** @type {string} */ (id)))))
+          .filter((chat) => chat && chat.root !== null && byRoot.has(chat.root))
+          .map((chat) => [/** @type {any} */ (chat).chatId, /** @type {any} */ (chat).root]));
+        return {
+          requests: pending.filter((dto) => roots.has(dto.chatId)).map((dto) => cardFor(entry, dto, roots.get(dto.chatId))),
+        };
+      },
+    },
+
+    'approval.respond': {
+      kinds: ['local', 'relay'],
+      async run(entry, params) {
+        if (!entry.approvals) throw new Refusal('refused');
+        const { requestId, response, sandboxPaths } = params;
+        if (typeof requestId !== 'string' || !requestId || requestId.length > REQUEST_ID_MAX) throw new Refusal('invalid-params');
+        if (typeof response !== 'string') throw new Refusal('invalid-params');
+        if (sandboxPaths !== undefined && (!Array.isArray(sandboxPaths) || sandboxPaths.some((p) => p !== null && typeof p !== 'string'))) {
+          throw new Refusal('invalid-params');
+        }
+        // Open, and of a chat this connection follows (§7.4): otherwise it is not this connection's card.
+        const card = desktop.pendingApprovals().find((dto) => dto.requestId === requestId);
+        const root = card && typeof card.chatId === 'string' ? entry.subscriptions.get(card.chatId) : undefined;
+        if (!card || root === undefined) throw new Refusal('not-found');
+        // A sandbox card's offers are named as the connection saw them: relative inside the workspace.
+        const chosen = Array.isArray(sandboxPaths) ? sandboxPaths.map((p, i) => fromShown(card, i, p, root)) : undefined;
+        const answered = desktop.respondToApproval(requestId, { response, sandboxPaths: chosen }, {
+          kind: entry.connection.kind,
+          client: entry.connection.client?.name || '',
+        });
+        if (!answered.ok) throw new Refusal(answered.reason);
+        return { response: answered.response };
       },
     },
 
@@ -646,17 +756,45 @@ function createRemoteDispatcher({
     },
   };
 
+  /**
+   * The offer a sandbox card made at `index` whose shown form is `shown`, as
+   * the card holds it; `shown` itself when none matches — the adapter then
+   * refuses it.
+   * @param {Record<string, unknown>} card
+   * @param {number} index
+   * @param {string|null} shown
+   * @param {string} root
+   */
+  function fromShown(card, index, shown, root) {
+    if (shown === null) return null;
+    const entries = /** @type {any} */ (card.sandbox)?.entries;
+    const allow = Array.isArray(entries) && Array.isArray(entries[index]?.allow) ? entries[index].allow : [];
+    return allow.find((/** @type {unknown} */ offer) => display.inWorkspace(root, offer) === shown) ?? shown;
+  }
+
   /** @param {RemoteConnection} connection */
   const methodsFor = (connection) => Object.keys(METHODS).filter((name) => METHODS[name].kinds.includes(connection.kind));
 
   // ---------------------------------------------------------------- the port
 
   return {
-    describe: (connection) => ({ methods: methodsFor(connection), approvalResponses: [], limits: { ...LIMITS } }),
+    describe: (connection) => ({
+      methods: methodsFor(connection),
+      approvalResponses: METHODS['approval.respond'].kinds.includes(connection.kind) ? [...APPROVAL_RESPONSES] : [],
+      limits: { ...LIMITS },
+    }),
 
     open(connection, outlet) {
       /** @type {Open} */
-      const entry = { connection, send: outlet.send, subscriptions: new Map(), deltas: new Map(), lastState: null, resyncing: false };
+      const entry = {
+        connection,
+        send: outlet.send,
+        subscriptions: new Map(),
+        deltas: new Map(),
+        lastState: null,
+        resyncing: false,
+        approvals: Array.isArray(connection.capabilities) && connection.capabilities.includes('approvals'),
+      };
       open.set(connection.id, entry);
       listen();
       emit(entry, 'session.welcome', { connectionId: connection.id, seq: 0 });

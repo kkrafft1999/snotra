@@ -49,6 +49,7 @@ const isChatId = (chatId) => typeof chatId === 'string' && chatId.length > 0;
  *   normalizeRoot: (root: unknown) => string|null,
  *   runningChatIds: () => Iterable<string|null>,
  *   listPendingApprovals: () => Array<{ chatId?: unknown }>,
+ *   respondToApproval?: import('../../application/ports/remote-desktop-port').RemoteDesktopPort['respondToApproval'],
  *   activity: {
  *     subscribe: import('../../application/ports/remote-desktop-port').RemoteDesktopPort['subscribe'],
  *     publishRun: (event: { chatId: string, runId: string, type: string, payload: unknown }) => void,
@@ -78,6 +79,7 @@ function createRemoteDesktopAdapter({
   normalizeRoot,
   runningChatIds,
   listPendingApprovals,
+  respondToApproval = () => ({ ok: false, reason: 'not-found' }),
   activity,
   conversation,
   llm,
@@ -124,6 +126,8 @@ function createRemoteDesktopAdapter({
     },
     runningChats: () => new Set([...runningChatIds()].filter(isChatId)),
     awaitingApproval: () => new Set(listPendingApprovals().map((request) => request?.chatId).filter(isChatId)),
+    pendingApprovals: () => /** @type {Array<Record<string, unknown>>} */ (listPendingApprovals()),
+    respondToApproval: (requestId, answer, by) => respondToApproval(requestId, answer, by),
     subscribe: (listener) => activity.subscribe(listener),
 
     async startTurn({ connectionId, chatId, text, runId }) {
