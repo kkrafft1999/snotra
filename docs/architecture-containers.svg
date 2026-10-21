@@ -65,7 +65,7 @@
   <text class="tech" x="110" y="344">[Container: Chromium]</text>
   <text class="tech" x="110" y="360">marked · DOMPurify · pdf.js · Prism</text>
   <text class="desc" x="110" y="388">Chat, file tree, file views, settings,</text>
-  <text class="desc" x="110" y="406">and the chat's run state (#981). Sees</text>
+  <text class="desc" x="110" y="406">and a running turn on screen (#981). Sees</text>
   <text class="desc" x="110" y="424">only window.electronAPI + contracts.</text>
 
   <rect class="container" x="415" y="290" width="300" height="150" rx="8"/>

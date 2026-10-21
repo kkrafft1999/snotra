@@ -4,8 +4,9 @@
 // `{ ok: false }`, the renderer never looked, and a save that threw for any
 // other reason ended as an unhandled rejection of a `void` call. The user went
 // on writing in chats that were gone after the next quit.
+// Since #981 main saves the turn and says how each save went (`chat-saved`).
 // Checked here: the banner under the header names the cause, stays while saves
-// fail, goes once one succeeds — and no save rejects into the void.
+// fail, goes once one succeeds.
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -22,7 +23,7 @@ async function mount() {
   const listeners = {};
   const sends = [];
   const manualOpened = [];
-  // What the next saves answer: a value, or an Error to reject with.
+  // How main's next saves went, as its `chat-saved` events say.
   const saveAnswers = [];
   const api = {
     onChatDelta: (cb) => { listeners.delta = cb; return () => {}; },
@@ -30,19 +31,22 @@ async function mount() {
     onChatToolLine: (cb) => { listeners.toolLine = cb; return () => {}; },
     getChatHistory: async () => ({ sessions: [], activeChatId: null }),
     setActiveChatId: async () => ({ ok: true }),
-    upsertChatSession: async () => {
-      const answer = saveAnswers.length ? saveAnswers.shift() : { ok: true };
-      if (answer instanceof Error) throw answer;
-      return answer;
-    },
-    generateChatTitle: async () => ({ title: '' }),
     openManual: async (target) => { manualOpened.push(target); return { ok: true }; },
     abortChat() {},
-    chat: (messages, options) =>
+    chat: (message, options) =>
       new Promise((resolve) => {
-        const send = { messages, options, settled: false };
+        const send = { message, options, settled: false };
+        const saved = () => listeners.progress?.({
+          type: 'chat-saved',
+          ...(saveAnswers.length ? saveAnswers.shift() : { ok: true, problem: null }),
+          chatId: options?.chatId,
+          runId: options?.runId,
+        });
+        // Main saves the question as the turn starts, and the turn once it settles.
+        setTimeout(saved, 0);
         send.resolve = (result) => {
           send.settled = true;
+          saved();
           resolve(result);
           listeners.progress?.({ type: 'run-end', chatId: options?.chatId, runId: options?.runId });
         };
@@ -106,7 +110,7 @@ test('a save skipped over an unreadable history shows the banner, a save that go
 
   assert.equal(notice().hidden, true, 'no banner while nothing went wrong');
   // The question's save and the answer's save are both skipped.
-  saveAnswers.push({ ok: false, unreadable: true }, { ok: false, unreadable: true });
+  saveAnswers.push({ ok: false, problem: 'unreadable' }, { ok: false, problem: 'unreadable' });
   ask('How far apart do the radishes go?');
   await flush();
   await flush();
@@ -125,26 +129,20 @@ test('a save skipped over an unreadable history shows the banner, a save that go
   await answer('2 cm.');
 });
 
-test('a save that rejects shows the banner instead of an unhandled rejection', async (t) => {
+test('a save that failed in main shows the banner, and a new chat keeps it until one goes through', async (t) => {
   const env = await mount();
   t.after(env.cleanup);
   const { chat, ask, answer, saveAnswers, notice, noticeText } = env;
-  const unhandled = [];
-  const onUnhandled = (reason) => unhandled.push(reason);
-  process.on('unhandledRejection', onUnhandled);
-  t.after(() => process.off('unhandledRejection', onUnhandled));
 
-  saveAnswers.push(new Error('ENOSPC: no space left on device'), new Error('ENOSPC: no space left on device'));
+  saveAnswers.push({ ok: false, problem: 'failed' }, { ok: false, problem: 'failed' });
   ask('Plan the beds.');
   await answer('Done.');
   assert.equal(notice().hidden, false);
   assert.match(noticeText(), /could not write this chat into the history/);
 
-  // A new chat saves the one it leaves first; that save failing does not stop it.
-  saveAnswers.push(new Error('ENOSPC: no space left on device'));
+  // Leaving the chat writes nothing, so nothing changes the banner.
   await chat.startNewChat();
   await flush();
-  assert.deepEqual(unhandled, [], 'no save rejected into the void');
   assert.equal(notice().hidden, false);
 });
 
@@ -153,7 +151,7 @@ test('the banner follows the language, and its link opens the troubleshooting pa
   t.after(env.cleanup);
   const { ask, answer, saveAnswers, notice, noticeText, manualOpened, setLocale } = env;
 
-  saveAnswers.push({ ok: false, unreadable: true }, { ok: false, unreadable: true });
+  saveAnswers.push({ ok: false, problem: 'unreadable' }, { ok: false, problem: 'unreadable' });
   ask('Plan the beds.');
   await answer('Done.');
   assert.equal(notice().hidden, false);

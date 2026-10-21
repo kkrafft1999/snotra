@@ -17,18 +17,106 @@ const {
 } = require('./enums');
 const { normalizeActiveSkills, normalizeActiveWorkspaceSkills } = require('./skills');
 const { createMessage, isMessage } = require('./message');
+const { isRecord } = require('../runtime/is-record');
+
+/**
+ * What this file reads of a provider definition. `ProviderAdapter`
+ * (`main/ports/provider-runtime-port.js`) is assignable to it; the shape is
+ * written from this side because `shared/` must not import from `main/`.
+ *
+ * @typedef {import('./message').Message} Message
+ * @typedef {string | Message} ProviderText
+ * @typedef {'chat' | 'full'} ApiStyle
+ * @typedef {(value: string | Message) => string} Say  puts a text or a message into words
+ *
+ * @typedef {Object} PresetFieldDefinition
+ * @property {string} key
+ * @property {string} [type]
+ * @property {string} [control]
+ * @property {ProviderText} [label]
+ * @property {ProviderText} [toggleLabel]
+ * @property {ProviderText} [hint]
+ * @property {string} [defaultValue]
+ * @property {boolean} [affectsPresetIdentity]
+ * @property {string} [detailPrefix]
+ * @property {string} [detailStyle]
+ * @property {ReadonlyArray<{ value: string, label?: ProviderText }>} [options]
+ * @property {(value: string) => string} [formatDetail]
+ *
+ * @typedef {Object} ProviderLike
+ * @property {string|Message} [name]
+ * @property {{ apiKey?: boolean, baseUrl?: boolean, insecureTls?: boolean, displayName?: boolean,
+ *   apiStyle?: boolean, extraHeaders?: boolean, supportsImages?: boolean, sendTools?: boolean,
+ *   maxOutputTokens?: boolean }} [fields]
+ * @property {boolean} [optionalApiKey]
+ * @property {boolean} [connectionPerPreset]
+ * @property {string} [defaultModel]
+ * @property {string} [defaultBaseUrl]
+ * @property {ApiStyle} [defaultApiStyle]
+ * @property {boolean} [defaultSendTools]
+ * @property {boolean} [defaultSupportsImages]
+ * @property {boolean} [defaultInsecureTls]
+ * @property {string} [apiBase]
+ * @property {{ apiKeyPlaceholder?: ProviderText, baseUrlPlaceholder?: string,
+ *   insecureTlsHint?: ProviderText, connectionDetail?: boolean, manualModel?: boolean,
+ *   offeredModels?: string, offeredModelsHint?: ProviderText,
+ *   apiStyleOptions?: ReadonlyArray<{ value: string, label?: ProviderText }>,
+ *   templates?: ReadonlyArray<{ id: string, label?: ProviderText, baseUrl?: string, apiStyle?: string, hint?: ProviderText }>,
+ *   presetFields?: ReadonlyArray<PresetFieldDefinition> }} [presentation]
+ *
+ * The renderer's view of a provider (`settings-presentation-service`), the
+ * part the format helpers below read.
+ * @typedef {Object} ProviderViewLike
+ * @property {boolean} [connectionDetail]
+ * @property {PresetFieldView[]} [presetFields]
+ * @property {{ connectionPerPreset?: boolean, offeredModels?: string }} [form]
+ * @property {string} [baseUrl]
+ * @property {boolean} [insecureTls]
+ *
+ * Either of the two: `isModelOffered` and the identity key accept both.
+ * @typedef {ProviderLike & ProviderViewLike} ProviderOrView
+ *
+ * @typedef {Object} PresetFieldView
+ * @property {string} key
+ * @property {'select'} type
+ * @property {'dropdown'|'segmented'|'switch'} control
+ * @property {string} label
+ * @property {string} hint
+ * @property {string} [toggleLabel]
+ * @property {Array<{ value: string, label: string }>} options
+ * @property {string} defaultValue
+ * @property {boolean} affectsPresetIdentity
+ * @property {string} detailPrefix
+ * @property {'default'|'mono'} detailStyle
+ *
+ * @typedef {Object} ProviderTemplateView
+ * @property {string} id
+ * @property {string} label
+ * @property {string} baseUrl
+ * @property {ApiStyle} apiStyle
+ * @property {string} hint
+ */
 
 /**
  * Fallback for the `say` parameter below: plain text as it stands, a message
  * as its bare key. Main and renderer always hand in a real translator — this
  * only keeps a forgotten one visible instead of printing "[object Object]".
+ *
+ * @type {Say}
  */
 function plainText(value) {
   if (typeof value === 'string') return value;
   return isMessage(value) ? value.key : '';
 }
 
-/** Text or message from a provider definition, or `fallback` if it has none. */
+/**
+ * Text or message from a provider definition, or `fallback` if it has none.
+ *
+ * @param {Say} say
+ * @param {unknown} value
+ * @param {string} fallback
+ * @returns {string}
+ */
 function sayText(say, value, fallback) {
   return typeof value === 'string' || isMessage(value) ? say(value) : fallback;
 }
@@ -55,8 +143,12 @@ const LLM_CONFIG_VERSION = 6;
 const MAX_OUTPUT_TOKENS_MIN = 1;
 const MAX_OUTPUT_TOKENS_MAX = 1000000;
 
+/**
+ * @param {unknown} value
+ * @returns {value is number}
+ */
 function isMaxOutputTokens(value) {
-  return Number.isInteger(value) && value >= MAX_OUTPUT_TOKENS_MIN && value <= MAX_OUTPUT_TOKENS_MAX;
+  return typeof value === 'number' && Number.isInteger(value) && value >= MAX_OUTPUT_TOKENS_MIN && value <= MAX_OUTPUT_TOKENS_MAX;
 }
 
 /**
@@ -64,6 +156,9 @@ function isMaxOutputTokens(value) {
  * for a valid limit, `{ error: true }` for anything else. Thousands separators
  * are accepted in groups of three (`8,192`, `8.192`, `8 192`), so `8.5` is an
  * error rather than 85; signs and decimals are errors too.
+ *
+ * @param {unknown} raw
+ * @returns {{ value?: number|null, error?: true }}
  */
 function parseMaxOutputTokensInput(raw) {
   const text = typeof raw === 'string' ? raw.trim() : '';
@@ -94,48 +189,62 @@ const MARKDOWN_ZOOM_MAX = 3;
 const HISTORY_CHAR_LIMIT_MIN = 4000;
 const HISTORY_CHAR_LIMIT_MAX = 2_000_000;
 
+/** @param {unknown} raw @returns {number|undefined} */
 function clampMaxToolRounds(raw) {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
   return Math.min(MAX_TOOL_ROUNDS_MAX, Math.max(MAX_TOOL_ROUNDS_MIN, Math.round(raw)));
 }
 
+/** @param {unknown} raw @returns {number|undefined} */
 function clampSidebarWidth(raw) {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
   return Math.min(SIDEBAR_WIDTH_MAX, Math.max(SIDEBAR_WIDTH_MIN, Math.round(raw)));
 }
 
+/** @param {unknown} raw @returns {number|undefined} */
 function clampChatPanelWidth(raw) {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
   return Math.min(CHAT_PANEL_WIDTH_MAX, Math.max(CHAT_PANEL_WIDTH_MIN, Math.round(raw)));
 }
 
+/** @param {unknown} raw @returns {number|undefined} */
 function clampChatHistoryWidth(raw) {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
   return Math.min(CHAT_HISTORY_WIDTH_MAX, Math.max(CHAT_HISTORY_WIDTH_MIN, Math.round(raw)));
 }
 
+/** @param {unknown} raw @returns {number|undefined} */
 function clampMarkdownZoom(raw) {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
   return Math.round(Math.min(MARKDOWN_ZOOM_MAX, Math.max(MARKDOWN_ZOOM_MIN, raw)) * 100) / 100;
 }
 
+/** @param {unknown} raw @returns {number|undefined} */
 function clampHistoryCharLimit(raw) {
   if (typeof raw !== 'number' || !Number.isFinite(raw)) return undefined;
   return Math.min(HISTORY_CHAR_LIMIT_MAX, Math.max(HISTORY_CHAR_LIMIT_MIN, Math.round(raw)));
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is 'de'|'en'}
+ */
 function isAppLocale(value) {
-  return Object.values(APP_LOCALES).includes(value);
+  return Object.values(APP_LOCALES).some((locale) => locale === value);
 }
 
 /**
  * Normalisiert die Liste abgewählter Tool-Namen (Einstellungen › Tools).
  * Gibt undefined zurück, wenn kein Array übergeben wurde; sonst eine
  * bereinigte, deduplizierte Liste (leeres Array = alle Tools aktiv).
+ *
+ * @param {unknown} raw
+ * @returns {string[]|undefined}
  */
 function normalizeDisabledTools(raw) {
   if (!Array.isArray(raw)) return undefined;
   const seen = new Set();
+  /** @type {string[]} */
   const out = [];
   for (const entry of raw) {
     if (typeof entry !== 'string') continue;
@@ -147,6 +256,7 @@ function normalizeDisabledTools(raw) {
   return out;
 }
 
+/** @returns {{ ok: true }} */
 function createSettingsOk() {
   return { ok: true };
 }
@@ -156,8 +266,13 @@ function createSettingsOk() {
  * wherever Snotra says it itself, and passes through as one — the settings
  * dialog puts it into words with `tMessage()` (#308). Plain text is what a
  * third party said and stays as it is.
+ *
+ * @param {unknown} error
+ * @param {string} [code]
+ * @returns {{ ok: false, error: Message|string, code?: string }}
  */
 function createSettingsError(error, code) {
+  /** @type {{ ok: false, error: Message|string, code?: string }} */
   const out = { ok: false, error: isMessage(error) ? error : String(error ?? '') };
   if (code) out.code = code;
   return out;
@@ -167,6 +282,7 @@ function createSettingsError(error, code) {
 function createListModelsResult({ models, error } = {}) {
   if (error) return { error: isMessage(error) ? error : String(error) };
   if (!Array.isArray(models)) return { models: [] };
+  /** @type {Array<{ id: string, label?: string }>} */
   const out = [];
   for (const m of models) {
     if (!m || typeof m.id !== 'string' || !m.id.trim()) continue;
@@ -178,7 +294,12 @@ function createListModelsResult({ models, error } = {}) {
   return { models: out };
 }
 
-/** Erlaubte Preset-Options-Keys laut Provider-Präsentation. */
+/**
+ * Erlaubte Preset-Options-Keys laut Provider-Präsentation.
+ *
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {Set<string>}
+ */
 function allowedPresetOptionKeys(provider) {
   const fields = provider?.presentation?.presetFields;
   if (!Array.isArray(fields)) return new Set();
@@ -189,11 +310,18 @@ function allowedPresetOptionKeys(provider) {
   return out;
 }
 
-/** Filtert ein Options-Objekt auf deklarierte presetFields-Keys. */
+/**
+ * Filtert ein Options-Objekt auf deklarierte presetFields-Keys.
+ *
+ * @param {unknown} options
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {Record<string, unknown>|undefined}
+ */
 function filterDeclaredPresetOptions(options, provider) {
   if (!options || typeof options !== 'object') return undefined;
   const allowed = allowedPresetOptionKeys(provider);
   if (allowed.size === 0) return undefined;
+  /** @type {Record<string, unknown>} */
   const out = {};
   for (const [key, value] of Object.entries(options)) {
     if (!allowed.has(key)) continue;
@@ -203,26 +331,37 @@ function filterDeclaredPresetOptions(options, provider) {
   return Object.keys(out).length > 0 ? out : undefined;
 }
 
-/** Extrahiert provider-spezifische Preset-Optionen aus Wire- oder Legacy-Feldern. */
+/**
+ * Extrahiert provider-spezifische Preset-Optionen aus Wire- oder Legacy-Feldern.
+ *
+ * @param {unknown} raw
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {Record<string, string>}
+ */
 function extractPresetOptions(raw, provider) {
   const fields = provider?.presentation?.presetFields;
   if (!Array.isArray(fields) || fields.length === 0) return {};
 
+  /** @type {Record<string, string>} */
   const out = {};
-  const legacy = raw && typeof raw === 'object' ? raw : {};
+  // The wire row: the option itself, or under `options`, depending on who wrote it.
+  const legacy = isRecord(raw) ? raw : {};
   for (const field of fields) {
     const key = field?.key;
     if (typeof key !== 'string' || !key.trim()) continue;
+    /** @type {string | null} */
     let value = null;
-    if (typeof legacy[key] === 'string' && legacy[key].trim()) {
-      value = legacy[key].trim();
-    } else if (legacy.options && typeof legacy.options === 'object' && typeof legacy.options[key] === 'string') {
-      const v = legacy.options[key].trim();
+    const direct = legacy[key];
+    const nested = isRecord(legacy.options) ? legacy.options[key] : undefined;
+    if (typeof direct === 'string' && direct.trim()) {
+      value = direct.trim();
+    } else if (typeof nested === 'string') {
+      const v = nested.trim();
       if (v) value = v;
     }
     if (!value) continue;
     const allowed = Array.isArray(field.options)
-      ? field.options.some((o) => o && o.value === value)
+      ? field.options.some((/** @type {{ value: string }|null} */ o) => o && o.value === value)
       : true;
     if (allowed) out[key] = value;
   }
@@ -245,6 +384,31 @@ function extractPresetOptions(raw, provider) {
  *  - **Ansicht** (Main → Renderer): Klartextfelder + `hasKey`/`hasExtraHeaders`.
  *    Der Renderer erfährt nie einen Geheimniswert.
  */
+/**
+ * @typedef {Object} PresetConnection  the stored form: plain fields and the encrypted secrets
+ * @property {string} [displayName]
+ * @property {string} [baseUrl]
+ * @property {ApiStyle} [apiStyle]
+ * @property {boolean} [insecureTls]
+ * @property {boolean} [supportsImages]
+ * @property {boolean} [sendTools]
+ * @property {number} [maxOutputTokens]
+ * @property {string} [apiKeyEnc]
+ * @property {string} [extraHeadersEnc]
+ *
+ * @typedef {Object} PresetConnectionPatch  the draft from the renderer: secrets in plain text
+ * @property {string} [displayName]  '' clears it
+ * @property {string} [baseUrl]
+ * @property {ApiStyle} [apiStyle]
+ * @property {boolean} [insecureTls]
+ * @property {boolean} [supportsImages]
+ * @property {boolean} [sendTools]
+ * @property {number|null} [maxOutputTokens]  `null` removes the limit
+ * @property {string} [apiKey]
+ * @property {boolean} [removeApiKey]
+ * @property {string} [extraHeaders]
+ * @property {boolean} [removeExtraHeaders]
+ */
 const PRESET_CONNECTION_PLAIN_FIELDS = Object.freeze([
   'displayName',
   'baseUrl',
@@ -261,15 +425,30 @@ const PRESET_CONNECTION_SECRET_FIELDS = Object.freeze(['apiKeyEnc', 'extraHeader
  * Two addresses that normalise alike are one endpoint — the unit a stored
  * secret is bound to (#537, #560).
  */
+/**
+ * @param {unknown} url
+ * @returns {string}
+ */
 function normalizeBaseUrl(url) {
   return typeof url === 'string' ? url.trim().replace(/\/+$/, '') : '';
 }
 
-/** Hängt die Verbindung bei diesem Anbieter am Eintrag statt am Anbieter? */
+/**
+ * Hängt die Verbindung bei diesem Anbieter am Eintrag statt am Anbieter?
+ *
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {boolean}
+ */
 function hasPresetConnection(provider) {
   return provider?.connectionPerPreset === true;
 }
 
+/**
+ * @param {string} key  one of PRESET_CONNECTION_PLAIN_FIELDS
+ * @param {unknown} value
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {string|number|boolean|undefined}
+ */
 function connectionPlainValue(key, value, provider) {
   if (key === 'displayName') {
     return typeof value === 'string' ? value.trim().slice(0, MAX_DISPLAY_NAME_CHARS) : undefined;
@@ -296,9 +475,24 @@ function connectionPlainValue(key, value, provider) {
  * Gespeicherte Verbindung eines Eintrags. Unbekannte Felder fallen weg; die
  * verschlüsselten Geheimnisse werden unverändert durchgereicht, weil nur der
  * Main-Prozess sie überhaupt lesen kann.
+ *
+ * @overload
+ * @param {Record<string, unknown>} raw
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {PresetConnection}
+ *
+ * @overload
+ * @param {unknown} raw
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {PresetConnection|undefined}
+ *
+ * @param {unknown} raw
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {PresetConnection|undefined}
  */
 function normalizeStoredPresetConnection(raw, provider) {
-  if (!raw || typeof raw !== 'object') return undefined;
+  if (!isRecord(raw)) return undefined;
+  /** @type {PresetConnection & Record<string, unknown>} */
   const out = {};
   for (const key of PRESET_CONNECTION_PLAIN_FIELDS) {
     const value = connectionPlainValue(key, raw[key], provider);
@@ -318,9 +512,14 @@ function normalizeStoredPresetConnection(raw, provider) {
 /**
  * Verbindungs-Entwurf aus dem Renderer. Klartext-Geheimnisse bleiben hier
  * stehen — der Aufrufer verschlüsselt sie sofort und wirft sie weg.
+ *
+ * @param {unknown} raw
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {PresetConnectionPatch|undefined}
  */
 function normalizePresetConnectionPatch(raw, provider) {
-  if (!raw || typeof raw !== 'object') return undefined;
+  if (!isRecord(raw)) return undefined;
+  /** @type {PresetConnectionPatch & Record<string, unknown>} */
   const out = {};
   for (const key of PRESET_CONNECTION_PLAIN_FIELDS) {
     const value = connectionPlainValue(key, raw[key], provider);
@@ -340,12 +539,29 @@ function normalizePresetConnectionPatch(raw, provider) {
 }
 
 /**
+ * A preset entry as it is persisted and sent over IPC. Beyond the named
+ * fields it carries the provider's preset options (`reasoningEffort`, …).
+ *
+ * @typedef {{ id: string, providerId: string, model: string|undefined, menuVisible: boolean,
+ *   connection?: PresetConnection, [option: string]: unknown }} PresetWire
+ *
+ * What `presetIdentityKey` reads of an entry: the wire form, or the settings
+ * dialog's row, which may keep the options under `options`.
+ * @typedef {{ providerId?: string, model?: string, connection?: { baseUrl?: string },
+ *   options?: Record<string, unknown>, [option: string]: unknown }} PresetRow
+ *
+ * The line under an entry in the settings: its text and how it is drawn.
+ * @typedef {{ text: string, style: 'default'|'mono' }} PresetDetail
+ */
+
+/**
  * Normalisiert einen Preset-Eintrag für Persistenz und IPC.
- * @param {*} raw  anything; only an object can pass
- * @param {(id: string) => Object|null} getProvider
+ * @param {unknown} raw  anything; only an object can pass
+ * @param {(id: string) => ProviderLike|null|undefined} getProvider
+ * @returns {PresetWire|null}
  */
 function normalizePresetWire(raw, getProvider) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : null;
   const providerId = typeof raw.providerId === 'string' && raw.providerId.trim()
     ? raw.providerId.trim()
@@ -361,6 +577,7 @@ function normalizePresetWire(raw, getProvider) {
   const menuVisible = raw.menuVisible !== false;
   const options = extractPresetOptions(raw, provider);
 
+  /** @type {PresetWire} */
   const preset = { id, providerId, model, menuVisible };
   if (Object.keys(options).length > 0) {
     for (const [k, v] of Object.entries(options)) {
@@ -374,8 +591,14 @@ function normalizePresetWire(raw, getProvider) {
   return preset;
 }
 
+/**
+ * @param {PresetRow|null|undefined} preset
+ * @param {ProviderOrView|null|undefined} providerOrView
+ * @returns {string}
+ */
 function presetIdentityKey(preset, providerOrView) {
   if (!preset) return '';
+  /** @type {unknown[]} */
   const parts = [preset.providerId, preset.model || ''];
   // Zwei Zeilen mit demselben Modell, aber verschiedenen Servern sind zwei
   // verschiedene Eintraege (Issue #202) — sonst lehnt die Liste den zweiten
@@ -402,12 +625,36 @@ const MAX_DISPLAY_NAME_CHARS = 60;
 const MAX_EXTRA_HEADERS_CHARS = 4000;
 const API_STYLES = Object.freeze(['chat', 'full']);
 
+/**
+ * @param {unknown} value
+ * @returns {value is ApiStyle}
+ */
 function isApiStyle(value) {
   return typeof value === 'string' && API_STYLES.includes(value);
 }
 
+/**
+ * @typedef {Object} ProviderPatch
+ * @property {boolean} [removeApiKey]
+ * @property {string} [apiKey]
+ * @property {string} [baseUrl]
+ * @property {boolean} [insecureTls]
+ * @property {string} [displayName]
+ * @property {ApiStyle} [apiStyle]
+ * @property {boolean} [removeExtraHeaders]
+ * @property {string} [extraHeaders]
+ * @property {boolean} [supportsImages]
+ * @property {boolean} [sendTools]
+ */
+
+/**
+ * @param {unknown} raw
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {ProviderPatch}
+ */
 function normalizeProviderPatch(raw, provider) {
-  if (!raw || typeof raw !== 'object' || !provider) return {};
+  if (!isRecord(raw) || !provider) return {};
+  /** @type {ProviderPatch} */
   const patch = {};
   if (raw.removeApiKey === true) patch.removeApiKey = true;
   if (typeof raw.apiKey === 'string' && raw.apiKey.trim() && provider.fields?.apiKey) {
@@ -446,6 +693,10 @@ function normalizeProviderPatch(raw, provider) {
 /** Pfad zu einem eigenen Interpreter (Issue #86); leerer String = automatisch suchen. */
 const MAX_INTERPRETER_PATH_CHARS = 1024;
 
+/**
+ * @param {unknown} raw
+ * @returns {string}
+ */
 function normalizeInterpreterPath(raw) {
   if (typeof raw !== 'string') return '';
   // Zeilenumbrueche und Steuerzeichen haetten in einem Programmpfad nichts zu
@@ -463,6 +714,10 @@ function normalizeInterpreterPath(raw) {
 const IMAGE_MODEL_PATTERN = /^(?:gpt-image|chatgpt-image)-[a-z0-9.-]+$/i;
 const MAX_IMAGE_MODEL_CHARS = 80;
 
+/**
+ * @param {unknown} raw
+ * @returns {string}
+ */
 function normalizeImageModel(raw) {
   if (typeof raw !== 'string') return '';
   const value = raw.trim();
@@ -470,8 +725,20 @@ function normalizeImageModel(raw) {
   return value;
 }
 
+/**
+ * The UI preferences as they are persisted and sent to the renderer.
+ * @typedef {ReturnType<typeof normalizeUiPrefs>} UiPrefs
+ *
+ * A change to them: any subset, each field already clamped.
+ * @typedef {Partial<UiPrefs>} UiPrefsPatch
+ */
+
+/**
+ * @param {unknown} raw
+ */
 function normalizeUiPrefs(raw) {
-  const data = raw && typeof raw === 'object' ? raw : {};
+  /** @type {Record<string, unknown>} */
+  const data = isRecord(raw) ? raw : {};
   let baseSystemPrompt = '';
   if (typeof data.baseSystemPrompt === 'string') {
     baseSystemPrompt = data.baseSystemPrompt;
@@ -560,6 +827,9 @@ function normalizeUiPrefs(raw) {
     // Hidden files in the tree (#436): off by default, so nothing changes for
     // anyone who does not look for the switch. Hence `=== true`.
     showHiddenFiles: data.showHiddenFiles === true,
+    // Developer mode (#1213): off unless switched on with its shortcut. Not
+    // in the patch below — only main's own toggle writes it.
+    developerMode: data.developerMode === true,
     baseSystemPrompt,
     appLocale,
     // `allowWorkspaceWrite` (bis v1.3.1) wird bewusst nicht mehr übernommen: das
@@ -592,8 +862,14 @@ function normalizeUiPrefs(raw) {
   };
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {UiPrefsPatch}
+ */
 function normalizeUiPrefsPatch(raw) {
-  const patch = raw && typeof raw === 'object' ? raw : {};
+  /** @type {Record<string, unknown>} */
+  const patch = isRecord(raw) ? raw : {};
+  /** @type {UiPrefsPatch} */
   const out = {};
   if (typeof patch.contentPaneVisible === 'boolean') {
     out.contentPaneVisible = patch.contentPaneVisible;
@@ -691,9 +967,25 @@ function normalizeUiPrefsPatch(raw) {
   return out;
 }
 
+/**
+ * @typedef {Object} ListModelsRequest
+ * @property {string} providerId
+ * @property {string} [apiKey]
+ * @property {string} [baseUrl]
+ * @property {boolean} [insecureTls]
+ * @property {string} [presetId]  the stored connection to fall back on
+ * @property {string} [extraHeaders]
+ */
+
+/**
+ * @param {unknown} raw
+ * @returns {ListModelsRequest}
+ */
 function normalizeListModelsRequest(raw) {
-  const payload = raw && typeof raw === 'object' ? raw : {};
+  /** @type {Record<string, unknown>} */
+  const payload = isRecord(raw) ? raw : {};
   const providerId = typeof payload.providerId === 'string' ? payload.providerId.trim() : '';
+  /** @type {ListModelsRequest} */
   const out = { providerId };
   if (typeof payload.apiKey === 'string' && payload.apiKey.trim()) {
     out.apiKey = payload.apiKey.trim();
@@ -717,6 +1009,10 @@ function normalizeListModelsRequest(raw) {
   return out;
 }
 
+/**
+ * @param {ProviderOrView|null|undefined} source
+ * @returns {boolean}
+ */
 function hasConnectionDetail(source) {
   return source?.connectionDetail === true || source?.presentation?.connectionDetail === true;
 }
@@ -726,9 +1022,10 @@ function hasConnectionDetail(source) {
  * into words (#310): the renderer hands in `tMessage`, the main process a
  * translator bound to the stored language.
  *
- * @param {Object} source  a provider or its catalogue entry
+ * @param {ProviderOrView|null|undefined} source  a provider or its catalogue entry
  * @param {{ baseUrl?: string, insecureTls?: boolean }} [connection]
- * @param {Function} [say]
+ * @param {Say} [say]
+ * @returns {string}
  */
 function formatConnectionDetail(source, { baseUrl, insecureTls } = {}, say = plainText) {
   if (!hasConnectionDetail(source)) return '';
@@ -744,6 +1041,10 @@ function formatConnectionDetail(source, { baseUrl, insecureTls } = {}, say = pla
 /**
  * Erstes gesetztes Preset-Feld als Detailtext. `detailPrefix` ist optional:
  * Ohne Praefix steht der nackte Wert da.
+ *
+ * @param {PresetRow|null|undefined} preset
+ * @param {ProviderOrView|null|undefined} providerView
+ * @returns {PresetDetail}
  */
 function formatPresetOptionDetailFromView(preset, providerView) {
   const fields = providerView?.presetFields;
@@ -769,6 +1070,12 @@ function formatPresetOptionDetailFromView(preset, providerView) {
 /**
  * Formatiert Preset-Sublabels aus normalisierten Provider-View-DTOs (Renderer + Main).
  * Optional connectionOverride für Credential-Drafts (baseUrl/insecureTls).
+ *
+ * @param {PresetRow|null|undefined} preset
+ * @param {ProviderOrView|null|undefined} providerView
+ * @param {{ baseUrl?: string, insecureTls?: boolean }|null} [connectionOverride]
+ * @param {Say} [say]
+ * @returns {PresetDetail}
  */
 function formatPresetSublabelFromView(preset, providerView, connectionOverride, say = plainText) {
   if (!isModelOffered(providerView, preset?.model)) return noLongerOfferedDetail(say);
@@ -797,6 +1104,11 @@ function formatPresetSublabelFromView(preset, providerView, connectionOverride, 
  */
 const offeredModelPatterns = new Map();
 
+/**
+ * @param {ProviderOrView|null|undefined} providerOrView
+ * @param {string|null|undefined} model
+ * @returns {boolean}
+ */
 function isModelOffered(providerOrView, model) {
   const source = providerOrView?.presentation?.offeredModels ?? providerOrView?.form?.offeredModels;
   if (typeof source !== 'string' || !source) return true;
@@ -813,6 +1125,10 @@ function isModelOffered(providerOrView, model) {
   return pattern.test(name);
 }
 
+/**
+ * @param {Say} say
+ * @returns {PresetDetail}
+ */
 function noLongerOfferedDetail(say) {
   return {
     text: say(createMessage('settings.models.noLongerOffered')),
@@ -820,6 +1136,11 @@ function noLongerOfferedDetail(say) {
   };
 }
 
+/**
+ * @param {PresetRow|null|undefined} preset
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {PresetDetail}
+ */
 function formatPresetOptionDetail(preset, provider) {
   const fields = provider?.presentation?.presetFields;
   if (!Array.isArray(fields) || !isModelOffered(provider, preset?.model)) {
@@ -829,7 +1150,7 @@ function formatPresetOptionDetail(preset, provider) {
     const key = field?.key;
     if (!key || typeof field.formatDetail !== 'function') continue;
     const value = preset?.[key] ?? preset?.options?.[key];
-    if (!value) continue;
+    if (typeof value !== 'string' || !value) continue;
     const text = field.formatDetail(value);
     if (!text) continue;
     return {
@@ -842,6 +1163,13 @@ function formatPresetOptionDetail(preset, provider) {
   return { text: '', style: PRESET_DETAIL_STYLES.DEFAULT };
 }
 
+/**
+ * @param {PresetRow|null|undefined} preset
+ * @param {ProviderLike|null|undefined} provider
+ * @param {{ baseUrl?: string, insecureTls?: boolean }} [connection]
+ * @param {Say} [say]
+ * @returns {PresetDetail}
+ */
 function formatPresetSublabel(preset, provider, connection, say = plainText) {
   if (!isModelOffered(provider, preset?.model)) return noLongerOfferedDetail(say);
   const optionDetail = formatPresetOptionDetail(preset, provider);
@@ -863,6 +1191,11 @@ function formatPresetSublabel(preset, provider, connection, say = plainText) {
  * OpenAI's reasoning levels need (#718) and what fills the field column at the
  * narrowest window, 900 px — an eighth segment would no longer fit.
  */
+/**
+ * @param {PresetFieldDefinition} field
+ * @param {unknown[]} options
+ * @returns {'dropdown'|'segmented'|'switch'}
+ */
 function presetFieldControl(field, options) {
   if (field.control === PRESET_FIELD_CONTROLS.SWITCH && options.length === 2) {
     return PRESET_FIELD_CONTROLS.SWITCH;
@@ -877,17 +1210,22 @@ function presetFieldControl(field, options) {
  * The view builders below turn a provider definition into plain data for the
  * settings dialog. Labels and hints may be catalogue messages there (#310);
  * `say` puts them into words, so the view holds finished text in one language.
+ *
+ * @param {ProviderLike|null|undefined} provider
+ * @param {Say} [say]
+ * @returns {PresetFieldView[]}
  */
 function buildPresetFieldViews(provider, say = plainText) {
   const fields = provider?.presentation?.presetFields;
   if (!Array.isArray(fields)) return [];
+  /** @type {PresetFieldView[]} */
   const out = [];
   for (const field of fields) {
     if (!field || field.type !== PRESET_FIELD_TYPES.SELECT || !field.key) continue;
     const options = Array.isArray(field.options)
       ? field.options
-          .filter((o) => o && typeof o.value === 'string')
-          .map((o) => ({
+          .filter((/** @type {{ value: string, label?: ProviderText }|null} */ o) => o && typeof o.value === 'string')
+          .map((/** @type {{ value: string, label?: ProviderText }} */ o) => ({
             value: o.value,
             label: sayText(say, o.label, o.value),
           }))
@@ -917,10 +1255,17 @@ function buildPresetFieldViews(provider, say = plainText) {
   return out;
 }
 
-/** Vorlagen des Providers als reine Daten fuer die Oberflaeche (Issue #193). */
+/**
+ * Vorlagen des Providers als reine Daten fuer die Oberflaeche (Issue #193).
+ *
+ * @param {ProviderLike|null|undefined} provider
+ * @param {Say} [say]
+ * @returns {ProviderTemplateView[]}
+ */
 function buildProviderTemplateViews(provider, say = plainText) {
   const templates = provider?.presentation?.templates;
   if (!Array.isArray(templates)) return [];
+  /** @type {ProviderTemplateView[]} */
   const out = [];
   for (const template of templates) {
     if (!template || typeof template.id !== 'string' || !template.id.trim()) continue;
@@ -935,6 +1280,10 @@ function buildProviderTemplateViews(provider, say = plainText) {
   return out;
 }
 
+/**
+ * @param {ProviderLike|null|undefined} provider
+ * @param {Say} [say]
+ */
 function buildProviderFormView(provider, say = plainText) {
   const presentation = provider?.presentation || {};
   const showApiKey = !!provider?.fields?.apiKey;

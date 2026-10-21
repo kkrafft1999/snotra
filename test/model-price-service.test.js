@@ -8,6 +8,7 @@ const path = require('node:path');
 
 const { createModelPriceService, isLoopbackUrl, UPDATE_ERROR_CODES } = require('../src/main/services/model-price-service');
 const { PRICE_SOURCES, LITELLM_PRICES_URL, MIN_PRICE_TABLE_MODELS } = require('../src/shared/contracts/cost');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const SNAPSHOT = {
   date: '2026-10-01',
@@ -27,11 +28,11 @@ function liteLlmTable(extra = {}) {
 
 function setup(t, options = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-prices-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDirSync(dir));
   const make = (more = {}) => createModelPriceService({
     fs: fs.promises,
     path,
-    app: { getPath: () => dir },
+    userDataPath: dir,
     snapshot: SNAPSHOT,
     now: () => new Date('2026-10-15T12:00:00Z'),
     log: { warn() {} },

@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const STORAGE_SERVICE_PATH = path.join(__dirname, '..', 'src', 'main', 'services', 'storage-service.js');
 
@@ -100,10 +101,10 @@ test('secret MCP headers never reach the renderer and are masked in a status (#3
   const { createMockProviderCatalog } = require('./helpers/provider-ports');
 
   const tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'snotra-mcp-headers-'));
-  t.after(() => fsp.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const storage = createStorageService({
-    app: { getPath: () => tmpDir },
-    safeStorage: {
+    userDataPath: tmpDir,
+    secretStore: {
       isEncryptionAvailable: () => true,
       encryptString: (plain) => Buffer.from(`enc:${plain}`, 'utf8'),
       decryptString: (buf) => buf.toString('utf8').slice(4),

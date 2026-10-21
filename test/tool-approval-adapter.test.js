@@ -124,3 +124,99 @@ test('unsubscribe verwirft offene Anfragen mit Grund fehlende UI', async () => {
   assert.equal((await pending).reason, 'no_approval_ui');
   assert.equal(adapter.isAvailable(1), false);
 });
+
+test('a front end without cards has its requests answered in the window, and only there (#1194)', async () => {
+  let counter = 0;
+  const adapter = createToolApprovalAdapter({
+    randomUUID: () => `req-${(counter += 1)}`,
+    PUSH,
+    log: { warn() {} },
+    answeredByWindow: (sessionId) => String(sessionId).startsWith('remote:'),
+  });
+  // No window yet: the request expires, as for any front end without a card.
+  assert.equal(adapter.isAvailable('remote:conn-1'), false);
+  assert.equal(adapter.isAvailable('other'), false, 'only the front ends named stand behind the window');
+
+  const wc = makeWebContents();
+  adapter.subscribe(1, wc);
+  assert.equal(adapter.isAvailable('remote:conn-1'), true);
+  const pending = adapter.requestApproval({ sessionId: 'remote:conn-1', request: { ...REQUEST, chatId: 'chat-phone' } });
+  assert.equal(wc.sent[0].channel, PUSH.TOOL_APPROVAL_REQUEST);
+  assert.equal(adapter.listPending(1).length, 1, 'kept under the window');
+  assert.equal(adapter.respond('remote:conn-1', { requestId: 'req-1', response: 'allow-once' }).ok, false, 'the front end itself cannot answer it');
+  assert.deepEqual(adapter.respond(1, { requestId: 'req-1', response: 'allow-once' }), { ok: true, response: 'allow-once' });
+  assert.equal((await pending).response, 'allow-once');
+
+  // The window goes away: its cards go with it, the phone's as well.
+  const later = adapter.requestApproval({ sessionId: 'remote:conn-1', request: REQUEST });
+  wc.destroy();
+  assert.equal((await later).invalidated, true);
+});
+
+test('a remote answers allow once or deny; the first valid answer wins and everyone hears who gave it (#1194)', async () => {
+  const adapter = makeAdapter();
+  const events = [];
+  adapter.observe((event) => events.push(event));
+  const wc = makeWebContents();
+  adapter.subscribe(1, wc);
+
+  const pending = adapter.requestApproval({ sessionId: 1, request: { ...REQUEST, chatId: 'chat-a' } });
+  assert.deepEqual(events.map((e) => [e.type, e.chatId, e.dto?.requestId]), [['request', 'chat-a', 'req-1']]);
+  const by = { kind: 'relay', client: 'Snotra mobile' };
+  assert.deepEqual(adapter.respondFromRemote('req-1', { response: 'allow-session' }, by), { ok: false, reason: 'refused' }, 'refused, not made smaller');
+  assert.deepEqual(adapter.respondFromRemote('req-1', { response: 'allow-always' }, by), { ok: false, reason: 'refused' });
+  assert.deepEqual(adapter.respondFromRemote('nope', { response: 'deny' }, by), { ok: false, reason: 'not-found' });
+  assert.deepEqual(adapter.respondFromRemote('req-1', { response: 'allow-once' }, by), { ok: true, response: 'allow-once' });
+  assert.deepEqual(await pending, { response: 'allow-once', requestId: 'req-1' });
+  // The window comes second: the card is settled already.
+  assert.equal(adapter.respond(1, { requestId: 'req-1', response: 'deny' }).ok, false);
+  assert.deepEqual(events[1], {
+    type: 'resolved', requestId: 'req-1', chatId: 'chat-a', response: 'allow-once', invalidated: false, reason: null, by,
+  });
+  assert.deepEqual(wc.sent.at(-1).payload, { requestId: 'req-1', response: 'allow-once', invalidated: false, reason: null }, 'the window takes its card down');
+
+  // The window answering is named as the desktop; a voided card names nobody.
+  const second = adapter.requestApproval({ sessionId: 1, request: { ...REQUEST, chatId: 'chat-a' } });
+  adapter.respond(1, { requestId: 'req-2', response: 'deny' });
+  await second;
+  assert.deepEqual(events.at(-1).by, { kind: 'desktop' });
+  const third = adapter.requestApproval({ sessionId: 1, request: { ...REQUEST, chatId: 'chat-a' } });
+  adapter.invalidateChat('chat-a');
+  await third;
+  assert.equal(events.at(-1).by, null);
+});
+
+test('a remote picks only among a sandbox card\'s offers (#1194)', async () => {
+  const adapter = makeAdapter();
+  adapter.subscribe(1, makeWebContents());
+  const sandbox = { entries: [{ kind: 'write', target: '/w/out', count: 1, folder: true, allow: ['/w/out', '/w'] }] };
+  const request = { ...REQUEST, chatId: 'chat-a', checkpoint: 'sandbox', sandbox };
+  const by = { kind: 'relay', client: 'phone' };
+
+  const first = adapter.requestApproval({ sessionId: 1, request });
+  assert.deepEqual(adapter.respondFromRemote('req-1', { response: 'allow-once', sandboxPaths: ['/etc'] }, by), { ok: false, reason: 'refused' });
+  assert.deepEqual(adapter.respondFromRemote('req-1', { response: 'allow-once', sandboxPaths: ['/w', '/x'] }, by), { ok: false, reason: 'refused' });
+  assert.equal(adapter.respondFromRemote('req-1', { response: 'allow-once', sandboxPaths: ['/w'] }, by).ok, true);
+  assert.deepEqual((await first).sandboxPaths, ['/w']);
+
+  const second = adapter.requestApproval({ sessionId: 1, request });
+  adapter.respondFromRemote('req-2', { response: 'allow-once' }, by);
+  assert.deepEqual((await second).sandboxPaths, ['/w/out'], 'without a choice, the first offer');
+
+  const third = adapter.requestApproval({ sessionId: 1, request: { ...REQUEST, chatId: 'chat-a' } });
+  assert.deepEqual(adapter.respondFromRemote('req-3', { response: 'allow-once', sandboxPaths: ['/w'] }, by), { ok: false, reason: 'refused' }, 'no paths on a card that offers none');
+  adapter.respondFromRemote('req-3', { response: 'deny' }, by);
+  await third;
+});
+
+test('an observer that throws does not hold up a card', async () => {
+  const warnings = [];
+  let counter = 0;
+  const adapter = createToolApprovalAdapter({ randomUUID: () => `req-${(counter += 1)}`, PUSH, log: { warn: (m) => warnings.push(m) } });
+  adapter.observe(() => { throw new Error('remote gone'); });
+  adapter.subscribe(1, makeWebContents());
+  const pending = adapter.requestApproval({ sessionId: 1, request: REQUEST });
+  adapter.respond(1, { requestId: 'req-1', response: 'allow-once' });
+  assert.equal((await pending).response, 'allow-once');
+  assert.equal(warnings.length, 2);
+});

@@ -385,7 +385,7 @@ test('the words are never translated: a German desktop shows the same six', asyn
 });
 
 test('the native adapter: an aborted signal closes the sheet and confirms nothing', async () => {
-  const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+  const { createNativeConfirmationAdapter } = require('../src/main/electron/native-confirmation-adapter');
   const { createFakeDialog } = require('./helpers/remote-pairing');
   const dialog = createFakeDialog();
   const port = createNativeConfirmationAdapter({ dialog });
@@ -396,4 +396,42 @@ test('the native adapter: an aborted signal closes the sheet and confirms nothin
   assert.deepEqual(await asking, { confirmed: false, reason: 'declined' });
   assert.deepEqual(await port.confirm({ action: 'remote-pairing', prompt: { message: 'm', buttons: ['a', 'b'] }, signal: controller.signal }), { confirmed: false, reason: 'declined' });
   assert.equal(dialog.boxes.length, 1, 'an aborted signal shows no sheet at all');
+});
+
+test('closed (#1110): a pairing is refused before anything reaches the relay, and the state says so', async (t) => {
+  const f = createPairingFixture(t, { open: false });
+  assert.deepEqual(await f.pairing.start(), { ok: false, reason: 'locked' });
+  const state = await f.pairing.getState();
+  assert.equal(state.locked, true);
+  assert.equal(state.state, 'empty');
+  assert.deepEqual(f.relay.inspect.calls(), [], 'no call reached the relay');
+  assert.equal(fs.existsSync(f.file), false, 'no identity keys either');
+  assert.equal((await createPairingFixture(t).pairing.getState()).locked, false, 'open by default');
+});
+
+test('closed (#1110): a phone paired before can still be removed', async (t) => {
+  const open = createPairingFixture(t);
+  await paired(open);
+  const closed = createPairingFixture(t, { dir: open.dir, relay: open.relay, open: false });
+  assert.equal((await closed.pairing.getState()).state, 'paired');
+  assert.deepEqual(await closed.pairing.start(), { ok: false, reason: 'locked' }, 'replacing it is pairing too');
+  assert.equal((await closed.pairing.unpair()).ok, true);
+  assert.equal((await closed.pairing.getState()).state, 'empty');
+});
+
+test('developer mode (#1213): pairing follows whether it is open, and a running one stops when it closes', async (t) => {
+  let open = false;
+  const f = createPairingFixture(t, { open: () => open });
+  assert.deepEqual(await f.pairing.start(), { ok: false, reason: 'locked' });
+  open = true;
+  f.pairing.refresh();
+  assert.equal((await f.pairing.getState()).locked, false);
+  assert.deepEqual(await f.pairing.start(), { ok: true });
+  await f.stateIs('code');
+  open = false;
+  f.pairing.refresh();
+  const state = await f.pairing.getState();
+  assert.equal(state.state, 'empty');
+  assert.equal(state.locked, true);
+  await f.until(() => f.relay.inspect.channelIds().length === 0, 'the channel deleted');
 });

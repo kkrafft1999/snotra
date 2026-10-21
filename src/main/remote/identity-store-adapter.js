@@ -22,14 +22,29 @@
 
 const nodeCrypto = require('node:crypto');
 const protocol = require('./pairing-protocol');
+const { isRecord } = require('../../shared/runtime/is-record');
+
+/** @typedef {import('node:crypto').JsonWebKey} JsonWebKey */
+/** @typedef {import('../../application/ports/remote-identity-port').RemotePairedPhone} RemotePairedPhone */
 
 const FILE_NAME = 'remote-pairing.json';
 const FILE_VERSION = 1;
 
 const EMPTY = Object.freeze({ identity: null, phone: null });
-/** Where `safeStorage`'s key is on disk from the start: everywhere but a fresh Windows profile (#1060). */
+/**
+ * Where `safeStorage`'s key is on disk from the start: everywhere but a fresh Windows profile (#1060).
+ * @type {{ whenDurable: () => Promise<unknown> }}
+ */
 const KEY_ALWAYS_DURABLE = Object.freeze({ whenDurable: () => Promise.resolve() });
 
+/**
+ * A private key kept as an object, with the public point it belongs to.
+ * @typedef {{ privateKey: import('node:crypto').KeyObject, point: Buffer }} KeyPair
+ *
+ * @typedef {{ identity: { sign: KeyPair, agree: KeyPair } | null, phone: RemotePairedPhone | null }} StoredIdentity
+ */
+
+/** @param {JsonWebKey} jwk */
 function pointOf(jwk) {
   const x = protocol.fromB64u(jwk?.x, 32);
   const y = protocol.fromB64u(jwk?.y, 32);
@@ -38,10 +53,16 @@ function pointOf(jwk) {
 
 function newKey() {
   const { privateKey } = nodeCrypto.generateKeyPairSync('ec', { namedCurve: 'P-256' });
-  return { privateKey, point: pointOf(privateKey.export({ format: 'jwk' })) };
+  const point = pointOf(privateKey.export({ format: 'jwk' }));
+  if (!point) throw new Error('remote pairing: the public point of a new key could not be read');
+  return { privateKey, point };
 }
 
-/** A stored private key, back as a KeyObject; null when it is not one. */
+/**
+ * A stored private key, back as a KeyObject; null when it is not one.
+ * @param {JsonWebKey | null | undefined} jwk
+ * @returns {KeyPair | null}
+ */
 function keyOf(jwk) {
   if (!jwk || jwk.kty !== 'EC' || jwk.crv !== 'P-256' || typeof jwk.d !== 'string') return null;
   try {
@@ -54,19 +75,36 @@ function keyOf(jwk) {
   }
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {RemotePairedPhone | null}
+ */
 function phoneOf(raw) {
-  if (!raw || typeof raw !== 'object') return null;
-  if (!protocol.fromB64u(raw.channelId, protocol.CHANNEL_ID_BYTES) || !protocol.isKeyBundle(raw.keys)) return null;
-  if (!Number.isFinite(raw.pairedAt)) return null;
+  if (!isRecord(raw)) return null;
+  if (typeof raw.channelId !== 'string' || !protocol.fromB64u(raw.channelId, protocol.CHANNEL_ID_BYTES)
+    || !protocol.isKeyBundle(raw.keys)) return null;
+  if (typeof raw.pairedAt !== 'number' || !Number.isFinite(raw.pairedAt)) return null;
   return { channelId: raw.channelId, keys: { sign: raw.keys.sign, agree: raw.keys.agree }, pairedAt: raw.pairedAt };
 }
 
-/** What the core gets: the public points, and a signer whose key stays in here. */
+/**
+ * What the core gets: the public points, a signer and the long-term
+ * agreement of the channel (`ss`, protocol §14) — the keys stay in here.
+ * @param {{ sign: KeyPair, agree: KeyPair }} identity
+ */
 function identityHandle(identity) {
   const signKey = identity.sign.privateKey;
+  const agreeKey = identity.agree.privateKey;
   return Object.freeze({
     keys: Object.freeze({ sign: protocol.toB64u(identity.sign.point), agree: protocol.toB64u(identity.agree.point) }),
+    /** @param {Uint8Array} message */
     sign: (message) => nodeCrypto.sign('sha256', Buffer.from(message), { key: signKey, dsaEncoding: 'ieee-p1363' }),
+    /** @param {string} otherAgreePoint  base64url; the shared point's x-coordinate, 32 bytes */
+    agree: (otherAgreePoint) => {
+      const publicKey = protocol.publicKeyOf(protocol.fromB64u(otherAgreePoint, protocol.POINT_BYTES));
+      if (!publicKey) throw new TypeError('remote pairing: not a P-256 point');
+      return nodeCrypto.diffieHellman({ privateKey: agreeKey, publicKey });
+    },
   });
 }
 
@@ -93,8 +131,9 @@ function createRemoteIdentityStore({
   log = console,
 }) {
   const file = path.join(dir, FILE_NAME);
-  /** @type {{ identity: any, phone: any } | null} */
+  /** @type {StoredIdentity | null} */
   let cache = null;
+  /** @type {Promise<StoredIdentity> | null} */
   let reading = null;
   // One change at a time: two pairings must not each create an identity.
   /** @type {Promise<unknown>} */
@@ -109,6 +148,7 @@ function createRemoteIdentityStore({
     }
   }
 
+  /** @param {StoredIdentity} next */
   function serialized(next) {
     return JSON.stringify({
       identity: next.identity
@@ -129,7 +169,7 @@ function createRemoteIdentityStore({
     try {
       const outer = JSON.parse(text);
       if (outer?.version !== FILE_VERSION || typeof outer.data !== 'string') throw new TypeError('format');
-      if (!isAvailable()) throw new TypeError('encryption unavailable');
+      if (!safeStorage || !isAvailable()) throw new TypeError('encryption unavailable');
       const inner = JSON.parse(safeStorage.decryptString(Buffer.from(outer.data, 'base64')));
       const sign = keyOf(inner?.identity?.sign);
       const agree = keyOf(inner?.identity?.agree);
@@ -151,8 +191,9 @@ function createRemoteIdentityStore({
     return reading;
   }
 
+  /** @param {StoredIdentity} next */
   async function write(next) {
-    if (!isAvailable()) throw new Error('remote pairing: encryption is not available');
+    if (!safeStorage || !isAvailable()) throw new Error('remote pairing: encryption is not available');
     // Ciphertext reaches the disk only once its key does (#1060).
     await safeStorageKey.whenDurable();
     const data = safeStorage.encryptString(serialized(next)).toString('base64');

@@ -28,6 +28,10 @@ const DEFAULT_MAX_LOGGED = 100;
 
 const RENDERER_TEXT_MAX = 4000;
 
+/**
+ * @param {string} text
+ * @param {number} max
+ */
 function truncate(text, max) {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
@@ -36,6 +40,8 @@ function truncate(text, max) {
  * What the window reports, checked: it comes over IPC and is only ever
  * written to the log, but a broken payload must not throw here either.
  * `null` when it carries nothing to report.
+ *
+ * @param {{ source?: unknown, message?: unknown, stack?: unknown, at?: unknown }|null|undefined} input
  */
 function normalizeRendererReport(input) {
   if (!input || typeof input !== 'object') return null;
@@ -48,9 +54,10 @@ function normalizeRendererReport(input) {
 }
 
 /**
- * @param {{ log?: { error?: Function }, notices?: { post: Function } | null,
+ * @param {{ log?: { error?: (...args: unknown[]) => void }|null,
+ *   notices?: Pick<ReturnType<typeof import('./app-notices').createAppNotices>, 'post'> | null,
  *   logFilePath?: string | null, coalesceMs?: number, maxCoalesceMs?: number, maxLogged?: number,
- *   now?: () => number, setTimer?: Function }} [options]
+ *   now?: () => number, setTimer?: (fn: () => void, ms: number) => { unref?: () => unknown } }} [options]
  */
 function createErrorReporter({
   log = console,
@@ -65,6 +72,7 @@ function createErrorReporter({
   let count = 0;
   let lastPostAt = -Infinity;
   let wait = coalesceMs;
+  /** @type {{ unref?: () => unknown }|null} */
   let timer = null;
 
   function post() {
@@ -89,6 +97,7 @@ function createErrorReporter({
     timer?.unref?.();
   }
 
+  /** @param {unknown[]} args */
   function writeLog(...args) {
     try {
       log?.error?.(...args);
@@ -97,7 +106,13 @@ function createErrorReporter({
     }
   }
 
-  /** `label` says what kind of error it was; `error` is whatever was thrown. */
+  /**
+   * `label` says what kind of error it was; `error` is whatever was thrown.
+   *
+   * @param {string} source
+   * @param {string} label
+   * @param {unknown} error
+   */
   function report(source, label, error) {
     count += 1;
     if (count <= maxLogged) {
@@ -108,7 +123,11 @@ function createErrorReporter({
     schedulePost();
   }
 
-  /** An error the window caught with its global handlers. */
+  /**
+   * An error the window caught with its global handlers.
+   *
+   * @param {Parameters<typeof normalizeRendererReport>[0]} input
+   */
   function reportRenderer(input) {
     const entry = normalizeRendererReport(input);
     if (!entry) return false;
@@ -128,9 +147,14 @@ function createErrorReporter({
  * a raw stack and the error leaves no trace; with them it is logged and
  * counted, and the app goes on — as it did after Electron's box.
  * Returns the function that removes them again.
+ *
+ * @param {Pick<NodeJS.Process, 'on' | 'removeListener'>} proc
+ * @param {Pick<ReturnType<typeof createErrorReporter>, 'report'>} reporter
  */
 function installProcessErrorHandlers(proc, reporter) {
+  /** @param {unknown} error */
   const onException = (error) => reporter.report('main', 'Uncaught exception', error);
+  /** @param {unknown} reason */
   const onRejection = (reason) => reporter.report('main', 'Unhandled promise rejection', reason);
   proc.on('uncaughtException', onException);
   proc.on('unhandledRejection', onRejection);

@@ -29,22 +29,14 @@
 
 const { normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { isPathInside } = require('../../shared/runtime/path-inside');
+const { PLATFORM_CAPABILITIES } = require('../../shared/contracts/platform-capabilities');
+const { platformSupports } = require('../platforms');
 const {
   summarizeViolations, describeForModel, widerFolder, widerHost, grantedHosts, parseViolationLine, NETWORK_REASONS,
 } = require('./sandbox-violations');
 
-const SANDBOX_REASONS = Object.freeze({
-  /** Windows (and anything that is neither macOS nor Linux). */
-  PLATFORM: 'platform',
-  /** Linux without bubblewrap, socat or ripgrep. */
-  DEPENDENCIES: 'dependencies',
-  /** The library could not be loaded or initialised. */
-  START: 'start',
-  /** The self-test ran and failed — typically restricted user namespaces. */
-  SELF_TEST: 'self-test',
-  /** The user switched the sandbox off for this workspace (#357). */
-  WORKSPACE: 'workspace',
-});
+const { SANDBOX_REASONS } = require('../../shared/contracts/sandbox-reasons');
+const { quoteArgv } = require('../../shared/runtime/quote-argv');
 
 /** The Linux packages the runtime needs, as the distributions name them. */
 const LINUX_PACKAGES = Object.freeze(['bubblewrap', 'socat', 'ripgrep']);
@@ -166,6 +158,7 @@ const SSH_PROXY_SCRIPT = 'ssh-proxy.pl';
  * and the public keys — with `IdentitiesOnly yes` ssh picks the agent's key by
  * its public half. The private keys stay unreadable; the agent signs (#932).
  */
+/** @param {string} home */
 function sshReadPaths(home) {
   return ['known_hosts', 'config', '*.pub'].map((name) => `${home}/.ssh/${name}`);
 }
@@ -177,23 +170,45 @@ function sshReadPaths(home) {
  * ProxyCommand. Connection sharing stays off, as the runtime has it — its
  * socket would sit in `~/.ssh`.
  */
+/** @param {string} scriptPath */
 function sshEnvExports(scriptPath) {
   const proxyCommand = `${SSH_PERL} "$SNOTRA_SSH_PROXY" %h %p`;
   const sshCommand = `ssh -o ControlMaster=no -o ControlPath=none -o ProxyCommand=${quoteArgv([proxyCommand])}`;
   return `export SNOTRA_SSH_PROXY=${quoteArgv([scriptPath])} GIT_SSH_COMMAND=${quoteArgv([sshCommand])}`;
 }
 
-/** POSIX single-quoting, so an argv survives the trip through `sh -c`. */
-function quoteArgv(argv) {
-  return argv
-    .map((arg) => {
-      const value = String(arg);
-      return /^[A-Za-z0-9_@%+=:,./-]+$/.test(value) ? value : `'${value.replace(/'/g, `'\\''`)}'`;
-    })
-    .join(' ');
+/**
+ * Git over SSH on Linux (#1155). The runtime's seccomp filter refuses every
+ * Unix socket inside a run, so ssh there cannot reach the ssh-agent. Git's
+ * SSH command hands the request to a relay instead, which the patched
+ * runtime starts before the filter (scripts/patch-sandbox-runtime.js); its
+ * launcher checks the request and runs ssh with the agent. Shell scripts,
+ * because /bin/sh and socat are all a Linux sandbox has for certain.
+ */
+const SSH_RELAY_SCRIPT = 'ssh-relay.sh';
+const SSH_RELAY_CLIENT_SCRIPT = 'ssh-relay-client.sh';
+
+/**
+ * Git's SSH command for a sandboxed run on Linux: the relay's client. Its
+ * path travels in its own variable, as in `sshEnvExports()`; the variant
+ * tells git to pass the port and GIT_PROTOCOL the way OpenSSH takes them.
+ * `exec`, because git runs the command through `sh -c`, and a shell left
+ * waiting there would hold git's input open after the relay has closed —
+ * a failed sign-in would hang.
+ *
+ * @param {string} clientPath
+ */
+function sshRelayExports(clientPath) {
+  return `export SNOTRA_SSH_CLIENT=${quoteArgv([clientPath])} GIT_SSH_VARIANT=ssh `
+    + `GIT_SSH_COMMAND=${quoteArgv(['exec /bin/sh "$SNOTRA_SSH_CLIENT"'])}`;
 }
 
-/** `pip 24.2 from …` → [24, 2]; null when the output says nothing usable. */
+/**
+ * `pip 24.2 from …` → [24, 2]; null when the output says nothing usable.
+ *
+ * @param {unknown} text
+ * @returns {[number, number] | null}
+ */
 function parsePipVersion(text) {
   const match = /\bpip\s+(\d+)\.(\d+)/.exec(String(text || ''));
   return match ? [Number(match[1]), Number(match[2])] : null;
@@ -206,6 +221,8 @@ function parsePipVersion(text) {
  * exfiltration channel. `PIP_USE_DEPRECATED=legacy-certs` sends pip back to
  * its bundled certifi instead. Older pip rejects the value and aborts, hence
  * the version check (decision on #329).
+ *
+ * @param {unknown} version  `[major, minor]`, as `parsePipVersion` returns it
  */
 function needsLegacyCerts(version) {
   if (!Array.isArray(version)) return false;
@@ -219,6 +236,11 @@ function needsLegacyCerts(version) {
  * a path into `app.asar`, which no external process can open. The files are
  * unpacked next to the archive (`asar.unpack` in package.json); this points
  * the configuration there.
+ *
+ * @template T
+ * @param {T} filePath
+ * @param {(candidate: string) => boolean} exists
+ * @returns {T | string}
  */
 function unpackedPath(filePath, exists) {
   if (typeof filePath !== 'string' || !/app\.asar[\\/]/.test(filePath)) return filePath;
@@ -226,9 +248,14 @@ function unpackedPath(filePath, exists) {
   return exists(candidate) ? candidate : filePath;
 }
 
-/** Which packages a dependency error list names, in distribution terms. */
+/**
+ * Which packages a dependency error list names, in distribution terms.
+ *
+ * @param {unknown} errors
+ */
 function missingPackages(errors) {
   const text = (Array.isArray(errors) ? errors : []).join('\n').toLowerCase();
+  /** @type {string[]} */
   const found = [];
   if (text.includes('bubblewrap') || text.includes('bwrap')) found.push('bubblewrap');
   if (text.includes('socat')) found.push('socat');
@@ -245,8 +272,10 @@ function missingPackages(errors) {
  * stream of same-set runs cannot starve a waiting one.
  */
 function createDomainGate() {
+  /** @type {string | null} */
   let activeKey = null;
   let active = 0;
+  /** @type {Array<{ key: string, grant: (release: () => void) => void }>} */
   const waiting = [];
 
   function makeRelease() {
@@ -271,6 +300,11 @@ function createDomainGate() {
     }
   }
 
+  /**
+   * @param {string} key
+   * @param {AbortSignal} [abortSignal]
+   * @returns {Promise<() => void>}
+   */
   function acquire(key, abortSignal) {
     return new Promise((resolve, reject) => {
       if (abortSignal?.aborted) {
@@ -283,7 +317,8 @@ function createDomainGate() {
         resolve(makeRelease());
         return;
       }
-      const entry = { key, grant: null };
+      /** @type {{ key: string, grant: (release: () => void) => void }} */
+      const entry = { key, grant: () => {} };
       const onAbort = () => {
         const index = waiting.indexOf(entry);
         if (index < 0) return;
@@ -315,6 +350,11 @@ function abortError() {
 /** A plain promise chain: one critical section at a time. */
 function createMutex() {
   let tail = Promise.resolve();
+  /**
+   * @template T
+   * @param {() => T | Promise<T>} fn
+   * @returns {Promise<T>}
+   */
   return function exclusive(fn) {
     const run = tail.then(fn, fn);
     tail = run.then(() => {}, () => {});
@@ -322,14 +362,26 @@ function createMutex() {
   };
 }
 
-/** The domains a run may reach: what its card named, and what sandbox cards opened. */
+/**
+ * The domains a run may reach: what its card named, and what sandbox cards opened.
+ *
+ * @param {unknown} allowedDomains
+ * @param {{ hosts?: string[] } | null | undefined} grants
+ */
 function runDomains(allowedDomains, grants) {
   return [...new Set([...normalizeDomains(allowedDomains), ...grantedHosts(grants?.hosts)])];
 }
 
-/** `pypi.org:443`, `*.pytorch.org` or `pypi.org` against one destination. */
+/**
+ * `pypi.org:443`, `*.pytorch.org` or `pypi.org` against one destination.
+ *
+ * @param {string} pattern
+ * @param {string} host
+ * @param {number} port
+ */
 function matchesHostPattern(pattern, host, port) {
   const m = /^(.*?)(?::(\d+))?$/.exec(pattern);
+  if (!m) return false;
   if (m[2] !== undefined && Number(m[2]) !== port) return false;
   return m[1].startsWith('*.') ? host.endsWith(m[1].slice(1)) : host === m[1];
 }
@@ -338,6 +390,10 @@ function matchesHostPattern(pattern, host, port) {
  * What a card may offer for a connection (#792): exactly the host and port,
  * and every host of the domain above it where that is one program's domain.
  * Nothing for a destination that is not a host Snotra can name.
+ *
+ * @param {unknown} host
+ * @param {number} port
+ * @returns {string[]}
  */
 function networkGrantOptions(host, port) {
   const h = String(host || '').toLowerCase();
@@ -362,12 +418,15 @@ function networkGrantOptions(host, port) {
  * process has ended; a question still open then goes back unanswered, and
  * the card after the run takes it up.
  *
- * @param {{ key?: string, domains?: string[], onNetworkAsk?: Function|null, readOutput?: Function|null }} [run]
+ * @param {{ key?: string, domains?: string[], onNetworkAsk?: import('./sandboxed-spawn').NetworkAsk|null,
+ *   readOutput?: (() => { stdout?: string, stderr?: string } | null) | null }} [run]
  */
 function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = null } = {}) {
+  /** @type {string[]} */
   const allowed = [];
   let denied = false;
   let closed = false;
+  /** @type {Map<string, Promise<boolean>>} */
   const waiting = new Map();
   const ended = new AbortController();
   const endedPromise = new Promise((_, reject) => {
@@ -376,17 +435,29 @@ function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = nu
   endedPromise.catch(() => {});
   let queue = Promise.resolve();
 
+  /**
+   * @param {string} host
+   * @param {number} port
+   * @returns {boolean | undefined}
+   */
   const decided = (host, port) => {
     if (allowed.some((pattern) => matchesHostPattern(pattern, host, port))) return true;
     return denied ? false : undefined;
   };
 
+  /**
+   * @param {string} host
+   * @param {number} port
+   * @param {number} since
+   * @returns {Promise<boolean>}
+   */
   async function put(host, port, since) {
     const known = decided(host, port);
     if (known !== undefined) return known;
     if (ended.signal.aborted) throw new Error('The command has ended.');
     const options = networkGrantOptions(host, port);
     if (options.length === 0) throw new Error('This destination cannot be allowed.');
+    /** @type {{ stdout?: string, stderr?: string } | null} */
     let output = null;
     try { output = readOutput?.() || null; } catch { output = null; }
     const request = {
@@ -400,6 +471,7 @@ function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = nu
       stderr: String(output?.stderr || ''),
     };
     // A handler that does not listen for the end must not hold the run.
+    if (typeof onNetworkAsk !== 'function') throw new Error('Nobody to ask.');
     const answer = await Promise.race([onNetworkAsk(request, { signal: ended.signal }), endedPromise]);
     if (answer?.outcome === 'allowed') {
       allowed.push(options.includes(answer.pattern) ? answer.pattern : options[0]);
@@ -415,6 +487,11 @@ function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = nu
   return {
     key,
     get closed() { return closed; },
+    /**
+     * @param {string} host
+     * @param {number} port
+     * @returns {Promise<boolean>}
+     */
     ask(host, port) {
       const known = decided(host, port);
       if (known !== undefined) return Promise.resolve(known);
@@ -465,6 +542,8 @@ function createLiveRun({ key, domains = [], onNetworkAsk = null, readOutput = nu
  * @param {number} [deps.violationSettleMs]  how long a finished run waits for late violations
  * @param {string[]} [deps.protectedWritePaths]  folders a run may never write (#548, #650)
  * @param {string} [deps.sshProxyScript]  the SSH tunnel helper (#932)
+ * @param {string} [deps.sshRelayScript]  the SSH relay's launcher, Linux (#1155)
+ * @param {string} [deps.sshRelayClientScript]  git's SSH command for the relay, Linux (#1155)
  */
 function createSandboxService({
   platform = process.platform,
@@ -490,10 +569,16 @@ function createSandboxService({
   protectedWritePaths = [],
   /** The SSH tunnel helper (#932); unpacked next to app.asar in a build, see package.json. */
   sshProxyScript = path.join(__dirname, SSH_PROXY_SCRIPT),
+  /** The SSH relay (#1155); unpacked next to app.asar in a build, like the tunnel helper. */
+  sshRelayScript = path.join(__dirname, SSH_RELAY_SCRIPT),
+  sshRelayClientScript = path.join(__dirname, SSH_RELAY_CLIENT_SCRIPT),
 }) {
+  /** @type {{ status: string, reason?: string, platform?: string, missing?: string[], detail?: string }} */
   let state = { status: 'unknown' };
+  /** @type {any} */
   let runtime = null;
   let pipLegacyCerts = false;
+  /** @type {ReturnType<typeof runDetection> | null} */
   let detection = null;
   const gate = createDomainGate();
   const exclusive = createMutex();
@@ -550,8 +635,24 @@ function createSandboxService({
 
   /** The ssh-agent's socket, for a run's SSH to sign in with (#932). */
   function agentSocket() {
+    if (!platformSupports(platform, PLATFORM_CAPABILITIES.SANDBOX_GIT_SSH)) return null;
     const socket = env?.SSH_AUTH_SOCK;
-    return platform === 'darwin' && typeof socket === 'string' && path.isAbsolute(socket) ? socket : null;
+    return typeof socket === 'string' && path.isAbsolute(socket) ? socket : null;
+  }
+
+  /**
+   * The SSH relay's two scripts, or null where it does not apply: off Linux,
+   * or without an agent — then nothing could sign in through it, and git's
+   * SSH takes the runtime's own route, which fails the same way and gets the
+   * same note (#1155).
+   *
+   * @returns {{ launcher: string, client: string } | null}
+   */
+  function sshRelay() {
+    if (platform !== 'linux' || !agentSocket()) return null;
+    const launcher = unpackedPath(sshRelayScript, existsSync);
+    const client = unpackedPath(sshRelayClientScript, existsSync);
+    return existsSync(launcher) && existsSync(client) ? { launcher, client } : null;
   }
 
   /**
@@ -559,16 +660,19 @@ function createSandboxService({
    * them every time (#932). That is the design, not something to offer on a
    * card: the private keys stay closed, the agent signs, and a failed sign-in
    * is explained by `annotateSsh()`. Only ssh's own reads inside `~/.ssh`;
-   * any other program reaching for them still shows up.
+   * any other program reaching for them still shows up. Seatbelt's lines
+   * only: on Linux the kernel reports writes, not reads, and the relay's ssh
+   * runs outside the observed filter (#1155).
    */
+  /** @param {string} line */
   function isExpectedSshRead(line) {
-    if (platform !== 'darwin') return false;
+    if (!platformSupports(platform, PLATFORM_CAPABILITIES.SANDBOX_GIT_SSH)) return false;
     const v = parseViolationLine(line);
     return v?.kind === 'read' && v.process === 'ssh' && isPathInside(path, path.join(os.homedir(), '.ssh'), v.target);
   }
 
-  const expandHome = (p) => (p === '~' ? os.homedir() : p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : p);
-  const around = (a, b) => isPathInside(path, a, b) || isPathInside(path, b, a);
+  const expandHome = (/** @type {string} */ p) => (p === '~' ? os.homedir() : p.startsWith('~/') ? path.join(os.homedir(), p.slice(2)) : p);
+  const around = (/** @type {string} */ a, /** @type {string} */ b) => isPathInside(path, a, b) || isPathInside(path, b, a);
 
   /**
    * Whether a write the sandbox refused may be allowed on its card (#792).
@@ -576,6 +680,8 @@ function createSandboxService({
    * around Snotra's own storage, the protected locations or the global skill
    * folders — the same lines a program allowance may not cross (#408), and
    * ones a model must not get a user to cross by a convincing error message.
+   *
+   * @param {unknown} target
    */
   function isGrantableWritePath(target) {
     if (typeof target !== 'string' || !path.isAbsolute(target)) return false;
@@ -592,6 +698,7 @@ function createSandboxService({
    * opened for a run, Snotra's own storage never — the keys of its providers
    * stay in the app, whatever the user is asked.
    */
+  /** @param {unknown} target */
   function isGrantableReadPath(target) {
     if (typeof target !== 'string' || !path.isAbsolute(target)) return false;
     const p = path.resolve(target);
@@ -601,16 +708,22 @@ function createSandboxService({
     return !around(own, p) && !around(own, privateAlias(p));
   }
 
-  const exists = (p) => fs.stat(p).then(() => true, () => false);
+  const exists = (/** @type {string} */ p) => fs.stat(p).then(() => true, () => false);
 
-  /** The targets of observed `mkdir` attempts that are folders already (#792). */
+  /**
+   * The targets of observed `mkdir` attempts that are folders already (#792).
+   *
+   * @param {string[]} lines
+   */
   async function foldersThatExist(lines) {
+    /** @type {Set<string>} */
     const targets = new Set();
     for (const line of lines) {
       const parsed = parseViolationLine(line);
       if (parsed?.observed && /^mkdir/.test(parsed.operation)) targets.add(parsed.target);
       if (targets.size >= 200) break;
     }
+    /** @type {Set<string>} */
     const out = new Set();
     for (const target of targets) {
       const stat = await fs.stat(target).catch(() => null);
@@ -629,6 +742,7 @@ function createSandboxService({
    * creates it before the retry — and a file that does not exist yet is
    * offered as the folder it was to go into.
    */
+  /** @param {import('./sandbox-violations').ViolationEntry} entry */
   async function grantOptions(entry) {
     if (entry.kind === 'write') {
       // No folder around it would help: the runtime refuses it inside any.
@@ -638,7 +752,14 @@ function createSandboxService({
         || (Array.isArray(entry.operations) && entry.operations.some((op) => /^mkdir/.test(op)));
       if (platform === 'linux' && !makesFolder && !(await exists(target))) target = path.dirname(target);
       const wider = widerFolder(target, os.homedir());
-      return [target, wider].filter((p, i, all) => p && isGrantableWritePath(p) && all.indexOf(p) === i);
+      /**
+       * @param {string | null} p
+       * @param {number} i
+       * @param {Array<string | null>} all
+       * @returns {p is string}
+       */
+      const offered = (p, i, all) => !!p && isGrantableWritePath(p) && all.indexOf(p) === i;
+      return [target, wider].filter(offered);
     }
     if (entry.kind === 'read') return isGrantableReadPath(entry.target) ? [entry.target] : [];
     // A connection nobody could be asked about while it waited (#792); one
@@ -650,7 +771,11 @@ function createSandboxService({
     return [];
   }
 
-  /** On Linux, the granted folders that do not exist yet are made before the run (see grantOptions). */
+  /**
+   * On Linux, the granted folders that do not exist yet are made before the run (see grantOptions).
+   *
+   * @param {{ writePaths?: string[] } | null | undefined} grants
+   */
   async function makeGrantedFolders(grants) {
     if (platform !== 'linux' || !Array.isArray(grants?.writePaths)) return;
     for (const folder of grants.writePaths.filter(isGrantableWritePath)) {
@@ -662,6 +787,9 @@ function createSandboxService({
    * The complete runtime configuration for one run. A program allowance
    * (#408) adds its folders to the writable ones and, on macOS only, opens
    * the trust service for certificate checks.
+   *
+   * @param {{ workspaceRoot?: string, runTmp?: string, allowedDomains?: string[], extraWritePaths?: string[],
+   *   weakerNetworkIsolation?: boolean, grants?: { writePaths?: string[], readPaths?: string[], hosts?: string[] } | null }} [request]
    */
   function buildConfig({
     workspaceRoot = '',
@@ -689,14 +817,25 @@ function createSandboxService({
       .filter((p) => allowWrite.some((dir) => isPathInside(path, dir, p)))
       .filter((p) => !extras.some((extra) => isPathInside(path, p, extra)));
     // Git over SSH (#932): the agent signs, ssh reads only what is no secret.
+    // macOS opens the agent's socket to the run; on Linux only the relay
+    // outside the seccomp filter can use it (#1155), and it needs the socket
+    // visible where a protected folder would hide it.
     const socket = agentSocket();
-    const allowRead = [...grantedReads, ...(platform === 'darwin' ? sshReadPaths(os.homedir()) : [])];
+    const relay = sshRelay();
+    const deniedReads = sensitiveReadPaths({ platform, userDataPath }).map((p) => path.resolve(expandHome(p)));
+    const hiddenSocket = relay && socket && deniedReads.some((denied) => isPathInside(path, denied, socket)) ? [socket] : [];
+    const allowRead = [
+      ...grantedReads,
+      // Without an agent too: an unknown host is then not what SSH reports.
+      ...(platformSupports(platform, PLATFORM_CAPABILITIES.SANDBOX_GIT_SSH) ? sshReadPaths(os.homedir()) : []),
+      ...hiddenSocket,
+    ];
     return {
       // Hosts a sandbox card opened (#792) join the domains the call named.
       network: {
         allowedDomains: runDomains(allowedDomains, grants),
         deniedDomains: [],
-        ...(socket ? { allowUnixSockets: [socket] } : {}),
+        ...(socket && platform === 'darwin' ? { allowUnixSockets: [socket] } : {}),
       },
       filesystem: {
         denyRead: sensitiveReadPaths({ platform, userDataPath }),
@@ -713,19 +852,32 @@ function createSandboxService({
    * Environment additions for a run: caches into its temp dir, pip's CA.
    * TMPDIR is not among them — the runtime overrides it inside the sandbox,
    * see `prepare()`.
+   *
+   * @param {string} [runTmp]
+   * @param {string} [relayLauncher]  the SSH relay's launcher on Linux (#1155)
    */
-  function runEnv(runTmp) {
+  function runEnv(runTmp = '', relayLauncher = '') {
+    /** @type {Record<string, string>} */
     const extra = {
       PIP_CACHE_DIR: path.join(runTmp, 'cache', 'pip'),
       npm_config_cache: path.join(runTmp, 'cache', 'npm'),
       XDG_CACHE_HOME: path.join(runTmp, 'cache'),
     };
     if (pipLegacyCerts) extra.PIP_USE_DEPRECATED = 'legacy-certs';
+    // Read by the patched runtime's inner script, before the run starts (#1155).
+    if (relayLauncher) extra.SNOTRA_SSH_RELAY = relayLauncher;
     return extra;
   }
 
+  /**
+   * @param {string} command
+   * @param {string[]} args
+   * @param {{ cwd: string, childEnv: NodeJS.ProcessEnv, timeoutMs: number }} options
+   * @returns {Promise<{ code: number | null, out: string, err: string }>}
+   */
   function spawnAndWait(command, args, { cwd, childEnv, timeoutMs }) {
     return new Promise((resolve) => {
+      /** @type {import('child_process').ChildProcess} */
       let child;
       try {
         child = spawn(command, args, { cwd, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
@@ -736,7 +888,11 @@ function createSandboxService({
       let out = '';
       let err = '';
       const timer = setTimeout(() => {
-        try { process.kill(-child.pid, 'SIGKILL'); } catch { try { child.kill('SIGKILL'); } catch { /* gone */ } }
+        const { pid } = child;
+        try {
+          if (pid === undefined) throw new Error('no process id');
+          process.kill(-pid, 'SIGKILL');
+        } catch { try { child.kill('SIGKILL'); } catch { /* gone */ } }
       }, timeoutMs);
       child.stdout?.on('data', (c) => { out += String(c); });
       child.stderr?.on('data', (c) => { err += String(c); });
@@ -779,8 +935,10 @@ function createSandboxService({
     await fs.mkdir(outside);
     const probeFile = path.join(outside, 'probe.txt');
     try {
-      const attempt = async (command) => {
+      const attempt = async (/** @type {string} */ command) => {
         const prepared = await prepare({ command, workspaceRoot: '', runTmp: allowed, allowedDomains: [], skipDetect: true });
+        // Only a run that skips the detection can come back unwrapped, and this one does.
+        if (!prepared) throw new Error('The self-test could not be wrapped.');
         try {
           return await spawnAndWait(prepared.command, prepared.args, {
             cwd: allowed,
@@ -807,7 +965,7 @@ function createSandboxService({
   }
 
   async function runDetection() {
-    if (platform !== 'darwin' && platform !== 'linux') {
+    if (!platformSupports(platform, PLATFORM_CAPABILITIES.EXECUTION_SANDBOX)) {
       state = { status: 'unavailable', reason: SANDBOX_REASONS.PLATFORM, platform };
       return describe();
     }
@@ -818,6 +976,7 @@ function createSandboxService({
       return describe();
     }
     const manager = runtime.SandboxManager;
+    /** @type {{ errors?: string[] }} */
     let deps;
     try {
       deps = manager.checkDependencies();
@@ -888,12 +1047,12 @@ function createSandboxService({
    * @param {string[]} [request.allowedDomains]
    * @param {string[]} [request.extraWritePaths]  a program allowance's folders (#408)
    * @param {boolean} [request.weakerNetworkIsolation]  a program allowance's trustd (#408)
-   * @param {{writePaths?: string[], readPaths?: string[], hosts?: string[]}} [request.grants]  allowed on a sandbox card (#792)
+   * @param {{writePaths?: string[], readPaths?: string[], hosts?: string[]} | null} [request.grants]  allowed on a sandbox card (#792)
    * @param {string} [request.commandId]
    * @param {string} [request.commandText]  what the user sees, for violations
-   * @param {(request: object, options: {signal: AbortSignal}) => Promise<object>} [request.onNetworkAsk]
+   * @param {import('./sandboxed-spawn').NetworkAsk | null} [request.onNetworkAsk]
    *   asks the user about a connection while the command waits (#792); without it nobody is asked
-   * @param {() => {stdout: string, stderr: string}} [request.readOutput]  what the command printed so far
+   * @param {(() => {stdout: string, stderr: string} | null) | null} [request.readOutput]  what the command printed so far
    * @param {AbortSignal} [request.abortSignal]
    * @param {boolean} [request.skipDetect]  the self-test, which runs inside detection: skip it and the isolation check
    */
@@ -927,13 +1086,21 @@ function createSandboxService({
     // (and Claude Code) shares and Snotra keeps closed. The run's temp dir
     // takes its place — assigned inside, after the runtime's assignment.
     // GIT_SSH_COMMAND the same way: the runtime's route cannot authenticate
-    // to its own proxy on macOS (#932).
+    // to its own proxy on macOS (#932), nor reach the agent on Linux (#1155).
     const ssh = sshTunnel();
+    // The launcher runs outside the seccomp filter: never one the run could
+    // have rewritten, as a checkout of Snotra opened as the workspace could.
+    const candidate = sshRelay();
+    const relay = candidate && !config.filesystem.allowWrite.some((dir) => isPathInside(path, dir, candidate.launcher))
+      ? candidate
+      : null;
     const inner = [
       ...(runTmp ? [`export TMPDIR=${quoteArgv([runTmp])}`] : []),
       ...(ssh ? [sshEnvExports(ssh)] : []),
+      ...(relay ? [sshRelayExports(relay.client)] : []),
       command,
     ].join('; ');
+    /** @type {string} */
     let wrapped;
     try {
       // Filesystem rules are compiled at wrap time, so update and wrap must
@@ -949,19 +1116,21 @@ function createSandboxService({
       release();
       throw e;
     }
+    /** @type {number | undefined} */
     let proxyPort;
     try { proxyPort = manager.getProxyPort?.(); } catch { /* no proxy, nothing to name */ }
     const commandKey = String(commandId || inner).slice(0, COMMAND_KEY_LENGTH);
     const live = createLiveRun({ key: commandKey, domains, onNetworkAsk, readOutput });
     liveRuns.set(commandKey, live);
     const collector = collectViolations(manager, commandId || inner);
-    const isPermittedWrite = collector ? await writeRules(config.filesystem) : undefined;
-    /** undefined until `blocked()` has looked; then the summary or null. */
+    const isPermittedWrite = collector ? await writeRules(config.filesystem) : () => false;
+    /** @type {import('./sandbox-violations').ViolationSummary | null | undefined} undefined until `blocked()` has looked; then the summary or null. */
     let summary;
     // Folders that already existed when `mkdir` was tried on them (Linux, see
     // summarizeViolations): looked up once, in `blocked()`.
+    /** @type {Set<string>} */
     let existingFolders = new Set();
-    const summarize = () => summarizeViolations(collector.lines.filter((line) => !isExpectedSshRead(line)), {
+    const summarize = () => summarizeViolations((collector?.lines ?? []).filter((line) => !isExpectedSshRead(line)), {
       homeDir: os.homedir(),
       isPermittedWrite: (target, operation) => isPermittedWrite(target)
         || (/^mkdir/.test(operation || '') && existingFolders.has(target)),
@@ -970,7 +1139,7 @@ function createSandboxService({
     return {
       command: '/bin/sh',
       args: ['-c', wrapped],
-      env: runEnv(runTmp),
+      env: runEnv(runTmp, relay?.launcher),
       domains,
       // What a program allowance added (#408), as the run actually got it.
       writePaths: config.filesystem.allowWrite.filter((p) => p !== workspaceRoot && p !== runTmp),
@@ -989,6 +1158,7 @@ function createSandboxService({
        * the process has closed, before `annotate()`. A run that failed is the
        * likely victim of a refusal and waits longer for late lines.
        */
+      /** @param {{ failed?: boolean, output?: string }} [options] */
       async blocked({ failed = false, output = '' } = {}) {
         if (summary !== undefined) return summary;
         // A connection still waiting for the user is refused now that the
@@ -1009,6 +1179,7 @@ function createSandboxService({
         }
         return summary;
       },
+      /** @param {unknown} stderr */
       annotate(stderr) {
         let text = String(stderr ?? '');
         if (collector) {
@@ -1022,8 +1193,9 @@ function createSandboxService({
           } catch { /* keep stderr as it is */ }
         }
         text = annotateUnreachableProxy(text, proxyPort);
+        if (platform === 'linux') return annotateSsh(text, { tunnel: true, agent: Boolean(agentSocket()), platform });
         if (platform !== 'darwin') return text;
-        text = annotateSsh(text, { tunnel: Boolean(ssh), agent: Boolean(agentSocket()) });
+        text = annotateSsh(text, { tunnel: Boolean(ssh), agent: Boolean(agentSocket()), platform });
         return trustd ? text : annotateBlockedTrustd(text);
       },
     };
@@ -1035,9 +1207,11 @@ function createSandboxService({
    * both spellings, as given and resolved — the Linux observer reports the
    * path the kernel saw.
    */
+  /** @param {{ allowWrite?: string[], denyWrite?: string[] }} rules */
   async function writeRules({ allowWrite = [], denyWrite = [] }) {
     const home = os.homedir();
-    const spellings = async (list) => {
+    const spellings = async (/** @type {string[]} */ list) => {
+      /** @type {string[]} */
       const out = [];
       for (const raw of list) {
         if (typeof raw !== 'string' || !raw || /[*?[]/.test(raw)) continue;
@@ -1052,7 +1226,7 @@ function createSandboxService({
     // still reports writes there.
     const writable = [...(await spellings(allowWrite)), '/dev', '/proc'];
     const protectedDirs = await spellings(denyWrite);
-    return (target) => writable.some((dir) => isPathInside(path, dir, target))
+    return (/** @type {string} */ target) => writable.some((dir) => isPathInside(path, dir, target))
       && !protectedDirs.some((dir) => isPathInside(path, dir, target));
   }
 
@@ -1085,20 +1259,25 @@ const ALWAYS_UNWRITABLE_FILES = new Set([
 ]);
 const ALWAYS_UNWRITABLE_DIRS = ['.vscode', '.idea', '.claude/commands', '.claude/agents', '.git/hooks', '.git/config'];
 
+/** @param {string} p */
 function isAlwaysUnwritable(p) {
   const lower = p.toLowerCase();
-  if (ALWAYS_UNWRITABLE_FILES.has(lower.split('/').pop())) return true;
+  if (ALWAYS_UNWRITABLE_FILES.has(lower.split('/').pop() ?? '')) return true;
   return ALWAYS_UNWRITABLE_DIRS.some((dir) => lower.endsWith(`/${dir}`) || lower.includes(`/${dir}/`));
 }
 
-/** `/private/var/x` for `/var/x` and back: macOS links /var, /tmp and /etc into /private. */
+/**
+ * `/private/var/x` for `/var/x` and back: macOS links /var, /tmp and /etc into /private.
+ *
+ * @param {string} p
+ */
 function privateAlias(p) {
   const m = /^\/private(\/(?:var|tmp|etc)(?:\/.*)?)$/.exec(p);
   if (m) return m[1];
   return /^\/(?:var|tmp|etc)(?:\/|$)/.test(p) ? `/private${p}` : p;
 }
 
-const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const pause = (/** @type {number} */ ms) => new Promise((resolve) => setTimeout(resolve, ms));
 /** A failed run waits up to this many times the settle time for late lines. */
 const FAILED_RUN_SETTLE_FACTOR = 6;
 /** One whose own output says it was not permitted something waits up to this many. */
@@ -1153,8 +1332,12 @@ const MAX_COLLECTED_VIOLATIONS = 1000;
  * last 100 of all runs together, which a single pip install fills with cache
  * writes, so the run keeps its own. Null when the runtime has no store to
  * listen to; the run then falls back to the runtime's own annotation.
+ *
+ * @param {any} manager  the runtime's `SandboxManager`, which has no typings here
+ * @param {string} key
  */
 function collectViolations(manager, key) {
+  /** @type {{ subscribe: (listener: (list: any[]) => void) => () => void, getTotalCount: () => number } | null} */
   let store = null;
   try {
     store = manager.getSandboxViolationStore?.() || null;
@@ -1163,6 +1346,7 @@ function collectViolations(manager, key) {
   }
   if (!store || typeof store.subscribe !== 'function' || typeof store.getTotalCount !== 'function') return null;
   const wanted = String(key).slice(0, COMMAND_KEY_LENGTH);
+  /** @type {string[]} */
   const lines = [];
   let lastAt = 0;
   let seen = store.getTotalCount();
@@ -1188,11 +1372,13 @@ function collectViolations(manager, key) {
   };
 }
 
+/** @param {unknown} encoded */
 function decodeCommandKey(encoded) {
   if (typeof encoded !== 'string' || !encoded) return '';
   return Buffer.from(encoded, 'base64').toString('utf8');
 }
 
+/** @param {unknown} text */
 function firstLine(text) {
   return String(text || '').trim().split('\n')[0].slice(0, 300);
 }
@@ -1228,6 +1414,7 @@ function annotateUnreachableProxy(stderr, proxyPort) {
  * Without a word the model reads that as a broken certificate or a host that
  * is down, so the run says what happened and where the user can change it.
  */
+/** @param {unknown} stderr */
 function annotateBlockedTrustd(stderr) {
   const text = String(stderr ?? '');
   if (!/x509: OSStatus -26276\b/.test(text) || text.includes('<sandbox_certificates>')) return text;
@@ -1239,16 +1426,17 @@ function annotateBlockedTrustd(stderr) {
 }
 
 /**
- * What an SSH failure inside the macOS sandbox means (#932). ssh's own words
+ * What an SSH failure inside the sandbox means (#932, #1155). ssh's own words
  * point at the wrong place — a proxy password, a broken key — while the cause
  * is what the sandbox lets through: no key files, only the agent; no prompt
- * to accept an unknown host; no tunnel without Perl. Only these three
+ * to accept an unknown host; no tunnel without Perl (macOS). Only these three
  * messages get a note, and each only once.
  *
  * @param {string} stderr
- * @param {{tunnel: boolean, agent: boolean}} state  whether the run had the tunnel helper and the agent socket
+ * @param {{tunnel: boolean, agent: boolean, platform?: string}} state  whether the run had the
+ *   tunnel helper and the agent socket, and where it ran (`darwin` unless named)
  */
-function annotateSsh(stderr, { tunnel, agent }) {
+function annotateSsh(stderr, { tunnel, agent, platform = 'darwin' }) {
   const text = String(stderr ?? '');
   if (text.includes('<sandbox_ssh>')) return text;
   let note = '';
@@ -1261,8 +1449,13 @@ function annotateSsh(stderr, { tunnel, agent }) {
       + (agent
         ? 'If the same command works in a terminal, the key is probably not loaded in the agent. '
         : 'No ssh-agent was found for this run (SSH_AUTH_SOCK is not set). ')
-      + 'Tell the user to load it with `ssh-add --apple-use-keychain ~/.ssh/<key>`, or to add '
-      + '`AddKeysToAgent yes` and `UseKeychain yes` to ~/.ssh/config, then try again.';
+      + (platform === 'linux'
+        ? 'Tell the user to load the key with `ssh-add ~/.ssh/<key>` in a session whose ssh-agent Snotra '
+          + 'was started from, or to add `AddKeysToAgent yes` to ~/.ssh/config, then try again. Only git '
+          + 'signs in through the agent here: `ssh` or `scp` called on their own cannot reach it inside the '
+          + 'sandbox on Linux.'
+        : 'Tell the user to load it with `ssh-add --apple-use-keychain ~/.ssh/<key>`, or to add '
+          + '`AddKeysToAgent yes` and `UseKeychain yes` to ~/.ssh/config, then try again.');
   } else if (/Host key verification failed/.test(text)) {
     note = 'The host is not in ~/.ssh/known_hosts, and inside the sandbox SSH can neither ask whether to '
       + 'trust it nor add it. Tell the user to connect to it once from a terminal, then try again.';
@@ -1276,6 +1469,7 @@ module.exports = {
   annotateBlockedTrustd,
   annotateSsh,
   sshEnvExports,
+  sshRelayExports,
   sshReadPaths,
   createDomainGate,
   createLiveRun,

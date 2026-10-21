@@ -22,6 +22,7 @@ const { createToolApprovalRequestDto } = require('../src/shared/contracts/tool-p
 const { normalizeSandboxLive } = require('../src/shared/contracts/chat');
 const { toolTraceEntryForStore } = require('../src/main/services/chat-history-normalization');
 const { patchSandboxRuntime, managerPath, PATCHED } = require('../scripts/patch-sandbox-runtime');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const posixOnly = { skip: process.platform === 'win32' ? 'needs /bin/sh' : false };
 
@@ -96,7 +97,7 @@ async function connect({ calls, store }, { host, port = 443, key }) {
 async function prepareRun(service, base, extra = {}) {
   const runTmp = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-live-'));
   const prepared = await service.prepare({ command: 'pip install torch', workspaceRoot: base, runTmp, ...extra });
-  return { prepared, cleanup: () => fs.rm(runTmp, { recursive: true, force: true }) };
+  return { prepared, cleanup: () => removeTempDir(runTmp) };
 }
 
 const tick = () => new Promise((resolve) => setImmediate(resolve));
@@ -264,7 +265,7 @@ test('the runtime gets the ask callback, and a connection goes to the run that o
     b.prepared.release();
     await a.cleanup();
     await b.cleanup();
-    await fs.rm(base, { recursive: true, force: true });
+    await removeTempDir(base);
   }
 });
 
@@ -285,7 +286,7 @@ test('without a command key, or for a command that has ended, nobody is asked', 
   } finally {
     run.prepared.release();
     await run.cleanup();
-    await fs.rm(base, { recursive: true, force: true });
+    await removeTempDir(base);
   }
 });
 
@@ -312,7 +313,7 @@ test('a connection still waiting when the command ends is refused, and offered o
   } finally {
     run.prepared.release();
     await run.cleanup();
-    await fs.rm(base, { recursive: true, force: true });
+    await removeTempDir(base);
   }
 });
 
@@ -330,7 +331,7 @@ test('a connection the user turned down is shown, but not offered again', posixO
   } finally {
     run.prepared.release();
     await run.cleanup();
-    await fs.rm(base, { recursive: true, force: true });
+    await removeTempDir(base);
   }
 });
 
@@ -348,7 +349,7 @@ test('hosts a card opened join the run\'s domains — what a card could not offe
   } finally {
     run.prepared.release();
     await run.cleanup();
-    await fs.rm(base, { recursive: true, force: true });
+    await removeTempDir(base);
   }
 });
 
@@ -418,6 +419,6 @@ test('the patch changes exactly the one line, once, and leaves a runtime without
     assert.equal(patchSandboxRuntime(file), 'missing');
     assert.equal(await fs.readFile(file, 'utf8'), 'something else entirely');
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 });

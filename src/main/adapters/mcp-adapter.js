@@ -28,6 +28,10 @@ const {
   qualifiedMcpToolName,
 } = require('../../shared/contracts/mcp');
 const { createMessage } = require('../../shared/contracts/message');
+const { isRecord } = require('../../shared/runtime/is-record');
+
+/** @typedef {import('../../application/ports/mcp-port').McpToolDescriptor} McpToolDescriptor */
+/** @typedef {import('../../application/ports/mcp-port').McpPort} McpPort */
 
 /** Obergrenze fuer das, was ein MCP-Tool ins Kontextfenster schreiben darf. */
 const MAX_RESULT_CHARS = 100_000;
@@ -42,18 +46,23 @@ const MAX_RESULT_CHARS = 100_000;
  * MCP asks a server that returns structured content to put the same JSON into
  * a text block as well, so attaching both paid for every result twice — and
  * the structured part went past the cap below.
+ *
+ * @param {unknown} content
+ * @param {unknown} structuredContent
+ * @returns {{ text: string, truncated: boolean }}
  */
 function renderContent(content, structuredContent) {
+  /** @type {string[]} */
   const parts = [];
   let hasText = false;
   for (const block of Array.isArray(content) ? content : []) {
-    if (!block || typeof block !== 'object') continue;
+    if (!isRecord(block)) continue;
     if (block.type === 'text' && typeof block.text === 'string') {
       parts.push(block.text);
       hasText = true;
       continue;
     }
-    if (block.type === 'resource' && typeof block.resource?.text === 'string') {
+    if (block.type === 'resource' && isRecord(block.resource) && typeof block.resource.text === 'string') {
       parts.push(block.resource.text);
       hasText = true;
       continue;
@@ -74,7 +83,10 @@ function renderContent(content, structuredContent) {
   return { text: `${text.slice(0, MAX_RESULT_CHARS)}\n… [output truncated]`, truncated: true };
 }
 
-/** Erster Satz eines Servertexts — mehr traegt die Zeile in der Liste nicht. */
+/**
+ * Erster Satz eines Servertexts — mehr traegt die Zeile in der Liste nicht.
+ * @param {unknown} text
+ */
 function firstSentence(text) {
   return String(text ?? '').split(/(?<=[.!?])\s/)[0];
 }
@@ -86,6 +98,9 @@ function firstSentence(text) {
  * Englisch wie alles im Modell-Kanal (#276) — der Text des Servers bleibt
  * dabei unangetastet, der ist nicht unserer. Die Fassung fuer den Bildschirm
  * entsteht getrennt davon aus `tools.mcp.*` (#291).
+ *
+ * @param {McpToolDescriptor} tool
+ * @param {string} serverLabel
  */
 function describeTool(tool, serverLabel) {
   const own = tool.description || tool.title || '';
@@ -101,13 +116,14 @@ function describeTool(tool, serverLabel) {
  * @param {import('../../application/ports/mcp-port').McpPort} [deps.mcpService]  aus mcp-service.js (Issue #106)
  * @returns {import('../../application/ports/mcp-port').McpPort & {
  *   describeSkippedTools: () => Array<{ serverId: string, name: string, reason: import('../../shared/contracts/message').Message }>,
- *   buildToolDefinitions: () => Promise<Array<import('./workspace-tool-adapter').ToolDefinition>>,
+ *   buildToolDefinitions: () => Promise<Array<import('../../application/tools/workspace-tool-registry').BuiltInTool>>,
  * }}
  */
 function createMcpAdapter({ mcpService } = {}) {
   // Namen, die wegen der 64-Zeichen-Grenze ausgelassen wurden. Der
   // Settings-Dialog (#109) kann sie spaeter anzeigen; still verschwinden
   // sollen sie nicht.
+  /** @type {Array<{ serverId: string, name: string, reason: import('../../shared/contracts/message').Message }>} */
   let skipped = [];
 
   async function listTools() {
@@ -121,7 +137,11 @@ function createMcpAdapter({ mcpService } = {}) {
     }
   }
 
+  /** @type {McpPort['callTool']} */
   async function callTool(call, options) {
+    if (!mcpService) {
+      return { content: [{ type: 'text', text: 'No MCP service is available.' }], isError: true };
+    }
     return mcpService.callTool(call, options);
   }
 
@@ -134,6 +154,7 @@ function createMcpAdapter({ mcpService } = {}) {
     return skipped.map((entry) => ({ ...entry }));
   }
 
+  /** @param {McpToolDescriptor} tool */
   function toDefinition(tool) {
     const name = qualifiedMcpToolName(tool.serverId, tool.name);
     const status = describeConnections().find((s) => s.serverId === tool.serverId);
@@ -165,6 +186,10 @@ function createMcpAdapter({ mcpService } = {}) {
       mcp: { serverId: tool.serverId, toolName: tool.name },
       // Called by the ids it was built from, not by reading its own name back
       // (CR-B16-07): that name is for the model and the rules.
+      /**
+       * @param {Record<string, unknown>} args
+       * @param {{ abortSignal?: AbortSignal, timeoutMs?: number }} [context]
+       */
       handler: async (args, context = {}) => {
         try {
           const result = await callTool(
@@ -172,6 +197,7 @@ function createMcpAdapter({ mcpService } = {}) {
             { signal: context.abortSignal, timeoutMs: context.timeoutMs },
           );
           const { text, truncated } = renderContent(result.content, result.structuredContent);
+          /** @type {{ output: string, error?: string, truncated?: boolean }} */
           const out = { output: text };
           if (result.isError) out.error = 'The MCP server reported an error.';
           if (truncated) out.truncated = true;
@@ -193,7 +219,9 @@ function createMcpAdapter({ mcpService } = {}) {
    */
   async function buildToolDefinitions() {
     const tools = await listTools();
+    /** @type {Array<ReturnType<typeof toDefinition>>} */
     const definitions = [];
+    /** @type {typeof skipped} */
     const left = [];
     for (const tool of tools) {
       const name = qualifiedMcpToolName(tool.serverId, tool.name);

@@ -9,7 +9,7 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { registerToolPermissionHandlers } = require('../src/main/ipc/tool-permission-handlers');
+const { registerToolPermissionsForTest: registerToolPermissionHandlers } = require('./helpers/tool-permission-handlers');
 const { createToolPolicyStore } = require('../src/main/services/tool-policy-store');
 const { createToolApprovalAdapter } = require('../src/main/adapters/tool-approval-adapter');
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
@@ -17,6 +17,8 @@ const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ip
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createTestConfirmations } = require('./helpers/confirmations');
 const { CONFIRMATION_ACTIONS, programAllowanceSubject } = require('../src/application/permissions/user-confirmation');
+const { removeTempDir } = require('./helpers/temp-dir');
+const { resolvePlatform } = require('../src/main/platforms');
 
 const OPEN = '/Users/u/garden-planner';
 const OTHER = '/Users/u/invoice-tool';
@@ -50,9 +52,9 @@ const fakeAllowances = {
   },
 };
 
-async function setup(t, { dialogResponse = 0, workspaceRoot = OPEN, locale = 'en', platform = 'darwin', knownWorkspaces = [] } = {}) {
+async function setup(t, { dialogResponse = 0, workspaceRoot = OPEN, locale = 'en', platform = 'darwin', knownWorkspaces = [], platformCapabilities, safeStorageAvailable = true } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-toolsec-ipc-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });
   const sessionGrants = createSessionGrants();
   const dialogCalls = [];
@@ -65,7 +67,7 @@ async function setup(t, { dialogResponse = 0, workspaceRoot = OPEN, locale = 'en
   const getMainWindow = () => ({ isDestroyed: () => false });
   const { confirmations, storeReceipts, confirmed } = createTestConfirmations({ dialog, getMainWindow });
   const toolPolicyStore = createToolPolicyStore({
-    app: { getPath: () => dir }, safeStorage: makeSafeStorage(true), fs, path, crypto, log: { warn() {} },
+    userDataPath: dir, secretStore: makeSafeStorage(safeStorageAvailable), fs, path, crypto, log: { warn() {} },
     confirmationReceipts: storeReceipts,
   });
   const ipcMain = createMockIpcMain();
@@ -88,6 +90,7 @@ async function setup(t, { dialogResponse = 0, workspaceRoot = OPEN, locale = 'en
     listKnownWorkspaces: async () => knownWorkspaces,
     folderExists: async (root) => root !== GONE,
     platform,
+    ...(platformCapabilities ? { platformCapabilities } : {}),
     homeDir: '/Users/u',
   });
   const call = (channel, sender, ...args) => ipcMain.handlers.get(channel)({ sender }, ...args);
@@ -122,6 +125,34 @@ test('without an open folder the overview lists only what is stored', async (t) 
   const overview = await call(REQ.TOOL_PERMISSIONS_GET_SANDBOX_OVERVIEW, makeSender());
   assert.deepEqual(overview.workspaces, []);
   assert.equal(overview.activeRoot, null);
+});
+
+// Encrypted storage reaches the window through the platform register, resolved
+// at start, and through nothing else (#1156); what main allows still follows
+// safeStorage live and fails closed.
+test('the window reads encrypted storage from the register only (#1156)', async (t) => {
+  const withoutStorage = resolvePlatform({ platform: 'darwin', facts: { encryptionAvailable: false } });
+  const { call } = await setup(t, { platformCapabilities: withoutStorage });
+  for (const channel of [
+    REQ.TOOL_PERMISSIONS_GET_STATE,
+    REQ.TOOL_PERMISSIONS_GET_SANDBOX_OVERVIEW,
+    REQ.TOOL_PERMISSIONS_GET_SECURITY_OVERVIEW,
+  ]) {
+    const dto = await call(channel, makeSender());
+    assert.equal('encryptionAvailable' in dto, false, channel);
+  }
+  assert.equal((await call(REQ.TOOL_PERMISSIONS_GET_STATE, makeSender())).platformCapabilities.secureStorage, false);
+  assert.equal((await call(REQ.TOOL_PERMISSIONS_GET_SANDBOX_OVERVIEW, makeSender())).platformCapabilities.secureStorage, false);
+});
+
+test('a register that promised encrypted storage does not open a guard safeStorage closes (#1156)', async (t) => {
+  const withStorage = resolvePlatform({ platform: 'darwin', facts: { encryptionAvailable: true } });
+  const { call, dialogCalls, toolPolicyStore } = await setup(t, { platformCapabilities: withStorage, safeStorageAvailable: false });
+  const result = await call(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, makeSender(), false, OPEN);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.key, 'permissions.error.sandboxOffNeedsEncryption');
+  assert.equal(dialogCalls.length, 0, 'no confirmation that leads nowhere');
+  assert.deepEqual((await toolPolicyStore.read()).unsandboxedWorkspaces, []);
 });
 
 test('on Windows the overview says there is no sandbox, whatever the detection said', async (t) => {

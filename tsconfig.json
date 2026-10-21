@@ -13,27 +13,31 @@
     "lib": ["es2024"],
     "types": ["node"],
     "skipLibCheck": true,
-    // Not `strict` as a whole: without `noImplicitAny` an unannotated
-    // parameter stays `any` instead of failing, and without
-    // `strictNullChecks` `null` passes where a value is declared. Both would
-    // flood the first round with findings that are not drift. What is on
-    // catches a port and its adapter disagreeing — a missing or extra
+    // Not `strict` as a whole: `useUnknownInCatchVariables` would report about
+    // 200 `catch (e)` sites, and nothing is gained there that the checks below
+    // do not give. What is on (#1098):
+    // `noImplicitAny` is on: every parameter and every variable that starts
+    // empty has a type, in JSDoc or inferred; a value that truly cannot be
+    // typed says `any` on purpose, with a reason beside it.
+    // `strictNullChecks` is on: `null` and `undefined` are values of their
+    // own, and a truthiness check narrows a `{ error } | { ok }` union. What
+    // is on catches a port and its adapter disagreeing — a missing or extra
     // member, a wrong shape, a wrong argument count — and callbacks that
     // take the wrong parameters.
     "strict": false,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
     "strictFunctionTypes": true,
     "strictBindCallApply": true,
     "noImplicitThis": true
   },
-  // A deliberate list, not the whole of `src/`: the core, the ports, the
-  // contracts and the adapters that implement the ports. Files these import
-  // are checked too, since `checkJs` checks every file in the program.
+  // `src/application`, `src/main` and `src/shared` as a whole; the tests, the
+  // renderer and the build scripts are outside. Every file an included one
+  // imports is checked too, since `checkJs` checks the whole program.
   "include": [
     "src/application/**/*.js",
-    "src/main/ports/**/*.js",
-    "src/main/adapters/**/*.js",
-    "src/main/remote/**/*.js",
-    "src/shared/contracts/**/*.js",
+    "src/main/**/*.js",
+    "src/shared/**/*.js",
     "types/**/*.d.ts"
   ]
 }

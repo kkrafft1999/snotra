@@ -424,9 +424,11 @@ const COMPAT_PROVIDER = {
   defaultModel: '',
   defaultBaseUrl: 'http://localhost:1234/v1',
   optionalApiKey: true,
-  fields: { apiKey: true, baseUrl: true },
-  capabilitiesFor(config) {
-    return { images: config?.supportsImages === true };
+  fields: { apiKey: true, baseUrl: true, supportsImages: true, maxOutputTokens: true },
+  connectionPerPreset: true,
+  capabilities: {
+    images: { supported: 'per-connection', setting: 'supportsImages', reason: 'chat.image.error.connectionWithoutImages' },
+    reasoningLevels: { supported: false, reason: 'provider.capability.reasoningLevels.notBuilt', issue: 1148 },
   },
   async streamChatRound() {
     return { message: { role: 'assistant', content: 'ok' }, finishReason: 'stop' };
@@ -464,12 +466,48 @@ test('prepareSendBundle nimmt Anzeigenamen und Bild-Faehigkeit aus der Konfigura
     supportsImages: true,
   }).prepareSendBundle({ providerId: 'openai-compatible', model: 'qwen2.5' });
   assert.equal(withImages.providerName, 'LM Studio');
-  assert.deepEqual(withImages.capabilities, { images: true });
+  assert.equal(withImages.capabilities.images, true);
+  assert.equal(withImages.capabilities.gaps.images, undefined);
 
   const plain = await compatAdapter({ baseUrl: 'http://localhost:1234/v1' })
     .prepareSendBundle({ providerId: 'openai-compatible', model: 'qwen2.5' });
   assert.equal(plain.providerName, 'OpenAI-kompatibel');
-  assert.deepEqual(plain.capabilities, { images: false });
+  assert.equal(plain.capabilities.images, false);
+  assert.equal(plain.capabilities.gaps.images.limitedBy, 'connection');
+});
+
+test('prepareSendBundle hands the engine the traits instead of the provider ID (#996)', async () => {
+  const local = await compatAdapter({ baseUrl: 'http://localhost:1234/v1' })
+    .prepareSendBundle({ providerId: 'openai-compatible', model: 'qwen2.5' });
+  assert.deepEqual(local.traits, {
+    runsLocally: true,
+    tokenizerProfile: 'local',
+    outputLimitSetting: true,
+    priceTable: { litellmProviders: [], keyPrefixes: [] },
+  });
+  const remote = await compatAdapter({ baseUrl: 'https://gw.example/v1' })
+    .prepareSendBundle({ providerId: 'openai-compatible', model: 'qwen2.5' });
+  assert.equal(remote.traits.runsLocally, false);
+});
+
+test('prepareSendBundle passes on the image formats a provider narrows to (#91)', async () => {
+  const narrowing = {
+    ...COMPAT_PROVIDER,
+    id: 'narrow',
+    capabilities: {
+      images: { supported: true, mediaTypes: ['image/webp', 'image/png', 'image/tiff'] },
+      reasoningLevels: { supported: true },
+    },
+  };
+  const llm = createProviderLlmAdapter(
+    makeAdapterDeps({
+      providerRuntime: { getProvider: (id) => (id === 'narrow' ? narrowing : null) },
+      providerSecrets: { getEffectiveProviderConfig: async () => ({ baseUrl: 'http://localhost:1234/v1' }) },
+    })
+  );
+  const bundle = await llm.prepareSendBundle({ providerId: 'narrow', model: 'm' });
+  // In the contract's order, and nothing Snotra does not attach.
+  assert.deepEqual(bundle.capabilities, { images: true, imageMediaTypes: ['image/png', 'image/webp'], reasoningLevels: true });
 });
 
 // ── Estimated cost per round (#949) ───────────────────────────────────────
@@ -554,4 +592,37 @@ test('adapter leaves a round without usage unpriced, and a failing price lookup 
   const counted = await oneRound(unpriced);
   assert.equal(counted.cost.entry.usd, null);
   assert.equal(counted.cost.entry.tokens.input, 10);
+});
+
+test('a chat off screen is resolved with its own model entry, the chat on screen with the active one (#1194)', async () => {
+  const seen = [];
+  const llm = createProviderLlmAdapter({
+    ...makeAdapterDeps({
+      llmConfigStore: {
+        readLLMConfig: async () => ({ activePresetId: 'on-screen' }),
+        resolveChatModelTarget: (config) => {
+          seen.push(config.activePresetId);
+          return { providerId: 'test', model: `model-${config.activePresetId}`, reasoningEffort: null };
+        },
+      },
+    }),
+    presetFor: async (chatId) => (chatId === 'chat-off' ? 'its-own' : null),
+  });
+  assert.equal((await llm.resolveChatTarget({ chatId: 'chat-off' })).model, 'model-its-own');
+  assert.equal((await llm.resolveChatTarget({ chatId: 'chat-on' })).model, 'model-on-screen');
+  assert.equal((await llm.resolveChatTarget()).model, 'model-on-screen');
+  assert.deepEqual(seen, ['its-own', 'on-screen', 'on-screen']);
+});
+
+test('a failing lookup of the chat\'s entry costs the round nothing: the active entry applies (#1194)', async () => {
+  const llm = createProviderLlmAdapter({
+    ...makeAdapterDeps({
+      llmConfigStore: {
+        readLLMConfig: async () => ({ activePresetId: 'on-screen' }),
+        resolveChatModelTarget: (config) => ({ providerId: 'test', model: `model-${config.activePresetId}`, reasoningEffort: null }),
+      },
+    }),
+    presetFor: async () => { throw new Error('history unreadable'); },
+  });
+  assert.equal((await llm.resolveChatTarget({ chatId: 'chat-off' })).model, 'model-on-screen');
 });

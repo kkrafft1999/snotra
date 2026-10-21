@@ -15,32 +15,77 @@
 
 const { quoteArgv, SANDBOX_REASONS } = require('./sandbox-service');
 
+/**
+ * What `planSpawn` takes from the sandbox service (`sandbox-service.js`): the
+ * command to start instead of the plain one, and what to do once it is over.
+ *
+ * @typedef {(request: { target: string, allow: string[] }, options?: { signal?: AbortSignal }) => Promise<{ outcome: string, pattern?: string }>} NetworkAsk
+ *
+ * @typedef {Object} PreparedSandbox
+ * @property {string} command
+ * @property {string[]} args
+ * @property {NodeJS.ProcessEnv} env
+ * @property {string[]} domains
+ * @property {string[]} [writePaths]  what a program allowance added
+ * @property {boolean} [trustd]
+ * @property {(stderr: string) => string} annotate
+ * @property {(options?: { failed?: boolean, output?: string }) => Promise<object|null>} [blocked]
+ * @property {() => void} release
+ *
+ * @typedef {Object} SandboxPrepareRequest
+ * @property {string} [command]  a complete shell command line; without one nothing runs
+ * @property {string} [workspaceRoot]
+ * @property {string} [runTmp]
+ * @property {string[]} [allowedDomains]
+ * @property {string[]} [extraWritePaths]
+ * @property {boolean} [weakerNetworkIsolation]
+ * @property {object|null} [grants]
+ * @property {string} [commandId]
+ * @property {string} [commandText]
+ * @property {NetworkAsk|null} [onNetworkAsk]
+ * @property {(() => {stdout: string, stderr: string} | null) | null} [readOutput]
+ * @property {AbortSignal} [abortSignal]
+ *
+ * @typedef {{
+ *   prepare(request: SandboxPrepareRequest): Promise<PreparedSandbox|null>,
+ *   describe(): { reason?: string, missing?: string[] },
+ * }} SandboxForSpawn
+ *
+ * @typedef {Object} SpawnPlan
+ * @property {string} command
+ * @property {string[]} args
+ * @property {NodeJS.ProcessEnv} env
+ * @property {null|{isolated: boolean, domains?: string[], writePaths?: string[], trustd?: boolean,
+ *   reason?: string, missing?: string[]}} isolation
+ * @property {(s: string) => string} annotate
+ * @property {(o?: {failed?: boolean, output?: string}) => Promise<object|null>} blocked
+ * @property {() => void} release
+ */
+
+/** @type {Pick<SpawnPlan, 'env' | 'annotate' | 'blocked' | 'release'>} */
 const PASSTHROUGH = Object.freeze({
   env: Object.freeze({}),
-  annotate: (stderr) => stderr,
+  annotate: (/** @type {string} */ stderr) => stderr,
   blocked: async () => null,
   release: () => {},
 });
 
 /**
  * @param {object} request
- * @param {object|null} request.sandbox       the sandbox service, if wired
+ * @param {SandboxForSpawn|null} request.sandbox       the sandbox service, if wired
  * @param {boolean} [request.disabled]         switched off for this workspace (#357)
  * @param {string[]} request.argv             [program, ...args]
  * @param {string} [request.workspaceRoot]
  * @param {string} request.runTmp
  * @param {string[]} [request.domains]
  * @param {{writePaths?: string[], trustd?: boolean}|null} [request.allowance]  a program allowance (#408)
+ * @param {Object|null} [request.grants]     what the user allowed on a sandbox card (#792)
  * @param {string} [request.commandId]
  * @param {string} [request.commandText]
- * @param {Function} [request.onNetworkAsk]  asks about a waiting connection (#792)
- * @param {Function} [request.readOutput]    what the command printed so far, for that question
+ * @param {NetworkAsk | null} [request.onNetworkAsk]  asks about a waiting connection (#792)
+ * @param {(() => {stdout: string, stderr: string} | null) | null} [request.readOutput]  what the command printed so far, for that question
  * @param {AbortSignal} [request.abortSignal]
- * @returns {Promise<{command: string, args: string[], env: object,
- *   isolation: null|{isolated: boolean, domains?: string[], writePaths?: string[], trustd?: boolean,
- *     reason?: string, missing?: string[]},
- *   annotate: (s: string) => string, blocked: (o?: {failed?: boolean, output?: string}) => Promise<object|null>,
- *   release: () => void}>}
+ * @returns {Promise<SpawnPlan>}
  *   Rejects with an AbortError when "Stop" comes while waiting for the gate.
  */
 async function planSpawn({

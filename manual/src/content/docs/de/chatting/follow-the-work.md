@@ -28,6 +28,14 @@ Ist die Antwort fertig, klappen die Schritte zu einer Zeile zusammen, die sie z�
 
 Wollte ein Befehl oder ein Python-Lauf unter macOS oder Linux an etwas, das die Sandbox verschlossen hält — einen Ordner außerhalb des Projekts, einen Host, der nicht erlaubt war —, erscheint unter dem Tool-Protokoll ein Kasten *Die Sandbox hat … blockiert*. Er listet, was blockiert wurde, wie oft und warum. Meist ist das der Grund, warum ein Befehl auf eine Weise scheiterte, die seine eigene Ausgabe nicht erklärt. [seit 1.18] Bei Schreiben oder Lesen an einem geschützten Ort fragt direkt nach dem Lauf eine Karte, ob du es freigeben und den Befehl wiederholen willst; eine Verbindung zu einem Host, den der Aufruf nicht genannt hat, wartet auf einer Karte auf dich, während der Befehl läuft. Der Kasten sagt danach auch, wie du entschieden hast; [seit 1.21] hast du alles beantwortet, weicht die Karte ihm, und er klappt zu einer Zeile zusammen, die sich per Klick öffnet. Mehr unter [Befehle in der Sandbox ausführen](../../safety/sandbox/).
 
+## Wenn sich ein Ergebnis wie Anweisungen liest
+
+[seit 1.27.1] Mancher Text ist für das Modell geschrieben, nicht für dich: eine Webseite, die sagt *ignoriere alle vorherigen Anweisungen*, eine Datei, die sich als Nachricht von Snotra ausgibt, Zeichen, die du nicht sehen kannst. Enthält ein Tool-Ergebnis so etwas, erscheint unter dem Tool-Protokoll ein Kasten *Ein Tool-Ergebnis liest sich wie Anweisungen an den Agenten*. Er nennt den Schritt, sagt, welche Art Text er gefunden hat, und zitiert ihn.
+
+![Eine Antwort, deren Tool-Protokoll „1 Datei gelesen“ zeigt. Darunter ein Kasten: „Ein Tool-Ergebnis liest sich wie Anweisungen an den Agenten · Datei notizen/saatgut-katalog.md gelesen“, die Art „Fordert den Agenten auf, seine Vorgaben zu ignorieren“ mit dem zitierten Satz aus der Datei, ein Hinweis, dass sich an dem, was der Agent darf, nichts geändert hat, und der Link „Was diese Prüfung macht“. Danach die Antwort, die sagt, dass sie die Bitte in der Datei nicht befolgt hat.](screenshots/injection-flag.webp)
+
+An dem, was Snotra darf, hat sich nichts geändert: Der nächste Tool-Aufruf wird geprüft wie jeder andere, Karten und Sandbox gelten wie bisher. Sieh dir genau an, was es als Nächstes vorschlägt — einen Befehl, mit dem du nicht gerechnet hast, eine Datei, die mit der Aufgabe nichts zu tun hat, eine Adresse, die du nicht kennst. Kommt dir etwas seltsam vor, lehne die Karte ab oder stoppe den Lauf. Warum der Kasten in beide Richtungen danebenliegen kann: [Warum Snotra fragt, bevor es handelt](../../safety/why-snotra-asks/#wenn-ein-tool-ergebnis-nach-anweisungen-aussieht).
+
 ## Was dann passiert
 
 Das Tool-Protokoll bleibt bei der Antwort, auch im Chat-Verlauf. Dateien, die Snotra gelesen oder geändert hat, sind außerdem im Dateibaum markiert, und die Zeile *Geändert:* unter dem Protokoll führt zu jeder Änderung: [Sehen, was Snotra geändert hat](../review-changes/).

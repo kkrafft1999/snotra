@@ -16,10 +16,12 @@ const {
   parsePageReference,
   MAX_PAGE_CHARS,
 } = require('../src/main/services/manual-lookup');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
-const { toolCategory, TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
-const { toolConfigGroup, CONFIG_TOOL_GROUPS } = require('../src/shared/contracts/chat-configuration');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
+const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
+const { TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
+const { descriptorOf } = require('./helpers/tool-descriptors');
+const { CONFIG_TOOL_GROUPS } = require('../src/shared/contracts/chat-configuration');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const VENDORED_MARKED = path.join(__dirname, '..', 'src', 'renderer', 'vendor', 'marked.umd.js');
 const loadLexer = () => loadVendoredMarkedLexer(VENDORED_MARKED, { readFileSync: fs.readFileSync });
@@ -42,7 +44,7 @@ test.before(() => {
 });
 
 test.after(() => {
-  fs.rmSync(targetDir, { recursive: true, force: true });
+  removeTempDirSync(targetDir);
 });
 
 /** A manual service over pages given inline, for the edge cases. */
@@ -251,10 +253,10 @@ test('a lookup that throws comes back as an error, not as a crash', async () => 
 });
 
 test('the log names a look into the manual as such, in both languages', () => {
-  assert.equal(toolCategory('search_manual'), TOOL_CATEGORIES.MANUAL);
-  assert.equal(toolCategory('read_manual_page'), TOOL_CATEGORIES.MANUAL);
-  assert.equal(toolConfigGroup('search_manual'), CONFIG_TOOL_GROUPS.READ);
-  assert.equal(toolConfigGroup('read_manual_page'), CONFIG_TOOL_GROUPS.READ);
+  assert.equal(descriptorOf('search_manual').category, TOOL_CATEGORIES.MANUAL);
+  assert.equal(descriptorOf('read_manual_page').category, TOOL_CATEGORIES.MANUAL);
+  assert.equal(descriptorOf('search_manual').configGroup, CONFIG_TOOL_GROUPS.READ);
+  assert.equal(descriptorOf('read_manual_page').configGroup, CONFIG_TOOL_GROUPS.READ);
 
   assert.equal(summarizeToolCall('search_manual', { query: 'network' }, 'start', 'en'), 'Searching the manual for “network” …');
   assert.equal(summarizeToolCall('search_manual', { query: 'Netzwerk' }, 'done', 'de'), 'Im Handbuch nach „Netzwerk“ gesucht');

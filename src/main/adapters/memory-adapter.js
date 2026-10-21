@@ -34,6 +34,15 @@ const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { createEmbeddedTextFiles } = require('../services/embedded-text-file');
 
 /**
+ * @param {{
+ *   fs: typeof import('fs/promises'),
+ *   path: typeof import('path'),
+ *   os?: typeof import('os'),
+ *   maxChars?: number,
+ *   isSelfMemoryAllowed?: (() => boolean | Promise<boolean>) | null,
+ *   getLocale?: (() => string) | null,
+ *   platform?: string,
+ * }} deps
  * @returns {import('../../application/ports/memory-port').MemoryPort}
  */
 function createMemoryAdapter({
@@ -62,10 +71,18 @@ function createMemoryAdapter({
   // folder, so its real path has to stay inside it.
   const textFiles = createEmbeddedTextFiles({ fs, path, platform });
 
-  /** Laufende Schreibvorgänge je Datei — der Lock ist eine Promise-Kette. */
+  /** The interface language right now; empty counts as the default language. */
+  const currentLocale = () => (typeof getLocale === 'function' ? getLocale() : '');
+
+  /**
+   * Laufende Schreibvorgänge je Datei — der Lock ist eine Promise-Kette.
+   *
+   * @type {Map<string, Promise<unknown>>}
+   */
   const queues = new Map();
 
   function homeDir() {
+    /** @type {string|null|undefined} */
     let home;
     try {
       home = os && typeof os.homedir === 'function' ? os.homedir() : null;
@@ -79,6 +96,10 @@ function createMemoryAdapter({
    * Absoluter Pfad einer Ebene samt der Wurzel, die er nicht verlassen darf,
    * oder null, wenn es die Ebene gerade nicht gibt. The global file has no
    * such root: it is the user's own, and a dotfiles manager links it elsewhere.
+   *
+   * @param {string} scope
+   * @param {unknown} workspaceRoot
+   * @returns {{ file: string, root: string|null }|null}
    */
   function targetFor(scope, workspaceRoot) {
     if (scope === MEMORY_SCOPES.WORKSPACE) {
@@ -92,11 +113,22 @@ function createMemoryAdapter({
     return home ? { file: path.join(home, '.snotra', MEMORY_FILE), root: null } : null;
   }
 
+  /**
+   * @param {string} scope
+   * @param {unknown} workspaceRoot
+   */
   function fileFor(scope, workspaceRoot) {
     return targetFor(scope, workspaceRoot)?.file || null;
   }
 
-  /** Vorgänge auf derselben Datei laufen nacheinander. */
+  /**
+   * Vorgänge auf derselben Datei laufen nacheinander.
+   *
+   * @template T
+   * @param {string} file
+   * @param {() => Promise<T>} task
+   * @returns {Promise<T>}
+   */
   function serialize(file, task) {
     const previous = queues.get(file) || Promise.resolve();
     // `catch` vor dem Anhängen: Ein gescheiterter Vorgang darf die Kette nicht
@@ -112,10 +144,10 @@ function createMemoryAdapter({
   return {
     /** Beide Ebenen in Lesereihenfolge; leere und fehlende fallen weg. */
     async load({ workspaceRoot = null } = {}) {
-      const targets = MEMORY_SCOPE_ORDER.map((scope) => ({
-        scope,
-        target: targetFor(scope, workspaceRoot),
-      })).filter(({ target }) => Boolean(target));
+      const targets = MEMORY_SCOPE_ORDER.flatMap((scope) => {
+        const target = targetFor(scope, workspaceRoot);
+        return target ? [{ scope, target }] : [];
+      });
       const results = await Promise.all(
         targets.map(async ({ scope, target }) => {
           // Fehlend, unlesbar, ein Verzeichnis, ein Symlink aus dem Ordner
@@ -125,7 +157,7 @@ function createMemoryAdapter({
           return { scope, file: target.file, text: read.text, truncated: read.truncated };
         })
       );
-      return results.filter(Boolean);
+      return results.filter((entry) => entry !== null);
     },
 
     /**
@@ -150,7 +182,7 @@ function createMemoryAdapter({
       if (origin === MEMORY_ORIGINS.SELF && typeof isSelfMemoryAllowed === 'function') {
         if ((await isSelfMemoryAllowed()) === false) {
           throw new Error(fillUiQuotes(
-            typeof getLocale === 'function' ? getLocale() : null,
+            currentLocale(),
             'Unprompted remembering is switched off ("{menu:settings.memory}"). '
               + 'Only what the user explicitly asks for is remembered.'
           ));
@@ -175,11 +207,11 @@ function createMemoryAdapter({
           origin,
           date: formatMemoryDate(new Date()),
           // A new file starts with a heading in the interface language (#579).
-          locale: typeof getLocale === 'function' ? getLocale() : null,
+          locale: currentLocale(),
         });
         if (next.length > maxChars) {
           throw new RangeError(fillUiQuotes(
-            typeof getLocale === 'function' ? getLocale() : null,
+            currentLocale(),
             `The ${scope === MEMORY_SCOPES.USER ? 'global' : 'project'} memory is full `
               + `(${maxChars} characters). The user can delete entries under "{menu:settings.memory}".`
           ));
@@ -212,10 +244,10 @@ function createMemoryAdapter({
 
     /** Pfade zur Anzeige in den Einstellungen — ohne zu lesen. */
     paths({ workspaceRoot = null } = {}) {
-      return MEMORY_SCOPE_ORDER.reduce((acc, scope) => {
-        acc[scope] = fileFor(scope, workspaceRoot);
-        return acc;
-      }, {});
+      /** @type {Record<string, string|null>} */
+      const paths = {};
+      for (const scope of MEMORY_SCOPE_ORDER) paths[scope] = fileFor(scope, workspaceRoot);
+      return paths;
     },
   };
 }

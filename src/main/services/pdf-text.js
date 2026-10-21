@@ -10,6 +10,32 @@
  * `document-text-worker.js` loads it and passes it here.
  */
 
+/**
+ * The part of pdf.js that is used here. It is an ES module loaded at run time
+ * and has no types of its own in this program.
+ *
+ * @typedef {{ str?: unknown, transform?: number[], width?: unknown, hasEOL?: boolean }} PdfTextItem
+ * @typedef {{
+ *   numPages: number,
+ *   getMetadata(): Promise<{ info?: { Title?: unknown } }>,
+ *   getPage(number: number): Promise<{
+ *     getTextContent(): Promise<{ items: PdfTextItem[] }>,
+ *     cleanup(): void,
+ *   }>,
+ * }} PdfDocumentProxy
+ * @typedef {{ promise: Promise<PdfDocumentProxy>, destroy(): Promise<void> }} PdfLoadingTask
+ * @typedef {{ getDocument(params: object): PdfLoadingTask }} PdfJs
+ *
+ * An opened PDF, read unit by unit — the shape `document-text.js` slices.
+ * @typedef {{
+ *   format: 'pdf',
+ *   title: string|null,
+ *   unitCount: number,
+ *   readUnit(number: number): Promise<string>,
+ *   close(): Promise<void>,
+ * }} PdfSource
+ */
+
 class PdfPasswordError extends Error {
   constructor() {
     super('The PDF is password-protected; its text cannot be read.');
@@ -21,10 +47,14 @@ class PdfPasswordError extends Error {
  * One page's text items as lines. pdf.js marks line ends itself (`hasEOL`),
  * but not the gaps between items on a line — a gap wider than a fraction of
  * the font size becomes a space, a jump in height a line break.
+ *
+ * @param {PdfTextItem[]} items
  */
 function joinTextItems(items) {
   let out = '';
+  /** @type {number|null} */
   let lastY = null;
+  /** @type {number|null} */
   let lastEnd = null;
   for (const item of items) {
     if (typeof item?.str !== 'string') continue;
@@ -55,6 +85,10 @@ function joinTextItems(items) {
  * Opens `bytes` with `pdfjs`. `cMapUrl` and `standardFontDataUrl` point at the
  * data files of the vendored copy; without the CMaps the text of CJK fonts
  * would come back as nothing.
+ *
+ * @param {Uint8Array} bytes
+ * @param {{ pdfjs: PdfJs, cMapUrl: string, standardFontDataUrl: string }} options
+ * @returns {Promise<PdfSource>}
  */
 async function openPdf(bytes, { pdfjs, cMapUrl, standardFontDataUrl }) {
   const loadingTask = pdfjs.getDocument({
@@ -71,6 +105,7 @@ async function openPdf(bytes, { pdfjs, cMapUrl, standardFontDataUrl }) {
     stopAtErrors: false,
     verbosity: 0,
   });
+  /** @type {PdfDocumentProxy} */
   let doc;
   try {
     doc = await loadingTask.promise;
@@ -80,10 +115,12 @@ async function openPdf(bytes, { pdfjs, cMapUrl, standardFontDataUrl }) {
     if (error?.name === 'InvalidPDFException') throw new Error('The PDF is damaged and cannot be read.');
     throw error;
   }
+  /** @type {string|null} */
   let title = null;
   try {
     const meta = await doc.getMetadata();
-    title = typeof meta?.info?.Title === 'string' && meta.info.Title.trim() ? meta.info.Title.trim() : null;
+    const found = meta?.info?.Title;
+    title = typeof found === 'string' && found.trim() ? found.trim() : null;
   } catch {
     /* no metadata is no reason to fail */
   }
@@ -91,6 +128,7 @@ async function openPdf(bytes, { pdfjs, cMapUrl, standardFontDataUrl }) {
     format: 'pdf',
     title,
     unitCount: doc.numPages,
+    /** @param {number} number */
     async readUnit(number) {
       const page = await doc.getPage(number);
       try {

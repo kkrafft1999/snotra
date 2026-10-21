@@ -1,5 +1,10 @@
+/** @typedef {import('../ports/provider-runtime-port').ProviderAdapter} ProviderAdapter */
+/** @typedef {import('../ports/provider-runtime-port').ProviderConfig} ProviderConfig */
+/** @typedef {import('../ports/provider-runtime-port').ChatRoundResult} ChatRoundResult */
+
 const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
+const { isRecord } = require('../../shared/runtime/is-record');
 const { describeFetchErrorMessage, readErrorMessage } = require('./stream-helpers');
 const { streamResponsesRound } = require('./openai-responses-transport');
 
@@ -17,15 +22,18 @@ const OFFERED_MODELS = /^(?:ft:)?gpt-(?:[5-9]|[1-9]\d+)(?!\d)(?!.*-chat(?:-|$))/
 // GPT-5 and newer also come as variants that do not chat.
 const NOT_FOR_CHAT = /realtime|audio|transcribe|tts|image|search|embedding/i;
 
+/** @param {unknown} model */
 function isOfferedModel(model) {
   return OFFERED_MODELS.test(String(model ?? '').trim());
 }
 
+/** @param {ProviderConfig|null|undefined} config */
 function baseUrlOf(config) {
   const raw = typeof config?.baseUrl === 'string' ? config.baseUrl.trim() : '';
   return (raw || DEFAULT_BASE).replace(/\/$/, '');
 }
 
+/** @type {ProviderAdapter['listModels']} */
 async function listModels(config) {
   try {
     return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
@@ -37,6 +45,7 @@ async function listModels(config) {
   }
 }
 
+/** @type {ProviderAdapter['listModels']} */
 async function listModelsRequest(config) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: createMessage('provider.error.noApiKey') };
@@ -52,21 +61,23 @@ async function listModelsRequest(config) {
   }
   if (!res.ok) return { error: await readErrorMessage(res) };
   const json = await res.json().catch(() => null);
-  if (!json || !Array.isArray(json.data)) {
+  if (!isRecord(json) || !Array.isArray(json.data)) {
     return { error: createMessage('provider.error.unexpectedAnswer.api', { provider: 'OpenAI' }) };
   }
   const models = json.data
-    .map((m) => m && typeof m.id === 'string' ? { id: m.id, label: m.id } : null)
-    .filter(Boolean)
+    .map((/** @type {unknown} */ m) => isRecord(m) && typeof m.id === 'string' ? { id: m.id, label: m.id } : null)
+    .filter((m) => m !== null)
     .filter((m) => isOfferedModel(m.id) && !NOT_FOR_CHAT.test(m.id))
     .sort((a, b) => a.id.localeCompare(b.id));
   return { models };
 }
 
+/** @type {ProviderAdapter['streamChatRound']} */
 async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal, cacheKey }) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: createMessage('provider.error.noApiKey'), code: 'NO_API_KEY' };
 
+  /** @type {{ prompt_cache_key?: string, reasoning?: { effort?: string, summary?: string } }} */
   const extraBody = {};
   // Prompt-Caching greift ab ~1.024 Token automatisch, aber nur, wenn die
   // Anfrage auf derselben Maschine landet wie die vorige. Der Schluessel (die
@@ -112,6 +123,11 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
  * into the app's own words — model, level, and the levels OpenAI lists as
  * possible — with the way to change it. A model that takes no level at all is
  * left to OpenAI's text: no other level would help there.
+ *
+ * @param {ChatRoundResult} result
+ * @param {string} model
+ * @param {string} effort
+ * @returns {ChatRoundResult}
  */
 function withEffortRejectionExplained(result, model, effort) {
   if (!effort || result?.code !== '400' || typeof result.error !== 'string') return result;
@@ -130,13 +146,22 @@ function withEffortRejectionExplained(result, model, effort) {
   };
 }
 
+/** @type {ProviderAdapter} */
 module.exports = {
   id: 'openai',
   name: 'OpenAI',
   fields: { apiKey: true },
-  // Sagt, ob *dieser Adapter* Bilder weiterreicht — nicht, ob das gewaehlte
-  // Modell sie versteht (Issue #93).
-  capabilities: { images: true },
+  // What *this adapter* passes on — not whether the chosen model understands
+  // it (#93). The vocabulary is in shared/contracts/provider-capabilities.js.
+  capabilities: {
+    images: { supported: true },
+    reasoningLevels: { supported: true },
+  },
+  traits: {
+    // Measured against o200k (context-breakdown.js, #178).
+    tokenizerProfile: 'o200k',
+    priceTable: { litellmProviders: ['openai'] },
+  },
   defaultModel: 'gpt-5-mini',
   // The levels a chat can choose (#725): all seven, for the models Snotra
   // offers. Which of them a model really takes is not in `/v1/models`; a

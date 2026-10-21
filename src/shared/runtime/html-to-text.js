@@ -15,6 +15,7 @@
  * wird — die Chat-Anzeige bereinigt ihrerseits (DOMPurify).
  */
 
+/** @type {Record<string, string>} */
 const NAMED_ENTITIES = {
   amp: '&',
   lt: '<',
@@ -63,7 +64,11 @@ const LATIN1_LETTERS =
   }
 }
 
-/** &amp;, &#228; und &#xE4; aufloesen; Unbekanntes bleibt stehen. */
+/**
+ * &amp;, &#228; und &#xE4; aufloesen; Unbekanntes bleibt stehen.
+ *
+ * @param {string} text
+ */
 function decodeEntities(text) {
   return text.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9]*);/g, (match, body) => {
     if (body[0] === '#') {
@@ -100,11 +105,19 @@ const TAG_NAME_CHAR = /[a-z0-9:-]/;
 /** What opens markup after `<`, as in a browser; anything else is text ("a < b"). */
 const MARKUP_START = /[a-zA-Z/!?]/;
 
-/** Lower case for ASCII only, so that every index still matches the original. */
+/**
+ * Lower case for ASCII only, so that every index still matches the original.
+ *
+ * @param {string} text
+ */
 function asciiLower(text) {
   return text.replace(/[A-Z]+/g, (run) => run.toLowerCase());
 }
 
+/**
+ * @param {string} lower
+ * @param {number} start
+ */
 function readTagName(lower, start) {
   let end = start;
   while (end < lower.length && TAG_NAME_CHAR.test(lower[end])) end += 1;
@@ -115,6 +128,9 @@ function readTagName(lower, start) {
  * `indexOf` that remembers its answers: once a token was not found from one
  * position, it is not there from any later one either, and a hit further on
  * still holds for every start before it.
+ *
+ * @param {string} text
+ * @returns {(token: string, from: number) => number}
  */
 function createFinder(text) {
   const found = new Map();
@@ -127,6 +143,10 @@ function createFinder(text) {
   };
 }
 
+/**
+ * @param {string} name
+ * @param {boolean} closing
+ */
 function markupFor(name, closing) {
   if (name === 'br') return '\n';
   const heading = /^h([1-6])$/.exec(name);
@@ -140,7 +160,11 @@ function markupFor(name, closing) {
   return ' ';
 }
 
-/** Titel aus dem <title>-Element, schon entschluesselt und gekuerzt. */
+/**
+ * Titel aus dem <title>-Element, schon entschluesselt und gekuerzt.
+ *
+ * @param {unknown} html
+ */
 function extractTitle(html) {
   if (typeof html !== 'string' || !html) return '';
   const lower = asciiLower(html);
@@ -158,6 +182,8 @@ function extractTitle(html) {
  * Markup out, structure kept: comments and the dropped elements disappear with
  * their content, headings, list items, paragraph and table ends become
  * Markdown-like breaks, every other tag a space.
+ *
+ * @param {string} html
  */
 function stripMarkup(html) {
   const lower = asciiLower(html);
@@ -208,6 +234,9 @@ function stripMarkup(html) {
   return parts.join('');
 }
 
+/**
+ * @param {unknown} html
+ */
 function htmlToText(html) {
   if (typeof html !== 'string' || !html) return '';
   let text = decodeEntities(stripMarkup(html));

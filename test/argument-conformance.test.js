@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { measureArgumentConformance, MAX_PATHS_PER_KIND } = require('../src/main/tools/argument-conformance');
-const { validateArguments } = require('../src/main/tools/tool-call-planner');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { measureArgumentConformance, MAX_PATHS_PER_KIND } = require('../src/application/tools/argument-conformance');
+const { validateArguments } = require('../src/application/tools/tool-call-planner');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { sanitizeChatMessagesForStore, normalizeLoadedMessages } = require('../src/main/services/chat-history-normalization');
 const { summarizeToolTrace, summarizeConversation } = require('../src/shared/runtime/tool-trace-metrics');

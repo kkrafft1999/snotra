@@ -13,11 +13,12 @@
 //
 // Result: out/mockup/tool-security-<locale>[-none][-narrow]-*.png
 
-import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
+import { removeDir } from '../test/helpers/temp-dir.js';
 
 const locale = process.argv[2] === 'de' ? 'de' : 'en';
 const withoutFolder = process.argv.includes('none');
@@ -112,7 +113,7 @@ try {
     console.log('host there:', JSON.stringify(await api('addSandboxHosts', { hosts: ['pypi.org:443'], scope: 'workspace' })));
     await api('activateFolder', garden);
     await pause(500);
-    await rm(gone, { recursive: true, force: true });
+    await removeDir(gone);
     console.log('program here:', JSON.stringify(await api('setProgramAllowance', { program: 'git', domains: ['github.com', 'api.github.com'], writePaths: [], trustd: false, scope: 'workspace' })));
     console.log('program everywhere:', JSON.stringify(await api('setProgramAllowance', { program: 'curl', domains: ['registry.npmjs.org'], writePaths: [], trustd: true, scope: 'global' })));
     console.log('hosts here:', JSON.stringify(await api('addSandboxHosts', { hosts: ['huggingface.co:443', '*.pytorch.org'], scope: 'workspace' })));
@@ -199,7 +200,15 @@ try {
     await app.evaluate(({ ipcMain }) => {
       ipcMain.removeHandler('toolPermissions:getSandboxOverview');
       ipcMain.handle('toolPermissions:getSandboxOverview', async () => ({
-        integrity: 'ok', encryptionAvailable: true, platform: 'win32', homeDir: '',
+        integrity: 'ok', platform: 'win32', homeDir: '',
+        // The platform register resolved for Windows (#1149).
+        platformCapabilities: {
+          executionSandbox: false, sandboxGitSsh: false, selfUpdate: true, secureStorage: true,
+          gaps: {
+            executionSandbox: { reason: 'approval.isolation.reason.platform', issue: 990 },
+            sandboxGitSsh: { reason: 'approval.isolation.reason.platform', issue: 990 },
+          },
+        },
         sandbox: { isolated: false, status: 'unavailable', reason: 'platform', platform: 'win32' },
         activeRoot: 'C:\\Users\\u\\garden-planner', newWorkspaceSandbox: true,
         global: { programs: [], hosts: [] },

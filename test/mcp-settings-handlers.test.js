@@ -15,11 +15,12 @@ const os = require('os');
 const path = require('path');
 const childProcess = require('child_process');
 
-const { registerSettingsHandlers } = require('../src/main/ipc/settings-handlers');
+const { registerSettingsForTest: registerSettingsHandlers } = require('./helpers/settings-handlers');
 const { createApplication } = require('../src/main/composition/create-application');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { MCP_CONNECTION_STATES } = require('../src/shared/contracts/mcp');
+const { removeTempDir, removeTempDirSync } = require('./helpers/temp-dir');
 
 // The application reads the PATH of the user's login shell once (#111), and an
 // interactive shell runs the user's own profile to do it. On a developer
@@ -39,10 +40,12 @@ after(() => {
     if (value === undefined) delete process.env[key];
     else process.env[key] = value;
   }
-  fsSync.rmSync(emptyHome, { recursive: true, force: true });
+  removeTempDirSync(emptyHome);
 });
 
 const TOKEN = 'ghp_streng_geheim_1234567890';
+/** A native dialog answered with the confirming button. */
+const CONFIRMING_DIALOG = { showMessageBox: async () => ({ response: 0 }) };
 const FAKE_SERVER = path.join(__dirname, 'helpers', 'fake-mcp-server.js');
 
 function fakeSafeStorage() {
@@ -59,9 +62,10 @@ function fakeSafeStorage() {
 
 // --- Teil 1: die Kanäle ---
 
-function makeHandlers(mcpSettings) {
+function makeHandlers(mcpSettings, { confirmations } = {}) {
   const ipcMain = createMockIpcMain();
   registerSettingsHandlers({
+    ...(confirmations ? { confirmations } : {}),
     ipcMain,
     safeStorage: { isEncryptionAvailable: () => true },
     llmConfigStore: {},
@@ -153,6 +157,81 @@ test('der Verbindungstest ohne Kennung scheitert verständlich', async () => {
   assert.deepEqual(result.error, { key: 'settings.error.mcp.idMissing' });
 });
 
+// A local command that is new or changed is asked through the port (#1104).
+
+const { createTestConfirmations } = require('./helpers/confirmations');
+const { CONFIRMATION_ACTIONS } = require('../src/application/permissions/user-confirmation');
+
+const LAUNCH = {
+  subject: 'launch-subject',
+  server: {
+    label: 'Files',
+    command: 'npx',
+    args: ['-y', '@modelcontextprotocol/server-filesystem', '/Users/me/My Docs'],
+    cwd: '/Users/me',
+    envKeys: ['API_TOKEN', 'DEBUG'],
+  },
+};
+
+function confirmingWith(response) {
+  const prompts = [];
+  const port = createTestConfirmations({
+    dialog: { showMessageBox: async (options) => { prompts.push(options); return { response }; } },
+  });
+  return { ...port, prompts };
+}
+
+test('a command to confirm is shown in a native dialog, and saved with its receipt (#1104)', async () => {
+  const { confirmations, storeReceipts, prompts } = confirmingWith(0);
+  let redeemed = null;
+  const mcp = fakeMcpSettings({
+    launchConfirmation: async () => LAUNCH,
+    save: async (input, options) => {
+      redeemed = storeReceipts.redeem(options?.confirmation, CONFIRMATION_ACTIONS.MCP_LAUNCH, LAUNCH.subject);
+      return { ok: true, errors: [] };
+    },
+  });
+  const ipcMain = makeHandlers(mcp, { confirmations });
+  const result = await ipcMain.handlers.get(REQ.SETTINGS_SAVE_MCP_SERVER)({}, { id: 'files' });
+  assert.equal(result.ok, true);
+  assert.equal(redeemed, true, 'the store gets the receipt for exactly this launch');
+
+  assert.equal(prompts.length, 1);
+  assert.equal(prompts[0].defaultId, 1);
+  assert.equal(prompts[0].cancelId, 1);
+  assert.match(prompts[0].detail, /npx -y @modelcontextprotocol\/server-filesystem "\/Users\/me\/My Docs"/);
+  assert.match(prompts[0].detail, /\/Users\/me/);
+  assert.match(prompts[0].detail, /API_TOKEN, DEBUG/);
+});
+
+test('declined, nothing is saved and the answer says why (#1104)', async () => {
+  const { confirmations } = confirmingWith(1);
+  const mcp = fakeMcpSettings({ launchConfirmation: async () => LAUNCH });
+  const ipcMain = makeHandlers(mcp, { confirmations });
+  const result = await ipcMain.handlers.get(REQ.SETTINGS_SAVE_MCP_SERVER)({}, { id: 'files' });
+  assert.equal(result.ok, false);
+  assert.equal(result.notConfirmed, true);
+  assert.equal(result.errors[0].key, 'mcp.error.launchNotConfirmed');
+  assert.deepEqual(mcp.calls, []);
+});
+
+test('without a person at the machine no command is saved (#1104)', async () => {
+  const mcp = fakeMcpSettings({ launchConfirmation: async () => LAUNCH });
+  const ipcMain = makeHandlers(mcp);
+  const result = await ipcMain.handlers.get(REQ.SETTINGS_SAVE_MCP_SERVER)({}, { id: 'files' });
+  assert.equal(result.ok, false);
+  assert.deepEqual(mcp.calls, []);
+});
+
+test('a save that starts nothing new asks nothing (#1104)', async () => {
+  const { confirmations, prompts } = confirmingWith(1);
+  const mcp = fakeMcpSettings({ launchConfirmation: async () => null });
+  const ipcMain = makeHandlers(mcp, { confirmations });
+  const result = await ipcMain.handlers.get(REQ.SETTINGS_SAVE_MCP_SERVER)({}, { id: 'github', enabled: false });
+  assert.equal(result.ok, true);
+  assert.equal(prompts.length, 0);
+});
+
 test('ohne MCP-Einrichtung antworten die Kanäle statt zu werfen', async () => {
   const ipcMain = makeHandlers(null);
   assert.deepEqual(await ipcMain.handlers.get(REQ.SETTINGS_GET_MCP_CATALOG)({}), {
@@ -165,12 +244,13 @@ test('ohne MCP-Einrichtung antworten die Kanäle statt zu werfen', async () => {
 
 async function makeApp(t) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-mcp-app-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const ipcMain = createMockIpcMain();
   const app = createApplication({
     app: { getPath: () => tmpDir, getVersion: () => '9.9.9' },
     ipcMain,
-    dialog: {},
+    // The person at the machine allows the program (#1104).
+    dialog: CONFIRMING_DIALOG,
     safeStorage: fakeSafeStorage(),
     fs,
     path,
@@ -292,14 +372,15 @@ test('a token inside a keyed status error is masked as well (#338)', async (t) =
 
 test('die gespeicherte Konfiguration übersteht einen Neustart der Anwendung', async (t) => {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-mcp-restart-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
 
   const build = () => {
     const ipcMain = createMockIpcMain();
     const app = createApplication({
       app: { getPath: () => tmpDir, getVersion: () => '9.9.9' },
       ipcMain,
-      dialog: {},
+      // The person at the machine allows the program (#1104).
+    dialog: CONFIRMING_DIALOG,
       safeStorage: fakeSafeStorage(),
       fs,
       path,

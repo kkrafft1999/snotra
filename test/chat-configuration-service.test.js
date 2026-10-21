@@ -9,15 +9,16 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createSkillsService } = require('../src/main/services/skills-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createChatConfigurationService } = require('../src/main/services/chat-configuration-service');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
+const { createChatConfigurationService } = require('../src/application/chat/chat-configuration-service');
 const { MAX_CONFIG_DESCRIPTION_CHARS } = require('../src/shared/contracts/chat-configuration');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const BODY_MARKER = 'BODY-MUST-NOT-LEAK-7731';
 
 async function makeTempTree(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-chat-config-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 

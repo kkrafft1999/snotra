@@ -35,6 +35,7 @@ const MAX_UPDATE_BYTES = 1024 * 1024;
 
 /** The refusal when a file or its folder leads out of its root. */
 class EmbeddedFileOutsideRootError extends Error {
+  /** @param {string} file */
   constructor(file) {
     super(`"${file}" leads outside the open folder (symlink); nothing was read or written.`);
     this.name = 'EmbeddedFileOutsideRootError';
@@ -42,6 +43,9 @@ class EmbeddedFileOutsideRootError extends Error {
   }
 }
 
+/**
+ * @param {string} file
+ */
 function notRegularFile(file) {
   /** @type {Error & { code?: string }} */
   const error = new Error(`"${file}" is not a regular file; nothing was written.`);
@@ -58,10 +62,17 @@ function notRegularFile(file) {
 function createEmbeddedTextFiles({ fs, path, platform = process.platform }) {
   if (!fs || !path) throw new TypeError('createEmbeddedTextFiles needs fs and path.');
 
+  /**
+   * @param {string|null} root
+   */
   async function realRootOf(root) {
     return root ? fs.realpath(root) : null;
   }
 
+  /**
+   * @param {string|null} realRoot
+   * @param {string} realTarget
+   */
   function inside(realRoot, realTarget) {
     return !realRoot || isPathInside(path, realRoot, realTarget);
   }
@@ -69,6 +80,10 @@ function createEmbeddedTextFiles({ fs, path, platform = process.platform }) {
   /**
    * The real path of an existing file, checked against the root, or null when
    * there is no file. Throws when the file leads out or is not a regular one.
+   *
+   * @param {string} file
+   * @param {string|null} root
+   * @returns {Promise<{ real: string, stat: import('fs').Stats }|null>}
    */
   async function resolveExisting(file, root) {
     let real;
@@ -90,6 +105,7 @@ function createEmbeddedTextFiles({ fs, path, platform = process.platform }) {
    * None of these is an error; an instruction file that is not there is the
    * normal case.
    *
+   * @param {{ file: string, root?: string|null, maxChars: number }} request
    * @returns {Promise<{ text: string, truncated: boolean } | null>}
    */
   async function readForPrompt({ file, root = null, maxChars }) {
@@ -130,6 +146,7 @@ function createEmbeddedTextFiles({ fs, path, platform = process.platform }) {
    * nothing and the file stays as it is — a read that failed for a moment
    * must not end as a file holding nothing but the new entry (#473).
    *
+   * @param {{ file: string, root?: string|null }} request
    * @returns {Promise<string | null>}
    */
   async function readForUpdate({ file, root = null }) {
@@ -144,6 +161,8 @@ function createEmbeddedTextFiles({ fs, path, platform = process.platform }) {
   /**
    * The nearest existing folder above `dir`, as a real path — what a `mkdir`
    * of `dir` would build on.
+   *
+   * @param {string} dir
    */
   async function nearestExistingRealDir(dir) {
     for (let current = dir; ; current = path.dirname(current)) {
@@ -155,7 +174,11 @@ function createEmbeddedTextFiles({ fs, path, platform = process.platform }) {
     }
   }
 
-  /** Replace the file's text atomically, refusing a target outside the root. */
+  /**
+   * Replace the file's text atomically, refusing a target outside the root.
+   *
+   * @param {{ file: string, root?: string|null, text: string }} request
+   */
   async function write({ file, root = null, text }) {
     const realRoot = await realRootOf(root);
     const existing = await resolveExisting(file, root);

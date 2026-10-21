@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const pkg = require('../package.json');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 // Schutz gegen ein halbes Rename: Paketname, Produktname, Forge-Konfiguration
 // und Bundle-ID muessen zusammenpassen (Issue #54).
@@ -74,7 +75,7 @@ test('the runtime check accepts only the pinned hash', (t) => {
   const path = require('node:path');
   const { isVerified, sha256 } = require('../scripts/fetch-appimage-runtime.js');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-runtime-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDirSync(dir));
   const file = path.join(dir, 'runtime');
   fs.writeFileSync(file, 'runtime bytes');
   assert.equal(isVerified(file, sha256(Buffer.from('runtime bytes'))), true);

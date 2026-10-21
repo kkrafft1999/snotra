@@ -65,16 +65,11 @@ const texts = () => page.evaluate(() => ({
 }));
 
 try {
-  // Encryption the way a Mac has it, without touching the real keychain.
-  await app.evaluate(({ safeStorage }) => {
-    safeStorage.isEncryptionAvailable = () => true;
-    safeStorage.encryptString = (plain) => Buffer.from(`enc:${plain}`, 'utf8');
-    safeStorage.decryptString = (buffer) => {
-      const text = buffer.toString('utf8');
-      if (!text.startsWith('enc:')) throw new Error('not ours');
-      return text.slice(4);
-    };
-  });
+  // Encryption the way a Mac has it, without touching the real keychain:
+  // `launchApp` starts with --use-mock-keychain, so safeStorage is there from
+  // the start and the platform register the window reads says so (#1156).
+  // Switching it on after the start, as before #885, would reach main's
+  // guards but not the window any more.
   await poll(async () =>
     (await page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length)) > 0,
   { what: 'drawn tree' });

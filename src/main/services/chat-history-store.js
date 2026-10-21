@@ -63,6 +63,34 @@ const {
   sessionFromMeta,
 } = require('./chat-history-normalization');
 
+/**
+ * @typedef {import('./chat-history-normalization').StoredSession} StoredSession
+ * @typedef {import('./chat-history-normalization').SessionMeta} SessionMeta
+ *
+ * An index entry; `plain` marks a chat whose file went to the disk unencrypted.
+ * @typedef {SessionMeta & { plain?: true }} IndexedMeta
+ *
+ * A parsed file: its shape is checked field by field by whoever reads it.
+ * @typedef {Record<string, any>} JsonObject
+ *
+ * What is loaded: the index entries by id, the folder pointers, the digest of
+ * the single file taken in, and whether the index itself is plain. `failed`
+ * is a store that could not be loaded.
+ * @typedef {Object} HistoryState
+ * @property {boolean} failed
+ * @property {Map<string, IndexedMeta>} metas
+ * @property {Record<string, string>} activeByWorkspace
+ * @property {string|null} legacyImport
+ * @property {boolean} plainIndex
+ *
+ * A file as read: its status, and what it held when that could be understood.
+ * @typedef {{ status: 'missing', encrypted?: undefined }
+ *   | { status: 'failed', error: unknown, encrypted?: undefined }
+ *   | { status: 'unavailable' | 'undecryptable', raw: string, encrypted: true }
+ *   | { status: 'not-understood', raw: string, encrypted?: boolean }
+ *   | { status: 'ok', data: JsonObject, raw: string, encrypted: boolean }} EnvelopeRead
+ */
+
 const LEGACY_FILENAME = 'chat-history.json';
 const LEGACY_VERSION = 2;
 
@@ -95,6 +123,7 @@ const DEFAULT_CACHED_SESSIONS = 8;
 /** Files written or read side by side while the single file is taken apart. */
 const MIGRATION_BATCH = 16;
 
+/** @type {Readonly<{ OK: 'ok', MISSING: 'missing', FAILED: 'failed', UNAVAILABLE: 'unavailable', UNDECRYPTABLE: 'undecryptable', NOT_UNDERSTOOD: 'not-understood' }>} */
 const READ = Object.freeze({
   OK: 'ok',
   MISSING: 'missing',
@@ -106,10 +135,16 @@ const READ = Object.freeze({
   NOT_UNDERSTOOD: 'not-understood',
 });
 
+/**
+ * @param {string} id
+ */
 function sessionFileName(id) {
   return `${createHash('sha256').update(id).digest('hex').slice(0, 32)}.json`;
 }
 
+/**
+ * @param {string} raw
+ */
 function digestOf(raw) {
   return createHash('sha256').update(raw).digest('hex');
 }
@@ -118,6 +153,10 @@ function stamp() {
   return new Date().toISOString().replace(/[:.]/g, '-');
 }
 
+/**
+ * @param {string} raw
+ * @returns {any}  the parsed file, or undefined when it is not JSON
+ */
 function parseJson(raw) {
   try {
     return JSON.parse(raw);
@@ -126,12 +165,20 @@ function parseJson(raw) {
   }
 }
 
+/**
+ * @param {unknown} data
+ * @returns {data is JsonObject}
+ */
 function isJsonObject(data) {
   return !!data && typeof data === 'object' && !Array.isArray(data);
 }
 
+/**
+ * @param {unknown} version
+ * @param {number} known
+ */
 function isNewer(version, known) {
-  return Number.isFinite(version) && version > known;
+  return typeof version === 'number' && Number.isFinite(version) && version > known;
 }
 
 function unreadableError() {
@@ -141,7 +188,14 @@ function unreadableError() {
   );
 }
 
+/**
+ * @template T
+ * @param {T[]} items
+ * @param {number} size
+ * @param {(item: T) => Promise<unknown>} fn
+ */
 function inBatches(items, size, fn) {
+  /** @type {Promise<unknown>} */
   let chain = Promise.resolve();
   for (let i = 0; i < items.length; i += size) {
     const batch = items.slice(i, i + size);
@@ -154,30 +208,44 @@ function inBatches(items, size, fn) {
  * The single file as releases before #985 wrote it. A broken envelope
  * (`payload` that is not a string) or a `sessions` that is no list is not
  * taken for an empty history.
+ *
+ * @param {JsonObject} data
  */
 function isLegacyShape(data) {
   if ('payload' in data || 'encrypted' in data) return false;
   return !('sessions' in data) || Array.isArray(data.sessions);
 }
 
+/**
+ * @param {{ updatedAt: number }} a
+ * @param {{ updatedAt: number }} b
+ */
 function newestFirst(a, b) {
   return b.updatedAt - a.updatedAt;
 }
 
 /**
  * @param {object} deps
+ * @param {typeof import('fs/promises')} deps.fs
+ * @param {typeof import('path')} deps.path
+ * @param {Pick<import('../../application/ports/secret-store-port').SecretStorePort, 'isEncryptionAvailable'>} deps.secretStore
+ * @param {Pick<import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability, 'whenDurable' | 'wouldWait'>} deps.safeStorageKey
  * @param {() => string} deps.userDataPath
  * @param {(file: string, data: object) => Promise<void>} deps.writeJsonAtomic the storage's queued atomic write
  * @param {(plain: string) => Promise<string|null>} deps.encryptForDisk
  * @param {(b64: string) => string|null} deps.decryptIfPossible
- * @param {(type: string, file: string, keptAs: string|null, store: string) => void} deps.reportStoreFile
+ * @param {(type: 'set-aside' | 'not-saved' | 'saved-again', file: string, keptAs: string|null, store: string) => void} [deps.reportStoreFile]
  * @param {(raw: unknown) => string|null} deps.normalizeWorkspaceRoot
  * @param {string} deps.noWorkspaceKey the folder pointer's key for chats without a folder
+ * @param {number} deps.maxChatSessions
+ * @param {{ warn?: (message: string) => void, info?: (message: string) => void }|null} [deps.log]
+ * @param {string} [deps.platform]
+ * @param {number} [deps.cachedSessions]
  */
 function createChatHistoryStore({
   fs,
   path,
-  safeStorage,
+  secretStore,
   safeStorageKey,
   userDataPath,
   writeJsonAtomic,
@@ -194,60 +262,96 @@ function createChatHistoryStore({
   const legacyPath = () => path.join(userDataPath(), LEGACY_FILENAME);
   const storeDir = () => path.join(userDataPath(), STORE_DIRNAME);
   const indexPath = () => path.join(storeDir(), INDEX_FILENAME);
-  const sessionPath = (id) => path.join(storeDir(), sessionFileName(id));
+  const sessionPath = (/** @type {string} */ id) => path.join(storeDir(), sessionFileName(id));
 
-  /**
-   * What is loaded: `metas` (id → index entry; `plain` marks a chat whose
-   * file went to the disk unencrypted), the folder pointers, the digest of
-   * the single file taken in, and whether the index itself is plain.
-   * `failed` is a store that could not be loaded.
-   */
+  /** @type {HistoryState|null} */
   let state = null;
+  /** @type {Promise<HistoryState>|null} */
   let loading = null;
-  /** id → the chat's file as last read or written (store form; never changed in place). */
+  /**
+   * id → the chat's file as last read or written (store form; never changed in place).
+   *
+   * @type {Map<string, StoredSession>}
+   */
   const cache = new Map();
-  /** id → a counter bumped by every save and delete, so a read that took longer does not undo one. */
+  /**
+   * id → a counter bumped by every save and delete, so a read that took longer does not undo one.
+   *
+   * @type {Map<string, number>}
+   */
   const revisions = new Map();
   /** Names of chat files that are there but could not be read in this run (#473): nothing is written over them. */
+  /** @type {Set<string>} */
   const blocked = new Set();
+  /** @type {Promise<unknown>} */
   let queue = Promise.resolve();
+  /** @type {Promise<void>|null} */
   let indexWrite = null;
   let indexDirty = false;
+  /** @type {HistoryState|null} */
   let indexState = null;
+  /** @type {Array<{ resolve: () => void, reject: (error: unknown) => void }>} */
   let indexWaiters = [];
+  /** @type {Promise<void>|null} */
   let encryption = null;
 
+  /** @returns {HistoryState} */
   function emptyState() {
     return { failed: false, metas: new Map(), activeByWorkspace: {}, legacyImport: null, plainIndex: false };
   }
 
+  /** @returns {HistoryState} */
   function failedState() {
     return { ...emptyState(), failed: true };
   }
 
+  /**
+   * @param {import('./chat-history-normalization').SessionRowInput|null|undefined} row
+   */
   function normalizeSession(row) {
     return normalizeSessionForStore(row, { normalizeWorkspaceRoot });
   }
 
-  /** Changes run one after the other, apart from the caller's lock: nothing here waits for that lock. */
+  /**
+   * Changes run one after the other, apart from the caller's lock: nothing here waits for that lock.
+   *
+   * @template T
+   * @param {() => Promise<T>} fn
+   * @returns {Promise<T>}
+   */
   function serial(fn) {
     const task = queue.then(fn);
     queue = task.catch(() => {});
     return task;
   }
 
+  /**
+   * @param {string} id
+   */
   function bump(id) {
     const next = (revisions.get(id) || 0) + 1;
     revisions.set(id, next);
     return next;
   }
 
+  /**
+   * @param {string} id
+   * @param {StoredSession} session
+   */
   function remember(id, session) {
     cache.delete(id);
     cache.set(id, session);
-    while (cache.size > cachedSessions) cache.delete(cache.keys().next().value);
+    while (cache.size > cachedSessions) {
+      const oldest = cache.keys().next();
+      if (oldest.done) break;
+      cache.delete(oldest.value);
+    }
   }
 
+  /**
+   * @param {HistoryState} s
+   * @param {string} id
+   */
   function forget(s, id) {
     bump(id);
     cache.delete(id);
@@ -257,10 +361,17 @@ function createChatHistoryStore({
     }
   }
 
+  /**
+   * @param {HistoryState} s
+   */
   function sortedMetas(s) {
     return [...s.metas.values()].sort(newestFirst);
   }
 
+  /**
+   * @param {IndexedMeta} meta
+   * @returns {SessionMeta}
+   */
   function publicMeta(meta) {
     const { plain: _plain, ...rest } = meta;
     return rest;
@@ -268,6 +379,10 @@ function createChatHistoryStore({
 
   // ── Files ─────────────────────────────────────────────────────────────────
 
+  /**
+   * @param {string} filePath
+   * @returns {Promise<EnvelopeRead>}
+   */
   async function readEnvelope(filePath) {
     let raw;
     try {
@@ -283,7 +398,7 @@ function createChatHistoryStore({
     }
     // Without encrypted storage the key is out of reach for this run, not
     // wrong (#658) — a refusing keychain, a broken signature as in #657.
-    if (!safeStorage.isEncryptionAvailable()) return { status: READ.UNAVAILABLE, raw, encrypted: true };
+    if (!secretStore.isEncryptionAvailable()) return { status: READ.UNAVAILABLE, raw, encrypted: true };
     const plain = decryptIfPossible(data.payload);
     if (!plain) return { status: READ.UNDECRYPTABLE, raw, encrypted: true };
     data = parseJson(plain);
@@ -296,9 +411,14 @@ function createChatHistoryStore({
    * to whether it was. Ciphertext waits for its key to be on the disk
    * (#1060); `plainWhileKeyPending` writes plain instead — only for content
    * that was plain to begin with, so the load does not wait for the key.
+   *
+   * @param {string} filePath
+   * @param {object} data
+   * @param {{ plainWhileKeyPending?: boolean }} [options]
+   * @returns {Promise<boolean>}
    */
   async function writeEnvelope(filePath, data, { plainWhileKeyPending = false } = {}) {
-    const encrypt = safeStorage.isEncryptionAvailable() && !(plainWhileKeyPending && safeStorageKey.wouldWait());
+    const encrypt = secretStore.isEncryptionAvailable() && !(plainWhileKeyPending && safeStorageKey.wouldWait());
     if (encrypt) {
       const payload = await encryptForDisk(JSON.stringify(data));
       if (payload) {
@@ -314,6 +434,10 @@ function createChatHistoryStore({
    * Moves a file — or the whole folder — out of the way, every byte kept
    * (#557). False when it is still where it was (#561). Reported with
    * `store` unless that is `null`: an index moved aside loses no chat.
+   *
+   * @param {string} source
+   * @param {string} suffix
+   * @param {string|null} store
    */
   async function setAside(source, suffix, store) {
     const target = `${source}.${suffix}-${stamp()}`;
@@ -329,6 +453,9 @@ function createChatHistoryStore({
     return true;
   }
 
+  /**
+   * @param {string} filePath
+   */
   async function removeFile(filePath) {
     try {
       await unlinkWithRetry(fs, filePath, { platform });
@@ -347,19 +474,32 @@ function createChatHistoryStore({
     }
   }
 
-  /** A chat file's content in store form; `'newer'` for one from a newer release. */
+  /**
+   * A chat file's content in store form; `'newer'` for one from a newer release.
+   *
+   * @param {JsonObject} data
+   * @returns {StoredSession|'newer'|null}
+   */
   function sessionFromFile(data) {
     if (isNewer(data.version, STORE_VERSION)) return 'newer';
     return normalizeSession(data.session);
   }
 
+  /**
+   * @param {StoredSession} session
+   * @param {{ plainWhileKeyPending?: boolean }} [options]
+   */
   async function writeSessionFile(session, options) {
     return writeEnvelope(sessionPath(session.id), { version: STORE_VERSION, session }, options);
   }
 
   // ── The index ─────────────────────────────────────────────────────────────
 
+  /**
+   * @param {HistoryState} s
+   */
   function indexData(s) {
+    /** @type {{ version: number, activeByWorkspace: Record<string, string>, sessions: IndexedMeta[], legacyImport?: string }} */
     const data = {
       version: STORE_VERSION,
       activeByWorkspace: { ...s.activeByWorkspace },
@@ -369,9 +509,14 @@ function createChatHistoryStore({
     return data;
   }
 
+  /**
+   * @param {HistoryState} next
+   * @param {JsonObject} data
+   */
   function applyIndex(next, data) {
     if (!Array.isArray(data.sessions)) return false;
     for (const raw of data.sessions) {
+      /** @type {IndexedMeta|null} */
       const meta = normalizeSessionMetaForStore(raw, { normalizeWorkspaceRoot });
       if (!meta) continue;
       if (raw.plain === true) meta.plain = true;
@@ -386,10 +531,16 @@ function createChatHistoryStore({
     return true;
   }
 
-  /** Writes the index behind the state in memory; resolves once a write that carries this change is on the disk. */
+  /**
+   * Writes the index behind the state in memory; resolves once a write that carries this change is on the disk.
+   *
+   * @param {HistoryState} s
+   * @returns {Promise<void>}
+   */
   function persistIndex(s) {
     indexState = s;
     indexDirty = true;
+    /** @type {Promise<void>} */
     const done = new Promise((resolve, reject) => indexWaiters.push({ resolve, reject }));
     if (!indexWrite) indexWrite = runIndexWrites();
     return done;
@@ -402,6 +553,10 @@ function createChatHistoryStore({
         const waiters = indexWaiters;
         indexWaiters = [];
         const s = indexState;
+        if (!s) {
+          for (const waiter of waiters) waiter.reject(new Error('The index has no state to write.'));
+          break;
+        }
         try {
           s.plainIndex = !(await writeEnvelope(indexPath(), indexData(s)));
           for (const waiter of waiters) waiter.resolve();
@@ -444,6 +599,9 @@ function createChatHistoryStore({
     return s;
   }
 
+  /**
+   * @returns {Promise<HistoryState>}
+   */
   async function load() {
     let next = emptyState();
     const index = await readEnvelope(indexPath());
@@ -545,8 +703,12 @@ function createChatHistoryStore({
    * Checks the index against the folder: what it changed, how many chats it
    * could read, and the files that could not be decrypted or understood.
    * `null` when the folder cannot be listed.
+   *
+   * @param {HistoryState} next
+   * @returns {Promise<{ changed: boolean, readable: number, undecryptable: string[] }|null>}
    */
   async function reconcile(next) {
+    /** @type {{ changed: boolean, readable: number, undecryptable: string[] }} */
     const result = { changed: false, readable: 0, undecryptable: [] };
     const names = await listStoreDir();
     if (!names) return null;
@@ -583,6 +745,7 @@ function createChatHistoryStore({
         result.undecryptable.push(name);
         continue;
       }
+      /** @type {IndexedMeta} */
       const meta = sessionMetaFromSession(session);
       if (!read.encrypted) meta.plain = true;
       next.metas.set(session.id, meta);
@@ -598,8 +761,13 @@ function createChatHistoryStore({
    * folder: written, read back, compared. A chat the folder already has is
    * only replaced by a newer one. Throws when anything does not hold, and the
    * file then stays where it is.
+   *
+   * @param {HistoryState} next
+   * @param {JsonObject} data
+   * @param {{ plain: boolean }} options
    */
   async function takeInLegacy(next, data, { plain }) {
+    /** @type {Map<string, StoredSession>} */
     const incoming = new Map();
     for (const row of Array.isArray(data.sessions) ? data.sessions : []) {
       const session = normalizeSession(row);
@@ -614,6 +782,7 @@ function createChatHistoryStore({
     if (sessions.some((session) => blocked.has(sessionFileName(session.id)))) {
       throw new Error(`a chat in ${LEGACY_FILENAME} has a file that cannot be read now`);
     }
+    /** @type {Map<string, boolean>} */
     const encrypted = new Map();
     await inBatches(sessions, MIGRATION_BATCH, async (session) => {
       encrypted.set(session.id, await writeSessionFile(session, { plainWhileKeyPending: plain }));
@@ -626,6 +795,7 @@ function createChatHistoryStore({
       }
     });
     for (const session of sessions) {
+      /** @type {IndexedMeta} */
       const meta = sessionMetaFromSession(session);
       if (!encrypted.get(session.id)) meta.plain = true;
       next.metas.set(session.id, meta);
@@ -647,9 +817,11 @@ function createChatHistoryStore({
    * Plain files get encrypted once encrypted storage is there and its key is
    * on the disk (#1060) — in the background, one chat at a time between the
    * other changes, never holding up the load.
+   *
+   * @param {HistoryState} s
    */
   function scheduleEncryption(s) {
-    if (!safeStorage.isEncryptionAvailable()) return;
+    if (!secretStore.isEncryptionAvailable()) return;
     const plainIds = [...s.metas.values()].filter((meta) => meta.plain).map((meta) => meta.id);
     if (plainIds.length === 0 && !s.plainIndex) return;
     const run = safeStorageKey.whenDurable().then(async () => {
@@ -662,13 +834,19 @@ function createChatHistoryStore({
     encryption = tracked;
   }
 
+  /**
+   * @param {HistoryState} s
+   * @param {string} id
+   */
   async function encryptPlainSession(s, id) {
     if (state !== s || !s.metas.get(id)?.plain) return;
     const read = await readEnvelope(sessionPath(id));
     const session = read.status === READ.OK && !read.encrypted ? sessionFromFile(read.data) : null;
     if (!session || session === 'newer' || !s.metas.get(id)?.plain) return;
     if (!(await writeSessionFile(session))) return;
-    const { plain: _plain, ...meta } = s.metas.get(id);
+    const current = s.metas.get(id);
+    if (!current) return;
+    const { plain: _plain, ...meta } = current;
     s.metas.set(id, meta);
   }
 
@@ -680,6 +858,10 @@ function createChatHistoryStore({
     return sortedMetas(s).map(publicMeta);
   }
 
+  /**
+   * @param {string} id
+   * @returns {Promise<SessionMeta|null>}
+   */
   async function getSessionMeta(id) {
     if (typeof id !== 'string') return null;
     const s = await loaded();
@@ -687,6 +869,9 @@ function createChatHistoryStore({
     return meta ? publicMeta(meta) : null;
   }
 
+  /**
+   * @param {string} bucketKey
+   */
   async function getActiveChatId(bucketKey) {
     const s = await loaded();
     return s.activeByWorkspace[bucketKey] || null;
@@ -696,6 +881,9 @@ function createChatHistoryStore({
    * The whole chat in store form, or `null`: not in the history, or its file
    * cannot be read (it is then moved aside, or left alone and kept from being
    * written over).
+   *
+   * @param {string} id
+   * @returns {Promise<StoredSession|null>}
    */
   async function getSession(id) {
     if (typeof id !== 'string') return null;
@@ -706,6 +894,11 @@ function createChatHistoryStore({
     return file && meta ? sessionFromMeta(meta, file.messages) : null;
   }
 
+  /**
+   * @param {HistoryState} s
+   * @param {string} id
+   * @returns {Promise<StoredSession|null>}
+   */
   async function sessionFile(s, id) {
     const hit = cache.get(id);
     if (hit) {
@@ -755,6 +948,9 @@ function createChatHistoryStore({
    * Saves a chat in store form: its file — unless it is what is there
    * already — and its index entry. Chats beyond `maxChatSessions` go, oldest
    * first; their ids come back so that their images can go as well.
+   *
+   * @param {StoredSession} session
+   * @returns {Promise<{ droppedIds: string[] }>}
    */
   function saveSession(session) {
     return serial(async () => {
@@ -768,6 +964,7 @@ function createChatHistoryStore({
         plain = !(await writeSessionFile(session));
       }
       remember(id, session);
+      /** @type {IndexedMeta} */
       const meta = sessionMetaFromSession(session);
       if (plain) meta.plain = true;
       s.metas.set(id, meta);
@@ -781,6 +978,10 @@ function createChatHistoryStore({
     });
   }
 
+  /**
+   * @param {HistoryState} s
+   * @returns {Promise<string[]>}
+   */
   async function dropBeyondLimit(s) {
     if (s.metas.size <= maxChatSessions) return [];
     const dropped = sortedMetas(s).slice(maxChatSessions).map((meta) => meta.id);
@@ -796,18 +997,27 @@ function createChatHistoryStore({
     return dropped;
   }
 
-  /** Changes a chat's own settings — in the index alone. False when the chat is not there. */
+  /**
+   * Changes a chat's own settings — in the index alone. False when the chat is not there.
+   *
+   * @param {string} id
+   * @param {Record<string, unknown>} patch
+   * @returns {Promise<boolean>}
+   */
   function patchSession(id, patch) {
     return serial(async () => {
       const s = await loaded();
       const meta = s.metas.get(id);
       if (!meta || s.failed) return null;
+      /** @type {Record<string, unknown>} */
       const changed = { ...meta };
       for (const [key, value] of Object.entries(patch || {})) {
         if (value === undefined) delete changed[key];
         else changed[key] = value;
       }
+      /** @type {IndexedMeta|null} */
       const next = normalizeSessionMetaForStore(changed, { normalizeWorkspaceRoot });
+      if (!next) return null;
       if (meta.plain) next.plain = true;
       s.metas.set(id, next);
       return { written: persistIndex(s) };
@@ -818,7 +1028,12 @@ function createChatHistoryStore({
     });
   }
 
-  /** The file goes first: a chat whose file stays must stay in the list, and a delete that fails says so (#582). */
+  /**
+   * The file goes first: a chat whose file stays must stay in the list, and a delete that fails says so (#582).
+   *
+   * @param {string} id
+   * @returns {Promise<void>}
+   */
   function deleteSession(id) {
     return serial(async () => {
       const s = await loadedForWrite();
@@ -838,6 +1053,10 @@ function createChatHistoryStore({
    * written: on a fresh Windows profile every encrypted write waits for the
    * key (#1060), and a new chat — which clears a pointer that is not there —
    * would wait with it before its mode is applied (#564).
+   *
+   * @param {string} bucketKey
+   * @param {string|null} id
+   * @returns {Promise<boolean>}
    */
   function setActiveChatId(bucketKey, id) {
     return serial(async () => {
@@ -883,7 +1102,7 @@ function createChatHistoryStore({
 
   /** What the quit waits for (#679): the load, queued changes, the index write, plain files being encrypted. */
   function pendingWork() {
-    return [loading, queue, indexWrite, encryption].filter(Boolean);
+    return [loading, queue, indexWrite, encryption].filter((work) => work !== null);
   }
 
   return {

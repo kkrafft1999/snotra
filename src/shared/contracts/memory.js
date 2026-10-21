@@ -26,6 +26,17 @@
 'use strict';
 
 const { APP_LOCALES } = require('./enums');
+const { isRecord } = require('../runtime/is-record');
+
+/**
+ * One entry line of a memory file, as the settings list it.
+ *
+ * @typedef {Object} MemoryEntry
+ * @property {number} line  0-based line number, the key for forgetting it
+ * @property {string|null} date  `YYYY-MM-DD`
+ * @property {'requested'|'self'} origin
+ * @property {string} text
+ */
 
 /** Dateiname beider Ebenen — derselbe Name, zwei Orte. */
 const MEMORY_FILE = 'memory.md';
@@ -42,11 +53,14 @@ const MEMORY_SCOPES = Object.freeze({
   USER: 'user',
 });
 
+/** @type {readonly ('workspace'|'user')[]} */
 const MEMORY_SCOPE_ORDER = Object.freeze([MEMORY_SCOPES.WORKSPACE, MEMORY_SCOPES.USER]);
 
 /**
  * Heading of the section in the context breakdown, as a catalogue key — the
  * text is chosen where it is shown, not where it is produced (issue #293).
+ *
+ * @type {Readonly<Record<string, string>>}
  */
 const MEMORY_SCOPE_LABEL_KEYS = Object.freeze({
   [MEMORY_SCOPES.WORKSPACE]: 'memory.scope.workspace',
@@ -58,6 +72,8 @@ const MEMORY_SCOPE_LABEL_KEYS = Object.freeze({
  * weil sie dort beim Modell landen (Issue #276). Bis dahin trug eine Tabelle
  * beide Leser; das war der Grund, warum die Prompt-Sprache nicht zu aendern
  * war, ohne die Einstellungen mitzuziehen.
+ *
+ * @type {Readonly<Record<string, string>>}
  */
 const MEMORY_SCOPE_PROMPT_LABELS = Object.freeze({
   [MEMORY_SCOPES.WORKSPACE]: 'Memory (project)',
@@ -68,6 +84,8 @@ const MEMORY_SCOPE_PROMPT_LABELS = Object.freeze({
  * Pfad zur Anzeige — nie zum Auflösen; die echten Pfade baut der Adapter.
  * The project file is given relative to the open folder; the `<folder>/`
  * in front of it is a word and comes from the catalogue (#353).
+ *
+ * @type {Readonly<Record<string, string>>}
  */
 const MEMORY_SCOPE_PATHS = Object.freeze({
   [MEMORY_SCOPES.WORKSPACE]: '.agents/memory.md',
@@ -78,6 +96,8 @@ const MEMORY_SCOPE_PATHS = Object.freeze({
  * Kurzform für die Oberfläche. Der absolute Pfad wandert in den Tooltip: In
  * der Karte steht er sonst zweimal so breit wie alles andere und sagt weniger
  * als der Ordnername daneben.
+ *
+ * @type {Readonly<Record<string, string>>}
  */
 const MEMORY_SCOPE_SHORT_PATHS = Object.freeze({
   [MEMORY_SCOPES.WORKSPACE]: '.agents/memory.md',
@@ -109,41 +129,57 @@ const MEMORY_ORIGINS = Object.freeze({
  * — the same words as the badge in the settings. Every spelling is read back,
  * whichever language the file was started in.
  */
-const SELF_ORIGIN_MARKERS = Object.freeze({
+const SELF_ORIGIN_MARKERS = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
   [APP_LOCALES.EN]: 'remembered on its own',
   [APP_LOCALES.DE]: 'selbst gemerkt',
-});
+}));
 
 /** @type {Set<string>} */
 const KNOWN_SELF_ORIGIN_MARKERS = new Set(Object.values(SELF_ORIGIN_MARKERS));
 
 /** Heading of a freshly created file, in the interface language (#579). */
-const MEMORY_FILE_HEADINGS = Object.freeze({
+const MEMORY_FILE_HEADINGS = /** @type {Readonly<Record<string, Readonly<{ user: string, workspace: string }>>>} */ (Object.freeze({
   [APP_LOCALES.EN]: Object.freeze({ user: '# Memory · global', workspace: '# Memory · project' }),
   [APP_LOCALES.DE]: Object.freeze({ user: '# Gedächtnis · global', workspace: '# Gedächtnis · Projekt' }),
-});
+}));
 
 /**
  * The language of the file's wording: one of the languages the tables above
  * have words for; anything else is English, as in the rest of the app.
  * `test/locale-literals.test.js` keeps the tables complete for every
  * registered language.
+ *
+ * @param {unknown} locale
+ * @returns {string}
  */
 function memoryLanguage(locale) {
-  return Object.hasOwn(MEMORY_FILE_HEADINGS, locale) ? locale : APP_LOCALES.EN;
+  return typeof locale === 'string' && Object.hasOwn(MEMORY_FILE_HEADINGS, locale) ? locale : APP_LOCALES.EN;
 }
 
-/** Kopfzeile einer frisch angelegten Datei. */
+/**
+ * Kopfzeile einer frisch angelegten Datei.
+ *
+ * @param {unknown} scope
+ * @param {unknown} locale
+ */
 function memoryFileHeading(scope, locale) {
   const headings = MEMORY_FILE_HEADINGS[memoryLanguage(locale)];
   return scope === MEMORY_SCOPES.USER ? headings.user : headings.workspace;
 }
 
-/** The line ending a file already uses, so an edit keeps it (#579). */
+/**
+ * The line ending a file already uses, so an edit keeps it (#579).
+ *
+ * @param {unknown} text
+ */
 function lineEndingOf(text) {
   return typeof text === 'string' && text.includes('\r\n') ? '\r\n' : '\n';
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is 'workspace'|'user'}
+ */
 function isMemoryScope(value) {
   return value === MEMORY_SCOPES.WORKSPACE || value === MEMORY_SCOPES.USER;
 }
@@ -157,14 +193,22 @@ function isMemoryScope(value) {
  */
 const ENTRY_LINE = /^[-*]\s+(?:(\d{4}-\d{2}-\d{2})\s*(?:\(([^)]*)\)\s*)?[—–-]\s+)?(.+?)\s*$/;
 
-/** Datum als `YYYY-MM-DD` — ohne Zeitzone, weil der Tag genügt. */
+/**
+ * Datum als `YYYY-MM-DD` — ohne Zeitzone, weil der Tag genügt.
+ *
+ * @param {Date} [date]
+ */
 function formatMemoryDate(date) {
   const d = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
-  const pad = (n) => String(n).padStart(2, '0');
+  const pad = (/** @type {number} */ n) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-/** Ein Eintrag als Markdown-Zeile. */
+/**
+ * Ein Eintrag als Markdown-Zeile.
+ *
+ * @param {{ text?: unknown, date?: string, origin?: string, locale?: unknown }} entry
+ */
 function formatMemoryEntryLine({ text, date, origin, locale }) {
   const body = String(text || '').replace(/\s+/g, ' ').trim();
   if (!body) return '';
@@ -180,9 +224,13 @@ function formatMemoryEntryLine({ text, date, origin, locale }) {
  * Prompt bekommt den ganzen Text, die Einträge dienen der Anzeige und dem
  * gezielten Vergessen. Wer von Hand schreibt, kann damit nichts kaputt machen,
  * er verliert höchstens die Einzellöschung für seine Zeile.
+ *
+ * @param {unknown} text
+ * @returns {MemoryEntry[]}
  */
 function parseMemoryEntries(text) {
   if (typeof text !== 'string' || !text.trim()) return [];
+  /** @type {MemoryEntry[]} */
   const entries = [];
   const lines = text.split(/\r?\n/);
   for (let index = 0; index < lines.length; index += 1) {
@@ -211,6 +259,9 @@ function parseMemoryEntries(text) {
  * Neue Einträge kommen **ans Ende**, nicht an den Anfang: So bleibt eine von
  * Hand gepflegte Datei in der Reihenfolge, die ihr Autor gewählt hat, und der
  * Anhang ist ein reines Anfügen ohne Umbau.
+ *
+ * @param {unknown} currentText
+ * @param {{ text?: unknown, date?: string, origin?: string, locale?: unknown, scope?: unknown }} entry
  */
 function appendMemoryEntry(currentText, entry) {
   const line = formatMemoryEntryLine(entry);
@@ -223,7 +274,11 @@ function appendMemoryEntry(currentText, entry) {
   return `${base}${eol}${line}${eol}`;
 }
 
-/** The text of an entry line, or null when the line is not one. */
+/**
+ * The text of an entry line, or null when the line is not one.
+ *
+ * @param {string} rawLine
+ */
 function entryTextOf(rawLine) {
   const match = ENTRY_LINE.exec(rawLine);
   const value = match ? match[3].trim() : '';
@@ -238,11 +293,16 @@ function entryTextOf(rawLine) {
  * in dieser Zeile, geht sie; ist er gewandert, geht die Zeile, die ihn trägt;
  * sonst bleibt alles, wie es ist — ein Vergessen, das den falschen Eintrag
  * trifft, wäre schlimmer als eines, das nichts tut.
+ *
+ * @param {unknown} currentText
+ * @param {unknown} line
+ * @param {unknown} text
+ * @returns {{ text: string, removed: boolean }}
  */
 function removeMemoryEntryLine(currentText, line, text) {
   const unchanged = { text: typeof currentText === 'string' ? currentText : '', removed: false };
   const wanted = typeof text === 'string' ? text.trim() : '';
-  if (typeof currentText !== 'string' || !wanted || !Number.isInteger(line) || line < 0) {
+  if (typeof currentText !== 'string' || !wanted || typeof line !== 'number' || !Number.isInteger(line) || line < 0) {
     return unchanged;
   }
   const lines = currentText.split(/\r?\n/);
@@ -253,11 +313,17 @@ function removeMemoryEntryLine(currentText, line, text) {
   return { text: lines.join(lineEndingOf(currentText)), removed: true };
 }
 
-/** Nur Dateien mit Inhalt; alles andere ist kein Fehler, sondern leer. */
+/**
+ * Nur Dateien mit Inhalt; alles andere ist kein Fehler, sondern leer.
+ *
+ * @template {{ scope: string, text: string }} F
+ * @param {F[]} files
+ * @returns {F[]}
+ */
 function normalizeMemoryFiles(files) {
   if (!Array.isArray(files)) return [];
   return files.filter(
-    (file) => file && isMemoryScope(file.scope) && typeof file.text === 'string' && file.text.trim()
+    (file) => isRecord(file) && isMemoryScope(file.scope) && typeof file.text === 'string' && file.text.trim()
   );
 }
 

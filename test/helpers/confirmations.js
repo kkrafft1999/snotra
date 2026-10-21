@@ -5,7 +5,7 @@
 // the policy store redeeming from it.
 
 const { createConfirmationReceipts } = require('../../src/application/permissions/user-confirmation');
-const { createNativeConfirmationAdapter } = require('../../src/main/adapters/native-confirmation-adapter');
+const { createNativeConfirmationAdapter } = require('../../src/main/electron/native-confirmation-adapter');
 
 function createTestConfirmations({ dialog = null, getMainWindow = () => null } = {}) {
   const receipts = createConfirmationReceipts();
@@ -18,4 +18,10 @@ function createTestConfirmations({ dialog = null, getMainWindow = () => null } =
   };
 }
 
-module.exports = { createTestConfirmations };
+/**
+ * For a store in a test about something else: every receipt holds. Never in
+ * a test about the confirmation itself (#1104).
+ */
+const ACCEPT_EVERY_RECEIPT = Object.freeze({ redeem: () => true });
+
+module.exports = { createTestConfirmations, ACCEPT_EVERY_RECEIPT };

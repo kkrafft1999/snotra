@@ -10,6 +10,9 @@ const { CONFIRMATION_ACTIONS, createRefusingConfirmation } = require('../../appl
  * Ordner immer — sie bringen unbekannt viel mit. Sonst erst ab einer Menge,
  * bei der ein Versehen weh tut. Eine einzelne kleine Datei geht durch, damit
  * der Alltag nicht leidet.
+ *
+ * @param {{ dirs?: number, files?: number, bytes?: number } | null | undefined} inspection
+ * @param {Pick<typeof LIMITS, 'IMPORT_CONFIRM_MIN_ENTRIES' | 'IMPORT_CONFIRM_MIN_BYTES'>} [limits]
  */
 function needsImportConfirmation(inspection, limits = LIMITS) {
   if (!inspection) return true;
@@ -18,8 +21,14 @@ function needsImportConfirmation(inspection, limits = LIMITS) {
   return (inspection.bytes || 0) >= limits.IMPORT_CONFIRM_MIN_BYTES;
 }
 
-/** Klartext für den Bestätigungsdialog: „3 Ordner und 128 Dateien (4,2 MB)“. */
+/**
+ * Klartext für den Bestätigungsdialog: „3 Ordner und 128 Dateien (4,2 MB)“.
+ *
+ * @param {{ dirs: number, files: number, bytes: number }} inspection
+ * @param {ReturnType<typeof createTranslator>} t
+ */
 function formatImportSummary(inspection, t) {
+  /** @type {string[]} */
   const parts = [];
   if (inspection.dirs > 0) parts.push(t.plural('import.count.dirs', inspection.dirs));
   if (inspection.files > 0 || parts.length === 0) {
@@ -28,7 +37,12 @@ function formatImportSummary(inspection, t) {
   return `${parts.join(t('import.summary.join'))} (${formatBytes(inspection.bytes || 0, t.locale)})`;
 }
 
+/**
+ * @param {{ skippedSymlinks: number, skippedSensitive: number, skippedOther: number }} inspection
+ * @param {ReturnType<typeof createTranslator>} t
+ */
 function formatSkipNote(inspection, t) {
+  /** @type {string[]} */
   const notes = [];
   if (inspection.skippedSymlinks > 0) {
     notes.push(t.plural('import.skipped.symlinks', inspection.skippedSymlinks));
@@ -52,17 +66,37 @@ const MAX_MENU_COORDINATE = 100000;
  * measures in CSS pixels, the menu takes window coordinates, which differ by
  * the zoom. Anything that is not two sane numbers is no position: the menu
  * then opens at the mouse pointer, as before.
+ *
+ * @param {{ x?: unknown, y?: unknown } | null | undefined} position
+ * @param {import('electron').BrowserWindow | null | undefined} win
+ * @returns {{ x: number, y: number } | null}
  */
 function contextMenuPosition(position, win) {
   const x = position?.x;
   const y = position?.y;
-  const sane = (v) => Number.isFinite(v) && v >= 0 && v <= MAX_MENU_COORDINATE;
-  if (!sane(x) || !sane(y)) return null;
+  const sane = (/** @type {unknown} */ v) => typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= MAX_MENU_COORDINATE;
+  if (typeof x !== 'number' || typeof y !== 'number' || !sane(x) || !sane(y)) return null;
   const zoom = win && !win.isDestroyed() ? win.webContents.getZoomFactor() : 1;
   const factor = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
   return { x: Math.round(x * factor), y: Math.round(y * factor) };
 }
 
+/**
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {import('../ports/filesystem-port').FilesystemPort} deps.filesystem
+ * @param {Record<string, string>} deps.REQ
+ * @param {Record<string, string> | null} [deps.PUSH]
+ * @param {Pick<ReturnType<typeof import('../electron/file-context-menu').createFileContextMenu>, 'popup' | 'reveal'> | null} [deps.fileContextMenu]
+ * @param {() => (import('electron').BrowserWindow | null)} [deps.getMainWindow]
+ * @param {Pick<import('electron').Dialog, 'showMessageBox'> | null} [deps.dialog]
+ * @param {import('../../application/ports/user-confirmation-port').UserConfirmationPort} [deps.confirmations]
+ * @param {typeof LIMITS} [deps.limits]
+ * @param {() => string | undefined} [deps.getLocale]
+ * @param {{ readPdfAsset(kind: string, filename: string): Promise<unknown> } | null} [deps.pdfAssets]
+ * @param {Pick<typeof import('fs').promises, 'lstat'>} [deps.fs]
+ * @param {() => string | null} [deps.getWorkspaceRoot]
+ */
 function registerFsHandlers({
   ipcMain,
   filesystem,
@@ -126,7 +160,10 @@ function registerFsHandlers({
   ipcMain.handle(REQ.FS_LIST_WORKSPACE_PATHS, async (_event, options) =>
     filesystem.listWorkspacePaths(options));
 
+  /** @param {import('electron').MessageBoxOptions} options */
   function showMessageBox(options) {
+    // Every caller has checked for a dialog before it gets here.
+    if (!dialog) throw new Error('No dialog is available.');
     const win = getMainWindow();
     return win && !win.isDestroyed() ? dialog.showMessageBox(win, options) : dialog.showMessageBox(options);
   }
@@ -147,7 +184,7 @@ function registerFsHandlers({
   ipcMain.handle(REQ.FS_IMPORT_ITEMS, async (_event, sourcePaths, destDir) => {
     const t = createTranslator(getLocale());
     const inspection = await filesystem.inspectImport(sourcePaths, destDir);
-    if (inspection.error) {
+    if (inspection.error !== undefined) {
       if (dialog) {
         await showMessageBox({
           type: 'error',
@@ -191,7 +228,7 @@ function registerFsHandlers({
     }
 
     const result = await filesystem.importItems(sourcePaths, destDir);
-    if (result.error && dialog) {
+    if (result.error !== undefined && dialog) {
       await showMessageBox({
         type: 'error',
         buttons: [t('import.ok')],
@@ -213,7 +250,7 @@ function registerFsHandlers({
   ipcMain.handle(REQ.FS_SHOW_FILE_CONTEXT_MENU, async (_event, filePath, options) => {
     if (!fileContextMenu) return { error: createTranslator(getLocale())('import.noContextMenu') };
     const { absPath, error } = await filesystem.resolveCheckedWorkspacePath(filePath);
-    if (error) return { error };
+    if (error !== undefined) return { error };
     let isDirectory;
     try {
       isDirectory = (await fs.lstat(absPath)).isDirectory();
@@ -221,22 +258,24 @@ function registerFsHandlers({
       return { error: err.message };
     }
     const win = getMainWindow();
-    const push = (channel, payload) => {
+    const push = (/** @type {string} */ channel, /** @type {unknown} */ payload) => {
       if (PUSH && win && !win.isDestroyed()) win.webContents.send(channel, payload);
     };
     const root = getWorkspaceRoot();
-    const isRoot = Boolean(root) && path.resolve(root) === absPath;
+    const isRoot = typeof root === 'string' && root !== '' && path.resolve(root) === absPath;
+    /** @type {Record<string, string>} */
+    const channels = PUSH ?? {};
     fileContextMenu.popup(absPath, win, {
       isDirectory,
       isRoot,
       // "New File…" and "New Folder…" (#349): inside a folder, next to a
       // file. Only the place goes back; the renderer asks for the name and
       // sends it over FS_CREATE_ITEM, where it is checked.
-      onCreate: (kind) => push(PUSH.FS_BEGIN_CREATE, {
+      onCreate: (kind) => push(channels.FS_BEGIN_CREATE, {
         path: isDirectory ? filePath : path.dirname(filePath),
         kind,
       }),
-      onRename: isRoot ? null : () => push(PUSH.FS_BEGIN_RENAME, { path: filePath }),
+      onRename: isRoot ? null : () => push(channels.FS_BEGIN_RENAME, { path: filePath }),
       position: contextMenuPosition(options?.position, win),
       // Whether to offer "Remove mark" (#347). The renderer's word is enough:
       // the item only sends the path back, it touches nothing on disk.
@@ -278,7 +317,7 @@ function registerFsHandlers({
   ipcMain.handle(REQ.FS_REVEAL_ITEM, async (_event, filePath) => {
     if (!fileContextMenu?.reveal) return { error: createTranslator(getLocale())('import.noContextMenu') };
     const { absPath, error } = await filesystem.resolveCheckedWorkspacePath(filePath);
-    if (error) return { error };
+    if (error !== undefined) return { error };
     fileContextMenu.reveal(absPath);
     return { ok: true };
   });

@@ -14,7 +14,10 @@ const { SENSITIVE_CONTENT_REDACTED_TEXT } = require('../../shared/contracts/tool
 /**
  * Markierung einer Tool-Nachricht: gebundener Endpunkt, Ziel, Dateiversion.
  *
+ * @typedef {NonNullable<import('../ports/llm-port').LlmMessage['sensitiveMarker']>} SensitiveMarker
+ *
  * @param {{ providerKey?: string|null, targets?: Array<{ path: string, version?: string|null }> }} [input]
+ * @returns {SensitiveMarker}
  */
 function createSensitiveMarker({ providerKey, targets } = {}) {
   return {
@@ -36,6 +39,10 @@ function redactedToolContent() {
 /**
  * Ersetzt in-place den Inhalt aller markierten Tool-Nachrichten, deren
  * Endpunkt nicht dem aktuellen entspricht. Liefert die Zahl der Redaktionen.
+ *
+ * @param {import('../ports/llm-port').LlmMessage[]} messages
+ * @param {string|null|undefined} currentProviderKey
+ * @returns {number}
  */
 function redactSensitiveToolMessages(messages, currentProviderKey) {
   if (!Array.isArray(messages)) return 0;
@@ -55,6 +62,9 @@ function redactSensitiveToolMessages(messages, currentProviderKey) {
 /**
  * Nachrichten für den Provider ohne interne Markierungen. Die Marker bleiben
  * im lokalen Verlauf, gehen aber nie über die Leitung.
+ *
+ * @param {import('../ports/llm-port').LlmMessage[]} messages
+ * @returns {import('../ports/llm-port').LlmMessage[]}
  */
 function stripSensitiveMarkers(messages) {
   if (!Array.isArray(messages)) return [];

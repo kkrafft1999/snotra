@@ -11,6 +11,7 @@
 
 const { countImageAttachments } = require('./attachments');
 const { createMessage } = require('./message');
+const { isRecord } = require('../runtime/is-record');
 const {
   CHAT_ERROR_CODES,
   CHAT_PHASES,
@@ -41,6 +42,9 @@ const CHAT_ACTIVATION = Object.freeze({
  * A chat id as main and the engine both take it (#532): a trimmed, non-empty
  * string of at most 128 characters, otherwise `null` — never cut down, since
  * two ids sharing a prefix would then share one run.
+ *
+ * @param {unknown} raw
+ * @returns {string|null}
  */
 function sanitizeChatId(raw) {
   if (typeof raw !== 'string') return null;
@@ -52,6 +56,8 @@ function sanitizeChatId(raw) {
 /**
  * Shortens a title by characters, not by UTF-16 units: a cut through an emoji
  * would leave half a surrogate pair, drawn as "�" (#532).
+ *
+ * @param {string} text
  */
 function clipChatTitle(text) {
   const chars = Array.from(text);
@@ -71,7 +77,8 @@ function clipChatTitle(text) {
  * answers with a message descriptor and the side that shows it looks it up
  * (`translateMessage`, `tMessage`; #359).
  *
- * @returns {string|{ key: string, params?: object }}
+ * @param {unknown} messages
+ * @returns {string|Message}
  */
 function inferChatTitle(messages) {
   const text = inferChatTitleText(messages);
@@ -89,6 +96,8 @@ function inferChatTitle(messages) {
  * string when the first message has none. This is what the history store
  * writes: a fallback title is not a title, it is worked out again in whatever
  * language the chat is read in.
+ *
+ * @param {unknown} messages
  */
 function inferChatTitleText(messages) {
   const list = Array.isArray(messages) ? messages : [];
@@ -103,6 +112,9 @@ function inferChatTitleText(messages) {
  * title is only a fallback when the first message has no text — otherwise the
  * old rule would have used the text — so a chat that literally opened with
  * "Bild" keeps its title.
+ *
+ * @param {unknown} title
+ * @param {unknown} messages
  */
 function isLegacyFallbackChatTitle(title, messages) {
   if (typeof title !== 'string' || inferChatTitleText(messages)) return false;
@@ -114,6 +126,9 @@ function isLegacyFallbackChatTitle(title, messages) {
  * Has this chat been given a title of its own — by the model or otherwise — or
  * does it still carry the one derived from its first message? Only the second
  * kind may be replaced by a generated title.
+ *
+ * @param {unknown} title
+ * @param {unknown} messages
  */
 function isDerivedChatTitle(title, messages) {
   const value = typeof title === 'string' ? title.trim() : '';
@@ -125,6 +140,10 @@ function isDerivedChatTitle(title, messages) {
  * The title to show for a stored chat: its own title, or — when it has none, or
  * only a derived one — `inferChatTitle`. Like that one, the result may be a
  * message descriptor.
+ *
+ * @param {unknown} title
+ * @param {unknown} messages
+ * @returns {string|Message}
  */
 function resolveChatTitle(title, messages) {
   const value = typeof title === 'string' ? title.trim() : '';
@@ -137,6 +156,8 @@ function resolveChatTitle(title, messages) {
  * Anfuehrungszeichen, ohne Schlusspunkt, auf eine Zeile normalisiert und auf
  * CHAT_TITLE_MAX_LENGTH gekuerzt. Leerer String, wenn nichts uebrig bleibt —
  * dann bleibt der Aufrufer beim abgeleiteten Titel.
+ *
+ * @param {unknown} raw
  */
 function sanitizeChatTitle(raw) {
   if (raw == null) return '';
@@ -145,7 +166,7 @@ function sanitizeChatTitle(raw) {
   // Manche Modelle verpacken die Ueberschrift in Anfuehrungszeichen, stellen
   // ein „Titel:“ voran — oder beides, in beliebiger Schachtelung. Deshalb
   // zweimal abtragen: aussen die Zeichen, dann der Vorsatz, dann erneut.
-  const unquote = (value) => value.replace(/^["'«»„“”‚‘’]+/, '').replace(/["'«»„“”‚‘’]+$/, '').trim();
+  const unquote = (/** @type {string} */ value) => value.replace(/^["'«»„“”‚‘’]+/, '').replace(/["'«»„“”‚‘’]+$/, '').trim();
   text = unquote(text);
   text = text.replace(/^(?:titel|title|ueberschrift|überschrift)\s*:\s*/i, '').trim();
   text = unquote(text);
@@ -173,13 +194,76 @@ function sanitizeChatTitle(raw) {
  */
 
 /**
+ * The recorder's summary of one write, without content (#348).
+ *
+ * @typedef {Object} FileChangeSummary
+ * @property {string} id
+ * @property {string} relativePath
+ * @property {string} status  `text`, `unchanged`, `eol-only`, `binary` or `too-large`
+ * @property {boolean} created
+ * @property {number} added
+ * @property {number} removed
+ */
+
+/**
+ * What the sandbox refused during one run, as it is shown and stored (#792).
+ *
+ * @typedef {Object} SandboxBlockedEntry
+ * @property {string} kind  one of SANDBOX_BLOCKED_KINDS
+ * @property {string} target
+ * @property {number} count
+ * @property {true} [folder]
+ * @property {string[]} [operations]
+ * @property {string} [reason]
+ *
+ * @typedef {Object} SandboxBlocked
+ * @property {SandboxBlockedEntry[]} entries
+ * @property {number} moreEntries
+ * @property {number} total
+ * @property {string[]} raw
+ */
+
+/**
+ * What the user decided on a sandbox card (#792).
+ *
+ * @typedef {Object} SandboxDecision
+ * @property {string} outcome  `allowed`, `denied` or `unanswered`
+ * @property {'run'|'session'|'workspace'} [duration]  allowed only
+ * @property {Array<{ kind: string, path: string }>} [paths]  allowed only
+ * @property {{ exitCode: number|null, blocked?: SandboxBlocked }} [retry]  allowed only
+ */
+
+/**
+ * A connection decided while a command waited (#792).
+ *
+ * @typedef {Object} SandboxLiveEntry
+ * @property {string} target
+ * @property {'allowed'|'denied'} outcome
+ * @property {'run'|'session'|'workspace'} [duration]  allowed only
+ * @property {string} [pattern]  allowed only
+ */
+
+/**
+ * A path outside the open folder decided on a card (#792, step 4).
+ *
+ * @typedef {Object} SandboxOutsideEntry
+ * @property {'read'|'write'} kind
+ * @property {string} target
+ * @property {'allowed'|'denied'} outcome
+ * @property {'session'|'call'} [duration]  allowed only
+ * @property {string} [pattern]  allowed only
+ * @property {true} [folder]
+ * @property {true} [sensitive]
+ */
+
+/**
  * The fields every result of a turn may carry.
  *
  * @typedef {Object} ChatResultParts
  * @property {Array<object>} [toolTrace]  the tool steps of the turn
  * @property {object|null} [usage]        summed over every round of the turn
  * @property {object|null} [contextUsage] the last round's usage
- * @property {object} [contextBreakdown]  what the last context window was made of (#174)
+ * @property {object|null} [contextBreakdown]  what the last context window was made of (#174)
  */
 
 /**
@@ -233,7 +317,7 @@ function createCancelledChatResult({
  * übergeben wurden — Frühabbrüche (z. B. leere Nachricht) bleiben so bei der
  * schlanken Form { error, code }, wie sie der Renderer erwartet.
  *
- * @param {ChatResultParts & { error?: Message|string, code?: string, partial?: boolean }} [parts]
+ * @param {ChatResultParts & { error: Message|string, code?: string, partial?: boolean }} parts
  * @returns {ChatErrorResult}
  */
 function createChatErrorResult({
@@ -244,7 +328,7 @@ function createChatErrorResult({
   contextBreakdown,
   toolTrace,
   partial = false,
-} = {}) {
+}) {
   /** @type {ChatErrorResult} */
   const result = { error, code };
   // The answer streamed so far stays: the round was cut off, not refused (#538).
@@ -261,7 +345,11 @@ function createChatErrorResult({
 
 // --- Push-Events (Main -> Renderer) ----------------------------------------
 
-/** chat:delta — ein Stück Antwort-Text. */
+/**
+ * chat:delta — ein Stück Antwort-Text.
+ *
+ * @param {unknown} text
+ */
 function createDeltaEvent(text) {
   return { text: String(text ?? '') };
 }
@@ -270,6 +358,11 @@ function createDeltaEvent(text) {
  * chat:tool-line — Tool-Ereignis mit Anzeige-Zeile und optionalen Rohdaten.
  * entry = { line, tool?, args?, waitMs?, noWorkspace? }.
  * `line` ist die fertige UI-Zeile; tool/args bleiben für Debugging/Kompatibilität.
+ *
+ * @template {object} E
+ * @param {string} phase
+ * @param {E} entry
+ * @returns {{ phase: string } & E}
  */
 function createToolLineEvent(phase, entry) {
   return { phase, ...entry };
@@ -279,8 +372,12 @@ function createToolLineEvent(phase, entry) {
  * chat:progress mit type='workspace' nach erfolgreichem Dateischreiben.
  * `change` is the recorder's summary of the write (#348), without content:
  * `{ id, relativePath, status, created, added, removed }`.
+ *
+ * @param {unknown} relativePath
+ * @param {unknown} [change]
  */
 function createWorkspaceFileWrittenEvent(relativePath, change = null) {
+  /** @type {Record<string, unknown>} */
   const event = {
     type: CHAT_PROGRESS_TYPES.WORKSPACE,
     event: WORKSPACE_PROGRESS_EVENTS.FILE_WRITTEN,
@@ -292,28 +389,36 @@ function createWorkspaceFileWrittenEvent(relativePath, change = null) {
 }
 
 const FILE_CHANGE_ID_PATTERN = /^[0-9a-f]{1,16}-\d{1,12}$/;
+/** @type {Set<string>} */
 const FILE_CHANGE_STATUSES = new Set(['text', 'unchanged', 'eol-only', 'binary', 'too-large']);
 
 /**
  * A change summary as it may travel and be stored (#348), or null. Counts are
  * whole numbers; anything else is dropped rather than shown.
+ *
+ * @param {unknown} change
+ * @returns {FileChangeSummary|null}
  */
 function normalizeFileChangeSummary(change) {
-  if (!change || typeof change !== 'object') return null;
+  if (!isRecord(change)) return null;
   const id = typeof change.id === 'string' ? change.id : '';
   if (!FILE_CHANGE_ID_PATTERN.test(id)) return null;
-  const count = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : 0);
+  const count = (/** @type {unknown} */ value) => (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0);
   return {
     id,
     relativePath: typeof change.relativePath === 'string' ? change.relativePath.slice(0, 4096) : '',
-    status: FILE_CHANGE_STATUSES.has(change.status) ? change.status : 'text',
+    status: typeof change.status === 'string' && FILE_CHANGE_STATUSES.has(change.status) ? change.status : 'text',
     created: change.created === true,
     added: count(change.added),
     removed: count(change.removed),
   };
 }
 
-/** What the sandbox can refuse, as the tool row shows it (#792). */
+/**
+ * What the sandbox can refuse, as the tool row shows it (#792).
+ *
+ * @type {readonly string[]}
+ */
 const SANDBOX_BLOCKED_KINDS = Object.freeze(['write', 'read', 'network', 'direct']);
 const SANDBOX_BLOCKED_LIMITS = Object.freeze({ ENTRIES: 20, OPERATIONS: 8, RAW_LINES: 100, CHARS: 1024 });
 
@@ -322,17 +427,22 @@ const SANDBOX_BLOCKED_LIMITS = Object.freeze({ ENTRIES: 20, OPERATIONS: 8, RAW_L
  * renderer and be stored with the tool row, or null. Paths, hosts and the
  * raw lines are cut to a fixed size; an entry of an unknown kind is dropped
  * rather than shown.
+ *
+ * @param {unknown} value
+ * @returns {SandboxBlocked|null}
  */
 function normalizeSandboxBlocked(value) {
-  if (!value || typeof value !== 'object' || !Array.isArray(value.entries)) return null;
-  const text = (v) => (typeof v === 'string' ? v.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) : '');
-  const count = (v) => (Number.isSafeInteger(v) && v >= 0 ? v : 0);
+  if (!isRecord(value) || !Array.isArray(value.entries)) return null;
+  const text = (/** @type {unknown} */ v) => (typeof v === 'string' ? v.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) : '');
+  const count = (/** @type {unknown} */ v) => (typeof v === 'number' && Number.isSafeInteger(v) && v >= 0 ? v : 0);
+  /** @type {SandboxBlockedEntry[]} */
   const entries = [];
   for (const raw of value.entries) {
     if (entries.length >= SANDBOX_BLOCKED_LIMITS.ENTRIES) break;
-    if (!raw || typeof raw !== 'object' || !SANDBOX_BLOCKED_KINDS.includes(raw.kind)) continue;
+    if (!isRecord(raw) || typeof raw.kind !== 'string' || !SANDBOX_BLOCKED_KINDS.includes(raw.kind)) continue;
     const target = text(raw.target);
     if (!target) continue;
+    /** @type {SandboxBlockedEntry} */
     const entry = { kind: raw.kind, target, count: Math.max(1, count(raw.count)) };
     if (raw.folder === true) entry.folder = true;
     const operations = Array.isArray(raw.operations)
@@ -355,13 +465,22 @@ function normalizeSandboxBlocked(value) {
   };
 }
 
+/** @type {readonly string[]} */
 const SANDBOX_DECISION_OUTCOMES = Object.freeze(['allowed', 'denied', 'unanswered']);
-/** What a sandbox card opens (#792): a folder to write in, a path to read, a host to connect to. */
+/**
+ * What a sandbox card opens (#792): a folder to write in, a path to read, a host to connect to.
+ *
+ * @type {readonly string[]}
+ */
 const SANDBOX_GRANT_KINDS = Object.freeze(['write', 'read', 'network']);
 
 /**
  * How long a sandbox card opened something (#792): for the run, the session,
  * or — a host only — the workspace (#946). Anything else is the shortest.
+ *
+ * @param {unknown} value
+ * @param {'run'|'session'} shortest
+ * @returns {'run'|'session'|'workspace'}
  */
 function sandboxDuration(value, shortest) {
   return value === 'session' || value === 'workspace' ? value : shortest;
@@ -371,17 +490,21 @@ function sandboxDuration(value, shortest) {
  * What the user decided on a sandbox card (#792), as the tool row keeps it:
  * allowed — for this run, the session or the workspace (#946), which paths, and how the retry
  * went — denied, or not answered. Null for anything else.
+ *
+ * @param {unknown} value
+ * @returns {SandboxDecision|null}
  */
 function normalizeSandboxDecision(value) {
-  if (!value || typeof value !== 'object' || !SANDBOX_DECISION_OUTCOMES.includes(value.outcome)) return null;
+  if (!isRecord(value) || typeof value.outcome !== 'string' || !SANDBOX_DECISION_OUTCOMES.includes(value.outcome)) return null;
   if (value.outcome !== 'allowed') return { outcome: value.outcome };
   const paths = (Array.isArray(value.paths) ? value.paths : [])
     .filter((p) => p && SANDBOX_GRANT_KINDS.includes(p.kind) && typeof p.path === 'string' && p.path)
     .slice(0, SANDBOX_BLOCKED_LIMITS.ENTRIES)
     .map((p) => ({ kind: p.kind, path: p.path.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) }));
+  /** @type {SandboxDecision} */
   const out = { outcome: 'allowed', duration: sandboxDuration(value.duration, 'run'), paths };
-  if (value.retry && typeof value.retry === 'object') {
-    out.retry = { exitCode: Number.isInteger(value.retry.exitCode) ? value.retry.exitCode : null };
+  if (isRecord(value.retry)) {
+    out.retry = { exitCode: typeof value.retry.exitCode === 'number' && Number.isInteger(value.retry.exitCode) ? value.retry.exitCode : null };
     const blocked = normalizeSandboxBlocked(value.retry.blocked);
     if (blocked) out.retry.blocked = blocked;
   }
@@ -396,14 +519,18 @@ const SANDBOX_LIVE_LIMIT = 10;
  * (#792), as the tool row keeps it: the host and port, allowed — for the run,
  * the session or the workspace (#946), and as which pattern — or denied. Empty entries and
  * anything else are dropped; null when nothing is left.
+ *
+ * @param {unknown} value
+ * @returns {SandboxLiveEntry[]|null}
  */
 function normalizeSandboxLive(value) {
   if (!Array.isArray(value)) return null;
-  const text = (v) => (typeof v === 'string' ? v.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) : '');
+  const text = (/** @type {unknown} */ v) => (typeof v === 'string' ? v.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) : '');
+  /** @type {SandboxLiveEntry[]} */
   const out = [];
   for (const raw of value) {
     if (out.length >= SANDBOX_LIVE_LIMIT) break;
-    if (!raw || typeof raw !== 'object' || (raw.outcome !== 'allowed' && raw.outcome !== 'denied')) continue;
+    if (!isRecord(raw) || (raw.outcome !== 'allowed' && raw.outcome !== 'denied')) continue;
     const target = text(raw.target);
     if (!target) continue;
     if (raw.outcome === 'denied') {
@@ -426,19 +553,24 @@ function normalizeSandboxLive(value) {
  * path (a folder, or a file that may hold credentials, when it was), allowed —
  * for the call or the session, and as which file or folder — or denied. Null
  * when nothing usable is left.
+ *
+ * @param {unknown} value
+ * @returns {SandboxOutsideEntry[]|null}
  */
 function normalizeSandboxOutside(value) {
   if (!Array.isArray(value)) return null;
-  const text = (v) => (typeof v === 'string' ? v.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) : '');
+  const text = (/** @type {unknown} */ v) => (typeof v === 'string' ? v.slice(0, SANDBOX_BLOCKED_LIMITS.CHARS) : '');
+  /** @type {SandboxOutsideEntry[]} */
   const out = [];
   for (const raw of value) {
     if (out.length >= SANDBOX_LIVE_LIMIT) break;
-    if (!raw || typeof raw !== 'object' || (raw.outcome !== 'allowed' && raw.outcome !== 'denied')) continue;
+    if (!isRecord(raw) || (raw.outcome !== 'allowed' && raw.outcome !== 'denied')) continue;
     const target = text(raw.target);
     if (!target) continue;
     const kind = raw.kind === 'write' ? 'write' : 'read';
     // What the card said about the target, kept only when it held: a folder
     // and a file that may hold credentials read differently afterwards.
+    /** @type {{ folder?: true, sensitive?: true }} */
     const about = { ...(raw.folder === true ? { folder: true } : {}), ...(raw.sensitive === true ? { sensitive: true } : {}) };
     if (raw.outcome === 'denied') {
       out.push({ kind, target, outcome: 'denied', ...about });
@@ -456,7 +588,11 @@ function normalizeSandboxOutside(value) {
   return out.length ? out : null;
 }
 
-/** chat:progress with type='workspace': a reading tool read the file (#347). */
+/**
+ * chat:progress with type='workspace': a reading tool read the file (#347).
+ *
+ * @param {unknown} relativePath
+ */
 function createWorkspaceFileReadEvent(relativePath) {
   return {
     type: CHAT_PROGRESS_TYPES.WORKSPACE,
@@ -473,6 +609,7 @@ function createWorkspaceFileReadEvent(relativePath) {
  * @param {{ callIndex?: number, tool?: string, response?: string, reason?: string, redactedCount?: number }} [details]
  */
 function createPermissionProgressEvent(event, { callIndex, tool, response, reason, redactedCount } = {}) {
+  /** @type {Record<string, unknown>} */
   const out = { type: CHAT_PROGRESS_TYPES.PERMISSION, event: String(event ?? '') };
   if (Number.isInteger(callIndex)) out.callIndex = callIndex;
   if (typeof tool === 'string' && tool) out.tool = tool;
@@ -482,12 +619,20 @@ function createPermissionProgressEvent(event, { callIndex, tool, response, reaso
   return out;
 }
 
-/** chat:progress mit type='phase'. */
+/**
+ * chat:progress mit type='phase'.
+ *
+ * @param {string} phase
+ */
 function createPhaseEvent(phase) {
   return { type: CHAT_PROGRESS_TYPES.PHASE, phase };
 }
 
-/** chat:progress mit type='reasoning'. */
+/**
+ * chat:progress mit type='reasoning'.
+ *
+ * @param {string} text
+ */
 function createReasoningEvent(text) {
   return { type: CHAT_PROGRESS_TYPES.REASONING, text };
 }
@@ -499,14 +644,23 @@ function createRunEndEvent() {
 
 // --- Validatoren ------------------------------------------------------------
 
+/**
+ * @param {unknown} code
+ */
 function isChatErrorCode(code) {
   return Object.values(CHAT_ERROR_CODES).includes(code);
 }
 
+/**
+ * @param {unknown} phase
+ */
 function isChatPhase(phase) {
   return Object.values(CHAT_PHASES).includes(phase);
 }
 
+/**
+ * @param {unknown} phase
+ */
 function isToolLinePhase(phase) {
   return Object.values(TOOL_LINE_PHASES).includes(phase);
 }

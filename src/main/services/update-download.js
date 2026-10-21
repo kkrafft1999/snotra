@@ -16,6 +16,17 @@ const { assetDigest } = require('./update-targets');
 // The work dir may hold an unpacked package, `app.asar` included (#914).
 const { removeTree } = require('./raw-fs');
 
+/**
+ * What `download` answers. An error is a message the update dialog words, or
+ * what the file system or the network said, quoted as it stands.
+ *
+ * @typedef {{ ok: true, filePath: string, version: string, assetName: string, bytes: number }
+ *   | { ok: false, canceled?: boolean, error?: import('../../shared/contracts/message').Message | string }} DownloadResult
+ *
+ * A file that is fully downloaded and ready to be installed.
+ * @typedef {{ filePath: string, version: string, assetName: string, bytes: number }} ReadyDownload
+ */
+
 /** Nur von dort holen wir Dateien — GitHub-Releases und deren Ablage. */
 const ALLOWED_HOSTS = Object.freeze([
   'github.com',
@@ -28,7 +39,11 @@ const ALLOWED_HOSTS = Object.freeze([
 const WORK_DIR_NAME = 'snotra-update';
 const PROGRESS_INTERVAL_MS = 150;
 
-/** HTTPS und ein bekannter GitHub-Host — sonst wird nichts geladen. */
+/**
+ * HTTPS und ein bekannter GitHub-Host — sonst wird nichts geladen.
+ *
+ * @param {unknown} raw
+ */
 function isAllowedAssetUrl(raw) {
   let url;
   try {
@@ -40,7 +55,12 @@ function isAllowedAssetUrl(raw) {
   return ALLOWED_HOSTS.includes(url.hostname.toLowerCase());
 }
 
-/** Dateiname ohne Pfadanteile — der Name kommt aus einer fremden Antwort. */
+/**
+ * Dateiname ohne Pfadanteile — der Name kommt aus einer fremden Antwort.
+ *
+ * @param {unknown} name
+ * @param {string} [fallback]
+ */
 function safeFileName(name, fallback = 'snotra-update.bin') {
   const base = path.basename(String(name || '')).replace(/[^\w.@+-]/g, '_');
   return base && base !== '.' && base !== '..' ? base : fallback;
@@ -49,15 +69,23 @@ function safeFileName(name, fallback = 'snotra-update.bin') {
 /**
  * @param {object} deps
  * @param {string} deps.tempDir       Basis fuer das Arbeitsverzeichnis (app.getPath('temp')).
- * @param {function} [deps.fetchImpl] Override fuer Tests; default globaler fetch.
+ * @param {typeof fetch} [deps.fetchImpl] Override fuer Tests; default globaler fetch.
  */
-function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
+function createUpdateDownloader({ tempDir, fetchImpl }) {
   const doFetch = fetchImpl || globalThis.fetch;
   const workDir = path.join(tempDir, WORK_DIR_NAME);
 
-  /** Laufender Download: Controller zum Abbrechen, sonst null. */
+  /**
+   * Laufender Download: Controller zum Abbrechen, sonst null.
+   *
+   * @type {AbortController|null}
+   */
   let active = null;
-  /** Fertig geladene Datei: { filePath, version, assetName } oder null. */
+  /**
+   * Fertig geladene Datei oder null.
+   *
+   * @type {ReadyDownload|null}
+   */
   let ready = null;
 
   async function removeWorkDir() {
@@ -69,14 +97,15 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
    * zurueck, damit der Renderer sie anzeigen kann statt sie zu verschlucken.
    *
    * @param {object} args
-   * @param {{url: string, name: string, size: number, digest?: string}} args.asset
+   * @param {import('./update-targets').ReleaseAsset} args.asset
    *        `digest` is GitHub's `sha256:<hex>`; when present, a file that does
    *        not hash to it is discarded like a short one (#569).
    * @param {string} args.version
    * @param {(p: {receivedBytes: number, totalBytes: number}) => void} [args.onProgress]
    * @param {AbortSignal} [args.signal]  the caller's cancellation (#568)
+   * @returns {Promise<DownloadResult>}
    */
-  async function download({ asset, version, onProgress, signal } = {}) {
+  async function download({ asset, version, onProgress, signal }) {
     if (active) return { ok: false, error: createMessage('update.error.downloadRunning') };
     if (!asset || !isAllowedAssetUrl(asset.url)) {
       return { ok: false, error: createMessage('update.error.foreignUrl') };
@@ -133,6 +162,7 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
 
       let receivedBytes = 0;
       let lastEmit = 0;
+      /** @param {boolean} force */
       const emit = (force) => {
         if (typeof onProgress !== 'function') return;
         const now = Date.now();
@@ -144,7 +174,7 @@ function createUpdateDownloader({ tempDir, fetchImpl } = {}) {
 
       const hash = crypto.createHash('sha256');
       const source = Readable.fromWeb(res.body);
-      source.on('data', (chunk) => {
+      source.on('data', (/** @type {Buffer} */ chunk) => {
         receivedBytes += chunk.length;
         hash.update(chunk);
         emit(false);

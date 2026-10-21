@@ -22,15 +22,17 @@ const { decideToolPolicy } = require('../src/application/permissions/tool-policy
 const { buildApprovalRequest } = require('../src/application/permissions/approval-request');
 const { createToolPolicyStore } = require('../src/main/services/tool-policy-store');
 const { createToolApprovalAdapter } = require('../src/main/adapters/tool-approval-adapter');
-const { registerToolPermissionHandlers, commandRuleDialog } = require('../src/main/ipc/tool-permission-handlers');
+const { registerToolPermissionsForTest: registerToolPermissionHandlers } = require('./helpers/tool-permission-handlers');
+const { commandRuleDialog } = require('../src/main/services/tool-permission-dialogs');
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
-const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { createTranslator } = require('../src/shared/i18n');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createTestConfirmations } = require('./helpers/confirmations');
 const { CONFIRMATION_ACTIONS, permissionRuleSubject } = require('../src/application/permissions/user-confirmation');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const ROOT = '/work/projekt';
 
@@ -266,7 +268,7 @@ function makeSender(id = 1) {
 
 async function setup(t, { dialogResponse = 0 } = {}) {
   const dir = await fs.mkdtemp(nodePath.join(os.tmpdir(), 'snotra-cmd-rule-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const getMainWindow = () => ({ isDestroyed: () => false });
   const dialogCalls = [];
   const dialog = {
@@ -277,7 +279,7 @@ async function setup(t, { dialogResponse = 0 } = {}) {
   };
   const { confirmations, storeReceipts, confirmed } = createTestConfirmations({ dialog, getMainWindow });
   const toolPolicyStore = createToolPolicyStore({
-    app: { getPath: () => dir }, safeStorage: makeSafeStorage(), fs, path: nodePath, crypto, log: { warn() {} },
+    userDataPath: dir, secretStore: makeSafeStorage(), fs, path: nodePath, crypto, log: { warn() {} },
     confirmationReceipts: storeReceipts,
   });
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });

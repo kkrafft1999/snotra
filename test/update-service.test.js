@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { translateMessage } = require('../src/shared/i18n');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 // Main hands over keys since #353; the German wording is checked through the
 // catalogue.
@@ -56,7 +57,7 @@ function jsonResponse(body, ok = true, status = 200) {
 
 test('checkForUpdate reports an available update', async () => {
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     fetchImpl: async () => jsonResponse({
       tag_name: 'v1.4.0',
@@ -74,7 +75,7 @@ test('checkForUpdate reports an available update', async () => {
 
 test('checkForUpdate reports no update when current is latest', async () => {
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     fetchImpl: async () => jsonResponse({ tag_name: 'v1.0.0' }),
   });
@@ -85,7 +86,7 @@ test('checkForUpdate reports no update when current is latest', async () => {
 test('respectIgnored suppresses a skipped version, manual check still shows it', async () => {
   const storage = makeStorage({ ignoredUpdateVersion: '1.4.0' });
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage,
     fetchImpl: async () => jsonResponse({ tag_name: 'v1.4.0' }),
   });
@@ -95,7 +96,7 @@ test('respectIgnored suppresses a skipped version, manual check still shows it',
 
 test('ignoreVersion persists into UI prefs', async () => {
   const storage = makeStorage();
-  const svc = createUpdateService({ app, storage });
+  const svc = createUpdateService({ installation: app, storage });
   const res = await svc.ignoreVersion('1.4.0');
   assert.equal(res.ok, true);
   assert.equal(storage._prefs().ignoredUpdateVersion, '1.4.0');
@@ -103,7 +104,7 @@ test('ignoreVersion persists into UI prefs', async () => {
 
 test('checkForUpdate never throws on network failure', async () => {
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     fetchImpl: async () => { throw Object.assign(new Error('boom'), { cause: 'ECONNREFUSED' }); },
   });
@@ -114,7 +115,7 @@ test('checkForUpdate never throws on network failure', async () => {
 
 test('checkForUpdate handles a non-OK HTTP response', async () => {
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     fetchImpl: async () => jsonResponse({}, false, 404),
   });
@@ -134,7 +135,7 @@ function limitedResponse(status, headers) {
 }
 
 function limitedService(response) {
-  return createUpdateService({ app, storage: makeStorage(), now: () => NOW, fetchImpl: async () => response });
+  return createUpdateService({ installation: app, storage: makeStorage(), now: () => NOW, fetchImpl: async () => response });
 }
 
 test('a 403 with an exhausted rate limit names the reset time, not the status', async () => {
@@ -181,7 +182,7 @@ test('a 500 stays the generic HTTP message, even without headers', async () => {
 
 test('checkForUpdate ignores a draft release', async () => {
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     fetchImpl: async () => jsonResponse({ tag_name: 'v2.0.0', draft: true }),
   });
@@ -192,7 +193,7 @@ test('checkForUpdate ignores a draft release', async () => {
 test('checkForUpdate targets the Snotra repo with a Snotra User-Agent by default', async () => {
   const calls = [];
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     fetchImpl: async (url, opts) => {
       calls.push({ url, opts });
@@ -248,7 +249,7 @@ function fakeDownloader({ ready = null } = {}) {
 
 test('checkForUpdate meldet das passende Paket und dass ein Selbst-Update geht', async () => {
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     fetchImpl: async () => jsonResponse(releaseWithAssets()),
@@ -263,7 +264,7 @@ test('checkForUpdate meldet das passende Paket und dass ein Selbst-Update geht',
 
 test('ohne passendes Paket bleibt nur der Verweis auf die Release-Seite', async () => {
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     fetchImpl: async () => jsonResponse(releaseWithAssets({ assets: [] })),
@@ -277,7 +278,7 @@ test('ohne passendes Paket bleibt nur der Verweis auf die Release-Seite', async 
 
 test('eine Paketinstallation nennt ihren Grund statt eines Downloads', async () => {
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     runtime: { platform: 'linux', arch: 'x64', execPath: '/opt/Snotra Agent/Snotra Agent', isPackaged: true },
     fetchImpl: async () => jsonResponse(releaseWithAssets()),
@@ -296,7 +297,7 @@ test('downloadUpdate prueft frisch nach und laedt die Adresse aus dem Release', 
   const downloader = fakeDownloader();
   let fetches = 0;
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     downloader,
@@ -317,7 +318,7 @@ test('downloadUpdate prueft frisch nach und laedt die Adresse aus dem Release', 
 test('downloadUpdate laedt nichts, wenn es gar kein Update mehr gibt', async () => {
   const downloader = fakeDownloader();
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     downloader,
@@ -331,7 +332,7 @@ test('downloadUpdate laedt nichts, wenn es gar kein Update mehr gibt', async () 
 test('downloadUpdate laedt auch eine zuvor uebersprungene Version', async () => {
   const downloader = fakeDownloader();
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage({ ignoredUpdateVersion: '1.4.0' }),
     runtime: MAC_RUNTIME,
     downloader,
@@ -349,7 +350,7 @@ test('installUpdate reicht Datei, Version und Ziel an den Installer und beendet 
   const seen = [];
   let quits = 0;
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     downloader,
@@ -373,7 +374,7 @@ test('installUpdate reicht Datei, Version und Ziel an den Installer und beendet 
 test('installUpdate ohne geladene Datei beendet die App nicht', async () => {
   let quits = 0;
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     downloader: fakeDownloader(),
@@ -390,7 +391,7 @@ test('installUpdate ohne geladene Datei beendet die App nicht', async () => {
 test('eine gescheiterte Installation laesst die laufende App stehen', async () => {
   let quits = 0;
   const svc = createUpdateService({
-    app,
+    installation: app,
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     downloader: fakeDownloader(),
@@ -410,7 +411,7 @@ function makeUserDataApp(t, version = '1.12.0') {
   const os = require('node:os');
   const path = require('node:path');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-update-status-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDirSync(dir));
   return {
     dir,
     statusFile: path.join(dir, 'update-install-failed.json'),
@@ -427,7 +428,7 @@ test('installUpdate gibt dem Installer Protokoll und Status im Benutzerordner mi
   const { app: userApp, logFile, statusFile, pendingFile } = makeUserDataApp(t, '1.0.0');
   const seen = [];
   const svc = createUpdateService({
-    app: userApp,
+    installation: userApp,
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     downloader: fakeDownloader(),
@@ -451,7 +452,7 @@ test('readInstallFailure reports a failed swap until it is cleared (#573)', asyn
     error: ' The process cannot access the file because it is being used by another process. ',
     log: 'C:\\Users\\k\\AppData\\Roaming\\Snotra Agent\\update-install.log',
   })}`);
-  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+  const svc = createUpdateService({ installation: userApp, storage: makeStorage() });
 
   const expected = {
     version: '1.13.0',
@@ -471,7 +472,7 @@ test('readInstallFailure verwirft eine Meldung, die inzwischen ueberholt ist', a
   const fs = require('node:fs');
   const { app: userApp, statusFile } = makeUserDataApp(t, '1.13.0');
   fs.writeFileSync(statusFile, JSON.stringify({ version: '1.13.0', error: 'locked' }));
-  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+  const svc = createUpdateService({ installation: userApp, storage: makeStorage() });
   assert.equal(await svc.readInstallFailure(), null);
   assert.equal(fs.existsSync(statusFile), false);
 });
@@ -480,7 +481,7 @@ test('readInstallFailure uebersteht eine kaputte Datei und faellt auf das eigene
   const fs = require('node:fs');
   const { app: userApp, statusFile, logFile } = makeUserDataApp(t);
   fs.writeFileSync(statusFile, '{ not json');
-  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+  const svc = createUpdateService({ installation: userApp, storage: makeStorage() });
   assert.equal(await svc.readInstallFailure(), null);
   assert.equal(fs.existsSync(statusFile), false, 'a file that cannot be read is dropped');
 
@@ -499,7 +500,7 @@ test('readInstallFailure tells a version that did not start from a failed swap (
     log: '/home/k/.config/Snotra AI/update-install.log',
     at: '2026-10-17T10:00:00Z',
   })}\n`);
-  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+  const svc = createUpdateService({ installation: userApp, storage: makeStorage() });
   assert.deepEqual(await svc.readInstallFailure(), {
     version: '1.13.0',
     stage: 'start',
@@ -514,7 +515,7 @@ test('readInstallFailure tells a version that did not start from a failed swap (
 test('confirmInstallStarted removes the record of this version, so the helper deletes the backup (#1003)', async (t) => {
   const fs = require('node:fs');
   const { app: userApp, pendingFile } = makeUserDataApp(t, '1.13.0');
-  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+  const svc = createUpdateService({ installation: userApp, storage: makeStorage() });
 
   assert.equal(await svc.confirmInstallStarted(), false, 'nothing waits: nothing to do');
 
@@ -526,7 +527,7 @@ test('confirmInstallStarted removes the record of this version, so the helper de
 test('confirmInstallStarted leaves a record for a newer version, and drops a stale one (#1003)', async (t) => {
   const fs = require('node:fs');
   const { app: userApp, pendingFile } = makeUserDataApp(t, '1.13.0');
-  const svc = createUpdateService({ app: userApp, storage: makeStorage() });
+  const svc = createUpdateService({ installation: userApp, storage: makeStorage() });
 
   // The helper is still deciding about 1.14.0 and is about to put this one back.
   fs.writeFileSync(pendingFile, '{"version":"1.14.0"}');
@@ -546,7 +547,7 @@ test('cancelDownload during the fresh check ends the run before anything is fetc
   const downloader = fakeDownloader();
   let releaseRequest;
   const svc = createUpdateService({
-    app: { getVersion: () => '1.3.0', isPackaged: true },
+    installation: { getVersion: () => '1.3.0', isPackaged: true },
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     downloader,
@@ -567,7 +568,7 @@ test('cancelDownload during the fresh check ends the run before anything is fetc
 test('a second downloadUpdate while the first is checking is refused (#568)', async () => {
   const downloader = fakeDownloader();
   const svc = createUpdateService({
-    app: { getVersion: () => '1.3.0', isPackaged: true },
+    installation: { getVersion: () => '1.3.0', isPackaged: true },
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     downloader,
@@ -586,7 +587,7 @@ test('downloadUpdate hands the asset digest and a signal to the downloader (#568
   const release = releaseWithAssets();
   release.assets[0].digest = digest;
   const svc = createUpdateService({
-    app: { getVersion: () => '1.3.0', isPackaged: true },
+    installation: { getVersion: () => '1.3.0', isPackaged: true },
     storage: makeStorage(),
     runtime: MAC_RUNTIME,
     downloader,

@@ -23,6 +23,9 @@
  */
 const MAX_TREE_CHANGED_DIRECTORIES = 200;
 
+/**
+ * @param {{ directories?: unknown, complete?: boolean }} [input]
+ */
 function createWorkspaceTreeChangedEvent({ directories = [], complete = true } = {}) {
   const list = [
     ...new Set(

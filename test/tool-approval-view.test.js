@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const { pathToFileURL } = require('url');
+const { normalizeToolPresentation } = require('../src/shared/contracts/tool-presentation');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 
 // Renderer-Modul ist natives ESM; das Contract-Bundle entsteht im pretest-Schritt.
 const load = () =>
@@ -23,8 +25,20 @@ async function inGerman(fn) {
   }
 }
 
+/**
+ * An approval request as main sends it: the presentation comes from the
+ * tool's descriptor (#1008), as the planner puts it on the plan.
+ */
 function dto(overrides = {}) {
+  const tool = overrides.tool || 'edit_file';
+  let presentation;
+  try {
+    presentation = normalizeToolPresentation(descriptorOf(tool));
+  } catch {
+    presentation = normalizeToolPresentation(null);
+  }
   return {
+    presentation,
     contractVersion: 1,
     requestId: 'req-1',
     tool: 'edit_file',
@@ -390,4 +404,23 @@ test('a remembered command and a session approval read on the Security page as t
     scope: { key: 'approval.sessionScope.targets', params: { tool: 'edit_file', paths: `docs/a${RLO}.md`, effectKeys: [] } },
   }]);
   assert.match(group.items[0].text, /docs\/a⟨U\+202E⟩\.md/);
+});
+
+// The verb comes from the descriptor's presentation (#1008), not from the tool's name.
+test('card: the image tool generates or redraws, unless replacing has no way back (#85)', async () => {
+  const { buildApprovalCardView } = await load();
+  const image = (targets, overrides = {}) => buildApprovalCardView(dto({
+    tool: 'generate_image', riskClasses: ['write', 'external'], sessionAllowed: false, targets, ...overrides,
+  }));
+  assert.equal(image([{ path: 'assets/a.png', kind: 'file', exists: false }]).headline.verb, 'generate the image');
+  assert.equal(image([{ path: 'assets/a.png', kind: 'file', exists: true }]).headline.verb, 'redraw the image');
+  assert.equal(
+    image([{ path: 'assets/a.png', kind: 'file', exists: true }], { riskClasses: ['delete', 'external'] }).headline.verb,
+    'send to an external service',
+  );
+  // Without the presentation the card falls back to what the risk class says.
+  assert.equal(
+    image([{ path: 'assets/a.png', kind: 'file', exists: false }], { presentation: undefined }).headline.verb,
+    'send to an external service',
+  );
 });

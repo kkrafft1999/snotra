@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildDiagnosticsReport, hideHome } = require('../src/main/services/diagnostics-report');
-const { createDiagnostics } = require('../src/main/services/diagnostics');
+const { createDiagnostics } = require('../src/main/electron/diagnostics');
 const { registerDiagnosticsHandlers } = require('../src/main/ipc/diagnostics-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 

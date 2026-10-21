@@ -15,7 +15,8 @@ const { registerSkillMoveHandlers } = require('../src/main/ipc/skill-move-handle
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { SKILL_SOURCES } = require('../src/shared/contracts/skills');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
-const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+const { createNativeConfirmationAdapter } = require('../src/main/electron/native-confirmation-adapter');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 /** The dialog for notices, and the confirmation port over the same dialog (#980). */
 function withDialog(dialog) {
@@ -24,7 +25,7 @@ function withDialog(dialog) {
 
 async function makeTree(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-make-global-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const workspace = path.join(dir, 'project');
   const home = path.join(dir, 'home');
   await fs.mkdir(workspace, { recursive: true });

@@ -18,53 +18,197 @@ const {
   normalizeSandboxLive,
   normalizeSandboxOutside,
 } = require('../../shared/contracts/chat');
+const { normalizeInjectionFlag } = require('../../shared/contracts/injection-flag');
 const { normalizeSessionCost } = require('../../shared/contracts/cost');
 const { createMessage, isMessage } = require('../../shared/contracts/message');
 const { normalizeChatConfigOverrides } = require('../../shared/contracts/chat-configuration');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
-const { TOOL_PERMISSION_MODES } = require('../../shared/contracts/tool-permissions');
-const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
-
-const TOOL_PERMISSION_MODE_VALUES = Object.freeze(Object.values(TOOL_PERMISSION_MODES));
+const { isToolCategory } = require('../../shared/contracts/tool-categories');
+const { isRecord } = require('../../shared/runtime/is-record');
 
 /**
- * Modell und Freigabemodus eines Chats (Issue #211). Beides ist optional: Ein
- * Verlauf aus einer aelteren Version kennt die Felder nicht, und ein Chat ohne
- * eigene Wahl soll auch keine bekommen — er faellt auf den Standard zurueck.
+ * A tool step as the history keeps it: the display line alone, or the line with
+ * what the display derives its icon, grouping and notes from (#60, #66, #187,
+ * #348, #792, #1008, #1011).
+ *
+ * @typedef {string | {
+ *   line: string,
+ *   tool?: string,
+ *   skill?: string,
+ *   category?: string,
+ *   permission?: StoredPermissionAudit,
+ *   round?: number,
+ *   schema?: StoredSchemaViolations,
+ *   changes?: import('../../shared/contracts/chat').FileChangeSummary[],
+ *   sandboxBlocked?: import('../../shared/contracts/chat').SandboxBlocked,
+ *   sandboxDecision?: import('../../shared/contracts/chat').SandboxDecision,
+ *   sandboxLive?: import('../../shared/contracts/chat').SandboxLiveEntry[],
+ *   sandboxOutside?: import('../../shared/contracts/chat').SandboxOutsideEntry[],
+ *   injectionFlag?: import('../../shared/contracts/injection-flag').InjectionFlag,
+ * }} StoredTraceEntry
  */
-function chatModelPresetIdForStore(raw) {
-  if (typeof raw !== 'string') return undefined;
-  const trimmed = raw.trim();
-  return trimmed ? trimmed.slice(0, 128) : undefined;
-}
 
 /**
- * Nur die drei bekannten Modi. Ein unbekannter Wert wird verworfen statt auf
- * `smart` normalisiert: „nichts gespeichert“ und „ausdruecklich intelligent“
- * sind derselbe Lauf, aber nicht dieselbe Aussage — und ein zugespielter Wert
- * darf hier auf keinen Fall zu einer Freigabe werden.
+ * @typedef {Object} StoredPermissionAudit
+ * @property {string} [decision]
+ * @property {string} [source]
+ * @property {string} [reason]
+ * @property {string} [ruleId]
+ * @property {string} [mode]
+ * @property {string} [status]
+ * @property {string[]} [riskClasses]
+ * @property {string[]} [targets]
+ * @property {true} [sensitive]
  */
-function chatToolPermissionModeForStore(raw) {
-  if (typeof raw !== 'string') return undefined;
-  return TOOL_PERMISSION_MODE_VALUES.includes(raw) ? raw : undefined;
-}
 
 /**
- * The chat's reasoning level (#725), optional like the two above. Whether the
- * model takes it is decided when a round starts, not here.
+ * Argument paths per kind of violation, never the values (#187).
+ *
+ * @typedef {Partial<Record<'unknownProperties' | 'nonInteger' | 'invalidItems', string[]>>} StoredSchemaViolations
  */
-function chatReasoningEffortForStore(raw) {
-  return normalizeReasoningLevel(raw);
-}
+
+/**
+ * @typedef {Object} StoredUserMessage
+ * @property {'user'} role
+ * @property {string} content
+ * @property {import('../../shared/contracts/attachments').StoredImageAttachment[]} [attachments]
+ */
+
+/**
+ * @typedef {Object} StoredAssistantMessage
+ * @property {'assistant'} role
+ * @property {string} content
+ * @property {true} [isError]
+ * @property {true} [interrupted]  the turn was cut off before it was finished (#979)
+ * @property {StoredTraceEntry[]} [toolTrace]
+ * @property {string} [reasoningText]
+ */
+
+/** @typedef {StoredUserMessage | StoredAssistantMessage} StoredMessage */
+
+/**
+ * An assistant message as the renderer loads it: every field there.
+ *
+ * @typedef {Object} LoadedAssistantMessage
+ * @property {'assistant'} role
+ * @property {string} content
+ * @property {StoredTraceEntry[]} toolTrace
+ * @property {string} reasoningText
+ * @property {false} streaming
+ * @property {boolean} isError
+ * @property {true} [interrupted]
+ */
+
+/** @typedef {StoredUserMessage | LoadedAssistantMessage} LoadedMessage */
+
+/**
+ * The prompt window of the last round (not a sum over the chat).
+ *
+ * @typedef {{ prompt: number, completion: number, total: number }} SessionTokenUsage
+ */
+
+/**
+ * What a chat carries beyond its messages, each optional (#211, #725, #774, #949).
+ *
+ * @typedef {Object} ChatSettings
+ * @property {string} [modelPresetId]
+ * @property {string} [toolPermissionMode]
+ * @property {string} [reasoningEffort]
+ * @property {import('../../shared/contracts/chat-configuration').ChatConfigOverrides} [configOverrides]
+ * @property {import('../../shared/contracts/cost').SessionCost} [cost]
+ */
+
+/**
+ * The fields every form of a chat has.
+ *
+ * @typedef {Object} SessionBase
+ * @property {string} id
+ * @property {string|null} workspaceRoot
+ * @property {string} title
+ * @property {number} updatedAt
+ * @property {SessionTokenUsage} tokenUsage
+ */
+
+/**
+ * A chat in store form: what the history file holds.
+ *
+ * @typedef {SessionBase & ChatSettings & { messages: StoredMessage[] }} StoredSession
+ */
+
+/**
+ * A chat as the renderer loads it, with its messages.
+ *
+ * @typedef {SessionBase & ChatSettings & { messages: LoadedMessage[] }} LoadedSession
+ */
+
+/**
+ * What the history's index keeps of a chat (#985): everything but its messages.
+ * `untitled` is what the list calls a chat without a title, as a descriptor.
+ *
+ * @typedef {SessionBase & ChatSettings & {
+ *   messageCount: number,
+ *   untitled?: string | import('../../shared/contracts/message').Message,
+ * }} SessionMeta
+ */
+
+/**
+ * A row of the history list (#985); `title` is the chat's own, or a descriptor.
+ *
+ * @typedef {Object} SessionListRow
+ * @property {string} id
+ * @property {string|null} workspaceRoot
+ * @property {string|import('../../shared/contracts/message').Message} title
+ * @property {number} updatedAt
+ * @property {number} messageCount
+ * @property {import('../../shared/contracts/cost').SessionCost} [cost]
+ */
+
+/** @typedef {(toolName: string) => (string|null)} ToolCategoryOf  the descriptor's category (#1008) */
+
+/**
+ * A chat as the renderer or a file hands it over, before it is checked: the
+ * fields are what the callers pass, `messages` and the settings are looked at
+ * by the normalizers.
+ *
+ * @typedef {Object} SessionRowInput
+ * @property {string} [id]
+ * @property {string|null} [workspaceRoot]
+ * @property {string} [title]
+ * @property {number} [updatedAt]
+ * @property {unknown} [messages]
+ * @property {unknown} [tokenUsage]
+ * @property {unknown} [modelPresetId]
+ * @property {unknown} [toolPermissionMode]
+ * @property {unknown} [reasoningEffort]
+ * @property {unknown} [configOverrides]
+ * @property {unknown} [cost]
+ */
+
+/**
+ * A chat the store already holds: it has an id and a time, and its parts are
+ * normalized again on the way out.
+ *
+ * @typedef {SessionRowInput & { id: string, updatedAt: number }} SessionRow
+ */
+
+// A chat's own model, mode and level (#211, #725) are read by the session
+// settings in the core as well (#982), so they live in the contracts.
+const {
+  chatModelPresetIdForStore,
+  chatToolPermissionModeForStore,
+  chatReasoningEffortForStore,
+} = require('../../shared/contracts/chat-session-fields');
 
 /**
  * Bild-Teil in einem Array-Content — die Formen, in denen Anbieter und Renderer
  * Bilder verpacken. Sie tragen keinen Text und duerfen nicht als JSON in den
  * Verlauf sickern; dort laege sonst genau das Base64, das Issue #94 aus der
  * Session-Datei heraushaelt.
+ *
+ * @param {unknown} part
  */
 function isImageContentPart(part) {
-  if (!part || typeof part !== 'object') return false;
+  if (!isRecord(part)) return false;
   return (
     part.type === 'image' ||
     part.type === 'image_url' ||
@@ -76,6 +220,10 @@ function isImageContentPart(part) {
   );
 }
 
+/**
+ * @param {unknown} content
+ * @returns {string}
+ */
 function messageContentForStore(content) {
   if (content == null) return '';
   if (typeof content === 'string') return content;
@@ -110,9 +258,13 @@ function messageContentForStore(content) {
   return String(content);
 }
 
+/**
+ * @param {unknown} entry
+ * @returns {string}
+ */
 function toolTraceEntryToString(entry) {
   if (typeof entry === 'string') return entry;
-  if (entry && typeof entry === 'object') {
+  if (isRecord(entry)) {
     if (typeof entry.line === 'string') return entry.line;
     if (typeof entry.summary === 'string') return entry.summary;
     if (typeof entry.text === 'string') return entry.text;
@@ -120,22 +272,33 @@ function toolTraceEntryToString(entry) {
   return '';
 }
 
+/** @type {Array<'decision' | 'source' | 'reason' | 'ruleId' | 'mode' | 'status'>} */
+const PERMISSION_AUDIT_STRING_KEYS = ['decision', 'source', 'reason', 'ruleId', 'mode', 'status'];
+
+/** @type {Array<'unknownProperties' | 'nonInteger' | 'invalidItems'>} */
+const SCHEMA_VIOLATION_KEYS = ['unknownProperties', 'nonInteger', 'invalidItems'];
+
 /**
  * Bereinigter Berechtigungs-Audit-Eintrag (Issue #66) für den Verlauf:
  * Entscheidung, Quelle, Grund, Klassen, Modus, Status, Ziel-Pfade. Nie
  * Argumente, Inhalte oder Vorschauen.
+ *
+ * @param {unknown} raw
+ * @returns {StoredPermissionAudit|undefined}
  */
 function permissionAuditForStore(raw) {
-  if (!raw || typeof raw !== 'object') return undefined;
+  if (!isRecord(raw)) return undefined;
+  /** @type {StoredPermissionAudit} */
   const out = {};
-  for (const key of ['decision', 'source', 'reason', 'ruleId', 'mode', 'status']) {
-    if (typeof raw[key] === 'string' && raw[key]) out[key] = raw[key].slice(0, 64);
+  for (const key of PERMISSION_AUDIT_STRING_KEYS) {
+    const value = raw[key];
+    if (typeof value === 'string' && value) out[key] = value.slice(0, 64);
   }
   if (Array.isArray(raw.riskClasses)) {
-    out.riskClasses = raw.riskClasses.filter((c) => typeof c === 'string').slice(0, 8);
+    out.riskClasses = raw.riskClasses.filter((/** @type {unknown} */ c) => typeof c === 'string').slice(0, 8);
   }
   if (Array.isArray(raw.targets)) {
-    out.targets = raw.targets.filter((p) => typeof p === 'string').map((p) => p.slice(0, 1024)).slice(0, 50);
+    out.targets = raw.targets.filter((/** @type {unknown} */ p) => typeof p === 'string').map((/** @type {string} */ p) => p.slice(0, 1024)).slice(0, 50);
   }
   if (raw.sensitive === true) out.sensitive = true;
   return Object.keys(out).length > 0 ? out : undefined;
@@ -145,13 +308,18 @@ function permissionAuditForStore(raw) {
  * Schema violations of a call (#187) for the history: argument paths per
  * kind, capped. The paths come from the model, so they are bounded like any
  * other foreign string; values never get here.
+ *
+ * @param {unknown} raw
+ * @returns {StoredSchemaViolations|undefined}
  */
 function schemaViolationsForStore(raw) {
-  if (!raw || typeof raw !== 'object') return undefined;
+  if (!isRecord(raw)) return undefined;
+  /** @type {StoredSchemaViolations} */
   const out = {};
-  for (const key of ['unknownProperties', 'nonInteger', 'invalidItems']) {
-    if (!Array.isArray(raw[key])) continue;
-    const paths = raw[key].filter((p) => typeof p === 'string' && p).map((p) => p.slice(0, 128)).slice(0, 32);
+  for (const key of SCHEMA_VIOLATION_KEYS) {
+    const list = raw[key];
+    if (!Array.isArray(list)) continue;
+    const paths = list.filter((p) => typeof p === 'string' && p).map((p) => p.slice(0, 128)).slice(0, 32);
     if (paths.length) out[key] = paths;
   }
   return Object.keys(out).length > 0 ? out : undefined;
@@ -162,27 +330,44 @@ function schemaViolationsForStore(raw) {
  * er als `{ line, tool }` erhalten — daraus leitet die Anzeige Symbol und
  * gruppierte Zusammenfassung ab (Issue #60). Ohne Tool-Namen bleibt es bei der
  * bisherigen reinen Zeichenkette, damit alte Verläufe unverändert durchgehen.
+ *
+ * @param {unknown} entry
+ * @param {ToolCategoryOf|null} [toolCategoryOf]
+ * @returns {StoredTraceEntry}
  */
-function toolTraceEntryForStore(entry) {
+function toolTraceEntryForStore(entry, toolCategoryOf = null) {
   const line = toolTraceEntryToString(entry);
   if (!line) return '';
-  const tool = typeof entry?.tool === 'string' && entry.tool ? entry.tool : '';
-  const skill = typeof entry?.skill === 'string' && entry.skill ? entry.skill : '';
-  const permission = permissionAuditForStore(entry?.permission);
-  const round = Number.isInteger(entry?.round) && entry.round > 0 ? entry.round : 0;
-  const schema = schemaViolationsForStore(entry?.schema);
-  const changes = fileChangesForStore(entry?.changes);
+  /** @type {Record<string, unknown>} */
+  const fields = isRecord(entry) ? entry : {};
+  const tool = typeof fields.tool === 'string' && fields.tool ? fields.tool : '';
+  const skill = typeof fields.skill === 'string' && fields.skill ? fields.skill : '';
+  // The tool's category (#1008). An entry stored before it carried one gets
+  // it from the descriptor on the way out, so its icon stays what it was.
+  let category = isToolCategory(fields.category) ? fields.category : '';
+  if (!category && tool && typeof toolCategoryOf === 'function') {
+    const known = toolCategoryOf(tool);
+    if (isToolCategory(known)) category = known;
+  }
+  const permission = permissionAuditForStore(fields.permission);
+  const round = typeof fields.round === 'number' && Number.isInteger(fields.round) && fields.round > 0 ? fields.round : 0;
+  const schema = schemaViolationsForStore(fields.schema);
+  const changes = fileChangesForStore(fields.changes);
   // What the sandbox refused (#792): kinds, paths and hosts, never output.
-  const sandboxBlocked = normalizeSandboxBlocked(entry?.sandboxBlocked);
-  const sandboxDecision = sandboxBlocked ? normalizeSandboxDecision(entry?.sandboxDecision) : null;
+  const sandboxBlocked = normalizeSandboxBlocked(fields.sandboxBlocked);
+  const sandboxDecision = sandboxBlocked ? normalizeSandboxDecision(fields.sandboxDecision) : null;
   // What the user decided about connections while a command waited (#792).
-  const sandboxLive = normalizeSandboxLive(entry?.sandboxLive);
+  const sandboxLive = normalizeSandboxLive(fields.sandboxLive);
   // …and on a card before a file tool reached outside the open folder (#792, step 4).
-  const sandboxOutside = normalizeSandboxOutside(entry?.sandboxOutside);
-  if (!tool && !skill && !permission && !round && !schema && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside) return line;
+  const sandboxOutside = normalizeSandboxOutside(fields.sandboxOutside);
+  // A result that looked like a prompt injection (#1011): kinds and short excerpts.
+  const injectionFlag = normalizeInjectionFlag(fields.injectionFlag);
+  if (!tool && !skill && !permission && !round && !schema && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside && !injectionFlag) return line;
+  /** @type {Exclude<StoredTraceEntry, string>} */
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
+  if (category) out.category = category;
   if (permission) out.permission = permission;
   if (round) out.round = round;
   if (schema) out.schema = schema;
@@ -191,6 +376,7 @@ function toolTraceEntryForStore(entry) {
   if (sandboxDecision) out.sandboxDecision = sandboxDecision;
   if (sandboxLive) out.sandboxLive = sandboxLive;
   if (sandboxOutside) out.sandboxOutside = sandboxOutside;
+  if (injectionFlag) out.injectionFlag = injectionFlag;
   return out;
 }
 
@@ -199,18 +385,28 @@ function toolTraceEntryForStore(entry) {
  * content. A patch touches at most 20 files; more than that is not a call.
  */
 const MAX_STORED_CHANGES = 20;
+/**
+ * @param {unknown} raw
+ */
 function fileChangesForStore(raw) {
   if (!Array.isArray(raw)) return undefined;
-  const out = raw.slice(0, MAX_STORED_CHANGES).map(normalizeFileChangeSummary).filter(Boolean);
+  const out = raw.slice(0, MAX_STORED_CHANGES).map(normalizeFileChangeSummary).filter((change) => change !== null);
   return out.length ? out : undefined;
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {StoredTraceEntry[]|undefined}
+ */
 function sanitizeToolTraceForStore(raw) {
   if (!Array.isArray(raw) || raw.length === 0) return undefined;
-  const out = raw.map(toolTraceEntryForStore).filter((e) => e !== '');
+  const out = raw.map((entry) => toolTraceEntryForStore(entry)).filter((entry) => entry !== '');
   return out.length ? out : undefined;
 }
 
+/**
+ * @param {StoredAssistantMessage} row
+ */
 function isStoredAssistantMessageWorthKeeping(row) {
   if (row.isError === true) return true;
   // A turn cut off before its first step still says so after a restart (#979).
@@ -220,6 +416,10 @@ function isStoredAssistantMessageWorthKeeping(row) {
   return !!(row.content && row.content.trim());
 }
 
+/**
+ * @param {LoadedMessage|null} message
+ * @returns {message is LoadedMessage}
+ */
 function isLoadedMessageWorthKeeping(message) {
   if (!message) return false;
   // Ein Screenshot ohne Begleitfrage ist eine vollwertige Nachricht (#94).
@@ -235,8 +435,13 @@ function isLoadedMessageWorthKeeping(message) {
   );
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {StoredMessage[]}
+ */
 function sanitizeChatMessagesForStore(raw) {
   if (!Array.isArray(raw)) return [];
+  /** @type {StoredMessage[]} */
   const out = [];
   for (const m of raw) {
     if (!m || (m.role !== 'user' && m.role !== 'assistant')) continue;
@@ -247,11 +452,13 @@ function sanitizeChatMessagesForStore(raw) {
       // (Issue #94). Base64 wird bewusst nicht uebernommen.
       const attachments = normalizeStoredAttachments(m.attachments);
       if (!content.trim() && attachments.length === 0) continue;
+      /** @type {StoredUserMessage} */
       const row = { role: 'user', content };
       if (attachments.length) row.attachments = attachments;
       out.push(row);
       continue;
     }
+    /** @type {StoredAssistantMessage} */
     const row = { role: 'assistant', content };
     if (m.isError === true) row.isError = true;
     // A turn written while its run is still going (#979) is stored as cut off.
@@ -272,8 +479,12 @@ function sanitizeChatMessagesForStore(raw) {
 /* tokenUsage einer Session ist die Usage der letzten LLM-Runde (deren prompt
  * = zuletzt gesendetes Kontextfenster), keine Summe ueber den Chat. Aeltere
  * Sessions tragen noch Summenwerte; die korrigieren sich mit dem naechsten Zug. */
+/**
+ * @param {unknown} raw
+ * @returns {SessionTokenUsage}
+ */
 function normalizeTokenUsageForStore(raw) {
-  if (!raw || typeof raw !== 'object') {
+  if (!isRecord(raw)) {
     return { prompt: 0, completion: 0, total: 0 };
   }
   const prompt = Math.max(0, Math.round(Number(raw.prompt) || 0));
@@ -285,12 +496,18 @@ function normalizeTokenUsageForStore(raw) {
   return { prompt, completion, total };
 }
 
-function normalizeLoadedMessages(raw) {
+/**
+ * @param {unknown} raw
+ * @param {ToolCategoryOf|null} [toolCategoryOf]
+ * @returns {LoadedMessage[]}
+ */
+function normalizeLoadedMessages(raw, toolCategoryOf = null) {
   if (!Array.isArray(raw)) return [];
   return raw
     .map((m) => {
       if (!m || (m.role !== 'user' && m.role !== 'assistant')) return null;
       if (m.role === 'user') {
+        /** @type {StoredUserMessage} */
         const row = { role: 'user', content: messageContentForStore(m.content) };
         // Die Bilddaten holt der Renderer erst beim Anzeigen nach (#94) —
         // saemtliche Sessions eines Ordners auf einmal waeren zu viel.
@@ -299,8 +516,9 @@ function normalizeLoadedMessages(raw) {
         return row;
       }
       const toolTrace = Array.isArray(m.toolTrace)
-        ? m.toolTrace.map(toolTraceEntryForStore).filter((e) => e !== '')
+        ? m.toolTrace.map((/** @type {unknown} */ entry) => toolTraceEntryForStore(entry, toolCategoryOf)).filter((/** @type {StoredTraceEntry} */ e) => e !== '')
         : [];
+      /** @type {LoadedAssistantMessage} */
       const row = {
         role: 'assistant',
         content: messageContentForStore(m.content),
@@ -319,6 +537,10 @@ function normalizeLoadedMessages(raw) {
  * Feldweiser Vergleich zweier Werte in Ablageform — reihenfolgenunabhaengig,
  * damit eine aeltere Verlaufsdatei nicht allein wegen einer anderen
  * Schluesselreihenfolge als veraendert gilt.
+ *
+ * @param {unknown} a
+ * @param {unknown} b
+ * @returns {boolean}
  */
 function sameStoredValue(a, b) {
   if (a === b) return true;
@@ -326,7 +548,7 @@ function sameStoredValue(a, b) {
     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
     return a.every((value, i) => sameStoredValue(value, b[i]));
   }
-  if (a && b && typeof a === 'object' && typeof b === 'object') {
+  if (isRecord(a) && isRecord(b)) {
     const keysA = Object.keys(a).sort();
     const keysB = Object.keys(b).sort();
     if (keysA.length !== keysB.length) return false;
@@ -349,9 +571,14 @@ function sameStoredValue(a, b) {
  * gespeicherte Seite laeuft vorher noch einmal durch die Sanitisierung, damit
  * ein Verlauf aus einer aelteren Version nicht schon durch das Nachziehen
  * seiner Form als veraendert zaehlt.
+ *
+ * @param {unknown} existingMessages
+ * @param {unknown} nextMessages
+ * @returns {boolean}
  */
 function storedChatMessagesChanged(existingMessages, nextMessages) {
   const before = sanitizeChatMessagesForStore(existingMessages);
+  /** @type {unknown[]} */
   const after = Array.isArray(nextMessages) ? nextMessages : [];
   if (before.length !== after.length) return true;
   if (after.length === 0) return false;
@@ -363,9 +590,14 @@ function storedChatMessagesChanged(existingMessages, nextMessages) {
  * with none at all: a fallback like "New chat" is worked out when the chat is
  * shown, in the language it is shown in (#359). German fallbacks written by
  * older versions are dropped on the way, so the next write migrates them.
+ *
+ * @param {{ title?: unknown }} sessionRow
+ * @param {unknown} messages
+ * @param {unknown} existingTitle
+ * @returns {string}
  */
 function resolveSessionTitle(sessionRow, messages, existingTitle) {
-  const own = (value) => {
+  const own = (/** @type {unknown} */ value) => {
     const title = typeof value === 'string' ? value.trim() : '';
     return title && !isLegacyFallbackChatTitle(title, messages) ? title : '';
   };
@@ -377,6 +609,11 @@ function resolveSessionTitle(sessionRow, messages, existingTitle) {
  * permission mode (#211), reasoning level (#725), what it switched for itself
  * (#774) and its estimated cost (#949). Copied in this order, so that every
  * form of a session lists its fields alike.
+ *
+ * @template {object} T
+ * @param {SessionRowInput} from
+ * @param {T & ChatSettings} out
+ * @returns {T & ChatSettings}
  */
 function copyChatSettings(from, out) {
   const modelPresetId = chatModelPresetIdForStore(from.modelPresetId);
@@ -392,6 +629,11 @@ function copyChatSettings(from, out) {
   return out;
 }
 
+/**
+ * @param {SessionRowInput|null|undefined} sessionRow
+ * @param {{ normalizeWorkspaceRoot?: (raw: unknown) => string|null, existingTitle?: string, requireMessages?: boolean }} [options]
+ * @returns {StoredSession|null}
+ */
 function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existingTitle, requireMessages = false } = {}) {
   if (!sessionRow || typeof sessionRow.id !== 'string' || !sessionRow.id.trim()) return null;
   const messages = sanitizeChatMessagesForStore(sessionRow.messages);
@@ -405,20 +647,25 @@ function normalizeSessionForStore(sessionRow, { normalizeWorkspaceRoot, existing
     id: sessionRow.id.trim(),
     workspaceRoot,
     title: title.slice(0, 200),
-    updatedAt: Number.isFinite(sessionRow.updatedAt) ? sessionRow.updatedAt : Date.now(),
+    updatedAt: typeof sessionRow.updatedAt === 'number' && Number.isFinite(sessionRow.updatedAt) ? sessionRow.updatedAt : Date.now(),
     messages,
     tokenUsage: normalizeTokenUsageForStore(sessionRow.tokenUsage),
   });
 }
 
-function normalizeSessionForLoad(sessionRow) {
+/**
+ * @param {SessionRow|null|undefined} sessionRow
+ * @param {{ toolCategoryOf?: ToolCategoryOf|null }} [options]
+ * @returns {LoadedSession|null}
+ */
+function normalizeSessionForLoad(sessionRow, { toolCategoryOf = null } = {}) {
   if (!sessionRow || typeof sessionRow !== 'object') return null;
   return copyChatSettings(sessionRow, {
     id: sessionRow.id,
     workspaceRoot: sessionRow.workspaceRoot ?? null,
     title: typeof sessionRow.title === 'string' ? sessionRow.title : '',
     updatedAt: sessionRow.updatedAt,
-    messages: normalizeLoadedMessages(sessionRow.messages),
+    messages: normalizeLoadedMessages(sessionRow.messages, toolCategoryOf),
     tokenUsage: normalizeTokenUsageForStore(sessionRow.tokenUsage),
   });
 }
@@ -429,9 +676,13 @@ function normalizeSessionForLoad(sessionRow) {
  * title, what the list calls it instead. Built from a session in store form,
  * so the list, the folder pointers and the chat's own settings are answered
  * without opening the chat's file.
+ *
+ * @param {SessionRow} session
+ * @returns {SessionMeta}
  */
 function sessionMetaFromSession(session) {
   const loaded = normalizeLoadedMessages(session.messages);
+  /** @type {SessionMeta} */
   const meta = copyChatSettings(session, {
     id: session.id,
     workspaceRoot: session.workspaceRoot ?? null,
@@ -446,16 +697,25 @@ function sessionMetaFromSession(session) {
   return meta;
 }
 
-/** An index entry as read back from the disk; `null` for one that is no entry. */
+/**
+ * An index entry as read back from the disk; `null` for one that is no entry.
+ *
+ * @param {unknown} raw
+ * @param {{ normalizeWorkspaceRoot?: (raw: unknown) => string|null }} [options]
+ * @returns {SessionMeta|null}
+ */
 function normalizeSessionMetaForStore(raw, { normalizeWorkspaceRoot } = {}) {
-  if (!raw || typeof raw !== 'object' || typeof raw.id !== 'string' || !raw.id.trim()) return null;
+  if (!isRecord(raw) || typeof raw.id !== 'string' || !raw.id.trim()) return null;
+  /** @type {SessionMeta} */
   const meta = copyChatSettings(raw, {
     id: raw.id.trim(),
     workspaceRoot:
-      typeof normalizeWorkspaceRoot === 'function' ? normalizeWorkspaceRoot(raw.workspaceRoot) : raw.workspaceRoot || null,
+      typeof normalizeWorkspaceRoot === 'function'
+        ? normalizeWorkspaceRoot(raw.workspaceRoot)
+        : (typeof raw.workspaceRoot === 'string' && raw.workspaceRoot) || null,
     title: typeof raw.title === 'string' ? raw.title.trim().slice(0, 200) : '',
-    updatedAt: Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0,
-    messageCount: Number.isInteger(raw.messageCount) && raw.messageCount > 0 ? raw.messageCount : 0,
+    updatedAt: typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : 0,
+    messageCount: typeof raw.messageCount === 'number' && Number.isInteger(raw.messageCount) && raw.messageCount > 0 ? raw.messageCount : 0,
     tokenUsage: normalizeTokenUsageForStore(raw.tokenUsage),
   });
   if (!meta.title && isMessage(raw.untitled)) meta.untitled = createMessage(raw.untitled.key, raw.untitled.params);
@@ -466,9 +726,13 @@ function normalizeSessionMetaForStore(raw, { normalizeWorkspaceRoot } = {}) {
  * A chat as the history list gets it (#985): no messages, only what a row
  * shows and what picks the chat a folder opens with. `title` is what the row
  * says — the chat's own title, or a message descriptor when it has none.
+ *
+ * @param {SessionMeta|null|undefined} meta
+ * @returns {SessionListRow|null}
  */
 function normalizeSessionMetaForList(meta) {
   if (!meta || typeof meta !== 'object' || typeof meta.id !== 'string') return null;
+  /** @type {SessionListRow} */
   const out = {
     id: meta.id,
     workspaceRoot: meta.workspaceRoot ?? null,
@@ -485,6 +749,10 @@ function normalizeSessionMetaForList(meta) {
  * A whole chat in store form, from its index entry and the messages of its
  * file. The entry wins for everything else: a chat's own settings are written
  * to the index alone when they change (#985).
+ *
+ * @param {SessionMeta} meta
+ * @param {StoredMessage[]} messages
+ * @returns {StoredSession}
  */
 function sessionFromMeta(meta, messages) {
   return copyChatSettings(meta, {

@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const nodePath = require('path');
+const { removeDir, removeTempDir } = require('./helpers/temp-dir');
 const {
   createSkillsWatcher,
   MAX_FALLBACK_LEVELS,
@@ -642,7 +643,7 @@ test('meldet eine echte neue SKILL.md im Unterordner', async () => {
     assert.ok(gemeldet, 'das Anlegen eines Skills wurde gemeldet');
   } finally {
     watcher.close();
-    await fsPromises.rm(root, { recursive: true, force: true });
+    await removeTempDir(root);
   }
 });
 
@@ -678,12 +679,12 @@ test('meldet auch, wenn das ganze Skill-Verzeichnis verschwindet', async () => {
         await fsPromises.mkdir(skillDir, { recursive: true });
         await fsPromises.writeFile(realPath.join(skillDir, 'SKILL.md'), '---\nname: x\n---\n', 'utf8');
       },
-      ausloesen: () => fsPromises.rm(agentsDir, { recursive: true, force: true }),
+      ausloesen: () => removeDir(agentsDir),
     });
     assert.ok(gemeldet, 'das Entfernen wurde gemeldet');
   } finally {
     watcher.close();
-    await fsPromises.rm(root, { recursive: true, force: true });
+    await removeTempDir(root);
   }
 });
 
@@ -746,6 +747,6 @@ test('ein Watcher, der sein Startfenster verschläft, bleibt nicht taub', async 
     );
   } finally {
     watcher.close();
-    await fsPromises.rm(root, { recursive: true, force: true });
+    await removeTempDir(root);
   }
 });

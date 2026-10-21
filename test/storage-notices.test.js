@@ -7,6 +7,7 @@ const { createStorageService } = require('../src/main/services/storage-service')
 const { createAppNotices, postStoreFileEvent } = require('../src/main/services/app-notices');
 const { NOTICE_KINDS } = require('../src/shared/contracts/notices');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 /**
  * A store that sets an unreadable file aside, or cannot save it, tells the
@@ -33,8 +34,8 @@ function makeStorage(dir, { fsImpl = fs } = {}) {
   const events = [];
   const notices = createAppNotices({ log: { warn() {} } });
   const storage = createStorageService({
-    app: { getPath: () => dir },
-    safeStorage,
+    userDataPath: dir,
+    secretStore: safeStorage,
     fs: fsImpl,
     path,
     providerCatalog: createMockProviderCatalog((id) => PROVIDERS[id] || null),
@@ -68,7 +69,7 @@ function fsFailingRenameTo(marker) {
 
 async function tmpDir(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-notices-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 

@@ -95,10 +95,42 @@ test('the provider refusal names Snotra and the provider, not the model (#995)',
     assert.ok(messages['chat.image.error.connectionWithoutImages'].length > 10);
   }
 
-  const named = rejectionMessage(INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES, { provider: 'Anthropic (Claude)' });
-  assert.match(named, /Anthropic \(Claude\)/);
+  const named = rejectionMessage(INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES, { provider: 'Google (Gemini)' });
+  assert.match(named, /Google \(Gemini\)/);
   assert.doesNotMatch(named, /model/i);
   assert.doesNotMatch(rejectionMessage(INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES), /\{provider\}/);
+});
+
+test('planAttachmentIntake refuses a format the provider does not take (#91)', async () => {
+  const { planAttachmentIntake, INTAKE_REJECTIONS } = await modulePromise;
+  const gemini = ['image/png', 'image/jpeg', 'image/webp'];
+
+  const { accepted, rejections, refusedMediaType } = planAttachmentIntake(
+    0,
+    [fakeFile('image/gif', 'a.gif'), fakeFile('image/png'), fakeFile('image/gif', 'b.gif')],
+    { imageMediaTypes: gemini },
+  );
+  assert.deepEqual(accepted.map((f) => f.type), ['image/png']);
+  assert.deepEqual(rejections, [INTAKE_REJECTIONS.PROVIDER_REFUSES_FORMAT]);
+  assert.equal(refusedMediaType, 'image/gif');
+
+  // Without a list every attachable format goes in, as before.
+  const all = planAttachmentIntake(0, [fakeFile('image/gif', 'a.gif')]);
+  assert.equal(all.accepted.length, 1);
+  assert.equal(all.refusedMediaType, '');
+});
+
+test('the format refusal names the provider, the format and what works (#91)', async () => {
+  const { rejectionMessage, INTAKE_REJECTIONS } = await modulePromise;
+  const text = rejectionMessage(INTAKE_REJECTIONS.PROVIDER_REFUSES_FORMAT, {
+    provider: 'Google (Gemini)',
+    refusedMediaType: 'image/gif',
+    mediaTypes: ['image/png', 'image/jpeg', 'image/webp'],
+  });
+  assert.match(text, /Google \(Gemini\)/);
+  assert.match(text, /GIF/);
+  assert.match(text, /PNG, JPEG, WebP/);
+  assert.doesNotMatch(rejectionMessage(INTAKE_REJECTIONS.PROVIDER_REFUSES_FORMAT), /\{/);
 });
 
 test('rejectionMessage liefert zu jedem Grund einen lesbaren Satz', async () => {

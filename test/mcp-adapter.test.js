@@ -8,7 +8,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { createMcpAdapter, renderContent, MAX_RESULT_CHARS } = require('../src/main/adapters/mcp-adapter');
-const { createToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { TOOL_RISK_CLASSES } = require('../src/shared/contracts/tool-permissions');
 const { MCP_CONNECTION_STATES } = require('../src/shared/contracts/mcp');
@@ -315,7 +315,7 @@ test('der Plan trägt beide Mindestklassen, auch ohne Planer', async () => {
 });
 
 test('der echte Planer führt beide Mindestklassen zusammen', async () => {
-  const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
+  const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
   const registry = registryWithMcp(await definitionsOf(fakeService()));
   const planner = createToolCallPlanner({
     fsService: { resolveToolPath: async () => ({ error: 'kein Workspace' }) },
@@ -427,7 +427,7 @@ test('ein abgeschaltetes MCP-Tool wird von der Policy blockiert', () => {
 
 // --- Tool-Log (#60) ---
 
-const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
+const { formatLine: formatToolDisplayLine } = require('./helpers/tool-descriptors');
 
 test('das Tool-Log zeigt Server und Tool statt des Namensraums', () => {
   const entry = { tool: 'mcp__github__search', args: { q: 'x' } };

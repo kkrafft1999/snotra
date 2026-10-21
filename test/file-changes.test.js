@@ -12,10 +12,11 @@ const path = require('path');
 const { splitLines, diffLines, countChanges } = require('../src/main/services/line-diff');
 const { createFileChangeRecorder, analyze } = require('../src/main/services/file-change-recorder');
 const { createFsService } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { createWorkspaceFileWrittenEvent, normalizeFileChangeSummary } = require('../src/shared/contracts/chat');
 const { toolTraceEntryForStore } = require('../src/main/services/chat-history-normalization');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const LIMITS = { maxReadFileBytes: 1024 * 1024, maxWriteFileBytes: 1024 * 1024 };
 
@@ -190,7 +191,7 @@ test('a file above the size limit is recorded with its sizes only', async () => 
 
 test('the diff says when the file moved on since, or went away', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-changes-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const file = path.join(dir, 'a.txt');
   await fs.writeFile(file, 'after\n');
   const recorder = createFileChangeRecorder({ fs, bootId: 'ab12' });
@@ -206,7 +207,7 @@ test('the diff says when the file moved on since, or went away', async (t) => {
 
 async function workspaceWith(t, files) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-changes-ws-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   for (const [rel, content] of Object.entries(files)) {
     await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
     await fs.writeFile(path.join(dir, rel), content);

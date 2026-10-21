@@ -12,11 +12,17 @@
  */
 const DEFAULT_TAIL_LINES = 200;
 
+/** @param {string} text */
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Replaces the home folder with `~`, in both slash directions on Windows. */
+/**
+ * Replaces the home folder with `~`, in both slash directions on Windows.
+ *
+ * @param {string} text
+ * @param {string} [homeDir]
+ */
 function hideHome(text, homeDir) {
   if (!homeDir || homeDir.length < 2) return text;
   const variants = new Set([homeDir, homeDir.replace(/\\/g, '/')]);
@@ -29,7 +35,7 @@ function hideHome(text, homeDir) {
 
 /**
  * @param {{ appName: string, appVersion: string, platform: string, arch: string,
- *   osRelease: string, versions: Record<string, string>, locale?: string,
+ *   osRelease: string, versions: Readonly<Record<string, string|undefined>>, locale?: string,
  *   errorCount: number, logFile: { filePath: string, tail: (n: number) => string[] } | null,
  *   homeDir?: string, tailLines?: number, now?: () => Date }} input
  */

@@ -8,7 +8,7 @@ const assert = require('node:assert/strict');
 // man dem Diff nicht an und im Chat erst, wenn ein englischsprachiger Nutzer
 // eine deutsche Antwort bekommt. Deshalb diese Datei.
 
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { buildEnvironmentSystemPrompt } = require('../src/application/chat/environment-prompt');
 const { buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt } = require('../src/application/chat/memory-prompt');
 const {
@@ -25,6 +25,7 @@ const {
   createPermissionDeniedToolResult,
 } = require('../src/shared/contracts/tool-permissions');
 const { hasKey, translate } = require('../src/shared/i18n');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // Menuepfade werden im Modelltext bewusst so zitiert, wie sie auf dem
 // Bildschirm stehen — sonst schickt das Modell den Nutzer zu einem Menuepunkt,
@@ -226,7 +227,7 @@ const fsPromises = require('node:fs/promises');
 const os = require('node:os');
 const nodePath = require('node:path');
 const { createFsService } = require('../src/main/services/fs-service');
-const { validateArguments } = require('../src/main/tools/tool-call-planner');
+const { validateArguments } = require('../src/application/tools/tool-call-planner');
 const { createHttpUrlFetchAdapter } = require('../src/main/adapters/http-url-fetch-adapter');
 const { renderContent, MAX_RESULT_CHARS } = require('../src/main/adapters/mcp-adapter');
 const { parseHttpUrl } = require('../src/shared/runtime/url-safety');
@@ -248,8 +249,8 @@ function looksGerman(text) {
 /** Files whose strings end up in a tool result. */
 const MODEL_CHANNEL_SOURCES = [
   'src/main/services/fs-service.js',
-  'src/main/tools/tool-call-planner.js',
-  'src/main/tools/workspace-tool-registry.js',
+  'src/application/tools/tool-call-planner.js',
+  'src/application/tools/workspace-tool-registry.js',
   'src/main/adapters/http-url-fetch-adapter.js',
   'src/main/adapters/mcp-adapter.js',
   'src/main/adapters/workspace-tool-adapter.js',
@@ -279,11 +280,11 @@ const MODEL_CHANNEL_SOURCES = [
 // sentence would slip through unnoticed.
 const NOT_MODEL_CHANNEL = [
   // Registration guards: programming errors at construction time (#278).
-  { file: 'src/main/tools/workspace-tool-registry.js', text: 'Tool benötigt name, description bzw. descriptionKey, parameters und handler.' },
-  { file: 'src/main/tools/workspace-tool-registry.js', text: ': ohne description braucht es eine modelDescription.' },
-  { file: 'src/main/tools/workspace-tool-registry.js', text: ': modelDescription muss ein String sein.' },
-  { file: 'src/main/tools/workspace-tool-registry.js', text: ' benötigt eine gültige riskClass.' },
-  { file: 'src/main/tools/workspace-tool-registry.js', text: ' hat eine ungültige zusätzliche riskClass: ' },
+  { file: 'src/application/tools/workspace-tool-registry.js', text: 'Tool benötigt name, description bzw. descriptionKey, parameters und handler.' },
+  { file: 'src/application/tools/workspace-tool-registry.js', text: ': ohne description braucht es eine modelDescription.' },
+  { file: 'src/application/tools/workspace-tool-registry.js', text: ': modelDescription muss ein String sein.' },
+  { file: 'src/application/tools/workspace-tool-registry.js', text: ' benötigt eine gültige riskClass.' },
+  { file: 'src/application/tools/workspace-tool-registry.js', text: ' hat eine ungültige zusätzliche riskClass: ' },
   // Construction guard (#278).
   { file: 'src/main/adapters/memory-adapter.js', text: 'createMemoryAdapter benötigt fs und path.' },
 ];
@@ -339,7 +340,7 @@ function stringsIn(value, found = []) {
 
 test('tool errors reach the model in English (#309)', async (t) => {
   const workspace = await fsPromises.mkdtemp(nodePath.join(os.tmpdir(), 'snotra-309-'));
-  t.after(() => fsPromises.rm(workspace, { recursive: true, force: true }));
+  t.after(() => removeTempDir(workspace));
   await fsPromises.writeFile(nodePath.join(workspace, 'a.txt'), 'one\ntwo\n');
   await fsPromises.writeFile(nodePath.join(workspace, 'notes.txt'), 'plain prose only\n');
   await fsPromises.mkdir(nodePath.join(workspace, 'dir'));

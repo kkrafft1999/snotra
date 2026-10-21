@@ -15,6 +15,9 @@ const {
   IMAGE_ATTACHMENT_CHAR_COST,
   MAX_IMAGES_PER_MESSAGE,
   MAX_IMAGE_ATTACHMENT_BYTES,
+  IMAGE_ATTACHMENT_MEDIA_TYPES,
+  providerImageMediaTypes,
+  imageFormatNames,
 } = require('../src/shared/contracts/attachments');
 
 const PNG_1PX =
@@ -181,4 +184,20 @@ test('countImageAttachments zaehlt beide Formen', () => {
     2
   );
   assert.equal(countImageAttachments({}), 0);
+});
+
+// Image formats per provider (#91).
+test('providerImageMediaTypes: all formats without a list, the named ones in contract order otherwise', () => {
+  assert.deepEqual(providerImageMediaTypes(undefined), [...IMAGE_ATTACHMENT_MEDIA_TYPES]);
+  assert.deepEqual(providerImageMediaTypes({ images: true }), [...IMAGE_ATTACHMENT_MEDIA_TYPES]);
+  assert.deepEqual(
+    providerImageMediaTypes({ images: true, imageMediaTypes: ['image/webp', 'image/png', 'image/tiff'] }),
+    ['image/png', 'image/webp'],
+  );
+});
+
+test('imageFormatNames names the formats for a message', () => {
+  assert.equal(imageFormatNames(IMAGE_ATTACHMENT_MEDIA_TYPES), 'PNG, JPEG, GIF, WebP');
+  assert.equal(imageFormatNames(['image/gif']), 'GIF');
+  assert.equal(imageFormatNames(undefined), '');
 });

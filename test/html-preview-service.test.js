@@ -12,7 +12,7 @@ const {
   HTML_PREVIEW_SCHEME_PRIVILEGES,
   previewUrl,
   parsePreviewUrl,
-} = require('../src/main/services/html-preview-service');
+} = require('../src/main/electron/html-preview-service');
 const {
   HTML_PREVIEW_PARTITION,
   MAX_HTML_PREVIEW_BYTES,

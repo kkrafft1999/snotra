@@ -19,6 +19,7 @@ const { createHash, randomBytes } = require('crypto');
 const { readRegularFile, NOT_A_REGULAR_FILE_ERROR } = require('./read-regular-file');
 const { renameWithRetry } = require('./rename-with-retry');
 const { OUTSIDE_WORKSPACE } = require('./outside-access');
+const { LIST_DIRECTORY_MAX_ENTRIES } = require('../../shared/contracts/list-directory');
 const {
   ITEM_FAILURE_REASONS,
   validateItemName,
@@ -47,6 +48,167 @@ const {
   createRegexSearchWorker,
 } = require('./regex-search-worker');
 const { compileGitignore, compileGlob } = require('./glob-match');
+
+/**
+ * The error texts of one kind of root, so that the user sees what a path fails on.
+ * @typedef {{ outside: string, missing: string, required: string }} PathLabels
+ */
+
+/** @typedef {{ name: string, dir: string }} SkillRoot */
+
+/**
+ * A folder (or one file) outside the open folder that the user opened on a card.
+ * @typedef {{ root: string, only: string | null, access: 'read' | 'write' }} OutsideRoot
+ */
+
+/**
+ * What resolving a tool path reads from the options of a tool call.
+ * @typedef {{ access?: 'read' | 'write', skillRoots?: SkillRoot[], outsideRoots?: OutsideRoot[] }} PathOptions
+ */
+
+/**
+ * A call's arguments as the model sent them: parsed JSON, checked where used.
+ * @typedef {import('../../application/ports/tool-port').ToolArguments} ToolArgs
+ */
+
+/**
+ * What a write tool produced: the result fields, or an error with an optional code.
+ * @typedef {{ error: string, code?: string }
+ *   | { relative_path: string, created: boolean, overwritten: boolean, bytes_written: number,
+ *       recovery_copy_in_trash?: string, error?: undefined }} WriteResult
+ */
+
+/**
+ * A file of a patch after phase 1 of `apply_patch`: where it goes, what it was
+ * and what it becomes.
+ * @typedef {{ relativePath: string, absPath: string, root: string, identity: string | undefined,
+ *   original: Buffer, updated: string, byteLength: number, hunks: number, offsets: Array<number | null> }} PlannedPatchFile
+ */
+
+/**
+ * The sensitive-path check the adapter hands the broad tools (#66).
+ * @typedef {NonNullable<ToolOptions['sensitivity']>} Sensitivity
+ */
+
+/**
+ * What `readWorkspaceEntries` needs to walk a folder with the shared rules of
+ * the listing tools. `omitted.count` is raised for every sensitive entry left out.
+ * @typedef {object} WalkOptions
+ * @property {string} root
+ * @property {boolean} includeHidden
+ * @property {((relPath: string, isDirectory: boolean) => boolean) | null} [isIgnored]
+ * @property {Sensitivity} [sensitivity]
+ * @property {string} [prefix]
+ * @property {{ count: number }} [omitted]
+ */
+
+/** @typedef {{ name: string, absPath: string, relPath: string, isDirectory: boolean }} WorkspaceEntry */
+
+/** A folder or file of the tree a tool draws. @typedef {{ name: string, isDirectory: boolean, absPath: string, children: TreeNode[], hidden: number }} TreeNode */
+
+/**
+ * One row of the file tree's listing (#76). A symlink also carries what it
+ * points at (#945).
+ * @typedef {{ name: string, path: string, isDirectory: boolean, size: number, modified: number,
+ *   isSymlink?: boolean, linkTarget?: string, linkKind?: string, linkOutside?: boolean }} DirectoryRow
+ */
+
+/**
+ * What an import is asked to do, and how it checks a source (#646).
+ * @typedef {object} ImportOptions
+ * @property {number} [maxEntries]
+ * @property {number} [maxTotalBytes]
+ * @property {((name: string) => boolean) | null} [isSensitiveName]  by entry name
+ * @property {((absPath: string) => { sensitive?: boolean, pattern?: string } | null | undefined) | null} [classifySourcePath]
+ *   by written and by real path
+ * @property {string} [platform]  decides whether target names compare case-insensitively
+ */
+
+/** @typedef {{ source: string, targetPath: string, kind: 'directory' | 'file' }} ImportTarget */
+
+/**
+ * What an import would touch: counted, and the targets named. Or why it is refused.
+ * @typedef {{ error: string, ok?: undefined }
+ *   | { ok: true, error?: undefined, destDir: string, dirs: number, files: number, bytes: number,
+ *       skippedSymlinks: number, skippedSensitive: number, skippedOther: number, targets: ImportTarget[] }} ImportInspection
+ */
+
+/**
+ * What an import did: what it copied, or why it did not. A failed copy names
+ * what could not be taken back.
+ * @typedef {{ error: string, copied?: string[], ok?: undefined }
+ *   | { ok: true, error?: undefined, copied: string[], dirs: number, files: number, bytes: number,
+ *       skippedSymlinks: number, skippedSensitive: number, skippedOther: number }} ImportResult
+ */
+
+/**
+ * The options of a tool call: the call's context and what the adapter adds.
+ * @typedef {import('../../application/ports/tool-port').ToolHandlerContext} ToolOptions
+ */
+
+/**
+ * A path checked against a root: the absolute path, or the reason it is refused.
+ * @typedef {{ absPath: string, error?: undefined, code?: undefined }
+ *   | { error: string, code?: string, absPath?: undefined }} CheckedPath
+ */
+
+/**
+ * A tool path resolved against its root (#61, #792): `root` is the root actually
+ * used, `prefix` the prefix for relative paths made from it. A refusal carries
+ * the `code` that lets a caller tell "no right to look" and "a dangling link"
+ * from a path that lies outside (#641).
+ * @typedef {{
+ *   error: string,
+ *   code?: string,
+ *   absPath?: string,
+ *   root?: undefined,
+ *   prefix?: undefined,
+ *   skillName?: undefined,
+ *   outside?: undefined,
+ * } | {
+ *   error?: undefined,
+ *   absPath: string,
+ *   root: string,
+ *   prefix: string,
+ *   skillName: string | null,
+ *   outside?: true,
+ * }} ResolvedToolPath
+ */
+
+/**
+ * One hunk of a patch: the lines it expects (`oldLines`), the lines that stand
+ * after it (`newLines`) and the marker of every body line (`ops`).
+ * `oldStart` is null when the header names no line; such a hunk is placed by
+ * its lines alone.
+ * @typedef {object} Hunk
+ * @property {string} header
+ * @property {number | null} oldStart
+ * @property {number} oldCount
+ * @property {string[]} oldLines
+ * @property {string[]} newLines
+ * @property {string[]} ops
+ * @property {boolean} noNewlineOld
+ * @property {boolean} noNewlineNew
+ * @property {string | null} [anchor]
+ */
+
+/** @typedef {{ relativePath: string, hunks: Hunk[] }} PatchFile */
+
+/**
+ * What `splitTextForPatch` hands the patch code: the lines without endings,
+ * and each line's own ending.
+ * @typedef {{ lines: string[], endings: string[] }} SplitText
+ */
+
+/**
+ * An edit as the model sends it; `applyEditsToText` checks every field.
+ * @typedef {{ old_string?: unknown, new_string?: unknown, replace_all?: unknown } | null | undefined} EditSpec
+ */
+
+/**
+ * One line of an outline: a heading or a signature, with the nesting level.
+ * @typedef {{ line: number, level?: number, kind: string, name?: string, text: string }} OutlineEntry
+ */
 
 const READ_LINES_DEFAULT_COUNT = 200;
 const READ_LINES_MAX_COUNT = 1000;
@@ -114,18 +276,23 @@ const TREE_DEFAULT_MAX_DEPTH = 3;
 const TREE_MAX_DEPTH = 10;
 const TREE_DEFAULT_MAX_ENTRIES = 200;
 const TREE_MAX_ENTRIES = 1000;
-// Cut after filtering and sorting, so the model sees folders first and a stable first page.
-const LIST_DIRECTORY_MAX_ENTRIES = 1000;
 // The file tree shows more than the model gets, but not everything: a folder
 // with tens of thousands of entries would otherwise stall main, IPC and the DOM.
 const READ_DIRECTORY_MAX_ENTRIES = 2000;
 const READ_DIRECTORY_LSTAT_BATCH = 64;
 
 
+/**
+ * @param {string} text
+ */
 function escapeRegExpLiteral(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * @param {Record<string, unknown>} args
+ * @param {string} name
+ */
 function readIntegerArg(args, name) {
   const value = args[name];
   if (value === undefined || value === null) return { value: undefined };
@@ -135,13 +302,24 @@ function readIntegerArg(args, name) {
   return { value: Math.floor(value) };
 }
 
-/** Teilt Text in Zeilen; eine einzelne Leerzeile durch abschließenden Umbruch zählt nicht mit. */
+/**
+ * Teilt Text in Zeilen; eine einzelne Leerzeile durch abschließenden Umbruch zählt nicht mit.
+ *
+ * @param {string} text
+ */
 function splitFileLines(text) {
   const lines = text.split(/\r\n|\r|\n/);
   if (lines.length && lines[lines.length - 1] === '') lines.pop();
   return lines;
 }
 
+/**
+ * @param {string} rel
+ * @param {string} text
+ * @param {number | undefined} startLineArg
+ * @param {number | undefined} endLineArg
+ * @param {number} maxChars
+ */
 function buildLineSliceResult(rel, text, startLineArg, endLineArg, maxChars) {
   const startLine = startLineArg === undefined ? 1 : startLineArg;
   if (startLine < 1) return { error: 'start_line must be at least 1.' };
@@ -193,6 +371,13 @@ function buildLineSliceResult(rel, text, startLineArg, endLineArg, maxChars) {
   };
 }
 
+/**
+ * @param {string} rel
+ * @param {Buffer} buf
+ * @param {number | undefined} startByteArg
+ * @param {number | undefined} lengthArg
+ * @param {number} maxChars
+ */
 function buildByteSliceResult(rel, buf, startByteArg, lengthArg, maxChars) {
   const startByte = startByteArg === undefined ? 0 : startByteArg;
   if (startByte < 0) return { error: 'start_byte must not be negative.' };
@@ -221,10 +406,16 @@ function buildByteSliceResult(rel, buf, startByteArg, lengthArg, maxChars) {
   };
 }
 
+/**
+ * @param {Buffer} buf
+ */
 function isBinaryBuffer(buf) {
   return buf.subarray(0, SEARCH_BINARY_PROBE_BYTES).includes(0);
 }
 
+/**
+ * @param {string} text
+ */
 function clipOutlineText(text) {
   const t = text.trim();
   return t.length <= OUTLINE_MAX_TEXT_CHARS ? t : `${t.slice(0, OUTLINE_MAX_TEXT_CHARS)}…`;
@@ -234,6 +425,8 @@ function clipOutlineText(text) {
  * The part of a line the outline patterns look at (#643). The patterns are
  * written to run in linear time; the cap keeps a 2 MB one-line file cheap
  * all the same, and costs nothing visible — an entry's text is shorter.
+ *
+ * @param {string} line
  */
 function clipOutlineLine(line) {
   return line.length <= OUTLINE_MAX_LINE_CHARS ? line : line.slice(0, OUTLINE_MAX_LINE_CHARS);
@@ -243,6 +436,8 @@ function clipOutlineLine(line) {
  * Drops a closing sequence of `#` behind a heading ("## Title ##"), as
  * `/[ \t]+#+$/` did — by hand, because that regex is quadratic on a long run
  * of blanks that does not end in `#` (#643).
+ *
+ * @param {string} text
  */
 function stripClosingHashes(text) {
   let end = text.length;
@@ -253,15 +448,22 @@ function stripClosingHashes(text) {
   return start < end ? text.slice(0, start) : text;
 }
 
-/** Markdown-Gliederung: ATX- (#) und Setext-Überschriften (===/---), ohne Code-Fences und Front-Matter. */
+/**
+ * Markdown-Gliederung: ATX- (#) und Setext-Überschriften (===/---), ohne Code-Fences und Front-Matter.
+ *
+ * @param {string[]} rawLines
+ * @returns {OutlineEntry[]}
+ */
 function extractMarkdownOutline(rawLines) {
   const lines = rawLines.map(clipOutlineLine);
+  /** @type {OutlineEntry[]} */
   const entries = [];
   let i = 0;
   if (lines.length && /^---\s*$/.test(lines[0])) {
     const end = lines.findIndex((line, idx) => idx > 0 && /^(?:---|\.\.\.)\s*$/.test(line));
     if (end > 0) i = end + 1;
   }
+  /** @type {RegExp | null} */
   let fenceClose = null;
   for (; i < lines.length; i++) {
     const line = lines[i];
@@ -383,6 +585,9 @@ const JS_SIGNATURE_PATTERNS = [
   },
 ];
 
+/**
+ * @param {string} line
+ */
 function measureIndentColumns(line) {
   let columns = 0;
   for (const ch of line) {
@@ -393,11 +598,18 @@ function measureIndentColumns(line) {
   return columns;
 }
 
-/** Generische Code-Gliederung: Signaturzeilen per Regex; Ebene = Rang der Einrücktiefe (1 = am weitesten links). */
+/**
+ * Generische Code-Gliederung: Signaturzeilen per Regex; Ebene = Rang der Einrücktiefe (1 = am weitesten links).
+ *
+ * @param {string[]} lines
+ * @param {{ isJavaScript?: boolean }} [options]
+ * @returns {OutlineEntry[]}
+ */
 function extractCodeOutline(lines, { isJavaScript = false } = {}) {
   const patterns = isJavaScript
     ? [...CODE_SIGNATURE_PATTERNS, ...JS_SIGNATURE_PATTERNS]
     : CODE_SIGNATURE_PATTERNS;
+  /** @type {Array<{ line: number, indent: number, kind: string, name?: string, text: string }>} */
   const found = [];
   const indents = new Set();
   for (let i = 0; i < lines.length; i++) {
@@ -412,6 +624,7 @@ function extractCodeOutline(lines, { isJavaScript = false } = {}) {
       // The opening brace and the blanks before it go; `/\s*\{$/` was
       // quadratic on a long blank run that did not end in `{` (#643).
       const signature = trimmed.endsWith('{') ? trimmed.slice(0, -1).trimEnd() : trimmed;
+      /** @type {{ line: number, indent: number, kind: string, name?: string, text: string }} */
       const entry = {
         line: i + 1,
         indent,
@@ -426,14 +639,14 @@ function extractCodeOutline(lines, { isJavaScript = false } = {}) {
     }
   }
   const ranks = new Map([...indents].sort((a, b) => a - b).map((indent, idx) => [indent, idx + 1]));
-  return found.map(({ indent, line, kind, name, text }) => {
-    const entry = { line, level: ranks.get(indent), kind };
-    if (name) entry.name = name;
-    entry.text = text;
-    return entry;
-  });
+  return found.map(({ indent, line, kind, name, text }) => (
+    { line, level: ranks.get(indent), kind, ...(name ? { name } : {}), text }
+  ));
 }
 
+/**
+ * @param {unknown} line
+ */
 function clipPatchLine(line) {
   const text = String(line ?? '');
   if (text.length <= PATCH_MAX_MESSAGE_LINE_CHARS) return text;
@@ -445,6 +658,9 @@ function clipPatchLine(line) {
  * shows the model a `\r`, so an old_string that spans lines arrives with bare
  * `\n` — and a new_string would put bare `\n` into the file. Text that carries
  * a `\r` of its own is taken as written.
+ *
+ * @param {string} text
+ * @param {string} eol
  */
 function fitEditToLineEnding(text, eol) {
   if (eol !== '\r\n' || text.includes('\r')) return text;
@@ -458,6 +674,10 @@ function fitEditToLineEnding(text, eol) {
  *
  * `edit_file` runs its one replacement through here too (#647), with
  * `single: true`, so that its messages carry no `edits[i]` label.
+ *
+ * @param {string} text
+ * @param {EditSpec[]} edits
+ * @param {{ single?: boolean }} [options]
  */
 function applyEditsToText(text, edits, { single = false } = {}) {
   const eol = detectLineEnding(text);
@@ -467,7 +687,7 @@ function applyEditsToText(text, edits, { single = false } = {}) {
 
   for (let i = 0; i < edits.length; i += 1) {
     const edit = edits[i];
-    const field = (name) => (single ? name : `edits[${i}].${name}`);
+    const field = (/** @type {string} */ name) => (single ? name : `edits[${i}].${name}`);
     const where = single ? '' : `edits[${i}]: `;
     if (!edit || typeof edit !== 'object' || Array.isArray(edit)) {
       return { error: `edits[${i}] must be an object with old_string and new_string.` };
@@ -529,6 +749,8 @@ function applyEditsToText(text, edits, { single = false } = {}) {
 /**
  * The prevailing line ending of a text: the one most lines end with (#647),
  * which is what new lines get. A tie, or no line break at all, is `\n`.
+ *
+ * @param {string} text
  */
 function detectLineEnding(text) {
   let crlf = 0;
@@ -549,6 +771,8 @@ function detectLineEnding(text) {
  * set aside: hunks match line 1 without it, and it goes back to byte 0. An
  * empty file counts as ending with a newline, so what a patch adds to it ends
  * with one unless the patch says `\ No newline at end of file`.
+ *
+ * @param {string} text
  */
 function splitTextForPatch(text) {
   const bom = text.startsWith(UTF8_BOM) ? UTF8_BOM : '';
@@ -573,6 +797,11 @@ function splitTextForPatch(text) {
 /**
  * Joins the lines again (#647). A line without an ending of its own — a new
  * one, or the former last line — gets `eol`; the last line ends as decided.
+ *
+ * @param {SplitText} source
+ * @param {boolean} endsWithNewline
+ * @param {string} eol
+ * @param {string} [bom]
  */
 function joinPatchLines({ lines, endings }, endsWithNewline, eol, bom = '') {
   if (!lines.length) return bom;
@@ -583,14 +812,23 @@ function joinPatchLines({ lines, endings }, endsWithNewline, eol, bom = '') {
   return parts.join('');
 }
 
-/** `\ No newline at end of file` gewinnt über den Ausgangszustand der Datei. */
+/**
+ * `\ No newline at end of file` gewinnt über den Ausgangszustand der Datei.
+ *
+ * @param {Hunk[]} hunks
+ * @param {boolean} originalEndsWithNewline
+ */
 function resolveTrailingNewline(hunks, originalEndsWithNewline) {
   if (hunks.some((hunk) => hunk.noNewlineNew)) return false;
   if (hunks.some((hunk) => hunk.noNewlineOld)) return true;
   return originalEndsWithNewline;
 }
 
-/** Entfernt Zeitstempel und den üblichen a//b/-Präfix aus einem Diff-Dateikopf. */
+/**
+ * Entfernt Zeitstempel und den üblichen a//b/-Präfix aus einem Diff-Dateikopf.
+ *
+ * @param {unknown} raw
+ */
 function normalizeDiffPath(raw) {
   let value = String(raw ?? '').split('\t')[0].replace(/\s+$/, '');
   if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
@@ -602,7 +840,12 @@ function normalizeDiffPath(raw) {
 
 const HUNK_HEADER = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/;
 
-/** A "--- " line followed by its "+++ " line: the next file of a unified diff. */
+/**
+ * A "--- " line followed by its "+++ " line: the next file of a unified diff.
+ *
+ * @param {string[]} rawLines
+ * @param {number} index
+ */
 function isFileHeaderAt(rawLines, index) {
   return rawLines[index]?.startsWith('--- ') === true && rawLines[index + 1]?.startsWith('+++ ') === true;
 }
@@ -615,8 +858,13 @@ function isFileHeaderAt(rawLines, index) {
  * lines still say where the hunk belongs. `oldStart` is null when the header
  * names no line; such a hunk is placed by its lines alone (see
  * locateUnnumberedHunk).
+ *
+ * @param {string[]} rawLines
+ * @param {number} startIndex
+ * @param {{ header: string, headerLine: number, oldStart: number | null, anchor?: string | null, isEnd: (rawLines: string[], index: number) => boolean }} options
  */
 function readDelimitedHunk(rawLines, startIndex, { header, headerLine, oldStart, anchor = null, isEnd }) {
+  /** @type {Hunk} */
   const hunk = {
     header,
     oldStart,
@@ -635,6 +883,7 @@ function readDelimitedHunk(rawLines, startIndex, { header, headerLine, oldStart,
   let last = end;
   while (last > startIndex && rawLines[last - 1] === '') last -= 1;
 
+  /** @type {'old' | 'new' | 'both' | null} */
   let lastSide = null;
   for (let i = startIndex; i < last; i += 1) {
     const body = rawLines[i];
@@ -664,7 +913,7 @@ function readDelimitedHunk(rawLines, startIndex, { header, headerLine, oldStart,
   return { hunk, nextIndex: end };
 }
 
-const endsUnifiedHunk = (rawLines, index) => rawLines[index].startsWith('@@') || isFileHeaderAt(rawLines, index);
+const endsUnifiedHunk = (/** @type {string[]} */ rawLines, /** @type {number} */ index) => rawLines[index].startsWith('@@') || isFileHeaderAt(rawLines, index);
 
 /**
  * Liest einen Hunk ab dem Kopf `@@ -alt,anzahl +neu,anzahl @@`. Die Zeilenzahlen im
@@ -673,11 +922,14 @@ const endsUnifiedHunk = (rawLines, index) => rawLines[index].startsWith('@@') ||
  *
  * Only when that fails — the header has no numbers, or its counts do not match
  * the body — is the body read up to the next hunk or file instead (#771).
+ *
+ * @param {string[]} rawLines
+ * @param {number} headerIndex
  */
 function parseUnifiedDiffHunk(rawLines, headerIndex) {
   const header = rawLines[headerIndex];
   const match = HUNK_HEADER.exec(header);
-  const delimited = (oldStart) => readDelimitedHunk(rawLines, headerIndex + 1, {
+  const delimited = (/** @type {number | null} */ oldStart) => readDelimitedHunk(rawLines, headerIndex + 1, {
     header,
     headerLine: headerIndex + 1,
     oldStart,
@@ -686,7 +938,7 @@ function parseUnifiedDiffHunk(rawLines, headerIndex) {
   if (!match) return delimited(null);
 
   const counted = parseCountedHunk(rawLines, headerIndex, match);
-  if (!counted.error) {
+  if (counted.error === undefined) {
     // Counts too low: the body goes on past what the header announced.
     const next = rawLines[counted.nextIndex];
     const bodyGoesOn = next !== undefined && /^[ +-]/.test(next) && !isFileHeaderAt(rawLines, counted.nextIndex);
@@ -697,17 +949,26 @@ function parseUnifiedDiffHunk(rawLines, headerIndex) {
   return fallback.error ? (counted.error ? counted : fallback) : fallback;
 }
 
+/**
+ * @param {string[]} rawLines
+ * @param {number} headerIndex
+ * @param {RegExpExecArray} match
+ */
 function parseCountedHunk(rawLines, headerIndex, match) {
   const header = rawLines[headerIndex];
   const oldStart = Number(match[1]);
   const oldCount = match[2] === undefined ? 1 : Number(match[2]);
   const newCount = match[4] === undefined ? 1 : Number(match[4]);
 
+  /** @type {string[]} */
   const oldLines = [];
+  /** @type {string[]} */
   const newLines = [];
   // The markers in body order (#647): which new line is an old one kept, so
   // that a kept line keeps its own line ending.
+  /** @type {string[]} */
   const ops = [];
+  /** @type {Hunk} */
   const hunk = {
     header,
     oldStart,
@@ -718,6 +979,7 @@ function parseCountedHunk(rawLines, headerIndex, match) {
     noNewlineOld: false,
     noNewlineNew: false,
   };
+  /** @type {'old' | 'new' | 'both' | null} */
   let lastSide = null;
   let i = headerIndex + 1;
 
@@ -782,7 +1044,7 @@ const OPENAI_PATCH = {
   END_OF_FILE: '*** End of File',
 };
 
-const endsOpenAiHunk = (rawLines, index) => rawLines[index].startsWith('@@') || rawLines[index].startsWith('*** ');
+const endsOpenAiHunk = (/** @type {string[]} */ rawLines, /** @type {number} */ index) => rawLines[index].startsWith('@@') || rawLines[index].startsWith('*** ');
 
 /**
  * OpenAI's own patch format (#771), which its models send out of habit even
@@ -800,8 +1062,12 @@ const endsOpenAiHunk = (rawLines, index) => rawLines[index].startsWith('@@') || 
  * the hunk follows, and the hunk is placed by its own lines (see
  * locateUnnumberedHunk). Adding, deleting and moving files are refused as in
  * a unified diff.
+ *
+ * @param {string[]} rawLines
+ * @param {number} startIndex
  */
 function parseOpenAiPatch(rawLines, startIndex) {
+  /** @type {PatchFile[]} */
   const files = [];
   let totalHunks = 0;
   let i = rawLines[startIndex].startsWith(OPENAI_PATCH.BEGIN) ? startIndex + 1 : startIndex;
@@ -844,10 +1110,12 @@ function parseOpenAiPatch(rawLines, startIndex) {
       };
     }
 
+    /** @type {Hunk[]} */
     const hunks = [];
     while (i < rawLines.length && !rawLines[i].startsWith('*** ')) {
       // A hunk may start without "@@" right below the file line; several
       // "@@" lines in a row narrow down to the last one.
+      /** @type {string | null} */
       let anchor = null;
       let header = '@@';
       const headerLine = i + 1;
@@ -857,7 +1125,7 @@ function parseOpenAiPatch(rawLines, startIndex) {
         i += 1;
       }
       const parsed = readDelimitedHunk(rawLines, i, { header, headerLine, oldStart: null, anchor, isEnd: endsOpenAiHunk });
-      if (parsed.error) return { error: parsed.error };
+      if (parsed.error !== undefined) return { error: parsed.error };
       hunks.push(parsed.hunk);
       totalHunks += 1;
       if (totalHunks > PATCH_MAX_HUNKS) {
@@ -888,6 +1156,8 @@ function parseOpenAiPatch(rawLines, startIndex) {
  * Zerlegt einen unified diff in Dateiabschnitte mit Hunks. Unterstützt werden
  * Änderungen an bestehenden Textdateien; Anlegen, Löschen, Umbenennen und
  * Binär-Patches werden mit einem erklärenden Fehler abgelehnt.
+ *
+ * @param {string} text
  */
 function parseUnifiedDiff(text) {
   const rawLines = text.split(/\r?\n/).map((line) => line.replace(/\r$/, ''));
@@ -898,6 +1168,7 @@ function parseUnifiedDiff(text) {
     return parseOpenAiPatch(rawLines, first);
   }
 
+  /** @type {PatchFile[]} */
   const files = [];
   let totalHunks = 0;
   let i = 0;
@@ -949,13 +1220,14 @@ function parseUnifiedDiff(text) {
       };
     }
 
+    /** @type {Hunk[]} */
     const hunks = [];
     // The order of the hunks is checked where they are found, not here by
     // their header numbers (#647): models often get those wrong, and a patch
     // whose hunks come in the right order applies all the same.
     while (i < rawLines.length && rawLines[i].startsWith('@@')) {
       const parsed = parseUnifiedDiffHunk(rawLines, i);
-      if (parsed.error) return { error: parsed.error };
+      if (parsed.error !== undefined) return { error: parsed.error };
       hunks.push(parsed.hunk);
       totalHunks += 1;
       if (totalHunks > PATCH_MAX_HUNKS) {
@@ -992,8 +1264,15 @@ function parseUnifiedDiff(text) {
  * process for seconds (#650). So the lines are turned into numbers (a line
  * the hunk does not hold can never match) and searched with Knuth–Morris–
  * Pratt, which finds every candidate in one pass over the file.
+ *
+ * @param {string[]} lines
+ * @param {string[]} oldLines
+ * @param {number} start
+ * @param {number} minIndex
+ * @param {number} maxIndex
  */
 function findNearestMatch(lines, oldLines, start, minIndex, maxIndex) {
+  /** @type {Map<string, number>} */
   const ids = new Map();
   const pattern = new Int32Array(oldLines.length);
   for (let k = 0; k < oldLines.length; k += 1) {
@@ -1049,6 +1328,11 @@ function findNearestMatch(lines, oldLines, start, minIndex, maxIndex) {
  * caller refuses that case. The part before `minIndex` is searched only as
  * far as a match there could still be the nearer one — a full scan per hunk
  * made 200 hunks on a 300k-line file take half a second.
+ *
+ * @param {string[]} lines
+ * @param {string[]} oldLines
+ * @param {number} expected
+ * @param {number} minIndex
  */
 function findHunkIndex(lines, oldLines, expected, minIndex) {
   if (!oldLines.length) {
@@ -1067,7 +1351,7 @@ function findHunkIndex(lines, oldLines, expected, minIndex) {
       error: `the file has fewer lines (${lines.length}) than the hunk expects (${oldLines.length}).`,
     };
   }
-  const matches = (index) => oldLines.every((line, k) => lines[index + k] === line);
+  const matches = (/** @type {number} */ index) => oldLines.every((line, k) => lines[index + k] === line);
   const start = Math.min(Math.max(expected, 0), maxIndex);
   if (matches(start)) return { index: start };
   const after = minIndex <= maxIndex ? findNearestMatch(lines, oldLines, start, minIndex, maxIndex) : -1;
@@ -1091,6 +1375,10 @@ function findHunkIndex(lines, oldLines, expected, minIndex) {
  * lines stand, below its anchor line if it names one. Without a number there
  * is no "nearest" to prefer, so a passage that occurs twice is refused
  * rather than guessed.
+ *
+ * @param {string[]} lines
+ * @param {Hunk} hunk
+ * @param {number} minIndex
  */
 function locateUnnumberedHunk(lines, hunk, minIndex) {
   let from = minIndex;
@@ -1134,10 +1422,16 @@ function locateUnnumberedHunk(lines, hunk, minIndex) {
  *
  * `source` comes from `splitTextForPatch`: a kept line keeps its own ending,
  * a new line gets `eol` (#647).
+ *
+ * @param {SplitText} source
+ * @param {Hunk[]} hunks
+ * @param {string} relativePath
+ * @param {string} eol
  */
 function applyHunksToLines(source, hunks, relativePath, eol) {
   const result = source.lines.slice();
   const endings = source.endings.slice();
+  /** @type {Array<number | null>} */
   const offsets = [];
   // Hunks are located in the original lines, as GNU patch does (#647): the
   // header numbers refer to them, and a hunk overlapping the one in front
@@ -1152,7 +1446,7 @@ function applyHunksToLines(source, hunks, relativePath, eol) {
     const hunk = hunks[h];
     if (hunk.oldStart === null) {
       const placed = locateUnnumberedHunk(source.lines, hunk, previousEnd);
-      if (placed.error) {
+      if (placed.error !== undefined) {
         return { error: `Hunk ${h + 1} of ${hunks.length} does not apply to "${relativePath}": ${placed.error}` };
       }
       const newEndings = [];
@@ -1173,7 +1467,7 @@ function applyHunksToLines(source, hunks, relativePath, eol) {
     const declared = hunk.oldCount === 0 ? hunk.oldStart : hunk.oldStart - 1;
     const expected = declared + offset;
     const found = findHunkIndex(source.lines, hunk.oldLines, expected, previousEnd);
-    if (found.error) {
+    if (found.error !== undefined) {
       return {
         error: `Hunk ${h + 1} of ${hunks.length} does not apply to "${relativePath}": ${found.error}`,
       };
@@ -1212,6 +1506,22 @@ function applyHunksToLines(source, hunks, relativePath, eol) {
   return { lines: result, endings, offsets };
 }
 
+/**
+ * @param {object} deps
+ * @param {typeof import('fs/promises')} deps.fs
+ * @param {typeof import('path')} deps.path
+ * @param {number} deps.maxReadFileBytes
+ * @param {number} [deps.maxWriteFileBytes]  Defaults to `maxReadFileBytes`.
+ * @param {number} [deps.maxSearchScannedFiles]
+ * @param {number} [deps.maxReadSliceChars]
+ * @param {number} [deps.regexSearchTimeBudgetMs]
+ * @param {string} [deps.platform]
+ * @param {() => Date} [deps.now]
+ * @param {() => string} [deps.randomSuffix]
+ * @param {string[]} [deps.globalSkillRoots]
+ * @param {() => string | undefined} [deps.getLocale]
+ * @param {string} [deps.homeDir]
+ */
 function createFsService({
   fs,
   path,
@@ -1257,7 +1567,12 @@ function createFsService({
   // Budget pro Ausschnitt: Zeichen im Zeilenmodus, Bytes im Byte-Modus.
   const MAX_READ_SLICE_CHARS = maxReadSliceChars || READ_SLICE_DEFAULT_MAX_CHARS;
 
-  /** true, wenn candidate (aufgelöst) innerhalb von root liegt — Root selbst zählt mit. */
+  /**
+   * true, wenn candidate (aufgelöst) innerhalb von root liegt — Root selbst zählt mit.
+   *
+   * @param {string} root
+   * @param {string} candidate
+   */
   function containsPath(root, candidate) {
     return isPathInside(path, path.resolve(root), path.resolve(candidate));
   }
@@ -1295,7 +1610,13 @@ function createFsService({
     required: 'A path is required.',
   };
 
-  /** `~` and `~/…` (or `~\…`) as the home folder; anything else as it is. */
+  /**
+   * `~` and `~/…` (or `~\…`) as the home folder; anything else as it is.
+   *
+   * @template T
+   * @param {T} raw
+   * @returns {T | string}
+   */
   function expandHome(raw) {
     if (!homeDir || typeof raw !== 'string') return raw;
     if (raw === '~') return path.resolve(homeDir);
@@ -1303,6 +1624,12 @@ function createFsService({
     return raw;
   }
 
+  /**
+   * @param {unknown} rootPath
+   * @param {unknown} relativePath
+   * @param {PathLabels} labels
+   * @returns {CheckedPath}
+   */
   function resolvePathInRoot(rootPath, relativePath, labels) {
     if (typeof rootPath !== 'string' || !rootPath.trim()) {
       return { error: labels.missing };
@@ -1316,6 +1643,10 @@ function createFsService({
     return { absPath: joined };
   }
 
+  /**
+   * @param {unknown} workspaceRoot
+   * @param {unknown} relativePath
+   */
   function resolveWorkspacePath(workspaceRoot, relativePath) {
     return resolvePathInRoot(workspaceRoot, relativePath, workspaceLabels());
   }
@@ -1323,6 +1654,12 @@ function createFsService({
   // The path is used exactly as it arrives: a name may end in a space, and
   // trimming would swap `report.txt ` for its twin `report.txt` (#649). Paths
   // the model types are trimmed where they are typed, in resolvePathInRoot.
+  /**
+   * @param {string | null | undefined} rootPath
+   * @param {unknown} absPath
+   * @param {PathLabels} labels
+   * @returns {CheckedPath}
+   */
   function assertAbsolutePathInRoot(rootPath, absPath, labels) {
     if (!rootPath) {
       return { error: labels.missing };
@@ -1338,6 +1675,10 @@ function createFsService({
     return { absPath: resolved };
   }
 
+  /**
+   * @param {string | null | undefined} workspaceRoot
+   * @param {unknown} absPath
+   */
   function assertAbsolutePathInWorkspace(workspaceRoot, absPath) {
     return assertAbsolutePathInRoot(workspaceRoot, absPath, workspaceLabels());
   }
@@ -1346,6 +1687,8 @@ function createFsService({
    * Resolves the nearest existing path (including symlinks) and appends any
    * not-yet-existing suffix. lstat is intentionally separate from realpath:
    * a dangling symlink must be rejected, not treated as a missing path.
+   *
+   * @param {string} absPath
    */
   async function resolveExistingRealPath(absPath) {
     let current = path.resolve(absPath);
@@ -1370,9 +1713,15 @@ function createFsService({
     }
   }
 
+  /**
+   * @param {string | null | undefined} rootPath
+   * @param {unknown} absPath
+   * @param {PathLabels} labels
+   * @returns {Promise<CheckedPath>}
+   */
   async function assertPathAccessibleInRoot(rootPath, absPath, labels) {
     const lexical = assertAbsolutePathInRoot(rootPath, absPath, labels);
-    if (lexical.error) return lexical;
+    if (lexical.error !== undefined || !rootPath) return lexical;
 
     try {
       const realRoot = await fs.realpath(path.resolve(rootPath));
@@ -1388,6 +1737,10 @@ function createFsService({
     }
   }
 
+  /**
+   * @param {string | null | undefined} workspaceRoot
+   * @param {unknown} absPath
+   */
   async function assertPathAccessibleInWorkspace(workspaceRoot, absPath) {
     return assertPathAccessibleInRoot(workspaceRoot, absPath, workspaceLabels());
   }
@@ -1402,9 +1755,9 @@ function createFsService({
    * `skillRoots` at all gets no skill paths, so a `skill:` path never lands
    * in the workspace as a file of that name.
    *
-   * @param {string} workspaceRoot
-   * @param {string} relativePath  Pfad wie vom Modell uebergeben.
-   * @param {Array<{name: string, dir: string}>} [skillRoots]
+   * @param {string | null | undefined} workspaceRoot
+   * @param {unknown} relativePath  Pfad wie vom Modell uebergeben.
+   * @param {SkillRoot[] | undefined} [skillRoots]
    * @param {'read'|'write'} [access]
    */
   function resolveAccessRoot(workspaceRoot, relativePath, skillRoots, access = 'read') {
@@ -1436,14 +1789,6 @@ function createFsService({
   }
 
   /**
-   * Loest einen Tool-Pfad gegen die passende Wurzel auf und prueft ihn gegen
-   * Ausbrueche (lexikalisch und ueber Realpath, inkl. Symlinks).
-   *
-   * @returns {Promise<{absPath?: string, root?: string, prefix?: string,
-   *   skillName?: string|null, error?: string}>} `root` ist die tatsaechlich
-   *   genutzte Wurzel, `prefix` das Praefix fuer daraus erzeugte relative Pfade.
-   */
-  /**
    * An absolute path that lies in the folder of a switched-on skill, spelled
    * as `skill:<name>/…` (#427). Skills written for other agents locate their
    * own folder and then read `<dir>/assets/…` — a path the read tools would
@@ -1456,6 +1801,10 @@ function createFsService({
    * stays inside the folder is checked afterwards, like any skill path. The
    * workspace winning is about reading: a write into a global skill folder is
    * refused in `resolveToolPath` wherever the open folder is (#650).
+   *
+   * @param {string | null | undefined} workspaceRoot
+   * @param {unknown} relativePath
+   * @param {SkillRoot[] | undefined} skillRoots
    */
   async function skillPathForAbsolute(workspaceRoot, relativePath, skillRoots) {
     const raw = typeof relativePath === 'string' ? relativePath.trim() : '';
@@ -1508,15 +1857,19 @@ function createFsService({
    * errs on the safe side, so it compares folded there (#650).
    */
   const foldCase = platform === 'darwin' || platform === 'win32'
-    ? (p) => p.normalize('NFC').toLowerCase()
-    : (p) => p;
+    ? (/** @type {string} */ p) => p.normalize('NFC').toLowerCase()
+    : (/** @type {string} */ p) => p;
 
+  /**
+   * @param {string} absPath
+   */
   async function isInGlobalSkillRoot(absPath) {
     const roots = Array.isArray(globalSkillRoots)
       ? globalSkillRoots.filter((dir) => typeof dir === 'string' && dir)
       : [];
     if (roots.length === 0) return false;
     const target = path.resolve(absPath);
+    /** @type {string | null} */
     let realTarget = null;
     try {
       realTarget = await resolveExistingRealPath(target);
@@ -1550,7 +1903,8 @@ function createFsService({
    * inside is checked afterwards, against that root, like any path.
    *
    * @param {string} target  the absolute path the tool was given
-   * @param {Array<{root: string, only: string|null, access: 'read'|'write'}>} [outsideRoots]
+   * @param {OutsideRoot[] | undefined} outsideRoots
+   * @param {'read' | 'write'} access
    */
   async function outsideRootFor(target, outsideRoots, access) {
     const entries = (Array.isArray(outsideRoots) ? outsideRoots : [])
@@ -1587,6 +1941,12 @@ function createFsService({
     return null;
   }
 
+  /**
+   * @param {string | null | undefined} workspaceRoot
+   * @param {unknown} relativePath
+   * @param {PathOptions} [options]
+   * @returns {Promise<ResolvedToolPath>}
+   */
   async function resolveToolPath(workspaceRoot, relativePath, options = {}) {
     const access = options.access === 'write' ? 'write' : 'read';
     const given = expandHome(typeof relativePath === 'string' ? relativePath.trim() : relativePath);
@@ -1597,7 +1957,7 @@ function createFsService({
       options.skillRoots,
       access
     );
-    if (chosen.error) return { error: chosen.error };
+    if (chosen.error !== undefined) return { error: chosen.error };
     let outside = false;
     if (!chosen.prefix && typeof workspaceRoot === 'string' && workspaceRoot.trim()) {
       const target = path.resolve(workspaceRoot, chosen.rel.length ? chosen.rel : '.');
@@ -1613,10 +1973,11 @@ function createFsService({
         outside = true;
       }
     }
+    if (typeof chosen.root !== 'string') return { error: chosen.labels.missing };
     const lexical = resolvePathInRoot(chosen.root, chosen.rel, chosen.labels);
-    if (lexical.error) return lexical;
+    if (lexical.error !== undefined) return lexical;
     const checked = await assertPathAccessibleInRoot(chosen.root, lexical.absPath, chosen.labels);
-    if (checked.error) return checked;
+    if (checked.error !== undefined) return checked;
     // Read-only in every mode (#548), also where the open folder contains a
     // global skill folder and the path reaches it as a workspace path (#650).
     if (access === 'write' && (await isInGlobalSkillRoot(checked.absPath))) {
@@ -1638,16 +1999,26 @@ function createFsService({
    * (#548), and so does a path into a global skill folder inside the
    * workspace (#650) — checked again here, at execution, not only when the
    * call was planned.
+   *
+   * @param {string | null | undefined} workspaceRoot
+   * @param {unknown} relativePath
+   * @param {PathOptions} [options]
    */
   async function resolveWorkspacePathForAccess(workspaceRoot, relativePath, options = {}) {
     return resolveToolPath(workspaceRoot, relativePath, { access: 'write', outsideRoots: options.outsideRoots });
   }
 
+  /**
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}  JSON for the model.
+   */
   async function runListDirectoryTool(args, workspaceRoot, options = {}) {
     const relArg = args.relative_path;
     const rel = typeof relArg === 'string' ? relArg : '';
     const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
     try {
       const st = await fs.stat(absPath);
       if (!st.isDirectory()) {
@@ -1656,7 +2027,7 @@ function createFsService({
       const entries = await fs.readdir(absPath, { withFileTypes: true });
       // Sensible Einträge (Issue #66) werden ausgelassen und nur gezählt.
       let omittedSensitive = 0;
-      const isSensitiveEntry = (name) => {
+      const isSensitiveEntry = (/** @type {string} */ name) => {
         if (!options.sensitivity) return false;
         const relEntry = path.relative(root, path.join(absPath, name)).split(path.sep).join('/');
         return options.sensitivity.isSensitivePath(`${prefix || ''}${relEntry}`);
@@ -1696,18 +2067,27 @@ function createFsService({
    * thread — and no more than MAX_READ_FILE_BYTES. Resolves to
    * `{ buffer, stats }` or `{ error }` in the tools' wording; `open` errors
    * (ENOENT, EACCES, …) are thrown.
+   *
+   * @param {string} absPath
+   * @returns {Promise<{ buffer: Buffer, stats: import('fs').Stats, error?: undefined } | { error: string, buffer?: undefined, stats?: undefined }>}
    */
   async function readFileForTool(absPath) {
     const read = await readRegularFile(fs, absPath, { maxBytes: MAX_READ_FILE_BYTES });
     if (read.notFile) {
       return { error: read.stats.isDirectory() ? 'Path is a folder, not a file.' : NOT_A_REGULAR_FILE_ERROR };
     }
-    if (read.tooLarge) {
+    if (read.tooLarge || !read.buffer) {
       return { error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.` };
     }
-    return read;
+    return { buffer: read.buffer, stats: read.stats };
   }
 
+  /**
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
+   */
   async function runReadFileTextTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
@@ -1716,10 +2096,10 @@ function createFsService({
     let maxChars = Number.isFinite(args.max_characters) ? Math.floor(args.max_characters) : 32000;
     maxChars = Math.min(Math.max(1000, maxChars), 200000);
     const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
     try {
       const read = await readFileForTool(absPath);
-      if (read.error) return JSON.stringify({ error: read.error });
+      if (read.error !== undefined) return JSON.stringify({ error: read.error });
       let text = read.buffer.toString('utf8');
       const truncated = text.length > maxChars;
       if (truncated) {
@@ -1748,6 +2128,11 @@ function createFsService({
    * Zurück kommt nur der Anweisungsteil: Das Frontmatter hat das Modell in
    * Gestalt der Beschreibung bereits gesehen, und `name`/`description` noch
    * einmal mitzuschicken wäre genau die Dopplung, die dieses Issue abschafft.
+   *
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
    */
   async function runLoadSkillTool(args, workspaceRoot, options = {}) {
     const name = typeof args.name === 'string' ? args.name.trim() : '';
@@ -1757,11 +2142,11 @@ function createFsService({
     }
     const rel = formatSkillPath(name, SKILL_FILE);
     const { absPath, root, error } = await resolveToolPath(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
     try {
       // The read tools' limit; a SKILL.md is a few kilobytes (#643).
       const read = await readFileForTool(absPath);
-      if (read.error) return JSON.stringify({ error: read.error });
+      if (read.error !== undefined) return JSON.stringify({ error: read.error });
       const raw = read.buffer.toString('utf8');
       const parsed = parseSkillDocument(raw);
       if (!parsed) {
@@ -1794,6 +2179,12 @@ function createFsService({
     }
   }
 
+  /**
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
+   */
   async function runReadFileLinesTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
@@ -1807,18 +2198,19 @@ function createFsService({
           'Give either a line range (start_line/end_line) or a byte range (start_byte/length) — not both.',
       });
     }
+    /** @type {Record<string, number | undefined>} */
     const parsed = {};
     for (const name of ['start_line', 'end_line', 'start_byte', 'length']) {
       const { value, error } = readIntegerArg(args, name);
-      if (error) return JSON.stringify({ error });
+      if (error !== undefined) return JSON.stringify({ error });
       parsed[name] = value;
     }
     const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
     let buf;
     try {
       const read = await readFileForTool(absPath);
-      if (read.error) return JSON.stringify({ error: read.error });
+      if (read.error !== undefined) return JSON.stringify({ error: read.error });
       buf = read.buffer;
     } catch (e) {
       return JSON.stringify({ error: e.message });
@@ -1848,11 +2240,15 @@ function createFsService({
    * already at that name — a symlink, dangling or not, included — fails with
    * EEXIST instead of being written through, and the next attempt takes a
    * fresh name.
+   *
+   * @param {string} absPath
+   * @param {string} root
+   * @param {(absPath: string) => Promise<void>} trashItem
    */
   async function createRecoveryCopy(absPath, root, trashItem) {
     const dir = path.dirname(absPath);
-    let copyName = null;
-    let copyPath = null;
+    let copyName = '';
+    let copyPath = '';
     try {
       const realRoot = await fs.realpath(path.resolve(root));
       if (!containsPath(realRoot, await fs.realpath(dir))) {
@@ -1909,6 +2305,7 @@ function createFsService({
    */
   async function writeFileAtomic(absPath, content, root) {
     let target = absPath;
+    /** @type {number | null} */
     let mode = null;
     try {
       const st = await fs.stat(absPath);
@@ -1955,6 +2352,9 @@ function createFsService({
    * Hands a finished write to `options.onWritten` (#348): the path, the
    * content before (a Buffer, null for a new file) and after. A listener that
    * throws must not turn a write that happened into a failed call.
+   *
+   * @param {ToolOptions | undefined} options
+   * @param {object} written
    */
   function reportWritten(options, written) {
     if (typeof options?.onWritten !== 'function') return;
@@ -1966,12 +2366,15 @@ function createFsService({
   }
 
   /**
-   * @param {object} [options]
-   * @param {{ trashItem?: Function|null, allowUnrecoverable?: boolean }} [options.recovery]
-   * @param {Function} [options.onWritten] called after the write, see reportWritten
-   *   Ohne `trashItem` und ohne `allowUnrecoverable` wird eine bestehende Datei
-   *   nicht überschrieben (`code: 'recovery_failed'`); der Aufruf muss dann als
-   *   `delete` erneut freigegeben werden.
+   * Without `options.recovery.trashItem` and without `allowUnrecoverable` an
+   * existing file is not overwritten (`code: 'recovery_failed'`); the call has
+   * to be approved again as `delete`. `options.onWritten` is called after the
+   * write, see reportWritten.
+   *
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
    */
   async function runWriteFileTextTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
@@ -1997,11 +2400,11 @@ function createFsService({
    * change recorder. The caller checks size and type; here only the bytes
    * count.
    *
-   * @param {string} relativePath
+   * @param {unknown} relativePath
    * @param {Buffer} bytes
-   * @param {string} workspaceRoot
-   * @param {object} [options]  as for runWriteFileTextTool
-   * @returns {Promise<object>} the result fields, or `{ error, code? }`
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]  as for runWriteFileTextTool
+   * @returns {Promise<WriteResult>} the result fields, or `{ error, code? }`
    */
   async function writeBinaryFileForTool(relativePath, bytes, workspaceRoot, options = {}) {
     const rel = typeof relativePath === 'string' ? relativePath.trim() : '';
@@ -2010,10 +2413,19 @@ function createFsService({
     return writeFileForTool(rel, bytes, bytes.length, workspaceRoot, options);
   }
 
-  /** The part of a write both tools share; returns the result as an object. */
+  /**
+   * The part of a write both tools share; returns the result as an object.
+   *
+   * @param {string} rel
+   * @param {string | Buffer} content
+   * @param {number} byteLength
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<WriteResult>}
+   */
   async function writeFileForTool(rel, content, byteLength, workspaceRoot, options = {}) {
     const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel, options);
-    if (error) return { error };
+    if (error !== undefined) return { error };
     if (path.resolve(absPath) === path.resolve(root)) {
       return { error: 'The project folder itself cannot be written as a file.' };
     }
@@ -2039,18 +2451,21 @@ function createFsService({
       // The old content, for "Show changes" (#348) — read before anything
       // is touched, and only within the read limit; above it, the size says
       // why there is no diff.
+      /** @type {Buffer | null} */
       let before = null;
+      /** @type {number | null} */
       let beforeBytes = null;
       if (existed && typeof options.onWritten === 'function') {
         const previous = await readRegularFile(fs, absPath, { maxBytes: MAX_READ_FILE_BYTES }).catch(() => null);
         if (previous?.buffer) before = previous.buffer;
         else if (previous?.tooLarge) beforeBytes = previous.stats.size;
       }
+      /** @type {string | null} */
       let recoveryCopy = null;
       if (existed && recovery) {
         if (typeof recovery.trashItem === 'function') {
           const copy = await createRecoveryCopy(absPath, root, recovery.trashItem);
-          if (copy.error) {
+          if (copy.error !== undefined) {
             if (recovery.allowUnrecoverable !== true) {
               return { error: copy.error, code: 'recovery_failed' };
             }
@@ -2090,14 +2505,15 @@ function createFsService({
    * U+FFFD, in lines the model never touched — so it is refused and the file
    * stays as it is. The original bytes come along for a rollback.
    *
-   * @returns {Promise<{ text: string, buffer: Buffer } | { error: string }>}
+   * @param {string} absPath
+   * @returns {Promise<{ text: string, buffer: Buffer, error?: undefined } | { error: string, text?: undefined, buffer?: undefined }>}
    */
   async function readFileForEdit(absPath) {
     const read = await readRegularFile(fs, absPath, { maxBytes: MAX_READ_FILE_BYTES });
     if (read.notFile) {
       return { error: read.stats.isDirectory() ? 'Path is a folder, not a file.' : NOT_A_REGULAR_FILE_ERROR };
     }
-    if (read.tooLarge) {
+    if (read.tooLarge || !read.buffer) {
       return { error: `File too large (>${MAX_READ_FILE_BYTES} bytes). Choose a different file.` };
     }
     if (read.buffer.includes(0)) {
@@ -2118,6 +2534,12 @@ function createFsService({
     }
   }
 
+  /**
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
+   */
   async function runEditFileTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
@@ -2133,17 +2555,17 @@ function createFsService({
       return JSON.stringify({ error: 'old_string and new_string must differ.' });
     }
     const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
     try {
       const original = await readFileForEdit(absPath);
-      if (original.error) return JSON.stringify({ error: original.error });
+      if (original.error !== undefined) return JSON.stringify({ error: original.error });
       const { text } = original;
       const applied = applyEditsToText(
         text,
         [{ old_string: args.old_string, new_string: args.new_string, replace_all: args.replace_all }],
         { single: true }
       );
-      if (applied.error) return JSON.stringify({ error: applied.error });
+      if (applied.error !== undefined) return JSON.stringify({ error: applied.error });
       const byteLength = Buffer.byteLength(applied.text, 'utf8');
       if (byteLength > MAX_WRITE_FILE_BYTES) {
         return JSON.stringify({
@@ -2167,6 +2589,11 @@ function createFsService({
    * apply_patch, Modus `edits`: mehrere Ersetzungen in einer Datei. Erst wenn alle
    * Schritte durchlaufen, wird einmal geschrieben — schlägt einer fehl, bleibt die
    * Datei unverändert.
+   *
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
    */
   async function runApplyEditsMode(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
@@ -2182,13 +2609,13 @@ function createFsService({
       });
     }
     const { absPath, root, error } = await resolveWorkspacePathForAccess(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
     try {
       const original = await readFileForEdit(absPath);
-      if (original.error) return JSON.stringify({ error: original.error });
+      if (original.error !== undefined) return JSON.stringify({ error: original.error });
       const { text } = original;
       const applied = applyEditsToText(text, args.edits);
-      if (applied.error) return JSON.stringify({ error: applied.error });
+      if (applied.error !== undefined) return JSON.stringify({ error: applied.error });
       const byteLength = Buffer.byteLength(applied.text, 'utf8');
       if (byteLength > MAX_WRITE_FILE_BYTES) {
         return JSON.stringify({
@@ -2214,8 +2641,11 @@ function createFsService({
    * Stellt nach einem fehlgeschlagenen Schreibvorgang die Ausgangsinhalte wieder her.
    *
    * It writes back the original bytes, not the decoded text (#645).
+   *
+   * @param {PlannedPatchFile[]} written
    */
   async function rollbackPatchedFiles(written) {
+    /** @type {string[]} */
     const failed = [];
     for (const entry of written) {
       try {
@@ -2231,6 +2661,8 @@ function createFsService({
    * What makes two spellings one file (#647): device and inode, read as
    * bigint because a Windows file ID does not fit a double. Where a file
    * system reports no inode, the real path stands in.
+   *
+   * @param {string} absPath
    */
   async function fileIdentity(absPath) {
     const st = await fs.stat(absPath, { bigint: true });
@@ -2245,6 +2677,11 @@ function createFsService({
    * Dateien auf ihren Ausgangsinhalt zurückgesetzt. Atomar ist jede einzelne
    * Datei (writeFileAtomic), nicht der Satz — ein Prozessabbruch zwischen zwei
    * Dateien hinterlässt einen teilweise angewendeten Patch (Issue #75).
+   *
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
    */
   async function runApplyDiffMode(args, workspaceRoot, options = {}) {
     if (typeof args.patch !== 'string' || !args.patch.trim()) {
@@ -2256,7 +2693,7 @@ function createFsService({
       });
     }
     const parsed = parseUnifiedDiff(args.patch);
-    if (parsed.error) return JSON.stringify({ error: parsed.error });
+    if (parsed.error !== undefined) return JSON.stringify({ error: parsed.error });
 
     const relArg = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (relArg && !parsed.files.some((file) => file.relativePath === relArg)) {
@@ -2267,17 +2704,19 @@ function createFsService({
       });
     }
 
+    /** @type {PlannedPatchFile[]} */
     const planned = [];
     for (const file of parsed.files) {
       const resolved = await resolveWorkspacePathForAccess(workspaceRoot, file.relativePath, options);
-      if (resolved.error) {
+      if (resolved.error !== undefined) {
         return JSON.stringify({ error: `"${file.relativePath}": ${resolved.error}` });
       }
       let original;
+      /** @type {string | undefined} */
       let identity;
       try {
         original = await readFileForEdit(resolved.absPath);
-        if (!original.error) identity = await fileIdentity(resolved.absPath);
+        if (original.error === undefined) identity = await fileIdentity(resolved.absPath);
       } catch (e) {
         if (e.code === 'ENOENT') {
           return JSON.stringify({
@@ -2288,7 +2727,7 @@ function createFsService({
         }
         return JSON.stringify({ error: `"${file.relativePath}": ${e.message}` });
       }
-      if (original.error) return JSON.stringify({ error: `"${file.relativePath}": ${original.error}` });
+      if (original.error !== undefined) return JSON.stringify({ error: `"${file.relativePath}": ${original.error}` });
       // The header paths are compared lexically by the parser; `src/app.js`
       // and `src/../src/app.js` (or `src/App.js` on a case-insensitive disk)
       // are still one file, and the second write would drop the first (#647).
@@ -2302,7 +2741,7 @@ function createFsService({
       }
       const source = splitTextForPatch(original.text);
       const applied = applyHunksToLines(source, file.hunks, file.relativePath, source.eol);
-      if (applied.error) return JSON.stringify({ error: applied.error });
+      if (applied.error !== undefined) return JSON.stringify({ error: applied.error });
       const updated = joinPatchLines(
         applied,
         resolveTrailingNewline(file.hunks, source.endsWithNewline),
@@ -2328,6 +2767,7 @@ function createFsService({
       });
     }
 
+    /** @type {PlannedPatchFile[]} */
     const written = [];
     for (const entry of planned) {
       try {
@@ -2374,6 +2814,8 @@ function createFsService({
    * im edits-Modus relative_path, im patch-Modus alle "+++"-Kopfzeilen. Der
    * Planer prüft damit jedes Ziel vor der Ausführung. Bei nicht parsebarem
    * Patch kommt `{ error }` zurück, damit die Ablehnung den Grund nennt.
+   *
+   * @param {ToolArgs | null | undefined} args
    */
   function listApplyPatchTargets(args) {
     const hasEdits = args?.edits !== undefined && args?.edits !== null;
@@ -2383,13 +2825,19 @@ function createFsService({
         return { error: 'patch (a unified diff as text) is required.' };
       }
       const parsed = parseUnifiedDiff(args.patch);
-      if (parsed.error) return { error: parsed.error };
+      if (parsed.error !== undefined) return { error: parsed.error };
       return parsed.files.map((file) => file.relativePath);
     }
     const rel = typeof args?.relative_path === 'string' ? args.relative_path.trim() : '';
     return rel ? [rel] : [];
   }
 
+  /**
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
+   */
   async function runApplyPatchTool(args, workspaceRoot, options = {}) {
     const hasEdits = args.edits !== undefined && args.edits !== null;
     const hasPatch = args.patch !== undefined && args.patch !== null;
@@ -2409,6 +2857,7 @@ function createFsService({
 
   /** Compiled `.gitignore` files by real path (#644), see loadGitignoreMatcher. */
   const GITIGNORE_CACHE_ENTRIES = 4;
+  /** @type {Map<string, { buffer: Buffer, compiled: ReturnType<typeof compileGitignore>, exhausted: boolean }>} */
   const gitignoreCache = new Map();
 
   /**
@@ -2424,6 +2873,8 @@ function createFsService({
    * used the budget up once stays switched off until it changes. The bytes
    * are compared rather than size and mtime, which on HFS+ or FAT is only
    * exact to the second.
+   *
+   * @param {string} root
    */
   async function loadGitignoreMatcher(root) {
     try {
@@ -2439,7 +2890,10 @@ function createFsService({
       // Most recently used last; the oldest goes once there are too many.
       gitignoreCache.delete(realTarget);
       gitignoreCache.set(realTarget, entry);
-      if (gitignoreCache.size > GITIGNORE_CACHE_ENTRIES) gitignoreCache.delete(gitignoreCache.keys().next().value);
+      if (gitignoreCache.size > GITIGNORE_CACHE_ENTRIES) {
+        const oldest = gitignoreCache.keys().next().value;
+        if (oldest !== undefined) gitignoreCache.delete(oldest);
+      }
       if (!entry.compiled || entry.exhausted) return null;
       return entry.compiled.matcher({
         onExhausted: () => {
@@ -2456,6 +2910,10 @@ function createFsService({
    * list_directory_tree: .git und (ohne includeHidden) Punkt-Einträge überspringen,
    * .gitignore des Projektroots anwenden, Symlinks nicht verfolgen (an Dirents weder
    * isFile noch isDirectory). Sortiert Dateien vor Ordnern, dann nach Name.
+   *
+   * @param {string} dirAbs
+   * @param {WalkOptions} walkOptions
+   * @returns {Promise<WorkspaceEntry[]>}
    */
   async function readWorkspaceEntries(dirAbs, { root, includeHidden, isIgnored, sensitivity, prefix = '', omitted }) {
     let dirents;
@@ -2464,6 +2922,7 @@ function createFsService({
     } catch {
       return [];
     }
+    /** @type {WorkspaceEntry[]} */
     const entries = [];
     for (const dirent of dirents) {
       if (dirent.name === '.git') continue;
@@ -2489,6 +2948,12 @@ function createFsService({
     return entries;
   }
 
+  /**
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
+   */
   async function runSearchInFilesTool(args, workspaceRoot, options = {}) {
     const query = typeof args.query === 'string' ? args.query : '';
     if (!query) {
@@ -2502,6 +2967,7 @@ function createFsService({
       const complexityError = validateRegexPattern(query, { maxChars: SEARCH_MAX_PATTERN_CHARS });
       if (complexityError) return JSON.stringify({ error: complexityError });
     }
+    /** @type {RegExp} */
     let matcher;
     try {
       matcher = new RegExp(pattern, flags);
@@ -2533,7 +2999,7 @@ function createFsService({
 
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
 
     const omitted = { count: 0 };
     const walkOptions = {
@@ -2552,7 +3018,12 @@ function createFsService({
     // Wörtliche Suchen sind linear und laufen im Main-Thread. Reguläre Ausdrücke
     // vom Modell laufen in einem Worker mit hartem Zeitbudget, damit
     // katastrophales Backtracking die App nicht einfrieren kann (Issue #69).
-    let regexWorker = null;
+    // Assigned in `matchText`, so the type is stated on the initial value too.
+    let regexWorker = /** @type {ReturnType<typeof createRegexSearchWorker> | null} */ (null);
+    /**
+     * @param {string} text
+     * @param {number} maxMatches
+     */
     function matchText(text, maxMatches) {
       if (!isRegex) return collectLineMatches(text, matcher, { ...matchOptions, maxMatches });
       if (!regexWorker) {
@@ -2567,6 +3038,7 @@ function createFsService({
     }
 
     const state = {
+      /** @type {Array<import('./search-line-matcher').LineMatch & { file: string }>} */
       matches: [],
       outputChars: 0,
       filesScanned: 0,
@@ -2579,10 +3051,13 @@ function createFsService({
       state.matchLimitReached || state.outputLimitReached || state.scanLimitReached || isAborted();
     // Erzeugte Pfade tragen die Wurzel mit: aus einem Skill-Ordner kommen sie
     // als "skill:<name>/…" zurück und sind damit direkt wieder aufrufbar.
-    const toRelPosix = (abs) => `${prefix}${path.relative(root, abs).split(path.sep).join('/')}`;
+    const toRelPosix = (/** @type {string} */ abs) => `${prefix}${path.relative(root, abs).split(path.sep).join('/')}`;
     // Trefferzeile samt Kontext, wie sie das Modell sehen würde.
-    const matchLineText = (m) => [...(m.before || []), m.text, ...(m.after || [])].join('\n');
+    const matchLineText = (/** @type {import('./search-line-matcher').LineMatch} */ m) => [...(m.before || []), m.text, ...(m.after || [])].join('\n');
 
+    /**
+     * @param {string} fileAbs
+     */
     async function scanFile(fileAbs) {
       if (state.filesVisited >= MAX_SEARCH_SCANNED_FILES) {
         state.scanLimitReached = true;
@@ -2621,6 +3096,7 @@ function createFsService({
       if (state.matches.length >= maxResults) state.matchLimitReached = true;
     }
 
+    /** @param {string} dirAbs */
     async function walk(dirAbs) {
       for (const entry of await readWorkspaceEntries(dirAbs, walkOptions)) {
         if (done()) return;
@@ -2698,6 +3174,12 @@ function createFsService({
     });
   }
 
+  /**
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
+   */
   async function runFindFilesTool(args, workspaceRoot, options = {}) {
     const pattern = typeof args.pattern === 'string' ? args.pattern.trim() : '';
     if (!pattern) {
@@ -2715,7 +3197,7 @@ function createFsService({
 
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
 
     const omitted = { count: 0 };
     const walkOptions = {
@@ -2728,11 +3210,16 @@ function createFsService({
     };
 
     const state = {
+      /** @type {Array<{ path: string, kind: string }>} */
       results: [],
       entriesVisited: 0,
       matchLimitReached: false,
       scanLimitReached: false,
     };
+    /**
+     * @param {string} relEntry
+     * @param {boolean} isDirectory
+     */
     function addMatch(relEntry, isDirectory) {
       if (glob.dirOnly && !isDirectory) return;
       if (!glob.test(relEntry)) return;
@@ -2740,6 +3227,7 @@ function createFsService({
       if (state.results.length >= maxResults) state.matchLimitReached = true;
     }
 
+    /** @param {string} dirAbs */
     async function walk(dirAbs) {
       for (const entry of await readWorkspaceEntries(dirAbs, walkOptions)) {
         if (state.matchLimitReached || state.scanLimitReached || isAborted()) return;
@@ -2786,15 +3274,21 @@ function createFsService({
    */
   // The `@` menu follows the tree (#436): hidden entries only with
   // `showHidden`, and the tree's system noise stays out either way.
+  /**
+   * @param {string} workspaceRoot
+   * @param {{ maxEntries?: number, showHidden?: boolean }} [options]
+   */
   async function listWorkspacePaths(workspaceRoot, { maxEntries = MENTION_MAX_ENTRIES, showHidden = false } = {}) {
     const root = path.resolve(workspaceRoot);
     const cap = Math.max(1, Math.floor(Number(maxEntries) || MENTION_MAX_ENTRIES));
     const walkOptions = { root, includeHidden: showHidden === true, isIgnored: await loadGitignoreMatcher(root) };
+    /** @type {Array<{ path: string, kind: 'directory' | 'file' }>} */
     const entries = [];
     let truncated = false;
     const queue = [root];
     while (queue.length > 0 && !truncated) {
       const dirAbs = queue.shift();
+      if (dirAbs === undefined) break;
       for (const entry of await readWorkspaceEntries(dirAbs, walkOptions)) {
         if (isAlwaysHiddenEntryName(entry.name)) continue;
         if (entries.length >= cap) {
@@ -2808,13 +3302,19 @@ function createFsService({
     return { entries, truncated };
   }
 
+  /**
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
+   */
   async function runStatPathTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path is required ("." for the project root).' });
     }
     const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
     let st;
     try {
       st = await fs.stat(absPath);
@@ -2825,6 +3325,7 @@ function createFsService({
       return JSON.stringify({ error: e.message });
     }
     const isDirectory = st.isDirectory();
+    /** @type {{ relative_path: string, exists: true, kind: string, size_bytes?: number, modified?: string, line_count_skipped?: string, line_count?: number }} */
     const result = {
       relative_path: rel,
       exists: true,
@@ -2845,7 +3346,7 @@ function createFsService({
           const read = await readRegularFile(fs, absPath, { maxBytes: MAX_READ_FILE_BYTES });
           if (read.notFile) {
             result.line_count_skipped = notFile;
-          } else if (read.tooLarge) {
+          } else if (read.tooLarge || !read.buffer) {
             result.line_count_skipped = tooLarge;
           } else if (isBinaryBuffer(read.buffer)) {
             result.line_count_skipped = 'Binary file — line count skipped.';
@@ -2860,13 +3361,19 @@ function createFsService({
     return JSON.stringify(result);
   }
 
+  /**
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
+   */
   async function runOutlineFileTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     if (!rel) {
       return JSON.stringify({ error: 'relative_path is required.' });
     }
     const depth = readIntegerArg(args, 'max_depth');
-    if (depth.error) return JSON.stringify({ error: depth.error });
+    if (depth.error !== undefined) return JSON.stringify({ error: depth.error });
     if (depth.value !== undefined && depth.value < 1) {
       return JSON.stringify({ error: 'max_depth must be at least 1.' });
     }
@@ -2875,11 +3382,11 @@ function createFsService({
       : OUTLINE_DEFAULT_MAX_ENTRIES;
     maxEntries = Math.min(Math.max(1, maxEntries), OUTLINE_MAX_ENTRIES);
     const { absPath, error } = await resolveToolPath(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
     let buf;
     try {
       const read = await readFileForTool(absPath);
-      if (read.error) return JSON.stringify({ error: read.error });
+      if (read.error !== undefined) return JSON.stringify({ error: read.error });
       buf = read.buffer;
     } catch (e) {
       return JSON.stringify({ error: e.message });
@@ -2893,10 +3400,12 @@ function createFsService({
     let entries = isMarkdown
       ? extractMarkdownOutline(lines)
       : extractCodeOutline(lines, { isJavaScript: OUTLINE_JS_EXTENSIONS.has(ext) });
-    if (depth.value !== undefined) {
-      entries = entries.filter((entry) => entry.level <= depth.value);
+    const maxLevel = depth.value;
+    if (maxLevel !== undefined) {
+      entries = entries.filter((entry) => (entry.level ?? Infinity) <= maxLevel);
     }
     const total = entries.length;
+    /** @type {{ relative_path: string, format: string, line_count: number, total_entries: number, entries: OutlineEntry[], truncated: boolean, hint?: string }} */
     const result = {
       relative_path: rel,
       format: isMarkdown ? 'markdown' : 'code',
@@ -2913,10 +3422,16 @@ function createFsService({
     return JSON.stringify(result);
   }
 
+  /**
+   * @param {ToolArgs} args
+   * @param {string | null | undefined} workspaceRoot
+   * @param {ToolOptions} [options]
+   * @returns {Promise<string>}
+   */
   async function runListDirectoryTreeTool(args, workspaceRoot, options = {}) {
     const rel = typeof args.relative_path === 'string' ? args.relative_path.trim() : '';
     const depth = readIntegerArg(args, 'max_depth');
-    if (depth.error) return JSON.stringify({ error: depth.error });
+    if (depth.error !== undefined) return JSON.stringify({ error: depth.error });
     let maxDepth = depth.value === undefined ? TREE_DEFAULT_MAX_DEPTH : depth.value;
     if (maxDepth < 1) return JSON.stringify({ error: 'max_depth must be at least 1.' });
     maxDepth = Math.min(maxDepth, TREE_MAX_DEPTH);
@@ -2927,7 +3442,7 @@ function createFsService({
     const includeHidden = args.include_hidden === true;
 
     const { absPath, root, prefix, error } = await resolveToolPath(workspaceRoot, rel, options);
-    if (error) return JSON.stringify({ error });
+    if (error !== undefined) return JSON.stringify({ error });
     try {
       const st = await fs.stat(absPath);
       if (!st.isDirectory()) {
@@ -2948,13 +3463,14 @@ function createFsService({
 
     // Breitensuche mit Gesamtbudget: obere Ebenen werden zuerst vollständig, tiefe zuletzt.
     // hidden = direkte Einträge eines Ordners, die wegen max_depth oder max_entries fehlen.
+    /** @type {TreeNode} */
     const rootNode = { name: rel || '.', isDirectory: true, absPath, children: [], hidden: 0 };
     const queue = [{ node: rootNode, depth: 0 }];
     let shown = 0;
     let hiddenTotal = 0;
     let truncated = false;
-    while (queue.length) {
-      const { node, depth } = queue.shift();
+    for (let next = queue.shift(); next; next = queue.shift()) {
+      const { node, depth } = next;
       const entries = await readWorkspaceEntries(node.absPath, walkOptions);
       if (depth >= maxDepth) {
         node.hidden = entries.length;
@@ -2981,9 +3497,14 @@ function createFsService({
       }
     }
 
+    /** @type {string[]} */
     const lines = [];
-    const label = (node) =>
+    const label = (/** @type {TreeNode} */ node) =>
       `${node.name}${node.isDirectory ? '/' : ''}${node.hidden > 0 ? ` [+${node.hidden}]` : ''}`;
+    /**
+     * @param {TreeNode} node
+     * @param {string} indent
+     */
     function render(node, indent) {
       const ordered = [...node.children].sort((a, b) => {
         if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
@@ -3012,12 +3533,17 @@ function createFsService({
   // entries, so only the rows that are shown cost an lstat, and those run in
   // batches instead of all at once. Hidden entries only with `showHidden`
   // (#436); system noise such as `.git` never.
+  /**
+   * @param {string} dirPath
+   * @param {{ maxEntries?: number, showHidden?: boolean }} [options]
+   */
   async function readDirectory(dirPath, { maxEntries = READ_DIRECTORY_MAX_ENTRIES, showHidden = false } = {}) {
     const listed = (await fs.readdir(dirPath, { withFileTypes: true }))
       .filter((entry) => isListedEntryName(entry.name, { showHidden }));
     // A symlink is neither file nor folder to its dirent (#945). Its target
     // decides where it sorts and which icon it gets, so links are resolved
     // before the sort — only they, the plain entries cost nothing extra.
+    /** @type {Map<string, { target: string, kind: string }>} */
     const links = new Map();
     const linked = listed.filter((entry) => entry.isSymbolicLink());
     for (let i = 0; i < linked.length; i += READ_DIRECTORY_LSTAT_BATCH) {
@@ -3026,18 +3552,20 @@ function createFsService({
         links.set(entry.name, await describeLink(path.join(dirPath, entry.name)));
       }));
     }
-    const isFolder = (entry) => entry.isDirectory() || links.get(entry.name)?.kind === 'directory';
+    const isFolder = (/** @type {import('fs').Dirent} */ entry) => entry.isDirectory() || links.get(entry.name)?.kind === 'directory';
     const all = listed.sort((a, b) => {
       if (isFolder(a) !== isFolder(b)) return isFolder(a) ? -1 : 1;
       return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     });
     const shown = all.slice(0, maxEntries);
 
+    /** @type {DirectoryRow[]} */
     const entries = [];
     for (let i = 0; i < shown.length; i += READ_DIRECTORY_LSTAT_BATCH) {
       const batch = shown.slice(i, i + READ_DIRECTORY_LSTAT_BATCH);
       entries.push(...await Promise.all(batch.map(async (entry) => {
         const fullPath = path.join(dirPath, entry.name);
+        /** @type {import('fs').Stats | null} */
         let stats = null;
         try {
           stats = await fs.lstat(fullPath);
@@ -3063,6 +3591,8 @@ function createFsService({
    * What a symlink in the file tree points at (#945): the target as written
    * in the link, and whether it is a folder, a file, something else (pipe,
    * socket, device) or missing. A loop counts as missing — it leads nowhere.
+   *
+   * @param {string} linkPath
    */
   async function describeLink(linkPath) {
     let target = '';
@@ -3089,9 +3619,13 @@ function createFsService({
    * (#101) — das Kollisionsschema muss für beide Wege identisch sein.
    * `claimed` hält Namen fest, die in demselben Vorgang schon vergeben,
    * aber noch nicht angelegt wurden (Mehrfachauswahl beim Drop).
+   *
+   * @param {string} destDir
+   * @param {string} baseName
+   * @param {{ has: (candidate: string) => boolean, add: (candidate: string) => void } | null} [claimed]
    */
   async function findFreeTargetPath(destDir, baseName, claimed = null) {
-    const isTaken = async (candidate) => {
+    const isTaken = async (/** @type {string} */ candidate) => {
       if (claimed && claimed.has(candidate)) return true;
       try {
         await fs.access(candidate);
@@ -3115,6 +3649,10 @@ function createFsService({
     return targetPath;
   }
 
+  /**
+   * @param {string} sourcePath
+   * @param {string} destDir
+   */
   async function moveItem(sourcePath, destDir) {
     const srcStat = await fs.stat(sourcePath);
     const dstStat = await fs.stat(destDir);
@@ -3145,7 +3683,11 @@ function createFsService({
   // log, `reason` (ITEM_NAME_REASONS / ITEM_FAILURE_REASONS) for the renderer,
   // which words it in the interface language.
 
+  /**
+   * @param {{ message?: string, code?: string } | null | undefined} err
+   */
   function itemFailure(err) {
+    /** @type {Record<string, string>} */
     const reasons = {
       EEXIST: ITEM_FAILURE_REASONS.EXISTS,
       ENOTEMPTY: ITEM_FAILURE_REASONS.EXISTS,
@@ -3156,13 +3698,19 @@ function createFsService({
       ENOTDIR: ITEM_FAILURE_REASONS.NOT_FOLDER,
       ENAMETOOLONG: 'too-long',
     };
-    return { error: err?.message ?? String(err), reason: reasons[err?.code] ?? ITEM_FAILURE_REASONS.FAILED };
+    return { error: err?.message ?? String(err), reason: reasons[err?.code ?? ''] ?? ITEM_FAILURE_REASONS.FAILED };
   }
 
   /**
    * Creates an empty file or an empty folder in `parentDir`. Never over an
    * existing entry: `wx` and a non-recursive mkdir fail with EEXIST instead,
    * in the same call that creates — no window between a check and the write.
+   *
+   * @param {string} parentDir
+   * @param {unknown} rawName
+   * @param {unknown} kind
+   * @returns {Promise<{ ok: true, path: string, error?: undefined, reason?: undefined, character?: undefined }
+   *   | { error: string, reason: string, character?: string, ok?: undefined, path?: undefined }>}
    */
   async function createItem(parentDir, rawName, kind) {
     const checked = validateItemName(rawName);
@@ -3197,6 +3745,11 @@ function createFsService({
    * Between the look and the rename another program could create the name;
    * fs.rename would replace it on POSIX. There is no portable no-replace
    * rename in Node, and the window is a few microseconds of one user's click.
+   *
+   * @param {string} sourcePath
+   * @param {unknown} rawName
+   * @returns {Promise<{ ok: true, path: string, unchanged?: boolean, error?: undefined, reason?: undefined, character?: undefined }
+   *   | { error: string, reason: string, character?: string, ok?: undefined, path?: undefined, unchanged?: undefined }>}
    */
   async function renameItem(sourcePath, rawName) {
     const checked = validateItemName(rawName);
@@ -3206,6 +3759,7 @@ function createFsService({
     try {
       const source = await fs.lstat(sourcePath, { bigint: true });
       if (target === sourcePath) return { ok: true, path: sourcePath, unchanged: true };
+      /** @type {import('fs').BigIntStats | null} */
       let existing = null;
       try {
         existing = await fs.lstat(target, { bigint: true });
@@ -3246,6 +3800,10 @@ function createFsService({
   // wird, nicht umbenannt: fs.rename arbeitet nur innerhalb eines Dateisystems,
   // und eine Quelle außerhalb des Workspace zu löschen wäre nicht rückholbar.
 
+  /**
+   * @param {string} entryName
+   * @param {((name: string) => boolean) | null | undefined} isSensitiveName
+   */
   function isSensitiveEntryName(entryName, isSensitiveName) {
     return typeof isSensitiveName === 'function' && isSensitiveName(entryName);
   }
@@ -3253,6 +3811,9 @@ function createFsService({
   // Only regular files and folders are copied. A pipe, a socket or a device
   // makes fs.cp throw halfway — a git repository with core.fsmonitor has a
   // socket in .git — so they are skipped and reported like symlinks (#646).
+  /**
+   * @param {import('fs').Stats} stat
+   */
   function isCopyableEntry(stat) {
     return stat.isFile() || stat.isDirectory();
   }
@@ -3261,14 +3822,16 @@ function createFsService({
    * The target names one import has handed out but not yet created. On APFS
    * and NTFS `README.md` and `readme.md` are the same file, so the comparison
    * folds case there — otherwise the second copy fails with EEXIST (#646).
+   *
+   * @param {string} platform
    */
   function createClaimedTargets(platform) {
     const foldsCase = platform === 'darwin' || platform === 'win32';
-    const keyOf = (candidate) => (foldsCase ? candidate.normalize('NFC').toLowerCase() : candidate);
+    const keyOf = (/** @type {string} */ candidate) => (foldsCase ? candidate.normalize('NFC').toLowerCase() : candidate);
     const keys = new Set();
     return {
-      has: (candidate) => keys.has(keyOf(candidate)),
-      add: (candidate) => {
+      has: (/** @type {string} */ candidate) => keys.has(keyOf(candidate)),
+      add: (/** @type {string} */ candidate) => {
         keys.add(keyOf(candidate));
       },
     };
@@ -3278,6 +3841,9 @@ function createFsService({
    * A source is refused when its path as written *or* its real path looks
    * like credentials: a drop through `~/k8s → ~/.kube` must not pass as
    * `k8s/config` (#646). Returns the matching verdict or null.
+   *
+   * @param {string} source
+   * @param {ImportOptions['classifySourcePath']} classifySourcePath
    */
   async function sensitiveSourceVerdict(source, classifySourcePath) {
     if (typeof classifySourcePath !== 'function') return null;
@@ -3299,6 +3865,11 @@ function createFsService({
    * Zählt rekursiv, was ein Import anfassen würde, ohne etwas zu schreiben.
    * Symlinks werden gezählt und übersprungen, nicht verfolgt — ein Symlink im
    * Workspace, der nach außen zeigt, wäre ein Loch in der Grenze.
+   *
+   * @param {string} absPath
+   * @param {import('fs').Stats} stat
+   * @param {{ dirs: number, files: number, bytes: number, skippedSymlinks: number, skippedSensitive: number, skippedOther: number, maxEntries: number }} acc
+   * @param {ImportOptions['isSensitiveName']} isSensitiveName
    */
   async function countImportSource(absPath, stat, acc, isSensitiveName) {
     if (stat.isSymbolicLink()) {
@@ -3340,8 +3911,10 @@ function createFsService({
    * `classifySourcePath` decides whether a source looks like credentials, on
    * its written and on its real path; `platform` decides whether target names
    * compare case-insensitively (both #646, injectable for tests).
-   * @returns {{ error: string } | { ok: true, dirs, files, bytes, skippedSymlinks,
-   *            skippedSensitive, skippedOther, targets: Array<{ source, targetPath, kind }> }}
+   * @param {unknown} sourcePaths
+   * @param {string} destDir
+   * @param {ImportOptions} [options]
+   * @returns {Promise<ImportInspection>}
    */
   async function inspectImportSources(sourcePaths, destDir, options = {}) {
     const {
@@ -3374,6 +3947,7 @@ function createFsService({
       skippedOther: 0,
       maxEntries,
     };
+    /** @type {ImportTarget[]} */
     const targets = [];
     const claimed = createClaimedTargets(platform);
 
@@ -3441,6 +4015,9 @@ function createFsService({
   }
 
   // "Already there" from fs.cp's own check or from the exclusive copyFile.
+  /**
+   * @param {{ code?: string } | null | undefined} err
+   */
   function isTargetTakenError(err) {
     return err?.code === 'EEXIST' || err?.code === 'ERR_FS_CP_EEXIST';
   }
@@ -3451,9 +4028,13 @@ function createFsService({
    * (#646). A folder is created here, exclusively, and then filled: one that
    * turned up since the check is somebody else's and is not merged into.
    * Files are copied with COPYFILE_EXCL, so nothing existing is overwritten.
+   *
+   * @param {ImportTarget} target
+   * @param {ImportOptions['isSensitiveName']} isSensitiveName
+   * @param {string[]} created
    */
   async function copyImportTarget(target, isSensitiveName, created) {
-    const filter = async (src) => {
+    const filter = async (/** @type {string} */ src) => {
       if (src !== target.source && isSensitiveEntryName(path.basename(src), isSensitiveName)) return false;
       try {
         return isCopyableEntry(await fs.lstat(src));
@@ -3486,8 +4067,13 @@ function createFsService({
     created.push(target.targetPath);
   }
 
-  /** Removes what a failed import created; returns what could not be removed. */
+  /**
+   * Removes what a failed import created; returns what could not be removed.
+   *
+   * @param {string[]} created
+   */
   async function removeCreatedTargets(created) {
+    /** @type {string[]} */
     const leftOver = [];
     for (const createdPath of [...created].reverse()) {
       try {
@@ -3506,12 +4092,18 @@ function createFsService({
    *
    * All or nothing (#646): when one target fails, what this import created so
    * far is removed again, and `copied` names only what could not be removed.
+   *
+   * @param {unknown} sourcePaths
+   * @param {string} destDir
+   * @param {ImportOptions} [options]
+   * @returns {Promise<ImportResult>}
    */
   async function importExternalItems(sourcePaths, destDir, options = {}) {
     const inspection = await inspectImportSources(sourcePaths, destDir, options);
-    if (inspection.error) return { error: inspection.error };
+    if (inspection.error !== undefined) return { error: inspection.error };
 
     const { isSensitiveName = null } = options;
+    /** @type {string[]} */
     const created = [];
     for (const target of inspection.targets) {
       try {
@@ -3550,10 +4142,13 @@ function createFsService({
    *
    * Skill-Ordner (`skillRoots`) sind hier bewusst keine zweite Wurzel: Fuer
    * Bilder gilt zunaechst nur der Arbeitsordner.
+   *
+   * @param {unknown} workspaceRoot
+   * @param {unknown} rawPath
    */
   async function readWorkspaceImage(workspaceRoot, rawPath) {
     const read = await readWorkspaceBytes(workspaceRoot, rawPath, MAX_WORKSPACE_IMAGE_BYTES);
-    if (read.reason) return createWorkspaceImageError(read.reason);
+    if (read.reason !== undefined) return createWorkspaceImageError(read.reason);
     const { buffer, stats } = read;
     // Der Typ haengt am Inhalt, nicht an der Endung: Eine Textdatei namens
     // `plot.png` darf keinen Ladeversuch ausloesen. SVG is recognised by its
@@ -3575,10 +4170,13 @@ function createFsService({
    * — and a type decided by the content. The bytes travel as they are; the
    * reason for a refusal carries the size, so that "too large" can say how
    * large.
+   *
+   * @param {unknown} workspaceRoot
+   * @param {unknown} rawPath
    */
   async function readWorkspacePdf(workspaceRoot, rawPath) {
     const read = await readWorkspaceBytes(workspaceRoot, rawPath, MAX_WORKSPACE_PDF_BYTES);
-    if (read.reason) return createWorkspacePdfError(read.reason, read.size ? { size: read.size } : {});
+    if (read.reason !== undefined) return createWorkspacePdfError(read.reason, read.size ? { size: read.size } : {});
     const { buffer, stats } = read;
     if (!isPdfHeader(buffer.subarray(0, WORKSPACE_PDF_SNIFF_BYTES))) {
       return createWorkspacePdfError(WORKSPACE_PDF_ERRORS.NOT_PDF, { size: stats.size });
@@ -3592,6 +4190,10 @@ function createFsService({
    * inside it lexically **and** after `realpath`, a file, at most `maxBytes`.
    * Answers `{ buffer, stats }` or `{ reason, size? }` with the reason codes
    * of the image contract, which the PDF contract shares.
+   *
+   * @param {unknown} workspaceRoot
+   * @param {unknown} rawPath
+   * @param {number} maxBytes
    */
   async function readWorkspaceBytes(workspaceRoot, rawPath, maxBytes) {
     if (typeof workspaceRoot !== 'string' || !workspaceRoot.trim()) {
@@ -3624,19 +4226,22 @@ function createFsService({
     try {
       const read = await readRegularFile(fs, realTarget, { maxBytes });
       if (read.notFile) return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
-      if (read.tooLarge) return { reason: WORKSPACE_IMAGE_ERRORS.TOO_LARGE, size: read.stats.size };
+      if (read.tooLarge || !read.buffer) return { reason: WORKSPACE_IMAGE_ERRORS.TOO_LARGE, size: read.stats.size };
       return { buffer: read.buffer, stats: read.stats };
     } catch {
       return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
     }
   }
 
+  /**
+   * @param {string} filePath
+   */
   async function readFilePreview(filePath) {
     const MAX_SIZE = 1024 * 1024; // 1 MB limit for preview
     // A click on a pipe in the tree must not block a thread-pool thread (#643).
     const read = await readRegularFile(fs, filePath, { maxBytes: MAX_SIZE });
     if (read.notFile) return { error: ui()('fs.error.previewNotAFile') };
-    if (read.tooLarge) {
+    if (read.tooLarge || !read.buffer) {
       return { error: ui()('fs.error.previewTooLarge'), size: read.stats.size };
     }
     const { buffer, stats } = read;
@@ -3659,18 +4264,19 @@ function createFsService({
    * that text would destroy the bytes it could not show.
    *
    * @param {string} absPath  checked against the workspace by the caller
-   * @param {string} content
+   * @param {unknown} content  anything but text is refused
    * @param {{ root: string, baseHash?: string, force?: boolean }} options
    * @returns {Promise<{ok: true, size: number, modified: number}
    *   | {conflict: 'changed'|'deleted'}
-   *   | {error: string, reason: 'too-large'|'encoding'|'not-file'|'invalid'}>}
+   *   | {error: string, reason: 'too-large'|'encoding'|'not-file'|'invalid'|'refused'}>}
    *   An unexpected failure (permission, a full disk) is thrown.
    */
-  async function writeFileFromUser(absPath, content, { root, baseHash = '', force = false } = {}) {
+  async function writeFileFromUser(absPath, content, { root, baseHash = '', force = false }) {
     if (typeof content !== 'string') return { error: 'No text to write.', reason: 'invalid' };
     if (Buffer.byteLength(content, 'utf8') > MAX_WRITE_FILE_BYTES) {
       return { error: `Content too large (>${MAX_WRITE_FILE_BYTES} bytes).`, reason: 'too-large' };
     }
+    /** @type {Awaited<ReturnType<typeof readRegularFile>> | null} */
     let current = null;
     try {
       current = await readRegularFile(fs, absPath, { maxBytes: Math.max(MAX_READ_FILE_BYTES, MAX_WRITE_FILE_BYTES) });
@@ -3736,6 +4342,8 @@ function createFsService({
     readWorkspaceFile: readWorkspaceBytes,
   };
 }
+
+/** @typedef {ReturnType<typeof createFsService>} FsService */
 
 module.exports = {
   createFsService,

@@ -33,6 +33,10 @@ const {
  */
 const MAX_FALLBACK_LEVELS = 2;
 
+/**
+ * @param {Omit<import('./directory-watcher').DirectoryWatcherOptions, 'resolveTargets' | 'onChange'>
+ *   & { onChange: () => void, os?: { homedir?: () => string } | null }} options
+ */
 function createSkillsWatcher({ watch, path, os = null, onChange, ...watcherOptions }) {
   if (typeof watch !== 'function') throw new TypeError('createSkillsWatcher benötigt watch.');
   if (!path) throw new TypeError('createSkillsWatcher benötigt path.');
@@ -46,7 +50,11 @@ function createSkillsWatcher({ watch, path, os = null, onChange, ...watcherOptio
     }
   }
 
-  /** Die zu beobachtenden Skill-Verzeichnisse — ohne die System-Quelle. */
+  /**
+   * Die zu beobachtenden Skill-Verzeichnisse — ohne die System-Quelle.
+   *
+   * @param {string | null | undefined} workspaceRoot
+   */
   function targetDirectories(workspaceRoot) {
     const dirs = [];
     const root =

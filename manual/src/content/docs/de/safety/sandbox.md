@@ -17,6 +17,9 @@ Snotra kann Shell-Befehle und Python-Code ausführen: `git status`, einen Build,
 
 1. Öffne *Einstellungen › Tools › Autonomie* und klapp die Zeile *Ausführen* auf.
 2. Schalte *Shell-Befehle erlauben* ein, *Python-Ausführung erlauben* oder beides.
+3. [seit 1.27.1] Ein Dialog deines Betriebssystems fragt *shell_execute einschalten?* oder *run_python einschalten?* und sagt, was das Tool dann darf — unter Windows, dass es keine Sandbox gibt. Wähl *Einschalten*. *Abbrechen* lässt den Schalter aus.
+
+Ausschalten fragt nie nach.
 
 Befehle laufen unter macOS und Linux in deiner Login-Shell (zsh, bash …), mit dem `PATH` aus deinem Shell-Profil, und unter Windows in PowerShell oder `cmd.exe`. Python sucht Snotra selbst; willst du einen bestimmten Interpreter — eine virtuelle Umgebung mit den Paketen, die du brauchst, zum Beispiel —, stellst du ihn unter *Einstellungen › Tools › Einrichtung* ein.
 
@@ -26,7 +29,7 @@ Befehle laufen unter macOS und Linux in deiner Login-Shell (zsh, bash …), mit 
 
 ![Einstellungen › Tools › Sicherheit: links die Liste — Alle Workspaces mit 1 Programm und 1 Host, darunter die Workspaces gartenplaner (offen, 1 Programm · 2 Hosts), altes-projekt (Ordner fehlt) und rechnungs-tool (Sandbox aus, durchgestrichenes Schild in Bernstein). Rechts gartenplaner: die Kachel „Sandbox aktiv“ mit ihrem Schalter, darunter „Programme mit mehr Spielraum“.](screenshots/tool-security.webp)
 
-**Die Liste links** beginnt mit *Alle Workspaces*, gefolgt von jedem Ordner, der eine eigene Sandbox-Einstellung oder Freigabe hat, und dem geöffneten, markiert mit *offen*. Jeder Eintrag sagt in Form und Worten, wie er steht: ein Schild mit dem, was er über die Sandbox hinaus erlaubt (*1 Programm · 2 Hosts* oder *Sandbox an · nichts extra*), das durchgestrichene Schild in Bernstein mit *Sandbox aus* oder *Ordner fehlt* für einen Ordner, den es nicht mehr gibt. Auch einen Ordner, der gerade nicht offen ist, kannst du prüfen und ändern; die Änderung gilt beim nächsten Lauf dort.
+**Die Liste links** beginnt mit *Alle Workspaces*, gefolgt von jedem Ordner, der eine eigene Sandbox-Einstellung oder Freigabe hat, jedem Ordner, der für dein Handy offen ist, und dem geöffneten, markiert mit *offen*. Jeder Eintrag sagt in Form und Worten, wie er steht: ein Schild mit dem, was er über die Sandbox hinaus erlaubt (*1 Programm · 2 Hosts* oder *Sandbox an · nichts extra*), das durchgestrichene Schild in Bernstein mit *Sandbox aus* oder *Ordner fehlt* für einen Ordner, den es nicht mehr gibt. Auch einen Ordner, der gerade nicht offen ist, kannst du prüfen und ändern; die Änderung gilt beim nächsten Lauf dort.
 
 **Ein Workspace** zeigt von oben nach unten:
 
@@ -34,6 +37,7 @@ Befehle laufen unter macOS und Linux in deiner Login-Shell (zsh, bash …), mit 
 - *Programme mit mehr Spielraum*: seine eigenen und die für alle Workspaces, markiert mit *Alle Workspaces*,
 - *Offen gehaltene Hosts*: seine eigenen und die für alle Workspaces, ebenso markiert,
 - *Sandbox dieses Workspace zurücksetzen*,
+- [seit 1.28] *Handy* mit dem Schalter *Zugriff vom Handy*: siehe [Einen Ordner fürs Handy öffnen](../tools-and-security/#einen-ordner-fürs-handy-öffnen),
 - nur beim geöffneten Workspace *Diese Sitzung*: was Karten in seinen Chats *Für diese Sitzung* freigegeben haben.
 
 Was überall gilt, steht in jedem Workspace mit da, geändert wird es aber nur unter *Alle Workspaces*: Die Markierung *Alle Workspaces* daneben führt dorthin. Solange die Sandbox eines Workspace aus ist, ruhen seine Freigaben, und die Seite sagt das.
@@ -92,12 +96,16 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 ## Git über SSH nutzen
 
-[seit 1.21.1] Unter macOS erreichen `git fetch`, `git pull`, `git push` und `git ls-remote` auch aus der Sandbox ein SSH-Remote wie `git@gitlab.example.com:team/app.git`. Snotra schickt die SSH-Verbindung von Git über den Proxy der Sandbox. Damit gelten für sie dieselben Regeln wie für jede andere Verbindung, und die Sandbox bleibt an.
+[seit 1.21.1] `git fetch`, `git pull`, `git push` und `git ls-remote` erreichen auch aus der Sandbox ein SSH-Remote wie `git@gitlab.example.com:team/app.git` — unter macOS und [seit 1.27.1] unter Linux. Snotra schickt die SSH-Verbindung von Git über den Proxy der Sandbox. Damit gelten für sie dieselben Regeln wie für jede andere Verbindung, und die Sandbox bleibt an.
 
 ### Was du brauchst
 
 - **Den Host in `~/.ssh/known_hosts`.** In der Sandbox kann SSH nicht fragen, ob es einem neuen Host trauen soll. Verbinde dich einmal aus einem Terminal mit ihm — `ssh -T git@gitlab.example.com` — und bestätige seinen Schlüssel.
-- **Deinen Schlüssel im ssh-agent.** Die Sandbox hält deine privaten Schlüsseldateien verschlossen; SSH meldet sich stattdessen über den Agent an. Lade den Schlüssel einmal mit `ssh-add --apple-use-keychain ~/.ssh/<schlüssel>`, oder trag `AddKeysToAgent yes` und `UseKeychain yes` in `~/.ssh/config` ein, dann lädt SSH ihn, sobald du ihn das nächste Mal im Terminal benutzt.
+- **Deinen Schlüssel im ssh-agent.** Die Sandbox hält deine privaten Schlüsseldateien verschlossen; SSH meldet sich stattdessen über den Agent an.
+  - Unter macOS lädst du den Schlüssel einmal mit `ssh-add --apple-use-keychain ~/.ssh/<schlüssel>`, oder du trägst `AddKeysToAgent yes` und `UseKeychain yes` in `~/.ssh/config` ein, dann lädt SSH ihn, sobald du ihn das nächste Mal im Terminal benutzt.
+  - Unter Linux nimmt Snotra den Agent der Sitzung, aus der es gestartet wurde — den, auf den `SSH_AUTH_SOCK` zeigt und den die meisten Desktops von selbst starten. Lade den Schlüssel mit `ssh-add ~/.ssh/<schlüssel>`, oder trag `AddKeysToAgent yes` in `~/.ssh/config` ein.
+
+Zum Prüfen genügen zwei Befehle: `ssh-keygen -F gitlab.example.com` gibt den Schlüssel des Hosts aus, wenn er in `known_hosts` steht. `ssh-add -l` listet die Schlüssel, die der Agent hält; meldet er *The agent has no identities*, lade den Schlüssel zuerst.
 
 ### Schritte
 
@@ -109,7 +117,9 @@ Was sie nicht tut: Sie hält einen Lauf nicht davon ab, deine anderen Dateien zu
 
 Git erreicht den Host über den Proxy. SSH darf in `~/.ssh` die `known_hosts`, die `config` und die öffentlichen Schlüssel (`*.pub`) lesen und mit dem ssh-agent sprechen; die privaten Schlüssel bleiben zu, und die Versuche von SSH, sie zu lesen, erscheinen nicht als blockiert. Ein Befehl in der Sandbox kann sich über den Agent bei den Hosts anmelden, die der Lauf erreichen darf, einen Schlüssel lesen oder kopieren kann er aber nicht. `git push` schreibt ins Remote und ist ein Befehl, den du freigibst wie jeden anderen.
 
-Nur die SSH-Verbindung von Git nimmt diesen Weg. `ssh` oder `scp`, direkt aufgerufen, verbinden sich weiter direkt, und dafür kann die Sandbox keinen einzelnen Host öffnen. Unter Linux kann sich Git über SSH in der Sandbox noch nicht anmelden: Nimm die HTTPS-Adresse des Repositorys, oder schalte die Sandbox für den Ordner ab.
+Unter Linux sperrt die Sandbox jede lokale Socket-Verbindung, auch die zum Agent. SSH läuft dort deshalb nicht im Lauf selbst: Git übergibt seine Verbindung an einen Helfer, den Snotra neben dem Lauf startet, weiterhin in der Sandbox. Der Helfer nimmt nur die Befehle von Git an, für jeweils einen Host, und startet SSH mit dem Agent. Deine Schlüsseldateien sind für ihn genauso verschlossen wie für den Lauf.
+
+Nur die SSH-Verbindung von Git nimmt diesen Weg. `ssh` oder `scp`, direkt aufgerufen, verbinden sich weiter direkt, und dafür kann die Sandbox keinen einzelnen Host öffnen; unter Linux erreichen sie auch den Agent nicht.
 
 ## Die Sandbox für einen Ordner abschalten
 
@@ -174,7 +184,7 @@ Gib den Host mit Port ein, etwa `api.example.com:443`, oder als `*.example.com` 
   ```
 
   Das hält bis zum nächsten Neustart; damit es bleibt, schreib dieselbe Einstellung in eine Datei unter `/etc/sysctl.d/`. Ein AppArmor-Profil, das `bwrap` User-Namespaces erlaubt, geht ebenso. Starte Snotra danach neu.
-- **Git über SSH: *Permission denied (publickey)*.** Der Schlüssel ist nicht im ssh-agent geladen, SSH hat also nichts, womit es sich anmelden kann. Lade ihn mit `ssh-add --apple-use-keychain ~/.ssh/<schlüssel>` und führ den Befehl noch einmal aus — siehe [Git über SSH nutzen](#git-über-ssh-nutzen).
+- **Git über SSH: *Permission denied (publickey)*.** Der Schlüssel ist nicht im ssh-agent geladen, SSH hat also nichts, womit es sich anmelden kann. Lade ihn — `ssh-add --apple-use-keychain ~/.ssh/<schlüssel>` unter macOS, `ssh-add ~/.ssh/<schlüssel>` unter Linux — und führ den Befehl noch einmal aus; siehe [Git über SSH nutzen](#git-über-ssh-nutzen). Wenn `ssh-add -l` unter Linux in deinem Terminal funktioniert, Snotra aber trotzdem keinen Agent findet, starte Snotra aus einer Sitzung, in der `SSH_AUTH_SOCK` gesetzt ist.
 - **Git über SSH: *Host key verification failed*.** Der Host steht noch nicht in `~/.ssh/known_hosts`. Verbinde dich einmal aus einem Terminal mit ihm und bestätige seinen Schlüssel.
 - **macOS: `gh`, `terraform` oder ein anderes Go-Programm kommt nicht ins Netz.** Gib ihm eine Freigabe pro Programm mit *Zertifikate über macOS prüfen*.
 - **Die Sandbox eines Workspace lässt sich nicht abschalten.** Dafür braucht es den verschlüsselten Speicher des Systems; wo es den nicht gibt, bleibt der Schalter an, und die Kachel sagt, warum. Dasselbe gilt für Programme, Hosts und *Sandbox in neuen Workspaces an*.

@@ -18,6 +18,9 @@ const { createTranslator } = require('../../shared/i18n');
  *
  * Fehler sind hier bewusst folgenlos: ohne gueltigen Pfad oeffnet der Dialog
  * einfach mit dem Standardverhalten.
+ *
+ * @param {{ getValidatedLastFolder?: () => Promise<string|null|undefined> }|null|undefined} workspaceFolderStore
+ * @returns {Promise<string|null>}
  */
 async function resolveDefaultPath(workspaceFolderStore) {
   if (!workspaceFolderStore || typeof workspaceFolderStore.getValidatedLastFolder !== 'function') {
@@ -31,6 +34,16 @@ async function resolveDefaultPath(workspaceFolderStore) {
   }
 }
 
+/**
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {Pick<import('electron').Dialog, 'showOpenDialog'>} deps.dialog
+ * @param {() => import('electron').BrowserWindow | null} deps.getMainWindow
+ * @param {Pick<ReturnType<typeof import('../services/workspace-activation').createWorkspaceActivation>, 'activateChosenFolder'>|null} deps.workspaceActivation
+ * @param {Parameters<typeof resolveDefaultPath>[0]} deps.workspaceFolderStore
+ * @param {Record<string, string>} deps.REQ
+ * @param {() => string|undefined} [deps.getLocale]
+ */
 function registerDialogHandlers({
   ipcMain,
   dialog,
@@ -44,6 +57,7 @@ function registerDialogHandlers({
 }) {
   ipcMain.handle(REQ.DIALOG_OPEN_FOLDER, async () => {
     const t = createTranslator(getLocale());
+    /** @type {import('electron').OpenDialogOptions} */
     const options = {
       title: t('folderDialog.title'),
       buttonLabel: t('folderDialog.button'),
@@ -57,7 +71,8 @@ function registerDialogHandlers({
     const defaultPath = await resolveDefaultPath(workspaceFolderStore);
     if (defaultPath) options.defaultPath = defaultPath;
 
-    const result = await dialog.showOpenDialog(getMainWindow(), options);
+    const win = getMainWindow();
+    const result = await (win ? dialog.showOpenDialog(win, options) : dialog.showOpenDialog(options));
     if (result.canceled || result.filePaths.length === 0) return null;
     if (!workspaceActivation) return result.filePaths[0];
     return workspaceActivation.activateChosenFolder(result.filePaths[0]);

@@ -1,7 +1,10 @@
 // Look instead of trust (#419): the mode pill's menu on a system without
 // encrypted storage — "Auto" shown but not offered, "Always ask" available.
-// safeStorage is switched off in main after the start, which is what the
-// renderer sees on a Linux desktop without a keyring.
+// safeStorage is switched off in main before the app's own code runs
+// (helpers/no-encryption-preload.cjs), which is what the renderer sees on a
+// Linux desktop without a keyring. Since #1156 the window reads it from the
+// platform register, resolved once at start — switching it off later no
+// longer reaches the window.
 // Not a test — a look. Run it outside the Claude Code sandbox.
 //
 //   node e2e/manual-mode-without-encryption.mjs [en|de]
@@ -10,6 +13,7 @@
 
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir } from './helpers/app.mjs';
@@ -23,15 +27,15 @@ await mkdir(SHOTS, { recursive: true });
 await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
 await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
 await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: locale }), 'utf8');
-const snotra = await launchApp({ userDataDir });
-const { app, page } = snotra;
+const NO_ENCRYPTION = fileURLToPath(new URL('./helpers/no-encryption-preload.cjs', import.meta.url));
+const snotra = await launchApp({ userDataDir, mainPreload: NO_ENCRYPTION });
+const { page } = snotra;
 const pause = (ms = 400) => new Promise((r) => setTimeout(r, ms));
 
 try {
   await poll(async () =>
     (await page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length)) > 0,
   { what: 'drawn tree' });
-  await app.evaluate(({ safeStorage }) => { safeStorage.isEncryptionAvailable = () => false; });
   await page.evaluate(() => window.electronAPI.setToolPermissionMode('ask-all'));
   await poll(() => page.evaluate(() => document.getElementById('chat-tool-mode-wrap').dataset.mode === 'ask-all'),
     { what: 'mode ask-all' });

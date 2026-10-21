@@ -48,6 +48,19 @@ Auch in *Auto*, dem Modus ohne Rückfragen:
 
 Im Chat steht Inhalt, den Snotra nicht selbst geschrieben hat: Antworten des Modells, Dateien, Webseiten. Ein Text in einer Datei kann Anweisungen enthalten, die sich an das Modell richten. Für das Modell ist das Material, kein Befehl, und jeder Tool-Aufruf danach durchläuft dieselbe Prüfung von Neuem.
 
-Deshalb darf auch das App-Fenster den Schutz nicht allein lockern. *Auto* einschalten, etwas dauerhaft erlauben, die Sandbox abschalten oder eine Sperre löschen bestätigst du in einem Dialog des Betriebssystems, außerhalb des Fensters. Verschärfen — eine Sperre, *Immer fragen* — wirkt sofort, ohne Dialog.
+Deshalb darf auch das App-Fenster den Schutz nicht allein lockern. *Auto* einschalten, etwas dauerhaft erlauben, die Sandbox abschalten oder eine Sperre löschen bestätigst du in einem Dialog des Betriebssystems, außerhalb des Fensters. [seit 1.27.1] Ebenso das Einschalten von Shell-Befehlen oder Python und das Speichern eines lokalen MCP-Servers mit einem neuen Befehl — dieses Programm liefe mit deinen Rechten, außerhalb der Sandbox. Verschärfen — eine Sperre, *Immer fragen* — wirkt sofort, ohne Dialog.
 
 Deine Berechtigungen liegen signiert in deinem Profil, nicht im Projektordner. Ein Repository, das du herunterlädst, kann sich nicht selbst auf *Auto* stellen oder die Sandbox abschalten.
+
+## Wenn ein Tool-Ergebnis nach Anweisungen aussieht
+
+[seit 1.27.1] Snotra sieht Tool-Ergebnisse außerdem nach Text durch, der sich wie Befehle an das Modell liest: die Aufforderung, frühere Anweisungen zu ignorieren, eine gefälschte Systemnachricht, Befehle an eine KI, die Bitte, Schlüssel oder das Gespräch irgendwohin zu schicken, Text, versteckt in Zeichen, die du nicht sehen kannst. Findet es so etwas, sagt der Chat es unter dem Tool-Protokoll — siehe [Verfolgen, was Snotra tut](../../chatting/follow-the-work/#wenn-sich-ein-ergebnis-wie-anweisungen-liest).
+
+Diese Prüfung ist eine Warnung, nie der Schutz:
+
+- **Sie ändert nichts.** Das Ergebnis geht so, wie es ist, an das Modell, und der nächste Tool-Aufruf wird genau wie jeder andere geprüft. Eine Warnung lockert keine Regel, und eine fehlende Warnung öffnet keine.
+- **Sie kann eine Injection übersehen.** Sie kennt verbreitete Muster, nicht jede Art, einen Befehl zu formulieren. Was dich schützt, sind die Prüfung jedes Aufrufs, die Freigabekarten und die Sandbox.
+- **Sie kann ohne Angriff anschlagen.** Eine Seite, die Prompt-Injection mit einem Beispiel erklärt, wird markiert, weil das Beispiel darauf steht. Eine Formulierung in Anführungszeichen — so, wie ein Text *über* eine Injection spricht — bleibt unbeachtet.
+- **Snotras eigener Text wird nicht geprüft:** Skills, dieses Handbuch und was ein Schreibvorgang meldet. Ein Skill ist von vornherein Anweisung.
+
+Schlägt die Prüfung selbst fehl, geht das Ergebnis ohne Warnung durch — und jede Regel oben gilt trotzdem vollständig.

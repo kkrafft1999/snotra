@@ -22,9 +22,13 @@ export function folderName(root) {
   return parts[parts.length - 1] || root;
 }
 
-/** Windows has no sandbox (#990): nothing to switch, nothing to allow. */
+/**
+ * A platform without a sandbox — Windows (#990) — has nothing to switch and
+ * nothing to allow. The platform register says so (#1149), and the sandbox's
+ * state carries the same reason.
+ */
 export function hasNoSandbox(overview) {
-  return overview?.platform === 'win32' || overview?.sandbox?.reason === 'platform';
+  return overview?.platformCapabilities?.executionSandbox === false || overview?.sandbox?.reason === 'platform';
 }
 
 /** "2 programs · 1 host", or '' when there is nothing. */
@@ -76,9 +80,14 @@ export function validSelection(overview, selected) {
 /**
  * The list: All workspaces first, then every workspace with its state in
  * shape and words — shield and counts, "Sandbox on · nothing extra", or the
- * struck-through amber shield with "Sandbox off".
+ * struck-through amber shield with "Sandbox off". `released` the roots open
+ * to the phone (#1195), which say so after their state.
+ *
+ * @param {any} overview
+ * @param {string|null} selected
+ * @param {{ released?: Set<string> }} [options]
  */
-export function describeWorkspaceList(overview, selected) {
+export function describeWorkspaceList(overview, selected, { released = new Set() } = {}) {
   const none = hasNoSandbox(overview);
   const global = globalOf(overview);
   const workspaces = workspacesOf(overview);
@@ -108,6 +117,8 @@ export function describeWorkspaceList(overview, selected) {
       tone = 'off';
       meta = t('toolSecurity.meta.off');
     }
+    // Open to the phone (#1195): said in words next to the sandbox state.
+    if (released.has(ws.root)) meta = t('toolSecurity.meta.phone', { meta });
     items.push({
       key: ws.root,
       kind: 'workspace',
@@ -154,7 +165,7 @@ export function describeSandboxTile(overview, ws, { autoLabel = '' } = {}) {
       offBlocked: false,
     };
   }
-  const offBlocked = overview?.encryptionAvailable === false;
+  const offBlocked = overview?.platformCapabilities?.secureStorage === false;
   const base = {
     checked: true,
     switchable: true,
@@ -230,7 +241,7 @@ export function describeGlobalDetail(overview) {
     noWorkspace: !workspacesOf(overview).some((ws) => ws.open),
     newWorkspaceSandbox: overview?.newWorkspaceSandbox !== false,
     // Off cannot be stored without encrypted storage; it is not offered then.
-    newWorkspaceOffBlocked: overview?.encryptionAvailable === false && overview?.newWorkspaceSandbox !== false,
+    newWorkspaceOffBlocked: overview?.platformCapabilities?.secureStorage === false && overview?.newWorkspaceSandbox !== false,
     programs: global.programs,
     hosts: global.hosts,
     system: describeSystemLine(overview),

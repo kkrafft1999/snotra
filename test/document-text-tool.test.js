@@ -11,19 +11,20 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { createDocumentTextService } = require('../src/main/services/document-text-service');
 const { createDocumentTextExtractor, pdfjsDataUrl, DOCUMENT_TEXT_TIME_BUDGET_MS } = require('../src/main/services/document-text-worker');
-const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
-const { toolCategory } = require('../src/shared/contracts/tool-categories');
+const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 const { makeDocx, makeXlsx, p } = require('./helpers/ooxml-fixtures');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const PDFJS_DIR = path.join(__dirname, '..', 'src', 'renderer', 'vendor', 'pdfjs');
 
 async function makeFixture(t, { extractor, maxBytes } = {}) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-doctext-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const workspace = path.join(base, 'projekt');
   await fs.mkdir(path.join(workspace, 'docs'), { recursive: true });
   await fs.writeFile(path.join(workspace, 'docs', 'angebot.docx'), makeDocx({ body: p('Angebot') + p('Preis 900 €') }));
@@ -50,7 +51,7 @@ test('the tool is offered with its extractor, as a read tool', async (t) => {
   assert.ok(tool, 'offered to the model');
   assert.deepEqual(tool.function.parameters.required, ['relative_path']);
   assert.equal(registry.getDefinition('extract_document_text').riskClass, 'read');
-  assert.equal(toolCategory('extract_document_text'), 'read');
+  assert.equal(descriptorOf('extract_document_text').category, 'read');
 });
 
 test('a document in the folder: text, size and the mark in the tree', async (t) => {

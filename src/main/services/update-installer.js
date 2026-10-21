@@ -34,14 +34,43 @@ const { createMessage } = require('../../shared/contracts/message');
 const { translateMessage } = require('../../shared/i18n');
 
 /**
+ * Where the helper scripts report once this process is gone (#442, #1003).
+ *
+ * @typedef {{ logFile: string, statusFile: string, pendingFile: string }} HelperFiles
+ *
+ * What every POSIX helper script is written from.
+ * @typedef {HelperFiles & { pid: number, version?: string, quitSeconds?: number, startSeconds?: number }} PosixScriptParams
+ *
+ * @typedef {PosixScriptParams & { appBundlePath: string, targetBundlePath?: string,
+ *   backupPath: string, workDir: string }} MacRelaunchParams
+ * @typedef {PosixScriptParams & { appImagePath: string, stagedPath: string,
+ *   backupPath?: string, workDir: string }} LinuxAppImageParams
+ * @typedef {PosixScriptParams & { installDir: string, stagedDir: string, backupDir: string,
+ *   workDir: string, binaryName?: string, previousBinaryName?: string }} LinuxDirParams
+ * @typedef {HelperFiles & { pid: number, installDir: string, stagedDir: string, stageRoot?: string,
+ *   backupDir: string, workDir: string, startedFile: string, version?: string, carryOver?: string[],
+ *   exeName?: string, previousExeName?: string, startSeconds?: number }} WindowsSwapParams
+ * @typedef {{ script: string, cwd: string, outputFile: string, startedFile: string,
+ *   resultFile: string, timeoutSeconds?: number }} WindowsLaunchParams
+ *
+ * What `install` answers: the helper is on its way, or the reason it is not.
+ * @typedef {{ ok: true, relaunching: true, logFile: string }
+ *   | { ok: false, error: import('../../shared/contracts/message').Message | string }} InstallResult
+ *
+ * @typedef {import('./update-targets').InstallTarget} InstallTarget
+ * @typedef {{ filePath: string, version: string, workDir: string, files: HelperFiles }} InstallJob
+ */
+
+/**
  * An error for the update dialog (#353). `userMessage` is a key the dialog
  * words in the interface language; `message` stays English, for the log.
+ *
+ * @param {string} key
+ * @param {Record<string, unknown>} [params]
  */
 function installError(key, params) {
   const userMessage = createMessage(key, params);
-  const err = new Error(translateMessage('en', userMessage));
-  err.userMessage = userMessage;
-  return err;
+  return Object.assign(new Error(translateMessage('en', userMessage)), { userMessage });
 }
 
 const MAC_BUNDLE_NAME = `${APP_NAME}.app`;
@@ -54,7 +83,12 @@ const MAC_BUNDLE_NAMES = PRODUCT_NAMES.map((name) => `${name}.app`);
 const WINDOWS_EXE_NAMES = PRODUCT_NAMES.map((name) => `${name}.exe`);
 const LINUX_BINARY_NAMES = PRODUCT_NAMES;
 
-/** The first of `names` that exists in `dir`, or ''. */
+/**
+ * The first of `names` that exists in `dir`, or ''.
+ *
+ * @param {string} dir
+ * @param {readonly string[]} names
+ */
 function findExecutable(dir, names) {
   return names.find((name) => fs.existsSync(path.join(dir, name))) || '';
 }
@@ -65,6 +99,10 @@ function findExecutable(dir, names) {
  * `Snotra Agent.app` with the update that brings the rename. A bundle the user
  * named differently keeps its path, and so does one whose new name is taken
  * already — by a copy installed by hand, say.
+ *
+ * @param {string} appBundlePath
+ * @param {string} imageBundleName
+ * @param {(path: string) => boolean} [exists]
  */
 function macTargetBundlePath(appBundlePath, imageBundleName, exists = fs.existsSync) {
   // A Mac path, on whatever machine the tests run (#796).
@@ -75,12 +113,20 @@ function macTargetBundlePath(appBundlePath, imageBundleName, exists = fs.existsS
   return exists(renamed) ? appBundlePath : renamed;
 }
 
-/** Pfad fuer ein POSIX-Shell-Skript einbetten. */
+/**
+ * Pfad fuer ein POSIX-Shell-Skript einbetten.
+ *
+ * @param {unknown} value
+ */
 function shQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
-/** Pfad fuer ein PowerShell-Skript einbetten (einfache Anfuehrungszeichen verdoppeln). */
+/**
+ * Pfad fuer ein PowerShell-Skript einbetten (einfache Anfuehrungszeichen verdoppeln).
+ *
+ * @param {unknown} value
+ */
 function psQuote(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
@@ -89,7 +135,11 @@ function psQuote(value) {
 const POSIX_QUIT_SECONDS = 120;
 const POSIX_START_SECONDS = 120;
 
-/** `s` as a literal inside an extended regular expression, for `pkill -f`. */
+/**
+ * `s` as a literal inside an extended regular expression, for `pkill -f`.
+ *
+ * @param {unknown} value
+ */
 function ereEscape(value) {
   return String(value).replace(/[.[\]()*+?{}|^$\\]/g, '\\$&');
 }
@@ -114,6 +164,8 @@ function ereEscape(value) {
  *   the reason in `$reason` when it gives up. The shell reaps a background
  *   child while it waits on `sleep`, so `kill -0` does not see a zombie.
  * - `stop_new PID` ends a new version that did not confirm, gently first.
+ *
+ * @param {PosixScriptParams} params
  */
 function buildPosixPrelude({
   pid, version = '', logFile, statusFile, pendingFile,
@@ -184,7 +236,11 @@ function buildPosixPrelude({
   ].join('\n');
 }
 
-/** `reason` for an app that is still running when the helper stops waiting. */
+/**
+ * `reason` for an app that is still running when the helper stops waiting.
+ *
+ * @param {number} [quitSeconds]
+ */
 function quitTimeoutReason(quitSeconds = POSIX_QUIT_SECONDS) {
   return `the app did not quit within ${Number(quitSeconds)} seconds`;
 }
@@ -198,6 +254,8 @@ function quitTimeoutReason(quitSeconds = POSIX_QUIT_SECONDS) {
  * `open -W -n` runs in the background as the stand-in for the new process: it
  * ends when the app ends. The app itself is no child of the helper, so one that
  * hangs is found by its path with `pkill -f`.
+ *
+ * @param {MacRelaunchParams} params
  */
 function buildMacRelaunchScript({
   pid, appBundlePath, targetBundlePath = appBundlePath, backupPath, workDir,
@@ -275,6 +333,8 @@ const POSIX_STOP_CHILD = [
  * Linux, AppImage: the old file goes aside as `backupPath`, the new one takes
  * its place. Nothing of this can happen in-process — the running AppImage is
  * mounted inside its own process.
+ *
+ * @param {LinuxAppImageParams} params
  */
 function buildLinuxAppImageScript({
   pid, appImagePath, stagedPath, backupPath = `${appImagePath}.old`, workDir,
@@ -334,6 +394,8 @@ function buildLinuxAppImageScript({
  * Linux, extracted folder: the old folder goes aside as `backupDir`, the
  * staged one takes its place. A rollback starts the old program under the
  * name it had (`previousBinaryName`, #794).
+ *
+ * @param {LinuxDirParams} params
  */
 function buildLinuxDirScript({
   pid, installDir, stagedDir, backupDir, workDir, binaryName = LINUX_BINARY_NAME,
@@ -424,6 +486,8 @@ const WINDOWS_START_SECONDS = 120;
  *
  * `startedFile` is written as soon as the script runs, before it waits for
  * the app: the launcher holds the app back until it sees that file (#654).
+ *
+ * @param {WindowsSwapParams} params
  */
 function buildWindowsSwapScript({
   pid, installDir, stagedDir, stageRoot = stagedDir, backupDir, workDir,
@@ -611,6 +675,8 @@ const WINDOWS_HELPER_START_SECONDS = 30;
  * `{ ok: true, pid }` or `{ ok: false, error }`: this stage runs without
  * stdio, since a pipe inherited by the swap script would keep the app waiting
  * on a process that is itself waiting for the app.
+ *
+ * @param {WindowsLaunchParams} params
  */
 function buildWindowsLaunchCommand({
   script, cwd, outputFile, startedFile, resultFile, timeoutSeconds = WINDOWS_HELPER_START_SECONDS,
@@ -653,7 +719,11 @@ function buildWindowsLaunchCommand({
   ].join('\n');
 }
 
-/** A PowerShell script as `-EncodedCommand` wants it: UTF-16LE, base64. */
+/**
+ * A PowerShell script as `-EncodedCommand` wants it: UTF-16LE, base64.
+ *
+ * @param {string} text
+ */
 function encodePowerShell(text) {
   return Buffer.from(text, 'utf16le').toString('base64');
 }
@@ -668,7 +738,9 @@ const MAX_ASAR_HEADER_BYTES = 64 * 1024 * 1024;
  * block and whose fourth is the length of the JSON header; the files follow
  * the header block, each at the `offset` the header names.
  *
- * @returns {object} the parsed package.json
+ * @param {string} asarPath
+ * @param {Pick<typeof fs, 'openSync' | 'readSync' | 'closeSync'>} [fsImpl]
+ * @returns {{ productName?: unknown, version?: unknown }} the parsed package.json
  * @throws when the archive cannot be read or has no package.json
  */
 function readAsarPackageJson(asarPath, fsImpl = rawFs) {
@@ -700,6 +772,10 @@ function readAsarPackageJson(asarPath, fsImpl = rawFs) {
 /**
  * What the Windows launcher left in `resultFile`. PowerShell writes UTF-8 with
  * a byte order mark; no file means the launcher itself did not get that far.
+ *
+ * @param {string} resultFile
+ * @param {number|null} exitCode
+ * @returns {Promise<{ ok: true, pid: number } | { ok: false, error: string }>}
  */
 async function readLaunchResult(resultFile, exitCode) {
   let raw;
@@ -717,7 +793,11 @@ async function readLaunchResult(resultFile, exitCode) {
   }
 }
 
-/** `update-install.log` → `update-install-output.log`, next to it. */
+/**
+ * `update-install.log` → `update-install-output.log`, next to it.
+ *
+ * @param {string} logFile
+ */
 function helperOutputFile(logFile) {
   const ext = path.extname(logFile);
   return `${logFile.slice(0, logFile.length - ext.length)}-output${ext}`;
@@ -729,6 +809,7 @@ function helperOutputFile(logFile) {
 // the next install starts — a started helper ends this app.
 const STALE_STAGING = /^\.snotra-new-\d+(\.app)?$/;
 
+/** @param {string} parentDir */
 async function removeStaleStaging(parentDir) {
   const names = await fsp.readdir(parentDir).catch(() => []);
   await Promise.all(names
@@ -741,6 +822,9 @@ async function removeStaleStaging(parentDir) {
  * ZIP the app came in, or files of the user's when the app was extracted into
  * a shared folder. The folder is swapped as a whole, so without this they
  * would go with the backup. Windows names are compared without case.
+ *
+ * @param {string} installDir
+ * @param {string} packageDir
  */
 async function listForeignEntries(installDir, packageDir) {
   const [installed, shipped] = await Promise.all([
@@ -755,6 +839,9 @@ async function listForeignEntries(installDir, packageDir) {
  * Where a helper reports once this process is gone. They belong outside the
  * app folder and the work folder, which both get replaced or removed; without
  * a caller's choice they go next to the work folder.
+ *
+ * @param {{ workDir: string } & Partial<HelperFiles>} params
+ * @returns {HelperFiles}
  */
 function helperFiles({ workDir, logFile, statusFile, pendingFile }) {
   const dir = path.dirname(workDir);
@@ -768,20 +855,21 @@ function helperFiles({ workDir, logFile, statusFile, pendingFile }) {
 /**
  * @param {object} [deps]
  * @param {() => number} [deps.getPid]     Test-Haken; default process.pid.
- * @param {function} [deps.run]            (cmd, args) => Promise<stdout>; default execFile.
- * @param {function} [deps.spawnDetached]  Test-Haken fuer den Helferstart (macOS, Linux).
- * @param {function} [deps.runQuiet]       (cmd, args, options) => Promise<exit code>,
- *                                         without stdio; default spawn. Starts the
- *                                         Windows helper (#654).
+ * @param {(cmd: string, args: string[], options?: object) => Promise<string>} [deps.run]
+ *   (cmd, args) => Promise<stdout>; default execFile.
+ * @param {(cmd: string, args: string[]) => void} [deps.spawnDetached]  Test-Haken fuer den Helferstart (macOS, Linux).
+ * @param {(cmd: string, args: string[], options?: { cwd?: string }) => Promise<number|null>} [deps.runQuiet]
+ *   (cmd, args, options) => Promise<exit code>, without stdio; default spawn.
+ *   Starts the Windows helper (#654).
  */
 function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
   const pidOf = getPid || (() => process.pid);
 
-  const exec = run || ((cmd, args, options = {}) => new Promise((resolve, reject) => {
+  const exec = run || ((/** @type {string} */ cmd, /** @type {string[]} */ args, /** @type {object} */ options = {}) => new Promise((resolve, reject) => {
     execFile(cmd, args, { maxBuffer: 8 * 1024 * 1024, ...options }, (err, stdout, stderr) => {
       if (err) {
         const output = String(stderr || err.message).trim();
-        err.userMessage = createMessage('update.error.commandFailed', { command: cmd, output });
+        Object.assign(err, { userMessage: createMessage('update.error.commandFailed', { command: cmd, output }) });
         err.message = `${cmd} failed: ${output}`;
         reject(err);
         return;
@@ -792,7 +880,7 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
 
   // On macOS and Linux a detached child outlives this process. Windows starts
   // its helper through `runQuiet` and a launcher of its own instead (#654).
-  const launch = spawnDetached || ((cmd, args) => {
+  const launch = spawnDetached || ((/** @type {string} */ cmd, /** @type {string[]} */ args) => {
     const child = spawn(cmd, args, { detached: true, stdio: 'ignore', windowsHide: true });
     child.unref();
   });
@@ -800,13 +888,16 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
   // No stdio at all: the swap script the child starts would inherit a pipe,
   // and reading it to the end would wait for that script — which in turn
   // waits for this app to quit.
-  const quiet = runQuiet || ((cmd, args, options = {}) => new Promise((resolve, reject) => {
+  const quiet = runQuiet || ((/** @type {string} */ cmd, /** @type {string[]} */ args, /** @type {{ cwd?: string }} */ options = {}) => new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: 'ignore', windowsHide: true, ...options });
     child.once('error', reject);
     child.once('exit', (code) => resolve(code));
   }));
 
-  /** @param {string} placeKey  Catalogue key naming the folder, e.g. `update.place.appFolder`. */
+  /**
+   * @param {string} dir
+   * @param {string} placeKey  Catalogue key naming the folder, e.g. `update.place.appFolder`.
+   */
   async function assertWritable(dir, placeKey) {
     try {
       await fsp.access(dir, fs.constants.W_OK);
@@ -815,7 +906,11 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     }
   }
 
-  /** Liest Info.plist eines .app-Bundles als Objekt (macOS-Bordmittel plutil). */
+  /**
+   * Liest Info.plist eines .app-Bundles als Objekt (macOS-Bordmittel plutil).
+   *
+   * @param {string} bundlePath
+   */
   async function readBundlePlist(bundlePath) {
     const json = await exec('/usr/bin/plutil', [
       '-convert', 'json', '-o', '-', path.join(bundlePath, 'Contents', 'Info.plist'),
@@ -827,6 +922,9 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
    * Bevor irgendetwas getauscht wird: Ist im Paket wirklich die erwartete
    * Version derselben App? Ein vertauschtes Asset faellt hier auf, solange
    * die laufende Installation noch unversehrt ist.
+   *
+   * @param {string} bundlePath
+   * @param {string} expectedVersion
    */
   async function verifyMacBundle(bundlePath, expectedVersion) {
     let plist;
@@ -853,6 +951,9 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
    * this app, at the version that was announced? Without this, a release
    * whose package is not its tag would be installed, found "newer" again on
    * the restart, and offered for ever (#569, #570).
+   *
+   * @param {string} packageDir
+   * @param {string} expectedVersion
    */
   function verifyPackageFolder(packageDir, expectedVersion) {
     let pkg;
@@ -874,6 +975,10 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     }
   }
 
+  /**
+   * @param {InstallJob & { target: Extract<InstallTarget, { kind: 'macos-bundle' }> }} job
+   * @returns {Promise<InstallResult>}
+   */
   async function installMacos({ filePath, version, target, workDir, files }) {
     const appBundlePath = target.appBundlePath;
     const parentDir = path.dirname(appBundlePath);
@@ -931,6 +1036,10 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     return { ok: true, relaunching: true, logFile: files.logFile };
   }
 
+  /**
+   * @param {InstallJob & { target: Extract<InstallTarget, { kind: 'windows-dir' }> }} job
+   * @returns {Promise<InstallResult>}
+   */
   async function installWindows({ filePath, version, target, workDir, files }) {
     const installDir = target.installDir;
     const parentDir = path.win32.dirname(installDir);
@@ -1014,6 +1123,10 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     return { ok: true, relaunching: true, logFile: helperLog };
   }
 
+  /**
+   * @param {InstallJob & { target: Extract<InstallTarget, { kind: 'linux-appimage' }> }} job
+   * @returns {Promise<InstallResult>}
+   */
   async function installLinuxAppImage({ filePath, version, target, workDir, files }) {
     const appImagePath = target.appImagePath;
     await assertWritable(path.dirname(appImagePath), 'update.place.appImageFolder');
@@ -1031,6 +1144,10 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     return { ok: true, relaunching: true, logFile: files.logFile };
   }
 
+  /**
+   * @param {InstallJob & { target: Extract<InstallTarget, { kind: 'linux-dir' }> }} job
+   * @returns {Promise<InstallResult>}
+   */
   async function installLinuxDir({ filePath, version, target, workDir, files }) {
     const installDir = target.installDir;
     const parentDir = path.posix.dirname(installDir);
@@ -1089,6 +1206,9 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
    * `logFile` and `statusFile` are where the helper reports once this process
    * is gone (#442, #1003); `pendingFile` is the one the new version removes
    * to say it has started. See `helperFiles`.
+   *
+   * @param {{ filePath: string, version: string, target: InstallTarget, workDir: string } & Partial<HelperFiles>} params
+   * @returns {Promise<InstallResult>}
    */
   async function install({ filePath, version, target, workDir, logFile, statusFile, pendingFile }) {
     try {
@@ -1101,12 +1221,12 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
       await fsp.mkdir(workDir, { recursive: true });
 
       const files = helperFiles({ workDir, logFile, statusFile, pendingFile });
-      const job = { filePath, version, target, workDir, files };
+      const job = { filePath, version, workDir, files };
       switch (target.kind) {
-        case 'macos-bundle': return await installMacos(job);
-        case 'windows-dir': return await installWindows(job);
-        case 'linux-appimage': return await installLinuxAppImage(job);
-        case 'linux-dir': return await installLinuxDir(job);
+        case 'macos-bundle': return await installMacos({ ...job, target });
+        case 'windows-dir': return await installWindows({ ...job, target });
+        case 'linux-appimage': return await installLinuxAppImage({ ...job, target });
+        case 'linux-dir': return await installLinuxDir({ ...job, target });
         default: return { ok: false, error: createMessage('update.error.selfUpdateImpossible') };
       }
     } catch (err) {

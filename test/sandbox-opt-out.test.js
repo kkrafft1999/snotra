@@ -12,11 +12,14 @@ const os = require('os');
 const nodePath = require('path');
 const { pathToFileURL } = require('url');
 
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
+const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
 const { planSpawn } = require('../src/main/services/sandboxed-spawn');
 const { createShellRunnerService } = require('../src/main/services/shell-runner-service');
 const { createPythonRunnerService } = require('../src/main/services/python-runner-service');
+const { normalizeToolPresentation } = require('../src/shared/contracts/tool-presentation');
+const { descriptorOf } = require('./helpers/tool-descriptors');
+const { resolvePlatform } = require('../src/main/platforms');
 
 const loadRenderer = (file) =>
   import(pathToFileURL(nodePath.join(__dirname, '..', 'src', 'renderer', 'utils', file)).href);
@@ -202,6 +205,8 @@ function cardDto(tool, isolation, mode = 'smart') {
   return {
     contractVersion: 1, requestId: 'req-ws', tool, riskClasses: ['execute'], targets: [], mode, sessionAllowed: false,
     preview: { ...preview, isolation },
+    // Verb and warning of the card come from the tool's descriptor (#1008).
+    presentation: normalizeToolPresentation(descriptorOf(tool)),
   };
 }
 
@@ -311,7 +316,7 @@ test('settings: the isolation line of each tool names the switched-off workspace
 
 test('settings: the sandbox tile of a workspace on Tools › Security — on, off, unavailable, Windows (#543, #1119)', async () => {
   const { describeSandboxTile } = await loadRenderer('tool-security-view.js');
-  const overview = (patch = {}) => ({ platform: 'darwin', encryptionAvailable: true, sandbox: { isolated: true, status: 'isolated' }, ...patch });
+  const overview = (patch = {}) => ({ platform: 'darwin', platformCapabilities: { secureStorage: true }, sandbox: { isolated: true, status: 'isolated' }, ...patch });
   const ws = (patch = {}) => ({ root: WORKSPACE, sandboxOff: false, programs: [], hosts: [], ...patch });
   const autoLabel = 'Auto';
 
@@ -342,15 +347,17 @@ test('settings: the sandbox tile of a workspace on Tools › Security — on, of
     assert.equal(describeSandboxTile(overview({ sandbox: pending }), ws(), { autoLabel }).tone, 'on');
   }
 
-  // Windows has no sandbox (#990): the tile says so and offers no switch.
-  const windows = describeSandboxTile(overview({ platform: 'win32', sandbox: null }), ws(), { autoLabel });
+  // Windows has no sandbox (#990): the tile says so and offers no switch. The
+  // platform register says it (#1149), not the platform's name.
+  const noSandbox = { platform: 'win32', platformCapabilities: resolvePlatform({ platform: 'win32' }), sandbox: null };
+  const windows = describeSandboxTile(overview(noSandbox), ws(), { autoLabel });
   assert.deepEqual([windows.switchable, windows.tone, windows.title], [false, 'unavailable', 'No sandbox on Windows']);
   assert.match(windows.body, /^Every command and Python run has your full rights/);
 });
 
 test('settings: without safeStorage "off" is not offered while on (CR-B14-09)', async () => {
   const { describeSandboxTile } = await loadRenderer('tool-security-view.js');
-  const overview = { platform: 'darwin', encryptionAvailable: false, sandbox: { isolated: true, status: 'isolated' } };
+  const overview = { platform: 'darwin', platformCapabilities: { secureStorage: false }, sandbox: { isolated: true, status: 'isolated' } };
   const blocked = describeSandboxTile(overview, { root: WORKSPACE, sandboxOff: false, programs: [], hosts: [] }, { autoLabel: 'Auto' });
   assert.deepEqual([blocked.checked, blocked.offBlocked, blocked.tone], [true, true, 'on']);
   assert.equal(blocked.note, 'It cannot be switched off here: this system offers no encrypted storage.');

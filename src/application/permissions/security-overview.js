@@ -26,6 +26,7 @@ const {
   PERMISSION_RULE_EFFECTS,
   PERMISSION_RULE_SCOPES,
   normalizeToolPermissionMode,
+  isToolRiskClass,
   isCommandRule,
 } = require('../../shared/contracts/tool-permissions');
 const {
@@ -33,6 +34,48 @@ const {
   DEFAULT_SENSITIVE_DIRECTORY_NAMES,
 } = require('../../shared/runtime/sensitive-paths');
 const { matrixDecision, ruleNamesCall } = require('./tool-policy');
+const { isToolExternalService } = require('../../shared/contracts/tool-presentation');
+
+/**
+ * @typedef {import('../../shared/contracts/tool-permissions').PermissionRule} PermissionRule
+ * @typedef {import('../../shared/contracts/tool-permissions').ToolRiskClass} ToolRiskClass
+ * @typedef {import('../../shared/contracts/tool-permissions').ToolPermissionMode} ToolPermissionMode
+ * @typedef {import('./session-grants').SessionGrantView} SessionGrantView
+ */
+
+/**
+ * A tool as the page is handed it: `listRiskCatalog()` plus `disabled`.
+ * @typedef {Object} RiskCatalogEntry
+ * @property {string} name
+ * @property {string} [shortDescription]
+ * @property {string[]} [riskClasses]
+ * @property {boolean} [available]
+ * @property {boolean} [disabled]
+ * @property {boolean} [mayOverwrite]
+ * @property {string|null} [mcpServer]
+ * @property {string|null} [mcpServerId]
+ * @property {string|null} [externalService]
+ */
+
+/**
+ * The sandbox and execution state main read, in the fields the page shows.
+ * @typedef {Object} ExecutionInput
+ * @property {{ status?: string, reason?: string, isolated?: boolean, platform?: string,
+ *   missing?: string[], detail?: string }|null} [sandbox]
+ * @property {boolean} [workspaceSandboxDisabled]
+ * @property {boolean} [unisolated]
+ * @property {boolean} [pending]
+ * @property {object[]} [programAllowances]
+ * @property {string[]} [workspaceHosts]
+ * @property {object[]} [workspacePrograms]
+ * @property {string[]} [globalHosts]
+ */
+
+/**
+ * @typedef {{ id: string, effect: string, scope: string, tool: string|null, riskClass: string|null,
+ *   pathPattern: string, command?: string, cwd?: string }} RuleView
+ * @typedef {ReturnType<typeof cleanTools>[number]} SecurityTool
+ */
 
 const SECURITY_ROW_STATUSES = Object.freeze({
   RUNS: 'runs',
@@ -53,6 +96,9 @@ const { READ, READ_SENSITIVE, WRITE, DELETE, EXECUTE, EXTERNAL } = TOOL_RISK_CLA
  * overwrites can lose a file for good. An MCP tool is declared `execute` and
  * `external`; it belongs to the services it talks to, so it is shown there
  * (and under overwrite when its server says it deletes).
+ *
+ * @param {SecurityTool} tool
+ * @returns {Set<string>}
  */
 function rowsOfTool(tool) {
   const declared = new Set(tool.riskClasses);
@@ -68,6 +114,9 @@ function rowsOfTool(tool) {
   return rows;
 }
 
+/**
+ * @param {RiskCatalogEntry[]|null|undefined} raw
+ */
 function cleanTools(raw) {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -78,10 +127,12 @@ function cleanTools(raw) {
       return {
         name: tool.name,
         shortDescription: typeof tool.shortDescription === 'string' ? tool.shortDescription : '',
-        riskClasses: Array.isArray(tool.riskClasses) ? tool.riskClasses.filter((cls) => TOOL_RISK_CLASS_ORDER.includes(cls)) : [],
+        riskClasses: Array.isArray(tool.riskClasses) ? tool.riskClasses.filter(isToolRiskClass) : [],
         mayOverwrite: tool.mayOverwrite === true,
         mcpServer: typeof tool.mcpServer === 'string' && tool.mcpServer ? tool.mcpServer : null,
         mcpServerId: typeof tool.mcpServerId === 'string' && tool.mcpServerId ? tool.mcpServerId : null,
+        // The outside service a built-in tool talks to, from its descriptor (#1008).
+        externalService: isToolExternalService(tool.externalService) ? tool.externalService : null,
         // Why a tool is not offered matters for what the user does next:
         // switched off → switch it on; unavailable → set it up (a key, the
         // execution switch, a server).
@@ -90,7 +141,12 @@ function cleanTools(raw) {
     });
 }
 
+/**
+ * @param {PermissionRule} rule
+ * @returns {RuleView}
+ */
 function ruleView(rule) {
+  /** @type {RuleView} */
   const view = {
     id: rule.id,
     effect: rule.effect,
@@ -106,7 +162,13 @@ function ruleView(rule) {
   return view;
 }
 
-/** Does the rule name this row — by its class, or by one of its tools? */
+/**
+ * Does the rule name this row — by its class, or by one of its tools?
+ * @param {PermissionRule} rule
+ * @param {ToolRiskClass} riskClass
+ * @param {Set<string>} toolNames
+ * @returns {boolean}
+ */
 function ruleNamesRow(rule, riskClass, toolNames) {
   if (rule.tool) return toolNames.has(rule.tool);
   return rule.riskClass === riskClass;
@@ -117,12 +179,21 @@ function ruleNamesRow(rule, riskClass, toolNames) {
  * the tool, by the row's class or by one of the classes every call carries.
  * The policy's own `ruleNamesCall` decides, so the page cannot call a row
  * blocked that the policy lets through (#515).
+ *
+ * @param {SecurityTool} tool
+ * @param {ToolRiskClass} riskClass
+ * @param {PermissionRule[]} denyRules
+ * @returns {boolean}
  */
 function toolFullyBlocked(tool, riskClass, denyRules) {
   const callClasses = [riskClass, ...tool.riskClasses];
   return denyRules.some((rule) => rule.pathPattern === '**' && ruleNamesCall(rule, tool.name, callClasses));
 }
 
+/**
+ * @param {Array<{ id: string, title?: string, mode?: string, current?: boolean }>|null|undefined} raw
+ * @param {ToolPermissionMode} defaultMode
+ */
 function cleanChats(raw, defaultMode) {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -136,11 +207,20 @@ function cleanChats(raw, defaultMode) {
     .filter((chat) => chat.mode !== defaultMode);
 }
 
+/**
+ * @param {SessionGrantView[]} grants
+ * @param {ToolRiskClass} riskClass
+ */
 function grantsForRow(grants, riskClass) {
   return grants.filter((grant) => Array.isArray(grant.classes) && grant.classes.includes(riskClass));
 }
 
+/**
+ * @param {ExecutionInput|null|undefined} execution
+ * @param {SecurityTool[]} tools
+ */
 function describeExecution(execution, tools) {
+  /** @type {ExecutionInput} */
   const source = execution && typeof execution === 'object' ? execution : {};
   const sandbox = source.sandbox && typeof source.sandbox === 'object' ? source.sandbox : null;
   const executionTools = tools.filter((tool) => !tool.mcpServer && tool.riskClasses.includes(EXECUTE));
@@ -179,15 +259,14 @@ function describeExecution(execution, tools) {
  * @param {Object} [input]
  * @param {string|null} [input.root]            the open workspace, or null
  * @param {string} [input.mode]                 the workspace default (#413); `smart` without a folder
- * @param {Array} [input.globalRules]
- * @param {Array} [input.workspaceRules]        rules of this root only
- * @param {Array} [input.tools]                 `listRiskCatalog()` plus `disabled`
- * @param {Array} [input.sessionGrants]         display DTOs of #447
- * @param {Array} [input.chats]                 `{ id, title, mode, current }` of this workspace
- * @param {Object} [input.execution]            sandbox state, workspace switch, program allowances, kept hosts
+ * @param {PermissionRule[]} [input.globalRules]
+ * @param {PermissionRule[]} [input.workspaceRules]  rules of this root only
+ * @param {RiskCatalogEntry[]} [input.tools]    `listRiskCatalog()` plus `disabled`
+ * @param {SessionGrantView[]} [input.sessionGrants]  display DTOs of #447
+ * @param {Array<{ id: string, title?: string, mode?: string, current?: boolean }>} [input.chats]  of this workspace
+ * @param {ExecutionInput} [input.execution]    sandbox state, workspace switch, program allowances, kept hosts
  * @param {string[]} [input.sensitivePathPatterns]  the user's own patterns
  * @param {string} [input.integrity]
- * @param {boolean} [input.encryptionAvailable]
  */
 function describeSecurityOverview(input = {}) {
   const root = typeof input.root === 'string' && input.root ? input.root : null;
@@ -212,6 +291,7 @@ function describeSecurityOverview(input = {}) {
     const running = offered.filter((tool) => !toolFullyBlocked(tool, riskClass, denyRules));
     const askFirst = matrixDecision(mode, riskClass) !== POLICY_DECISIONS.ALLOW;
     let status;
+    /** @type {string|null} */
     let offReason = null;
     if (offered.length === 0) {
       status = SECURITY_ROW_STATUSES.OFF;
@@ -245,7 +325,6 @@ function describeSecurityOverview(input = {}) {
     defaultMode: mode,
     allowancesApply,
     integrity: typeof input.integrity === 'string' ? input.integrity : 'ok',
-    encryptionAvailable: input.encryptionAvailable !== false,
     chatsWithOtherMode: root ? cleanChats(input.chats, mode) : [],
     classes,
     execution: describeExecution(input.execution, tools),
@@ -259,7 +338,10 @@ function describeSecurityOverview(input = {}) {
   };
 }
 
-/** The last segment of the root, for the header; the full path goes along. */
+/**
+ * The last segment of the root, for the header; the full path goes along.
+ * @param {string} root
+ */
 function workspaceName(root) {
   const trimmed = root.replace(/[\\/]+$/, '');
   const parts = trimmed.split(/[\\/]/);

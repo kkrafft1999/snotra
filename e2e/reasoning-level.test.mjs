@@ -84,7 +84,7 @@ test('a chosen reasoning level stays with its chat, a new chat starts with mediu
   let { page } = snotra;
   await waitForApp(page);
 
-  const { encryptionAvailable } = await page.evaluate(() => window.electronAPI.getLLMState());
+  const encryptionAvailable = (await page.evaluate(() => window.electronAPI.getLLMState())).platformCapabilities?.secureStorage === true;
   if (!encryptionAvailable) {
     t.skip('no encrypted storage here (a Linux runner without a keyring): no key for the OpenAI entry');
     return;

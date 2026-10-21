@@ -4,7 +4,7 @@ const { isAbortError, createChatAbortError } = require('../../shared/runtime/abo
 const { extractStringFromPartialJson } = require('../../shared/runtime/partial-json');
 const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
 const { mergeSessionCost } = require('../../shared/contracts/cost');
-const { normalizeAttachments, attachmentsCharCost } = require('../../shared/contracts/attachments');
+const { normalizeAttachments, attachmentsCharCost, providerImageMediaTypes, imageFormatNames } = require('../../shared/contracts/attachments');
 const { extractInvokedSkillNames } = require('../../shared/contracts/skill-invocation');
 const { LOAD_SKILL_TOOL, SKILL_SOURCES } = require('../../shared/contracts/skills');
 const {
@@ -47,6 +47,7 @@ const {
   TOOL_PERMISSION_MODES,
   normalizeToolPermissionMode,
   normalizeRiskClasses,
+  isPermissionDenialReason,
   createPermissionDeniedToolResult,
   createPermissionAuditEntry,
 } = require('../../shared/contracts/tool-permissions');
@@ -75,11 +76,75 @@ const {
 const { decideToolPolicy } = require('../permissions/tool-policy');
 const { createSessionGrants } = require('../permissions/session-grants');
 const { buildApprovalRequest } = require('../permissions/approval-request');
+const { createBuiltinInjectionDetector } = require('./injection-detector');
+const { flagToolResult } = require('./injection-flagging');
 const {
   createSensitiveMarker,
   redactSensitiveToolMessages,
   stripSensitiveMarkers,
 } = require('../permissions/sensitive-redaction');
+
+/**
+ * @typedef {import('../ports/llm-port').LlmMessage} LlmMessage
+ * @typedef {import('../ports/llm-port').LlmToolDefinition} LlmToolDefinition
+ * @typedef {import('../ports/llm-port').LlmSendBundle} LlmSendBundle
+ * @typedef {import('../ports/chat-preferences-port').ChatPreferences} ChatPreferences
+ * @typedef {import('../ports/skill-port').ActiveSkill} ActiveSkill
+ * @typedef {import('../../shared/contracts/llm-target').ChatModelTarget} ChatModelTarget
+ * @typedef {import('../../shared/contracts/context-breakdown').ContextPart} ContextPart
+ * @typedef {import('../../shared/contracts/tool-permissions').ToolRiskClass} ToolRiskClass
+ * @typedef {import('../ports/tool-port').ToolPlan} ToolPlan
+ * @typedef {import('../ports/tool-port').ToolTraceEntry} ToolTraceEntry
+ * @typedef {import('../ports/tool-port').ToolArguments} ToolArguments
+ * @typedef {import('../ports/tool-port').ToolExecutionResult} ToolExecutionResult
+ * @typedef {import('./embedded-text-guard').EmbeddedTextGuard} EmbeddedTextGuard
+ *
+ * A switched-on skill, with the note the secret protection left on it (#528).
+ * @typedef {ActiveSkill & { guard?: EmbeddedTextGuard }} GuardedSkill
+ *
+ * An event the engine pushes while a run goes on (`CHAT_ENGINE_EVENTS`).
+ * @typedef {{ type: string, payload: unknown }} ChatEngineEvent
+ * @typedef {(event: ChatEngineEvent) => void} ChatEventSink
+ *
+ * What the renderer sends with `chat:send`, as far as the engine reads it. It
+ * is unchecked input: the engine sanitizes what it uses.
+ * @typedef {Object} ChatSendPayload
+ * @property {unknown} [chatId]
+ * @property {Array<{ role: string, content?: unknown, attachments?: unknown }>} [messages]
+ * @property {string|null} [workspaceRoot]
+ * @property {string|null} [selectedPath]
+ * @property {boolean} [selectedIsDirectory]
+ *
+ * What a card's answer comes to (`askUser`): an answer, or a lapse.
+ * @typedef {{ response?: string, reason?: string, invalidated?: boolean, ruleId?: string,
+ *   sandboxPaths?: string[] }} CardAnswer
+ *
+ * Why a call was refused, for the audit entry and the message to the model.
+ * @typedef {{ reason?: string, ruleId?: string, riskClasses?: string[]|null, mode?: string,
+ *   targets?: Array<string|{ path: string }>, message?: string }} DenialDetails
+ *
+ * What a tool call hands back to the round loop (`runToolCall`).
+ * @typedef {Object} ToolCallOutcome
+ * @property {string} content  the tool message for the model
+ * @property {boolean} [denied]
+ * @property {string} [reason]
+ * @property {boolean} [endRun]  end the run without another provider request
+ * @property {string} [invalidatedReason]
+ * @property {Array<object>} [progressEvents]
+ * @property {Array<object>} [fileChanges]
+ * @property {import('../ports/tool-port').SandboxRefusal} [sandboxBlocked]
+ * @property {LlmMessage['sensitiveMarker']|null} [sensitiveMarker]
+ *
+ * The folders, paths and hosts the shell and Python runs of a chat may use beyond the default.
+ * @typedef {{ writePaths: string[], readPaths: string[], hosts: string[] }} SandboxGrants
+ *
+ * Connections the sandbox held while a command ran, and what the user said about them (#792).
+ * @typedef {{ decisions: import('../../shared/contracts/chat').SandboxLiveEntry[], repeated: boolean }} LiveConnections
+ *
+ * A tool call the model is still streaming (`makeStreamCallbacks`).
+ * @typedef {{ callIndex: number, tool: string, args: Record<string, unknown>, partialArguments: string,
+ *   labelResolved: boolean }} PendingToolCall
+ */
 
 /* ── Konversationstitel ──────────────────────────────────────────────────────
  * Nach dem ersten Austausch benennt das Modell die Konversation selbst. Der
@@ -122,6 +187,7 @@ const MAX_PLAN_ATTEMPTS = 3;
  * Hauptprozess, gelesen wird der Hinweis im Renderer, wo die aktive Sprache
  * lebt; also reist der Schluessel (#293).
  */
+/** @type {Readonly<Record<string, string>>} */
 const RUN_ENDED_MESSAGE_KEYS = Object.freeze({
   [PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI]: 'chat.error.runEnded.noApprovalUi',
   [PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED]: 'chat.error.runEnded.requestInvalidated',
@@ -133,11 +199,16 @@ const RUN_ENDED_MESSAGE_KEYS = Object.freeze({
  * that has been English since #277 — a fresh installation would otherwise get
  * German lines inside an English interface (#290).
  */
+/** @param {ChatPreferences|null|undefined} uiPrefs */
 function resolveAppLocale(uiPrefs) {
   return normalizeLocale(uiPrefs?.appLocale);
 }
 
 /** The setting where there is one, otherwise main's default — within the bounds the settings use (#531). */
+/**
+ * @param {ChatPreferences|null|undefined} uiPrefs
+ * @param {unknown} mainDefault
+ */
 function resolveToolRoundLimit(uiPrefs, mainDefault) {
   return clampMaxToolRounds(uiPrefs?.maxToolRounds)
     ?? clampMaxToolRounds(mainDefault)
@@ -150,6 +221,12 @@ function resolveToolRoundLimit(uiPrefs, mainDefault) {
  * Sprachvorgaben — die bleiben dem Prompt des Nutzers überlassen. Die
  * Prompt-Injection-Regel (Konzept §5) hängt an den Tools, nicht am Prompt des
  * Nutzers, und lässt sich dort nicht abschalten.
+ *
+ * @param {Object} input
+ * @param {string} input.folderName
+ * @param {string} [input.toolsPrompt]
+ * @param {string|null} [input.selectedRelPath]
+ * @param {boolean} [input.selectedIsDirectory]
  */
 function buildWorkspaceSystemPrompt({ folderName, toolsPrompt, selectedRelPath, selectedIsDirectory }) {
   const parts = [`You are working in the folder currently open in the app: "${folderName}".`];
@@ -180,6 +257,8 @@ function buildWorkspaceSystemPrompt({ folderName, toolsPrompt, selectedRelPath, 
  * vorhanden" (Issue #96). Ohne diesen Baustein sieht das Modell nur die rohen
  * Schemas der Tools ohne Ordnerbezug und behauptet weiter, es koenne nichts —
  * oder es versucht Datei-Tools aufzurufen, die gar nicht in der Liste stehen.
+ *
+ * @param {{ toolsPrompt?: string, skillFiles?: boolean }} input
  */
 function buildNoWorkspaceSystemPrompt({ toolsPrompt, skillFiles = false }) {
   if (!toolsPrompt) return '';
@@ -199,19 +278,28 @@ function buildNoWorkspaceSystemPrompt({ toolsPrompt, skillFiles = false }) {
 }
 
 /**
- * The sentence for a round that was cut off (#538). An OpenAI-compatible entry
- * has its own output limit (#931), so there the sentence names that setting —
- * a server default that is too small is the likely cause.
+ * The sentence for a round that was cut off (#538). An entry with an output
+ * limit of its own (#931) is told to raise that setting — a server default
+ * that is too small is the likely cause. The provider's traits say whether it
+ * has one (#996).
+ *
+ * @param {string|undefined} finishReason
+ * @param {{ tool_calls?: unknown[] }|null|undefined} assistantMessage
+ * @param {boolean|undefined} outputLimitSetting
  */
-function cutOffMessageKey(finishReason, assistantMessage, providerId) {
+function cutOffMessageKey(finishReason, assistantMessage, outputLimitSetting) {
   if (finishReason === FINISH_REASONS.CONTENT_FILTER) return 'chat.error.cutOff.contentFilter';
   if (finishReason === FINISH_REASONS.INCOMPLETE) return 'chat.error.cutOff.incomplete';
-  const suffix = providerId === 'openai-compatible' ? 'Setting' : '';
+  const suffix = outputLimitSetting === true ? 'Setting' : '';
   return Array.isArray(assistantMessage?.tool_calls) && assistantMessage.tool_calls.length > 0
     ? `chat.error.cutOff.lengthTool${suffix}`
     : `chat.error.cutOff.length${suffix}`;
 }
 
+/**
+ * @param {string|null|undefined} rawArguments  the JSON text of a call's arguments
+ * @returns {import('../ports/tool-port').ToolArguments}
+ */
 function parseToolArguments(rawArguments) {
   try {
     const parsed = JSON.parse(rawArguments || '{}');
@@ -228,9 +316,13 @@ function parseToolArguments(rawArguments) {
  * in einer Assistenz-Antwort oder einem Tool-Ergebnis zählt nicht — sonst
  * könnte sich das Modell selbst Skills einschalten, und fremder Dateiinhalt
  * käme über den Umweg eines Tool-Ergebnisses an die Aktivierung heran.
+ *
+ * @param {LlmMessage[]|null|undefined} messages
+ * @returns {string[]}
  */
 function collectInvokedSkillNames(messages) {
   if (!Array.isArray(messages)) return [];
+  /** @type {Set<string>} */
   const names = new Set();
   for (const message of messages) {
     if (!message || message.role !== 'user') continue;
@@ -264,13 +356,16 @@ function collectInvokedSkillNames(messages) {
  *    `load_skill` sie nicht in seinem enum) und für Tool-Ports ohne dieses
  *    Tool.
  *
- * @returns {{ text: string, parts: object[] }} Der Prompttext und seine
+ * @param {GuardedSkill[]|null|undefined} activeSkills
+ * @param {{ toolsAvailable?: boolean, canLoadSkills?: boolean, workspaceOpen?: boolean }} [options]
+ * @returns {{ text: string, parts: ContextPart[] }} Der Prompttext und seine
  *   Bausteine je Skill für die Token-Aufschlüsselung (Issue #174).
  */
 function buildSkillsSystemPrompt(
   activeSkills,
   { toolsAvailable = false, canLoadSkills = false, workspaceOpen = false } = {}
 ) {
+  /** @type {{ text: string, parts: ContextPart[] }} */
   const empty = { text: '', parts: [] };
   if (!Array.isArray(activeSkills) || activeSkills.length === 0) return empty;
   const usable = activeSkills.filter(
@@ -360,9 +455,14 @@ function buildSkillsSystemPrompt(
   // damit sichtbar wird, welcher Skill wie viel vom Prompt belegt. Der
   // Rahmentext (Hinweise zu load_skill, Skill-Pfaden, „/name") gehoert keinem
   // einzelnen Skill und bekommt deshalb eine eigene Zeile.
+  /** @type {ContextPart[]} */
   const parts = [];
   let catalogChars = 0;
   // A skill the secret protection touched says so in its row (#528).
+  /**
+   * @param {GuardedSkill} skill
+   * @param {string} plain
+   */
   const skillDetailKey = (skill, plain) => (skill.guard ? `context.detail.skill.${skill.guard}` : plain);
   lazy.forEach((skill, index) => {
     const chars = catalogLines[index].length;
@@ -415,7 +515,10 @@ function buildSkillsSystemPrompt(
  * vom Anbieter und verteilt sich auf sie (context-breakdown.js).
  */
 
-/** Zeichen eines Tool-Schemas, so wie es an den Anbieter geht. */
+/**
+ * Zeichen eines Tool-Schemas, so wie es an den Anbieter geht.
+ * @param {LlmToolDefinition|null|undefined} definition
+ */
 function toolDefinitionChars(definition) {
   try {
     return JSON.stringify(definition ?? {}).length;
@@ -428,11 +531,15 @@ function toolDefinitionChars(definition) {
  * Tool-Definitionen als Zeilen: die eingebauten zusammen, jeder MCP-Server
  * einzeln. Wer sieht, dass ein Server 4.000 Token kostet, kann ihn abschalten;
  * eine Sammelzeile „Tools" wuerde genau das verbergen.
+ *
+ * @param {LlmToolDefinition[]|null|undefined} toolDefs
+ * @returns {ContextPart[]}
  */
 function buildToolContextParts(toolDefs) {
   const list = Array.isArray(toolDefs) ? toolDefs : [];
   let builtinChars = 0;
   let builtinCount = 0;
+  /** @type {Map<string, { chars: number, count: number }>} */
   const servers = new Map();
   for (const definition of list) {
     const chars = toolDefinitionChars(definition);
@@ -448,6 +555,7 @@ function buildToolContextParts(toolDefs) {
     builtinCount += 1;
   }
 
+  /** @type {ContextPart[]} */
   const parts = [];
   if (builtinChars > 0) {
     parts.push(
@@ -480,7 +588,10 @@ function buildToolContextParts(toolDefs) {
   return parts;
 }
 
-/** Zeichen einer Verlaufs-Nachricht, Bildanhaenge eingerechnet. */
+/**
+ * Zeichen einer Verlaufs-Nachricht, Bildanhaenge eingerechnet.
+ * @param {LlmMessage|null|undefined} message
+ */
 function messageContentChars(message) {
   const content = message?.content;
   if (typeof content === 'string') return content.length;
@@ -497,6 +608,9 @@ function messageContentChars(message) {
  * aufzuloesen (je Nachricht eine Zeile) hilft niemandem — abschalten laesst
  * sich eine einzelne Nachricht ohnehin nicht, wohl aber ein Verlauf, der zu
  * lang geworden ist.
+ *
+ * @param {LlmMessage[]|null|undefined} messages
+ * @returns {ContextPart[]}
  */
 function buildHistoryContextParts(messages) {
   let messageChars = 0;
@@ -523,6 +637,7 @@ function buildHistoryContextParts(messages) {
     imageChars += attachmentsCharCost(message);
   }
 
+  /** @type {ContextPart[]} */
   const parts = [];
   if (messageChars > 0) {
     parts.push(
@@ -572,6 +687,18 @@ function buildHistoryContextParts(messages) {
  * Skills, Umgebung, Ordnerkontext und die Tool-Schemas. Die Tool-Liste im
  * Prompttext zaehlt zu den Tools, nicht zum Ordnerkontext — sie verschwindet
  * mit ihnen.
+ *
+ * @param {Object} input
+ * @param {string} [input.systemPrompt]
+ * @param {ContextPart[]} [input.memoryParts]
+ * @param {ContextPart[]} [input.skillParts]
+ * @param {string} [input.environmentSystem]
+ * @param {ContextPart[]} [input.projectInstructionParts]
+ * @param {ContextPart[]} [input.folderMemoryParts]
+ * @param {string} [input.workspaceSystem]
+ * @param {string} [input.toolsPrompt]
+ * @param {LlmToolDefinition[]} [input.toolDefs]
+ * @returns {ContextPart[]}
  */
 function buildStaticContextParts({
   systemPrompt,
@@ -584,6 +711,7 @@ function buildStaticContextParts({
   toolsPrompt,
   toolDefs,
 }) {
+  /** @type {ContextPart[]} */
   const parts = [];
   if (systemPrompt) {
     parts.push(
@@ -652,6 +780,8 @@ function buildStaticContextParts({
  * Beschreibung für die Kurzliste. Ohne `description` im Frontmatter kann ein
  * Skill nicht geladen werden — der Dienst lässt solche Skills gar nicht erst
  * zu (`skills-service.js`) —, der Rückfall ist also nur Vorsichtsmaßnahme.
+ *
+ * @param {ActiveSkill} skill
  */
 function describeSkillForCatalog(skill) {
   const description = typeof skill.description === 'string' ? skill.description.trim() : '';
@@ -659,17 +789,26 @@ function describeSkillForCatalog(skill) {
   return 'No description — load it when in doubt.';
 }
 
+/** @param {string} text */
 function collapseWhitespace(text) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-/** Provider-Endpunkt als Bindungsschlüssel sensibler Freigaben (Konzept §4). */
+/**
+ * Provider-Endpunkt als Bindungsschlüssel sensibler Freigaben (Konzept §4).
+ * @param {ChatModelTarget|null|undefined} target
+ * @param {LlmSendBundle|null|undefined} sendBundle
+ */
 function buildProviderKey(target, sendBundle) {
   const providerId = typeof target?.providerId === 'string' ? target.providerId : '';
   const baseUrl = typeof sendBundle?.config?.baseUrl === 'string' ? sendBundle.config.baseUrl.trim() : '';
   return baseUrl ? `${providerId}|${baseUrl}` : providerId;
 }
 
+/**
+ * @param {ChatModelTarget|null|undefined} target
+ * @param {LlmSendBundle|null|undefined} sendBundle
+ */
 function buildProviderLabel(target, sendBundle) {
   const providerId = typeof target?.providerId === 'string' ? target.providerId : 'Provider';
   const baseUrl = typeof sendBundle?.config?.baseUrl === 'string' ? sendBundle.config.baseUrl.trim() : '';
@@ -683,20 +822,61 @@ function buildProviderLabel(target, sendBundle) {
  * nicht weiterreicht (Issue #93). Aeltere Bilder im Verlauf blockieren nicht:
  * Sie hatten ihren Zug, und ein Textmodell soll die Konversation fortsetzen
  * koennen.
+ *
+ * A provider that takes images but not every format (Gemini: no GIF) refuses
+ * the format here too (#91) — the composer only checks at paste time, and the
+ * model may have changed since.
+ *
+ * @param {LlmMessage[]} messages
+ * @param {LlmSendBundle|null|undefined} sendBundle
  */
 function findUnsupportedAttachment(messages, sendBundle) {
-  if (sendBundle?.capabilities?.images === true) return null;
   const lastUser = [...messages].reverse().find((message) => message?.role === 'user');
-  if (normalizeAttachments(lastUser?.attachments).length === 0) return null;
+  const attachments = normalizeAttachments(lastUser?.attachments);
+  if (attachments.length === 0) return null;
+  const provider = sendBundle?.providerName
+    ? { provider: sendBundle.providerName }
+    : { providerKey: 'chat.error.provider.fallback' };
+  if (sendBundle?.capabilities?.images !== true) {
+    return createChatErrorResult({
+      error: createMessage('chat.error.noImages', provider),
+      code: CHAT_ERROR_CODES.INVALID,
+    });
+  }
+  const accepted = providerImageMediaTypes(sendBundle.capabilities);
+  const refused = attachments.find((attachment) => !accepted.includes(attachment.mediaType));
+  if (!refused) return null;
   return createChatErrorResult({
-    error: sendBundle?.providerName
-      ? createMessage('chat.error.noImages', { provider: sendBundle.providerName })
-      : createMessage('chat.error.noImages', { providerKey: 'chat.error.provider.fallback' }),
+    error: createMessage('chat.error.imageFormat', {
+      ...provider,
+      format: imageFormatNames([refused.mediaType]),
+      formats: imageFormatNames(accepted),
+    }),
     code: CHAT_ERROR_CODES.INVALID,
   });
 }
 
-/** Fail-safe-Stand, wenn kein Policy-Port angebunden ist: smart, keine Regeln. */
+/**
+ * The permission state a run works from: the port's snapshot, read once per
+ * tool call and made safe (`readPolicySnapshot`).
+ *
+ * @typedef {Object} PolicyState
+ * @property {import('../../shared/contracts/tool-permissions').ToolPermissionMode} mode
+ * @property {import('../../shared/contracts/tool-permissions').PermissionRule[]} rules
+ * @property {string[]} sensitivePathPatterns
+ * @property {string} policyVersion
+ * @property {string|null} [rulesVersion]
+ * @property {string} [integrity]
+ * @property {boolean} [encryptionAvailable]
+ * @property {Record<string, string[]>} [workspaceHosts]
+ * @property {string[]} [globalHosts]
+ * @property {true} [unreadable]  the snapshot could not be read: every tool stays blocked
+ */
+
+/**
+ * Fail-safe-Stand, wenn kein Policy-Port angebunden ist: smart, keine Regeln.
+ * @returns {PolicyState}
+ */
 function defaultPolicySnapshot() {
   return {
     mode: DEFAULT_TOOL_PERMISSION_MODE,
@@ -709,7 +889,17 @@ function defaultPolicySnapshot() {
 /** Resources one sandbox card asks about (#792); the contract shows no more. */
 const SANDBOX_CARD_ENTRIES = 10;
 
-/** A tool's JSON result as an object, or null. */
+/**
+ * A tool's JSON result, as far as the engine reads it.
+ * @typedef {{ exit_code?: unknown, duration_ms?: unknown, timed_out?: unknown, stdout?: unknown, stderr?: unknown,
+ *   [field: string]: unknown }} ToolOutputObject
+ */
+
+/**
+ * A tool's JSON result as an object, or null.
+ * @param {unknown} output
+ * @returns {ToolOutputObject|null}
+ */
 function parseToolOutput(output) {
   if (typeof output !== 'string') return null;
   try {
@@ -720,21 +910,33 @@ function parseToolOutput(output) {
   }
 }
 
-/** A sentence for the model about a sandbox card's outcome (#792), added to the tool result. */
+/**
+ * A sentence for the model about a sandbox card's outcome (#792), added to the tool result.
+ * @param {unknown} output
+ * @param {string} note
+ * @param {string} [key]
+ */
 function withSandboxNote(output, note, key = 'sandbox_decision') {
   const parsed = parseToolOutput(output);
   if (!parsed) return `${typeof output === 'string' ? output : ''}\n\n${note}`;
   return JSON.stringify({ ...parsed, [key]: note });
 }
 
-/** "writing to /a, reading /b, connecting to c:443" — for the notes to the model. */
+/**
+ * "writing to /a, reading /b, connecting to c:443" — for the notes to the model.
+ * @param {Array<{ kind: string, target: string }>} entries
+ */
 function describeSandboxEntries(entries) {
+  /** @type {Record<string, string>} */
   const verb = { read: 'reading', write: 'writing to', network: 'connecting to' };
   const parts = entries.map((e) => `${verb[e.kind] || 'writing to'} ${e.target}`);
   return parts.length ? parts.join(', ') : 'access';
 }
 
-/** The risk a sandbox card opens, per resource (#792). */
+/**
+ * The risk a sandbox card opens, per resource (#792).
+ * @typedef {'write'|'read'|'network'|'outsideRead'|'outsideWrite'} SandboxKind
+ */
 const SANDBOX_KIND_CLASSES = Object.freeze({
   read: TOOL_RISK_CLASSES.READ_SENSITIVE,
   write: TOOL_RISK_CLASSES.WRITE,
@@ -745,9 +947,40 @@ const SANDBOX_KIND_CLASSES = Object.freeze({
 });
 
 /**
+ * @param {string} kind
+ * @returns {kind is SandboxKind}
+ */
+function isSandboxKind(kind) {
+  return Object.keys(SANDBOX_KIND_CLASSES).includes(kind);
+}
+
+/**
+ * What the sandbox refused as the runner reports it, with a choice a card may offer.
+ * @typedef {NonNullable<import('../ports/tool-port').SandboxRefusal['entries']>[number]} RefusedEntry
+ */
+
+/**
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+function integerOrNull(value) {
+  return typeof value === 'number' && Number.isInteger(value) ? value : null;
+}
+
+/**
+ * @param {unknown} value
+ * @returns {number|null}
+ */
+function finiteOrNull(value) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/**
  * What the user allowed on the card before a call outside the open folder
  * (#792, step 4), so that the call that then runs is the one the card
  * showed: the same classes, the same places in the same state.
+ *
+ * @param {ToolPlan|null|undefined} plan
  */
 function outsideApprovalKey(plan) {
   const targets = (Array.isArray(plan?.targets) ? plan.targets : []).map((t) => [t.absPath, t.exists, t.version]);
@@ -765,6 +998,8 @@ const SANDBOX_DURATION_TEXT = Object.freeze({
  * What the user decided about connections while the command waited (#792),
  * as one sentence for the model — added to the tool result next to what a
  * card after the run decided.
+ *
+ * @param {import('../../shared/contracts/chat').SandboxLiveEntry[]} decisions
  */
 function describeLiveDecisions(decisions) {
   const allowed = decisions.filter((d) => d.outcome === 'allowed');
@@ -772,7 +1007,7 @@ function describeLiveDecisions(decisions) {
   const parts = [];
   if (allowed.length) {
     const what = allowed.map((d) => `${d.target}${d.pattern !== d.target ? ` (as ${d.pattern})` : ''}`
-      + ` ${SANDBOX_DURATION_TEXT[d.duration] || SANDBOX_DURATION_TEXT.run}`).join(', ');
+      + ` ${(d.duration && SANDBOX_DURATION_TEXT[d.duration]) || SANDBOX_DURATION_TEXT.run}`).join(', ');
     parts.push(`While the command ran, the sandbox asked the user about connections it waited for, and the user allowed ${what}.`);
   }
   if (denied.length) {
@@ -783,8 +1018,12 @@ function describeLiveDecisions(decisions) {
   return parts.join(' ');
 }
 
-/** What a command reported, for the sandbox card: its stderr without the sandbox's own block. */
 const COMMAND_REPORT_CHARS = 2000;
+
+/**
+ * What a command reported, for the sandbox card: its stderr without the sandbox's own block.
+ * @param {{ stderr?: unknown, stdout?: unknown }|null|undefined} result
+ */
 function commandReport(result) {
   const stderr = typeof result?.stderr === 'string' ? result.stderr : '';
   const own = stderr.replace(/\n*<sandbox_blocked>[\s\S]*?<\/sandbox_blocked>\n*/g, '\n').trim();
@@ -792,8 +1031,13 @@ function commandReport(result) {
   return text.length > COMMAND_REPORT_CHARS ? `…${text.slice(-COMMAND_REPORT_CHARS)}` : text;
 }
 
-/** Session grants plus what one card allowed, as the runner takes them. */
+/**
+ * Session grants plus what one card allowed, as the runner takes them.
+ * @param {{ writePaths?: string[], readPaths?: string[], hosts?: string[] }|null} session
+ * @param {Array<{ kind: string, path: string }>} chosen
+ */
 function mergeSandboxGrants(session, chosen) {
+  /** @type {Record<string, string[]>} */
   const lists = {
     write: [...(session?.writePaths || [])],
     read: [...(session?.readPaths || [])],
@@ -827,6 +1071,7 @@ function mergeSandboxGrants(session, chosen) {
  * @property {number} [maxToolRounds]
  * @property {(run: { sessionId: string|number, chatId: string|null }) => void} [onRunSettled]
  * @property {import('../ports/config-proposal-port').ConfigProposalPort|null} [configProposals]
+ * @property {ReadonlyArray<import('../ports/injection-flag-port').InjectionFlagPort>} [injectionFlags]
  */
 
 /**
@@ -851,6 +1096,9 @@ function createChatEngine({
   onRunSettled = () => {},
   // What a chat switched for itself, and the card that changes it (#774).
   configProposals = null,
+  // Who may flag a tool result as a likely prompt injection (#1011): the
+  // built-in detector, later a PostToolUse hook (#927). A warning only.
+  injectionFlags = [createBuiltinInjectionDetector()],
 }) {
   /**
    * One run per window *and* chat (#320). Until then a window had exactly one
@@ -859,18 +1107,39 @@ function createChatEngine({
    */
   const activeRuns = new Map();
 
+  /**
+   * @param {string|number|null|undefined} sessionId
+   * @param {string|null|undefined} chatId
+   */
   function runKey(sessionId, chatId) {
     return JSON.stringify([sessionId ?? null, chatId ?? null]);
   }
 
+  /**
+   * @param {ChatEventSink|undefined} onEvent
+   * @param {string} type
+   * @param {unknown} payload
+   */
   function emit(onEvent, type, payload) {
     onEvent?.({ type, payload });
   }
 
+  /**
+   * @param {ChatEventSink|undefined} onEvent
+   * @param {string} phase
+   */
   function emitPhase(onEvent, phase) {
     emit(onEvent, CHAT_ENGINE_EVENTS.PROGRESS, createPhaseEvent(phase));
   }
 
+  /**
+   * @param {ChatEventSink | undefined} onEvent
+   * @param {Array<object>} toolTrace
+   * @param {string} [content]
+   * @param {ReturnType<typeof normalizeUsage> | null} [usage]
+   * @param {ReturnType<typeof normalizeUsage> | null} [contextUsage]
+   * @param {ReturnType<typeof createContextBreakdown> | null} [contextBreakdown]
+   */
   function returnCancelledChat(
     onEvent,
     toolTrace,
@@ -894,19 +1163,23 @@ function createChatEngine({
    * hier auch Tool-Aufrufe, die das Modell gerade streamt; daraus entsteht die
    * vorläufige Tool-Zeile (Phase 'pending'), noch bevor das Tool ausgeführt wird.
    *
-   * @param {Function} onEvent
-   * @param {{ onToolCallPending?: Function }} [options]
-   * @returns {import('../ports/llm-port').LlmStreamCallbacks}
+   * @param {ChatEventSink | undefined} onEvent
+   * @param {{ onToolCallPending?: (pending: PendingToolCall) => void }} [options]
+   * @returns {import('../ports/llm-port').LlmStreamCallbacks & { reset: () => void }}
    */
   function makeStreamCallbacks(onEvent, { onToolCallPending } = {}) {
     let started = false;
-    /** Gerade gestreamte Tool-Aufrufe: Provider-Index → Zwischenstand. */
+    /**
+     * Gerade gestreamte Tool-Aufrufe: Provider-Index → Zwischenstand.
+     * @type {Map<number|string|undefined, PendingToolCall>}
+     */
     let pendingCalls = new Map();
     const markGenerating = () => {
       if (started) return;
       started = true;
       emitPhase(onEvent, CHAT_PHASES.GENERATING);
     };
+    /** @param {PendingToolCall} pending */
     const notifyPending = (pending) => {
       if (typeof onToolCallPending === 'function') onToolCallPending(pending);
     };
@@ -968,6 +1241,9 @@ function createChatEngine({
    * `chatId` names the chat the run is for, so it runs with that chat's
    * reasoning level (#725). The target is resolved once per send and every
    * round reuses it: a level changed meanwhile applies to the next send.
+   *
+   * @param {boolean} forSend
+   * @param {string|null} [chatId]
    */
   async function resolveTarget(forSend, chatId) {
     const target = await llm.resolveChatTarget(chatId ? { chatId } : undefined);
@@ -991,6 +1267,10 @@ function createChatEngine({
     }
   }
 
+  /**
+   * @param {string|null} chatId
+   * @returns {Promise<PolicyState>}
+   */
   async function readPolicySnapshot(chatId) {
     if (!toolPolicy || typeof toolPolicy.read !== 'function') return defaultPolicySnapshot();
     try {
@@ -1025,6 +1305,9 @@ function createChatEngine({
   /**
    * Stops the run of one chat. Without a chat (`undefined`), every run of the
    * window stops — what closing it means.
+   *
+   * @param {string|number} sessionId
+   * @param {unknown} [chatId]
    */
   function abort(sessionId, chatId) {
     for (const run of activeRuns.values()) {
@@ -1043,14 +1326,21 @@ function createChatEngine({
    * The estimated cost of the turn (#949) rides on whatever the run returns —
    * an answer, a cancel or an error after paid rounds alike. One entry per
    * model, so the renderer can add it to the chat's sum as it is.
+   *
+   * @param {{ sessionId: string|number, payload?: ChatSendPayload, onEvent?: ChatEventSink }} args
    */
   async function send(args) {
+    /** @type {{ value: ReturnType<typeof mergeSessionCost> }} */
     const turnCost = { value: null };
     const result = await runSend(args, turnCost);
     if (!turnCost.value || !result || typeof result !== 'object') return result;
     return { ...result, cost: turnCost.value };
   }
 
+  /**
+   * @param {{ sessionId: string|number, payload?: ChatSendPayload, onEvent?: ChatEventSink }} args
+   * @param {{ value: ReturnType<typeof mergeSessionCost> }} turnCost
+   */
   async function runSend({ sessionId, payload, onEvent }, turnCost) {
     const abortController = new AbortController();
     const abortSignal = abortController.signal;
@@ -1063,13 +1353,17 @@ function createChatEngine({
     }
     activeRuns.set(key, { sessionId, chatId, controller: abortController });
 
+    /** @type {import('../ports/tool-port').ToolTraceEntry[]} */
     const toolTrace = [];
     // requestUsage: Summe ueber alle Runden (Verbrauch dieses Zugs).
     // contextUsage: Usage der letzten Runde — deren prompt ist die Groesse des
     // Kontextfensters, das zuletzt an das Modell ging (Anzeige im Composer).
+    /** @type {ReturnType<typeof normalizeUsage> | null} */
     let requestUsage = null;
+    /** @type {ReturnType<typeof normalizeUsage> | null} */
     let contextUsage = null;
     // Woraus sich der zuletzt gesendete Prompt zusammensetzt (Issue #174).
+    /** @type {ReturnType<typeof createContextBreakdown> | null} */
     let contextBreakdown = null;
     // Whether the await under way is the provider's: a throw there is a
     // network or provider error, anywhere else it is the app's own (#527).
@@ -1077,6 +1371,7 @@ function createChatEngine({
     // Read once per run, and only when something is embedded (#528). A failed
     // read leaves the embedded text out (the guard withholds it) and ends the
     // run before the next request, with a message that says why (#976).
+    /** @type {string[] | null} */
     let embeddedSecrets = null;
     let ownSecretsUnreadable = false;
     const readOwnSecretList = async () => {
@@ -1088,6 +1383,11 @@ function createChatEngine({
     };
     // An error result after tools ran still carries them — without the trace
     // the renderer drops the turn, and with it the record of what was done (#527).
+    /**
+     * @param {string|import('../../shared/contracts/message').Message} error
+     * @param {string} code
+     * @param {{ partial?: boolean }} [options]
+     */
     const failRun = (error, code, { partial = false } = {}) => {
       emitPhase(onEvent, CHAT_PHASES.IDLE);
       return createChatErrorResult({
@@ -1145,6 +1445,7 @@ function createChatEngine({
         }
       };
       let configOverrides = await readConfigOverrides();
+      /** @type {string[]} */
       let disabledNames = [];
       // Deaktivierte Tools bleiben unsichtbar und gesperrt; der Modus allein
       // versteckt keine Tools (Konzept §8) — pro Aufruf entscheidet die Policy.
@@ -1158,20 +1459,26 @@ function createChatEngine({
       // hängt daran, ob `load_skill` verfügbar ist (Issue #173). Eingeschaltet
       // sind Skills unabhängig davon, ob ein Ordner offen ist; die
       // System-Skills beschreiben die App selbst.
+      /** @type {GuardedSkill[]} */
       let activeSkills = [];
       // Verzeichnisse der eingeschalteten Skills sind zusätzliche Lesewurzeln
       // für die Lese-Tools (Issue #61); Schreib-Tools sehen sie nie (#548).
+      /** @type {Array<{ name: string, dir: string }>} */
       let skillRoots = [];
+      /** @type {import('../ports/tool-port').ToolListOptions | null} */
       let toolOptions = null;
       let toolsPrompt = '';
+      /** @type {LlmToolDefinition[]} */
       let availableToolDefs = [];
       let canLoadSkills = false;
       let skillFilesWithoutFolder = false;
       let skillsSystem = '';
+      /** @type {ContextPart[]} */
       let skillContextParts = [];
       let workspaceSystem = '';
       // Without a folder the read tools are still there while a skill is
       // switched on — for its folder and nothing else (#429, #548).
+      /** @param {string} toolName */
       const skillPathTool = (toolName) =>
         skillRoots.length > 0
         && typeof tools.supportsSkillPaths === 'function'
@@ -1244,7 +1551,10 @@ function createChatEngine({
           (definition) => definition?.function?.name === LOAD_SKILL_TOOL
         );
         skillFilesWithoutFolder = !workspaceOpen
-          && availableToolDefs.some((definition) => skillPathTool(definition?.function?.name));
+          && availableToolDefs.some((definition) => {
+            const name = definition.function?.name;
+            return typeof name === 'string' && skillPathTool(name);
+          });
         ({ text: skillsSystem, parts: skillContextParts } = buildSkillsSystemPrompt(
           activeSkills,
           { toolsAvailable: workspaceOpen || skillFilesWithoutFolder, canLoadSkills, workspaceOpen }
@@ -1285,6 +1595,7 @@ function createChatEngine({
       // seine Anweisungen — der Schalter ist die Notbremse dafür und steht
       // wie bei #138 standardmäßig an.
       let projectInstructionsSystem = '';
+      /** @type {ContextPart[]} */
       let projectInstructionParts = [];
       if (projectInstructions && uiPrefs.projectInstructionsEnabled !== false) {
         try {
@@ -1306,8 +1617,10 @@ function createChatEngine({
       // Notbremse für einen fremden Ordner, dessen `memory.md` man nicht
       // übernehmen will.
       let memorySystem = '';
+      /** @type {ContextPart[]} */
       let memoryParts = [];
       let folderMemorySystem = '';
+      /** @type {ContextPart[]} */
       let folderMemoryParts = [];
       if (memory) {
         try {
@@ -1339,6 +1652,7 @@ function createChatEngine({
       // Tool-Ergebnisse Daten sind, und die soll nicht das Letzte sein, was
       // eine fremde AGENTS.md überschreiben könnte.
       let combinedSystem = '';
+      /** @type {ContextPart[]} */
       let staticContextParts = [];
       // The system message and what it is made of, again after a card (#774).
       const composeSystem = () => {
@@ -1375,14 +1689,14 @@ function createChatEngine({
       };
       composeSystem();
 
+      /** @type {LlmMessage[]} */
       const apiMessages = [];
       if (combinedSystem) apiMessages.push({ role: 'system', content: combinedSystem });
-      // Der Server hinter der ID entscheidet mit, ob das enge lokale Budget
-      // gilt (Issue #193) — dieselbe ID kann auf localhost oder ins Netz zeigen.
+      // Whether the narrow local budget applies, the provider's traits say;
+      // the server address already weighed in (#193, #996).
       const historyCharLimit = resolveHistoryCharLimit(
         uiPrefs,
-        target?.providerId,
-        sendBundle?.config?.baseUrl
+        sendBundle?.traits?.runsLocally === true
       );
       // Bild-Anhaenge (Issue #84) reisen als eigenes Feld mit, nicht im
       // Content — und werden hier normalisiert, weil der Payload aus dem
@@ -1391,6 +1705,7 @@ function createChatEngine({
       const historyRows = messages
         .filter((message) => message.role === 'user' || message.role === 'assistant')
         .map((message) => {
+          /** @type {LlmMessage} */
           const row = { role: message.role, content: message.content ?? '' };
           const attachments = normalizeAttachments(message.attachments);
           if (attachments.length > 0) row.attachments = attachments;
@@ -1433,12 +1748,19 @@ function createChatEngine({
       }
       // Ohne Ordner gilt der Zusatz „kein Ordner geöffnet" nur noch für Tools,
       // die tatsächlich einen brauchen (Issue #96).
+      /** @param {string} toolName */
       const needsWorkspace = (toolName) =>
         (typeof tools.requiresWorkspace === 'function' ? tools.requiresWorkspace(toolName) !== false : true)
         && !skillPathTool(toolName);
+      /** @param {string} toolName */
       const traceExtraFor = (toolName) =>
         !workspaceRoot && needsWorkspace(toolName) ? { noWorkspace: true } : undefined;
       const toolRoundLimit = resolveToolRoundLimit(uiPrefs, maxToolRounds);
+      /**
+       * @param {string} phase
+       * @param {import('../ports/tool-port').ToolTraceEntry} entry
+       * @param {object} [extra]
+       */
       const emitToolLine = (phase, entry, extra = {}) => {
         const line = tools.formatDisplayLine(entry, phase, appLocale);
         entry.line = line;
@@ -1457,6 +1779,7 @@ function createChatEngine({
           emitToolLine(TOOL_LINE_PHASES.PENDING, entry, { callIndex: pending.callIndex });
         },
       });
+      /** @param {unknown} progressEvents */
       const emitProgressPayloads = (progressEvents) => {
         if (!Array.isArray(progressEvents)) return;
         for (const payload of progressEvents) {
@@ -1476,6 +1799,7 @@ function createChatEngine({
       // Bound to the rules, not to every write of the policy file: the mode is
       // part of the key on its own, and the file is written whenever another
       // chat comes on screen (#320).
+      /** @param {PolicyState} policy */
       function buildScopeKey(policy) {
         return JSON.stringify([
           chatId,
@@ -1494,6 +1818,10 @@ function createChatEngine({
        * Only for those: a folder skill is somebody else's text, and tool
        * results are data. Rewriting one on its way to the model would be the
        * same mistake as following an instruction found inside it.
+       *
+       * @param {string} toolName
+       * @param {import('../ports/tool-port').ToolArguments} args
+       * @param {string} content
        */
       function localizeSystemSkillResult(toolName, args, content) {
         if (toolName !== LOAD_SKILL_TOOL) return content;
@@ -1504,9 +1832,9 @@ function createChatEngine({
       }
 
       /**
-       * @param {import('../ports/tool-port').ToolTraceEntry} entry
-       * @param {{ reason?: string, ruleId?: string, riskClasses?: string[], mode?: string,
-       *   targets?: Array<string|{ path: string }>, message?: string }} denial
+       * @param {ToolTraceEntry} entry
+       * @param {DenialDetails} denial
+       * @returns {ToolCallOutcome}
        */
       function permissionDenied(entry, { reason, ruleId, riskClasses, mode, targets, message }) {
         entry.permission = createPermissionAuditEntry({
@@ -1533,6 +1861,19 @@ function createChatEngine({
       /**
        * Freigabe-Karte anzeigen und auf die Entscheidung warten. Ohne
        * erreichbare Oberfläche verfällt die Anfrage sofort (fail-safe).
+       *
+       * What a sandbox card shows (#792): what the run printed, what the
+       * sandbox refused, and the entries the card may open.
+       * @typedef {{ before?: boolean, live?: boolean, command: string, run: object, output: unknown,
+       *   entries: Array<{ kind: string, [field: string]: any }>, others: unknown[], raw: unknown[],
+       *   [field: string]: any }} SandboxCardData
+       *
+       * @param {{ entry: ToolTraceEntry, callIndex: number, toolName: string,
+       *   plan: ToolPlan, verdict: { askClasses?: string[] },
+       *   policy: PolicyState,
+       *   checkpoint: 'access'|'output'|'sandbox'|'config', sandbox?: SandboxCardData | null,
+       *   signal?: AbortSignal | null }} request
+       * @returns {Promise<CardAnswer>}
        */
       async function askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint, sandbox = null, signal = null }) {
         if (deniedPlanKeys.has(plan.planKey)) {
@@ -1569,7 +1910,7 @@ function createChatEngine({
             && sandbox.before !== true
             && Array.isArray(sandbox.entries) && sandbox.entries.length > 0
             && sandbox.entries.every((e) => e.kind === 'network');
-          if (request.workspaceAllowed) request.workspaceRoot = workspaceRoot;
+          if (request.workspaceAllowed && workspaceRoot) request.workspaceRoot = workspaceRoot;
         }
         entry.permission = createPermissionAuditEntry({
           decision: POLICY_DECISIONS.ASK,
@@ -1583,6 +1924,7 @@ function createChatEngine({
           CHAT_ENGINE_EVENTS.PROGRESS,
           createPermissionProgressEvent(PERMISSION_PROGRESS_EVENTS.AWAITING, { callIndex, tool: toolName })
         );
+        /** @type {import('../ports/tool-approval-port').ToolApprovalOutcome} */
         let outcome;
         try {
           // A card about a waiting connection (#792) also ends when its command does.
@@ -1671,18 +2013,25 @@ function createChatEngine({
        * a change that changes nothing never reaches the user. What passes is
        * put on a card; only the user's click switches, and only for this
        * chat. A proposal declined before is not shown again.
+       *
+       * @param {{ entry: ToolTraceEntry, callIndex: number, args: ToolArguments, policy: PolicyState }} call
+       * @returns {Promise<ToolCallOutcome>}
        */
       async function proposeConfigChange({ entry, callIndex, args, policy }) {
+        // `runToolCall` calls this only with a proposal port; narrowed here for the type check.
+        if (!configProposals) return { content: JSON.stringify({ error: 'Configuration changes are not available.' }) };
         const proposal = {
           kind: args?.kind,
           name: typeof args?.name === 'string' ? args.name.trim() : '',
           enable: args?.enable,
           reason: args?.reason,
         };
+        /** @param {string} error */
         const refuse = (error) => {
           entry.configProposal = { outcome: 'refused' };
           return { content: JSON.stringify({ error }) };
         };
+        /** @type {{ error?: string, declined?: true, card?: import('../../shared/contracts/tool-permissions').ConfigProposal } | null | undefined} */
         let prepared;
         try {
           prepared = await configProposals.prepare({
@@ -1716,6 +2065,7 @@ function createChatEngine({
           CHAT_ENGINE_EVENTS.PROGRESS,
           createPermissionProgressEvent(PERMISSION_PROGRESS_EVENTS.AWAITING, { callIndex, tool: PROPOSE_CONFIG_CHANGE_TOOL })
         );
+        /** @type {import('../ports/tool-approval-port').ToolApprovalOutcome} */
         let outcome;
         try {
           outcome = await approvals.requestApproval({
@@ -1793,7 +2143,13 @@ function createChatEngine({
         };
       }
 
-      /** A denial that also ends the run, without another provider request (§6). */
+      /**
+       * A denial that also ends the run, without another provider request (§6).
+       * @param {ToolTraceEntry} entry
+       * @param {DenialDetails} details
+       * @param {string|undefined} invalidatedReason
+       * @returns {ToolCallOutcome}
+       */
       function endRunDenied(entry, details, invalidatedReason) {
         return { ...permissionDenied(entry, details), endRun: true, invalidatedReason };
       }
@@ -1802,13 +2158,18 @@ function createChatEngine({
        * What a card's answer comes to when it did not allow the call. One
        * function for both checkpoints, so that they cannot drift apart again:
        * the output checkpoint once lost the repeated denial (#526).
+       *
+       * @param {CardAnswer} answer
+       * @param {ToolTraceEntry} entry
+       * @param {DenialDetails} details
+       * @returns {ToolCallOutcome|null}
        */
       function refusalFromAnswer(answer, entry, details) {
         if (answer.invalidated) {
           return endRunDenied(entry, {
             ...details,
             reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED,
-            message: PERMISSION_DENIED_TOOL_RESULT_MESSAGES[answer.reason],
+            message: isPermissionDenialReason(answer.reason) ? PERMISSION_DENIED_TOOL_RESULT_MESSAGES[answer.reason] : undefined,
           }, answer.reason);
         }
         if (answer.response !== APPROVAL_RESPONSES.DENY) return null;
@@ -1818,17 +2179,27 @@ function createChatEngine({
         return permissionDenied(entry, { ...details, reason: answer.reason });
       }
 
-      /** The key a withheld output is remembered under — the plan's, at the output checkpoint. */
+      /**
+       * The key a withheld output is remembered under — the plan's, at the output checkpoint.
+       * @param {ToolPlan} plan
+       */
       function outputPlanKey(plan) {
         return `${plan.planKey}#sensitive`;
       }
 
-      /** The key a sandbox card's denial is remembered under (#792). */
+      /**
+       * The key a sandbox card's denial is remembered under (#792).
+       * @param {ToolPlan} plan
+       */
       function sandboxPlanKey(plan) {
         return `${plan.planKey}#sandbox`;
       }
 
-      /** A folder, path or host a sandbox card opened for the rest of the chat (#792). */
+      /**
+       * A folder, path or host a sandbox card opened for the rest of the chat (#792).
+       * @param {{ scopeKey: string, toolName: string,
+       *   grant: { kind: 'write'|'read'|'network'|'outsideRead'|'outsideWrite', path: string, file?: boolean } }} input
+       */
       function grantSandboxForSession({ scopeKey, toolName, grant }) {
         sessionGrants.grant({
           scopeKey,
@@ -1848,6 +2219,12 @@ function createChatEngine({
        * sandbox, one question at a time per run, while the tool call is still
        * running; `signal` aborts when the command has stopped waiting. Never
        * throws — what is not an answer is "not answered".
+       *
+       * @param {{ entry: ToolTraceEntry, callIndex: number, toolName: string, plan: ToolPlan, policy: PolicyState,
+       *   scopeKey: string, live: LiveConnections,
+       *   request: { target?: unknown, allow?: unknown, waitedMs?: number, domains?: unknown, stderr?: unknown, stdout?: unknown },
+       *   signal?: AbortSignal }} input
+       * @returns {Promise<{ outcome: 'allowed', pattern: string } | { outcome: 'denied' | 'unanswered' }>}
        */
       async function askLiveConnection({ entry, callIndex, toolName, plan, policy, scopeKey, live, request, signal }) {
         const target = typeof request?.target === 'string' ? request.target : '';
@@ -1910,7 +2287,11 @@ function createChatEngine({
         return { outcome: 'allowed', pattern };
       }
 
-      /** How long a sandbox card's answer opened something for (#792, #946). */
+      /**
+       * How long a sandbox card's answer opened something for (#792, #946).
+       * @param {string|undefined} response
+       * @returns {'run'|'session'|'workspace'}
+       */
       function sandboxDurationOf(response) {
         if (response === APPROVAL_RESPONSES.ALLOW_WORKSPACE) return 'workspace';
         return response === APPROVAL_RESPONSES.ALLOW_SESSION ? 'session' : 'run';
@@ -1920,6 +2301,10 @@ function createChatEngine({
        * What sandbox cards allowed for the shell and Python runs of this chat
        * (#792) — and the hosts kept open for its workspace (#946) or for
        * every workspace (#1119) — or null.
+       *
+       * @param {string} scopeKey
+       * @param {PolicyState} policy
+       * @returns {SandboxGrants|null}
        */
       function sessionSandboxGrants(scopeKey, policy) {
         const granted = sessionGrants.sandboxPaths?.(scopeKey);
@@ -1936,7 +2321,10 @@ function createChatEngine({
         return { writePaths, readPaths, hosts };
       }
 
-      /** What cards opened outside the open folder for this chat's file tools (#792, step 4). */
+      /**
+       * What cards opened outside the open folder for this chat's file tools (#792, step 4).
+       * @param {string} scopeKey
+       */
       function sessionOutsideGrants(scopeKey) {
         const granted = sessionGrants.sandboxPaths?.(scopeKey);
         return Array.isArray(granted?.outside) ? granted.outside : [];
@@ -1950,10 +2338,17 @@ function createChatEngine({
        * the preview of a write — so no second card follows. Returns the grants
        * to plan again with, and the source the call is audited with, or a
        * refusal.
+       *
+       * @param {{ entry: ToolTraceEntry, callIndex: number, toolName: string, plan: ToolPlan, policy: PolicyState,
+       *   scopeKey: string, riskClasses: ToolRiskClass[] }} input
+       * @returns {Promise<{ refusal: ToolCallOutcome } | { grants: Array<import('../ports/tool-port').OutsideGrant>, source: string }>}
        */
       async function openOutsidePaths({ entry, callIndex, toolName, plan, policy, scopeKey, riskClasses }) {
         const offered = (plan.targets || [])
-          .filter((t) => t && t.outside && Array.isArray(t.outside.offers) && t.outside.offers.length > 0)
+          .filter(
+            /** @returns {t is import('../ports/tool-port').ToolPlanTarget & { outside: { offers: import('../ports/tool-port').OutsideGrant[] } }} */
+            (t) => !!t && !!t.outside && Array.isArray(t.outside.offers) && t.outside.offers.length > 0
+          )
           .slice(0, SANDBOX_CARD_ENTRIES);
         const details = { riskClasses, mode: policy.mode, targets: plan.targets };
         const answer = await askUser({
@@ -1994,7 +2389,11 @@ function createChatEngine({
           })));
         };
         if (answer.invalidated || answer.reason === PERMISSION_DENIAL_REASONS.REPEATED_DENIAL) {
-          return { refusal: refusalFromAnswer(answer, entry, details) };
+          // `refusalFromAnswer` refuses both; the fallback fails closed should that ever change.
+          return {
+            refusal: refusalFromAnswer(answer, entry, details)
+              ?? endRunDenied(entry, { ...details, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED),
+          };
         }
         if (answer.response === APPROVAL_RESPONSES.DENY) {
           record('denied');
@@ -2041,27 +2440,41 @@ function createChatEngine({
        * After the user turned down a connection while the command ran, there
        * is no card: they said no to this command, and a retry would only ask
        * them again.
+       *
+       * @param {{ entry: ToolTraceEntry, callIndex: number, toolName: string, plan: ToolPlan, policy: PolicyState,
+       *   scopeKey: string, execution: ToolExecutionResult, live?: LiveConnections,
+       *   executeWith: (grants: SandboxGrants|null) => Promise<ToolExecutionResult> }} input
+       * @returns {Promise<{ refusal: ToolCallOutcome } | { execution: ToolExecutionResult }>}
        */
       async function reviewSandboxRefusal({ entry, callIndex, toolName, plan, policy, scopeKey, execution, executeWith, live }) {
         const blocked = execution?.sandboxBlocked;
         if (!blocked || execution.invalidated || execution.hardLimit || execution.reclassify?.length) return { execution };
         if (live?.decisions.some((d) => d.outcome === 'denied')) return { execution };
         // As many as the card shows: a resource it did not show is not opened.
-        const offered = (Array.isArray(blocked.entries) ? blocked.entries : [])
-          .filter((e) => SANDBOX_KIND_CLASSES[e.kind] && Array.isArray(e.allow) && e.allow.length > 0)
+        const refused = Array.isArray(blocked.entries) ? blocked.entries : [];
+        const offered = refused
+          .filter(
+            /** @returns {e is RefusedEntry & { kind: SandboxKind, allow: string[] }} */
+            (e) => isSandboxKind(e.kind) && Array.isArray(e.allow) && e.allow.length > 0
+          )
           .slice(0, SANDBOX_CARD_ENTRIES);
         if (offered.length === 0) return { execution };
 
         const first = parseToolOutput(execution.output);
         const classes = normalizeRiskClasses(offered.map((e) => SANDBOX_KIND_CLASSES[e.kind]));
+        // The kinds are filtered to known ones above, so the list is valid; the check is for the type.
+        if (!classes) return { execution };
+        /** @type {ToolPlan} */
         const sandboxPlan = {
           ...plan,
           planKey: sandboxPlanKey(plan),
           riskClasses: classes,
-          targets: offered.filter((e) => e.kind !== 'network').map((e) => ({ path: e.target, kind: 'file', exists: false })),
+          targets: offered
+            .filter((e) => e.kind !== 'network')
+            .map((e) => ({ path: e.target, kind: 'file', exists: false, version: null, sensitive: false })),
         };
         const executed = entry.permission;
-        entry.sandboxBlocked = blocked;
+        entry.sandboxBlocked = normalizeSandboxBlocked(blocked);
         const answer = await askUser({
           entry,
           callIndex,
@@ -2073,13 +2486,13 @@ function createChatEngine({
           sandbox: {
             command: typeof plan.preview?.text === 'string' ? plan.preview.text : '',
             run: {
-              exitCode: Number.isInteger(first?.exit_code) ? first.exit_code : null,
-              durationMs: Number.isFinite(first?.duration_ms) ? first.duration_ms : null,
+              exitCode: integerOrNull(first?.exit_code),
+              durationMs: finiteOrNull(first?.duration_ms),
               timedOut: first?.timed_out === true,
             },
             output: commandReport(first),
             entries: offered.map((e) => ({ kind: e.kind, target: e.target, count: e.count, folder: e.folder === true, allow: e.allow })),
-            others: blocked.entries.filter((e) => !offered.includes(e)).map((e) => ({ kind: e.kind, target: e.target })),
+            others: refused.filter((e) => !offered.includes(e)).map((e) => ({ kind: e.kind, target: e.target })),
             raw: Array.isArray(blocked.raw) ? blocked.raw.slice(-20) : [],
           },
         });
@@ -2109,8 +2522,8 @@ function createChatEngine({
 
         // The card may only choose among what it offered; anything else is the first option.
         const chosen = offered.map((e, i) => {
-          const pick = answer.sandboxPaths[i];
-          return { kind: e.kind, path: e.allow.includes(pick) ? pick : e.allow[0] };
+          const pick = answer.sandboxPaths?.[i];
+          return { kind: e.kind, path: pick !== undefined && e.allow.includes(pick) ? pick : e.allow[0] };
         });
         const duration = sandboxDurationOf(answer.response);
         if (duration === 'session') {
@@ -2125,7 +2538,7 @@ function createChatEngine({
           duration,
           paths: chosen,
           retry: {
-            exitCode: Number.isInteger(retried?.exit_code) ? retried.exit_code : null,
+            exitCode: integerOrNull(retried?.exit_code),
             ...(retryBlocked ? { blocked: retryBlocked } : {}),
           },
         };
@@ -2134,13 +2547,16 @@ function createChatEngine({
           + 'and the command ran a second time. This is the result of that second run'
           + (retryBlocked ? '; the sandbox refused something again, see <sandbox_blocked>.' : '.');
         // The first refusal is on the entry; the retry's goes with the decision.
-        return { execution: { ...retry, sandboxBlocked: null, output: withSandboxNote(retry?.output, note) } };
+        return { execution: { ...retry, sandboxBlocked: undefined, output: withSandboxNote(retry?.output, note) } };
       }
 
       /**
        * Ein Tool-Aufruf von der Planung bis zur geprüften Ausgabe. Liefert die
        * Tool-Nachricht fürs Modell; `endRun` beendet den Lauf ohne weiteren
        * Provider-Request (verfallene Freigabe, Konzept §6).
+       *
+       * @param {{ entry: ToolTraceEntry, callIndex: number, toolName: string, args: ToolArguments }} call
+       * @returns {Promise<ToolCallOutcome>}
        */
       async function runToolCall({ entry, callIndex, toolName, args }) {
         const policy = await readPolicySnapshot(chatId);
@@ -2164,12 +2580,16 @@ function createChatEngine({
         if (toolName === PROPOSE_CONFIG_CHANGE_TOOL && !toolDisabled && configProposals) {
           return proposeConfigChange({ entry, callIndex, args, policy });
         }
+        /** @type {ToolRiskClass[]} */
         let forcedClasses = [];
+        /** @type {string | null | undefined} */
         let lastPlanKey = null;
         const scopeKey = buildScopeKey(policy);
         // What a card before this call opened outside the open folder (#792,
         // step 4), and the call it approved.
+        /** @type {import('../ports/tool-port').OutsideGrant[]} */
         const callOutsideGrants = [];
+        /** @type {{ key: string, source: string | undefined } | null} */
         let outsideApproval = null;
         const outsideGrants = () => [...sessionOutsideGrants(scopeKey), ...callOutsideGrants];
 
@@ -2197,7 +2617,7 @@ function createChatEngine({
           // the log too — the planner knows the skill, the path alone does not.
           if (!entry.skill) {
             const skillTarget = (plan.targets || []).find((target) => target && target.skillName);
-            if (skillTarget) {
+            if (skillTarget && skillTarget.skillName) {
               entry.skill = skillTarget.skillName;
               if (typeof skillTarget.skillPath === 'string' && skillTarget.skillPath) entry.skillPath = skillTarget.skillPath;
             }
@@ -2239,6 +2659,15 @@ function createChatEngine({
               targets: plan.targets,
             });
           }
+          // `decideToolPolicy` denies a call without valid classes above; this
+          // narrows the list for everything that follows.
+          if (!riskClasses) {
+            return permissionDenied(entry, {
+              reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS,
+              mode: policy.mode,
+              targets: plan.targets,
+            });
+          }
 
           // A path outside the open folder (#792, step 4): the card asks
           // before anything else, in every mode, and then the call is planned
@@ -2248,7 +2677,7 @@ function createChatEngine({
               return endRunDenied(entry, { reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED, riskClasses, mode: policy.mode, targets: plan.targets }, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
             }
             const opened = await openOutsidePaths({ entry, callIndex, toolName, plan, policy, scopeKey, riskClasses });
-            if (opened.refusal) return opened.refusal;
+            if ('refusal' in opened) return opened.refusal;
             callOutsideGrants.push(...opened.grants);
             outsideApproval = { key: outsideApprovalKey(plan), source: opened.source };
             continue;
@@ -2310,6 +2739,7 @@ function createChatEngine({
           const onSandboxNetworkAsk = (request, { signal } = {}) => askLiveConnection({
             entry, callIndex, toolName, plan, policy, scopeKey, live, request, signal,
           });
+          /** @param {SandboxGrants|null} sandboxGrants */
           const executeWith = (sandboxGrants) => tools.execute(toolName, args, {
             workspaceRoot,
             skillRoots,
@@ -2356,7 +2786,7 @@ function createChatEngine({
             executeWith,
             live,
           });
-          if (reviewed.refusal) return reviewed.refusal;
+          if ('refusal' in reviewed) return reviewed.refusal;
           let execution = reviewed.execution;
           const liveDecisions = normalizeSandboxLive(live.decisions);
           if (liveDecisions) {
@@ -2386,11 +2816,16 @@ function createChatEngine({
             });
           }
 
+          /** @type {ReturnType<typeof createSensitiveMarker> | null} */
           let sensitiveMarker = null;
           if (execution?.sensitive && !riskClasses.includes(TOOL_RISK_CLASSES.READ_SENSITIVE)) {
             // Zweite Prüfstelle (Konzept §4): unerwartet sensibler Inhalt bleibt
             // im Puffer, bis die Policy ihn als read-sensitive freigibt.
             const escalated = normalizeRiskClasses([...riskClasses, TOOL_RISK_CLASSES.READ_SENSITIVE]);
+            // Built from valid classes, so never null; the check is for the type.
+            if (!escalated) {
+              return permissionDenied(entry, { reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, mode: policy.mode, targets: plan.targets });
+            }
             const escalatedPlan = { ...plan, riskClasses: escalated, planKey: outputPlanKey(plan) };
             const escalatedGrant = sessionGrants.find({ scopeKey, tool: toolName, targets: plan.targets, riskClasses: escalated, providerKey });
             const outputVerdict = decideToolPolicy({
@@ -2505,11 +2940,9 @@ function createChatEngine({
           parts: roundContextParts,
           promptTokens: roundUsage ? roundUsage.prompt : 0,
           // Der Teiler Zeichen→Token gehoert dem Tokenizer am anderen Ende
-          // (Issue #178) — ohne den Anbieter schaetzt die Aufschluesselung
-          // gegen das falsche Modell. Die Server-URL entscheidet mit, weil ein
-          // generischer Anbieter mal lokal und mal entfernt steht (Issue #193).
-          providerId: target?.providerId,
-          baseUrl: sendBundle?.config?.baseUrl,
+          // (Issue #178). Which one that is, the provider's traits say — the
+          // server address already weighed in (#193, #996).
+          tokenizerProfile: sendBundle?.traits?.tokenizerProfile,
         });
 
         if (streamed.cancelled) {
@@ -2529,7 +2962,7 @@ function createChatEngine({
           // call cut off mid-argument would run with arguments it never
           // finished (#538).
           return failRun(
-            createMessage(cutOffMessageKey(streamed.finishReason, assistantMessage, target?.providerId)),
+            createMessage(cutOffMessageKey(streamed.finishReason, assistantMessage, sendBundle?.traits?.outputLimitSetting)),
             CHAT_ERROR_CODES.INCOMPLETE,
             { partial: true }
           );
@@ -2609,6 +3042,17 @@ function createChatEngine({
             throw error;
           }
           let content = localizeSystemSkillResult(toolName, args, outcome.content);
+          // A best-effort warning for the user (#1011, SEC-4): what the
+          // sources find goes onto the row and nowhere else — not into the
+          // policy, not into what the model receives. Looked at before the
+          // cut, so that nothing hides behind the budget.
+          const injectionFlag = await flagToolResult(injectionFlags, {
+            toolName,
+            category: typeof entry.category === 'string' ? entry.category : '',
+            skill: typeof entry.skill === 'string' ? entry.skill : '',
+            content: typeof content === 'string' ? content : '',
+          });
+          if (injectionFlag) entry.injectionFlag = injectionFlag;
           // Cut to the room left in the budget now, not once the total has
           // overflowed (#169); the tool line says so.
           const capped = capToolOutput(content, toolOutputRoom(apiMessages, messageCharLimit));
@@ -2617,6 +3061,7 @@ function createChatEngine({
             entry.shortened = { originalChars: capped.originalChars, keptChars: capped.keptChars };
           }
           emitToolLine(TOOL_LINE_PHASES.DONE, entry, { callIndex });
+          /** @type {LlmMessage} */
           const toolMessage = {
             role: 'tool',
             tool_call_id: toolCall.id,
@@ -2629,7 +3074,7 @@ function createChatEngine({
             // Verfall oder wiederholte Ablehnung beenden den Lauf ohne weiteren
             // Provider-Request; das Ergebnis bleibt im Verlauf sichtbar (Konzept §6).
             return failRun(
-              createMessage(RUN_ENDED_MESSAGE_KEYS[outcome.invalidatedReason]
+              createMessage((outcome.invalidatedReason && RUN_ENDED_MESSAGE_KEYS[outcome.invalidatedReason])
                 || RUN_ENDED_MESSAGE_KEYS[PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED]),
               CHAT_ERROR_CODES.PERMISSION
             );
@@ -2673,6 +3118,7 @@ function createChatEngine({
     };
   }
 
+  /** @param {unknown} content */
   function clipForTitle(content) {
     const text = typeof content === 'string' ? content : String(content ?? '');
     const flat = text.trim();

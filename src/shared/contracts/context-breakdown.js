@@ -18,7 +18,45 @@
  */
 'use strict';
 
-const { isLocalEndpoint } = require('./provider-endpoint');
+const { isRecord } = require('../runtime/is-record');
+
+/** @typedef {'system'|'skills'|'tools'|'history'} ContextPartGroup */
+/** @typedef {'prose'|'markdown'|'json'} ContextContentKind */
+/** @typedef {Readonly<Record<ContextContentKind, number>>} CharsPerTokenProfile  divisor per content kind */
+
+/**
+ * A building block of the prompt as it is stored and shown. `labelKey`,
+ * `detailKey` and `params` stand in for a finished sentence (#290, #293).
+ *
+ * @typedef {Object} ContextPart
+ * @property {string} id
+ * @property {ContextPartGroup} group
+ * @property {string} label
+ * @property {string} detail
+ * @property {number} chars
+ * @property {ContextContentKind} contentKind
+ * @property {string} [labelKey]
+ * @property {string} [detailKey]
+ * @property {Object<string, unknown>} [params]
+ * @property {string} [skillName]
+ * @property {number} [count]
+ */
+
+/**
+ * A part with its tokens: estimated, or scaled to the provider's real count.
+ *
+ * @typedef {ContextPart & { tokens: number, share: number }} ContextPartRow
+ */
+
+/**
+ * @typedef {Object} ContextBreakdown
+ * @property {number} version
+ * @property {number} promptTokens  the provider's real count
+ * @property {number} estimatedTokens  the sum of the estimates
+ * @property {boolean} scaled  whether the rows were scaled to `promptTokens`
+ * @property {number} total
+ * @property {ContextPartRow[]} parts
+ */
 
 // Stamped on a breakdown, which is stored with the chat. Nothing reads it yet;
 // it lets a later shape tell the old stored ones apart.
@@ -32,6 +70,7 @@ const CONTEXT_PART_GROUPS = Object.freeze({
   HISTORY: 'history',
 });
 
+/** @type {readonly ContextPartGroup[]} */
 const CONTEXT_PART_GROUP_ORDER = Object.freeze([
   CONTEXT_PART_GROUPS.SYSTEM,
   CONTEXT_PART_GROUPS.SKILLS,
@@ -39,6 +78,7 @@ const CONTEXT_PART_GROUP_ORDER = Object.freeze([
   CONTEXT_PART_GROUPS.HISTORY,
 ]);
 
+/** @type {Readonly<Record<ContextPartGroup, string>>} */
 const CONTEXT_PART_GROUP_LABEL_KEYS = Object.freeze({
   [CONTEXT_PART_GROUPS.SYSTEM]: 'context.group.system',
   [CONTEXT_PART_GROUPS.SKILLS]: 'context.group.skills',
@@ -74,7 +114,7 @@ const CONTEXT_CONTENT_KINDS = Object.freeze({
  * Messverfahren fuer beide Profile: denselben Text einmal zaehlen
  * (`text.length`) und einmal durch den Tokenizer schicken, Quotient bilden.
  */
-const CHARS_PER_TOKEN_PROFILES = Object.freeze({
+const CHARS_PER_TOKEN_PROFILES = /** @type {Readonly<Record<string, CharsPerTokenProfile>>} */ (Object.freeze({
   /**
    * Lokale Modelle (MLX-LM, Ollama), gemessen gegen Qwen am 2026-09-18
    * (Issue #169). Deutscher Fliesstext und Markdown liegen nahe an der
@@ -104,78 +144,81 @@ const CHARS_PER_TOKEN_PROFILES = Object.freeze({
     [CONTEXT_CONTENT_KINDS.MARKDOWN]: 3.8,
     [CONTEXT_CONTENT_KINDS.JSON]: 4.1,
   }),
-});
+}));
 
 /**
  * Ohne Messung kein eigenes Profil.
  *
- * Eingetragen ist nur, wogegen tatsaechlich gemessen wurde. Anthropic und
- * Google bleiben bewusst draussen: Ihre Tokenizer liegen hier nicht vor, und
- * eine geschaetzte Zahl waere derselbe Fehler wie der, den Issue #178
- * behebt — nur mit besserem Gewissen. Sie fallen auf `local` zurueck, das von
- * beiden Profilen das konservativere ist (kleinerer Teiler = mehr geschaetzte
- * Tokens). Wer ein Profil ergaenzt, misst vorher und schreibt Datum und
- * Verfahren wie oben dazu.
+ * Which profile a provider gets is its trait `tokenizerProfile` in the
+ * capability register (#996, provider-capabilities.js) — only what was
+ * actually measured against is declared there. Anthropic und Google bleiben
+ * bewusst draussen: Ihre Tokenizer liegen hier nicht vor, und eine geschaetzte
+ * Zahl waere derselbe Fehler wie der, den Issue #178 behebt — nur mit
+ * besserem Gewissen. Sie fallen auf `local` zurueck, das von beiden Profilen
+ * das konservativere ist (kleinerer Teiler = mehr geschaetzte Tokens). Wer ein
+ * Profil ergaenzt, misst vorher und schreibt Datum und Verfahren wie oben dazu.
  */
 const DEFAULT_CHARS_PER_TOKEN_PROFILE = 'local';
-
-const CHARS_PER_TOKEN_PROFILE_BY_PROVIDER = Object.freeze({
-  openai: 'o200k',
-  ollama: 'local',
-});
 
 /** Rueckwaertskompatibler Name fuer das Standardprofil. */
 const CHARS_PER_TOKEN = CHARS_PER_TOKEN_PROFILES[DEFAULT_CHARS_PER_TOKEN_PROFILE];
 
 /**
- * Profil eines Anbieters. Die Provider-ID ist der Normalfall; eine Server-URL,
- * die auf diesen Rechner zeigt, sticht sie (Issue #193).
+ * The divisors of a profile by its name; the default profile for an unknown
+ * or missing name. The name comes from the provider's traits, which already
+ * weighed in a server address on this machine (#193): there a locally loaded
+ * model answers, and that is what `local` was measured against.
  *
- * Grund: Seit es einen generischen Anbieter gibt, sagt die ID nicht mehr, was
- * am anderen Ende steht — dieselbe ID bedient LM Studio auf `localhost` und
- * ein Gateway im Netz. Zeigt sie auf diesen Rechner, laeuft dort ein lokal
- * geladenes Modell, und das ist genau der Fall, fuer den `local` gemessen ist.
- *
- * Fuer einen **entfernten** OpenAI-kompatiblen Endpunkt gibt es bewusst kein
- * eigenes Profil: Dahinter kann alles stecken, von einem OpenAI-Gateway bis zu
- * Llama bei einem Router. Ohne Messung bleibt es beim konservativeren
- * Standardprofil — dieselbe Regel, die auch Anthropic und Google draussen haelt.
- *
- * @param {string} providerId
- * @param {{ baseUrl?: string }} [endpoint]
+ * @param {string} [profileName]
+ * @returns {CharsPerTokenProfile}
  */
-function charsPerTokenProfile(providerId, { baseUrl } = {}) {
-  if (isLocalEndpoint(baseUrl)) return CHARS_PER_TOKEN_PROFILES.local;
-  const key =
-    (typeof providerId === 'string' && CHARS_PER_TOKEN_PROFILE_BY_PROVIDER[providerId])
-    || DEFAULT_CHARS_PER_TOKEN_PROFILE;
+function charsPerTokenProfile(profileName) {
+  const key = typeof profileName === 'string' && Object.hasOwn(CHARS_PER_TOKEN_PROFILES, profileName)
+    ? profileName
+    : DEFAULT_CHARS_PER_TOKEN_PROFILE;
   return CHARS_PER_TOKEN_PROFILES[key];
 }
 
+/**
+ * @param {unknown} value
+ * @returns {value is ContextContentKind}
+ */
 function isContentKind(value) {
-  return Object.prototype.hasOwnProperty.call(CHARS_PER_TOKEN, value);
+  return typeof value === 'string' && Object.hasOwn(CHARS_PER_TOKEN, value);
 }
 
-function charsPerToken(contentKind, providerId, options) {
-  const profile = charsPerTokenProfile(providerId, options);
+/**
+ * @param {unknown} contentKind
+ * @param {string} [profileName]
+ */
+function charsPerToken(contentKind, profileName) {
+  const profile = charsPerTokenProfile(profileName);
   return isContentKind(contentKind)
     ? profile[contentKind]
     : profile[CONTEXT_CONTENT_KINDS.PROSE];
 }
 
+/** @param {unknown} value */
 function toCount(value) {
   const n = Number(value);
   if (!Number.isFinite(n) || n < 0) return 0;
   return Math.round(n);
 }
 
-/** Schaetzt Tokens aus einer Zeichenzahl. Mindestens 1, solange Zeichen da sind. */
-function estimateTokensFromChars(chars, contentKind, providerId, options) {
+/**
+ * Schaetzt Tokens aus einer Zeichenzahl. Mindestens 1, solange Zeichen da sind.
+ *
+ * @param {unknown} chars
+ * @param {unknown} contentKind
+ * @param {string} [profileName]
+ */
+function estimateTokensFromChars(chars, contentKind, profileName) {
   const count = toCount(chars);
   if (count === 0) return 0;
-  return Math.max(1, Math.round(count / charsPerToken(contentKind, providerId, options)));
+  return Math.max(1, Math.round(count / charsPerToken(contentKind, profileName)));
 }
 
+/** @param {unknown} value */
 function text(value) {
   return typeof value === 'string' ? value : '';
 }
@@ -205,7 +248,7 @@ function shortPathDetail(shortPath, { inFolder = false, truncated = false, guard
  *
  * @typedef {Object} ContextPartInput
  * @property {string} [id]
- * @property {string} [group]        a CONTEXT_PART_GROUPS value
+ * @property {string} [group]        a CONTEXT_PART_GROUPS value, anything else counts as `system`
  * @property {string} [label]
  * @property {string} [labelKey]
  * @property {string} [detail]
@@ -217,6 +260,7 @@ function shortPathDetail(shortPath, { inFolder = false, truncated = false, guard
  * @property {number} [count]
  *
  * @param {ContextPartInput} [input]
+ * @returns {ContextPart}
  */
 function createContextPart({
   id,
@@ -231,9 +275,10 @@ function createContextPart({
   skillName = '',
   count,
 } = {}) {
+  /** @type {ContextPart} */
   const part = {
     id: text(id) || text(label) || text(labelKey),
-    group: CONTEXT_PART_GROUP_ORDER.includes(group) ? group : CONTEXT_PART_GROUPS.SYSTEM,
+    group: CONTEXT_PART_GROUP_ORDER.find((known) => known === group) ?? CONTEXT_PART_GROUPS.SYSTEM,
     label: text(label),
     detail: text(detail),
     chars: toCount(chars),
@@ -260,21 +305,24 @@ function createContextPart({
  * Fall vorliegt. Der Rundungsrest landet bei den groessten Posten, damit die
  * Summe der Zeilen exakt der angezeigten Gesamtzahl entspricht.
  *
- * `providerId` — und bei einem generischen Anbieter die Server-URL — waehlt das
- * Teiler-Profil (Issue #178, #193). Auf die Gesamtzahl hat
+ * `tokenizerProfile` — the provider's trait for this connection — waehlt das
+ * Teiler-Profil (Issue #178, #193, #996). Auf die Gesamtzahl hat
  * es keinen Einfluss — solange skaliert wird, verschiebt ein anderes Profil
  * nur die Gewichte zwischen den Zeilen. Genau darum geht es: Bisher bekam der
  * Block „Tool-Definitionen" bei OpenAI rund 80 % zu viel Gewicht, und Verlauf
  * und Skills entsprechend zu wenig.
+ *
+ * @param {{ parts?: Array<ContextPartInput>, promptTokens?: number, tokenizerProfile?: string }} [input]
+ * @returns {ContextBreakdown}
  */
-function createContextBreakdown({ parts = [], promptTokens = 0, providerId = '', baseUrl = '' } = {}) {
+function createContextBreakdown({ parts = [], promptTokens = 0, tokenizerProfile = '' } = {}) {
   const usable = (Array.isArray(parts) ? parts : [])
     .map((part) => createContextPart(part))
     .filter((part) => part.chars > 0);
 
   const estimated = usable.map((part) => ({
     ...part,
-    tokens: estimateTokensFromChars(part.chars, part.contentKind, providerId, { baseUrl }),
+    tokens: estimateTokensFromChars(part.chars, part.contentKind, tokenizerProfile),
   }));
   const estimatedTotal = estimated.reduce((sum, part) => sum + part.tokens, 0);
   const real = toCount(promptTokens);
@@ -324,23 +372,26 @@ function createContextBreakdown({ parts = [], promptTokens = 0, providerId = '',
 /**
  * Defensive Annahme im Renderer: Der Wert kommt ueber IPC und wird wie jede
  * fremde Eingabe geprueft, statt ihm zu glauben.
+ *
+ * @param {unknown} raw
+ * @returns {ContextBreakdown|null}
  */
 function normalizeContextBreakdown(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   const parts = Array.isArray(raw.parts) ? raw.parts : [];
   if (parts.length === 0) return null;
   const promptTokens = toCount(raw.promptTokens);
   const estimatedTokens = toCount(raw.estimatedTokens);
   const scaled = raw.scaled === true && promptTokens > 0;
   const total = scaled ? promptTokens : estimatedTokens;
-  const rows = parts
-    .map((part) => {
-      const normalized = createContextPart(part);
-      const tokens = toCount(part?.tokens);
-      if (tokens === 0) return null;
-      return { ...normalized, tokens, share: total > 0 ? tokens / total : 0 };
-    })
-    .filter(Boolean);
+  /** @type {ContextPartRow[]} */
+  const rows = [];
+  for (const part of parts) {
+    const normalized = createContextPart(part);
+    const tokens = toCount(part?.tokens);
+    if (tokens === 0) continue;
+    rows.push({ ...normalized, tokens, share: total > 0 ? tokens / total : 0 });
+  }
   if (rows.length === 0) return null;
   return {
     version: CONTEXT_BREAKDOWN_VERSION,
@@ -356,9 +407,12 @@ function normalizeContextBreakdown(raw) {
  * Anzeige-Reihenfolge: Gruppen in fester Folge, innerhalb einer Gruppe der
  * teuerste Posten zuerst — die Frage lautet „was kostet am meisten", nicht
  * „was kam zuerst". Gruppen ohne Zeilen fallen weg.
+ *
+ * @param {{ parts?: ContextPartRow[], total?: number }|null|undefined} breakdown
  */
 function groupContextParts(breakdown) {
   const parts = Array.isArray(breakdown?.parts) ? breakdown.parts : [];
+  const whole = breakdown?.total ?? 0;
   return CONTEXT_PART_GROUP_ORDER.map((group) => {
     const rows = parts
       .filter((part) => part.group === group)
@@ -368,7 +422,7 @@ function groupContextParts(breakdown) {
       group,
       labelKey: CONTEXT_PART_GROUP_LABEL_KEYS[group],
       tokens,
-      share: breakdown?.total > 0 ? tokens / breakdown.total : 0,
+      share: whole > 0 ? tokens / whole : 0,
       parts: rows,
     };
   }).filter((entry) => entry.parts.length > 0);
@@ -382,7 +436,6 @@ module.exports = {
   CONTEXT_CONTENT_KINDS,
   CHARS_PER_TOKEN,
   CHARS_PER_TOKEN_PROFILES,
-  CHARS_PER_TOKEN_PROFILE_BY_PROVIDER,
   DEFAULT_CHARS_PER_TOKEN_PROFILE,
   charsPerTokenProfile,
   estimateTokensFromChars,

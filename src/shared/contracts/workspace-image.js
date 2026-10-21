@@ -68,6 +68,11 @@ const WORKSPACE_IMAGE_MIME_TYPES = Object.freeze([
  */
 const WORKSPACE_IMAGE_SNIFF_BYTES = 4096;
 
+/**
+ * @param {ArrayLike<number>} bytes
+ * @param {ArrayLike<number>} signature
+ * @param {number} [offset]
+ */
 function startsWith(bytes, signature, offset = 0) {
   for (let i = 0; i < signature.length; i += 1) {
     if (bytes[offset + i] !== signature[i]) return false;
@@ -75,6 +80,9 @@ function startsWith(bytes, signature, offset = 0) {
   return true;
 }
 
+/**
+ * @param {string} text
+ */
 function ascii(text) {
   return [...text].map((c) => c.charCodeAt(0));
 }
@@ -93,6 +101,8 @@ const UTF8_BOM = [0xef, 0xbb, 0xbf];
  * element — BOM, whitespace, `<?xml …?>`, comments, a doctype with or without
  * an internal subset — and then asks for `<svg` and nothing else. An HTML file
  * or an XML file with another root is not an image, whatever its name says.
+ *
+ * @param {ArrayLike<number>} bytes
  */
 function looksLikeSvg(bytes) {
   const start = startsWith(bytes, UTF8_BOM) ? UTF8_BOM.length : 0;
@@ -153,6 +163,8 @@ function sniffImageMime(header) {
  *
  * Ist die Kodierung kaputt (einzelnes `%`), bleibt der Rohwert stehen — er
  * scheitert dann an der Pfadprüfung statt an einer Ausnahme.
+ *
+ * @param {unknown} src
  */
 function decodeWorkspaceImageSource(src) {
   const raw = typeof src === 'string' ? src.trim() : '';
@@ -173,6 +185,8 @@ function decodeWorkspaceImageSource(src) {
  * absolute Pfade (`/Users/…/ws/plot.png`, `C:\…`). Ob ein absoluter Pfad
  * wirklich im Workspace liegt, entscheidet der Main-Prozess — hier geht es nur
  * darum, wofür überhaupt gefragt wird.
+ *
+ * @param {unknown} src
  */
 function isWorkspaceImageSource(src) {
   const raw = typeof src === 'string' ? src.trim() : '';
@@ -197,6 +211,8 @@ function isWorkspaceImageSource(src) {
  * Erfasst `C:/…`, `C:\…` und die prozent-kodierte Form `C:%5C…`, die
  * `marked` daraus macht. **Nicht** `C:datei` ohne Trenner: Das ist unter
  * Windows ein Pfad relativ zum Laufwerk und nichts, was ein Modell schreibt.
+ *
+ * @param {unknown} src
  */
 function isWindowsDrivePath(src) {
   const raw = typeof src === 'string' ? src.trim() : '';
@@ -212,6 +228,8 @@ function createWorkspaceImageResult({ mime, base64, mtimeMs = 0, size = 0 } = {}
  * Only the reason travels — the sentence is chosen where the placeholder is
  * drawn (issue #293). Until then the result carried a finished German one
  * that nobody on the far side read.
+ *
+ * @param {unknown} reason
  */
 function createWorkspaceImageError(reason) {
   const known = Object.values(WORKSPACE_IMAGE_ERRORS).includes(reason)
@@ -220,14 +238,20 @@ function createWorkspaceImageError(reason) {
   return { ok: false, reason: known };
 }
 
-/** Katalogschlüssel zu einem Grund — auch für unbekannte Gründe nie leer. */
+/**
+ * Katalogschlüssel zu einem Grund — auch für unbekannte Gründe nie leer.
+ *
+ * @param {unknown} reason
+ */
 function workspaceImageErrorMessageKey(reason) {
-  return (
-    WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS[reason]
-    || WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS[WORKSPACE_IMAGE_ERRORS.NOT_FOUND]
-  );
+  /** @type {Readonly<Record<string, string>>} */
+  const keys = WORKSPACE_IMAGE_ERROR_MESSAGE_KEYS;
+  return keys[String(reason)] || keys[WORKSPACE_IMAGE_ERRORS.NOT_FOUND];
 }
 
+/**
+ * @param {{ ok?: boolean, mime?: string, base64?: string } | null | undefined} result
+ */
 function workspaceImageDataUrl(result) {
   if (!result?.ok || !result.mime || !result.base64) return '';
   return `data:${result.mime};base64,${result.base64}`;

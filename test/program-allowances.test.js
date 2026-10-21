@@ -23,6 +23,7 @@ const {
 const { parseSimpleCommand } = require('../src/shared/runtime/simple-command');
 const { resolveRunDomains } = require('../src/shared/runtime/sandbox-domains');
 const { createProgramAllowances } = require('../src/main/services/program-allowances-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const posixOnly = { skip: process.platform === 'win32' ? 'no sandbox, no allowances on Windows' : false };
 
@@ -84,10 +85,10 @@ test('only an edit that takes rights away counts as narrowing', () => {
 
 test('a run\'s domains put the allowance first, so the cap never drops them', () => {
   const declared = Array.from({ length: 20 }, (_, i) => `d${i}.example.com`);
-  const domains = resolveRunDomains('shell_execute', { command: 'x', network_domains: declared }, { domains: ['graph.microsoft.com'] });
+  const domains = resolveRunDomains('shell', { command: 'x', network_domains: declared }, { domains: ['graph.microsoft.com'] });
   assert.equal(domains.length, 20);
   assert.equal(domains[0], 'graph.microsoft.com');
-  assert.deepEqual(resolveRunDomains('shell_execute', { command: 'x' }, null), []);
+  assert.deepEqual(resolveRunDomains('shell', { command: 'x' }, null), []);
 });
 
 // ── One simple command ──────────────────────────────────────────────────────
@@ -181,7 +182,7 @@ test('a program is found by name through the PATH, or by ~ or absolute path', po
     assert.equal((await service.resolveProgram('no-such-tool')).error.key, 'permissions.allowance.error.programNotFound');
     assert.equal((await service.resolveProgram(path.join(fx.bin, 'not-executable'))).ok, false);
   } finally {
-    await fs.rm(fx.root, { recursive: true, force: true });
+    await removeTempDir(fx.root);
   }
 });
 
@@ -201,7 +202,7 @@ test('folders: existing and specific ones pass; home, root, Snotra and closed pl
     assert.equal(await refused('~/nope'), 'permissions.allowance.error.folderMissing');
     assert.equal(await refused('relative/dir'), 'permissions.allowance.error.folderInvalid');
   } finally {
-    await fs.rm(fx.root, { recursive: true, force: true });
+    await removeTempDir(fx.root);
   }
 });
 
@@ -222,7 +223,7 @@ test('an entry from the dialog is checked in full; trustd only exists on macOS',
     assert.equal(await error({ domains: [], writePaths: [], trustd: false }), 'permissions.allowance.error.empty');
     assert.equal(await error({ program: 'nope' }), 'permissions.allowance.error.programNotFound');
   } finally {
-    await fs.rm(fx.root, { recursive: true, force: true });
+    await removeTempDir(fx.root);
   }
 });
 
@@ -248,7 +249,7 @@ test('a command that runs the allowed file on its own gets the allowance and its
     const linux = makeService(fx, { allowances: [entry], platform: 'linux' });
     assert.equal((await linux.match({ command: 'ms-todo-cli', cwd: fx.project })).allowance.trustd, false);
   } finally {
-    await fs.rm(fx.root, { recursive: true, force: true });
+    await removeTempDir(fx.root);
   }
 });
 
@@ -273,6 +274,6 @@ test('a file of the same name, a chain or an expansion keeps the allowance off a
     assert.equal(await makeService(fx).match({ command: 'ms-todo-cli', cwd: fx.project }), null);
     assert.equal(await makeService(fx, { allowances: [entry], platform: 'win32' }).match({ command: 'ms-todo-cli' }), null);
   } finally {
-    await fs.rm(fx.root, { recursive: true, force: true });
+    await removeTempDir(fx.root);
   }
 });

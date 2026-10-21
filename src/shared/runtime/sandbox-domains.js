@@ -1,5 +1,7 @@
 'use strict';
 
+const { TOOL_EXECUTION_KINDS } = require('../contracts/tool-presentation');
+
 /**
  * Which domains an isolated run may reach (#329).
  *
@@ -27,8 +29,13 @@ const MAX_DOMAIN_CHARS = 253;
 const DOMAIN_PATTERN = /^(\*\.)?[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+(:\d{1,5})?$/;
 const IP_LITERAL = /^[\d.]+(:\d+)?$/;
 
+/**
+ * @param {unknown} list
+ * @returns {string[]}
+ */
 function normalizeDomains(list) {
   if (!Array.isArray(list)) return [];
+  /** @type {string[]} */
   const out = [];
   const seen = new Set();
   for (const raw of list) {
@@ -60,8 +67,13 @@ const PACKAGE_INSTALLS = Object.freeze([
   },
 ]);
 
+/**
+ * @param {unknown} command
+ * @returns {string[]}
+ */
 function suggestDomains(command) {
   const text = typeof command === 'string' ? command : '';
+  /** @type {string[]} */
   const out = [];
   for (const entry of PACKAGE_INSTALLS) {
     if (entry.pattern.test(text)) out.push(...entry.domains);
@@ -70,23 +82,33 @@ function suggestDomains(command) {
 }
 
 /**
- * The domains of one call. `shell_execute` adds the suggestions for its
- * command; `run_python` gets what it declares and nothing else — its
+ * The domains of one call, by the kind of process the tool starts (its
+ * descriptor's `execution`, #1008). A shell command adds the suggestions for
+ * its command; a Python program gets what it declares and nothing else — its
  * description says "no pip install", and a subprocess inside the script is
  * not something to guess about.
+ *
+ * @param {string | undefined} execution  One of `TOOL_EXECUTION_KINDS`.
+ * @param {{ network_domains?: unknown, command?: unknown } | null | undefined} args
+ * @returns {string[]}
  */
-function resolveNetworkDomains(toolName, args) {
+function resolveNetworkDomains(execution, args) {
   const declared = Array.isArray(args?.network_domains) ? args.network_domains : [];
-  const suggested = toolName === 'shell_execute' ? suggestDomains(args?.command) : [];
+  const suggested = execution === TOOL_EXECUTION_KINDS.SHELL ? suggestDomains(args?.command) : [];
   return normalizeDomains([...declared, ...suggested]);
 }
 
 /**
  * The domains of one run with a program allowance (#408): the allowance's
  * first, so the cap never pushes out what the user set, then the call's own.
+ *
+ * @param {string | undefined} execution
+ * @param {{ network_domains?: unknown, command?: unknown } | null | undefined} args
+ * @param {{ domains?: string[], writePaths?: string[], trustd?: boolean } | null | undefined} allowance  A program allowance.
+ * @returns {string[]}
  */
-function resolveRunDomains(toolName, args, allowance) {
-  const declared = resolveNetworkDomains(toolName, args);
+function resolveRunDomains(execution, args, allowance) {
+  const declared = resolveNetworkDomains(execution, args);
   const granted = Array.isArray(allowance?.domains) ? allowance.domains : [];
   return granted.length > 0 ? normalizeDomains([...granted, ...declared]) : declared;
 }

@@ -19,6 +19,22 @@ const { createUpdateDownloader } = require('./update-download');
 const { createUpdateInstaller } = require('./update-installer');
 const { createMessage } = require('../../shared/contracts/message');
 
+/**
+ * What the check answers. `error` is a message the update dialog words, or what
+ * the network said, quoted as it stands; the fields after `releaseUrl` are there
+ * only when a release was found.
+ *
+ * @typedef {{ updateAvailable: boolean, currentVersion: string, releaseUrl: string,
+ *   error?: import('../../shared/contracts/message').Message | string,
+ *   latestVersion?: string, isPrerelease?: boolean, publishedAt?: string|null, notes?: string,
+ *   canSelfUpdate?: boolean, selfUpdateBlockedReason?: import('../../shared/contracts/message').Message | string,
+ *   installKind?: string, asset?: { name: string, size: number }|null }} UpdateCheckResult
+ *
+ * The fields of GitHub's release that are read; none is trusted to be there.
+ * @typedef {{ tag_name?: unknown, draft?: unknown, prerelease?: unknown, html_url?: unknown,
+ *   published_at?: string, body?: unknown, assets?: unknown }} GithubRelease
+ */
+
 const GITHUB_API = 'https://api.github.com';
 const DEFAULT_REPO = 'kkrafft1999/snotra';
 const REQUEST_TIMEOUT_MS = 8000;
@@ -30,9 +46,14 @@ const REQUEST_TIMEOUT_MS = 8000;
  * and says so in the headers. Returns null when it is not the rate limit,
  * otherwise `{ resetAt }` — the epoch millisecond the budget comes back, or
  * null when the headers do not say.
+ *
+ * @param {Pick<Response, 'status' | 'headers'>} res
+ * @param {number} now
+ * @returns {{ resetAt: number|null }|null}
  */
 function readRateLimit(res, now) {
   if (res.status !== 403 && res.status !== 429) return null;
+  /** @param {string} name */
   const header = (name) => {
     const value = res.headers?.get?.(name);
     return typeof value === 'string' ? value.trim() : '';
@@ -41,6 +62,7 @@ function readRateLimit(res, now) {
   const remaining = header('x-ratelimit-remaining');
   if (!retryAfter && remaining !== '0') return null;
 
+  /** @type {number|null} */
   let resetAt = null;
   if (/^\d+$/.test(retryAfter)) {
     resetAt = now + Number(retryAfter) * 1000;
@@ -56,6 +78,9 @@ function readRateLimit(res, now) {
  * Zerlegt eine Versionsangabe in {major, minor, patch, prerelease}.
  * Toleriert ein fuehrendes "v" (z. B. Git-Tag "v1.2.3") und Prerelease-Suffixe
  * (z. B. "1.2.3-beta.1"). Liefert null, wenn nichts Brauchbares drinsteht.
+ *
+ * @param {unknown} raw
+ * @returns {{ major: number, minor: number, patch: number, prerelease: string }|null}
  */
 function parseSemver(raw) {
   if (typeof raw !== 'string') return null;
@@ -69,6 +94,10 @@ function parseSemver(raw) {
   };
 }
 
+/**
+ * @param {string} a
+ * @param {string} b
+ */
 function comparePrerelease(a, b) {
   // SemVer §11: eine Version OHNE Prerelease ist hoeher als dieselbe MIT.
   if (a === b) return 0;
@@ -99,6 +128,9 @@ function comparePrerelease(a, b) {
 /**
  * Vergleicht zwei Versionen. Rueckgabe: -1 (a<b), 0 (gleich), 1 (a>b).
  * Unparsebare Werte gelten als kleinstmoeglich.
+ *
+ * @param {unknown} a
+ * @param {unknown} b
  */
 function compareSemver(a, b) {
   const pa = parseSemver(a);
@@ -112,25 +144,43 @@ function compareSemver(a, b) {
   return comparePrerelease(pa.prerelease, pb.prerelease);
 }
 
-/** True, wenn latest echt neuer als current ist. */
+/**
+ * True, wenn latest echt neuer als current ist.
+ *
+ * @param {unknown} latest
+ * @param {unknown} current
+ */
 function isNewerVersion(latest, current) {
   return compareSemver(latest, current) > 0;
 }
 
 /**
+ * What the update service asks of the running installation. Electron's `app`
+ * is one; a test hands in its own. Each getter may throw before the host is
+ * ready, and the service falls back then.
+ *
+ * @typedef {Object} Installation
+ * @property {() => string} getVersion
+ * @property {(name: 'temp' | 'userData' | 'exe') => string} getPath
+ * @property {boolean} [isPackaged]
+ */
+
+/**
  * @param {object} deps
- * @param {object} deps.app             Electron-app (getVersion, getPath, isPackaged).
- * @param {object} deps.storage         storage-service (fuer ignoredUpdateVersion).
+ * @param {Installation} deps.installation  the running installation: its version and folders (#983)
+ * @param {Pick<import('../ports/ui-prefs-store-port').UiPrefsStorePort, 'readUIPrefs' | 'updateUIPrefs'>} deps.storage
+ *        storage-service (fuer ignoredUpdateVersion).
  * @param {string} [deps.repo]          "owner/name"; default kkrafft1999/snotra.
- * @param {function} [deps.fetchImpl]   Override fuer Tests; default globaler fetch.
- * @param {object} [deps.downloader]    Test-Haken; default createUpdateDownloader.
- * @param {object} [deps.installer]     Test-Haken; default createUpdateInstaller.
- * @param {object} [deps.runtime]       Test-Haken fuer Plattform/Pfade der Installation.
- * @param {function} [deps.quitApp]     Wird nach erfolgreicher Installation gerufen.
- * @param {function} [deps.now]         Clock in epoch ms, for tests.
+ * @param {typeof fetch} [deps.fetchImpl]  Override fuer Tests; default globaler fetch.
+ * @param {ReturnType<typeof createUpdateDownloader>} [deps.downloader]  Test-Haken; default createUpdateDownloader.
+ * @param {ReturnType<typeof createUpdateInstaller>} [deps.installer]    Test-Haken; default createUpdateInstaller.
+ * @param {{ platform: string, execPath: string, env?: { APPIMAGE?: unknown }, isPackaged?: boolean, arch?: string }} [deps.runtime]
+ *        Test-Haken fuer Plattform/Pfade der Installation.
+ * @param {() => void} [deps.quitApp]   Wird nach erfolgreicher Installation gerufen.
+ * @param {() => number} [deps.now]     Clock in epoch ms, for tests.
  */
 function createUpdateService({
-  app,
+  installation,
   storage,
   repo = DEFAULT_REPO,
   fetchImpl,
@@ -139,7 +189,7 @@ function createUpdateService({
   runtime,
   quitApp,
   now = Date.now,
-} = {}) {
+}) {
   const doFetch = fetchImpl || globalThis.fetch;
   // Where a user fetches the version by hand — also when the check failed
   // and the API never told us the release's own page (#943).
@@ -147,7 +197,7 @@ function createUpdateService({
 
   function getTempDir() {
     try {
-      return app.getPath('temp');
+      return installation.getPath('temp');
     } catch {
       return require('os').tmpdir();
     }
@@ -163,7 +213,7 @@ function createUpdateService({
   function getHelperFiles() {
     let dir;
     try {
-      dir = app.getPath('userData');
+      dir = installation.getPath('userData');
     } catch {
       dir = getTempDir();
     }
@@ -183,13 +233,13 @@ function createUpdateService({
     if (runtime) return detectInstallTarget(runtime);
     let execPath = process.execPath;
     try {
-      execPath = app.getPath('exe');
+      execPath = installation.getPath('exe');
     } catch { /* Fallback bleibt process.execPath */ }
     return detectInstallTarget({
       platform: process.platform,
       execPath,
       env: process.env,
-      isPackaged: app?.isPackaged !== false,
+      isPackaged: installation?.isPackaged !== false,
     });
   }
 
@@ -202,16 +252,21 @@ function createUpdateService({
    * absichtlich im Main-Prozess: Der Renderer erfaehrt nur Name und Groesse
    * und kann damit keine andere Quelle unterschieben.
    */
+  /** @type {import('./update-targets').ReleaseAsset|null} */
   let lastAsset = null;
 
   function getCurrentVersion() {
     try {
-      return app.getVersion();
+      return installation.getVersion();
     } catch {
       return '0.0.0';
     }
   }
 
+  /**
+   * @param {AbortSignal} [signal]
+   * @returns {Promise<{ release: GithubRelease, error?: undefined } | { error: import('../../shared/contracts/message').Message, release?: undefined }>}
+   */
   async function fetchLatestRelease(signal) {
     const url = `${GITHUB_API}/repos/${repo}/releases/latest`;
     const controller = new AbortController();
@@ -240,7 +295,7 @@ function createUpdateService({
         return { error: createMessage('update.error.githubHttp', { status: res.status }) };
       }
       const json = await res.json();
-      return { release: json };
+      return { release: json && typeof json === 'object' ? json : {} };
     } finally {
       clearTimeout(timer);
       signal?.removeEventListener('abort', abortFromCaller);
@@ -255,10 +310,12 @@ function createUpdateService({
    * @param {boolean} [opts.respectIgnored] true -> uebersprungene Version meldet
    *        kein Update (fuer Auto-Check beim Start). Bei manuellem Check false.
    * @param {AbortSignal} [opts.signal] ends the request early (#568)
+   * @returns {Promise<UpdateCheckResult>}
    */
   async function checkForUpdate(opts = {}) {
     const respectIgnored = opts.respectIgnored === true;
     const currentVersion = getCurrentVersion();
+    /** @type {Awaited<ReturnType<typeof fetchLatestRelease>>} */
     let result;
     try {
       result = await fetchLatestRelease(opts.signal);
@@ -323,6 +380,7 @@ function createUpdateService({
    * fresh check below belongs to it as much as the transfer. Cancelling has to
    * reach both — the check alone can take seconds (#568).
    */
+  /** @type {AbortController|null} */
   let pendingDownload = null;
 
   /**
@@ -332,6 +390,9 @@ function createUpdateService({
    * Prueft dafuer noch einmal frisch — zwischen der Meldung und dem Klick auf
    * „Herunterladen" koennen Minuten liegen. So kommt die Download-Adresse
    * immer direkt von GitHub und nie aus dem Renderer.
+   *
+   * @param {{ onProgress?: (progress: { receivedBytes: number, totalBytes: number }) => void }} [options]
+   * @returns {Promise<import('./update-download').DownloadResult & { manualOnly?: boolean, releaseUrl?: string }>}
    */
   async function downloadUpdate({ onProgress } = {}) {
     if (pendingDownload) return { ok: false, error: createMessage('update.error.downloadRunning') };
@@ -343,7 +404,7 @@ function createUpdateService({
       if (!result.updateAvailable) {
         return { ok: false, error: result.error || createMessage('update.error.noNewerVersion') };
       }
-      if (!result.canSelfUpdate || !lastAsset) {
+      if (!result.canSelfUpdate || !lastAsset || !result.latestVersion) {
         return {
           ok: false,
           manualOnly: true,
@@ -484,6 +545,7 @@ function createUpdateService({
     }
   }
 
+  /** @param {unknown} version */
   async function ignoreVersion(version) {
     if (typeof version !== 'string' || !version.trim()) return { ok: false };
     try {

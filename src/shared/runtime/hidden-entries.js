@@ -27,15 +27,21 @@ const ALWAYS_HIDDEN_ENTRY_NAMES = Object.freeze(['.git', '.DS_Store', 'Thumbs.db
 
 const alwaysHiddenLower = new Set(ALWAYS_HIDDEN_ENTRY_NAMES.map((name) => name.toLowerCase()));
 
+/** @param {unknown} name */
 function isHiddenEntryName(name) {
   return typeof name === 'string' && name.startsWith('.');
 }
 
+/** @param {unknown} name */
 function isAlwaysHiddenEntryName(name) {
   return typeof name === 'string' && alwaysHiddenLower.has(name.toLowerCase());
 }
 
-/** Whether an entry of that name is listed, with hidden files shown or not. */
+/**
+ * Whether an entry of that name is listed, with hidden files shown or not.
+ * @param {unknown} name
+ * @param {{ showHidden?: boolean }} [options]
+ */
 function isListedEntryName(name, { showHidden = false } = {}) {
   if (isAlwaysHiddenEntryName(name)) return false;
   return showHidden === true || !isHiddenEntryName(name);

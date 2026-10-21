@@ -30,7 +30,14 @@ jobs:
       fail-fast: false
       matrix:
         os: [macos-14, windows-latest, ubuntu-latest]
-    runs-on: ${{ matrix.os }}
+        # `ubuntu-latest` became Ubuntu 26.04 on 2026-10-20, where the Linux
+        # sandbox cannot start (#1204). The runner stays on 24.04 until that is
+        # fixed; the matrix value keeps its name, and with it the check name
+        # the ruleset requires (#1203).
+        include:
+          - os: ubuntu-latest
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner || matrix.os }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

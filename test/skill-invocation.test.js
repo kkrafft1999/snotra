@@ -12,6 +12,7 @@ const {
 const contracts = require('../src/shared/contracts');
 const { SKILL_SOURCES, SKILL_STATUS } = require('../src/shared/contracts/skills');
 const { createSkillsService } = require('../src/main/services/skills-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // ── findSkillQuery: was ist ein offener Aufruf? ─────────────────────────────
 
@@ -167,7 +168,7 @@ async function withSkillDir(run) {
     const on = (names) => ({ activeWorkspaceSkills: { [path.resolve(dir)]: names } });
     await run({ service, workspaceRoot: dir, on });
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 }
 

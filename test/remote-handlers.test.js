@@ -21,6 +21,7 @@ const {
 } = require('../src/shared/contracts/remote/pairing-state');
 const { SAFETY_WORDS } = require('../src/main/remote/pairing-protocol');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const CODE = { display: '0111-EP9D-ZH4Q-PYT4-HWWF', qr: 'snotra-pair:v1/relay.example/0111EP9DZH4QPYT4HWWF', expiresAt: 1_700_000_000_000 };
 const WORDS = ['coffeecake', 'groundhog', 'maestro', 'kangaroo', 'ozone', 'oncoming'];
@@ -45,7 +46,19 @@ test('the state contract lets the facts through and nothing else', () => {
     words: null,
     replacing: true,
     reason: null,
+    locked: false,
   });
+});
+
+test('the state contract takes a QR code\'s modules only as a square of a QR code\'s size, and the lock (#1110)', () => {
+  const square = (n) => Array.from({ length: n }, (_, i) => (i % 2 ? '1' : '0').repeat(n));
+  const code = (modules) => normalizeRemotePairingState({ state: 'code', code: { ...CODE, modules } }).code;
+  assert.deepEqual(code(square(29)).modules, square(29));
+  for (const bad of [square(20), square(30), [...square(29).slice(1), '2'.repeat(29)], square(29).map((r, i) => (i ? r : r.slice(1))), 'x', null]) {
+    assert.equal('modules' in code(bad), false);
+  }
+  assert.equal(normalizeRemotePairingState({ state: 'empty', locked: true }).locked, true);
+  assert.equal(normalizeRemotePairingState({ state: 'empty', locked: 'yes' }).locked, false);
 });
 
 test('the state contract: a code only while it is shown, words only while confirming', () => {
@@ -110,13 +123,13 @@ test('the handlers: four requests without arguments, and a push per change', asy
   listener({ state: 'paired', phone: { pairedAt: 1, connected: false, keys: 'x' } });
   assert.deepEqual(pushed, [{
     channel: 'remote:state',
-    payload: { state: 'paired', encryptionAvailable: false, phone: { pairedAt: 1, connected: false }, code: null, words: null, replacing: false, reason: null },
+    payload: { state: 'paired', encryptionAvailable: false, phone: { pairedAt: 1, connected: false }, code: null, words: null, replacing: false, reason: null, locked: false },
   }]);
 });
 
 test('createApplication wires the pairing, and nothing reaches the relay before a pairing starts (R7)', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-remote-app-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const relay = createInMemoryRelayAdapter();
   const ipcMain = createMockIpcMain();
   const application = createApplication({
@@ -147,8 +160,22 @@ test('createApplication wires the pairing, and nothing reaches the relay before 
   const state = await ipcMain.invoke(REQ.REMOTE_GET_STATE);
   assert.equal(state.state, 'empty');
   assert.equal(state.encryptionAvailable, false);
-  // Without real encryption no key may be kept, so no pairing starts.
-  assert.deepEqual(await ipcMain.invoke(REQ.REMOTE_PAIR_START), { ok: false, reason: 'encryption-unavailable' });
+  // Pairing is closed in this build (#1110): refused before anything reaches the relay.
+  assert.equal(state.locked, true);
+  assert.deepEqual(await ipcMain.invoke(REQ.REMOTE_PAIR_START), { ok: false, reason: 'locked' });
   assert.deepEqual(relay.inspect.calls(), []);
   await assert.rejects(fs.stat(path.join(dir, 'remote-pairing.json')), { code: 'ENOENT' });
+});
+
+test('the window\'s answer to a folder the phone asked for reaches the switch, and only with one wired (#1194)', () => {
+  const pairing = { getState: async () => ({}), start: async () => ({}), cancel: async () => ({}), unpair: async () => ({}), subscribe: () => {} };
+  const bare = createMockIpcMain();
+  registerRemoteHandlers({ ipcMain: bare, pairing, pushToWindow: () => true, REQ, PUSH });
+  assert.equal(bare.handlers.has(REQ.WORKSPACE_SWITCH_ANSWER), false);
+
+  const ipcMain = createMockIpcMain();
+  const answers = [];
+  registerRemoteHandlers({ ipcMain, pairing, workspaceSwitch: { answer: (payload) => answers.push(payload) }, pushToWindow: () => true, REQ, PUSH });
+  ipcMain.invoke(REQ.WORKSPACE_SWITCH_ANSWER, { requestId: 'r1', outcome: 'switched' });
+  assert.deepEqual(answers, [{ requestId: 'r1', outcome: 'switched' }]);
 });

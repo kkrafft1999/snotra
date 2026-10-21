@@ -17,19 +17,25 @@ const ROOT = path.join(__dirname, '..');
 const PORT_DIRS = ['src/application/ports', 'src/main/ports'];
 // The driven adapters, and the remote bridge's in their own folder (#1114).
 const ADAPTER_DIRS = ['src/main/adapters', 'src/main/remote'];
-
 /**
- * Ports whose implementation lies outside the checked set, with the reason.
- * The list may only shrink (#1098): once one of them is covered, the test
- * below asks for its entry to go.
+ * Services that implement a port themselves rather than through an adapter
+ * (#1098), and the Electron modules that implement one (#983): the rest of
+ * `src/main/electron/` is the desktop shell and implements none.
  */
-const IMPLEMENTED_OUTSIDE = new Map([
-  ['ToolPolicyPort', 'built in src/main/composition (#1005, #1098)'],
-  ['OwnSecretsPort', 'built in src/main/composition (#1005, #1098)'],
-  ['ConfigProposalPort', 'built in src/main/composition (#1005, #1098)'],
-  ['ShellExecutionPort', 'src/main/services/shell-runner-service.js (#1077, #1098)'],
-  ['CodeExecutionPort', 'src/main/services/python-runner-service.js (#1077, #1098)'],
-]);
+const IMPLEMENTING_SERVICES = [
+  'src/main/services/shell-runner-service.js',
+  'src/main/services/python-runner-service.js',
+  'src/main/electron/native-confirmation-adapter.js',
+  'src/main/electron/safe-storage-backend.js',
+  'src/main/electron/system-notification-adapter.js',
+  'src/main/electron/window-push.js',
+  // Pure logic, so it lives in the core and is the engine's default (#1011).
+  'src/application/chat/injection-detector.js',
+  // What stands behind the channel's message layer until the dispatcher exists (#1192, #1194).
+  'src/application/remote/remote-message-stand-in.js',
+  // What stands there since (#1194): the dispatcher of the read-only methods.
+  'src/application/remote/remote-dispatcher.js',
+];
 
 /** Adapter factories that implement no port: stores and helpers main uses directly. */
 const NOT_A_PORT = new Set([
@@ -38,6 +44,10 @@ const NOT_A_PORT = new Set([
   'createMcpSecretsPort',
   'createGuardedLookup',
   'createUpdateCheck',
+  // The window's half of a remote turn (#1194): a push mapping the desktop adapter is handed.
+  'createWindowFollower',
+  // … and the request it sends the window to open a folder, with the answer it waits for.
+  'createWindowWorkspaceSwitch',
 ]);
 
 function read(rel) {
@@ -61,7 +71,7 @@ function declaredPorts() {
 /** `XPort` → the adapter files whose factories return it. */
 function implementedPorts() {
   const implemented = new Map();
-  for (const file of ADAPTER_DIRS.flatMap(jsFiles)) {
+  for (const file of [...ADAPTER_DIRS.flatMap(jsFiles), ...IMPLEMENTING_SERVICES]) {
     for (const match of read(file).matchAll(/@returns \{import\('[^']+'\)\.([A-Za-z]+Port)\b/g)) {
       implemented.set(match[1], [...(implemented.get(match[1]) || []), file]);
     }
@@ -83,20 +93,18 @@ function adapterFactories() {
   return factories;
 }
 
-test('every port has a type-checked implementation, or a reason why not yet', () => {
+test('every port has a type-checked implementation', () => {
   const ports = declaredPorts();
   const implemented = implementedPorts();
   assert.ok(ports.size >= 30, `found only ${ports.size} port typedefs — did the pattern stop matching?`);
-  const missing = [...ports.keys()].filter((port) => !implemented.has(port) && !IMPLEMENTED_OUTSIDE.has(port));
+  const missing = [...ports.keys()].filter((port) => !implemented.has(port));
   assert.deepEqual(missing, [], 'a port without an adapter that names it in `@returns` is a contract nobody checks');
 });
 
-test('the list of ports implemented outside only shrinks', () => {
-  const ports = declaredPorts();
-  const implemented = implementedPorts();
-  for (const port of IMPLEMENTED_OUTSIDE.keys()) {
-    assert.ok(ports.has(port), `${port} is no port any more — drop it from IMPLEMENTED_OUTSIDE`);
-    assert.ok(!implemented.has(port), `${port} is checked now (${implemented.get(port)}) — drop it from IMPLEMENTED_OUTSIDE`);
+test('a port file is a type declaration and exports no runtime value', () => {
+  // The values a port's callers need live in src/shared/contracts/ (#1098).
+  for (const file of PORT_DIRS.flatMap(jsFiles)) {
+    assert.deepEqual(Object.keys(require(path.join(ROOT, file))), [], `${file} exports a runtime value`);
   }
 });
 
@@ -113,10 +121,16 @@ test('every adapter factory names the port it implements', () => {
 test('the type check covers the core, the ports, the contracts and the adapters', () => {
   // tsconfig.json is JSONC; its comments are whole lines.
   const config = JSON.parse(read('tsconfig.json').replace(/^\s*\/\/.*$/gm, ''));
-  for (const dir of ['src/application', 'src/main/ports', 'src/main/adapters', 'src/main/remote', 'src/shared/contracts']) {
-    assert.ok(config.include.includes(`${dir}/**/*.js`), `${dir} fell out of the include list`);
+  // The three source trees are included as a whole (#1098), with nothing
+  // excluded: a port, an adapter or a service that implements one cannot fall
+  // out of the type check.
+  for (const tree of ['src/application', 'src/main', 'src/shared']) {
+    assert.ok(config.include.includes(`${tree}/**/*.js`), `${tree} fell out of the include list`);
   }
+  assert.equal(config.exclude, undefined, 'nothing is excluded from the type check any more (#1098)');
   assert.equal(config.compilerOptions.checkJs, true);
+  assert.equal(config.compilerOptions.noImplicitAny, true, 'every parameter has a type (#1098)');
+  assert.equal(config.compilerOptions.strictNullChecks, true, 'null and undefined are values of their own (#1098)');
   assert.equal(config.compilerOptions.noEmit, true, 'the app has no build step; tsc must not write files');
 });
 

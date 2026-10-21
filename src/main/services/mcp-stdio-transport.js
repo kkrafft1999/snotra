@@ -30,18 +30,32 @@ const { createOutputSink } = require('./child-output-sink');
 const { createMessage } = require('../../shared/contracts/message');
 const { mergeWindowsEnv, windowsLaunch } = require('./windows-command');
 const { transportError, detailOf, serverErrorOf } = require('./mcp-transport-errors');
+const { isRecord } = require('../../shared/runtime/is-record');
 
-/** Why the process ended, for both channels. */
+/** @typedef {import('./mcp-transport-errors').ExitReason} ExitReason */
+/** @typedef {import('./mcp-transport-errors').McpTransport} McpTransport */
+/** @typedef {import('./mcp-transport-errors').McpTransportExit} McpTransportExit */
+/** @typedef {import('./mcp-transport-errors').McpRequestOptions} McpRequestOptions */
+/** @typedef {import('./mcp-transport-errors').JsonRpcMessage} JsonRpcMessage */
+
+/**
+ * Why the process ended, for both channels.
+ * @param {number|null} code
+ * @param {string|null} signal
+ * @returns {ExitReason}
+ */
 function exitReasonOf(code, signal) {
   return signal
     ? { text: `signal ${signal}`, message: createMessage('mcp.transport.reason.signal', { signal }) }
     : { text: `exit code ${code}`, message: createMessage('mcp.transport.reason.code', { code }) };
 }
 
+/** @param {string} file */
 function isFile(file) {
   try { return fs.statSync(file).isFile(); } catch { return false; }
 }
 
+/** @param {string} dir */
 async function isDirectory(dir) {
   try { return (await fs.promises.stat(dir)).isDirectory(); } catch { return false; }
 }
@@ -50,17 +64,18 @@ async function isDirectory(dir) {
  * @param {Object} deps
  * @param {import('../../shared/contracts/mcp').McpServerConfig} deps.config
  * @param {typeof import('child_process').spawn} deps.spawn
- * @param {NodeJS.ProcessEnv} [deps.baseEnv] — Umgebung samt aufgeräumtem PATH
+ * @param {NodeJS.ProcessEnv} [deps.baseEnv] Umgebung samt aufgeräumtem PATH
  * @param {string} [deps.platform]
  * @param {string} [deps.homeDir] where an empty or relative working directory
  *   starts from (CR-B16-06)
- * @param {(method: string, params: unknown) => ({ result: unknown } | null)} [deps.onRequest]
+ * @param {import('./mcp-transport-errors').McpOnRequest} [deps.onRequest]
  *   answers a request the server sends; `null` means "not supported" and is
  *   answered with "method not found" (CR-B16-02). What a method means is the
  *   service's business, not the transport's.
- * @param {(request: { id: number, method: string, reason: string }) => void} [deps.onCancel]
+ * @param {import('./mcp-transport-errors').McpOnCancel} [deps.onCancel]
  *   told when a request is given up — aborted or timed out — so the service
  *   can tell the server (CR-B16-04)
+ * @returns {McpTransport}
  */
 function createStdioTransport({
   config,
@@ -72,8 +87,9 @@ function createStdioTransport({
   onCancel = () => {},
 }) {
   const stderr = createOutputSink(MCP_LIMITS.STDERR_MAX_BYTES);
-  /** @type {Map<number, { resolve: Function, reject: Function, timer: NodeJS.Timeout, cleanup: Function }>} */
+  /** @type {Map<number, { resolve: (result: unknown) => void, reject: (error: Error) => void, timer: NodeJS.Timeout, cleanup: () => void }>} */
   const pending = new Map();
+  /** @type {import('child_process').ChildProcessWithoutNullStreams|null} */
   let child = null;
   let nextId = 1;
   let buffer = '';
@@ -81,14 +97,19 @@ function createStdioTransport({
   // „er ist gestorben", was im Fehlertext einen Unterschied macht.
   let closing = false;
   let exited = false;
+  /** @type {ExitReason|null} */
   let exitReason = null;
+  /** @type {Set<(exit: McpTransportExit) => void>} */
   const exitListeners = new Set();
 
   function stderrText() {
     return stderr.text();
   }
 
-  /** Alle offenen Anfragen scheitern lassen — nie hängen bleiben. */
+  /**
+   * Alle offenen Anfragen scheitern lassen — nie hängen bleiben.
+   * @param {Error} error
+   */
   function failPending(error) {
     const open = [...pending.values()];
     pending.clear();
@@ -104,6 +125,8 @@ function createStdioTransport({
       if (platform === 'win32') {
         spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore', windowsHide: true });
       } else {
+        // No pid means no process to signal; the fallback below ends it.
+        if (child.pid === undefined) throw new Error('The process has no pid.');
         process.kill(-child.pid, 'SIGKILL');
       }
     } catch {
@@ -111,6 +134,7 @@ function createStdioTransport({
     }
   }
 
+  /** @param {ExitReason} reason */
   function handleExit(reason) {
     if (exited) return;
     exited = true;
@@ -135,6 +159,7 @@ function createStdioTransport({
     exitListeners.clear();
   }
 
+  /** @param {Record<string, unknown>} message */
   function send(message) {
     if (!child || exited) return;
     try {
@@ -146,21 +171,29 @@ function createStdioTransport({
    * A request from the server (CR-B16-02). It always gets an answer — MCP
    * expects one for `ping` at any time, and anything we do not support is
    * refused at once instead of leaving the server waiting.
+   *
+   * @param {JsonRpcMessage} message
+   * @param {string} method
    */
-  function answerServerRequest(message) {
+  function answerServerRequest(message, method) {
+    /** @type {{ result: unknown } | null} */
     let answer = null;
     try {
-      answer = onRequest(message.method, message.params);
+      answer = onRequest(method, message.params);
     } catch { /* counts as not supported */ }
     if (answer && Object.prototype.hasOwnProperty.call(answer, 'result')) {
       send({ id: message.id, result: answer.result });
     } else {
-      send({ id: message.id, error: { code: -32601, message: `Method not found: ${message.method}` } });
+      send({ id: message.id, error: { code: -32601, message: `Method not found: ${method}` } });
     }
   }
 
-  /** Eine eingegangene Zeile zuordnen. Unbekanntes wird still verworfen. */
+  /**
+   * Eine eingegangene Zeile zuordnen. Unbekanntes wird still verworfen.
+   * @param {string} line
+   */
   function handleMessage(line) {
+    /** @type {JsonRpcMessage} */
     let message;
     try {
       message = JSON.parse(line);
@@ -175,21 +208,22 @@ function createStdioTransport({
     // or a request with an id of its own counting. Its id says nothing about
     // ours, so it must never resolve one of our requests (CR-B16-02).
     if (typeof message.method === 'string') {
-      if (hasId) answerServerRequest(message);
+      if (hasId) answerServerRequest(message, message.method);
       return;
     }
-    if (!hasId) return;
+    if (!hasId || typeof message.id !== 'number') return;
     const entry = pending.get(message.id);
     if (!entry) return;
     pending.delete(message.id);
     entry.cleanup();
     if (message.error) {
-      entry.reject(serverErrorOf(message.error, stderrText()));
+      entry.reject(serverErrorOf(isRecord(message.error) ? message.error : {}, stderrText()));
       return;
     }
     entry.resolve(message.result === undefined ? {} : message.result);
   }
 
+  /** @param {unknown} chunk */
   function onStdout(chunk) {
     buffer += String(chunk);
     if (buffer.length > MCP_LIMITS.MAX_MESSAGE_BYTES) {
@@ -261,7 +295,7 @@ function createStdioTransport({
 
     child.stdout?.setEncoding('utf8');
     child.stdout?.on('data', onStdout);
-    child.stderr?.on('data', (chunk) => stderr.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))));
+    child.stderr?.on('data', (/** @type {Buffer|string} */ chunk) => stderr.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))));
     // EPIPE, wenn der Server stirbt, während wir schreiben — das meldet
     // bereits der Exit, hier würde es nur den Prozess mitreißen.
     child.stdin?.on('error', () => {});
@@ -272,7 +306,7 @@ function createStdioTransport({
     // 'error'. Einen Tick warten, damit `start` selbst schon scheitert und
     // nicht erst der Handshake in einen Timeout läuft.
     await new Promise((resolve) => setImmediate(resolve));
-    if (exited) {
+    if (exitReason) {
       throw transportError(
         `The MCP server “${config.label}” could not be started (${exitReason.text}).`,
         stderrText(),
@@ -281,7 +315,12 @@ function createStdioTransport({
     }
   }
 
-  /** A request we stopped waiting for; a late answer finds no entry and is dropped. */
+  /**
+   * A request we stopped waiting for; a late answer finds no entry and is dropped.
+   * @param {number} id
+   * @param {string} method
+   * @param {string} reason
+   */
   function giveUp(id, method, reason) {
     try { onCancel({ id, method, reason }); } catch { /* only a courtesy to the server */ }
   }
@@ -290,6 +329,11 @@ function createStdioTransport({
    * Eine Anfrage mit Antwort. Zeitlimit und AbortSignal beenden das Warten,
    * nicht den Server — ein abgebrochener `tools/call` lässt die Verbindung
    * stehen, damit der nächste Aufruf nicht neu starten muss.
+   *
+   * @param {string} method
+   * @param {unknown} [params]
+   * @param {McpRequestOptions} [options]
+   * @returns {Promise<unknown>}
    */
   function request(method, params, { timeoutMs = MCP_TIMEOUTS.REQUEST_MS, signal } = {}) {
     if (!child || exited) {
@@ -304,6 +348,7 @@ function createStdioTransport({
     }
     const id = nextId;
     nextId += 1;
+    const target = child;
     return new Promise((resolve, reject) => {
       const onAbort = () => {
         const entry = pending.get(id);
@@ -333,7 +378,7 @@ function createStdioTransport({
       pending.set(id, { resolve, reject, timer, cleanup });
       signal?.addEventListener('abort', onAbort, { once: true });
       try {
-        child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+        target.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
       } catch (e) {
         pending.delete(id);
         cleanup();
@@ -347,7 +392,11 @@ function createStdioTransport({
     });
   }
 
-  /** Benachrichtigung ohne Antwort (`notifications/initialized`). */
+  /**
+   * Benachrichtigung ohne Antwort (`notifications/initialized`).
+   * @param {string} method
+   * @param {unknown} [params]
+   */
   function notify(method, params) {
     send({ method, params });
   }
@@ -366,10 +415,11 @@ function createStdioTransport({
       ));
       return Promise.resolve();
     }
+    const target = child;
     return new Promise((resolve) => {
       const done = () => {
         clearTimeout(timer);
-        resolve();
+        resolve(undefined);
       };
       const timer = setTimeout(() => {
         killTree();
@@ -377,7 +427,7 @@ function createStdioTransport({
         setTimeout(done, 200).unref?.();
       }, MCP_TIMEOUTS.SHUTDOWN_MS);
       exitListeners.add(done);
-      try { child.stdin?.end(); } catch { /* schon zu */ }
+      try { target.stdin?.end(); } catch { /* schon zu */ }
     });
   }
 

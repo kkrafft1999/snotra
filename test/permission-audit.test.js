@@ -3,7 +3,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
+const { formatLine: formatToolDisplayLine } = require('./helpers/tool-descriptors');
 const { toolTraceEntryForStore, sanitizeChatMessagesForStore, normalizeLoadedMessages } = require('../src/main/services/chat-history-normalization');
 
 test('Tool-Zeile zeigt Ablehnung, Blockade und Warten', () => {

@@ -24,10 +24,13 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
+const { codeOnly } = require('./helpers/code-only');
 
-const ROOT_FILE = path.join(__dirname, '..', 'src', 'main', 'composition', 'create-application.js');
+// The core and the desktop's composition around it (#983): both are wiring.
+const ROOT_FILES = ['create-core.js', 'create-application.js']
+  .map((name) => path.join(__dirname, '..', 'src', 'main', 'composition', name));
 
-/** 938 lines when #1005 landed; room for a few services more, not for a feature. */
+/** Per file. 938 lines in one when #1005 landed; room for a few services more, not for a feature. */
 const LINE_BUDGET = 1000;
 
 /** The only conditions a branch may test: whether an optional dependency was handed in. */
@@ -40,39 +43,6 @@ const ALLOWED_CONDITIONS = new Set([
   'session && WebContentsView && shell',
   'shell',
 ]);
-
-/**
- * The source without comments, and with every string, template and regular
- * expression emptied — what is left is code. Line breaks are kept, so a
- * position still maps to its line.
- */
-function codeOnly(source) {
-  let out = '';
-  let i = 0;
-  // Whether a `/` here starts a regular expression rather than a division.
-  const regexAllowed = () => /(^|[=(,:;!&|?{}[\]]|\breturn)\s*$/.test(out);
-  while (i < source.length) {
-    const c = source[i];
-    const next = source[i + 1];
-    if (c === '/' && next === '/') {
-      while (i < source.length && source[i] !== '\n') i += 1;
-    } else if (c === '/' && next === '*') {
-      const end = source.indexOf('*/', i + 2);
-      const stop = end === -1 ? source.length : end + 2;
-      out += source.slice(i, stop).replace(/[^\n]/g, '');
-      i = stop;
-    } else if (c === '\'' || c === '"' || c === '`' || (c === '/' && regexAllowed())) {
-      let j = i + 1;
-      while (j < source.length && source[j] !== c) j += source[j] === '\\' ? 2 : 1;
-      out += c + source.slice(i + 1, j).replace(/[^\n]/g, '') + c;
-      i = j + 1;
-    } else {
-      out += c;
-      i += 1;
-    }
-  }
-  return out;
-}
 
 const lineOf = (code, index) => code.slice(0, index).split('\n').length;
 const squash = (text) => text.replace(/\s+/g, ' ').trim();
@@ -154,22 +124,24 @@ function findDecisions(source) {
   return findings.sort((a, b) => a.line - b.line);
 }
 
-const report = (findings) => findings.map(({ line, what }) => `  create-application.js:${line}  ${what}`).join('\n');
+const report = (file, findings) => findings.map(({ line, what }) => `  ${path.basename(file)}:${line}  ${what}`).join('\n');
 
-test('the composition root makes no decisions of its own (#1005)', () => {
-  const findings = findDecisions(fs.readFileSync(ROOT_FILE, 'utf8'));
-  assert.deepEqual(
-    findings,
-    [],
-    `The composition root wires; these look like decisions:\n${report(findings)}\n`
-      + 'Move the logic into a module next to its topic and test it there (see the head of this test).',
-  );
-});
+for (const file of ROOT_FILES) {
+  test(`${path.basename(file)} makes no decisions of its own (#1005)`, () => {
+    const findings = findDecisions(fs.readFileSync(file, 'utf8'));
+    assert.deepEqual(
+      findings,
+      [],
+      `The composition root wires; these look like decisions:\n${report(file, findings)}\n`
+        + 'Move the logic into a module next to its topic and test it there (see the head of this test).',
+    );
+  });
 
-test(`the composition root stays within ${LINE_BUDGET} lines (#1005)`, () => {
-  const lines = fs.readFileSync(ROOT_FILE, 'utf8').split('\n').length;
-  assert.ok(lines <= LINE_BUDGET, `create-application.js has ${lines} lines, the budget is ${LINE_BUDGET}.`);
-});
+  test(`${path.basename(file)} stays within ${LINE_BUDGET} lines (#1005)`, () => {
+    const lines = fs.readFileSync(file, 'utf8').split('\n').length;
+    assert.ok(lines <= LINE_BUDGET, `${path.basename(file)} has ${lines} lines, the budget is ${LINE_BUDGET}.`);
+  });
+}
 
 // The guard is only worth something if it catches what it is meant to. These
 // are the pieces #1005 moved out, as they stood in the file.

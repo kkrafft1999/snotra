@@ -8,11 +8,16 @@
  * Kontextfenster fluten. Gemeinsam genutzt von Python- und Shell-Runner,
  * damit beide dieselbe Kappungsmarkierung liefern.
  */
+/**
+ * @param {number} maxBytes
+ */
 function createOutputSink(maxBytes) {
+  /** @type {Buffer[]} */
   const chunks = [];
   let size = 0;
   let truncated = false;
   return {
+    /** @param {Buffer} chunk */
     push(chunk) {
       if (size >= maxBytes) {
         truncated = true;

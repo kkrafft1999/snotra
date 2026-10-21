@@ -12,10 +12,11 @@ const path = require('path');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { chatSessionFileName, CHAT_HISTORY_UNREADABLE } = require('../src/main/services/chat-history-store');
 const { createChatHistoryStorePort } = require('../src/main/adapters/persistence-store-adapters');
-const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
+const { registerChatHistoryForTest: registerChatHistoryHandlers, SAVE_CHAT } = require('./helpers/chat-history-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const quiet = { warn() {}, info() {}, error() {}, log() {} };
 
@@ -37,14 +38,14 @@ function encrypt(data, key = 'enc') {
 
 async function tempDir(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-985-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 
 function makeStorage(dir, { safeStorage = makeSafeStorage(), fsImpl = fs, maxChatSessions = 200, events = [] } = {}) {
   return createStorageService({
-    app: { getPath: () => dir },
-    safeStorage,
+    userDataPath: dir,
+    secretStore: safeStorage,
     fs: fsImpl,
     path,
     providerCatalog: createMockProviderCatalog(() => null),
@@ -573,11 +574,11 @@ test('a save after an upsert round trip keeps the chat\'s file and the list in s
   const dir = await tempDir(t);
   const storage = makeStorage(dir);
   const ipcMain = makeHandlers(storage);
-  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chat('a', { messages: 2 })), { ok: true });
+  assert.deepEqual(await ipcMain.invoke(SAVE_CHAT, chat('a', { messages: 2 })), { ok: true });
   const first = (await ipcMain.invoke(REQ.CHAT_HISTORY_GET)).sessions[0];
-  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chat('a', { messages: 2 })), { ok: true });
+  assert.deepEqual(await ipcMain.invoke(SAVE_CHAT, chat('a', { messages: 2 })), { ok: true });
   assert.equal((await ipcMain.invoke(REQ.CHAT_HISTORY_GET)).sessions[0].updatedAt, first.updatedAt, 'nothing said, no new time (#245)');
-  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chat('a', { messages: 4 })), { ok: true });
+  assert.deepEqual(await ipcMain.invoke(SAVE_CHAT, chat('a', { messages: 4 })), { ok: true });
   const after = (await ipcMain.invoke(REQ.CHAT_HISTORY_GET)).sessions[0];
   assert.equal(after.messageCount, 4);
   assert.ok(after.updatedAt > first.updatedAt);

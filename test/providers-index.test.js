@@ -28,22 +28,38 @@ test('ollama exposes dispose as alias for destroyInsecureDispatcher', () => {
   assert.equal(ollama.dispose, ollama.destroyInsecureDispatcher);
 });
 
-// Bild-Anhaenge (Issue #93): Das Flag beschreibt, ob *unser* Adapter Bilder
-// abbildet — nicht, was der Anbieter koennte. Es wandert mit #90 (Anthropic),
-// #91 (Google) und #92 (Ollama) auf true.
+// Image attachments (#93): the flag says whether *our* adapter maps images,
+// not what the provider could take. Since #90–#92 every built-in one does.
 test('jeder Provider deklariert, ob er Bilder weiterreicht', () => {
   const expected = {
     openai: true,
-    anthropic: false,
-    google: false,
-    ollama: false,
+    anthropic: true,
+    google: true,
+    ollama: true,
   };
   for (const [id, images] of Object.entries(expected)) {
-    assert.equal(providers.getProvider(id).capabilities.images, images, id);
+    assert.equal(providers.getProvider(id).capabilities.images.supported, images, id);
   }
+  // The rest of the declaration is checked against the register's vocabulary
+  // in provider-capabilities.test.js (#996).
   for (const meta of providers.listProviderMeta()) {
-    assert.equal(typeof meta.capabilities?.images, 'boolean', meta.id);
+    assert.equal(typeof meta.capabilities?.images, 'object', meta.id);
   }
+});
+
+// A provider that takes fewer image formats names them (#91) — only formats
+// the composer can attach, or the list would promise what never arrives.
+test('a provider narrows the image formats only to ones Snotra attaches', () => {
+  const { IMAGE_ATTACHMENT_MEDIA_TYPES } = require('../src/shared/contracts/attachments');
+  for (const meta of providers.listProviderMeta()) {
+    const own = meta.capabilities?.images?.mediaTypes;
+    if (own === undefined) continue;
+    assert.ok(own.length > 0, meta.id);
+    for (const type of own) assert.ok(IMAGE_ATTACHMENT_MEDIA_TYPES.includes(type), `${meta.id}: ${type}`);
+  }
+  assert.deepEqual([...providers.getProvider('google').capabilities.images.mediaTypes],
+    ['image/png', 'image/jpeg', 'image/webp']);
+  assert.equal(providers.getProvider('anthropic').capabilities.images.mediaTypes, undefined);
 });
 
 test('openai offers its levels to the chat, not as a preset field (#726)', () => {

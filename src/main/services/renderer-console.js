@@ -14,11 +14,16 @@
 
 const MESSAGE_MAX = 2000;
 
+/**
+ * @param {string} text
+ * @param {number} [max]
+ */
 function truncate(text, max = MESSAGE_MAX) {
   return text.length <= max ? text : `${text.slice(0, max - 1)}…`;
 }
 
 /** `file:///…/src/renderer/components/ChatStream.js` → `components/ChatStream.js`. */
+/** @param {unknown} sourceId */
 function shortSource(sourceId) {
   const source = String(sourceId);
   const marker = '/src/renderer/';
@@ -26,7 +31,13 @@ function shortSource(sourceId) {
   return at >= 0 ? source.slice(at + marker.length) : source;
 }
 
-/** A `console-message` listener that writes the renderer's errors to `log`. */
+/**
+ * A `console-message` listener that writes the renderer's errors to `log`.
+ *
+ * @param {object} [options]
+ * @param {(line: string) => void} [options.log]
+ * @returns {(details: { level?: unknown, message?: unknown, sourceId?: unknown, lineNumber?: unknown }|null|undefined) => void}
+ */
 function createRendererErrorForwarder({ log = (line) => console.error(line) } = {}) {
   return (details) => {
     if (details?.level !== 'error') return;

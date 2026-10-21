@@ -14,8 +14,8 @@ const crypto = require('crypto');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { chatSessionFileName } = require('../src/main/services/chat-history-store');
 const { createToolPolicyStore, POLICY_FILENAME, POLICY_KEY_FILENAME } = require('../src/main/services/tool-policy-store');
-const { registerSettingsHandlers } = require('../src/main/ipc/settings-handlers');
-const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
+const { registerSettingsForTest: registerSettingsHandlers } = require('./helpers/settings-handlers');
+const { registerChatHistoryForTest: registerChatHistoryHandlers } = require('./helpers/chat-history-handlers');
 const { KEY_ALWAYS_DURABLE } = require('../src/main/services/safe-storage-key-durability');
 const {
   createChatHistoryStorePort,
@@ -28,6 +28,8 @@ const { createMockProviderCatalog } = require('./helpers/provider-ports');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createHeldSafeStorageKey, settle } = require('./helpers/held-safe-storage-key');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
+const { removeTempDir } = require('./helpers/temp-dir');
+const { ACCEPT_EVERY_RECEIPT } = require('./helpers/confirmations');
 
 function makeSafeStorage(available = true) {
   return {
@@ -66,14 +68,14 @@ const providerCatalog = createMockProviderCatalog((id) => (Object.hasOwn(PROVIDE
 
 async function tempDir(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-1060-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 
 function makeStorage(dir, { safeStorageKey, encryption = true } = {}) {
   return createStorageService({
-    app: { getPath: () => dir },
-    safeStorage: makeSafeStorage(encryption),
+    userDataPath: dir,
+    secretStore: makeSafeStorage(encryption),
     safeStorageKey,
     fs,
     path,
@@ -81,6 +83,8 @@ function makeStorage(dir, { safeStorageKey, encryption = true } = {}) {
     maxChatSessions: 10,
     maxFolderHistory: 5,
     defaultProviderId: GATEWAY.id,
+    // What is checked here is the key, not the confirmation (#1104).
+    confirmationReceipts: ACCEPT_EVERY_RECEIPT,
   });
 }
 
@@ -88,8 +92,8 @@ function makePolicyStore(dir, safeStorageKey) {
   return createToolPolicyStore({
     // What is checked here is the key, not the confirmation (#980).
     confirmationReceipts: { redeem: () => true },
-    app: { getPath: () => dir },
-    safeStorage: makeSafeStorage(true),
+    userDataPath: dir,
+    secretStore: makeSafeStorage(true),
     safeStorageKey,
     fs,
     path,

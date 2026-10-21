@@ -1,6 +1,6 @@
 # A security concept for tool calls
 
-Written 2026-09-05, last brought in line with the code on 2026-10-17 ([#1010](https://github.com/kkrafft1999/snotra/issues/1010)) ·
+Written 2026-09-05, last brought in line with the code on 2026-10-18 ([#1100](https://github.com/kkrafft1999/snotra/issues/1100)) ·
 the concept behind [#65](https://github.com/kkrafft1999/snotra/issues/65).
 Where the model grew after the first version, the sections below carry the
 current rule and point to the revision at the end of section 9 that dated it.
@@ -34,7 +34,7 @@ piece of tool text is therefore not an approval.
 
 The verified starting point: v1.3.1, commit `1e2b50d`:
 
-- The [registry](../src/main/tools/workspace-tool-registry.js) holds eight read
+- The [registry](../src/application/tools/workspace-tool-registry.js) holds eight read
   tools, `debug_wait` and three write tools. So far, `requiresWrite` and
   `allowWorkspaceWrite` control visibility and execution wholesale.
 - The [chat engine](../src/application/chat/chat-engine.js) runs tool calls one
@@ -328,6 +328,23 @@ history without encrypted storage" in section 9 records that.
   follow-up call runs through the policy again, no matter what the fetched text
   says. The reduced markup (no HTML, no scripts) is about saving tokens, not a
   security measure.
+- **Injection flags are a warning, never a boundary (#1011, SEC-4):** after a
+  tool ran, `application/chat/injection-flagging.js` asks every source behind
+  `ports/injection-flag-port.js` whether the result looks like a prompt
+  injection — today the built-in, pattern-based `injection-detector.js`, later
+  a `PostToolUse` hook (#927). What they find becomes `injectionFlag` on the
+  tool's trace entry: kinds and short excerpts, shown in a box under the tool
+  log and kept with the history. Nothing else reads it. The result reaches the
+  model unchanged, and the policy, the cards, the session grants and the
+  sandbox never see the flag, so a flag cannot loosen a boundary and a missing
+  one cannot open one; `test/chat-engine-injection-flags.test.js` runs the same
+  turn with a source that always flags, one that throws and none, in every
+  mode, and requires identical decisions and identical model input. A source
+  that throws or answers with garbage contributes nothing — the warning fails
+  open, the boundaries do not move. To keep the box worth reading, a strong
+  pattern flags on its own and a weak one only next to a weak one of another
+  kind; a phrase in quotation marks does not count, and results of skills,
+  the manual and writes are not looked at.
 - **Technical enforcement:** the policy sits in the application and main layers;
   the renderer only delivers validated user decisions. Every subsequent tool
   call is checked anew, no matter how convincingly a piece of tool text demands
@@ -360,9 +377,17 @@ history without encrypted storage" in section 9 records that.
   a URL field ignores a requested one (#537). Saving holds to the same rule: an
   entry saved with a new address keeps neither its old key nor its old headers,
   only what the save itself brings, and the dialog says so before saving
-  (#560). Local processes
-  running with the user's rights are outside the protection goal; they could
-  modify the app itself.
+  (#560). Local processes running with the user's rights are outside the
+  protection goal; they could modify the app itself. Two exceptions hold once
+  Snotra listens on localhost for other front ends
+  ([`remote-interface.md`](./remote-interface.md), #989). Other users of the
+  machine and web pages in the user's browser can reach a loopback port, so
+  they are inside the goal, kept out by the interface's own checks — loopback
+  only, a credential only the user can read, `Host` and `Origin` checked. And
+  the processes Snotra starts itself — commands, interpreters, MCP servers —
+  are inside it as well: one that reached the interface could approve the
+  agent's next call. What a remote front end may do, and what stays undefended
+  where no sandbox runs, is in the threat model of that record (section 9).
 - **The presence guarantee (#980):** each of these confirmations goes through
   one port, the user-confirmation port, and means one thing: a person at this
   machine answered a prompt the operating system drew. Only the desktop's
@@ -378,6 +403,38 @@ history without encrypted storage" in section 9 records that.
   chat that comes back on screen gets "Auto" only when the signed policy names
   it as confirmed, or its workspace's confirmed default is "Auto" — its own
   history file is not enough.
+- **Settings that loosen (#1104).** Three settings changed what the agent may
+  do, or what crosses the network, without any dialog. Each is decided:
+  - *`shell_execute` and `run_python` switched on* go through the port, each
+    as an action of its own; switching one off asks nothing. A switched-on
+    tool still asks on a card for every run, but "Auto" runs it without one,
+    and the "Auto" a user confirmed earlier did not name execution — on
+    Windows, or in a workspace without the sandbox, without isolation. The
+    preferences store leaves a switch off that comes without a receipt; the
+    rest of the same write is kept.
+  - *A local MCP server stored with a command that is new or changed* — the
+    command, its arguments, its folder or its environment — goes through the
+    port, with a prompt that names the command line, the folder and the names
+    (never the values) of its variables. Such a process runs with the user's
+    rights, outside the sandbox and without a card, as soon as the server is
+    switched on — or tested, which starts it even when it is off. So the
+    confirmation sits where the command is stored, not where it is switched
+    on: the MCP store refuses the save without a receipt bound to the server
+    and exactly that launch. An import saves its servers switched off, but a
+    local one still asks, one prompt per server. Switching a server on or
+    off, renaming it, its tools and a remote server over HTTP start nothing
+    new and ask nothing; a remote server's every tool call is on a card
+    (`execute` and `external`, section 11).
+  - *"Ignore TLS certificate" on a model entry* is classified as **not
+    loosening** and asks nothing. It gives up the check that the server
+    behind an address the user typed is the one it claims to be; it gives the
+    agent no tool, no file and no host. The address itself may be plain
+    `http://` without any dialog, which is more open still, and a front end
+    that could set the flag could set that address as well. The residual
+    risk, stated plainly: unlike a changed address (#560), the flag keeps the
+    stored key with the entry, so on a network someone controls the key can
+    be read. The form says what the switch is for; the channel stays
+    desktop-only (remote interface §8.3).
 
 Snotra cannot reliably tell whether a permissible model call was caused
 indirectly by foreign text. The prompt rule supports the model; the effective
@@ -723,8 +780,21 @@ circumvented, but recorded here:
   outlive its run (#519). A process that leaves the group on purpose (`setsid`,
   a daemon that forks twice) escapes that on macOS and without the sandbox; on
   Linux the sandbox's PID namespace ends it as well. Windows has no process
-  group to address once the parent is gone, so there a process started in the
-  background outlives the run.
+  group to address once the parent is gone. There the shell or interpreter
+  first puts itself into a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`
+  and holds its only handle, so everything the command starts — `Start-Process`,
+  `start`, a detached `subprocess.Popen` — is in that job and ends when the
+  shell or interpreter exits (#991). PowerShell makes the job in a line in
+  front of the command, through a P/Invoke type built with Reflection.Emit;
+  Python through a first interpreter that runs the script as its child. The
+  job allows no breakaway, so a process asking for `CREATE_BREAKAWAY_FROM_JOB`
+  is refused, and it is the innermost job, so the outer one libuv puts every
+  child into, which allows silent breakaway, lets nothing out either. What it
+  cannot hold is what Windows starts on the command's behalf in a process of
+  its own — a scheduled task, a service, a COM server such as an Office
+  application. Where no job can be made (PowerShell in Constrained Language
+  Mode, `cmd.exe` as the last fallback), the command runs as before and a note
+  in its error output says that its background is not contained.
 - **The residual risk, stated plainly.** There is no sandbox. An approved
   command can do anything the logged-in user can — outside the project folder as
   well, and on the network. In "auto" mode it runs without a question, because
@@ -1355,6 +1425,45 @@ domains, so a card for a host that is already kept is not shown.
 - **Not covered.** Direct `ssh`, `scp` or `psql` connections: only what goes
   through the proxy — HTTP(S) and Git over SSH — can be named per host.
 
+### Revision: Git over SSH in the Linux sandbox (#1155)
+
+On macOS the sandbox opens the ssh-agent's socket to a run, so git's SSH can
+sign in while the private key files in `~/.ssh` stay unreadable (#932). Linux
+cannot do the same: the runtime's seccomp filter refuses every Unix socket
+inside a run, and it cannot tell one socket path from another — opening it
+for the agent would mean switching it off for all of them, the Docker socket,
+X11 and the D-Bus session bus (with the keyring behind it) included.
+
+Snotra therefore keeps the filter and moves ssh out of it, not the run.
+A third patch of the runtime (`scripts/patch-sandbox-runtime.js`) starts one
+more relay in the inner script, before `apply-seccomp`, where the runtime's
+own proxy relays start — and only for a run whose environment names the
+launcher. Git's SSH command in the run (`ssh-relay-client.sh`) sends git's
+request over the run's own loopback to it; the launcher (`ssh-relay.sh`)
+checks it and runs ssh with the agent, through the runtime's proxy.
+
+- **What the launcher accepts.** One request: a host and a port, an address
+  family, `GIT_PROTOCOL`, and one of `git-upload-pack`, `git-receive-pack`,
+  `git-upload-archive` as the command for the remote side. No ssh option, no
+  local command, nothing that reaches a shell as code; the host may not start
+  with `-`. Programs are looked up only on the absolute entries of `PATH`,
+  from `/`, so nothing the run put in its folder is started. A launcher inside
+  a folder the run may write — a checkout of Snotra opened as the workspace —
+  is not used.
+- **What stays as it was.** The launcher runs inside bubblewrap: the same
+  mounts, so the private key files are as unreadable for it as for the run;
+  the same network namespace, so the proxy and the run's allowed hosts apply.
+  Errors and the exit status come back through a folder in the run's
+  temporary directory that the run could write anyway.
+- **The remaining risk.** As on macOS, a run can have the agent sign in to
+  any host it may reach — for git's three commands only, where macOS gives it
+  the agent outright. It cannot read or copy a key. Each run of Snotra's
+  patched runtime carries one more process outside the filter, and one more
+  patch to check on a runtime update; the patch test fails when its anchor
+  moves.
+- **Not covered.** `ssh` and `scp` called on their own: they run under the
+  filter and cannot reach the agent on Linux.
+
 ### Revision: the history without encrypted storage
 
 Section 4 said the provider-bound mark of a sensitive read is stored "with the
@@ -1387,7 +1496,7 @@ not a claim that the product modes are identical.
 
 | Decision | Ownership / the conservative interim state |
 | --- | --- |
-| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio or, since #341, over Streamable HTTP; every MCP tool carries `execute` **and** `external` whatever the transport, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. **Endpoint changes settled in #341:** saving a server with another address or another transport switches it off and forgets its remembered tool catalogue, so nothing accepted for one endpoint carries over to another; it connects again only after the user switched it on (a connection test works on a switched-off server and closes it right after). A remote address needs `https` except on loopback; private network addresses are allowed, because the user enters the address deliberately — unlike `fetch_url`, where the model picks the target. Credentials in the URL are refused; headers are stored like environment variables (secret by default, `{ enc }` via `safeStorage`, not stored at all without encryption), count as own secrets and are masked in every status. They go to the configured origin only: redirects are followed by hand and only on the same origin. OAuth is not supported. Still open: isolation of local server processes, which run with the user's rights (see #329 for the built-in execution tools). |
+| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio or, since #341, over Streamable HTTP; every MCP tool carries `execute` **and** `external` whatever the transport, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. **Endpoint changes settled in #341:** saving a server with another address or another transport switches it off and forgets its remembered tool catalogue, so nothing accepted for one endpoint carries over to another; it connects again only after the user switched it on (a connection test works on a switched-off server and closes it right after). A remote address needs `https` except on loopback; private network addresses are allowed, because the user enters the address deliberately — unlike `fetch_url`, where the model picks the target. Credentials in the URL are refused; headers are stored like environment variables (secret by default, `{ enc }` via `safeStorage`, not stored at all without encryption), count as own secrets and are masked in every status. They go to the configured origin only: redirects are followed by hand and only on the same origin. OAuth is not supported. Still open: isolation of local server processes, which run with the user's rights (see #329 for the built-in execution tools); since #1104 a new or changed command is stored only after a native confirmation (section 5). |
 | Web search providers, permitted targets and redirects, and the amount of data | To be decided in #63. The request including the search text is external; search responses are untrusted. Provider keys stay in the adapter. |
 | The exact content patterns, false positives and the limits with large files | To be versioned and tested in #66; the minimum groups from section 4 are mandatory. No broad detection of personal data or entropy in the first step. |
 | A separate persistent audit journal with retention and export | An extension of #66/#67 where needed; sanitised decisions in the existing chat history for now. No unlimited full-text logging. |

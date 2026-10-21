@@ -15,6 +15,7 @@ const { pathToFileURL } = require('node:url');
 const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const {
   snotraOnLogEntry, patchLogMonitor, monitorPath, MONITOR_ANCHOR, MONITOR_PATCHED,
@@ -107,7 +108,7 @@ test('the patch replaces the one call, adds the splitter before the source map, 
     assert.equal(patchLogMonitor(file), 'missing');
     assert.equal(await fs.readFile(file, 'utf8'), 'something else entirely');
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 });
 

@@ -11,6 +11,13 @@
  * qualified name the catalog uses, and the server lists are emptied. The
  * preferences are written first: a start that stops in between leaves a tool
  * deselected twice, never switched on by accident.
+ *
+ * @param {Object} deps
+ * @param {{ readMcpServers: () => Promise<Array<{ id: string, disabledTools?: string[] }>>, clearMcpServerDisabledTools: () => Promise<unknown> }} deps.mcpConfigStore
+ * @param {import('../ports/ui-prefs-store-port').UiPrefsStorePort} deps.uiPrefsStore
+ * @param {(serverId: string, toolName: string) => string} deps.qualify
+ * @param {{ warn?: (message: string) => void } | null} [deps.log]
+ * @returns {Promise<{ moved: string[] }>}
  */
 async function migrateMcpDisabledTools({ mcpConfigStore, uiPrefsStore, qualify, log = null }) {
   let servers;
@@ -20,6 +27,7 @@ async function migrateMcpDisabledTools({ mcpConfigStore, uiPrefsStore, qualify, 
     log?.warn?.(`[mcp] Could not read the servers to move deselected tools: ${error?.message || error}`);
     return { moved: [] };
   }
+  /** @type {string[]} */
   const moved = [];
   for (const server of Array.isArray(servers) ? servers : []) {
     if (!server || typeof server.id !== 'string') continue;

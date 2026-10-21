@@ -12,14 +12,27 @@
  * the same checked path as a click in the tree.
  */
 
+/**
+ * One file in the menu: its name, the folder it is in, whether it is gone, and
+ * the index the renderer gets back when it is picked.
+ * @typedef {{ index: number, name: string, folder: string, gone: boolean }} HistoryMenuEntry
+ */
+
 const MAX_ENTRIES = 50;
 const MAX_TEXT = 512;
 
+/**
+ * @param {unknown} value
+ */
 function text(value) {
   return typeof value === 'string' ? value.slice(0, MAX_TEXT) : '';
 }
 
-/** The request, checked; null when it is not one. */
+/**
+ * The request, checked; null when it is not one.
+ *
+ * @param {{ token?: unknown, entries?: unknown, position?: { x?: unknown, y?: unknown } | null } | null | undefined} request
+ */
 function sanitizeHistoryMenuRequest(request) {
   if (!request || typeof request !== 'object') return null;
   const { token, entries, position } = request;
@@ -32,6 +45,7 @@ function sanitizeHistoryMenuRequest(request) {
     clean.push({ index: entry.index, name, folder: text(entry.folder), gone: entry.gone === true });
   }
   const point = position
+    && typeof position.x === 'number' && typeof position.y === 'number'
     && Number.isFinite(position.x) && Number.isFinite(position.y)
     && position.x >= 0 && position.y >= 0
     ? { x: Math.round(position.x), y: Math.round(position.y) }
@@ -43,10 +57,14 @@ function sanitizeHistoryMenuRequest(request) {
  * The template: one item per entry. The folder goes into `sublabel` on macOS,
  * which shows it as a second, quieter line; elsewhere it follows the name. An
  * `&` would be an access key on Windows and Linux.
+ *
+ * @param {{ entries: HistoryMenuEntry[] }} request
+ * @param {{ platform?: string, onPick: (index: number) => void }} options
+ * @returns {import('electron').MenuItemConstructorOptions[]}
  */
 function buildHistoryMenuTemplate({ entries }, { platform = process.platform, onPick }) {
   const mac = platform === 'darwin';
-  const escape = (value) => (mac ? value : value.replaceAll('&', '&&'));
+  const escape = (/** @type {string} */ value) => (mac ? value : value.replaceAll('&', '&&'));
   return entries.map((entry) => ({
     label: escape(!mac && entry.folder ? `${entry.name} — ${entry.folder}` : entry.name),
     ...(mac && entry.folder ? { sublabel: entry.folder } : {}),
@@ -55,6 +73,15 @@ function buildHistoryMenuTemplate({ entries }, { platform = process.platform, on
   }));
 }
 
+/**
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {Pick<typeof import('electron').Menu, 'buildFromTemplate'>} deps.Menu
+ * @param {Record<string, string>} deps.REQ
+ * @param {Record<string, string>} deps.PUSH
+ * @param {() => (import('electron').BrowserWindow | null)} deps.getMainWindow
+ * @param {string} [deps.platform]
+ */
 function registerPreviewHistoryMenuHandlers({
   ipcMain, Menu, REQ, PUSH, getMainWindow, platform = process.platform,
 }) {

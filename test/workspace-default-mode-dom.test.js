@@ -15,7 +15,7 @@ function baseState(patch = {}) {
     mode: 'smart',
     workspaceRoot: ROOT,
     workspaceMode: 'smart',
-    encryptionAvailable: true,
+    platformCapabilities: { secureStorage: true },
     executionIsolation: { unisolated: false, tools: [], reason: '', pending: false },
     ...patch,
   };
@@ -102,10 +102,10 @@ test('view: the checkbox speaks about the chat\'s mode and says what ticking it 
 
 test('view: "Auto" cannot be offered without encrypted storage; taking one back still can', async () => {
   const { describeWorkspaceDefault } = await importRenderer('utils', 'tool-approval-view.js');
-  const blocked = describeWorkspaceDefault(baseState({ mode: 'auto', encryptionAvailable: false }));
+  const blocked = describeWorkspaceDefault(baseState({ mode: 'auto', platformCapabilities: { secureStorage: false } }));
   assert.equal(blocked.disabled, true);
   assert.equal(blocked.hint, 'Not available: this system offers no encrypted storage.');
-  const takeBack = describeWorkspaceDefault(baseState({ mode: 'auto', workspaceMode: 'auto', encryptionAvailable: false }));
+  const takeBack = describeWorkspaceDefault(baseState({ mode: 'auto', workspaceMode: 'auto', platformCapabilities: { secureStorage: false } }));
   assert.equal(takeBack.disabled, false);
 });
 
@@ -258,7 +258,7 @@ test('settings: no folder, nothing to choose; no encrypted storage, no "Auto"', 
     assert.ok(radios().every((input) => input.disabled && !input.checked));
     assert.equal(doc.getElementById('settings-security-mode-state').textContent, 'Open a folder to choose its default.');
 
-    permissions.push(baseState({ encryptionAvailable: false }));
+    permissions.push(baseState({ platformCapabilities: { secureStorage: false } }));
     assert.deepEqual(radios().filter((input) => input.disabled).map((input) => input.value), ['auto']);
     assert.match(doc.getElementById('settings-security-mode-state').textContent, /not available as a default/);
   } finally {
@@ -284,7 +284,7 @@ test('settings: the state line describes the radiogroup, and each option carries
     assert.equal(radio('smart').closest('label').title, description('smart').textContent);
     assert.match(description('auto').textContent, /^No questions about tool calls/);
 
-    permissions.push(baseState({ encryptionAvailable: false }));
+    permissions.push(baseState({ platformCapabilities: { secureStorage: false } }));
     assert.equal(radio('auto').disabled, true);
     assert.equal(description('auto').textContent, 'Not available: this system offers no encrypted storage.');
     assert.equal(radio('auto').closest('label').title, 'Not available: this system offers no encrypted storage.');

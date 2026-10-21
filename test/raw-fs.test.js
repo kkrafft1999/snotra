@@ -8,12 +8,13 @@ const Module = require('node:module');
 const os = require('node:os');
 const path = require('node:path');
 const { writeMinimalAsar } = require('./helpers/asar.js');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const RAW_FS = require.resolve('../src/main/services/raw-fs');
 
 test('removeTree removes a package folder with its app.asar', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-rawfs-test-'));
-  t.after(() => fsp.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const staged = path.join(dir, '.snotra-new-1');
   await fsp.mkdir(path.join(staged, 'resources'), { recursive: true });
   writeMinimalAsar(path.join(staged, 'resources', 'app.asar'), {

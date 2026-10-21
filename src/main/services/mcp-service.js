@@ -36,8 +36,39 @@ const {
 const { createMessage } = require('../../shared/contracts/message');
 const { createStdioTransport } = require('./mcp-stdio-transport');
 const { createHttpTransport } = require('./mcp-http-transport');
+const { isRecord } = require('../../shared/runtime/is-record');
 
-/** Fehlertext eines geworfenen Fehlers, ohne „[object Object]"-Überraschungen. */
+/** @typedef {import('../../shared/contracts/mcp').McpServerConfig} McpServerConfig */
+/** @typedef {import('../../shared/contracts/mcp').McpToolCatalogEntry} McpToolCatalogEntry */
+/** @typedef {import('../../shared/contracts/message').Message} Message */
+/** @typedef {import('./mcp-transport-errors').McpTransport} McpTransport */
+/** @typedef {import('./mcp-transport-errors').McpTransportDeps} McpTransportDeps */
+/** @typedef {(deps: McpTransportDeps) => McpTransport} CreateTransport */
+
+/**
+ * One server of the list: its configuration and what the service knows of
+ * its connection.
+ *
+ * @typedef {Object} Connection
+ * @property {McpServerConfig} config
+ * @property {McpTransport|null} transport
+ * @property {string} state  an MCP_CONNECTION_STATES value
+ * @property {McpToolCatalogEntry[]} tools
+ * @property {string|Message} error  what Settings shows (#338)
+ * @property {string} modelError  the sentence a failed `callTool` hands to the model
+ * @property {string} stderr
+ * @property {string} serverName
+ * @property {string} serverVersion
+ * @property {string} protocolVersion
+ * @property {Promise<Connection>|null} starting  keeps a server from starting twice
+ * @property {number} generation  counts deliberate closes (CR-B16-03)
+ */
+
+/**
+ * Fehlertext eines geworfenen Fehlers, ohne „[object Object]"-Überraschungen.
+ * @param {{ message?: unknown } | null | undefined} error
+ * @param {string} fallback
+ */
 function messageOf(error, fallback) {
   const text = typeof error?.message === 'string' ? error.message.trim() : '';
   return text || fallback;
@@ -48,6 +79,8 @@ function messageOf(error, fallback) {
  * server (CR-B16-03): the label only names it, and `knownTools` is what the
  * service itself writes back after every connection — comparing those
  * restarted a server on the next save of any other one.
+ *
+ * @param {McpServerConfig} config
  */
 function processKey(config) {
   const { transport, command, args, env, cwd, url, headers, enabled } = config;
@@ -58,6 +91,8 @@ function processKey(config) {
  * Requests a server may send us (CR-B16-02). Only `ping`, which MCP expects
  * either side to answer at any time; the client declares no capability that
  * would invite anything else, so everything else is "method not found".
+ *
+ * @param {string} method
  */
 function answerServerRequest(method) {
   return method === 'ping' ? { result: {} } : null;
@@ -66,15 +101,20 @@ function answerServerRequest(method) {
 /**
  * @param {Object} deps
  * @param {typeof import('child_process').spawn} deps.spawn
- * @param {(deps: Object) => Object} [deps.createTransport] one transport for
+ * @param {CreateTransport|null} [deps.createTransport] one transport for
  *   every server, for tests; otherwise `createStdio` or `createHttp` by the
  *   server's `transport`
+ * @param {CreateTransport} [deps.createStdio]
+ * @param {CreateTransport} [deps.createHttp]
  * @param {typeof fetch} [deps.fetch] for the HTTP transport
  * @param {() => Promise<string>} [deps.readShellPath] PATH aus dem Shell-Profil (Issue #111)
  * @param {{ name: string, version: string }} [deps.clientInfo]
- * @param {{ HANDSHAKE_MS: number, REQUEST_MS: number }} [deps.timeouts]
+ * @param {{ HANDSHAKE_MS?: number, REQUEST_MS?: number, SHUTDOWN_MS?: number }} [deps.timeouts]
  *   Ueberschreibbar, weil der Verbindungstest im Settings-Dialog (#109) nicht
  *   zwanzig Sekunden auf einen toten Server warten soll.
+ * @param {(serverId: string, toolNames: string[]) => Promise<unknown>} [deps.rememberTools]
+ * @param {NodeJS.ProcessEnv} [deps.env]
+ * @param {string} [deps.platform]
  */
 function createMcpService({
   spawn,
@@ -93,21 +133,17 @@ function createMcpService({
   rememberTools = async () => {},
   env = process.env,
   platform = process.platform,
-} = {}) {
+}) {
   const limits = { ...MCP_TIMEOUTS, ...timeouts };
-  /**
-   * @typedef {Object} Connection
-   * @property {Object} config
-   * @property {Object|null} transport
-   * @property {string} state
-   * @property {Array} tools
-   * @property {string} error
-   * @property {Promise|null} starting — verhindert doppeltes Hochfahren
-   */
   /** @type {Map<string, Connection>} */
   const connections = new Map();
+  /** @type {string|null} */
   let shellPath = null;
 
+  /**
+   * @param {McpServerConfig} config
+   * @returns {Connection}
+   */
   function blank(config) {
     return {
       config,
@@ -148,18 +184,22 @@ function createMcpService({
    * werden geschlossen — sonst liefe die alte Konfiguration weiter, während
    * der Nutzer die neue vor sich sieht.
    *
-   * @returns {{ ok: boolean, servers: Object[],
-   *   errors: Array<{ id: string, errors: Array<{key: string, params?: object}> }> }}
+   * @param {unknown} rawList
+   * @returns {{ ok: boolean, servers: McpServerConfig[],
+   *   errors: Array<{ id: string, errors: Message[] }> }}
    */
   function setServers(rawList) {
     const list = Array.isArray(rawList) ? rawList : [];
+    /** @type {McpServerConfig[]} */
     const servers = [];
+    /** @type {Array<{ id: string, errors: Message[] }>} */
     const errors = [];
+    /** @type {Set<string>} */
     const seen = new Set();
 
     for (const raw of list) {
       const { ok, value, errors: problems } = validateMcpServerConfig(raw);
-      if (!ok) {
+      if (!ok || !value) {
         errors.push({ id: typeof raw?.id === 'string' ? raw.id : '', errors: problems });
         continue;
       }
@@ -171,6 +211,7 @@ function createMcpService({
       servers.push(value);
     }
 
+    /** @type {Promise<void>[]} */
     const closed = [];
     for (const [id, connection] of connections) {
       const next = servers.find((server) => server.id === id);
@@ -183,8 +224,9 @@ function createMcpService({
     Promise.allSettled(closed).catch(() => {});
 
     for (const server of servers) {
-      if (!connections.has(server.id)) connections.set(server.id, blank(server));
-      else connections.get(server.id).config = server;
+      const known = connections.get(server.id);
+      if (known) known.config = server;
+      else connections.set(server.id, blank(server));
     }
     for (const id of [...connections.keys()]) {
       if (!seen.has(id)) connections.delete(id);
@@ -193,9 +235,16 @@ function createMcpService({
     return { ok: errors.length === 0, servers, errors };
   }
 
-  /** Holt den Tool-Katalog, über `nextCursor` hinweg. */
+  /**
+   * Holt den Tool-Katalog, über `nextCursor` hinweg.
+   * @param {McpTransport} transport
+   * @param {string} serverId
+   * @returns {Promise<McpToolCatalogEntry[]>}
+   */
   async function fetchTools(transport, serverId) {
+    /** @type {McpToolCatalogEntry[]} */
     const tools = [];
+    /** @type {string|undefined} */
     let cursor;
     // Schleifengrenze statt `while (cursor)`: ein Server, der immer denselben
     // Cursor zurückgibt, soll uns nicht endlos beschäftigen.
@@ -203,15 +252,20 @@ function createMcpService({
       const result = await transport.request('tools/list', cursor ? { cursor } : {}, {
         timeoutMs: limits.REQUEST_MS,
       });
-      tools.push(...normalizeMcpToolCatalog(result?.tools, serverId));
-      const next = typeof result?.nextCursor === 'string' ? result.nextCursor : '';
+      const answer = isRecord(result) ? result : {};
+      tools.push(...normalizeMcpToolCatalog(answer.tools, serverId));
+      const next = typeof answer.nextCursor === 'string' ? answer.nextCursor : '';
       if (!next || next === cursor || tools.length >= MCP_LIMITS.MAX_TOOLS) break;
       cursor = next;
     }
     return tools.slice(0, MCP_LIMITS.MAX_TOOLS);
   }
 
-  /** Fehlerzustand festhalten und den Prozess loswerden. */
+  /**
+   * Fehlerzustand festhalten und den Prozess loswerden.
+   * @param {Connection} connection
+   * @param {{ message?: unknown, userMessage?: string | Message, stderr?: unknown } | null | undefined} error
+   */
   function markFailed(connection, error) {
     connection.state = MCP_CONNECTION_STATES.FAILED;
     connection.error = error?.userMessage || messageOf(error, '') || createMessage('mcp.connection.unreachable');
@@ -223,11 +277,13 @@ function createMcpService({
     transport?.close?.().catch(() => {});
   }
 
+  /** @param {McpServerConfig} config */
   function transportFor(config) {
     if (createTransport) return createTransport;
     return config.transport === MCP_TRANSPORTS.HTTP ? createHttp : createStdio;
   }
 
+  /** @param {Connection} connection */
   async function handshake(connection) {
     const remote = connection.config.transport === MCP_TRANSPORTS.HTTP;
     const transport = transportFor(connection.config)({
@@ -284,13 +340,15 @@ function createMcpService({
     // Der Server bestimmt die Version, auf die man sich einigt. Wir
     // protokollieren sie nur — ablehnen würde im MVP mehr kaputtmachen als
     // helfen, solange wir ohnehin nur `tools` benutzen.
-    connection.protocolVersion = typeof result?.protocolVersion === 'string' ? result.protocolVersion : '';
-    connection.serverName = String(result?.serverInfo?.name || '');
-    connection.serverVersion = String(result?.serverInfo?.version || '');
+    const info = isRecord(result) ? result : {};
+    const serverInfo = isRecord(info.serverInfo) ? info.serverInfo : {};
+    connection.protocolVersion = typeof info.protocolVersion === 'string' ? info.protocolVersion : '';
+    connection.serverName = String(serverInfo.name || '');
+    connection.serverVersion = String(serverInfo.version || '');
 
     transport.notify('notifications/initialized', {});
 
-    if (!result?.capabilities || typeof result.capabilities !== 'object' || !result.capabilities.tools) {
+    if (!isRecord(info.capabilities) || !info.capabilities.tools) {
       // Kein Fehler, aber auch nichts zu holen: ein Server ohne `tools` ist
       // für uns leer, statt in einem scheiternden tools/list zu enden.
       connection.tools = [];
@@ -318,6 +376,10 @@ function createMcpService({
    * Stellt sicher, dass ein Server verbunden ist. Mehrfache Aufrufe teilen
    * sich denselben Startvorgang; ein gescheiterter Start wird nicht von
    * allein wiederholt — sonst stürbe bei jedem Tool-Aufruf ein Prozess neu.
+   *
+   * @param {string} id
+   * @param {{ evenIfOff?: boolean }} [options]
+   * @returns {Promise<Connection|null>}
    */
   function ensureConnected(id, { evenIfOff = false } = {}) {
     const connection = connections.get(id);
@@ -354,6 +416,8 @@ function createMcpService({
    * or one whose address changed (#341), is off until the user has seen it
    * answer. It is closed again right after, so its tools never reach the
    * model and no process or session lingers for it.
+   *
+   * @param {string} id
    */
   async function connect(id) {
     const connection = connections.get(id);
@@ -369,6 +433,7 @@ function createMcpService({
     return status;
   }
 
+  /** @param {string} id */
   async function disconnect(id) {
     const connection = connections.get(id);
     if (!connection) return;
@@ -383,7 +448,7 @@ function createMcpService({
   /** Tools aller eingeschalteten Server; ein kaputter Server bremst die anderen nicht. */
   async function listTools() {
     await Promise.allSettled(
-      [...connections.keys()].map((id) => (connections.get(id).config.enabled ? ensureConnected(id) : null)),
+      [...connections.entries()].map(([id, connection]) => (connection.config.enabled ? ensureConnected(id) : null)),
     );
     const out = [];
     for (const connection of connections.values()) {
@@ -400,8 +465,10 @@ function createMcpService({
    * Ruft ein Tool auf. Ein fachlicher Fehler des Servers (`isError`) ist ein
    * Ergebnis, kein Wurf — das Modell soll ihn lesen können. Geworfen wird
    * nur, was den Aufruf gar nicht erst zustande kommen lässt.
+   *
+   * @type {import('../../application/ports/mcp-port').McpPort['callTool']}
    */
-  async function callTool({ serverId, name, args } = {}, { signal, timeoutMs = limits.REQUEST_MS } = {}) {
+  async function callTool({ serverId, name, args }, { signal, timeoutMs = limits.REQUEST_MS } = {}) {
     const connection = connections.get(serverId);
     // Only the model reads these: they end up in the tool result (#338).
     if (!connection) throw new Error(`Unknown MCP server “${serverId}”.`);
@@ -430,16 +497,16 @@ function createMcpService({
       if (!error?.sessionExpired) throw error;
       result = await call();
     }
+    const answer = isRecord(result) ? result : {};
     return {
-      content: Array.isArray(result?.content) ? result.content : [],
-      isError: result?.isError === true,
-      ...(result?.structuredContent !== undefined ? { structuredContent: result.structuredContent } : {}),
+      content: Array.isArray(answer.content) ? answer.content : [],
+      isError: answer.isError === true,
+      ...(answer.structuredContent !== undefined ? { structuredContent: answer.structuredContent } : {}),
     };
   }
 
-  function describeOne(id) {
-    const connection = connections.get(id);
-    if (!connection) return null;
+  /** @param {Connection} connection */
+  function statusOf(connection) {
     return createMcpConnectionStatus({
       serverId: connection.config.id,
       label: connection.config.label,
@@ -454,8 +521,14 @@ function createMcpService({
     });
   }
 
+  /** @param {string} id */
+  function describeOne(id) {
+    const connection = connections.get(id);
+    return connection ? statusOf(connection) : null;
+  }
+
   function describeConnections() {
-    return [...connections.keys()].map((id) => describeOne(id));
+    return [...connections.values()].map(statusOf);
   }
 
   /**
@@ -494,5 +567,7 @@ function createMcpService({
     disposeSync,
   };
 }
+
+/** @typedef {ReturnType<typeof createMcpService>} McpService */
 
 module.exports = { createMcpService };

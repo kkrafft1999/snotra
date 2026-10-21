@@ -8,7 +8,7 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
-const { registerToolPermissionHandlers } = require('../src/main/ipc/tool-permission-handlers');
+const { registerToolPermissionsForTest: registerToolPermissionHandlers } = require('./helpers/tool-permission-handlers');
 const { createToolPolicyStore } = require('../src/main/services/tool-policy-store');
 const { createToolApprovalAdapter } = require('../src/main/adapters/tool-approval-adapter');
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
@@ -16,6 +16,7 @@ const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ip
 const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { createTestConfirmations } = require('./helpers/confirmations');
 const { CONFIRMATION_ACTIONS } = require('../src/application/permissions/user-confirmation');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 function makeSafeStorage(available = true) {
   return {
@@ -44,7 +45,7 @@ async function setup(t, {
   describeWorkspaceChats = undefined,
 } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-perm-ipc-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });
   const sessionGrants = createSessionGrants();
   const dialogCalls = [];
@@ -62,7 +63,7 @@ async function setup(t, {
   const getMainWindow = () => ({ isDestroyed: () => false });
   const { confirmations, storeReceipts, confirmed } = createTestConfirmations({ dialog, getMainWindow });
   const toolPolicyStore = createToolPolicyStore({
-    app: { getPath: () => dir }, safeStorage: makeSafeStorage(encryption), fs, path, crypto, log: { warn() {} },
+    userDataPath: dir, secretStore: makeSafeStorage(encryption), fs, path, crypto, log: { warn() {} },
     confirmationReceipts: storeReceipts,
   });
   const ipcMain = createMockIpcMain();

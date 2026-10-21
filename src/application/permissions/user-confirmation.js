@@ -46,6 +46,14 @@ const CONFIRMATION_ACTIONS = Object.freeze({
   SKILL_MAKE_GLOBAL: 'skill-make-global',
   /** A phone let in as the mobile remote, after comparing the six words (#1114) — subject: the channel id. */
   REMOTE_PAIRING: 'remote-pairing',
+  /** A workspace opened to the paired phone, its chats readable there (#1194) — subject: the root. */
+  REMOTE_WORKSPACE: 'remote-workspace',
+  /** `shell_execute` switched on (#1104) — subject: ''. */
+  SHELL_EXECUTION: 'shell-execution',
+  /** `run_python` switched on (#1104) — subject: ''. */
+  PYTHON_EXECUTION: 'python-execution',
+  /** A local MCP server stored with a command that is new or changed (#1104) — subject: `mcpLaunchSubject`. */
+  MCP_LAUNCH: 'mcp-launch',
 });
 
 const CONFIRMATION_REFUSALS = Object.freeze({
@@ -60,7 +68,7 @@ const RECEIPT_TTL_MS = 60_000;
  * The subject of an allow rule: everything that makes it the rule it is,
  * without its id and creation time — those are minted by the store.
  *
- * @param {object} rule  a normalized permission rule
+ * @param {Record<string, unknown>} rule  a normalized permission rule
  * @returns {string}
  */
 function permissionRuleSubject(rule) {
@@ -102,16 +110,22 @@ function globalHostsSubject(hosts) {
  * }}
  */
 function createConfirmationReceipts({ now = () => Date.now(), ttlMs = RECEIPT_TTL_MS } = {}) {
-  /** receipt → { action, subject, expiresAt } */
+  /** @type {WeakMap<object, { action: string, subject: string, expiresAt: number }>} receipt → what it is good for */
   const open = new WeakMap();
 
+  /** @param {{ action: string, subject?: string }} binding */
   function issue({ action, subject = '' }) {
     const receipt = Object.freeze({});
     open.set(receipt, { action, subject: String(subject), expiresAt: now() + ttlMs });
     return receipt;
   }
 
-  /** Good once: a receipt is spent by the first attempt, matching or not. */
+  /**
+   * Good once: a receipt is spent by the first attempt, matching or not.
+   * @param {unknown} receipt
+   * @param {string} action
+   * @param {string} [subject]
+   */
   function redeem(receipt, action, subject = '') {
     if (!receipt || typeof receipt !== 'object') return false;
     const entry = open.get(receipt);

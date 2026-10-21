@@ -1,6 +1,36 @@
+/** @typedef {import('../ports/provider-runtime-port').ProviderAdapter} ProviderAdapter */
+/** @typedef {import('../ports/provider-runtime-port').ChatRoundResult} ChatRoundResult */
+/** @typedef {import('../ports/provider-runtime-port').AssistantMessage} AssistantMessage */
+/** @typedef {NonNullable<AssistantMessage['tool_calls']>[number]} ToolCall */
+/** @typedef {import('../../application/ports/llm-port').LlmMessage} LlmMessage */
+/** @typedef {import('../../application/ports/llm-port').LlmToolDefinition} LlmToolDefinition */
+/** @typedef {import('../../application/ports/llm-port').LlmThinkingBlock} ThinkingBlock */
+
+/**
+ * What of a streamed Messages event is read.
+ * @typedef {Object} AnthropicEvent
+ * @property {string} [type]
+ * @property {number} [index]
+ * @property {{ usage?: unknown }} [message]
+ * @property {{ type?: string, id?: string, name?: string, thinking?: string, signature?: string, data?: string }} [content_block]
+ * @property {{ type?: string, text?: string, partial_json?: string, thinking?: string, signature?: string, stop_reason?: string }} [delta]
+ * @property {unknown} [usage]
+ * @property {{ message?: string }} [error]
+ *
+ * A content block of the running round, collected from its deltas.
+ * @typedef {Object} StreamedBlock
+ * @property {string} type
+ * @property {string} [text]
+ * @property {string} [signature]
+ * @property {string} [data]
+ * @property {{ id: string, name: string, args: string }} [toolCall]
+ */
+
 const { withRequestTimeout, userMessageOf, CLOUD_MODELS_TIMEOUT_MS } = require('../services/request-timeout');
 const { createMessage } = require('../../shared/contracts/message');
+const { imageAttachmentsOf } = require('../../shared/contracts/attachments');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
+const { isRecord } = require('../../shared/runtime/is-record');
 const { iterSseEvents, describeFetchErrorMessage, readErrorMessage, abortIfRequested, cancelledChatRound, isAbortError, bindAbortSignalToReader, createEmptyUsage, normalizeUsage, notifyToolCallStart, notifyToolCallArgumentsDelta } = require('./stream-helpers');
 
 const API_BASE = 'https://api.anthropic.com/v1';
@@ -23,17 +53,22 @@ const DEFAULT_MAX_TOKENS = 8192;
 const ADAPTIVE_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'];
 const ADAPTIVE_EFFORTS_4_6 = ['low', 'medium', 'high', 'max'];
 const BUDGET_LEVELS = ['low', 'medium', 'high'];
+/** @type {Record<string, number>} */
 const THINKING_BUDGETS = { low: 2048, medium: 8192, high: 16384 };
 // Thinking counts against `max_tokens`. The room for the answer stays at the
 // default; the higher efforts get more, so that a long think does not cut the
 // answer off. Anthropic's output rate limit is estimated from `max_tokens`,
 // which is why it does not simply go to the model's maximum.
+/** @type {Record<string, number>} */
 const ADAPTIVE_MAX_TOKENS = { low: 16384, medium: 16384, high: 32768, xhigh: 32768, max: 32768 };
 
 /**
  * Family and version of a Claude model id: `claude-opus-4-6`,
  * `claude-sonnet-4-20250514`, `claude-3-7-sonnet-latest`. A date suffix is no
  * minor version.
+ *
+ * @param {unknown} model
+ * @returns {{ family: string, version: number } | null}
  */
 function claudeModelOf(model) {
   const id = String(model ?? '').trim().toLowerCase();
@@ -44,7 +79,11 @@ function claudeModelOf(model) {
   return null;
 }
 
-/** How `model` thinks: 'adaptive', 'adaptive-4.6', 'budget' or null. */
+/**
+ * How `model` thinks: 'adaptive', 'adaptive-4.6', 'budget' or null.
+ * @param {unknown} model
+ * @returns {'adaptive'|'adaptive-4.6'|'budget'|null}
+ */
 function thinkingModeOf(model) {
   const claude = claudeModelOf(model);
   if (!claude) return null;
@@ -67,6 +106,10 @@ function thinkingModeOf(model) {
   return null;
 }
 
+/**
+ * @param {unknown} model
+ * @returns {string[]}
+ */
 function reasoningLevelsOf(model) {
   const mode = thinkingModeOf(model);
   if (mode === 'adaptive') return ADAPTIVE_EFFORTS;
@@ -80,6 +123,10 @@ function reasoningLevelsOf(model) {
  * thinking: from Opus 4.7 on the default is `omitted`, which streams thinking
  * blocks without text and leaves a long silence before the answer. The 4.6
  * models summarise by default.
+ *
+ * @param {unknown} model
+ * @param {string} level
+ * @returns {Record<string, unknown>}
  */
 function thinkingFieldsFor(model, level) {
   const mode = thinkingModeOf(model);
@@ -98,6 +145,7 @@ function thinkingFieldsFor(model, level) {
   };
 }
 
+/** @param {string} apiKey */
 function authHeaders(apiKey) {
   return {
     'x-api-key': apiKey,
@@ -106,6 +154,7 @@ function authHeaders(apiKey) {
   };
 }
 
+/** @type {ProviderAdapter['listModels']} */
 async function listModels(config) {
   try {
     return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
@@ -117,6 +166,7 @@ async function listModels(config) {
   }
 }
 
+/** @type {ProviderAdapter['listModels']} */
 async function listModelsRequest(config) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: createMessage('provider.error.noApiKey') };
@@ -128,20 +178,25 @@ async function listModelsRequest(config) {
   }
   if (!res.ok) return { error: await readErrorMessage(res) };
   const json = await res.json().catch(() => null);
-  if (!json || !Array.isArray(json.data)) {
+  if (!isRecord(json) || !Array.isArray(json.data)) {
     return { error: createMessage('provider.error.unexpectedAnswer.api', { provider: 'Anthropic' }) };
   }
   const models = json.data
-    .map((m) => m && typeof m.id === 'string'
-      ? { id: m.id, label: m.display_name || m.id }
+    .map((/** @type {unknown} */ m) => isRecord(m) && typeof m.id === 'string'
+      ? { id: m.id, label: typeof m.display_name === 'string' && m.display_name ? m.display_name : m.id }
       : null)
-    .filter(Boolean)
+    .filter((m) => m !== null)
     .sort((a, b) => a.id.localeCompare(b.id));
   return { models };
 }
 
+/**
+ * @param {LlmToolDefinition[]|undefined} tools
+ * @returns {Array<Record<string, unknown>>|undefined}
+ */
 function translateToolsToAnthropic(tools) {
   if (!Array.isArray(tools) || tools.length === 0) return undefined;
+  /** @type {Array<Record<string, unknown>>} */
   const out = [];
   for (const t of tools) {
     if (!t?.function?.name) continue;
@@ -154,13 +209,17 @@ function translateToolsToAnthropic(tools) {
   return out.length ? out : undefined;
 }
 
-/** Anthropic's stop reasons that mean "cut off" (#538). */
+/**
+ * Anthropic's stop reasons that mean "cut off" (#538).
+ * @param {string|null} stopReason
+ */
 function cutOffOf(stopReason) {
   if (stopReason === 'max_tokens' || stopReason === 'model_context_window_exceeded') return FINISH_REASONS.LENGTH;
   if (stopReason === 'refusal') return FINISH_REASONS.CONTENT_FILTER;
   return null;
 }
 
+/** @param {unknown} s */
 function isLikelyJsonString(s) {
   const t = String(s ?? '').trim();
   return t.length > 0 && (t[0] === '{' || t[0] === '[' || t === 'null' || t === 'true' || t === 'false' || /^-?\d/.test(t));
@@ -172,6 +231,8 @@ function isLikelyJsonString(s) {
  * the reasoning that led to a call in front of the call. Earlier turns go
  * without theirs, as they always have: Anthropic would drop them anyway, and
  * a history that never carries them never changes under them.
+ *
+ * @param {LlmMessage[]} messages
  */
 function currentTurnStart(messages) {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -180,7 +241,12 @@ function currentTurnStart(messages) {
   return 0;
 }
 
-/** The thinking blocks a message carries for `model`; none from another model. */
+/**
+ * The thinking blocks a message carries for `model`; none from another model.
+ * @param {LlmMessage} message
+ * @param {unknown} model
+ * @returns {ThinkingBlock[]}
+ */
 function thinkingBlocksFor(message, model) {
   const thinking = message?.anthropicThinking;
   if (!thinking || !Array.isArray(thinking.blocks) || !model || thinking.model !== model) return [];
@@ -188,14 +254,22 @@ function thinkingBlocksFor(message, model) {
     || (b?.type === 'redacted_thinking' && typeof b.data === 'string'));
 }
 
+/**
+ * @param {LlmMessage[]} messages
+ * @param {{ model?: string, replayThinking?: boolean }} [options]
+ * @returns {{ system: string|undefined, messages: Array<{ role: string, content: unknown }> }}
+ */
 function translateMessagesToAnthropic(messages, { model, replayThinking = true } = {}) {
   const turnStart = replayThinking ? currentTurnStart(messages) : messages.length;
   let system = '';
+  /** @type {Array<{ role: string, content: unknown }>} */
   const out = [];
+  /** @type {Array<Record<string, unknown>>|null} */
   let pendingToolResults = null; // array of tool_result blocks to flush on next non-tool message
   // tool_use-IDs der letzten Assistant-Nachricht, die noch kein tool_result
   // referenziert hat — Fallback fuer tool-Messages ohne tool_call_id, denn
   // Anthropic lehnt tool_use_id: '' mit 400 ab.
+  /** @type {string[]} */
   let unmatchedToolUseIds = [];
 
   const flushPendingToolResults = () => {
@@ -207,7 +281,7 @@ function translateMessagesToAnthropic(messages, { model, replayThinking = true }
 
   for (const [index, m] of messages.entries()) {
     if (m.role === 'system') {
-      system += (system ? '\n\n' : '') + (m.content || '');
+      system += (system ? '\n\n' : '') + (typeof m.content === 'string' ? m.content : '');
       continue;
     }
     if (m.role === 'tool') {
@@ -231,11 +305,29 @@ function translateMessagesToAnthropic(messages, { model, replayThinking = true }
     flushPendingToolResults();
 
     if (m.role === 'user') {
-      out.push({ role: 'user', content: typeof m.content === 'string' ? m.content : '' });
+      const text = typeof m.content === 'string' ? m.content : '';
+      // imageAttachmentsOf keeps png, jpeg, gif and webp — the formats
+      // Anthropic takes; anything else never reaches the request (#90).
+      const images = imageAttachmentsOf(m);
+      if (images.length === 0) {
+        out.push({ role: 'user', content: text });
+        continue;
+      }
+      // Images go in front of the question, as Anthropic recommends. An empty
+      // text block is refused by the API, and a screenshot without a question
+      // is a valid input.
+      /** @type {Array<Record<string, unknown>>} */
+      const content = images.map((image) => ({
+        type: 'image',
+        source: { type: 'base64', media_type: image.mediaType.toLowerCase(), data: image.dataBase64 },
+      }));
+      if (text) content.push({ type: 'text', text });
+      out.push({ role: 'user', content });
       continue;
     }
     if (m.role === 'assistant') {
       // Thinking comes first, unchanged — the API checks the signature.
+      /** @type {Array<Record<string, unknown>>} */
       const blocks = index >= turnStart ? thinkingBlocksFor(m, model).map((b) => ({ ...b })) : [];
       unmatchedToolUseIds = [];
       if (typeof m.content === 'string' && m.content.length > 0) {
@@ -244,6 +336,7 @@ function translateMessagesToAnthropic(messages, { model, replayThinking = true }
       if (Array.isArray(m.tool_calls)) {
         for (const tc of m.tool_calls) {
           if (!tc?.function?.name) continue;
+          /** @type {unknown} */
           let input = {};
           const argStr = tc.function.arguments;
           if (typeof argStr === 'string' && argStr.trim()) {
@@ -270,8 +363,14 @@ function translateMessagesToAnthropic(messages, { model, replayThinking = true }
   return { system: system || undefined, messages: out };
 }
 
-/** The round's thinking blocks as the API wants them back: unchanged, in order. */
+/**
+ * The round's thinking blocks as the API wants them back: unchanged, in order.
+ * @param {Map<number, StreamedBlock>} blocks
+ * @param {number[]} orderedIndexes
+ * @returns {ThinkingBlock[]}
+ */
 function collectThinkingBlocks(blocks, orderedIndexes) {
+  /** @type {ThinkingBlock[]} */
   const out = [];
   for (const idx of orderedIndexes) {
     const b = blocks.get(idx);
@@ -284,6 +383,7 @@ function collectThinkingBlocks(blocks, orderedIndexes) {
   return out;
 }
 
+/** @type {ProviderAdapter['streamChatRound']} */
 async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
   const apiKey = config?.apiKey;
   if (!apiKey) return { error: createMessage('provider.error.noApiKey'), code: 'NO_API_KEY' };
@@ -291,8 +391,10 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   const tooling = translateToolsToAnthropic(tools);
   const level = typeof config?.reasoningEffort === 'string' ? config.reasoningEffort.trim() : '';
   const thinkingFields = thinkingFieldsFor(model, level);
+  /** @param {boolean} replayThinking */
   function buildBody(replayThinking) {
     const { system, messages: anthMessages } = translateMessagesToAnthropic(messages, { model, replayThinking });
+    /** @type {Record<string, unknown>} */
     const body = {
       model,
       max_tokens: DEFAULT_MAX_TOKENS,
@@ -331,24 +433,29 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     if (replayThinking && res.status === 400 && /bound to a different conversation/i.test(error)) continue;
     return { error, code: String(res.status) };
   }
-  if (!res.body) return { error: createMessage('provider.error.noStream'), code: 'STREAM' };
+  // `res` is set by the loop above, which cannot end without one.
+  if (!res?.body) return { error: createMessage('provider.error.noStream'), code: 'STREAM' };
 
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
 
   // Accumulators per content block index
+  /** @type {Map<number, StreamedBlock>} */
   const blocks = new Map(); // index -> { type, text?, toolCall: {id, name, args} }
   let textOut = '';
+  /** @type {string|null} */
   let stopReason = null;
   // `message_stop` (or at least a stop reason) closes a round; without it the
   // stream was cut off on the way (#538).
   let messageStopped = false;
+  /** @type {ChatRoundResult['usage']} */
   let usage = null;
 
   try {
     for await (const evt of iterSseEvents(reader, abortSignal)) {
       abortIfRequested(abortSignal);
       if (!evt.data) continue;
+      /** @type {AnthropicEvent} */
       let payload;
       try { payload = JSON.parse(evt.data); } catch { continue; }
       const type = payload.type || evt.event;
@@ -366,14 +473,14 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
           usage.total = usage.prompt + usage.completion;
         }
       } else if (type === 'content_block_start') {
-        const idx = payload.index;
+        const idx = payload.index ?? -1;
         const cb = payload.content_block || {};
         if (cb.type === 'text') {
           blocks.set(idx, { type: 'text', text: '' });
         } else if (cb.type === 'tool_use') {
           blocks.set(idx, {
             type: 'tool_use',
-            toolCall: { id: cb.id, name: cb.name, args: '' },
+            toolCall: { id: cb.id || '', name: cb.name || '', args: '' },
           });
           notifyToolCallStart(callbacks, { index: idx, name: cb.name || '' });
         } else if (cb.type === 'thinking') {
@@ -382,7 +489,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
           blocks.set(idx, { type: 'redacted_thinking', data: cb.data || '' });
         }
       } else if (type === 'content_block_delta') {
-        const idx = payload.index;
+        const idx = payload.index ?? -1;
         const block = blocks.get(idx);
         if (!block) continue;
         const d = payload.delta || {};
@@ -411,7 +518,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
           if (deltaUsage.completion > 0) usage.completion = deltaUsage.completion;
           if (deltaUsage.prompt > 0) usage.prompt = deltaUsage.prompt;
           if (deltaUsage.cached > 0) usage.cached = deltaUsage.cached;
-          if (deltaUsage.cacheWrite > 0) usage.cacheWrite = deltaUsage.cacheWrite;
+          if (deltaUsage.cacheWrite) usage.cacheWrite = deltaUsage.cacheWrite;
           usage.total = usage.prompt + usage.completion;
         }
         const sr = payload.delta?.stop_reason;
@@ -426,6 +533,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   } catch (err) {
     if (isAbortError(err)) {
       const orderedIndexes = [...blocks.keys()].sort((a, b) => a - b);
+      /** @type {ToolCall[]} */
       const tool_calls = [];
       for (const idx of orderedIndexes) {
         const b = blocks.get(idx);
@@ -455,6 +563,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
 
   // Build canonical tool_calls (preserve block order)
   const orderedIndexes = [...blocks.keys()].sort((a, b) => a - b);
+  /** @type {ToolCall[]} */
   const tool_calls = [];
   for (const idx of orderedIndexes) {
     const b = blocks.get(idx);
@@ -472,6 +581,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
   }
 
   const thinkingBlocks = collectThinkingBlocks(blocks, orderedIndexes);
+  /** @type {AssistantMessage} */
   const message = {
     role: 'assistant',
     content: textOut.length > 0 ? textOut : tool_calls.length ? null : '',
@@ -491,13 +601,21 @@ module.exports = {
   id: 'anthropic',
   name: 'Anthropic (Claude)',
   fields: { apiKey: true },
-  // Auf true, sobald translateMessagesToAnthropic Bilder abbildet (Issue #90).
-  capabilities: { images: false },
+  // translateMessagesToAnthropic maps image attachments (#90).
+  capabilities: {
+    images: { supported: true },
+    reasoningLevels: { supported: true },
+  },
+  // No tokenizer profile: Anthropic's tokenizer was never measured (#178).
+  traits: {
+    priceTable: { litellmProviders: ['anthropic'] },
+  },
   defaultModel: 'claude-sonnet-4-6',
   // The levels depend on how the model thinks (#994); see thinkingModeOf.
   reasoning: {
     levels: reasoningLevelsOf,
     defaultLevel: 'medium',
+    /** @param {string} model */
     appliesTo: (model) => thinkingModeOf(model) !== null,
   },
   apiBase: API_BASE,

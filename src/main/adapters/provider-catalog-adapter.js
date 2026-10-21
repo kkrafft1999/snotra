@@ -1,5 +1,9 @@
 'use strict';
 
+/**
+ * @param {import('../ports/provider-runtime-port').ProviderAdapter | null} provider
+ * @returns {import('../ports/provider-catalog-port').ProviderCatalogEntry | null}
+ */
 function toCatalogEntry(provider) {
   if (!provider) return null;
   return {
@@ -10,26 +14,23 @@ function toCatalogEntry(provider) {
     defaultInsecureTls: provider.defaultInsecureTls === true,
     // Voreinstellungen der Felder aus Issue #193; ohne sie faende
     // `getEffectiveProviderConfig` hinter dem Katalog-Adapter keinen Default.
-    defaultApiStyle: provider.defaultApiStyle || '',
+    defaultApiStyle: provider.defaultApiStyle,
     defaultSupportsImages: provider.defaultSupportsImages === true,
     defaultSendTools: provider.defaultSendTools !== false,
     fields: provider.fields || {},
     presentation: provider.presentation,
     apiBase: provider.apiBase || '',
-    capabilities: { images: provider.capabilities?.images === true },
+    // The declaration (#996); the presentation resolves it against an entry.
+    capabilities: provider.capabilities || {},
     optionalApiKey: provider.optionalApiKey === true,
     connectionPerPreset: provider.connectionPerPreset === true,
     // The reasoning levels a chat can choose, and for which models (#725).
     ...(provider.reasoning ? { reasoning: provider.reasoning } : {}),
-    // Faehigkeiten, die an der gespeicherten Konfiguration haengen statt am
-    // Adapter (Issue #193) — die Praesentation ruft sie mit dem Eintrag auf.
-    ...(typeof provider.capabilitiesFor === 'function'
-      ? { capabilitiesFor: provider.capabilitiesFor }
-      : {}),
   };
 }
 
 /**
+ * @param {Pick<typeof import('../providers'), 'getProvider' | 'listProviderMeta' | 'disposeAll'>} providersModule
  * @returns {import('../ports/provider-runtime-port').ProviderRuntimePort}
  */
 function createProviderRuntimeAdapter(providersModule) {
@@ -47,6 +48,7 @@ function createProviderRuntimeAdapter(providersModule) {
 }
 
 /**
+ * @param {import('../ports/provider-runtime-port').ProviderRuntimePort} providerRuntime
  * @returns {import('../ports/provider-catalog-port').ProviderCatalogPort}
  */
 function createProviderCatalogAdapter(providerRuntime) {

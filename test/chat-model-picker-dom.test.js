@@ -18,7 +18,7 @@ function llmState({ presets, reasoning } = {}) {
     activeProvider: 'openai',
     activePresetId: 'p1',
     chatTarget: { providerId: 'openai', model: 'gpt-5' },
-    encryptionAvailable: true,
+    platformCapabilities: { secureStorage: true },
     providers: [{ id: 'openai', name: 'OpenAI', configured: true, model: 'gpt-5' }],
     presets: presets ?? [entry('p1', 'gpt-5'), entry('p2', 'gpt-5-mini'), entry('p3', 'o4')],
     reasoning: reasoning ?? { level: null, levels: [], defaultLevel: null },
@@ -59,6 +59,7 @@ async function setup({ locale = 'en', state = llmState(), userAgent = null, setR
   return {
     dom,
     document,
+    picker,
     chosen,
     levels,
     pill: document.getElementById('btn-chat-model-picker'),
@@ -354,3 +355,84 @@ test('a press on a level gives the focus to its radio, so the menu stays open (#
   document.getElementById('chat-reasoning-hint').dispatchEvent(hint);
   assert.equal(hint.defaultPrevented, true, 'a press on the text keeps the focus where it is');
 });
+
+// #996: the picker reads the capabilities main resolved for the entry, and
+// derives none of its own.
+test('the image capability comes from the active entry, as main resolved it', async () => {
+  const geminiCaps = { images: true, imageMediaTypes: ['image/png', 'image/jpeg', 'image/webp'], reasoningLevels: true };
+  const switchedOff = {
+    images: false,
+    reasoningLevels: false,
+    gaps: { images: { limitedBy: 'connection', reason: 'chat.image.error.connectionWithoutImages' } },
+  };
+  const state = {
+    ...llmState({
+      presets: [
+        entry('p1', 'gemini-2.5-pro', { providerId: 'google', capabilities: geminiCaps }),
+        entry('p2', 'qwen', { providerId: 'openai-compatible', capabilities: switchedOff, connection: { supportsImages: false } }),
+      ],
+    }),
+    chatTarget: { providerId: 'google', model: 'gemini-2.5-pro' },
+    providers: [
+      { id: 'google', name: 'Google (Gemini)', configured: true, capabilities: geminiCaps },
+      { id: 'openai-compatible', name: 'OpenAI-compatible', configured: true, capabilities: switchedOff },
+    ],
+  };
+  const { picker } = await setup({ state });
+  assert.equal(picker.activeProviderSupportsImages(), true);
+  assert.deepEqual(picker.activeImageFormats(), {
+    mediaTypes: ['image/png', 'image/jpeg', 'image/webp'],
+    provider: 'Google (Gemini)',
+  });
+
+  const { picker: compat } = await setup({
+    state: { ...state, activePresetId: 'p2', chatTarget: { providerId: 'openai-compatible', model: 'qwen' } },
+  });
+  assert.equal(compat.activeProviderSupportsImages(), false);
+  assert.equal(compat.activeImageLimit().limitedBy, 'connection');
+});
+
+test('a provider gap is the provider\'s, and an older state without capabilities takes no images', async () => {
+  const noImages = { images: false, reasoningLevels: true, gaps: { images: { limitedBy: 'provider', reason: 'x', issue: 1 } } };
+  const { picker } = await setup({
+    state: {
+      ...llmState({ presets: [entry('p1', 'm', { capabilities: noImages })] }),
+      providers: [{ id: 'openai', name: 'OpenAI', configured: true, capabilities: noImages }],
+    },
+  });
+  assert.equal(picker.activeProviderSupportsImages(), false);
+  assert.deepEqual(picker.activeImageLimit(), { limitedBy: 'provider', provider: 'OpenAI' });
+
+  const { picker: old } = await setup();
+  assert.equal(old.activeProviderSupportsImages(), false);
+});
+
+// The hint reads encrypted storage from the platform register (#1156), with
+// the wording it had when the LLM state carried a field of its own.
+for (const [locale, words] of [
+  ['en', 'Encrypted storage is not available. An API key cannot be stored safely here.'],
+  ['de', 'Verschlüsselter Speicher ist nicht verfügbar. Ein API-Key kann hier nicht sicher gespeichert werden.'],
+]) {
+  test(`without encrypted storage the hint says a key cannot be stored (${locale}, #1156)`, async () => {
+    const unconfigured = {
+      ...llmState(),
+      providers: [{ id: 'openai', name: 'OpenAI', configured: false, model: 'gpt-5' }],
+    };
+    const without = await setup({
+      locale,
+      state: {
+        ...unconfigured,
+        platformCapabilities: {
+          executionSandbox: true, sandboxGitSsh: true, selfUpdate: true, secureStorage: false,
+          gaps: { secureStorage: { reason: 'settings.error.encryptionUnavailable', permanent: true } },
+        },
+      },
+    });
+    const hint = without.document.getElementById('chat-hint');
+    assert.equal(hint.textContent, words);
+    assert.equal(hint.classList.contains('hidden'), false);
+
+    const withStorage = await setup({ locale, state: unconfigured });
+    assert.notEqual(withStorage.document.getElementById('chat-hint').textContent, words);
+  });
+}

@@ -18,6 +18,8 @@ const {
   MAX_IMAGES_PER_MESSAGE,
   MAX_IMAGE_EDGE_PX,
   isImageMediaType,
+  providerImageMediaTypes,
+  imageFormatNames,
   toDataUrl,
 } = contracts;
 
@@ -28,9 +30,12 @@ export const INTAKE_REJECTIONS = Object.freeze({
   UNSUPPORTED_TYPE: 'unsupported-type',
   TOO_MANY: 'too-many',
   TOO_LARGE: 'too-large',
-  // Snotra has no image adapter for this provider yet (#90–#92) — the model
-  // behind it may well take images, so the message must not blame it (#995).
+  // Snotra has no image adapter for this provider — none of the built-in ones
+  // since #92. The model behind it may well take images, so the message must
+  // not blame it (#995).
   PROVIDER_PASSES_NO_IMAGES: 'provider-passes-no-images',
+  // The provider takes images, but not this format: Gemini takes no GIF (#91).
+  PROVIDER_REFUSES_FORMAT: 'provider-refuses-format',
   // An OpenAI-compatible connection with "Allow image attachments" off: the
   // user's own setting, which they can change.
   CONNECTION_WITHOUT_IMAGES: 'connection-without-images',
@@ -48,9 +53,11 @@ function formatMiB(bytes) {
 
 /**
  * `provider` is the display name of the active provider; it only matters for
- * PROVIDER_PASSES_NO_IMAGES.
+ * PROVIDER_PASSES_NO_IMAGES and PROVIDER_REFUSES_FORMAT. For the latter,
+ * `refusedMediaType` and `mediaTypes` (what the provider takes) name the
+ * formats (#91).
  */
-export function rejectionMessage(reason, { provider = '' } = {}) {
+export function rejectionMessage(reason, { provider = '', refusedMediaType = '', mediaTypes = [] } = {}) {
   switch (reason) {
     case INTAKE_REJECTIONS.UNSUPPORTED_TYPE:
       return t('chat.image.error.unsupportedType');
@@ -62,6 +69,14 @@ export function rejectionMessage(reason, { provider = '' } = {}) {
       return provider
         ? t('chat.image.error.providerPassesNoImages', { provider })
         : t('chat.image.error.providerPassesNoImages.unnamed');
+    case INTAKE_REJECTIONS.PROVIDER_REFUSES_FORMAT:
+      return provider && refusedMediaType && mediaTypes.length > 0
+        ? t('chat.image.error.providerRefusesFormat', {
+          provider,
+          format: imageFormatNames([refusedMediaType]),
+          formats: imageFormatNames(mediaTypes),
+        })
+        : t('chat.image.error.providerRefusesFormat.unnamed');
     case INTAKE_REJECTIONS.CONNECTION_WITHOUT_IMAGES:
       return t('chat.image.error.connectionWithoutImages');
     default:
@@ -74,22 +89,29 @@ export function rejectionMessage(reason, { provider = '' } = {}) {
  * Frage kommen. `existingCount` sind die Chips, die schon am Composer haengen.
  * `imagesSupported` sagt, ob der aktive Anbieter Bilder weiterreicht (#93).
  * `imagesLimitedBy` says why not — see IMAGE_LIMITED_BY (#995).
+ * `imageMediaTypes` are the formats it takes, all of them by default (#91);
+ * `refusedMediaType` is the first image the provider refused for its format.
  *
- * @returns {{ accepted: any[], rejections: string[] }}
+ * @returns {{ accepted: any[], rejections: string[], refusedMediaType: string }}
  */
 export function planAttachmentIntake(
   existingCount,
   files,
-  { imagesSupported = true, imagesLimitedBy = IMAGE_LIMITED_BY.PROVIDER } = {},
+  {
+    imagesSupported = true,
+    imagesLimitedBy = IMAGE_LIMITED_BY.PROVIDER,
+    imageMediaTypes = providerImageMediaTypes(null),
+  } = {},
 ) {
   const list = Array.isArray(files) ? files : [];
   const accepted = [];
   const rejections = [];
+  let refusedMediaType = '';
   if (!imagesSupported) {
     const reason = imagesLimitedBy === IMAGE_LIMITED_BY.CONNECTION
       ? INTAKE_REJECTIONS.CONNECTION_WITHOUT_IMAGES
       : INTAKE_REJECTIONS.PROVIDER_PASSES_NO_IMAGES;
-    return { accepted, rejections: list.length > 0 ? [reason] : [] };
+    return { accepted, rejections: list.length > 0 ? [reason] : [], refusedMediaType };
   }
   let free = Math.max(0, MAX_IMAGES_PER_MESSAGE - (Number(existingCount) || 0));
 
@@ -97,6 +119,14 @@ export function planAttachmentIntake(
     if (!isImageMediaType(file?.type)) {
       if (!rejections.includes(INTAKE_REJECTIONS.UNSUPPORTED_TYPE)) {
         rejections.push(INTAKE_REJECTIONS.UNSUPPORTED_TYPE);
+      }
+      continue;
+    }
+    const mediaType = file.type.toLowerCase();
+    if (!imageMediaTypes.includes(mediaType)) {
+      if (!refusedMediaType) {
+        refusedMediaType = mediaType;
+        rejections.push(INTAKE_REJECTIONS.PROVIDER_REFUSES_FORMAT);
       }
       continue;
     }
@@ -109,7 +139,7 @@ export function planAttachmentIntake(
     accepted.push(file);
     free -= 1;
   }
-  return { accepted, rejections };
+  return { accepted, rejections, refusedMediaType };
 }
 
 /** Bilder aus einem ClipboardEvent — Screenshots kommen hier als Datei an. */

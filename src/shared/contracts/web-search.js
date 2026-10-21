@@ -27,4 +27,3 @@ const WEB_SEARCH_LIMITS = Object.freeze({
 
 module.exports = { WEB_SEARCH_ERROR_CODES, WEB_SEARCH_LIMITS };
 
-module.exports = { WEB_SEARCH_ERROR_CODES, WEB_SEARCH_LIMITS };

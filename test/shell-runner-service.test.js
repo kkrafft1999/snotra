@@ -26,7 +26,8 @@ const {
   PROBE_MARKER,
   PATH_MARKER,
 } = require('../src/main/services/shell-runner-service');
-const { SHELL_EXECUTION_LIMITS } = require('../src/application/ports/shell-execution-port');
+const { SHELL_EXECUTION_LIMITS } = require('../src/shared/contracts/shell-execution');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 /**
  * Windows-Shells geben CRLF aus, eingecheckte Dateien kommen unter
@@ -442,7 +443,7 @@ test('run arbeitet im übergebenen Verzeichnis', async (t) => {
     const result = await service.run({ command, cwd: dir });
     assert.match(lines(result.stdout).pop(), new RegExp(`${path.basename(dir)}$`));
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 });
 
@@ -522,7 +523,7 @@ test('disposeSync ends a running command and its grandchild when the app quits (
     // Nothing left to end: a second call is harmless.
     service.disposeSync();
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 });
 
@@ -567,7 +568,7 @@ test('„Stop" beendet den Prozessbaum, nicht nur die Shell', async (t) => {
 
     await until(() => !isAlive(grandchild), 'the grandchild to be gone');
   } finally {
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   }
 });
 

@@ -9,14 +9,15 @@ const os = require('os');
 const path = require('path');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { createChatAttachmentStore } = require('../src/main/services/chat-attachment-store');
-const { createChatSessionSettings } = require('../src/main/services/chat-session-settings');
+const { createChatSessionSettings } = require('../src/application/chat/chat-session-settings');
 const { createChatHistoryStorePort } = require('../src/main/adapters/persistence-store-adapters');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
-const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
+const { registerChatHistoryForTest: registerChatHistoryHandlers, SAVE_CHAT } = require('./helpers/chat-history-handlers');
 const { sanitizeChatMessagesForStore } = require('../src/main/services/chat-history-normalization');
 const { CHAT_ACTIVATION } = require('../src/shared/contracts/chat');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeDir, removeTempDir } = require('./helpers/temp-dir');
 
 const PNG_1PX =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -42,7 +43,7 @@ function switchableSafeStorage() {
 
 async function tempUserData(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-b08-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 
@@ -50,8 +51,8 @@ async function tempUserData(t) {
 function start(dir, { safeStorage = { isEncryptionAvailable: () => false }, maxChatSessions = 50, fsImpl = fs, platform } = {}) {
   const app = { getPath: () => dir };
   const storage = createStorageService({
-    app,
-    safeStorage,
+    userDataPath: app.getPath(),
+    secretStore: safeStorage,
     fs: fsImpl,
     path,
     providerCatalog: createMockProviderCatalog(() => null),
@@ -65,7 +66,7 @@ function start(dir, { safeStorage = { isEncryptionAvailable: () => false }, maxC
     ipcMain,
     chatHistoryStore: createChatHistoryStorePort(storage),
     REQ,
-    chatAttachments: createChatAttachmentStore({ app, fs: fsImpl, path, log: silentLog, platform }),
+    chatAttachments: createChatAttachmentStore({ userDataPath: app.getPath(), fs: fsImpl, path, log: silentLog, platform }),
   });
   return { ipcMain, storage };
 }
@@ -104,12 +105,12 @@ test('#565: a history that cannot be decrypted keeps its images while its copy i
   const dir = await tempUserData(t);
   const safeStorage = switchableSafeStorage();
 
-  await start(dir, { safeStorage }).ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chatWithImage('chat-a'));
+  await start(dir, { safeStorage }).ipcMain.invoke(SAVE_CHAT, chatWithImage('chat-a'));
   assert.deepEqual(await attachmentFolders(dir), ['chat-a']);
 
   safeStorage.state.decrypts = false;
   const second = start(dir, { safeStorage });
-  assert.deepEqual(await second.ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, textChat('chat-b')), { ok: true });
+  assert.deepEqual(await second.ipcMain.invoke(SAVE_CHAT, textChat('chat-b')), { ok: true });
 
   const copies = await setAsideCopies(dir);
   assert.equal(copies.length, 1);
@@ -118,8 +119,8 @@ test('#565: a history that cannot be decrypted keeps its images while its copy i
 
   // Once the copy is gone, the next save sweeps as before.
   safeStorage.state.decrypts = true;
-  await fs.rm(path.join(dir, copies[0]), { recursive: true });
-  await second.ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, textChat('chat-c'));
+  await removeDir(path.join(dir, copies[0]));
+  await second.ipcMain.invoke(SAVE_CHAT, textChat('chat-c'));
   assert.deepEqual(await attachmentFolders(dir), []);
 });
 
@@ -128,10 +129,10 @@ test('#565: sessions dropped by MAX_CHAT_SESSIONS lose their images, a set-aside
   await fs.writeFile(path.join(dir, 'chat-history.json.undecryptable-2026-01-01T00-00-00-000Z'), '{}');
   const { ipcMain } = start(dir, { maxChatSessions: 2 });
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chatWithImage('chat-1'));
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chatWithImage('chat-2'));
+  await ipcMain.invoke(SAVE_CHAT, chatWithImage('chat-1'));
+  await ipcMain.invoke(SAVE_CHAT, chatWithImage('chat-2'));
   await new Promise((resolve) => setTimeout(resolve, 5));
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chatWithImage('chat-3'));
+  await ipcMain.invoke(SAVE_CHAT, chatWithImage('chat-3'));
 
   const { sessions } = await getHistory(ipcMain);
   const kept = sessions.map((s) => s.id).sort();
@@ -144,7 +145,7 @@ test('#565: without a set-aside copy, orphaned folders are still swept', async (
   await fs.mkdir(path.join(dir, 'chat-attachments', 'gone'), { recursive: true });
   const { ipcMain } = start(dir);
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chatWithImage('chat-a'));
+  await ipcMain.invoke(SAVE_CHAT, chatWithImage('chat-a'));
 
   assert.deepEqual(await attachmentFolders(dir), ['chat-a']);
 });
@@ -176,7 +177,7 @@ test('#566: a history from a newer release is moved aside byte for byte, not rew
   const { ipcMain } = start(dir);
 
   assert.deepEqual((await getHistory(ipcMain)).sessions, []);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, textChat('new'));
+  await ipcMain.invoke(SAVE_CHAT, textChat('new'));
 
   const copies = await setAsideCopies(dir);
   assert.equal(copies.length, 1);
@@ -195,7 +196,7 @@ test('#566: an encrypted history from a newer release is moved aside too, and it
   await fs.mkdir(path.join(dir, 'chat-attachments', 'old-1'), { recursive: true });
   const { ipcMain } = start(dir, { safeStorage });
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, textChat('new'));
+  await ipcMain.invoke(SAVE_CHAT, textChat('new'));
 
   const copies = await setAsideCopies(dir);
   assert.equal(copies.length, 1);
@@ -259,8 +260,8 @@ test('#567: image parts never reach the stored content, whatever stands next to 
 test('#567: delete uses one trimmed id for the list and the attachment folder', async (t) => {
   const dir = await tempUserData(t);
   const { ipcMain } = start(dir);
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chatWithImage('chat-a'));
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chatWithImage('chat-b'));
+  await ipcMain.invoke(SAVE_CHAT, chatWithImage('chat-a'));
+  await ipcMain.invoke(SAVE_CHAT, chatWithImage('chat-b'));
 
   assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_DELETE, '  chat-a '), { ok: true });
 
@@ -285,7 +286,7 @@ test('#567: an image is moved into place with the Windows retry', async (t) => {
   };
   const { ipcMain } = start(dir, { fsImpl: flakyFs, platform: 'win32' });
 
-  await ipcMain.invoke(REQ.CHAT_HISTORY_UPSERT, chatWithImage('chat-a'));
+  await ipcMain.invoke(SAVE_CHAT, chatWithImage('chat-a'));
 
   assert.equal(failures, 1);
   const { sessions } = await getHistory(ipcMain);

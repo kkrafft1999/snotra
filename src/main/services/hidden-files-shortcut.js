@@ -12,6 +12,15 @@
  * US keyboard, where it would match.
  */
 
+/**
+ * The part of Electron's `Input` the shortcut looks at.
+ * @typedef {{ type?: string, code?: string, shift?: boolean, alt?: boolean, meta?: boolean, control?: boolean, isAutoRepeat?: boolean }} KeyInput
+ */
+
+/**
+ * @param {KeyInput | null | undefined} input
+ * @param {string} [platform]
+ */
 function matchesHiddenFilesShortcut(input, platform = process.platform) {
   if (!input || input.type !== 'keyDown' || input.code !== 'Period') return false;
   if (input.shift !== true || input.alt === true) return false;
@@ -20,7 +29,12 @@ function matchesHiddenFilesShortcut(input, platform = process.platform) {
     : input.control === true && input.meta !== true;
 }
 
-/** A `before-input-event` listener that calls `onToggle` once per press. */
+/**
+ * A `before-input-event` listener that calls `onToggle` once per press.
+ *
+ * @param {{ platform?: string, onToggle: () => void }} options
+ * @returns {(event: { preventDefault: () => void }, input: KeyInput) => void}
+ */
 function createHiddenFilesShortcutHandler({ platform = process.platform, onToggle }) {
   return (event, input) => {
     if (!matchesHiddenFilesShortcut(input, platform)) return;

@@ -12,14 +12,15 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const LIMITS = { maxReadFileBytes: 4 * 1024 * 1024, maxWriteFileBytes: 4 * 1024 * 1024 };
 const BOM = '﻿';
 
 async function makeWorkspace(t, files = {}) {
   const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-patch-fidelity-'));
-  t.after(() => fs.rm(workspace, { recursive: true, force: true }));
+  t.after(() => removeTempDir(workspace));
   for (const [rel, content] of Object.entries(files)) {
     const abs = path.join(workspace, ...rel.split('/'));
     await fs.mkdir(path.dirname(abs), { recursive: true });

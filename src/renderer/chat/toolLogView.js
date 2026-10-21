@@ -22,7 +22,8 @@ import { normalizeChanges } from './fileChanges.js';
 import { t, tPlural } from '../i18n.js';
 
 const {
-  toolCategoryForEntry, normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive, normalizeSandboxOutside,
+  toolCategoryForEntry, isToolCategory, normalizeSandboxBlocked, normalizeSandboxDecision, normalizeSandboxLive, normalizeSandboxOutside,
+  normalizeInjectionFlag,
 } = contracts;
 
 /** Erledigt-Marke: nur noch für Screenreader — sichtbar tragen die Zeilen ein Symbol. */
@@ -224,8 +225,13 @@ export function syncChangesStrip(messageEl, files, options) {
   const strip = log ? buildChangesStrip(files, options) : null;
   if (old && strip) old.replaceWith(strip);
   else if (old) old.remove();
-  // Under the sandbox box when there is one (#792): that explains the steps.
-  else if (strip) (messageEl.querySelector(':scope > .chat-sandbox-blocked') || log).after(strip);
+  // Under the sandbox box (#792) and the injection box (#1011) when there
+  // are any: they explain the steps.
+  else if (strip) {
+    (messageEl.querySelector(':scope > .chat-injection-flag')
+      || messageEl.querySelector(':scope > .chat-sandbox-blocked')
+      || log).after(strip);
+  }
 }
 
 /**
@@ -440,13 +446,16 @@ export function syncToolLogSummary(wrap, { thinking = false, elapsedMs = 0 } = {
  * Trace-Eintrag für Store und Verlauf: nur Anzeige-Zeile und Tool-Name. Die
  * Argumente aus dem Engine-Ergebnis bleiben bewusst draußen (write_file_text
  * trägt dort bis zu 2 MB Dateiinhalt). What a writing call changed comes along
- * as summaries — ids and line counts, never content (#348) — and what the
- * sandbox refused, as kinds, paths and hosts (#792).
+ * as summaries — ids and line counts, never content (#348) — what the
+ * sandbox refused, as kinds, paths and hosts (#792), and whether the result
+ * looked like a prompt injection (#1011).
  */
 export function toolTraceEntryForStore(entry) {
   const line = toolLineText(entry);
   const tool = typeof entry?.tool === 'string' ? entry.tool : '';
   const skill = typeof entry?.skill === 'string' ? entry.skill : '';
+  // The tool's own category, as main wrote it (#1008).
+  const category = isToolCategory(entry?.category) ? entry.category : '';
   // Das Audit ist bereits bereinigt (nur Entscheidung, Klassen, Status,
   // Pfade – keine Inhalte); der Main normalisiert es beim Speichern erneut.
   const permission = entry?.permission && typeof entry.permission === 'object' ? { ...entry.permission } : null;
@@ -455,16 +464,19 @@ export function toolTraceEntryForStore(entry) {
   const sandboxDecision = sandboxBlocked ? normalizeSandboxDecision(entry?.sandboxDecision) : null;
   const sandboxLive = normalizeSandboxLive(entry?.sandboxLive);
   const sandboxOutside = normalizeSandboxOutside(entry?.sandboxOutside);
-  if (!tool && !skill && !permission && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside) return line;
+  const injectionFlag = normalizeInjectionFlag(entry?.injectionFlag);
+  if (!tool && !skill && !permission && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside && !injectionFlag) return line;
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
+  if (category) out.category = category;
   if (permission) out.permission = permission;
   if (changes) out.changes = changes;
   if (sandboxBlocked) out.sandboxBlocked = sandboxBlocked;
   if (sandboxDecision) out.sandboxDecision = sandboxDecision;
   if (sandboxLive) out.sandboxLive = sandboxLive;
   if (sandboxOutside) out.sandboxOutside = sandboxOutside;
+  if (injectionFlag) out.injectionFlag = injectionFlag;
   return out;
 }
 

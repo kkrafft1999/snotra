@@ -13,6 +13,9 @@
  */
 'use strict';
 
+/** @typedef {import('../ports/provider-runtime-port').ProviderAdapter} ProviderAdapter */
+/** @typedef {import('../ports/provider-runtime-port').ProviderConfig} ProviderConfig */
+
 const { Agent } = require('undici');
 const { createMessage } = require('../../shared/contracts/message');
 const {
@@ -22,20 +25,25 @@ const {
   LOCAL_MODELS_TIMEOUT_MS,
 } = require('../services/request-timeout');
 const { isLocalEndpoint } = require('../../shared/contracts/provider-endpoint');
+const { PER_CONNECTION } = require('../../shared/contracts/provider-capabilities');
 const { isMaxOutputTokens } = require('../../shared/contracts/settings');
 const { listChatModels, streamChatCompletionsRound } = require('./openai-chat-transport');
 const { streamResponsesRound } = require('./openai-responses-transport');
 
 const DEFAULT_BASE = 'http://localhost:1234/v1';
+/** @type {'chat'} */
 const API_STYLE_CHAT = 'chat';
+/** @type {'full'} */
 const API_STYLE_FULL = 'full';
 
 /**
  * Vorlagen belegen nur Werte vor; gespeichert wird die Auswahl nicht. Nach dem
  * Klick ist jedes Feld wieder frei — die Vorlage ist eine Abkürzung, keine
  * Betriebsart.
+ *
+ * @type {import('../ports/provider-runtime-port').ProviderTemplate[]}
  */
-const TEMPLATES = Object.freeze([
+const TEMPLATES = [
   {
     id: 'lm-studio',
     label: 'LM Studio',
@@ -85,13 +93,15 @@ const TEMPLATES = Object.freeze([
     apiStyle: API_STYLE_CHAT,
     hint: createMessage('provider.compatible.template.custom'),
   },
-]);
+];
 
 // --- TLS-Ausnahme ----------------------------------------------------------
 // Wie bei Ollama: ein lazy gebauter undici-Agent ohne Zertifikatsprüfung, der
 // nur greift, wenn der Nutzer es ausdrücklich eingeschaltet hat UND die
 // Ziel-URL https ist.
+/** @type {Agent|null} */
 let _insecureDispatcher = null;
+/** @type {Set<string>} */
 const _warnedInsecureUrls = new Set();
 
 function getInsecureDispatcher() {
@@ -101,6 +111,10 @@ function getInsecureDispatcher() {
   return _insecureDispatcher;
 }
 
+/**
+ * @param {string} url
+ * @param {ProviderConfig|null|undefined} config
+ */
 function dispatcherFor(url, config) {
   if (!config?.insecureTls) return undefined;
   if (!url.startsWith('https://')) return undefined;
@@ -114,28 +128,36 @@ function dispatcherFor(url, config) {
 
 // --- Konfiguration ---------------------------------------------------------
 
+/** @param {ProviderConfig|null|undefined} config */
 function baseUrlOf(config) {
   const raw = typeof config?.baseUrl === 'string' ? config.baseUrl.trim() : '';
   return (raw || DEFAULT_BASE).replace(/\/$/, '');
 }
 
+/** @param {ProviderConfig|null|undefined} config */
 function apiStyleOf(config) {
   return config?.apiStyle === API_STYLE_FULL ? API_STYLE_FULL : API_STYLE_CHAT;
 }
 
+/** @param {ProviderConfig|null|undefined} config */
 function sendToolsOf(config) {
   return config?.sendTools !== false;
 }
 
+/** @param {ProviderConfig|null|undefined} config */
 function maxOutputTokensOf(config) {
   return isMaxOutputTokens(config?.maxOutputTokens) ? config.maxOutputTokens : undefined;
 }
 
+/** @param {ProviderConfig|null|undefined} config */
 function supportsImagesOf(config) {
   return config?.supportsImages === true;
 }
 
-/** Zeitlimit der Modellliste: am Host, nicht an der Provider-ID (Issue #193). */
+/**
+ * Zeitlimit der Modellliste: am Host, nicht an der Provider-ID (Issue #193).
+ * @param {ProviderConfig|null|undefined} config
+ */
 function modelsTimeoutFor(config) {
   return isLocalEndpoint(baseUrlOf(config)) ? LOCAL_MODELS_TIMEOUT_MS : CLOUD_MODELS_TIMEOUT_MS;
 }
@@ -163,9 +185,13 @@ const CONTROL_CHARS_PATTERN = /[\u0000-\u001f\u007f]/;
  * „Name: Wert" je Zeile → Header-Objekt. Ungültige Zeilen werden still
  * übergangen: Ein Fehlertext mit dem Inhalt der Zeile wäre eine Kopie des
  * Geheimnisses an einer Stelle, an der es nicht hingehört.
+ *
+ * @param {unknown} raw
+ * @returns {Record<string, string>}
  */
 function parseExtraHeaders(raw) {
   if (typeof raw !== 'string' || !raw.trim()) return {};
+  /** @type {Record<string, string>} */
   const out = {};
   for (const line of raw.split(/\r?\n/)) {
     const trimmed = line.trim();
@@ -187,6 +213,10 @@ function parseExtraHeaders(raw) {
  * Sets a header, replacing one of the same name in any spelling. Header names
  * are case-insensitive; two keys that differ only in case would go out joined
  * (`Bearer sk-…, Basic …`) instead of one replacing the other (#541).
+ *
+ * @param {Record<string, string>} headers
+ * @param {string} name
+ * @param {string} value
  */
 function setHeader(headers, name, value) {
   const lower = name.toLowerCase();
@@ -201,8 +231,13 @@ function setHeader(headers, name, value) {
  * Normalfall bei lokalen Servern, kein Fehler. Zusatz-Header stehen zuletzt und
  * dürfen `Authorization` bewusst überschreiben: manche Gateways verlangen ein
  * anderes Schema als Bearer.
+ *
+ * @param {ProviderConfig|null|undefined} config
+ * @param {{ json?: boolean }} [options]
+ * @returns {Record<string, string>}
  */
 function buildHeaders(config, { json = true } = {}) {
+  /** @type {Record<string, string>} */
   const headers = json ? { 'Content-Type': 'application/json' } : {};
   const apiKey = typeof config?.apiKey === 'string' ? config.apiKey.trim() : '';
   if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
@@ -214,6 +249,7 @@ function buildHeaders(config, { json = true } = {}) {
 
 // --- Modellliste -----------------------------------------------------------
 
+/** @type {ProviderAdapter['listModels']} */
 async function listModels(config) {
   try {
     return await withRequestTimeout((signal) => listModelsRequest({ ...config, signal }), {
@@ -225,6 +261,7 @@ async function listModels(config) {
   }
 }
 
+/** @type {ProviderAdapter['listModels']} */
 async function listModelsRequest(config) {
   const base = baseUrlOf(config);
   return listChatModels({
@@ -243,13 +280,16 @@ async function listModelsRequest(config) {
  * Dropdown, damit ein kurzzeitig falsch antwortendes Gateway die Einstellung
  * nicht dauerhaft umschreibt.
  */
+/** @type {Set<string>} */
 const _chatFallbackBases = new Set();
 
 /** Nur diese beiden Status heißen „diesen Pfad gibt es hier nicht". */
+/** @param {number|undefined} status */
 function meansNoResponsesApi(status) {
   return status === 404 || status === 405;
 }
 
+/** @type {ProviderAdapter['streamChatRound']} */
 async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
   const base = baseUrlOf(config);
   const shared = {
@@ -321,11 +361,24 @@ module.exports = {
   // übrigen fünf Anbietern bleibt sie am Anbieter, damit sich etwa der
   // OpenAI-Schlüssel nicht über mehrere Zeilen verteilt.
   connectionPerPreset: true,
-  // Voreinstellung; die tatsächliche Fähigkeit steht in der Konfiguration und
-  // kommt aus `capabilitiesFor`.
-  capabilities: { images: false },
-  capabilitiesFor(config) {
-    return { images: supportsImagesOf(config) };
+  // Images follow the entry's own switch (*Supports images*), since two entries
+  // can point at servers of which only one understands them.
+  capabilities: {
+    images: {
+      supported: PER_CONNECTION,
+      setting: 'supportsImages',
+      reason: 'chat.image.error.connectionWithoutImages',
+    },
+    reasoningLevels: {
+      supported: false,
+      reason: 'provider.capability.reasoningLevels.notBuilt',
+      issue: 1148,
+    },
+  },
+  // Local or remote, and so the history budget, the price and the tokenizer
+  // profile, follow the server address (#193).
+  traits: {
+    priceTable: { litellmProviders: ['openrouter'], keyPrefixes: ['openrouter/'] },
   },
   defaultModel: '',
   defaultBaseUrl: DEFAULT_BASE,

@@ -53,7 +53,9 @@ async function useTheme(page, theme) {
     if (value === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
     else document.documentElement.removeAttribute('data-theme');
     void document.body.offsetHeight; // style and layout up to date, so the transitions exist
-    const running = document.getAnimations();
+    // The theme's transitions end at once; a looping one — the pairing's waiting
+    // dots (#1110) — has no end, and only its colour matters here.
+    const running = document.getAnimations().filter((animation) => animation.effect?.getComputedTiming().endTime !== Infinity);
     for (const animation of running) animation.finish();
     return running.length;
   }, theme);
@@ -142,7 +144,8 @@ test('the workspace and every settings section pass axe, light and dark; System 
   await writeFile(path.join(workspace, 'README.md'), '# Garden notes\n\nTomatoes go out after the last frost.\n', 'utf8');
   await writeFile(path.join(workspace, 'beds.md'), '- Bed 1: tomatoes\n- Bed 2: beans\n', 'utf8');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
-  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en' }), 'utf8');
+  // Developer mode on (#1213), so that Settings › Remote access is there to be checked.
+  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en', developerMode: true }), 'utf8');
 
   const snotra = await launchApp({ userDataDir });
   t.after(async () => {
@@ -173,13 +176,36 @@ test('the workspace and every settings section pass axe, light and dark; System 
   // Each section of the settings, the dialog only: the window behind it is
   // inert while it is open and was checked above.
   await openSettings(app, page);
-  for (const panel of ['models', 'security', 'tools', 'skills', 'memory', 'general']) {
+  for (const panel of ['models', 'security', 'tools', 'skills', 'memory', 'remote', 'general']) {
     await page.click(`.settings-nav-item[data-settings-panel="${panel}"]`);
     await poll(() => page.evaluate((key) => document.querySelector(`.settings-nav-item[data-settings-panel="${key}"]`)
       ?.getAttribute('aria-selected') === 'true', panel), { what: `settings section ${panel}` });
     await page.mouse.move(0, 0);
     await checkScreen(page, `settings › ${panel}`, findings, { context: '#modal-settings' });
   }
+
+  // Remote access (#1110) in the states main pushes once pairing is open —
+  // it is closed in this build, so they come as main would send them.
+  await page.click('.settings-nav-item[data-settings-panel="remote"]');
+  const quiet = { encryptionAvailable: true, phone: null, code: null, words: null, replacing: false, reason: null, locked: false };
+  const square = Array.from({ length: 21 }, (_, y) => Array.from({ length: 21 }, (_, x) => ((x * y + x) % 3 ? '0' : '1')).join(''));
+  const remoteStates = {
+    code: { ...quiet, state: 'code', code: { display: '0111-EP9D-ZH4Q-PYT4-HWWF', qr: 'snotra-pair:v1/relay.snotra-ai.dev/0111EP9DZH4QPYT4HWWF', expiresAt: Date.now() + 240000, modules: square } },
+    confirm: { ...quiet, state: 'confirm', words: ['coffeecake', 'groundhog', 'maestro', 'kangaroo', 'ozone', 'oncoming'] },
+    stopped: { ...quiet, state: 'stopped', reason: 'mac' },
+    // Last: its Remove phone opens the question checked below.
+    paired: { ...quiet, state: 'paired', phone: { pairedAt: Date.now() - 86400000, connected: true } },
+  };
+  for (const [name, state] of Object.entries(remoteStates)) {
+    await app.evaluate(({ BrowserWindow }, s) => BrowserWindow.getAllWindows()[0].webContents.send('remote:state', s), state);
+    await poll(() => page.evaluate(() => !!document.querySelector('#settings-remote-body .ra-card')), { what: `remote access: ${name}` });
+    await page.mouse.move(0, 0);
+    await checkScreen(page, `settings › remote › ${name}`, findings, { context: '#modal-settings' });
+  }
+  await page.click('#settings-remote-body [data-action="remove"]');
+  await checkScreen(page, 'settings › remote › remove?', findings, { context: '#modal-settings' });
+  // Back to General, which the check below works on.
+  await page.click('.settings-nav-item[data-settings-panel="general"]');
   assertClean(findings);
 
   // "System" (#999), reached with the keyboard on the page left open above:

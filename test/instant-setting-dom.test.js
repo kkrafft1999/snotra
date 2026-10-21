@@ -114,3 +114,20 @@ test('the first save fails, the second lands: the second value stands; a thrown 
   await flush();
   assert.deepEqual(choiceCalls, ['dark', 'dark'], 'the queue still runs');
 });
+
+test('a declined confirmation turns the switch back without saying "Not saved" (#1104)', async (t) => {
+  const ui = await mount();
+  t.after(ui.cleanup);
+  const { INSTANT_DECLINED } = await importRenderer('components', 'InstantSetting.js');
+  const { calls, save } = scriptedSave();
+  const status = ui.doc.getElementById('status');
+  ui.bindInstantSwitch(ui.input, status, save);
+
+  ui.flip(true);
+  await flush();
+  calls[0].resolve(INSTANT_DECLINED);
+  await flush();
+  assert.equal(ui.input.checked, false, 'back to what is stored');
+  assert.equal(status.textContent, '', 'a "Cancel" is no failure');
+  assert.equal(status.classList.contains('is-error'), false);
+});

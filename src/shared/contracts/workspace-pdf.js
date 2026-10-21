@@ -37,7 +37,11 @@ const WORKSPACE_PDF_ERRORS = Object.freeze({
 const WORKSPACE_PDF_SNIFF_BYTES = 1024;
 const PDF_SIGNATURE = [0x25, 0x50, 0x44, 0x46, 0x2d]; // %PDF-
 
-/** Does this head of a file belong to a PDF? The name does not count. */
+/**
+ * Does this head of a file belong to a PDF? The name does not count.
+ *
+ * @param {ArrayLike<number> | null | undefined} header
+ */
 function isPdfHeader(header) {
   const bytes = header || [];
   const end = Math.min(bytes.length, WORKSPACE_PDF_SNIFF_BYTES) - PDF_SIGNATURE.length;
@@ -59,6 +63,10 @@ function createWorkspacePdfResult({ bytes, size = 0, mtimeMs = 0 } = {}) {
   return { ok: true, bytes, size, mtimeMs };
 }
 
+/**
+ * @param {unknown} reason
+ * @param {Record<string, unknown>} [extra]
+ */
 function createWorkspacePdfError(reason, extra = {}) {
   const known = Object.values(WORKSPACE_PDF_ERRORS).includes(reason)
     ? reason
@@ -81,6 +89,8 @@ const PDF_ASSET_DIRS = Object.freeze({
 /**
  * A file name pdf.js may ask for: one plain name, no path, no dot at the
  * start. `78-EUC-H.bcmap`, `FoxitSerif.pfb`, `openjpeg.wasm`.
+ *
+ * @param {unknown} name
  */
 function isPdfAssetName(name) {
   return typeof name === 'string'

@@ -5,7 +5,7 @@ import { APP_LOCALES, onLocaleChange, t, tMessage } from '../i18n.js';
 import contracts from '../generated/contracts.js';
 import { toolLogDebug } from '../chat/toolLogDebug.js';
 
-const { resolveChatTitle } = contracts;
+const { resolveChatTitle, providerImageMediaTypes, CAPABILITY_LIMITS } = contracts;
 
 export function initChatModelPicker({
   api,
@@ -44,33 +44,50 @@ export function initChatModelPicker({
     return !!(p && p.configured);
   }
 
-  // Ob der aktive Anbieter Bild-Anhaenge weiterreicht (Issue #93). Ohne das
-  // Feld — etwa aus einem aelteren Zustand — gilt „kann keine Bilder".
-  //
-  // Bei Verbindung je Eintrag (Issue #202) entscheidet der **Eintrag**: Zwei
-  // Zeilen desselben Anbieters koennen auf verschiedene Server zeigen, von
-  // denen nur einer Bilder versteht.
-  function activeProviderSupportsImages() {
+  /**
+   * What the active model can do (#996): the entry's capabilities as main
+   * resolved them — with a connection of its own the entry decides (#202),
+   * otherwise its provider. Only read here, never derived. Without the field
+   * — an older state — the model takes no images.
+   */
+  function activeCapabilities() {
     const preset = (appStore.llmState.presets || [])
       .find((pr) => pr.id === appStore.llmState.activePresetId);
-    if (preset?.connection) return preset.connection.supportsImages === true;
+    if (preset?.capabilities) return preset.capabilities;
+    const pid = appStore.llmState.chatTarget?.providerId;
+    return (pid ? findProviderView(pid) : null)?.capabilities || null;
+  }
+
+  function activeProviderName() {
     const pid = appStore.llmState.chatTarget?.providerId;
     const p = pid ? findProviderView(pid) : null;
-    return p?.capabilities?.images === true;
+    return p?.name ? tMessage(p.name) : '';
+  }
+
+  // Whether the active model's provider passes image attachments on (#93).
+  function activeProviderSupportsImages() {
+    return activeCapabilities()?.images === true;
   }
 
   /**
    * Why the active model gets no images, for the composer's refusal (#995):
-   * on a connection it is the user's switch, otherwise Snotra's missing
-   * adapter for the provider (#90–#92) — not the model.
+   * the connection's switch, or Snotra's missing adapter for the provider —
+   * not the model. The register says which (#996).
    */
   function activeImageLimit() {
-    const preset = (appStore.llmState.presets || [])
-      .find((pr) => pr.id === appStore.llmState.activePresetId);
-    if (preset?.connection) return { limitedBy: 'connection', provider: '' };
-    const pid = appStore.llmState.chatTarget?.providerId;
-    const p = pid ? findProviderView(pid) : null;
-    return { limitedBy: 'provider', provider: p?.name ? tMessage(p.name) : '' };
+    const limitedBy = activeCapabilities()?.gaps?.images?.limitedBy === CAPABILITY_LIMITS.CONNECTION
+      ? CAPABILITY_LIMITS.CONNECTION
+      : CAPABILITY_LIMITS.PROVIDER;
+    return { limitedBy, provider: activeProviderName() };
+  }
+
+  /**
+   * The image formats the active model takes, and the name the composer's
+   * refusal gives it (#91). Without `imageMediaTypes` it takes them all; a
+   * provider can name fewer (Gemini: no GIF).
+   */
+  function activeImageFormats() {
+    return { mediaTypes: providerImageMediaTypes(activeCapabilities()), provider: activeProviderName() };
   }
 
   /**
@@ -371,7 +388,7 @@ export function initChatModelPicker({
     }
 
     if (!isConfigured) {
-      if (!appStore.llmState.encryptionAvailable) {
+      if (appStore.llmState.platformCapabilities?.secureStorage === false) {
         chatHint.textContent = t('chat.hint.noEncryption');
       } else if (active?.keyUnreadable) {
         chatHint.textContent = t('chat.hint.keyUnreadable');
@@ -544,6 +561,7 @@ export function initChatModelPicker({
     activeProviderConfigured,
     activeProviderSupportsImages,
     activeImageLimit,
+    activeImageFormats,
     refreshLLMState,
     updateChatChrome,
     syncChatTitle,

@@ -15,14 +15,14 @@
  */
 
 const vm = require('node:vm');
-const { buildSearchIndex, pageSections, searchManual, MIN_QUERY_LENGTH } = require('../../shared/manual/manual-search');
+const {
+  buildSearchIndex, pageSections, searchManual, MIN_QUERY_LENGTH, DEFAULT_SEARCH_RESULTS, MAX_SEARCH_RESULTS,
+} = require('../../shared/manual/manual-search');
 const { headingSlug } = require('../../shared/runtime/heading-slug');
 const { manualWebUrl, normalizeManualLocale } = require('./manual-service');
 const { parseManualAddress } = require('../../shared/manual/manual-address');
 const { splitManualLocale } = require('../../shared/i18n/locales');
 
-const DEFAULT_SEARCH_RESULTS = 5;
-const MAX_SEARCH_RESULTS = 10;
 /** The longest page is about 15 000 characters; a section is far below. */
 const MAX_PAGE_CHARS = 12_000;
 
@@ -37,11 +37,15 @@ const ABSOLUTE = /^[a-z][a-z0-9+.-]*:/i;
  * also `/safety/sandbox/`, `safety/sandbox.md` or the page's address on
  * docs.snotra-ai.dev — whatever it copied from an earlier answer. A fragment
  * becomes the anchor, the `de/` prefix the language, unless both were given.
+ *
+ * @param {unknown} reference
+ * @returns {{ slug: string, anchor: string|null, locale: string|null }}
  */
 function parsePageReference(reference) {
   let text = String(reference ?? '').trim();
   const address = parseManualAddress(text);
   if (address) return { slug: address.slug, anchor: address.fragment || null, locale: address.locale };
+  /** @type {string | null} */
   let anchor = null;
   const hash = text.indexOf('#');
   if (hash !== -1) {
@@ -60,12 +64,18 @@ function parsePageReference(reference) {
   return { slug, anchor, locale };
 }
 
-/** Links of a page as addresses on the web manual, screenshots as their description. */
+/**
+ * Links of a page as addresses on the web manual, screenshots as their description.
+ *
+ * @param {string} markdown
+ * @param {string} locale
+ * @param {string} slug
+ */
 function forTheModel(markdown, locale, slug) {
   const pageUrl = manualWebUrl(locale, slug);
   return markdown
-    .replace(IMAGE, (_match, alt) => (alt.trim() ? `*(Screenshot: ${alt.trim()})*` : ''))
-    .replace(LINK, (match, label, target, title = '') => {
+    .replace(IMAGE, (/** @type {string} */ _match, /** @type {string} */ alt) => (alt.trim() ? `*(Screenshot: ${alt.trim()})*` : ''))
+    .replace(LINK, (/** @type {string} */ match, /** @type {string} */ label, /** @type {string} */ target, /** @type {string} */ title = '') => {
       if (ABSOLUTE.test(target)) return match;
       try {
         return `[${label}](${new URL(target, pageUrl).href}${title})`;
@@ -82,8 +92,13 @@ function forTheModel(markdown, locale, slug) {
  * so both split a page the same way. `marked` itself is a dev dependency and
  * not in the packaged app; the UMD file sets a global when there is no
  * CommonJS around, so it runs in a context of its own — the same as in a page.
+ *
+ * @param {string} file
+ * @param {{ readFileSync: (file: string, encoding: 'utf8') => string }} fs
+ * @returns {import('../../shared/manual/manual-search').MarkdownLexer}
  */
 function loadVendoredMarkedLexer(file, { readFileSync }) {
+  /** @type {{ marked?: { lexer?: import('../../shared/manual/manual-search').MarkdownLexer } }} */
   const context = {};
   vm.runInNewContext(readFileSync(file, 'utf8'), context, { filename: file });
   const lexer = context.marked?.lexer;
@@ -94,9 +109,15 @@ function loadVendoredMarkedLexer(file, { readFileSync }) {
 /**
  * `manual` is the manual service, `loadLexer` returns marked's lexer — asked
  * for on the first call, so a chat that never looks anything up never loads it.
+ *
+ * @param {object} deps
+ * @param {Pick<ReturnType<typeof import('./manual-service').createManualService>, 'isAvailable' | 'getAllPages' | 'getIndex' | 'getPage'>} deps.manual
+ * @param {() => import('../../shared/manual/manual-search').MarkdownLexer} deps.loadLexer
  */
 function createManualLookup({ manual, loadLexer }) {
+  /** @type {Map<string, ReturnType<typeof buildSearchIndex>>} */
   const indexes = new Map();
+  /** @type {import('../../shared/manual/manual-search').MarkdownLexer|null} */
   let lexer = null;
 
   function lex() {
@@ -108,21 +129,28 @@ function createManualLookup({ manual, loadLexer }) {
     return Boolean(manual?.isAvailable?.());
   }
 
-  /** Built on the first search in a language and kept: the bundle never changes at runtime. */
+  /**
+   * Built on the first search in a language and kept: the bundle never changes at runtime.
+   *
+   * @param {string} locale
+   */
   function indexFor(locale) {
-    if (!indexes.has(locale)) {
-      indexes.set(locale, buildSearchIndex(manual.getAllPages(locale), { lexer: lex(), slugify: headingSlug }));
+    let index = indexes.get(locale);
+    if (!index) {
+      index = buildSearchIndex(manual.getAllPages(locale), { lexer: lex(), slugify: headingSlug });
+      indexes.set(locale, index);
     }
-    return indexes.get(locale);
+    return index;
   }
 
+  /** @param {{ query?: unknown, locale?: unknown, limit?: unknown }} [request] */
   function search({ query, locale, limit } = {}) {
     const language = normalizeManualLocale(locale);
     const text = typeof query === 'string' ? query.trim() : '';
     if (text.length < MIN_QUERY_LENGTH) {
       return { error: `The query needs at least ${MIN_QUERY_LENGTH} characters.` };
     }
-    const count = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), MAX_SEARCH_RESULTS) : DEFAULT_SEARCH_RESULTS;
+    const count = typeof limit === 'number' && Number.isInteger(limit) ? Math.min(Math.max(limit, 1), MAX_SEARCH_RESULTS) : DEFAULT_SEARCH_RESULTS;
     const results = searchManual(indexFor(language), text, { limit: count }).map((hit) => ({
       slug: hit.slug,
       title: hit.title,
@@ -141,6 +169,7 @@ function createManualLookup({ manual, loadLexer }) {
     };
   }
 
+  /** @param {{ slug?: unknown, anchor?: unknown, locale?: unknown }} [request] */
   function read({ slug, anchor, locale } = {}) {
     const reference = parsePageReference(slug);
     const language = normalizeManualLocale(locale ?? reference.locale ?? undefined);
@@ -159,6 +188,7 @@ function createManualLookup({ manual, loadLexer }) {
     const headings = sections.filter((section) => section.anchor);
 
     let selected = sections;
+    /** @type {string | null} */
     let section = null;
     if (wanted) {
       const at = sections.findIndex((entry) => entry.anchor === wanted);
@@ -189,8 +219,8 @@ function createManualLookup({ manual, loadLexer }) {
       slug: reference.slug,
       title: page.title,
       description: page.description,
-      ...(section && { section, anchor: wanted }),
-      url: manualWebUrl(language, reference.slug, section ? wanted : ''),
+      ...(section ? { section, anchor: wanted } : {}),
+      url: manualWebUrl(language, reference.slug, section ? wanted ?? '' : ''),
       markdown,
       // Only when the rest is missing: then the model can ask for a section.
       ...(truncated && {

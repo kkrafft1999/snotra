@@ -91,10 +91,20 @@ const {
 const { endpointHost, isLocalEndpoint } = require('./provider-endpoint');
 const {
   TOOL_CATEGORIES,
-  TOOL_CATEGORY_BY_TOOL,
-  toolCategory,
+  isToolCategory,
+  entryToolCategory,
   toolCategoryForEntry,
 } = require('./tool-categories');
+const {
+  TOOL_APPROVAL_VERBS,
+  TOOL_APPROVAL_WARNINGS,
+  TOOL_EXTERNAL_SERVICES,
+  TOOL_EXECUTION_KINDS,
+  isToolApprovalVerb,
+  isToolApprovalWarning,
+  isToolExternalService,
+  normalizeToolPresentation,
+} = require('./tool-presentation');
 const {
   GET_CONFIGURATION_TOOL,
   PROPOSE_CONFIG_CHANGE_TOOL,
@@ -113,7 +123,6 @@ const {
   CONFIG_TOOL_GROUPS,
   SKILLS_PLACE,
   toolSettingsPlace,
-  toolConfigGroup,
   skillOrigin,
   clipConfigDescription,
 } = require('./chat-configuration');
@@ -146,6 +155,11 @@ const {
   isChatPhase,
   isToolLinePhase,
 } = require('./chat');
+const {
+  INJECTION_SIGNAL_KINDS,
+  INJECTION_FLAG_SOURCES,
+  normalizeInjectionFlag,
+} = require('./injection-flag');
 const {
   createWorkspaceTreeChangedEvent,
   MAX_TREE_CHANGED_DIRECTORIES,
@@ -231,8 +245,16 @@ const {
   normalizeAttachments,
   imageAttachmentsOf,
   attachmentsCharCost,
+  IMAGE_ATTACHMENT_FORMAT_NAMES,
+  providerImageMediaTypes,
+  imageFormatNames,
   toDataUrl,
 } = require('./attachments');
+const {
+  PROVIDER_CAPABILITIES,
+  CAPABILITY_LIMITS,
+  resolveProviderCapabilities,
+} = require('./provider-capabilities');
 const {
   TOOL_PERMISSIONS_CONTRACT_VERSION,
   TOOL_RISK_CLASSES,
@@ -328,6 +350,12 @@ const {
   NOTICE_STORE_IDS,
   normalizeNotice,
 } = require('./notices');
+// Settings › Remote access (#1110) draws main's pairing state.
+const {
+  REMOTE_PAIRING_STATES,
+  REMOTE_PAIRING_REASONS,
+  normalizeRemotePairingState,
+} = require('./remote/pairing-state');
 
 module.exports = {
   createMessage,
@@ -412,9 +440,17 @@ module.exports = {
   endpointHost,
   isLocalEndpoint,
   TOOL_CATEGORIES,
-  TOOL_CATEGORY_BY_TOOL,
-  toolCategory,
+  isToolCategory,
+  entryToolCategory,
   toolCategoryForEntry,
+  TOOL_APPROVAL_VERBS,
+  TOOL_APPROVAL_WARNINGS,
+  TOOL_EXTERNAL_SERVICES,
+  TOOL_EXECUTION_KINDS,
+  isToolApprovalVerb,
+  isToolApprovalWarning,
+  isToolExternalService,
+  normalizeToolPresentation,
   GET_CONFIGURATION_TOOL,
   PROPOSE_CONFIG_CHANGE_TOOL,
   CONFIG_PROPOSAL_KINDS,
@@ -432,7 +468,6 @@ module.exports = {
   CONFIG_TOOL_GROUPS,
   SKILLS_PLACE,
   toolSettingsPlace,
-  toolConfigGroup,
   skillOrigin,
   clipConfigDescription,
   CHAT_ACTIVATION,
@@ -458,6 +493,9 @@ module.exports = {
   normalizeSandboxLive,
   normalizeSandboxOutside,
   SANDBOX_BLOCKED_KINDS,
+  INJECTION_SIGNAL_KINDS,
+  INJECTION_FLAG_SOURCES,
+  normalizeInjectionFlag,
   createPermissionProgressEvent,
   isChatErrorCode,
   isChatPhase,
@@ -525,7 +563,13 @@ module.exports = {
   normalizeAttachments,
   imageAttachmentsOf,
   attachmentsCharCost,
+  IMAGE_ATTACHMENT_FORMAT_NAMES,
+  providerImageMediaTypes,
+  imageFormatNames,
   toDataUrl,
+  PROVIDER_CAPABILITIES,
+  CAPABILITY_LIMITS,
+  resolveProviderCapabilities,
   TOOL_PERMISSIONS_CONTRACT_VERSION,
   TOOL_RISK_CLASSES,
   TOOL_RISK_CLASS_ORDER,
@@ -613,4 +657,7 @@ module.exports = {
   NOTICE_STORES,
   NOTICE_STORE_IDS,
   normalizeNotice,
+  REMOTE_PAIRING_STATES,
+  REMOTE_PAIRING_REASONS,
+  normalizeRemotePairingState,
 };

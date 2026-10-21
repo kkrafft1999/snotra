@@ -114,6 +114,7 @@ const PAIRS = [
   ...['keyword', 'tag', 'string', 'comment', 'number', 'function', 'type', 'property', 'punctuation']
     .map((role) => [`--ds-syntax-${role}`, ['--ds-surface'], TEXT, 'source text in the preview (#745)']),
   ['--ds-paper-ink', ['--ds-paper'], TEXT, 'the note on a page that could not be drawn (#641)'],
+  ['--ds-qr-ink', ['--ds-qr-plate'], TEXT, 'the pairing QR code, light in both themes so a camera reads it (#1110)'],
   ['--ds-grey-control-border', ['--ds-surface', '--ds-grey-bg'], NON_TEXT, 'edges of switches and fields'],
   ['--ds-blue', ['--ds-surface', '--ds-grey-bg', ...CHAT_GROUNDS], NON_TEXT, 'the focus ring and an active control'],
   ['--ds-mic-recording', ['--ds-chat-composer-bg'], NON_TEXT, 'the recording microphone'],

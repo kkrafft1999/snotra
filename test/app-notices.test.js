@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createAppNotices, postStoreFileEvent } = require('../src/main/services/app-notices');
+const { createAppNotices, postStoreFileEvent, postRemoteWorkspaceSwitch } = require('../src/main/services/app-notices');
 const { registerNoticeHandlers } = require('../src/main/ipc/notice-handlers');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { NOTICE_KINDS, NOTICE_STORES, normalizeNotice } = require('../src/shared/contracts/notices');
@@ -145,4 +145,17 @@ test('the reveal handler shows the log file of the background-error notice (#978
   notices.post({ id: 'background-error', kind: NOTICE_KINDS.BACKGROUND_ERROR, count: 1, location: '/l/main.log' });
   assert.deepEqual(await handlers.get(REQ.NOTICES_REVEAL)({}, 'background-error'), { ok: true });
   assert.deepEqual(shown, ['/l/main.log']);
+});
+
+test('the phone\'s switch is one notice with the folder\'s name, nothing to reveal (#1194)', () => {
+  const notices = createAppNotices({ log: quiet });
+  postRemoteWorkspaceSwitch(notices, 'alpha');
+  postRemoteWorkspaceSwitch(notices, 'beta');
+  assert.deepEqual(notices.list(), [{
+    id: 'remote-workspace-switched', kind: NOTICE_KINDS.REMOTE_WORKSPACE_SWITCHED, folder: 'beta', location: null, canReveal: false,
+  }], 'a second switch replaces the first');
+  assert.equal(normalizeNotice({ id: 'x', kind: NOTICE_KINDS.REMOTE_WORKSPACE_SWITCHED, folder: '' }), null);
+  assert.equal(normalizeNotice({ id: 'x', kind: NOTICE_KINDS.REMOTE_WORKSPACE_SWITCHED, folder: 'a'.repeat(256) }), null);
+  // A path offered as location is not taken: the notice never names one.
+  assert.equal(normalizeNotice({ id: 'x', kind: NOTICE_KINDS.REMOTE_WORKSPACE_SWITCHED, folder: 'a', location: '/home/me/a' }).location, null);
 });

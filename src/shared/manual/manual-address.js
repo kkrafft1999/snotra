@@ -16,7 +16,13 @@ const MANUAL_WEB_BASE = 'https://docs.snotra-ai.dev/';
 const MANUAL_HOST = 'docs.snotra-ai.dev';
 const SLUG = /^[a-z0-9-]+(?:\/[a-z0-9-]+)*$/;
 
-/** Address of a page on docs.snotra-ai.dev — every language but the root one lives under `/<code>/`. */
+/**
+ * Address of a page on docs.snotra-ai.dev — every language but the root one lives under `/<code>/`.
+ *
+ * @param {string} locale
+ * @param {string} [slug]
+ * @param {string} [fragment]
+ */
 function manualWebUrl(locale, slug = 'index', fragment = '') {
   const prefix = manualPathPrefix(locale);
   const page = !slug || slug === 'index' ? '' : `${slug}/`;
@@ -28,6 +34,9 @@ function manualWebUrl(locale, slug = 'index', fragment = '') {
  * `{ slug, fragment, locale }` of a page address on docs.snotra-ai.dev, or null
  * for anything else — another host, plain http, a file, an address that names
  * no page. `locale` is the language of a page under `/<code>/` and null for the root one.
+ *
+ * @param {unknown} href
+ * @returns {{ slug: string, fragment: string, locale: string|null }|null}
  */
 function parseManualAddress(href) {
   let url;

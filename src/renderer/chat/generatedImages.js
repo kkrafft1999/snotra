@@ -12,8 +12,9 @@
 import { t } from '../i18n.js';
 import { normalizeChanges } from './fileChanges.js';
 import { applyWorkspaceImages } from './workspaceImages.js';
+import contracts from '../generated/contracts.js';
 
-const IMAGE_TOOL = 'generate_image';
+const { TOOL_CATEGORIES } = contracts;
 
 const FORMAT_LABELS = Object.freeze({ png: 'PNG', jpg: 'JPEG', jpeg: 'JPEG', webp: 'WebP' });
 
@@ -35,7 +36,8 @@ function formatLabelOf(relativePath) {
 export function generatedImagesOf(toolTrace) {
   const images = new Map();
   for (const entry of Array.isArray(toolTrace) ? toolTrace : []) {
-    if (entry?.tool !== IMAGE_TOOL) continue;
+    // The image tool's entries, by the category main wrote from its descriptor (#1008).
+    if (entry?.category !== TOOL_CATEGORIES.IMAGE) continue;
     for (const change of normalizeChanges(entry.changes) || []) {
       const key = change.relativePath;
       if (!images.has(key)) images.set(key, { relativePath: key, changeIds: [] });
@@ -111,6 +113,21 @@ function settleFigure(figure) {
 }
 
 /**
+ * What the images stand under: the line of changed files, else the box of a
+ * flagged result (#1011), else the sandbox box (#792), else the tool log.
+ *
+ * @param {Element} messageEl
+ * @param {Element} log
+ * @returns {Element}
+ */
+function imagesAnchor(messageEl, log) {
+  return messageEl.querySelector(':scope > .chat-changes')
+    || messageEl.querySelector(':scope > .chat-injection-flag')
+    || messageEl.querySelector(':scope > .chat-sandbox-blocked')
+    || log;
+}
+
+/**
  * Puts the images under the line of changed files of `messageEl` — under the
  * tool log when there is no such line — or takes them away. The same set is
  * left standing, so a redraw of the message does not reload what is shown.
@@ -131,7 +148,7 @@ export function syncGeneratedImages(messageEl, images, { api, workspaceRoot, onO
   }
   if (old && old.dataset.key === key) {
     // Still in its place: the line of changed files may have been redrawn.
-    const anchor = messageEl.querySelector(':scope > .chat-changes') || messageEl.querySelector(':scope > .chat-sandbox-blocked') || log;
+    const anchor = imagesAnchor(messageEl, log);
     if (anchor.nextElementSibling !== old) anchor.after(old);
     return Promise.resolve();
   }
@@ -144,7 +161,7 @@ export function syncGeneratedImages(messageEl, images, { api, workspaceRoot, onO
   box.setAttribute('aria-label', t('chat.images.label'));
   for (const image of list) box.append(buildFigure(image, onOpen));
   if (old) old.replaceWith(box);
-  else (messageEl.querySelector(':scope > .chat-changes') || messageEl.querySelector(':scope > .chat-sandbox-blocked') || log).after(box);
+  else imagesAnchor(messageEl, log).after(box);
 
   return applyWorkspaceImages(box, { api, workspaceRoot }).then(() => {
     box.querySelectorAll('.chat-image').forEach(settleFigure);

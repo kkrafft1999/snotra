@@ -54,14 +54,18 @@ specification must not contradict.
   ([security concept §5](./security-concept.md#5-hard-boundaries-and-prompt-injection);
   AR-05, [#980](https://github.com/kkrafft1999/snotra/issues/980)). A remote
   front end cannot see that dialog and must never be the one to answer it.
-  Some loosening has no dialog at all: `settings:setUIPrefs` switches shell
-  and Python execution on, `settings:saveMcpServer` stores and at once starts
-  any command, `settings:commitSettings` turns off TLS checks for an entry.
-- **The renderer owns the conversation** ([#981](https://github.com/kkrafft1999/snotra/issues/981)).
-  It sends the whole history with every `chat:send`, which answers only when
-  the run is over; it writes the chat back with `chatHistory:upsert`; it
-  settles runs with the run-end marker and a grace of 10 s (#721). A second
-  front end would have to do all of that again.
+  Some loosening had no dialog at all: `settings:setUIPrefs` switched shell
+  and Python execution on, `settings:saveMcpServer` stored any command to
+  start, `settings:commitSettings` turns off TLS checks for an entry. Since
+  #1104 the first two go through the confirmation port, and the third is
+  classified as not loosening (§7.6).
+- **The conversation was the renderer's** until [#981](https://github.com/kkrafft1999/snotra/issues/981):
+  it sent the whole history with every `chat:send` and wrote the chat back
+  with `chatHistory:upsert`. Since #981 `chat:send` carries the question and
+  the chat id, and the core's conversation service keeps, saves and names the
+  chat; `chat:send` still answers only when the run is over, and the renderer
+  still settles what it draws with the run-end marker and a grace of 10 s
+  (#721).
 - **The security concept puts local processes running with the user's rights
   outside the protection goal** (§5). A listener on localhost is the first part
   of Snotra that such a process — and a web page in the user's browser — can
@@ -448,7 +452,10 @@ one place at registration that no handler can forget.
    (`no_approval_ui`). In the desktop app the window counts as subscribed to
    every chat of its workspace, so this happens only headless or when the
    window is gone; headless, the last connection's 30 s grace covers a
-   reconnect.
+   reconnect. *As built (#1194):* a card still needs the window to go out —
+   a phone's turn included —, and a phone that follows the chat is offered
+   it besides; without a window it expires, until a headless process
+   (#983) changes that.
 
 ### 7.5 What a connection may see
 
@@ -471,11 +478,17 @@ reachable. The method table of the dispatcher is the first line; the one that
 holds is the confirmation port of #980, whose adapters for `local` and `relay`
 answer every request with *no* — the measure of SEC-6.
 
-The catalogue below found loosening that today needs no native dialog at all
-(the shell and Python switches, MCP servers, insecure TLS). None of it is on
-the remote surface, and #980 has to cover it before any remote kind could ever
-reach a settings write. Who confirms a loosening when there is no desktop at
-all is [O4](#11-open-decisions).
+The catalogue below found loosening that needed no native dialog at all
+(the shell and Python switches, MCP servers, insecure TLS). #1104 decided
+each ([security concept §5](./security-concept.md#5-hard-boundaries-and-prompt-injection)):
+switching `shell_execute` or `run_python` on and storing a local MCP command
+that is new or changed now go through the same port, and the stores refuse
+both without a receipt — so even a remote kind that reached a settings write
+could switch neither on. "Ignore TLS certificate" is classified as not
+loosening: an `http://` address needs no dialog either, and the flag gives
+the agent nothing. None of these channels is on the remote surface. Who
+confirms a loosening when there is no desktop at all is
+[O4](#11-open-decisions).
 
 ## 8. Catalogue
 
@@ -496,13 +509,13 @@ release list, **2** #981, **3** #980.
 | `chat.open` | `{ chatId, limit? ≤100 }` → `{ chatId, title, state, messages: DisplayMessage[], before?, runId?, pendingApprovals: ApprovalRequest[] }` — subscribes; never changes the chat on the desktop's screen | `not-found` | L R | 1 (live state of a running turn and `pendingApprovals`: 2, 3) | `chatHistory:getSession`, without `chatHistory:activate` |
 | `chat.more` | `{ chatId, before, limit? ≤100 }` → `{ messages: DisplayMessage[], before? }` | `not-found` | L R | 1 | `chatHistory:getSession` |
 | `chat.close` | `{ chatId }` → `{}` — ends the subscription | — | L R | 1 | — |
-| `workspace.activate` | `{ workspaceId }` → `{ workspaceId }` — the path comes from the release list, never from the client | `not-found`, `busy` (a run in the current workspace works or waits, R6) | L R | 2 | `settings:activateFolder` |
-| `chat.new` | `{ workspaceId? }` → `{ chatId }` | `not-found` | L R | 2 | — (today the renderer makes chats and upserts them) |
-| `message.send` | `{ chatId, text ≤maxTextChars, clientMessageId ≤64 }` → `{ runId, messageId }` — a repeated `clientMessageId` answers again and starts nothing | `not-found`, `busy` (the chat is running), `too-large`, `unavailable` (no provider set up) | L R | 2 | `chat:send` — the text and the chat id, not the history |
+| `workspace.activate` | `{ workspaceId }` → `{ workspaceId }` — the path comes from the release list, never from the client; the window opens it as from its menu and says so in a notice | `not-found` (also when the window could not open it), `busy` with `data.why`: `running` (a turn works or waits, R6) or `unsaved-changes` (the file on show at the desktop has unsaved changes — refused without a dialog, decided 2026-10-20); `busy` without `why` when the window did not answer in time | L R | 2 | `settings:activateFolder` |
+| `chat.new` | `{ workspaceId? }` → `{ chatId }` — nothing is written until the first `message.send`; without `workspaceId`, the open workspace | `not-found`, `refused` (a workspace other than the one open at the desktop) | L R | 2 | — (today the renderer makes chats and upserts them) |
+| `message.send` | `{ chatId, text ≤maxTextChars, clientMessageId ≤64 }` → `{ runId, messageId }` — a repeated `clientMessageId` answers again and starts nothing, also on a new connection; `messageId` names the question | `not-found`, `refused` (the chat's workspace is not the one open at the desktop: its tools would work there — `workspace.activate` first), `busy` (the chat is running or waits for a card), `too-large`, `unavailable` (no provider set up for the chat's model) | L R | 2 | `chat:send` — the text and the chat id, not the history |
 | `run.abort` | `{ chatId }` → `{ aborted: bool }` | `not-found` | L R | 2 | `chat:abort` |
 | `chat.configuration` | `{ chatId }` → `{ model: { label }, mode: 'smart'\|'ask-all'\|'auto', reasoning?: string, skills: [{ name, state }], tools: [{ name, on }] }` — read only | `not-found` | L R | 2 | `chat:getConfiguration`, per chat instead of "the chat on screen" |
-| `approval.list` | `{ chatId? }` → `{ requests: ApprovalRequest[] }` | `not-found` | L R | 3 | `toolApproval:listPending` |
-| `approval.respond` | `{ requestId, response: 'allow-once'\|'deny', sandboxPaths?: string[] }` → `{ response }` — `sandboxPaths` only as a choice among the card's offers | `not-found` (not open, or not this connection's chat), `refused` (an option beyond the kind's) | L R | 3 | `toolApproval:respond` |
+| `approval.list` | `{ chatId? }` → `{ requests: ApprovalRequest[] }` — the open cards of the chats the connection may see | `not-found`, `refused` (the connection did not declare `approvals`) | L R | 3 | `toolApproval:listPending` |
+| `approval.respond` | `{ requestId, response: 'allow-once'\|'deny', sandboxPaths?: (string\|null)[] }` → `{ response }` — `sandboxPaths` only as a choice among the card's offers, named as the card showed them | `not-found` (not open, or not a chat this connection follows), `refused` (an option or a path beyond the kind's, or no `approvals` capability), `invalid-params` | L R | 3 | `toolApproval:respond` |
 
 `toolApproval:subscribe` has no method of its own: declaring `approvals` in
 `session.hello` and subscribing to a chat with `chat.open` together do what it
@@ -512,9 +525,13 @@ does.
 concept §7): `{ messageId, role: 'user'|'assistant', text: Markdown,
 toolLines?: [{ line, tool, status }], attachments?: [{ kind: 'image',
 placeholder: true, name? }], origin?: { kind, client }, interrupted?: bool,
-createdAt? }`. Tool lines are worded by
+createdAt? }`. Tool lines are the lines the desktop shows, worded by
 [`tool-display.js`](../src/shared/presentation/tool-display.js) in the
-connection's language; no tool arguments, no schemas, no tool results.
+desktop's language — the history keeps no arguments to word a stored line
+again, and a chat should not mix two languages (decided 2026-10-20, #1194);
+no tool arguments, no schemas, no tool results. `messageId` is `m<index>`,
+the message's place in the chat, and `before` in `chat.more` is such an id.
+The history keeps no time per message, so `createdAt` is left out for now.
 
 **`ApprovalRequest`** — the card's DTO (`createToolApprovalRequestDto`,
 `contractVersion: 1`) as the connection's kind may see it: `requestId`,
@@ -534,8 +551,8 @@ answers this connection may give. `sessionAllowed`, `alwaysAllowed`,
 | `chat.delta` | `{ chatId, runId, text }` | 1 | `chat:delta` |
 | `chat.tool-line` | `{ chatId, runId, callIndex, phase: 'pending'\|'start'\|'done', tool, line, permission?, changes?: [{ relativePath, status, added, removed }] }` — no `args`, no `schema` | 1 | `chat:tool-line` |
 | `chat.progress` | `{ chatId, runId, type: 'phase'\|'reasoning'\|'workspace'\|'permission'\|'run-end', … }` — the fields of each type as in [`chat.js`](../src/shared/contracts/chat.js) | 1 | `chat:progress` |
-| `chat.message` | `{ chatId, message: DisplayMessage }` — a message another front end wrote | 2 | — |
-| `chat.updated` | `{ chatId, title?, cost?, configurationChanged?: true }` | 2 | `toolPermissions:changed`, `skills:changed`, in part |
+| `chat.message` | `{ chatId, message: DisplayMessage }` — a message another front end wrote: a turn's question once it is saved, to every follower but the connection that asked, with `origin` when a remote asked | 2 | — |
+| `chat.updated` | `{ chatId, title?, cost?, configurationChanged?: true }` — so far `title`, when a chat got its name | 2 | `toolPermissions:changed`, `skills:changed`, in part |
 | `approval.request` | `ApprovalRequest` | 3 | `toolApproval:request` |
 | `approval.resolved` | `{ requestId, chatId, response: string\|null, invalidated: bool, reason: string\|null, by?: { kind, client } }` | 3 | `toolApproval:resolved` |
 | `session.resync` | `{ reason }` — the gap could not be filled; open the chats again | 1 | — |
@@ -556,6 +573,8 @@ listed together where they share their class.
 | --- | --- | --- |
 | `chatHistory:get`, `chatHistory:getSession` | mapped: `chats.list`, `chat.open`, `chat.more` | Read only; display DTOs instead of stored rows |
 | `chat:delta`, `chat:tool-line`, `chat:progress` (push) | mapped: `chat.delta`, `chat.tool-line`, `chat.progress` | Published by chat to subscribers, without raw tool arguments |
+| `chat:turn-started` (push) | desktop | The window following a turn another front end started (#1194, step 2b); the remote side hears of it as `chat.message` |
+| `workspace:switch-requested` (push), `workspace:switch-answer` | desktop | The window opening the folder `workspace.activate` asked for, and its outcome (#1194, step 2c) |
 | `settings:getFolderHistory`, `settings:getLastFolder` | mapped: `workspaces.list` | Names and ids, never paths |
 | `update:getVersion` | mapped: `session.hello` | — |
 | `settings:activateFolder` | mapped in step 2: `workspace.activate` | By id, and refused during a run (R6) |
@@ -565,15 +584,15 @@ listed together where they share their class.
 | `toolApproval:subscribe`, `toolApproval:listPending`, `toolApproval:respond` | after #980: `session.hello` capability with `chat.open`, `approval.list`, `approval.respond` | Answers only *allow once* and *deny*; loosening stays with the confirmation port |
 | `toolApproval:request`, `toolApproval:resolved` (push) | after #980: `approval.request`, `approval.resolved` | — |
 | `toolPermissions:changed`, `skills:changed` (push) | after #981: folded into `chat.updated` | A remote client cares about its chat's configuration, not the settings page |
-| `chatHistory:upsert`, `chat:title` | **never**: the core persists and titles the chat (#981) | Remote front ends do not write chat rows; the window stops doing it too |
+| *chatHistory:upsert*, *chat:title* — removed with #981 | **never**: the core persists and titles the chat (#981) | Remote front ends do not write chat rows; the window no longer does either |
 | `chatHistory:setActive`, `chatHistory:activate` | desktop | The desktop's own screen state; `activate` switches the global preset and mode |
 | `chatHistory:delete` | desktop, for now ([O6](#11-open-decisions)) | Destructive |
 | `chatHistory:readAttachment` | later, as `attachment.read` | Images are placeholders in the first version ([§6.4](#64-binary-payloads)) |
 | `chat:file-changes` | later | The diff of what the agent changed; useful to a local client, not needed first |
-| `toolPermissions:setMode`, `addRule`, `removeRule`, `setSensitivePaths`, `resetWorkspaceRules`, `resetAll`, `setWorkspaceSandbox`, `setWorkspaceMode`, `setProgramAllowance` | desktop, **never** remote | Loosening (§7.6) |
-| `toolPermissions:clearSessionGrants`, `revokeSessionGrant`, `removeWorkspaceHost`, `removeProgramAllowance` | desktop | They only tighten and could be offered later; nothing needs them first |
-| `toolPermissions:getState`, `getSecurityOverview`, `resolveProgram`, `chooseAllowanceFolder` | desktop | The settings page's view; a folder dialog |
-| `settings:setUIPrefs`, `settings:commitSettings`, `settings:saveMcpServer`, `settings:deleteMcpServer`, `settings:reloadMcpServers`, `settings:testMcpServer`, `settings:setWebSearchApiKey` | desktop, **never** remote | Secrets come in here, and several loosen without a dialog (§7.6) |
+| `toolPermissions:setMode`, `addRule`, `removeRule`, `setSensitivePaths`, `resetWorkspaceRules`, `resetAll`, `setWorkspaceSandbox`, `setWorkspaceMode`, `setProgramAllowance`, `addHosts`, `setNewWorkspaceSandbox`, `resetWorkspaceSandbox`, `resetSandboxEverywhere` | desktop, **never** remote | Loosening (§7.6), or a reset that can undo a tightening |
+| `toolPermissions:clearSessionGrants`, `revokeSessionGrant`, `removeWorkspaceHost`, `removeGlobalHost`, `removeProgramAllowance` | desktop | They only tighten and could be offered later; nothing needs them first |
+| `toolPermissions:getState`, `getSecurityOverview`, `getSandboxOverview`, `resolveProgram`, `chooseAllowanceFolder` | desktop | The settings page's view; a folder dialog |
+| `settings:setUIPrefs`, `settings:commitSettings`, `settings:saveMcpServer`, `settings:deleteMcpServer`, `settings:reloadMcpServers`, `settings:testMcpServer`, `settings:setWebSearchApiKey` | desktop, **never** remote | Secrets come in here; the execution switches and a local MCP command are confirmed through the port (§7.6, #1104) |
 | `settings:getLLMState`, `setActivePreset`, `setReasoningEffort`, `listModels`, `cancelModels`, `getUIPrefs`, `getToolCatalog`, `getMcpCatalog`, `getWebSearchState`, `getImageGenerationState`, `listImageModels`, `cancelImageModels`, `getPythonState`, `getShellState`, `getSkillCatalog`, `reloadSkills`, `getMemory`, `forgetMemory`, `removeFolderFromHistory` | desktop | The settings window. Choosing a chat's model from a phone is [O6](#11-open-decisions); it needs the per-chat model of #981 first |
 | `skills:suggest` | desktop | A helper of the window's composer |
 | `skills:makeGlobal` | desktop | Native confirmation; writes a global skill folder (#980) |
@@ -593,8 +612,10 @@ listed together where they share their class.
 | `update:check`, `ignoreVersion`, `download`, `cancelDownload`, `discardDownload`, `install`, `update:available`, `update:progress` (push) | desktop | Updating the app is the desktop's business |
 | `feedback:getDiagnostics`, `feedback:send` | desktop | The feedback form |
 | `remote:getState`, `remote:pair:start`, `remote:pair:cancel`, `remote:unpair`, `remote:state` (push) | desktop, **never** remote | Pairing and removing the phone (#1114); a phone must not be able to pair another or remove itself through the protocol, and the *Allow* is the confirmation port's |
+| `remote:release:get`, `remote:release:set`, `remote:release:changed` (push) | desktop, **never** remote | Which workspaces the phone sees (#1195): opening one is a loosening with a receipt, and a phone must not widen what it may see |
+| `developerMode:get`, `developerMode:toggle`, `developerMode:changed` (push) | desktop, **never** remote | Developer mode (#1213) opens pairing; a phone must not open pairing for another |
 | `voice:start`, `voice:audio`, `voice:stop`, `voice:cancel`, `voice:transcript` (push), `whisper:transcribe`, `whisper:cancel` | desktop | The microphone belongs to the window; a phone has its own dictation |
-| all eleven `ui:*` pushes and `ui:preview-history-choice` | desktop | Menu items and shortcuts of the window |
+| all `ui:*` pushes and `ui:preview-history-choice` | desktop | Menu items and shortcuts of the window |
 | all `manual:*` channels | desktop | The manual window; it is also published at docs.snotra-ai.dev |
 
 When the catalogue becomes code, a test checks that every request and push
@@ -617,7 +638,7 @@ the user's attention, which a flood of cards would wear down.
 | **Someone on the network** | Reach the listener from the LAN or beyond | Loopback only, checked after binding; the SEC-5 measure as a test | yes |
 | **A web page in the user's browser** | Cross-site requests, a WebSocket-style hijack, DNS rebinding, guessing the port | `Host` allowlist, `Origin` and fetch metadata refused, the token only in a header (which forces a preflight that never succeeds), JSON only, no CORS headers, no token in a URL, a random port | yes. A page can still tell from timing that *something* listens on a port; it learns nothing more |
 | **Another user of the same machine** | Connect over loopback, which is open to every account | The token in a file only the user can read; 256 bits, constant-time comparison, new on every start, repeated failures throttled and reported | yes, as long as the operating system's file permissions hold |
-| **The agent's own processes** — a command, a Python script or an MCP server, steered by a prompt injection | Read the token and approve the agent's next call, or send it messages | The sandbox denies reading Snotra's folder (`sensitiveReadPaths`) and network access except through the domain proxy — on macOS the one Unix socket it opens is the SSH agent's; the token is never in a child's environment; the domain proxy must refuse loopback whatever a card opened (to be enforced when this is built); the token is an own secret, so output that prints it never reaches the model | yes where the sandbox runs. **Not** where it does not — see [§9.3](#93-what-is-not-defended) |
+| **The agent's own processes** — a command, a Python script or an MCP server, steered by a prompt injection | Read the token and approve the agent's next call, or send it messages | The sandbox denies reading Snotra's folder (`sensitiveReadPaths`) and network access except through the domain proxy — on macOS the one Unix socket it opens is the SSH agent's, on Linux it opens none (only the SSH relay outside the run's seccomp filter reaches the agent, #1155); the token is never in a child's environment; the domain proxy must refuse loopback whatever a card opened (to be enforced when this is built); the token is an own secret, so output that prints it never reaches the model | yes where the sandbox runs. **Not** where it does not — see [§9.3](#93-what-is-not-defended) |
 | **A client with a valid credential**, buggy or hostile | Do more than its kind allows | Ids instead of paths, normalizers for every method, a method table per kind, loosening refused in the core (#980), limits on size, rate and connections, one run per chat, no workspace switch during a run | yes — what remains is what the credential is for: read the released chats, write into them, answer *allow once* or *deny*, stop a run |
 | **A client answering someone else's card** | Answer a request of a chat it does not follow, or one that already ended | The answer is bound to the `requestId`, an open request, a subscription to its chat and the kind's options; requests are random 122-bit ids | yes |
 | **A program on a stale port** | Receive the token after a crash | The token changes with every start; clients send it only to the URL in the file | yes |
@@ -660,11 +681,47 @@ the attacker model.
 
 1. **Watch.** The remote dispatcher, the local transport, the release list,
    and the read-only methods and events. Needs none of the prerequisites; a
-   CLI can follow a chat from here on.
+   CLI can follow a chat from here on. *Built for the relay* (#1194):
+   `application/remote/remote-dispatcher.js` behind the channel, the release
+   list in `main/remote/release-store-adapter.js` (a workspace opens only
+   with a receipt for `remote-workspace`; the switch on *Settings › Tools ›
+   Security* asks for it, #1195, in `main/services/remote-release-settings.js`),
+   the desktop's reads in `main/remote/desktop-adapter.js`. `session.welcome`'s `seq` is
+   the dispatcher's count of its events, 0 for the welcome; on the relay
+   `session.resync` follows an event the channel could not carry. The local
+   transport is not built.
 2. **Write.** `message.send`, `chat.new`, `run.abort`, `workspace.activate`,
    `chat.configuration` — after #981, which also has to answer a turn with its
-   own chat's model and mode instead of the screen's (§7.3).
-3. **Decide.** The approval methods and events — after #980.
+   own chat's model and mode instead of the screen's (§7.3). *Built for the
+   relay so far* (#1194, step 2a): every method but `workspace.activate`,
+   writing only in the workspace open at the desktop. A turn goes through
+   the conversation service under a session `remote:<connection>`; any run
+   off screen — a phone's, or a chat left while its turn runs — takes its
+   own chat's model entry and mode (`chat-session-settings.js`: `presetFor`,
+   `runModeFor`). A stored *Auto* counts there only after an explicit switch
+   at the desktop, as on an automatic restore (#567; decided 2026-10-20).
+   Until step 3 the window answers a remote turn's cards. The window follows
+   a remote turn as one of its own (step 2b): `main/remote/window-follow.js`
+   sends `chat:turn-started` once the question is saved, then the turn's
+   events on the window's own channels; the window settles it at `run-end`
+   from what main saved, and its stop button stops it. `workspace.activate`
+   (step 2c) goes through the window as well
+   (`main/remote/window-workspace-switch.js`): it opens the folder as from
+   its menu, or answers `unsaved` while the file on show has unsaved
+   changes; without a window main opens it itself. A switch that happened
+   posts the notice `remote-workspace-switched` with the folder's name.
+3. **Decide.** The approval methods and events — after #980. *Built for
+   the relay* (#1194): the tool approval adapter tells who it offered a
+   card and who answered it (`observe`), and takes a remote's answer through
+   `respondFromRemote` — *allow once* or *deny*, and on a sandbox card only
+   paths it offered; anything wider is `refused`. A connection that declared
+   `approvals` gets the cards of the chats it follows (`approval.request`,
+   in `chat.open` as `pendingApprovals`) worded in its language, paths
+   inside the workspace relative to it, without the session scope, the
+   command rule or *for this workspace*; `approval.resolved` names who
+   answered. The first valid answer wins, the window's included. Every IPC
+   channel is classified in §8.3, and `test/remote-interface-catalogue.test.js`
+   keeps it so.
 4. **Relay.** The relay transport under the same dispatcher (phases 1–3 of
    #1081). A headless process serving the protocol needs #983 as well.
 

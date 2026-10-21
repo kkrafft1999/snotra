@@ -155,16 +155,13 @@ test('granted folders become writable and granted paths readable — what may no
   assert.ok(filesystem.denyRead.includes('~/.aws'), 'the protected list itself stays as it is');
 });
 
-test('without grants the run config has no allowRead — on macOS only what SSH needs (#932)', posixOnly, async () => {
-  const linux = makeService({ platform: 'linux' });
-  await linux.service.detect();
-  await linux.service.prepare({ command: 'x', workspaceRoot: `${HOME}/project`, runTmp: '/tmp/r', commandId: 'c', skipDetect: true });
-  assert.equal('allowRead' in linux.configs.at(-1).filesystem, false);
-
-  const { service, configs } = makeService({ platform: 'darwin' });
-  await service.detect();
-  await service.prepare({ command: 'x', workspaceRoot: `${HOME}/project`, runTmp: '/tmp/r', commandId: 'c', skipDetect: true });
-  assert.deepEqual(configs.at(-1).filesystem.allowRead, sshReadPaths(HOME));
+test('without grants the run config allows only what SSH needs to read (#932, #1155)', posixOnly, async () => {
+  for (const platform of ['darwin', 'linux']) {
+    const { service, configs } = makeService({ platform });
+    await service.detect();
+    await service.prepare({ command: 'x', workspaceRoot: `${HOME}/project`, runTmp: '/tmp/r', commandId: 'c', skipDetect: true });
+    assert.deepEqual(configs.at(-1).filesystem.allowRead, sshReadPaths(HOME), platform);
+  }
 });
 
 test('Linux: a granted folder that does not exist is made before the run, a refused one is not', posixOnly, async () => {

@@ -14,9 +14,10 @@
  * certainty counts as "more than the program". Quotes and backslashes are
  * understood, because arguments with spaces are common and harmless.
  *
- * @returns {{ok: true, words: {value: string, start: number, end: number}[]}
- *   | {ok: false, reason: 'empty'|'compound'|'expansion'}}
- *   `start`/`end` delimit a word in the original line, quotes included.
+ * `start`/`end` delimit a word in the original line, quotes included.
+ *
+ * @typedef {{ ok: true, words: Array<{ value: string, start: number, end: number }> }
+ *   | { ok: false, reason: 'empty'|'compound'|'expansion' }} SimpleCommand
  */
 
 /** Unquoted, these hand the run to something besides the program. */
@@ -26,15 +27,24 @@ const EXPANSION_CHARS = new Set(['$', '`']);
 /** `NAME=value` in front of the program. */
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
 
+/**
+ * @param {unknown} line
+ * @returns {SimpleCommand}
+ */
 function parseSimpleCommand(line) {
   const text = typeof line === 'string' ? line : '';
+  /** @type {Array<{ value: string, start: number, end: number, raw: string }>} */
   const words = [];
+  /** @type {{ value: string, start: number, end: number, raw: string }|null} */
   let current = null;
   let i = 0;
 
+  /** @param {number} at */
   const startWord = (at) => {
     if (!current) current = { value: '', start: at, end: at, raw: '' };
+    return current;
   };
+  /** @param {number} at */
   const endWord = (at) => {
     if (!current) return;
     current.end = at;
@@ -53,20 +63,20 @@ function parseSimpleCommand(line) {
     if (EXPANSION_CHARS.has(ch)) return { ok: false, reason: 'expansion' };
     // A comment could hide the rest of the line from the reader of the card.
     if (ch === '#' && !current) return { ok: false, reason: 'compound' };
-    startWord(i);
+    const word = startWord(i);
     if (ch === '\\') {
       const next = text[i + 1];
       if (next === undefined || next === '\n' || next === '\r') return { ok: false, reason: 'compound' };
-      current.value += next;
-      current.raw += ch + next;
+      word.value += next;
+      word.raw += ch + next;
       i += 2;
       continue;
     }
     if (ch === "'") {
       const close = text.indexOf("'", i + 1);
       if (close === -1) return { ok: false, reason: 'compound' };
-      current.value += text.slice(i + 1, close);
-      current.raw += text.slice(i, close + 1);
+      word.value += text.slice(i + 1, close);
+      word.raw += text.slice(i, close + 1);
       i = close + 1;
       continue;
     }
@@ -87,13 +97,13 @@ function parseSimpleCommand(line) {
         value += c;
         j += 1;
       }
-      current.value += value;
-      current.raw += text.slice(i, j + 1);
+      word.value += value;
+      word.raw += text.slice(i, j + 1);
       i = j + 1;
       continue;
     }
-    current.value += ch;
-    current.raw += ch;
+    word.value += ch;
+    word.raw += ch;
     i += 1;
   }
   endWord(text.length);

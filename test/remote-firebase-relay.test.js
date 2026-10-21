@@ -98,7 +98,7 @@ function fakeRelay({ desktopKeys, routes = {} } = {}) {
       const idToken = body.token === CUSTOM_TOKEN ? ID_TOKEN : FRESH_ID_TOKEN;
       return json(200, { idToken, refreshToken: 'REFRESH-SECRET', expiresIn: '3600' });
     }
-    if (key === `GET db.test/channels/${CHANNEL_ID}.json`) {
+    if (key === `GET db.test/channels/${CHANNEL_ID}/meta.json`) {
       const stream = eventStream();
       streams.push({ request, ...stream });
       return stream.response;
@@ -208,6 +208,8 @@ test('following the channel: the stream carries the ID token, put and patch buil
   const watch = adapter.watchChannel(CHANNEL_ID, { onRecord: (r) => records.push(r), onError: (e) => errors.push(e) });
   await settle();
   const [stream] = relay.streams;
+  assert.equal(stream.request.path, `/channels/${CHANNEL_ID}/meta.json`,
+    'only meta: read access on the channel would cascade into to-phone (#1142)');
   assert.equal(stream.request.query.get('auth'), ID_TOKEN);
   assert.equal(stream.request.headers.Accept, 'text/event-stream');
 

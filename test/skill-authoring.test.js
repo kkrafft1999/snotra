@@ -23,9 +23,10 @@ const {
 } = require('../src/shared/contracts/skills');
 const { checkSkillDocument } = require('../src/shared/runtime/skill-frontmatter');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
-const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
+const { formatLine: formatToolDisplayLine, withDescriptors } = require('./helpers/tool-descriptors');
 const { createSkillsService } = require('../src/main/services/skills-service');
 const { TOOL_CATEGORIES, toolCategoryForEntry } = require('../src/shared/contracts/tool-categories');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const VALID = '---\nname: release-notes\ndescription: Writes release notes. Use when asked for them.\n---\n\nDo it.\n';
 
@@ -83,16 +84,16 @@ async function withWorkspace(files, run) {
     }
     return await run(root);
   } finally {
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTempDir(root);
   }
 }
 
 function adapterReturning(result) {
-  const registry = {
+  const registry = withDescriptors({
     getTools: () => [],
     buildSystemPrompt: () => '',
     execute: async () => JSON.stringify(result),
-  };
+  });
   return createWorkspaceToolAdapter(registry, { fs: fsp, path });
 }
 
@@ -193,7 +194,7 @@ test('snotra-skill-authoring ships as a valid system skill and is named in snotr
 });
 
 test('a write into a skill of the open folder is its own log category, reading and images are not', () => {
-  const adapter = createWorkspaceToolAdapter({ getTools: () => [], buildSystemPrompt: () => '', execute: async () => '{}' });
+  const adapter = createWorkspaceToolAdapter(withDescriptors({ getTools: () => [], buildSystemPrompt: () => '', execute: async () => '{}' }));
   const skillPath = '.agents/skills/release-notes/SKILL.md';
   for (const tool of ['write_file_text', 'edit_file', 'apply_patch']) {
     const entry = adapter.buildTraceEntry(tool, { relative_path: skillPath });

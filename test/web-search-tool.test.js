@@ -3,8 +3,8 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
+const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
 
 function makeRegistry({ configured = true, search } = {}) {
   const calls = [];

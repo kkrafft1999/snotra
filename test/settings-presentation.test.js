@@ -33,7 +33,6 @@ test('every registered provider exposes presentation metadata', () => {
 
 test('buildLlmStateDto returns normalized preset and provider views', () => {
   const dto = presentation.buildLlmStateDto({
-    encryptionAvailable: true,
     config: {
       activeProvider: 'openai',
       activePresetId: 'p1',
@@ -65,7 +64,8 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
     locale: 'de',
   });
 
-  assert.equal(dto.encryptionAvailable, true);
+  // Encrypted storage reaches the window through the platform register only (#1156).
+  assert.equal('encryptionAvailable' in dto, false);
   assert.equal(dto.activePresetId, 'p1');
   assert.equal(dto.presets.length, 2);
 
@@ -101,7 +101,15 @@ test('buildLlmStateDto returns normalized preset and provider views', () => {
 
   // Der Composer liest die Bild-Faehigkeit aus dieser Sicht (Issue #93).
   assert.equal(openaiProvider.capabilities.images, true);
-  assert.equal(ollamaProvider.capabilities.images, false);
+  assert.equal(ollamaProvider.capabilities.images, true);
+  // …and which formats, where a provider takes fewer than all (#91).
+  assert.deepEqual(openaiProvider.capabilities, { images: true, reasoningLevels: true });
+  assert.deepEqual(dto.providers.find((p) => p.id === 'google').capabilities,
+    { images: true, imageMediaTypes: ['image/png', 'image/jpeg', 'image/webp'], reasoningLevels: true });
+  // Every entry carries its own capabilities, so the renderer reads instead
+  // of deriving them (#996); without a connection of its own, the provider's.
+  assert.deepEqual(openaiPreset.capabilities, openaiProvider.capabilities);
+  assert.deepEqual(ollamaPreset.capabilities, ollamaProvider.capabilities);
 });
 
 test('buildPresetView respects connection draft overrides', () => {
@@ -127,7 +135,6 @@ test('buildPresetView respects connection draft overrides', () => {
 
 test('a stored but undecryptable API key marks provider and presets as not configured', () => {
   const build = (apiKeyDecryptable) => presentation.buildLlmStateDto({
-    encryptionAvailable: true,
     config: {
       version: 3,
       activeProvider: 'openai',
@@ -250,6 +257,19 @@ test('API-Stil und Schalter der Zeile kommen mit ihren Voreinstellungen heraus',
   assert.equal(set.connection.supportsImages, true);
 });
 
+test('an entry with a connection of its own carries the capabilities of that connection (#996)', () => {
+  const off = compatPresetView({ baseUrl: 'x' });
+  assert.equal(off.capabilities.images, false);
+  // The composer says it is the user's switch, not Snotra (#995).
+  assert.equal(off.capabilities.gaps.images.limitedBy, 'connection');
+  const on = compatPresetView({ baseUrl: 'x', supportsImages: true });
+  assert.equal(on.capabilities.images, true);
+  assert.equal(on.capabilities.gaps.images, undefined);
+  // The gap that is not the user's to close names its issue.
+  assert.equal(on.capabilities.reasoningLevels, false);
+  assert.equal(on.capabilities.gaps.reasoningLevels.issue, 1148);
+});
+
 test('Eintraege der uebrigen Anbieter tragen keine eigene Verbindung', () => {
   const meta = providerCatalog.listProviderMeta().find((m) => m.id === 'ollama');
   const providerView = presentation.buildProviderView(meta, { baseUrl: 'http://127.0.0.1:11434' }, {});
@@ -271,7 +291,6 @@ test('buildLlmStateDto speaks the stored language', () => {
     providers: { ollama: { baseUrl: 'http://127.0.0.1:11434' } },
   };
   const build = (locale) => presentation.buildLlmStateDto({
-    encryptionAvailable: true,
     config,
     chatTarget: { providerId: 'ollama', model: 'llama3.2' },
     locale,
@@ -358,7 +377,6 @@ test('die bestehenden Anbieter zeigen keines der neuen Felder', () => {
 
 test('an entry with an older OpenAI model shows no level and says it is no longer offered (#724)', () => {
   const dto = presentation.buildLlmStateDto({
-    encryptionAvailable: true,
     config: {
       activeProvider: 'openai',
       activePresetId: 'old',

@@ -6,9 +6,10 @@ const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createFilesystemIpcAdapter } = require('../src/main/adapters/filesystem-ipc-adapter');
 const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
-const { createFileContextMenu } = require('../src/main/services/file-context-menu');
+const { createFileContextMenu } = require('../src/main/electron/file-context-menu');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // #849: "Information" travels to the renderer as fs:show-info, and "Reveal"
 // comes back over fs:revealItem — checked against the workspace like every
@@ -16,7 +17,7 @@ const { createMockIpcMain } = require('./helpers/mock-ipc');
 
 async function setup(t, { window = true } = {}) {
   const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-info-')));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const workspace = path.join(dir, 'ws');
   await fs.mkdir(workspace);
 

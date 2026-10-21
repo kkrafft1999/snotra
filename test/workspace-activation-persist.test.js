@@ -13,10 +13,11 @@ const path = require('path');
 const { createWorkspaceActivation } = require('../src/main/services/workspace-activation');
 const { registerDialogHandlers } = require('../src/main/ipc/dialog-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 async function makeFolder(t) {
   const folder = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-activation-'));
-  t.after(() => fs.rm(folder, { recursive: true, force: true }));
+  t.after(() => removeTempDir(folder));
   return path.resolve(folder);
 }
 

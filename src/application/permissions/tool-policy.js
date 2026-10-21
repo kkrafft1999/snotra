@@ -33,6 +33,17 @@ const {
 } = require('../../shared/contracts/tool-permissions');
 const { matchesPathPattern } = require('../../shared/runtime/path-pattern');
 
+/**
+ * @typedef {import('../../shared/contracts/tool-permissions').PermissionRule} PermissionRule
+ * @typedef {import('../../shared/contracts/tool-permissions').ToolRiskClass} ToolRiskClass
+ */
+
+/**
+ * The call as the rule matchers read it: the tool, its classes, and per
+ * target the spellings of its path (`targetPathForms`).
+ * @typedef {{ toolName: string, riskClasses: ToolRiskClass[], targets: string[][] }} PolicyCall
+ */
+
 /** Grundmatrix ohne gemerkte Entscheidungen (Konzept §3). */
 const POLICY_MATRIX = Object.freeze({
   [TOOL_PERMISSION_MODES.SMART]: Object.freeze({
@@ -61,7 +72,12 @@ const POLICY_MATRIX = Object.freeze({
   }),
 });
 
-/** Matrixzelle für genau eine Klasse. */
+/**
+ * Matrixzelle für genau eine Klasse.
+ * @param {unknown} mode
+ * @param {ToolRiskClass} riskClass
+ * @returns {string}  a POLICY_DECISIONS value
+ */
 function matrixDecision(mode, riskClass) {
   const row = POLICY_MATRIX[normalizeToolPermissionMode(mode)];
   return row[riskClass] || POLICY_DECISIONS.ASK;
@@ -70,6 +86,9 @@ function matrixDecision(mode, riskClass) {
 /**
  * Matrixentscheidung für mehrere Wirkungen: jede Teilwirkung muss erlaubt
  * sein, sonst wird gefragt (Konzept §2).
+ * @param {unknown} mode
+ * @param {unknown} riskClasses
+ * @returns {string}  a POLICY_DECISIONS value
  */
 function matrixDecisionForClasses(mode, riskClasses) {
   const classes = normalizeRiskClasses(riskClasses);
@@ -79,7 +98,12 @@ function matrixDecisionForClasses(mode, riskClasses) {
     : POLICY_DECISIONS.ASK;
 }
 
-/** Klassen, für die im Modus gefragt würde — Grundlage der Karte. */
+/**
+ * Klassen, für die im Modus gefragt würde — Grundlage der Karte.
+ * @param {unknown} mode
+ * @param {unknown} riskClasses
+ * @returns {ToolRiskClass[]}
+ */
 function classesRequiringAsk(mode, riskClasses) {
   const classes = normalizeRiskClasses(riskClasses) || [];
   return classes.filter((cls) => matrixDecision(mode, cls) !== POLICY_DECISIONS.ALLOW);
@@ -88,6 +112,9 @@ function classesRequiringAsk(mode, riskClasses) {
 /**
  * Globale Regeln plus Workspace-Regeln der kanonischen Wurzel. Gleichnamige
  * Ordner an anderer Stelle teilen keine Regeln (Konzept §7).
+ * @param {PermissionRule[]|null|undefined} rules
+ * @param {string|null|undefined} root
+ * @returns {PermissionRule[]}
  */
 function selectRulesForRoot(rules, root) {
   if (!Array.isArray(rules)) return [];
@@ -104,6 +131,8 @@ function selectRulesForRoot(rules, root) {
  * root-relative paths the planner resolved (`rulePaths`), lexically and as
  * the real path. A target without them — a bare string, an older caller —
  * falls back to its `path`.
+ * @param {Array<string | { path?: string, rulePaths?: string[] }>|null|undefined} targets
+ * @returns {string[][]}
  */
 function targetPathForms(targets) {
   if (!Array.isArray(targets)) return [];
@@ -120,6 +149,8 @@ function targetPathForms(targets) {
 /**
  * A path that still leaves its folder, or names one from the top, is not a
  * place inside the root; it never counts as covered by an allow rule.
+ * @param {string} rawPath
+ * @returns {boolean}
  */
 function isRootRelative(rawPath) {
   const text = String(rawPath).replace(/\\/g, '/');
@@ -132,6 +163,10 @@ function isRootRelative(rawPath) {
  * overwrite without a recovery copy is classified `delete` instead of
  * `write` (concept §9), but it destroys a file all the same: a block on
  * writes covers it (#515).
+ * @param {PermissionRule} rule
+ * @param {string} toolName
+ * @param {ToolRiskClass[]} riskClasses
+ * @returns {boolean}
  */
 function ruleNamesCall(rule, toolName, riskClasses) {
   if (rule.tool) return rule.tool === toolName;
@@ -145,6 +180,9 @@ function ruleNamesCall(rule, toolName, riskClasses) {
  * Muster für „alles“. Any form of any target is enough, and the comparison
  * ignores case: on macOS and Windows `Private/a` is `private/a`, and a block
  * that is too wide only tightens (#511).
+ * @param {PermissionRule} rule
+ * @param {PolicyCall} call
+ * @returns {boolean}
  */
 function denyRuleMatches(rule, { toolName, riskClasses, targets }) {
   if (!ruleNamesCall(rule, toolName, riskClasses)) return false;
@@ -157,6 +195,9 @@ function denyRuleMatches(rule, { toolName, riskClasses, targets }) {
  * eine Regel erlaubt sein, die alle Ziele einschließt, und die Klassen müssen
  * dauerhaft erlaubbar sein (read/write, Konzept §7). "All targets" means every
  * form of every target, compared exactly (#511).
+ * @param {PermissionRule[]} rules
+ * @param {PolicyCall} call
+ * @returns {string[]|null}  the ids of the covering rules, or null when the rules do not cover the call
  */
 function allowRulesCover(rules, { toolName, riskClasses, targets }) {
   if (riskClasses.some((cls) => !PERSISTENT_ALLOW_CLASSES.includes(cls))) return null;
@@ -164,6 +205,7 @@ function allowRulesCover(rules, { toolName, riskClasses, targets }) {
   // A command rule allows one command line and nothing else (#121).
   const allowRules = rules.filter((rule) => rule.effect === PERMISSION_RULE_EFFECTS.ALLOW && !isCommandRule(rule));
   if (allowRules.length === 0) return null;
+  /** @type {string[]} */
   const matched = [];
   for (const cls of riskClasses) {
     const covering = allowRules.find(
@@ -179,6 +221,11 @@ function allowRulesCover(rules, { toolName, riskClasses, targets }) {
   return matched;
 }
 
+/**
+ * @param {unknown} a
+ * @param {unknown} b
+ * @returns {boolean}
+ */
 function sameList(a, b) {
   return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((entry, index) => entry === b[index]);
 }
@@ -190,6 +237,12 @@ function sameList(a, b) {
  * and the declared network domains — and no input on stdin, which could turn
  * a harmless program into a different one. Workspace-bound through
  * `selectRulesForRoot`, like every workspace rule.
+ * @param {PermissionRule[]} rules
+ * @param {Object} call
+ * @param {string} call.toolName
+ * @param {ToolRiskClass[]} call.riskClasses
+ * @param {ShellCommandForm|null|undefined} call.shellCommand
+ * @returns {PermissionRule|null}  the command rule that covers the call
  */
 function commandRuleCovers(rules, { toolName, riskClasses, shellCommand }) {
   if (toolName !== COMMAND_RULE_TOOL) return null;
@@ -211,6 +264,11 @@ function commandRuleCovers(rules, { toolName, riskClasses, shellCommand }) {
 }
 
 /**
+ * The planned `shell_execute` call in the form command rules compare (#121).
+ * @typedef {{ command: string|null, cwd: string, networkDomains: string[], stdin: boolean }} ShellCommandForm
+ */
+
+/**
  * What the policy decided about one call. `ask` carries the classes the card
  * asks about; `allow` and `deny` name where the decision came from.
  *
@@ -229,12 +287,12 @@ function commandRuleCovers(rules, { toolName, riskClasses, shellCommand }) {
  * @param {Object} [input]
  * @param {string} [input.mode]
  * @param {string} [input.toolName]
- * @param {string[]} [input.riskClasses]  effektive Klassen des Aufrufs
- * @param {Array<{path: string}>} [input.targets]
+ * @param {string[]|null} [input.riskClasses]  effektive Klassen des Aufrufs; `null` for an invalid list, which is denied
+ * @param {Array<string | { path?: string, rulePaths?: string[] }>} [input.targets]
  * @param {string|null} [input.root]  kanonische Workspace-Wurzel
- * @param {Array} [input.rules]  normalisierte Regeln (global + alle Workspaces)
+ * @param {PermissionRule[]} [input.rules]  normalisierte Regeln (global + alle Workspaces)
  * @param {import('./session-grants').SessionGrant|null} [input.sessionGrant]  passende, noch gültige Sitzungsfreigabe
- * @param {{ command: string|null, cwd: string, networkDomains: string[], stdin: boolean }|null} [input.shellCommand]
+ * @param {ShellCommandForm|null} [input.shellCommand]
  *   the planned `shell_execute` call in the form command rules compare (#121)
  * @param {boolean} [input.toolDisabled]
  * @param {boolean} [input.unknownTool]

@@ -23,6 +23,7 @@ const {
   isGitSignal,
 } = require('../src/main/services/workspace-watcher');
 const { createWorkspaceTreeChangedEvent } = require('../src/shared/contracts/workspace-tree');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 /**
  * Wie im Skills-Test wird bewusst in POSIX-Pfaden gerechnet: Geprüft wird die
@@ -567,7 +568,7 @@ function realWatcherTest(name, run) {
     });
     t.after(async () => {
       watcher.close();
-      await nodeFs.promises.rm(root, { recursive: true, force: true });
+      await removeTempDir(root);
     });
     /**
      * Makes a change and repeats it until the watcher reports one that

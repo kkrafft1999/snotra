@@ -28,7 +28,12 @@ const CMD_META = /([()\][%!^"`<>&|;, *?])/g;
 /** `PATHEXT` when the environment has none — the Windows default. */
 const DEFAULT_PATHEXT = '.COM;.EXE;.BAT;.CMD';
 
-/** Windows environment names ignore case; `Path` and `PATH` are the same. */
+/**
+ * Windows environment names ignore case; `Path` and `PATH` are the same.
+ *
+ * @param {Record<string, unknown>|null|undefined} env
+ * @param {string} name
+ */
 function envValue(env, name) {
   const wanted = name.toUpperCase();
   for (const [key, value] of Object.entries(env || {})) {
@@ -42,9 +47,14 @@ function envValue(env, name) {
  * later `PATH` replaces an earlier `Path` instead of standing next to it. A
  * plain spread keeps both, and which one a child then sees depends on Node's
  * sort order — not on which was meant to win.
+ *
+ * @param {Array<Record<string, string|undefined>|null|undefined>} sources
+ * @returns {Record<string, string|undefined>}
  */
 function mergeWindowsEnv(...sources) {
+  /** @type {Record<string, string|undefined>} */
   const out = {};
+  /** @type {Map<string, string>} */
   const keyOf = new Map();
   for (const source of sources) {
     for (const [key, value] of Object.entries(source || {})) {
@@ -60,6 +70,8 @@ function mergeWindowsEnv(...sources) {
 /**
  * Quotes one argument for a program that splits its command line the usual
  * way (`CommandLineToArgvW`), then escapes it for `cmd`, twice.
+ *
+ * @param {unknown} arg
  */
 function escapeCmdArgument(arg) {
   let quoted = String(arg);
@@ -71,7 +83,11 @@ function escapeCmdArgument(arg) {
   return quoted.replace(CMD_META, '^$1').replace(CMD_META, '^$1');
 }
 
-/** The path of the batch file itself is read by `cmd` once. */
+/**
+ * The path of the batch file itself is read by `cmd` once.
+ *
+ * @param {unknown} file
+ */
 function escapeCmdCommand(file) {
   return String(file).replace(CMD_META, '^$1');
 }
@@ -81,6 +97,8 @@ function escapeCmdCommand(file) {
  * relative to `cwd`, a bare name is looked up in every `PATH` directory, and a
  * name without an extension is tried with every `PATHEXT` extension in order.
  *
+ * @param {string} command
+ * @param {{ env: Record<string, unknown>|null|undefined, cwd?: string, isFile: (file: string) => boolean }} context
  * @returns {string} the full path, or '' when nothing matches
  */
 function findWindowsCommand(command, { env, cwd, isFile }) {
@@ -107,8 +125,8 @@ function findWindowsCommand(command, { env, cwd, isFile }) {
  *
  * @param {object} input
  * @param {string} input.command
- * @param {string[]} input.args
- * @param {Record<string, string>} input.env  the child's environment
+ * @param {string[]} [input.args]
+ * @param {Record<string, string|undefined>} [input.env]  the child's environment
  * @param {string} [input.cwd]
  * @param {(file: string) => boolean} input.isFile
  * @returns {{ command: string, args: string[], options: object }}

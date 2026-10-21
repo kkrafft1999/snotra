@@ -4,12 +4,13 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { createLogFile, teeConsole, formatLine } = require('../src/main/services/log-file');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 /** The local log file (#978): written, rotated, read back, and never a reason to throw. */
 
 function tempDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-log-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDirSync(dir));
   return path.join(dir, 'logs');
 }
 

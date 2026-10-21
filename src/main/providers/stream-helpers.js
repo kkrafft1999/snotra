@@ -1,3 +1,7 @@
+/** @typedef {import('../ports/provider-runtime-port').StreamCallbacks} StreamCallbacks */
+/** @typedef {{ cancel?: (reason?: unknown) => Promise<unknown> }} Cancellable */
+/** @typedef {Pick<ReadableStreamDefaultReader<Uint8Array>, 'read'> & Cancellable} StreamReader  What the line readers need of a body reader. */
+
 // Token-Usage-Helfer stammen aus der gemeinsamen Contract-Schicht (Single
 // Source of Truth); hier nur re-exportiert, damit die Provider sie weiterhin
 // aus stream-helpers beziehen können.
@@ -19,7 +23,10 @@ const { createMessage } = require('../../shared/contracts/message');
 const MAX_STREAM_LINE_CHARS = 8 * 1024 * 1024;
 const MAX_ERROR_BODY_BYTES = 64 * 1024;
 
-/** Stops reading the rest of a body; a failure to do so changes nothing. */
+/**
+ * Stops reading the rest of a body; a failure to do so changes nothing.
+ * @param {Cancellable|null|undefined} reader
+ */
 function cancelQuietly(reader) {
   try {
     Promise.resolve(reader?.cancel?.()).catch(() => {});
@@ -34,6 +41,12 @@ function streamLimitError() {
   });
 }
 
+/**
+ * @param {StreamReader} reader
+ * @param {AbortSignal|undefined} abortSignal
+ * @param {{ maxLineChars?: number }} [options]
+ * @returns {AsyncGenerator<string>}
+ */
 async function* iterStreamLines(reader, abortSignal, { maxLineChars = MAX_STREAM_LINE_CHARS } = {}) {
   const decoder = new TextDecoder();
   let carry = '';
@@ -61,8 +74,16 @@ async function* iterStreamLines(reader, abortSignal, { maxLineChars = MAX_STREAM
   }
 }
 
+/**
+ * @param {StreamReader} reader
+ * @param {AbortSignal|undefined} abortSignal
+ * @param {{ maxEventChars?: number }} [options]
+ * @returns {AsyncGenerator<{ event: string|null, data: string }>}
+ */
 async function* iterSseEvents(reader, abortSignal, { maxEventChars = MAX_STREAM_LINE_CHARS } = {}) {
+  /** @type {string | null} */
   let currentEvent = null;
+  /** @type {string[]} */
   let dataLines = [];
   let dataChars = 0;
   for await (const line of iterStreamLines(reader, abortSignal, { maxLineChars: maxEventChars })) {
@@ -94,7 +115,11 @@ async function* iterSseEvents(reader, abortSignal, { maxEventChars = MAX_STREAM_
   }
 }
 
-/** At most `maxBytes` of a response body as text; the rest is not fetched (#539). */
+/**
+ * At most `maxBytes` of a response body as text; the rest is not fetched (#539).
+ * @param {Response} res
+ * @param {number} [maxBytes]
+ */
 async function readLimitedText(res, maxBytes = MAX_ERROR_BODY_BYTES) {
   if (typeof res?.body?.getReader !== 'function') return res.text().catch(() => '');
   const reader = res.body.getReader();
@@ -118,6 +143,7 @@ async function readLimitedText(res, maxBytes = MAX_ERROR_BODY_BYTES) {
   return text;
 }
 
+/** @param {Response} res */
 async function readErrorMessage(res) {
   return (await readErrorDetails(res)).message;
 }
@@ -126,6 +152,9 @@ async function readErrorMessage(res) {
  * The error text plus, where the API names it, the request field it objects
  * to (`error.param`, e.g. `reasoning.effort`). The field lets a provider
  * recognise its own rejections without matching on wording (#718).
+ *
+ * @param {Response} res
+ * @returns {Promise<{ message: string, param: string }>}
  */
 async function readErrorDetails(res) {
   const errText = await readLimitedText(res);
@@ -142,6 +171,11 @@ async function readErrorDetails(res) {
   return { message: msg, param };
 }
 
+/**
+ * @param {unknown} s
+ * @param {unknown} [fallback]
+ * @returns {unknown}
+ */
 function safeJsonParse(s, fallback = {}) {
   if (typeof s !== 'string' || !s.trim()) return fallback;
   try {
@@ -151,6 +185,7 @@ function safeJsonParse(s, fallback = {}) {
   }
 }
 
+/** @param {import('../ports/provider-runtime-port').AssistantMessage} [message] */
 function cancelledChatRound(message) {
   return { cancelled: true, message };
 }
@@ -158,10 +193,18 @@ function cancelledChatRound(message) {
 // Optionale Stream-Callbacks für Tool-Aufrufe, die das Modell gerade streamt.
 // Damit erscheint die Tool-Zeile im Chat schon, während z. B. der Dateiinhalt
 // noch generiert wird — nicht erst nach der Ausführung.
+/**
+ * @param {StreamCallbacks|undefined} callbacks
+ * @param {{ index?: number|string, name: string, args?: object }} call
+ */
 function notifyToolCallStart(callbacks, call) {
   if (typeof callbacks?.onToolCallStart === 'function') callbacks.onToolCallStart(call);
 }
 
+/**
+ * @param {StreamCallbacks|undefined} callbacks
+ * @param {{ index?: number|string, delta: string }} delta
+ */
 function notifyToolCallArgumentsDelta(callbacks, delta) {
   if (typeof callbacks?.onToolCallArgumentsDelta === 'function') callbacks.onToolCallArgumentsDelta(delta);
 }

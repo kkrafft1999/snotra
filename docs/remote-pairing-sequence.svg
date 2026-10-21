@@ -123,9 +123,9 @@
   <text class="lbl-sub" x="692.25" y="517" text-anchor="middle">{challenge, desktopKeys, proof}</text>
   <line class="m-req" x1="826" y1="586" x2="1038.5" y2="586"/>
   <polygon class="head m-req-head" points="1038.5,586 1029,581 1029,591"/>
-  <rect class="label-bg" x="828" y="537" width="314.94" height="43" rx="3"/>
+  <rect class="label-bg" x="826" y="537" width="318.94" height="43" rx="3"/>
   <text class="lbl" x="985.47" y="549" text-anchor="middle">create channel and pairing</text>
-  <text class="lbl-sub" x="985.47" y="563" text-anchor="middle">/channels/{channelId} {desktopKeys, status open}</text>
+  <text class="lbl-sub" x="985.47" y="563" text-anchor="middle">/channels/{channelId}/meta {desktopKeys, status open}</text>
   <text class="lbl-sub" x="985.47" y="577" text-anchor="middle">/pairing/{pairingId} {channelId, +5 min, one claim}</text>
   <line class="m-ret" x1="774" y1="632" x2="561.5" y2="632"/>
   <polyline class="m-ret head-open" points="570,627 561.5,632 570,637"/>
@@ -134,8 +134,8 @@
   <text class="lbl-sub" x="635.3199999999999" y="623" text-anchor="middle">custom token · claims: channel, role desktop</text>
   <line class="m-req" x1="586" y1="678" x2="1038.5" y2="678"/>
   <polygon class="head m-req-head" points="1038.5,678 1029,673 1029,683"/>
-  <rect class="label-bg" x="672.6" y="643" width="279.3" height="29" rx="3"/>
-  <text class="lbl" x="812.25" y="655" text-anchor="middle">listen on /channels/{channelId}</text>
+  <rect class="label-bg" x="668.5" y="643" width="287.5" height="29" rx="3"/>
+  <text class="lbl" x="812.25" y="655" text-anchor="middle">listen on /channels/{channelId}/meta</text>
   <text class="lbl-sub" x="812.25" y="669" text-anchor="middle">REST streaming (SSE), no Firebase SDK in main</text>
   <line class="m-ret" x1="534" y1="710" x2="321.5" y2="710"/>
   <polyline class="m-ret head-open" points="330,705 321.5,710 330,715"/>
@@ -209,7 +209,7 @@
   <line class="m-req" x1="1254" y1="1446" x2="1041.5" y2="1446"/>
   <polygon class="head m-req-head" points="1041.5,1446 1051,1441 1051,1451"/>
   <rect class="label-bg" x="964.5" y="1425" width="287.5" height="15" rx="3"/>
-  <text class="lbl" x="1108.25" y="1437" text-anchor="middle">listen on /channels/{channelId}/status</text>
+  <text class="lbl" x="1108.25" y="1437" text-anchor="middle">listen on /channels/{channelId}/meta</text>
   <line class="m-evt" x1="1014" y1="1492" x2="561.5" y2="1492"/>
   <polygon class="head m-evt-head" points="561.5,1492 571,1487 571,1497"/>
   <rect class="label-bg" x="720.125" y="1457" width="135.25" height="29" rx="3"/>

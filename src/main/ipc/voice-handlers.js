@@ -2,7 +2,11 @@
 
 const { isVoiceChunk } = require('../../shared/contracts/voice');
 
-/** The bytes of an ArrayBuffer or of any view on one — not its element values (#541). */
+/**
+ * The bytes of an ArrayBuffer or of any view on one — not its element values (#541).
+ *
+ * @param {ArrayBuffer|ArrayBufferView} payload
+ */
 function bytesOf(payload) {
   if (ArrayBuffer.isView(payload)) return Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
   return Buffer.from(payload);
@@ -16,11 +20,21 @@ function bytesOf(payload) {
  *
  * When the live transcription fails, main only reports it; the fallback to
  * Whisper is the renderer's — it holds the audio (whisper-handlers.js).
+ *
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {import('../ports/speech-port').SpeechPort} deps.speech
+ * @param {Record<string, string>} deps.REQ
+ * @param {Record<string, string>} deps.PUSH
  */
 function registerVoiceHandlers({ ipcMain, speech, REQ, PUSH }) {
+  /** @typedef {{ id: number, session: import('../ports/speech-port').LiveTranscription }} Recording */
+  /** @type {Map<import('electron').WebContents, Recording>} */
   const recordings = new Map();
+  /** @type {WeakSet<import('electron').WebContents>} */
   const watched = new WeakSet();
 
+  /** @param {import('electron').WebContents} sender */
   function drop(sender) {
     const recording = recordings.get(sender);
     if (!recording) return;
@@ -28,6 +42,11 @@ function registerVoiceHandlers({ ipcMain, speech, REQ, PUSH }) {
     recording.session.cancel();
   }
 
+  /**
+   * @param {import('electron').WebContents} sender
+   * @param {Recording} recording
+   * @param {object} payload
+   */
   function push(sender, recording, payload) {
     if (recordings.get(sender) !== recording || !sender || sender.isDestroyed?.()) return;
     sender.send(PUSH.VOICE_TRANSCRIPT, { id: recording.id, ...payload });
@@ -38,14 +57,19 @@ function registerVoiceHandlers({ ipcMain, speech, REQ, PUSH }) {
     const id = payload?.id;
     if (!Number.isSafeInteger(id)) return { error: 'invalid recording' };
     drop(sender);
-    const recording = { id, session: null };
-    recording.session = speech.openLiveTranscription({
-      onUpdate: (update) => push(sender, recording, update),
+    /** @type {Recording|null} */
+    let recording = null;
+    const session = speech.openLiveTranscription({
+      onUpdate: (update) => {
+        if (recording) push(sender, recording, update);
+      },
       onError: (error) => {
+        if (!recording) return;
         push(sender, recording, { error });
         if (recordings.get(sender) === recording) recordings.delete(sender);
       },
     });
+    recording = { id, session };
     recordings.set(sender, recording);
     if (sender && !watched.has(sender)) {
       watched.add(sender);
@@ -53,8 +77,8 @@ function registerVoiceHandlers({ ipcMain, speech, REQ, PUSH }) {
     }
     // Answers once the key is there — the connection itself is still being
     // set up, and the audio spoken meanwhile waits for it.
-    const started = await recording.session.started;
-    if (started.error) {
+    const started = await session.started;
+    if ('error' in started && started.error) {
       if (recordings.get(sender) === recording) recordings.delete(sender);
       return { error: started.error };
     }

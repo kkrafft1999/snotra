@@ -29,6 +29,9 @@ const path = require('path');
 
 const MAX_NAME_ATTEMPTS = 100;
 
+/**
+ * @param {number} value
+ */
 function twoDigits(value) {
   return String(value).padStart(2, '0');
 }
@@ -36,6 +39,9 @@ function twoDigits(value) {
 /**
  * The name for `attempt` (0, 1, 2, …): unchanged first, then with the time of
  * day, then counted as well. A folder has no extension, so `v1.2` stays whole.
+ *
+ * @param {string} baseName
+ * @param {{ isDirectory?: boolean, date: Date, attempt: number }} options
  */
 function trashName(baseName, { isDirectory = false, date, attempt }) {
   if (attempt === 0) return baseName;
@@ -46,6 +52,10 @@ function trashName(baseName, { isDirectory = false, date, attempt }) {
   return `${stem} ${time}${counter}${ext}`;
 }
 
+/**
+ * @param {string} parent
+ * @param {string} candidate
+ */
 function isInside(parent, candidate) {
   const relative = path.relative(parent, candidate);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
@@ -54,6 +64,11 @@ function isInside(parent, candidate) {
 /**
  * @param {object} options
  * @param {(target: string) => Promise<void>} options.trashItem  `shell.trashItem`
+ * @param {string} [options.platform]
+ * @param {Pick<typeof import('fs').promises, 'lstat' | 'stat' | 'rename'>} [options.fs]
+ * @param {() => string} [options.homedir]
+ * @param {() => Date} [options.now]
+ * @param {Pick<Console, 'warn'>} [options.logger]
  * @returns {(target: string) => Promise<void>} resolves once the item is in
  *   the trash, rejects with the trash API's error otherwise
  */
@@ -67,7 +82,11 @@ function createMoveToTrash({
 }) {
   if (typeof trashItem !== 'function') throw new TypeError('trashItem must be a function');
 
-  /** Whether a name in the trash is taken. Unknown counts as taken. */
+  /**
+   * Whether a name in the trash is taken. Unknown counts as taken.
+   *
+   * @param {string} candidate
+   */
   async function isTaken(candidate) {
     try {
       await fs.lstat(candidate);
@@ -77,7 +96,12 @@ function createMoveToTrash({
     }
   }
 
-  /** True once the item is in `~/.Trash`, false when this way is closed too. */
+  /**
+   * True once the item is in `~/.Trash`, false when this way is closed too.
+   *
+   * @param {string} target
+   * @param {{ message?: unknown } | null | undefined} refusal
+   */
   async function renameIntoTrash(target, refusal) {
     const trashDir = path.join(homedir(), '.Trash');
     const source = path.resolve(target);
@@ -108,6 +132,9 @@ function createMoveToTrash({
     return false;
   }
 
+  /**
+   * @param {string} target
+   */
   return async function moveToTrash(target) {
     try {
       await trashItem(target);

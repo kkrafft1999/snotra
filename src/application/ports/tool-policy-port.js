@@ -9,8 +9,8 @@
 
 /**
  * @typedef {Object} ToolPolicySnapshot
- * @property {'smart'|'ask-all'|'auto'} mode
- * @property {Array<object>} rules  normalisierte Regeln aller Geltungsbereiche
+ * @property {import('../../shared/contracts/tool-permissions').ToolPermissionMode} mode
+ * @property {Array<import('../../shared/contracts/tool-permissions').PermissionRule>} rules  normalisierte Regeln aller Geltungsbereiche
  * @property {string[]} sensitivePathPatterns
  * @property {string} policyVersion  ändert sich bei jeder Regel-/Modusänderung
  * @property {string} [rulesVersion]  changes with the rules, the sensitive

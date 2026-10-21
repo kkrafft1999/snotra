@@ -26,6 +26,10 @@ const { sniffImageMime } = require('../../shared/contracts/workspace-image');
 const { normalizeImageModel } = require('../../shared/contracts/settings');
 const { readErrorMessage } = require('../providers/stream-helpers');
 const { describeFetchErrorMessage } = require('../../shared/runtime/fetch-errors');
+const { isRecord } = require('../../shared/runtime/is-record');
+
+/** @typedef {import('../../shared/contracts/message').Message} Message */
+/** @typedef {{ message: string, code: string }} ImagesApiError */
 const {
   IMAGE_GENERATION_ERROR_CODES: CODES,
   IMAGE_SIZES,
@@ -51,16 +55,33 @@ const MAX_RETRIES = 2;
 const RETRY_DELAYS_MS = [2_000, 5_000];
 const MAX_RETRY_AFTER_MS = 20_000;
 
-/** A model id the Images API takes: `gpt-image-…` or `chatgpt-image-…`. */
+/**
+ * A model id the Images API takes: `gpt-image-…` or `chatgpt-image-…`.
+ * @param {unknown} model
+ * @returns {model is string}
+ */
 function isImageModel(model) {
   return normalizeImageModel(model) !== '';
 }
 
+/**
+ * @template T
+ * @param {unknown} value
+ * @param {readonly T[]} allowed
+ * @param {T} fallback
+ * @returns {T}
+ */
 function pick(value, allowed, fallback) {
-  return allowed.includes(value) ? value : fallback;
+  const hit = allowed.find((entry) => entry === value);
+  return hit === undefined ? fallback : hit;
 }
 
-/** Waits, unless the call is cancelled first. */
+/**
+ * Waits, unless the call is cancelled first.
+ * @param {number} ms
+ * @param {AbortSignal} [signal]
+ * @returns {Promise<void>}
+ */
 function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) {
@@ -73,12 +94,16 @@ function sleep(ms, signal) {
     }, ms);
     function onAbort() {
       clearTimeout(timer);
-      reject(signal.reason);
+      reject(signal?.reason);
     }
     signal?.addEventListener('abort', onAbort, { once: true });
   });
 }
 
+/**
+ * @param {Response | null | undefined} response
+ * @param {number} attempt
+ */
 function retryDelay(response, attempt) {
   // `Number(null)` is 0: without the header the backoff applies, not no wait.
   const raw = response?.headers?.get?.('retry-after');
@@ -87,6 +112,10 @@ function retryDelay(response, attempt) {
   return RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)];
 }
 
+/**
+ * @param {Response} response
+ * @returns {Promise<ImagesApiError>}
+ */
 async function readErrorBody(response) {
   let text = '';
   try {
@@ -106,12 +135,21 @@ async function readErrorBody(response) {
   }
 }
 
-/** A quota that is used up is not a rate limit: waiting does not help. */
+/**
+ * A quota that is used up is not a rate limit: waiting does not help.
+ * @param {number} status
+ * @param {string} code
+ */
 function isRetryable(status, code) {
   if (status === 503) return true;
   return status === 429 && code !== 'insufficient_quota';
 }
 
+/**
+ * @param {number} status
+ * @param {ImagesApiError} apiError
+ * @returns {{ code: string, error: string }}
+ */
 function errorFor(status, { message, code }) {
   const detail = message ? ` (${message.slice(0, 300)})` : '';
   if (status === 401 || status === 403) {
@@ -151,14 +189,14 @@ function errorFor(status, { message, code }) {
  * @param {(ms: number, signal?: AbortSignal) => Promise<void>} [deps.wait]  injectable for tests
  * @param {number} [deps.timeoutMs]
  * @returns {import('../../application/ports/image-generation-port').ImageGenerationPort & {
- *   listModels: (options?: { signal?: AbortSignal }) => Promise<{ models?: Array<object>, error?: object }>,
+ *   listModels: (options?: { signal?: AbortSignal }) => Promise<{ models?: string[], error?: string | Message }>,
  * }}  the port, plus the model list for the settings
  */
 function createOpenAiImageGenerationAdapter({
   readApiKey,
   hasApiKey,
   getModel = () => DEFAULT_IMAGE_MODEL,
-  fetchImpl = (...args) => globalThis.fetch(...args),
+  fetchImpl = (url, init) => globalThis.fetch(url, init),
   baseUrl = OPENAI_API_BASE,
   wait = sleep,
   timeoutMs = GENERATION_TIMEOUT_MS,
@@ -168,6 +206,12 @@ function createOpenAiImageGenerationAdapter({
     return isImageModel(chosen) ? chosen.trim() : DEFAULT_IMAGE_MODEL;
   }
 
+  /**
+   * @param {Record<string, unknown>} body
+   * @param {string} apiKey
+   * @param {AbortSignal} [abortSignal]
+   * @returns {Promise<{ response: Response, error?: ImagesApiError, payload?: Record<string, unknown> }>}
+   */
   async function requestOnce(body, apiKey, abortSignal) {
     return withRequestTimeout(
       async (signal) => {
@@ -184,7 +228,8 @@ function createOpenAiImageGenerationAdapter({
           return { response, error: await readErrorBody(response) };
         }
         // Read inside the timeout: the body is where the image is.
-        return { response, payload: await response.json() };
+        const payload = await response.json();
+        return { response, payload: isRecord(payload) ? payload : {} };
       },
       { timeoutMs, signal: abortSignal },
     );
@@ -222,10 +267,10 @@ function createOpenAiImageGenerationAdapter({
             }
             if (!response?.ok) return { error: await readErrorMessage(response) };
             const json = await response.json().catch(() => null);
-            if (!json || !Array.isArray(json.data)) {
+            if (!isRecord(json) || !Array.isArray(json.data)) {
               return { error: createMessage('provider.error.unexpectedAnswer.api', { provider: 'OpenAI' }) };
             }
-            const models = [...new Set(json.data.map((entry) => entry?.id).filter(isImageModel))]
+            const models = [...new Set(json.data.map((/** @type {unknown} */ entry) => (isRecord(entry) ? entry.id : undefined)).filter(isImageModel))]
               .sort((a, b) => a.localeCompare(b));
             return { models };
           },
@@ -269,6 +314,7 @@ function createOpenAiImageGenerationAdapter({
       }
 
       const model = currentModel();
+      /** @type {Record<string, unknown>} */
       const body = {
         model,
         prompt: text,
@@ -312,7 +358,8 @@ function createOpenAiImageGenerationAdapter({
         }
       }
 
-      const item = Array.isArray(result.payload?.data) ? result.payload.data[0] : null;
+      const first = Array.isArray(result.payload?.data) ? result.payload.data[0] : null;
+      const item = isRecord(first) ? first : null;
       const b64 = typeof item?.b64_json === 'string' ? item.b64_json : '';
       if (!b64) {
         return {
@@ -327,7 +374,7 @@ function createOpenAiImageGenerationAdapter({
       const bytes = Buffer.from(b64, 'base64');
       const expected = IMAGE_MIME_BY_FORMAT[outputFormat];
       const mime = sniffImageMime(bytes.subarray(0, 64));
-      if (mime !== expected) {
+      if (!mime || mime !== expected) {
         return {
           ok: false,
           code: CODES.SERVICE,
@@ -336,7 +383,7 @@ function createOpenAiImageGenerationAdapter({
       }
       /** @type {import('../../application/ports/image-generation-port').ImageGenerationOk} */
       const out = { ok: true, bytes, mime, model };
-      const revised = typeof item.revised_prompt === 'string' ? item.revised_prompt.trim() : '';
+      const revised = typeof item?.revised_prompt === 'string' ? item.revised_prompt.trim() : '';
       if (revised && revised !== text) out.revisedPrompt = revised.slice(0, LIMITS.MAX_PROMPT_CHARS);
       return out;
     },

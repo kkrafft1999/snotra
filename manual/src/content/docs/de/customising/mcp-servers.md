@@ -28,7 +28,8 @@ Ein MCP-Server ist fremder Code. Ein lokaler läuft auf deinem Rechner mit deine
 
 1. Öffne *Einstellungen › Tools › Einrichtung* und klick unter *MCP-Server* auf *Server hinzufügen*.
 2. Wähl unter *Verbindung* *Lokaler Prozess (stdio)* oder *Entfernt (HTTP)* und füll das Formular aus; die Felder sind unten erklärt.
-3. Klick auf *Speichern* und dann auf *Verbindung testen*. Das verbindet einmal und zeigt die Tools, die der Server anbietet — oder den Fehler, mit dem, was der Server mitgeschickt hat.
+3. Klick auf *Speichern*. [seit 1.27.1] Bei einem lokalen Server fragt ein Dialog deines Betriebssystems *Darf Snotra dieses Programm starten?* und zeigt die Befehlszeile, das Arbeitsverzeichnis und die Namen der Umgebungsvariablen — nie ihre Werte. Wähl *Programm erlauben*; *Abbrechen* speichert nichts.
+4. Klick auf *Verbindung testen*. Das verbindet einmal und zeigt die Tools, die der Server anbietet — oder den Fehler, mit dem, was der Server mitgeschickt hat.
 
 ![Der Dialog eines MCP-Servers: Kennung github, Anzeigename GitHub, die Verbindung auf „Lokaler Prozess (stdio)“, Kommando npx, Argumente „-y @modelcontextprotocol/server-github“, ein leeres Arbeitsverzeichnis, der Knopf „Variable hinzufügen“ und unten „Server entfernen“, „Verbindung testen“, „Abbrechen“ und „Speichern“.](screenshots/mcp-server.webp)
 
@@ -53,11 +54,15 @@ Header gehen nur an die Adresse, die du eingetragen hast. Schickt der Server Sno
 
 Speicherst du eine neue *Server-URL* — oder stellst einen Server zwischen *Lokaler Prozess* und *Entfernt* um —, **schaltet Snotra den Server aus und vergisst seine Tool-Liste**. Der Dialog sagt das, bevor du speicherst. Was du für die alte Adresse erlaubt hast, gilt nicht für eine neue. Klick auf *Verbindung testen*, um zu sehen, was die neue Adresse anbietet, und schalte den Server dann in der Liste ein.
 
+## Wann Snotra vor dem Speichern noch einmal fragt
+
+[seit 1.27.1] Ein lokaler Server fragt jedes Mal, wenn sich ändert, was er startet: das Kommando, ein Argument, das Arbeitsverzeichnis oder eine Umgebungsvariable — eine neue, eine entfernte oder ein neuer Wert. Ein- und Ausschalten, ein neuer Anzeigename und seine Tools fragen nie. Ein entfernter Server fragt ebenfalls nicht: Er startet nichts auf deinem Rechner, und jeden seiner Tool-Aufrufe gibst du auf einer Karte frei.
+
 ## Aus einer anderen App importieren
 
 Nutzt du MCP-Server schon in Claude Desktop, Claude Code oder Cursor, klick auf *Importieren* und füg deren `mcpServers`-Block ein. Snotra zeigt, was es erkannt hat: jeden Server mit seinem Startbefehl oder seiner Adresse, die Werte, die es geheim hält, noch nicht ausgefüllte Platzhalter und Server, die einen deiner ersetzen würden. [seit 1.25] Einträge mit einer `url` werden als entfernte Server übernommen, samt ihrer `headers`; ein Wert wie `${GITHUB_TOKEN}` zählt als Platzhalter, weil Snotra ihn nicht ausfüllt. Einträge, die nicht funktionieren können — etwa ein *HTTP+SSE*-Server —, stehen mit Grund darunter. Nimm heraus, was du nicht willst, und importiere dann.
 
-Importierte Server starten **ausgeschaltet**. Snotra liest nur, was du einfügst, nie die Konfigurationsdateien einer anderen App.
+Importierte Server starten **ausgeschaltet**. [seit 1.27.1] Jeder lokale fragt trotzdem im Dialog deines Betriebssystems, bevor er gespeichert wird, einer nach dem anderen; einer, bei dem du abbrichst, steht mit Grund hinter *Nicht übernommen*. Snotra liest nur, was du einfügst, nie die Konfigurationsdateien einer anderen App.
 
 ## Was dann passiert
 
@@ -71,6 +76,7 @@ Ein Server, der nicht startet, nicht erreichbar ist oder abstürzt, legt den Cha
 
 ## Wenn es nicht klappt
 
+- ***Nicht gespeichert: Du hast den Start des Programms nicht erlaubt.*** — du hast im Dialog deines Betriebssystems *Abbrechen* gewählt. Prüf das Kommando, speichere dann noch einmal und wähl *Programm erlauben*.
 - ***… konnte nicht gestartet werden …*** — das Kommando eines lokalen Servers wird nicht gefunden oder endet sofort. *Verbindung testen* zeigt, was der Server ausgegeben hat; oft fehlt das Programm hinter dem Kommando (Node.js, Docker) oder ein Token.
 - ***… nicht autorisiert (401) …*** — das Token in den Headern fehlt, ist falsch oder abgelaufen. Gib es unter *Header* neu ein.
 - ***… verlangt eine Anmeldung (OAuth) …*** — der Dienst will eine OAuth-Anmeldung, die Snotra noch nicht unterstützt. Such in seiner Dokumentation nach einem API-Schlüssel oder einem persönlichen Token.

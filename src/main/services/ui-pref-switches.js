@@ -6,7 +6,7 @@
  * start-up (#987). Each is read when it is needed rather than remembered, so
  * the switch takes effect without a restart.
  *
- * @param {{ readUIPrefs: () => Promise<Object> }} uiPrefsStore
+ * @param {{ readUIPrefs: () => Promise<Record<string, unknown>> }} uiPrefsStore
  * @param {string} key
  * @returns {() => Promise<boolean>}
  */

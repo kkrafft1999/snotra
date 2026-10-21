@@ -10,16 +10,17 @@ const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createFilesystemIpcAdapter } = require('../src/main/adapters/filesystem-ipc-adapter');
 const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
-const { createFileContextMenu } = require('../src/main/services/file-context-menu');
+const { createFileContextMenu } = require('../src/main/electron/file-context-menu');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 async function setup(t) {
   const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-create-')));
   t.after(async () => {
     // A test may leave a folder read-only; rm needs to get in again.
     await fs.chmod(path.join(dir, 'ws', 'locked'), 0o755).catch(() => {});
-    await fs.rm(dir, { recursive: true, force: true });
+    await removeTempDir(dir);
   });
   const workspace = path.join(dir, 'ws');
   const outside = path.join(dir, 'outside');

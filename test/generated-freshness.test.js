@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { staleGenerated } = require('../scripts/generated-freshness');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const BUILT = [
   'src/preload/bundle.js',
@@ -18,7 +19,7 @@ const BUILT = [
 
 function tree(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-freshness-'));
-  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  t.after(() => removeTempDirSync(root));
   const write = (rel, mtimeSeconds) => {
     const file = path.join(root, rel);
     fs.mkdirSync(path.dirname(file), { recursive: true });

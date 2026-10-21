@@ -37,7 +37,7 @@ const TRUNCATION_NOTE = `… [truncated to ${MAX_PROJECT_INSTRUCTION_CHARS} char
 
 /**
  * @param {Array<{source: string, text: string, truncated?: boolean}>} files
- * @returns {{ text: string, parts: Array<object> }}
+ * @returns {{ text: string, parts: Array<import('../../shared/contracts/context-breakdown').ContextPart> }}
  */
 function buildProjectInstructionsSystemPrompt(files) {
   const usable = normalizeProjectInstructionFiles(files);

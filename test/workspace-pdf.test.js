@@ -20,12 +20,13 @@ const {
   createWorkspacePdfError,
 } = require('../src/shared/contracts/workspace-pdf');
 const contracts = require('../src/shared/contracts');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const PDF = Buffer.from('%PDF-1.7\n%\xe2\xe3\xcf\xd3\n1 0 obj\n<<>>\nendobj\n', 'latin1');
 
 async function makeWorkspace(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-ws-pdf-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return fs.realpath(dir);
 }
 

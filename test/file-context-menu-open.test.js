@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { createFileContextMenu, LAUNCHABLE_EXTENSIONS } = require('../src/main/services/file-context-menu');
+const { createFileContextMenu, LAUNCHABLE_EXTENSIONS } = require('../src/main/electron/file-context-menu');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // CR-B17-08 (#649): "Open" on a program or script asks first, a failed Open
 // says so, and Delete cannot take the main process down.
@@ -193,7 +194,7 @@ test('Delete is guarded like Information: a dialog that throws does not reject t
 
 test('with the real file system: an executable script asks, a plain text file does not (#649)', { skip: process.platform === 'win32' }, async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-open-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const script = path.join(dir, 'build');
   const text = path.join(dir, 'notes.txt');
   await fs.writeFile(script, '#!/bin/sh\necho hi\n', { mode: 0o755 });

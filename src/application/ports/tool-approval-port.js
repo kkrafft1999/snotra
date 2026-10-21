@@ -28,6 +28,7 @@
  * @property {string} [providerLabel]  bei read-sensitive: Provider, an den der Inhalt geht
  * @property {string} [providerKey]  bei read-sensitive: the endpoint the content is bound to (§4)
  * @property {{ kind: string, text: string, truncated: boolean, masked: boolean }} [preview]
+ * @property {{ category: string, verb?: string, warning?: string }} [presentation]  the headline verb and warning, from the tool's descriptor (#1008)
  * @property {string} [planKey]  stabiler Schlüssel des validierten Plans
  * @property {string} [policyVersion]
  * @property {string} [chatId]
@@ -36,6 +37,7 @@
  * @property {object} [commandRule]  the rule main stores on "always"; never sent to the renderer
  * @property {object} [sandbox]  `sandbox` checkpoint: what the card shows and may open (#792)
  * @property {boolean} [workspaceAllowed]  `sandbox` checkpoint: whether "for this workspace" is offered (#946)
+ * @property {string} [workspaceRoot]  `sandbox` checkpoint with `workspaceAllowed`: the folder the hosts are kept open for (#946)
  * @property {object} [config]  `config` checkpoint: the proposal the card shows (#774)
  */
 

@@ -19,12 +19,13 @@ const nodeCrypto = require('node:crypto');
 const ref = require('../../scripts/remote-protocol-vectors');
 const { createRemotePairing } = require('../../src/application/remote/remote-pairing');
 const { createConfirmationReceipts } = require('../../src/application/permissions/user-confirmation');
-const { createNativeConfirmationAdapter } = require('../../src/main/adapters/native-confirmation-adapter');
+const { createNativeConfirmationAdapter } = require('../../src/main/electron/native-confirmation-adapter');
 const { createInMemoryRelayAdapter } = require('../../src/main/remote/in-memory-relay-adapter');
 const { createRemoteIdentityStore, FILE_NAME } = require('../../src/main/remote/identity-store-adapter');
 const { createRemotePairingCryptoAdapter } = require('../../src/main/remote/pairing-protocol');
 const { pairingPrompt } = require('../../src/main/remote/pairing-prompt');
 const { writeFileAtomic } = require('../../src/main/services/atomic-write');
+const { removeTempDirSync } = require('./temp-dir');
 
 const b64u = (buffer) => Buffer.from(buffer).toString('base64url');
 const bytes = (text) => Buffer.from(text, 'base64url');
@@ -120,6 +121,14 @@ function createPhone() {
     code: null,
     desktopPoints: null,
     sign: (message) => nodeCrypto.sign('sha256', message, { key: pairs.sign.privateKey, dsaEncoding: 'ieee-p1363' }),
+    /** The phone's long-term agreement with a desktop's agree point (`ss`, protocol §14). */
+    agree: (pointB64u) => {
+      const jwk = pairs.agree.privateKey.export({ format: 'jwk' });
+      const ecdh = nodeCrypto.createECDH('prime256v1');
+      ecdh.setPrivateKey(bytes(jwk.d));
+      return ecdh.computeSecret(bytes(pointB64u));
+    },
+    points,
 
     /** Steps 15–22: read the typed key, look the pairing up, claim it with MAC_P. */
     /**
@@ -154,7 +163,7 @@ function createPhone() {
 
 function tempDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-remote-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDirSync(dir));
   return dir;
 }
 
@@ -165,6 +174,7 @@ function tempDir(t) {
  * @param {boolean} [options.encryption]
  * @param {object} [options.confirmations]  replaces the native adapter
  * @param {string} [options.locale]
+ * @param {boolean} [options.open]  false: pairing closed, as in this build until #1110 opens it
  */
 function createPairingFixture(t, {
   dir = tempDir(t),
@@ -173,6 +183,7 @@ function createPairingFixture(t, {
   encryption = true,
   confirmations = null,
   locale = 'en',
+  open = true,
 } = {}) {
   const sharedRelay = relay || createInMemoryRelayAdapter({ relayHost: 'relay.test', now: clock.now });
   const dialog = createFakeDialog();
@@ -191,6 +202,7 @@ function createPairingFixture(t, {
     setTimer: clock.setTimer,
     clearTimer: clock.clearTimer,
     log,
+    open,
   });
   const states = [];
   pairing.subscribe((state) => states.push(state));

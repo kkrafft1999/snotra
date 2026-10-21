@@ -62,6 +62,14 @@ const CHAT_PROGRESS_TYPES = Object.freeze({
    * event of the run is in.
    */
   RUN_END: 'run-end',
+  /**
+   * Main saved the chat of a run, or could not (#981): `ok`, and `problem` —
+   * `unreadable` when the history file is there but could not be read (#473),
+   * `failed` when the write went wrong, null otherwise (#977).
+   */
+  CHAT_SAVED: 'chat-saved',
+  /** Main named the chat after its first answer (#359, #981): `title`. */
+  CHAT_NAMED: 'chat-named',
 });
 
 /** Untertyp eines chat:progress-Events mit type='permission'. */
@@ -103,6 +111,9 @@ const SKILL_SUGGESTION_MODES = Object.freeze({
 
 const DEFAULT_SKILL_SUGGESTION_MODE = SKILL_SUGGESTION_MODES.LEXICAL;
 
+/**
+ * @param {unknown} value
+ */
 function isSkillSuggestionMode(value) {
   return Object.values(SKILL_SUGGESTION_MODES).includes(value);
 }

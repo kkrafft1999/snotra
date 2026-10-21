@@ -1,10 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {
-  truncateToolLabel,
-  summarizeToolCall,
-  formatToolDisplayLine,
-} = require('../src/shared/presentation/tool-display');
+const { truncateToolLabel } = require('../src/shared/presentation/tool-display');
+const { summarize: summarizeToolCall, formatLine: formatToolDisplayLine } = require('./helpers/tool-descriptors');
 
 /**
  * One table for both languages (#290). English is the default and therefore

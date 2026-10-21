@@ -4,13 +4,14 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const MB = 1024 * 1024;
 
 async function outline(t, fileName, content) {
   const svc = createFsService({ fs, path, maxReadFileBytes: 2 * MB });
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-outline-'));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(root));
   await fs.writeFile(path.join(root, fileName), content, 'utf8');
   const started = Date.now();
   const result = JSON.parse(await svc.runOutlineFileTool({ relative_path: fileName }, root));

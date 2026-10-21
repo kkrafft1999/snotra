@@ -36,6 +36,14 @@
 const { MCP_LIMITS, MCP_TIMEOUTS } = require('../../shared/contracts/mcp');
 const { createMessage } = require('../../shared/contracts/message');
 const { transportError, detailOf, serverErrorOf } = require('./mcp-transport-errors');
+const { isRecord } = require('../../shared/runtime/is-record');
+
+/** @typedef {import('./mcp-transport-errors').ExitReason} ExitReason */
+/** @typedef {import('./mcp-transport-errors').McpTransport} McpTransport */
+/** @typedef {import('./mcp-transport-errors').McpTransportExit} McpTransportExit */
+/** @typedef {import('./mcp-transport-errors').McpRequestOptions} McpRequestOptions */
+/** @typedef {import('./mcp-transport-errors').JsonRpcMessage} JsonRpcMessage */
+/** @typedef {import('./mcp-transport-errors').TransportError} TransportError */
 
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
@@ -47,24 +55,33 @@ const CONNECT_TIMEOUT_CODES = new Set(['UND_ERR_CONNECT_TIMEOUT', 'ETIMEDOUT', '
 /** A session ID is visible ASCII only (specification, "Session Management"). */
 const SESSION_ID_PATTERN = /^[\x21-\x7e]+$/;
 
-/** The `code` of a network error, wherever in the `cause` chain it sits. */
+/**
+ * The `code` of a network error, wherever in the `cause` chain it sits.
+ * @param {unknown} error
+ */
 function errorCodeOf(error) {
+  /** @type {unknown} */
   let current = error;
-  for (let depth = 0; current && depth < 4; depth += 1) {
+  for (let depth = 0; isRecord(current) && depth < 4; depth += 1) {
     if (typeof current.code === 'string' && current.code) return current.code;
     current = current.cause;
   }
   return '';
 }
 
+/** @param {Response} response */
 function mediaTypeOf(response) {
   return String(response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
 }
 
-/** A JSON-RPC body may be one message or a batch of them. */
+/**
+ * A JSON-RPC body may be one message or a batch of them.
+ * @param {unknown} parsed
+ * @returns {JsonRpcMessage[]}
+ */
 function messagesOf(parsed) {
-  if (Array.isArray(parsed)) return parsed.filter((item) => item && typeof item === 'object');
-  return parsed && typeof parsed === 'object' ? [parsed] : [];
+  if (Array.isArray(parsed)) return parsed.filter(isRecord);
+  return isRecord(parsed) ? [parsed] : [];
 }
 
 /**
@@ -72,27 +89,32 @@ function messagesOf(parsed) {
  * @param {import('../../shared/contracts/mcp').McpServerConfig} deps.config
  *   a remote server: `url` and flat `headers`, decrypted
  * @param {typeof fetch} [deps.fetch]
- * @param {(method: string, params: unknown) => ({ result: unknown } | null)} [deps.onRequest]
+ * @param {import('./mcp-transport-errors').McpOnRequest} [deps.onRequest]
  *   answers a request the server sends; `null` means "not supported"
- * @param {(request: { id: number, method: string, reason: string }) => void} [deps.onCancel]
+ * @param {import('./mcp-transport-errors').McpOnCancel} [deps.onCancel]
  *   told when a request is given up — aborted or timed out
- * @param {{ SHUTDOWN_MS: number }} [deps.timeouts]
+ * @param {{ SHUTDOWN_MS?: number, REQUEST_MS?: number }} [deps.timeouts]
+ * @returns {McpTransport}
  */
 function createHttpTransport({
   config,
-  fetch: fetchImpl = (...args) => globalThis.fetch(...args),
+  fetch: fetchImpl = (url, init) => globalThis.fetch(url, init),
   onRequest = () => null,
   onCancel = () => {},
   timeouts = MCP_TIMEOUTS,
 }) {
   const limits = { ...MCP_TIMEOUTS, ...timeouts };
-  /** @type {Map<number, { resolve: Function, reject: Function }>} */
+  /** @type {Map<number, { resolve: (result: unknown) => void, reject: (error: Error) => void }>} */
   const pending = new Map();
-  /** Every running fetch, so closing can stop them all. */
+  /**
+   * Every running fetch, so closing can stop them all.
+   * @type {Set<AbortController>}
+   */
   const inflight = new Set();
+  /** @type {Set<(exit: McpTransportExit) => void>} */
   const exitListeners = new Set();
   // The endpoint as configured, then as a same-origin redirect moved it.
-  let endpoint = config.url;
+  let endpoint = config.url || '';
   let origin = '';
   let host = '';
   let sessionId = '';
@@ -109,10 +131,18 @@ function createHttpTransport({
     return excerpt;
   }
 
+  /**
+   * @param {string} message  the sentence for the model
+   * @param {string} key      the catalogue key for Settings
+   * @param {Record<string, unknown>} [params]
+   * @param {string} [stderr]
+   * @returns {TransportError}
+   */
   function fail(message, key, params, stderr = excerpt) {
     return transportError(message, stderr, createMessage(key, { label: config.label, ...params }));
   }
 
+  /** @param {Error} error */
   function failPending(error) {
     const open = [...pending.values()];
     pending.clear();
@@ -128,6 +158,9 @@ function createHttpTransport({
    * The connection is over. `sessionExpired` marks the one end that is not a
    * failure: the server forgot the session, and a fresh `initialize` gets a
    * new one.
+   *
+   * @param {ExitReason} reason
+   * @param {{ sessionExpired?: boolean }} [options]
    */
   function handleExit(reason, { sessionExpired = false } = {}) {
     if (exited) return;
@@ -156,15 +189,16 @@ function createHttpTransport({
   }
 
   function sessionExpiredError() {
-    const error = fail(
+    return Object.assign(fail(
       `The MCP server “${config.label}” no longer knows the session; it has to be started again.`,
       'mcp.http.sessionExpired',
-    );
-    error.sessionExpired = true;
-    return error;
+    ), { sessionExpired: true });
   }
 
-  /** What a fetch that never got an answer says about the network. */
+  /**
+   * What a fetch that never got an answer says about the network.
+   * @param {unknown} error
+   */
   function networkError(error) {
     const code = errorCodeOf(error);
     if (TLS_ERROR_CODE.test(code)) {
@@ -183,7 +217,7 @@ function createHttpTransport({
     if (CONNECT_TIMEOUT_CODES.has(code)) {
       return fail(`${host} could not be reached in time.`, 'mcp.http.connectTimeout', { host });
     }
-    const detail = code || detailOf(error).text;
+    const detail = code || detailOf(isRecord(error) ? error : null).text;
     return fail(`The request to ${host} failed: ${detail}`, 'mcp.http.network', { host, detail });
   }
 
@@ -191,6 +225,8 @@ function createHttpTransport({
    * The body of a refusal: all of it for reading a JSON-RPC error out of it,
    * its start for the status — and nothing of an HTML page, which explains
    * nothing in a status line.
+   *
+   * @param {Response} response
    */
   async function refusalBody(response) {
     const type = mediaTypeOf(response);
@@ -205,10 +241,16 @@ function createHttpTransport({
     return { text, shown: text.trim().slice(0, MCP_LIMITS.HTTP_ERROR_BODY_MAX_CHARS) };
   }
 
-  /** Reads a body up to a limit; past it either truncates or throws. */
+  /**
+   * Reads a body up to a limit; past it either truncates or throws.
+   * @param {Response} response
+   * @param {number} maxBytes
+   * @param {{ truncate?: boolean }} [options]
+   */
   async function readText(response, maxBytes, { truncate = false } = {}) {
     if (!response.body) return '';
     const reader = response.body.getReader();
+    /** @type {Uint8Array[]} */
     const chunks = [];
     let size = 0;
     try {
@@ -239,34 +281,42 @@ function createHttpTransport({
    * event. Same rules as on stdio: a message with a method is the server's
    * own (a notification, or a request that always gets an answer), anything
    * else may answer one of ours.
+   *
+   * @param {JsonRpcMessage} message
    */
   function handleMessage(message) {
     const hasId = message.id !== undefined && message.id !== null;
     if (typeof message.method === 'string') {
-      if (hasId) answerServerRequest(message);
+      if (hasId) answerServerRequest(message, message.method);
       return;
     }
-    if (!hasId) return;
+    if (!hasId || typeof message.id !== 'number') return;
     const entry = pending.get(message.id);
     if (!entry) return;
     if (message.error) {
-      entry.reject(serverErrorOf(message.error, excerpt));
+      entry.reject(serverErrorOf(isRecord(message.error) ? message.error : {}, excerpt));
       return;
     }
     entry.resolve(message.result === undefined ? {} : message.result);
   }
 
-  function answerServerRequest(message) {
+  /**
+   * @param {JsonRpcMessage} message
+   * @param {string} method
+   */
+  function answerServerRequest(message, method) {
+    /** @type {{ result: unknown } | null} */
     let answer = null;
     try {
-      answer = onRequest(message.method, message.params);
+      answer = onRequest(method, message.params);
     } catch { /* counts as not supported */ }
     const reply = answer && Object.prototype.hasOwnProperty.call(answer, 'result')
       ? { jsonrpc: '2.0', id: message.id, result: answer.result }
-      : { jsonrpc: '2.0', id: message.id, error: { code: -32601, message: `Method not found: ${message.method}` } };
+      : { jsonrpc: '2.0', id: message.id, error: { code: -32601, message: `Method not found: ${method}` } };
     sendWithoutAnswer(reply);
   }
 
+  /** @param {string} text */
   function dispatchText(text) {
     let parsed;
     try {
@@ -283,12 +333,16 @@ function createHttpTransport({
    * Only `data` lines matter: each event carries one JSON-RPC message (or a
    * batch). Event names, IDs and retry hints are for resuming, which this
    * client does not do.
+   *
+   * @param {Response} response
+   * @param {() => boolean} isDone
    */
   async function readEventStream(response, isDone) {
     if (!response.body) return;
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    /** @type {string[]} */
     let data = [];
     try {
       while (!isDone()) {
@@ -325,7 +379,9 @@ function createHttpTransport({
     }
   }
 
+  /** @param {string} method */
   function headersFor(method) {
+    /** @type {Record<string, string>} */
     const headers = method === 'POST'
       ? { ...config.headers, 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream' }
       : { ...config.headers };
@@ -338,6 +394,11 @@ function createHttpTransport({
    * One HTTP exchange, redirects included. Only same-origin redirects are
    * followed, and by hand: `fetch` would carry the configured headers along
    * to wherever the server points.
+   *
+   * @param {string} method
+   * @param {string|undefined} body
+   * @param {AbortSignal} signal
+   * @returns {Promise<Response>}
    */
   async function exchange(method, body, signal) {
     let target = endpoint;
@@ -391,7 +452,11 @@ function createHttpTransport({
     }
   }
 
-  /** A refused answer, in words a user can act on. */
+  /**
+   * A refused answer, in words a user can act on.
+   * @param {Response} response
+   * @returns {Promise<TransportError>}
+   */
   async function refusal(response) {
     const { status } = response;
     if (status === 404 && sessionId) {
@@ -403,6 +468,7 @@ function createHttpTransport({
     const challenge = String(response.headers.get('www-authenticate') || '');
     const { text: body, shown } = await refusalBody(response);
     excerpt = shown;
+    /** @param {string} message @param {string} key @param {Record<string, unknown>} [params] */
     const refuse = (message, key, params) => fail(message, key, params, shown);
     if (status === 401) {
       // A server that points at authorization metadata wants an OAuth
@@ -435,6 +501,7 @@ function createHttpTransport({
     }
     // A server that explains itself in JSON-RPC — a wrong protocol version,
     // a missing session — is quoted.
+    /** @type {object | null} */
     let rpcError = null;
     try {
       rpcError = messagesOf(JSON.parse(body)).find((message) => message.error)?.error || null;
@@ -450,6 +517,7 @@ function createHttpTransport({
     return refuse(`The MCP server “${config.label}” answered with HTTP ${status}.`, 'mcp.http.status', { status });
   }
 
+  /** @param {string} type */
   function notMcpError(type) {
     return fail(
       `${quotedEndpoint()} answered, but not as an MCP server (${type || 'no content type'}).`,
@@ -462,6 +530,10 @@ function createHttpTransport({
    * Sends one message. For a request (`expectId`) it reads the answer — a
    * JSON body or an SSE stream — and leaves resolving to `handleMessage`;
    * for anything else the answer is only checked for a refusal.
+   *
+   * @param {Record<string, unknown>} message
+   * @param {AbortSignal} signal
+   * @param {number|null} [expectId]
    */
   async function post(message, signal, expectId = null) {
     const response = await exchange('POST', JSON.stringify(message), signal);
@@ -489,7 +561,10 @@ function createHttpTransport({
     throw notMcpError(type);
   }
 
-  /** A message that needs no answer: a notification, or our reply to the server. */
+  /**
+   * A message that needs no answer: a notification, or our reply to the server.
+   * @param {Record<string, unknown>} message
+   */
   function sendWithoutAnswer(message) {
     if (!started || exited) return;
     const controller = new AbortController();
@@ -517,6 +592,11 @@ function createHttpTransport({
     started = true;
   }
 
+  /**
+   * @param {number} id
+   * @param {string} method
+   * @param {string} reason
+   */
   function giveUp(id, method, reason) {
     try { onCancel({ id, method, reason }); } catch { /* only a courtesy to the server */ }
   }
@@ -524,6 +604,11 @@ function createHttpTransport({
   /**
    * A request with an answer. Time limit and AbortSignal end the waiting and
    * the HTTP exchange, not the session — the next call reuses it.
+   *
+   * @param {string} method
+   * @param {unknown} [params]
+   * @param {McpRequestOptions} [options]
+   * @returns {Promise<unknown>}
    */
   function request(method, params, { timeoutMs = limits.REQUEST_MS, signal } = {}) {
     if (!started || exited) {
@@ -537,6 +622,11 @@ function createHttpTransport({
     return new Promise((resolve, reject) => {
       const controller = new AbortController();
       let settled = false;
+      /**
+       * @template T
+       * @param {(value: T) => void} settle
+       * @param {T} value
+       */
       const finish = (settle, value) => {
         if (settled) return;
         settled = true;
@@ -567,7 +657,7 @@ function createHttpTransport({
         resolve: (result) => {
           // The header every later message carries (specification,
           // "Protocol Version Header").
-          if (method === 'initialize' && typeof result?.protocolVersion === 'string') {
+          if (method === 'initialize' && isRecord(result) && typeof result.protocolVersion === 'string') {
             protocolVersion = result.protocolVersion;
           }
           finish(resolve, result);
@@ -590,6 +680,10 @@ function createHttpTransport({
     });
   }
 
+  /**
+   * @param {string} method
+   * @param {unknown} [params]
+   */
   function notify(method, params) {
     sendWithoutAnswer({ jsonrpc: '2.0', method, params });
   }

@@ -25,11 +25,19 @@
  * kommt und geht nicht zur Laufzeit, und ein Profil-Lauf kostet Zeit.
  */
 
-const { SHELL_EXECUTION_LIMITS } = require('../../application/ports/shell-execution-port');
+const { SHELL_EXECUTION_LIMITS } = require('../../shared/contracts/shell-execution');
+
+/** @typedef {import('../../application/ports/shell-execution-port').ShellExecutionPort} ShellExecutionPort */
+/** @typedef {import('../../application/ports/shell-execution-port').ShellDescription} ShellDescription */
+/** @typedef {import('../../application/ports/shell-execution-port').ShellExecutionRequest} ShellExecutionRequest */
+/** @typedef {import('../../application/ports/shell-execution-port').ShellExecutionResult} ShellExecutionResult */
 const { createChildRunner } = require('./child-run');
+const { withPowerShellJob, noteUncontained } = require('./windows-job');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { planSpawn } = require('./sandboxed-spawn');
 const { createMessage } = require('../../shared/contracts/message');
+
+/** @typedef {import('./sandboxed-spawn').SandboxForSpawn} SandboxForSpawn */
 
 /** Marker der Erkennung: die Shell muss ihn tatsaechlich ausgeben. */
 const PROBE_MARKER = 'snotra-shell-ok';
@@ -47,6 +55,9 @@ const PROBE_COMMAND_POSIX = `echo ${PROBE_MARKER}; echo "${PATH_MARKER}$PATH"`;
  * Liest Marker und PATH aus der Ausgabe der Erkennung. Ein Profil darf
  * schwatzen (MOTD, Versionshinweise, Prompt-Vorlauf), deshalb zeilenweise und
  * die letzte PATH-Zeile — vorangehende Ausgabe ist Rauschen.
+ *
+ * @param {unknown} text
+ * @returns {{ marker: boolean, path: string }}
  */
 function parseProbeOutput(text) {
   const out = { marker: false, path: '' };
@@ -89,6 +100,10 @@ const INVOCATIONS = Object.freeze({
  * `-EncodedCommand` (Base64/UTF-16LE) an PowerShell: die Anfuehrungszeichen
  * eines `-Command`-Aufrufs ueberleben die Kommandozeilen-Zerlegung von Node
  * und PowerShell nicht zuverlaessig, `git commit -m "…"` waere sonst kaputt.
+ *
+ * @param {string|undefined} invocation  one of INVOCATIONS
+ * @param {unknown} command
+ * @returns {string[]}
  */
 function buildShellArgs(invocation, command) {
   if (invocation === INVOCATIONS.POWERSHELL) {
@@ -101,7 +116,12 @@ function buildShellArgs(invocation, command) {
   return ['-c', String(command)];
 }
 
-/** Anzeigename einer Shell: Programmname ohne Pfad und ohne Endung. */
+/**
+ * Anzeigename einer Shell: Programmname ohne Pfad und ohne Endung.
+ *
+ * @param {unknown} command
+ * @returns {string}
+ */
 function shellLabel(command) {
   const base = String(command).split(/[\\/]/).pop() || String(command);
   return base.replace(/\.exe$/i, '');
@@ -119,9 +139,16 @@ function shellLabel(command) {
  * bleibt. Klappt `-ilc` nicht (exotisches Profil, `sh` ohne `-i`), folgt die
  * reine Login-Shell und zuletzt die gewoehnliche — lieber ein knapper PATH
  * als gar keine Shell.
+ *
+ * @typedef {{ command: string, label: string, attempts: Array<{ probe: string, run: string }> }} ShellCandidate
+ *
+ * @param {string} platform
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {ShellCandidate[]}
  */
 function shellCandidates(platform, env = {}) {
   if (platform === 'win32') {
+    /** @param {string} invocation */
     const win = (invocation) => [{ probe: invocation, run: invocation }];
     return [
       { command: 'pwsh.exe', label: 'PowerShell 7', attempts: win(INVOCATIONS.POWERSHELL) },
@@ -133,7 +160,9 @@ function shellCandidates(platform, env = {}) {
     ? ['/bin/zsh', '/bin/bash', '/bin/sh']
     : ['/bin/bash', '/bin/sh'];
   const fromEnv = typeof env.SHELL === 'string' ? env.SHELL.trim() : '';
+  /** @type {Set<string>} */
   const seen = new Set();
+  /** @type {ShellCandidate[]} */
   const out = [];
   for (const command of [fromEnv, ...fallbacks]) {
     if (!command || seen.has(command)) continue;
@@ -151,13 +180,22 @@ function shellCandidates(platform, env = {}) {
   return out;
 }
 
-/** Erkennungsbefehl einer Aufrufform: nur POSIX liefert den PATH mit (#111). */
+/**
+ * Erkennungsbefehl einer Aufrufform: nur POSIX liefert den PATH mit (#111).
+ *
+ * @param {string} invocation
+ * @returns {string}
+ */
 function probeCommandFor(invocation) {
   return invocation === INVOCATIONS.POWERSHELL || invocation === INVOCATIONS.CMD
     ? PROBE_COMMAND
     : PROBE_COMMAND_POSIX;
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {number}
+ */
 function clampTimeout(raw) {
   const value = Number(raw);
   if (!Number.isFinite(value)) return SHELL_EXECUTION_LIMITS.DEFAULT_TIMEOUT_MS;
@@ -173,9 +211,11 @@ function clampTimeout(raw) {
  * @param {typeof import('os')} deps.os
  * @param {string} [deps.platform]
  * @param {NodeJS.ProcessEnv} [deps.env]
- * @param {typeof import('fs/promises')} [deps.fs]  for the run's temp directory (#329)
- * @param {typeof import('path')} [deps.path]
- * @param {object} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
+ * @param {typeof import('fs/promises') | null} [deps.fs]  for the run's temp directory (#329)
+ * @param {typeof import('path') | null} [deps.path]
+ * @param {SandboxForSpawn | null} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
+ * @returns {import('../../application/ports/shell-execution-port').ShellExecutionPort & {
+ *   detect: () => Promise<ShellDescription>, disposeSync: () => void }}
  */
 function createShellRunnerService({
   spawn,
@@ -191,8 +231,14 @@ function createShellRunnerService({
   // `error` is the detail Settings shows next to "No shell found": a
   // catalogue message, or the quoted output of the probe (#338). The model
   // never reads it — `run()` has its own English sentence.
+  /** @type {ShellDescription} */
   let detected = { found: false, error: createMessage('runner.error.notChecked') };
 
+  /**
+   * @param {string} command
+   * @param {string} invocation
+   * @returns {Promise<{ ok: true, path: string } | { ok: false, error: string | import('../../shared/contracts/message').Message }>}
+   */
   function probe(command, invocation) {
     return new Promise((resolve) => {
       let child;
@@ -236,6 +282,7 @@ function createShellRunnerService({
    * probiert wird — lieber ein knapper PATH als gar keine Shell.
    */
   async function runDetection() {
+    /** @type {string | import('../../shared/contracts/message').Message} */
     let firstError = '';
     for (const candidate of shellCandidates(platform, env)) {
       for (const attempt of candidate.attempts) {
@@ -275,6 +322,7 @@ function createShellRunnerService({
   // dasselbe Versprechen — ohne diesen Merker startete bei jedem Klick eine
   // neue Login-Shell. An der Erkennung gibt es nichts zu aktualisieren: eine
   // Shell kommt zur Laufzeit weder dazu noch weg.
+  /** @type {Promise<ShellDescription> | null} */
   let detection = null;
   function detect() {
     if (!detection) detection = runDetection();
@@ -293,6 +341,7 @@ function createShellRunnerService({
   // Time limit, "Stop", output cap and the process tree (CR-B03-01).
   const children = createChildRunner({ spawn, platform });
 
+  /** @param {Partial<ShellExecutionRequest>} [request]  a missing command is refused, not thrown */
   async function run({
     command,
     stdin,
@@ -308,9 +357,12 @@ function createShellRunnerService({
     sandboxDisabled = false,
     abortSignal,
   } = {}) {
-    if (!detected.found) {
+    // Read once: `detected` is replaced as a whole by a later detection.
+    const { command: shellCommand, label } = detected;
+    if (!detected.found || !shellCommand) {
       return { error: 'No shell is available.' };
     }
+    const shellName = label ?? shellCommand;
     const line = typeof command === 'string' ? command : '';
     if (!line.trim()) return { error: 'No command was given.' };
     if (line.length > SHELL_EXECUTION_LIMITS.MAX_COMMAND_CHARS) {
@@ -336,15 +388,21 @@ function createShellRunnerService({
         return { error: `The run's temp directory could not be created: ${e?.message || e}` };
       }
     }
-    const removeRunTmp = () => (runTmp ? fs.rm(runTmp, { recursive: true, force: true }).catch(() => {}) : undefined);
+    const removeRunTmp = () => (runTmp && fs ? fs.rm(runTmp, { recursive: true, force: true }).catch(() => {}) : undefined);
     // What the command printed so far, for the card about a waiting connection.
+    /** @type {(() => { stdout: string, stderr: string }) | null} */
     let readOutput = null;
     let target;
     try {
       target = await planSpawn({
         sandbox: runTmp ? sandbox : null,
         disabled: sandboxDisabled === true,
-        argv: [detected.command, ...buildShellArgs(detected.invocation, line)],
+        // PowerShell puts itself into a Job Object first, so that what the
+        // command leaves in the background ends with it (#991).
+        argv: [shellCommand, ...buildShellArgs(
+          detected.invocation,
+          detected.invocation === INVOCATIONS.POWERSHELL ? withPowerShellJob(line) : line,
+        )],
         workspaceRoot,
         runTmp,
         domains: networkDomains,
@@ -363,7 +421,7 @@ function createShellRunnerService({
       if (e?.name === 'AbortError') {
         return {
           stdout: '', stderr: '', exitCode: null, timedOut: false, aborted: true,
-          truncated: false, durationMs: Date.now() - startedAt, shell: detected.label,
+          truncated: false, durationMs: Date.now() - startedAt, shell: shellName,
         };
       }
       return { error: e?.message || 'The sandbox could not be prepared.' };
@@ -383,18 +441,22 @@ function createShellRunnerService({
         exposeOutput: (read) => { readOutput = read; },
         startError: 'The shell could not be started.',
       });
-      if (outcome.error) return outcome;
+      // Narrows the union for the type check (#1098); the error is never empty.
+      if ('error' in outcome) return outcome;
       // What the sandbox refused (#792): as a list for the chat's tool row,
       // and in stderr for the model (#329). Looked up before annotating.
       const blocked = await target.blocked?.({
         failed: outcome.exitCode !== 0 && !outcome.aborted,
         output: outcome.stderr,
       });
+      const stderr = target.annotate(outcome.stderr);
+      /** @type {ShellExecutionResult} */
       const result = {
         ...outcome,
-        stderr: target.annotate(outcome.stderr),
+        // cmd.exe cannot make a Job Object; the model hears so (#991).
+        stderr: platform === 'win32' && detected.invocation === INVOCATIONS.CMD ? noteUncontained(stderr) : stderr,
         durationMs: Date.now() - startedAt,
-        shell: detected.label,
+        shell: shellName,
       };
       if (target.isolation) result.isolation = target.isolation;
       if (blocked) result.sandboxBlocked = blocked;

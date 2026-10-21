@@ -66,7 +66,7 @@ test('Tools › Security: reached from the shield, changes a workspace that is n
   const openNow = async () => path.basename((await api('getSandboxOverview')).activeRoot || '');
   await poll(async () => (await openNow()) === 'invoice-tool', { what: 'invoice-tool open', timeoutMs: 30000 });
   const windows = process.platform === 'win32';
-  const encrypted = !windows && (await api('getSandboxOverview')).encryptionAvailable === true;
+  const encrypted = !windows && (await api('getSandboxOverview')).platformCapabilities?.secureStorage === true;
   const kept = windows ? null : await api('addSandboxHosts', { hosts: ['pypi.org:443'], scope: 'workspace' });
   if (windows) {
     t.diagnostic('Windows has no sandbox: the page is checked without a switch or allowances');

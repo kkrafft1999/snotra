@@ -334,3 +334,43 @@ test('"Open folder…" cannot be removed with Delete, and a cancelled dialog ope
   assert.deepEqual(dialogs, ['openFolder']);
   assert.equal(appStore.rootPath, null);
 });
+
+test('a folder the phone asks for opens as from the menu, and the window answers (#1194)', async (t) => {
+  const dom = setupRendererDom();
+  t.after(dom.cleanup);
+  const { initFileTree } = await importRenderer('components', 'FileTree.js');
+  const { appStore } = await importRenderer('state', 'store.js');
+  appStore.rootPath = null;
+  const answers = [];
+  const activated = [];
+  let requested = () => {};
+  initFileTree({
+    api: {
+      activateFolder: async (p) => { activated.push(p); return p === POSIX ? { ok: true } : { ok: false }; },
+      getFolderHistory: async () => ({ paths: [POSIX] }),
+      readDirectory: async () => ({ entries: [], hidden: 0 }),
+      onFsTreeChanged: () => () => {},
+      onFsItemDeleted: () => {},
+      onWorkspaceSwitchRequested: (cb) => { requested = cb; },
+      answerWorkspaceSwitch: (answer) => answers.push(answer),
+    },
+    appStore,
+    onInputChanged() {},
+    onWorkspaceChanged() {},
+    onProjectOpened() {},
+    sendChatMessage() {},
+    activeProviderConfigured: () => true,
+  });
+  await flush();
+
+  requested({ requestId: 'r1', folderPath: POSIX });
+  requested({ requestId: 'r2', folderPath: WINDOWS });
+  requested({ requestId: 42, folderPath: POSIX });
+  for (let i = 0; i < 6; i += 1) await flush();
+  assert.deepEqual(activated, [POSIX, WINDOWS], 'through main, as the menu does; a request without an id is ignored');
+  assert.deepEqual(answers.sort((a, b) => a.requestId.localeCompare(b.requestId)), [
+    { requestId: 'r1', outcome: 'switched' },
+    { requestId: 'r2', outcome: 'refused' },
+  ]);
+  assert.equal(appStore.rootPath, POSIX);
+});

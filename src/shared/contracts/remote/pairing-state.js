@@ -17,8 +17,8 @@
  * them; *Replace phone?* (6) and *Remove phone?* (7) are questions the panel
  * asks itself while main stays in `paired`. *Paired, connected* (4) and
  * *Paired, phone offline* (5) are both `paired`, told apart by
- * `phone.connected` — which stays false until the channel (part 2 of the
- * protocol) is built and a session stands.
+ * `phone.connected` — true while a session of the channel stands, from the
+ * phone's `session.hello` on (#1192).
  */
 const REMOTE_PAIRING_STATES = Object.freeze({
   /** 1 — no phone paired and no pairing running. Nothing has reached the relay (R7). */
@@ -63,6 +63,8 @@ const REMOTE_PAIRING_REASONS = Object.freeze({
   BUSY: 'busy',
   /** The pairing was cancelled while it was being opened. */
   CANCELLED: 'cancelled',
+  /** Pairing is not open in this build yet: the phone's side comes first (#1110, decided 2026-10-21). */
+  LOCKED: 'locked',
 });
 
 const STATE_VALUES = new Set(Object.values(REMOTE_PAIRING_STATES));
@@ -75,24 +77,44 @@ const QR_PAYLOAD = /^snotra-pair:v1\/[a-z0-9.-]+(?::\d{1,5})?\/[0-9A-HJKMNP-TV-Z
 /** A word of the EFF short word list 2.0: lower case, 3 to 10 letters, one of them with a hyphen. */
 const SAFETY_WORD = /^[a-z][a-z-]{1,9}[a-z]$/;
 const PHRASE_WORDS = 6;
+/** A QR code's sides, from version 1 (21 modules) to version 40 (177). */
+const QR_MIN = 21;
+const QR_MAX = 177;
+const QR_ROW = /^[01]+$/;
 
+/** @param {unknown} value */
 function finiteTime(value) {
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
 }
 
+/**
+ * The QR code's modules, row by row as `0` and `1` (#1110): main draws the
+ * code, the window only paints it. Null for anything that is no square of
+ * a QR code's size.
+ * @param {unknown} modules
+ */
+function normalizeModules(modules) {
+  if (!Array.isArray(modules) || modules.length < QR_MIN || modules.length > QR_MAX || (modules.length - QR_MIN) % 4 !== 0) return null;
+  return modules.every((row) => typeof row === 'string' && row.length === modules.length && QR_ROW.test(row)) ? [...modules] : null;
+}
+
+/** @param {*} code */
 function normalizeCode(code) {
   if (!code || typeof code !== 'object') return null;
   const expiresAt = finiteTime(code.expiresAt);
   if (typeof code.display !== 'string' || !DISPLAY_CODE.test(code.display)) return null;
   if (typeof code.qr !== 'string' || !QR_PAYLOAD.test(code.qr) || expiresAt === null) return null;
-  return { display: code.display, qr: code.qr, expiresAt };
+  const modules = normalizeModules(code.modules);
+  return { display: code.display, qr: code.qr, expiresAt, ...(modules ? { modules } : {}) };
 }
 
+/** @param {*} words */
 function normalizeWords(words) {
   if (!Array.isArray(words) || words.length !== PHRASE_WORDS) return null;
   return words.every((word) => typeof word === 'string' && SAFETY_WORD.test(word)) ? [...words] : null;
 }
 
+/** @param {*} phone */
 function normalizePhone(phone) {
   if (!phone || typeof phone !== 'object') return null;
   return { pairedAt: finiteTime(phone.pairedAt), connected: phone.connected === true };
@@ -107,11 +129,12 @@ function normalizePhone(phone) {
  *   state: string,
  *   encryptionAvailable: boolean,
  *   phone: { pairedAt: number|null, connected: boolean } | null,
- *   code: { display: string, qr: string, expiresAt: number } | null,
+ *   code: { display: string, qr: string, expiresAt: number, modules?: string[] } | null,
  *   words: string[] | null,
  *   replacing: boolean,
  *   reason: string | null,
- * }}
+ *   locked: boolean,
+ * }}  `locked`: pairing is not open in this build yet (#1110); removing a phone still is
  */
 function normalizeRemotePairingState(input) {
   const raw = input && typeof input === 'object' ? /** @type {Record<string, any>} */ (input) : {};
@@ -126,6 +149,7 @@ function normalizeRemotePairingState(input) {
     words,
     replacing: raw.replacing === true,
     reason: REASON_VALUES.has(raw.reason) ? raw.reason : null,
+    locked: raw.locked === true,
   };
 }
 

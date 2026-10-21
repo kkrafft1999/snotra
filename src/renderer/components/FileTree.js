@@ -2642,6 +2642,28 @@ export function initFileTree(deps) {
     syncAgentMarks();
   });
 
+  /**
+   * The phone asks to open another folder (#1194, step 2c). Unsaved changes
+   * at the desktop refuse it, without a dialog nobody may be there to answer
+   * (decided 2026-10-20); otherwise the folder opens as from the menu.
+   */
+  async function switchForRemote(folderPath) {
+    if (contentPane.hasUnsaved()) return 'unsaved';
+    return (await openProject(folderPath)) ? 'switched' : 'refused';
+  }
+
+  if (typeof api.onWorkspaceSwitchRequested === 'function') {
+    api.onWorkspaceSwitchRequested(({ requestId, folderPath } = {}) => {
+      if (typeof requestId !== 'string' || typeof folderPath !== 'string') return;
+      switchForRemote(folderPath)
+        .catch((error) => {
+          console.error('[tree] a switch asked for by the phone failed:', error);
+          return 'refused';
+        })
+        .then((outcome) => api.answerWorkspaceSwitch?.({ requestId, outcome }));
+    });
+  }
+
   return {
     openProject,
     refreshFolderHistory,

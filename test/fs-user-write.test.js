@@ -9,6 +9,7 @@ const { createFilesystemIpcAdapter } = require('../src/main/adapters/filesystem-
 const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // #863: the user's own edit from the preview goes through the same checks as
 // the agent's write tool, and never overwrites a file that changed meanwhile.
@@ -19,7 +20,7 @@ const skipOnWindows = { skip: process.platform === 'win32' };
 
 async function setup(t, { maxWriteFileBytes } = {}) {
   const dir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-user-write-')));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const workspace = path.join(dir, 'ws');
   await fs.mkdir(workspace);
   const fsService = createFsService({ fs, path, maxReadFileBytes: 1 << 20, maxWriteFileBytes });

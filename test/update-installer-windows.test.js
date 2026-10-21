@@ -31,6 +31,7 @@ const { createUpdateService } = require('../src/main/services/update-service');
 const { writeMinimalAsar } = require('./helpers/asar.js');
 // The running app's own name: a rollback restarts it under that name (#794).
 const { APP_NAME } = require('../src/main/app-identity');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 const onWindows = process.platform === 'win32';
 const EXE = `${APP_NAME}.exe`;
@@ -74,7 +75,7 @@ static class StandIn {
 
 const CONFIRM_SCRIPT = [
   "const { service, version, userData } = require(require('node:path').join(__dirname, 'confirm.json'));",
-  'require(service).createUpdateService({ app: { getVersion: () => version, getPath: () => userData } })',
+  'require(service).createUpdateService({ installation: { getVersion: () => version, getPath: () => userData } })',
   '  .confirmInstallStarted().then((ok) => process.exit(ok ? 0 : 9));',
   '',
 ].join('\n');
@@ -93,7 +94,7 @@ before(() => {
   ]);
 });
 after(() => {
-  if (standInExe) fs.rmSync(path.dirname(standInExe), { recursive: true, force: true });
+  if (standInExe) removeTempDirSync(path.dirname(standInExe));
 });
 
 /** A copy of the stand-in as the app's .exe in `folder`, labelled `label`. */
@@ -318,7 +319,7 @@ function parseErrors(script) {
         + '$e | ForEach-Object { $_.Extent.StartLineNumber.ToString() + ": " + $_.Message }',
     ], { encoding: 'utf8' }).trim();
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   }
 }
 
@@ -503,7 +504,7 @@ async function assertRolledBack(fixture, reason) {
 
   // The next start of the old version shows the reason next to the update.
   const failure = await createUpdateService({
-    app: { getVersion: () => '1.12.0', getPath: () => fixture.userData },
+    installation: { getVersion: () => '1.12.0', getPath: () => fixture.userData },
   }).readInstallFailure();
   assert.equal(failure?.stage, 'start');
   assert.match(failure.error, reason);

@@ -42,6 +42,10 @@ export const SETTINGS_HELP = Object.freeze({
     slug: 'customising/memory',
     title: { en: 'Let Snotra remember', de: 'Snotra etwas merken lassen' },
   },
+  'panel.remote': {
+    slug: 'customising/remote-access',
+    title: { en: 'Follow your chats from your phone', de: 'Deine Chats vom Handy aus verfolgen' },
+  },
   'panel.general': {
     slug: 'customising/settings',
     section: { en: 'The section General', de: 'Der Bereich Allgemein' },
@@ -101,6 +105,11 @@ export const SETTINGS_HELP = Object.freeze({
   'notice.backgroundError': {
     slug: 'troubleshooting/logs-and-reports',
     section: { en: 'The log file', de: 'Die Logdatei' },
+  },
+  // The link in the box of a tool result that looked like an injection (#1011).
+  'chat.injectionFlag': {
+    slug: 'safety/why-snotra-asks',
+    section: { en: 'When a tool result looks like instructions', de: 'Wenn ein Tool-Ergebnis nach Anweisungen aussieht' },
   },
   'chat.saveNotice': {
     slug: 'troubleshooting/keychain-and-storage',

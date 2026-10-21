@@ -8,7 +8,8 @@ const { createFilesystemIpcAdapter } = require('../src/main/adapters/filesystem-
 const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
-const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+const { createNativeConfirmationAdapter } = require('../src/main/electron/native-confirmation-adapter');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 /** The dialog for notices, and the confirmation port over the same dialog (#980). */
 function withDialog(dialog) {
@@ -30,7 +31,7 @@ async function createSymlinkOrSkip(t, target, linkPath, type) {
 
 async function setup(t) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-fs-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const workspace = path.join(tmpDir, 'workspace');
   const outside = path.join(tmpDir, 'outside');
   await fs.mkdir(workspace, { recursive: true });

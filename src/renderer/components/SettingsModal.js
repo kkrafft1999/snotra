@@ -4,7 +4,7 @@ import {
   APP_LOCALES, DEFAULT_LOCALE, LOCALE_INFO, LOCALES,
 } from '../i18n.js';
 import { invokeErrorDetail, invokeErrorMessage } from '../utils/invoke-error.js';
-import { bindInstantSwitch, bindInstantChoice } from './InstantSetting.js';
+import { bindInstantSwitch, bindInstantChoice, INSTANT_DECLINED } from './InstantSetting.js';
 import { normalizeAppearance } from './ThemeManager.js';
 import { describeSandboxStatus } from '../utils/sandbox-status-view.js';
 import { initProgramAllowanceDialog } from './ProgramAllowanceDialog.js';
@@ -13,6 +13,7 @@ import { settingsPageName } from '../utils/settings-pages.js';
 import { initSecurityPanel } from './SecurityPanel.js';
 import { initSettingsHelp } from './SettingsHelp.js';
 import { initModelPricesSettings } from './ModelPricesSettings.js';
+import { initRemoteAccessSettings, initRemoteSectionVisibility } from './RemoteAccessSettings.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -24,7 +25,8 @@ import { initModelPricesSettings } from './ModelPricesSettings.js';
 // workspace default mode; Tools › Security (#1119) applies everything at
 // once. MCP is no section of its own since #767: its servers sit on
 // Tool setup, whose hint names them.
-const IMMEDIATE_PANELS = new Set(['security', 'sandbox', 'memory']);
+// Remote access (#1110): pairing and removing a phone take effect at once.
+const IMMEDIATE_PANELS = new Set(['security', 'sandbox', 'memory', 'remote']);
 
 /**
  * The hint in the footer depends on the section. Since issue #297 memory is
@@ -43,7 +45,7 @@ const APPLY_HINT_KEYS = {
 // `security` is Tools › Autonomy (once "Tools & security"), `sandbox` is
 // Tools › Security (#1119), `tools` is Tools › Setup with the MCP servers
 // (#767); the keys stayed so that links and ids did not move.
-const SETTINGS_NAV_KEYS = ['models', 'security', 'sandbox', 'tools', 'skills', 'memory', 'general'];
+const SETTINGS_NAV_KEYS = ['models', 'security', 'sandbox', 'tools', 'skills', 'memory', 'remote', 'general'];
 
 /** Disclosure arrow of the skill rows (#98); turns by CSS. */
 const CHEVRON_ICON_HTML =
@@ -64,6 +66,7 @@ const {
   SKILL_STATUS,
   DEFAULT_SKILL_SUGGESTION_MODE,
   isSkillSuggestionMode,
+  TOOL_EXECUTION_KINDS,
 } = contracts;
 
 /**
@@ -164,6 +167,19 @@ export function initSettingsModal(deps) {
       model: preset.model,
       baseUrl: preset.connection?.baseUrl || findProviderView(preset.providerId)?.defaultBaseUrl || '',
     })),
+  });
+  // The phone of the mobile remote (#1110), drawn from main's pairing state.
+  const remoteAccessSettings = initRemoteAccessSettings({
+    root: document.getElementById('settings-remote-body'),
+    api,
+    openPanel: (panelKey) => (panelKey === 'sandbox' ? openSandboxPage() : activateSettingsPanel(panelKey)),
+  });
+  // Shown in developer mode, or while a phone is paired (#1213).
+  initRemoteSectionVisibility({
+    api,
+    tab: document.getElementById('tab-settings-remote'),
+    leave: () => activateSettingsPanel('models'),
+    isActive: () => activePanelKey === 'remote',
   });
   const panelHelpButton = document.getElementById('btn-settings-panel-help');
   const settingsNavTabs = [...document.querySelectorAll('.settings-nav-item[role="tab"]')];
@@ -1517,6 +1533,11 @@ export function initSettingsModal(deps) {
     renderSkillList();
   }
 
+  /** The tool that starts this kind of process, as the catalogue says (#1008). */
+  function executionToolName(kind) {
+    return settingsToolCatalog.find((tool) => tool?.execution === kind)?.name || '';
+  }
+
   async function loadToolCatalog() {
     try {
       const result = typeof api.getToolCatalog === 'function' ? await api.getToolCatalog() : null;
@@ -1768,7 +1789,8 @@ export function initSettingsModal(deps) {
     // than inviting a key that may well be stored (CR-B14-09).
     webSearchStateUnknown = !state || typeof state !== 'object';
     webSearchHasKey = state?.hasApiKey === true;
-    webSearchEncryption = state?.encryptionAvailable !== false;
+    // Whether a key can be stored is the platform's, read once at start (#1156).
+    webSearchEncryption = appStore.llmState.platformCapabilities?.secureStorage !== false;
     syncWebSearchUI();
   }
 
@@ -1871,6 +1893,9 @@ export function initSettingsModal(deps) {
     if (activePanelKey === 'security' && !modalSettings.classList.contains('hidden')) void securityPanel.refresh();
     if (activePanelKey === 'sandbox' && !modalSettings.classList.contains('hidden')) toolSecurityPanel.open().catch(reportSandboxPageFailure);
     if (activePanelKey === 'tools' && !modalSettings.classList.contains('hidden')) listImageModelsOnce();
+    if (activePanelKey === 'remote' && !modalSettings.classList.contains('hidden')) {
+      remoteAccessSettings.open().catch((error) => console.error('[settings] the remote access panel could not be drawn:', error));
+    }
     const applyHint = document.getElementById('settings-apply-hint');
     if (applyHint) {
       let hintKey = APPLY_HINT_KEYS.deferred;
@@ -2127,7 +2152,7 @@ export function initSettingsModal(deps) {
     setupDraftFromServerState();
     renderDraftPresetList();
     let loadError = null;
-    modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.encryptionAvailable);
+    modalEncryptionWarning.classList.toggle('hidden', appStore.llmState.platformCapabilities?.secureStorage !== false);
     for (const setting of instantSettings) setting.status.clear();
     // The appearance is not in the UI prefs but in the renderer's
     // localStorage (see ThemeManager.js). "System" is a choice of its own
@@ -2688,8 +2713,10 @@ export function initSettingsModal(deps) {
     // The list turns into a row below 640 px, so both arrow axes move.
     tab.addEventListener('keydown', (e) => {
       if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      const i = settingsNavTabs.indexOf(tab);
-      const n = settingsNavTabs.length;
+      // A section shown only in developer mode (#1213) is skipped while hidden.
+      const shown = settingsNavTabs.filter((candidate) => !candidate.hidden);
+      const i = shown.indexOf(tab);
+      const n = shown.length;
       let next;
       if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (i + 1) % n;
       else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = (i - 1 + n) % n;
@@ -2697,7 +2724,7 @@ export function initSettingsModal(deps) {
       else if (e.key === 'End') next = n - 1;
       else return;
       e.preventDefault();
-      const target = settingsNavTabs[next];
+      const target = shown[next];
       activateSettingsPanel(target.dataset.settingsPanel);
       target.focus();
     });
@@ -2883,10 +2910,13 @@ export function initSettingsModal(deps) {
 
   // Instant settings (issue #297): each one is written on its own through
   // setUIPrefs, and the answer is checked — a store that did not take the
-  // value must not leave the switch saying it did.
+  // value must not leave the switch saying it did. Switching an execution
+  // tool on asks in a native dialog first (#1104); a "Cancel" there is
+  // answered as declined, not as a failure.
   async function saveUiPref(key, value) {
     const prefs = await api.setUIPrefs({ [key]: value });
-    return prefs?.[key] === value;
+    if (prefs?.[key] === value) return true;
+    return Array.isArray(prefs?.notConfirmed) && prefs.notConfirmed.includes(key) ? INSTANT_DECLINED : false;
   }
 
   /**
@@ -2928,7 +2958,7 @@ export function initSettingsModal(deps) {
   function bindPrefSwitch(input, statusId, key, after) {
     return bindInstantSwitch(input, document.getElementById(statusId), async (value) => {
       const ok = await saveUiPref(key, value);
-      if (ok) await after?.(value);
+      if (ok === true) await after?.(value);
       return ok;
     });
   }
@@ -2938,7 +2968,7 @@ export function initSettingsModal(deps) {
     choiceAppLocale,
     document.getElementById('status-app-locale'),
     async (lc) => {
-      const ok = await saveUiPref('appLocale', lc);
+      const ok = (await saveUiPref('appLocale', lc)) === true;
       // Switch first, then report — the status speaks the new language.
       // Since epic #277 `setLocale` redraws the whole interface, inside the
       // dialog and outside it, without a restart.
@@ -2965,7 +2995,7 @@ export function initSettingsModal(deps) {
   const autoUpdateCheckSwitch = bindPrefSwitch(
     inputAutoUpdateCheck, 'status-auto-update-check', 'autoUpdateCheckEnabled'
   );
-  // Both decide whether run_python / shell_execute are offered; the status
+  // Both decide whether the execution tools are offered; the status
   // line and the tool list follow what main now reports.
   // The mode pill turns amber for "Auto" with an unisolated execution tool
   // (#357, amber since #396), so it has to hear about both switches too.
@@ -2974,14 +3004,16 @@ export function initSettingsModal(deps) {
   // also clears an old tick-off from the tool list, which no longer exists.
   const pythonSwitch = bindPrefSwitch(
     inputPythonEnabled, 'status-python-enabled', 'pythonExecutionEnabled', async (on) => {
-      if (on) await setToolEnabled('run_python', true);
+      const tool = executionToolName(TOOL_EXECUTION_KINDS.PYTHON);
+      if (on && tool) await setToolEnabled(tool, true);
       await loadPythonState();
       void toolPermissions?.refresh?.();
     }
   );
   const shellSwitch = bindPrefSwitch(
     inputShellEnabled, 'status-shell-enabled', 'shellExecutionEnabled', async (on) => {
-      if (on) await setToolEnabled('shell_execute', true);
+      const tool = executionToolName(TOOL_EXECUTION_KINDS.SHELL);
+      if (on && tool) await setToolEnabled(tool, true);
       await loadShellState();
       void toolPermissions?.refresh?.();
     }

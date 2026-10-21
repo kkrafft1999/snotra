@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
-const { registerSettingsHandlers, mergePresetConnection } = require('../src/main/ipc/settings-handlers');
+const { registerSettingsForTest: registerSettingsHandlers } = require('./helpers/settings-handlers');
+const { mergePresetConnection } = require('../src/main/services/llm-settings');
 const { createStorageService } = require('../src/main/services/storage-service');
 const {
   createLlmConfigStorePort,
@@ -15,6 +16,7 @@ const { createMockIpcMain } = require('./helpers/mock-ipc');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { getProvider } = require('../src/main/providers');
 const { createSettingsPresentationService } = require('../src/main/services/settings-presentation-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 /**
  * Findings of the B07 review on the settings handlers: a stored secret stays
@@ -59,7 +61,7 @@ const EVIL = 'http://evil.example/v1';
 test('a new address drops the stored key and headers (#560)', () => {
   const previous = { baseUrl: GOOD, apiKeyEnc: enc('key'), extraHeadersEnc: enc('X-GW: hdr') };
 
-  const { connection } = mergePresetConnection({ safeStorage }, { previous, patch: { baseUrl: EVIL }, provider: COMPAT });
+  const { connection } = mergePresetConnection({ secretStore: safeStorage }, { previous, patch: { baseUrl: EVIL }, provider: COMPAT });
 
   assert.equal(connection.baseUrl, EVIL);
   assert.equal(connection.apiKeyEnc, undefined);
@@ -69,7 +71,7 @@ test('a new address drops the stored key and headers (#560)', () => {
 test('the same address, written differently, keeps the stored key and headers (#560)', () => {
   const previous = { baseUrl: GOOD, apiKeyEnc: enc('key'), extraHeadersEnc: enc('X-GW: hdr') };
 
-  const { connection } = mergePresetConnection({ safeStorage }, {
+  const { connection } = mergePresetConnection({ secretStore: safeStorage }, {
     previous,
     patch: { baseUrl: `  ${GOOD}/  `.trim(), apiStyle: 'full' },
     provider: COMPAT,
@@ -83,7 +85,7 @@ test('the same address, written differently, keeps the stored key and headers (#
 test('an entry on the default address keeps its key when the draft names that address (#560)', () => {
   const previous = { apiKeyEnc: enc('key') };
 
-  const { connection } = mergePresetConnection({ safeStorage }, {
+  const { connection } = mergePresetConnection({ secretStore: safeStorage }, {
     previous,
     patch: { baseUrl: COMPAT.defaultBaseUrl },
     provider: COMPAT,
@@ -95,7 +97,7 @@ test('an entry on the default address keeps its key when the draft names that ad
 test('a new address with a new key stores the new key only (#560)', () => {
   const previous = { baseUrl: GOOD, apiKeyEnc: enc('old'), extraHeadersEnc: enc('X-GW: old') };
 
-  const { connection } = mergePresetConnection({ safeStorage }, {
+  const { connection } = mergePresetConnection({ secretStore: safeStorage }, {
     previous,
     patch: { baseUrl: EVIL, apiKey: 'new' },
     provider: COMPAT,
@@ -105,15 +107,38 @@ test('a new address with a new key stores the new key only (#560)', () => {
   assert.equal(connection.extraHeadersEnc, undefined);
 });
 
+// The guard asks safeStorage itself, whatever the platform register said at
+// start (#1156): a key or headers without encrypted storage are refused, and
+// nothing goes to the disk in plain text.
+for (const patch of [{ apiKey: 'sk-new' }, { extraHeaders: 'X-GW: secret' }]) {
+  test(`an entry refuses ${Object.keys(patch)[0]} without encrypted storage (#1156)`, () => {
+    let encrypted = 0;
+    const withoutEncryption = {
+      ...safeStorage,
+      isEncryptionAvailable: () => false,
+      encryptString: (/** @type {string} */ text) => { encrypted += 1; return safeStorage.encryptString(text); },
+    };
+    const result = mergePresetConnection({ secretStore: withoutEncryption }, {
+      previous: { baseUrl: GOOD },
+      patch,
+      provider: COMPAT,
+    });
+
+    assert.equal(result.ok, false);
+    assert.equal(result.connection, undefined);
+    assert.equal(encrypted, 0);
+  });
+}
+
 async function setup(t, { onShowHiddenFilesChanged = null } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-b07-settings-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   const providerCatalog = createMockProviderCatalog((id) => (Object.hasOwn(PROVIDERS, id) ? PROVIDERS[id] : null), {
     listMeta: () => Object.values(PROVIDERS),
   });
   const storage = createStorageService({
-    app: { getPath: () => dir },
-    safeStorage,
+    userDataPath: dir,
+    secretStore: safeStorage,
     fs,
     path,
     providerCatalog,

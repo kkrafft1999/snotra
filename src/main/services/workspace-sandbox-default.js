@@ -8,7 +8,7 @@
  * once. Nothing to do while the default is on.
  *
  * @param {object} deps
- * @param {{ noteWorkspaceOpened: (root: string) => Promise<{changed?: boolean}> }} deps.toolPolicyStore
+ * @param {{ noteWorkspaceOpened: (root: string|null) => Promise<{changed?: boolean}> }} deps.toolPolicyStore
  * @param {() => void} [deps.onChanged]
  * @param {{ warn?: Function }} [deps.log]
  * @returns {(root: string|null) => Promise<void>} never rejects

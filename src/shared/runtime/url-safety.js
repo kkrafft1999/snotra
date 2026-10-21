@@ -25,9 +25,14 @@ const ALLOWED_PROTOCOLS = new Set(['http:', 'https:']);
 const BLOCKED_HOST_SUFFIXES = ['.localhost', '.local', '.internal', '.home.arpa'];
 const BLOCKED_HOSTS = new Set(['localhost', 'ip6-localhost', 'ip6-loopback']);
 
+/**
+ * @param {unknown} value
+ * @returns {number[] | null} Four octets.
+ */
 function parseIpv4(value) {
   const parts = String(value).split('.');
   if (parts.length !== 4) return null;
+  /** @type {number[]} */
   const octets = [];
   for (const part of parts) {
     if (!/^\d{1,3}$/.test(part)) return null;
@@ -42,6 +47,8 @@ function parseIpv4(value) {
  * Adressbereiche, die den Rechner selbst oder das lokale Netz meinen.
  * 169.254.0.0/16 steht wegen der Cloud-Metadaten (169.254.169.254) mit drin,
  * 100.64.0.0/10 ist Carrier-NAT, 198.18.0.0/15 Benchmark-Netz.
+ *
+ * @param {number[]} octets
  */
 function isBlockedIpv4(octets) {
   const [a, b] = octets;
@@ -56,6 +63,10 @@ function isBlockedIpv4(octets) {
   return false;
 }
 
+/**
+ * @param {unknown} value
+ * @returns {number[] | null} Eight 16-bit groups.
+ */
 function expandIpv6(value) {
   let raw = String(value).trim().replace(/^\[/, '').replace(/\]$/, '').split('%')[0];
   if (!raw.includes(':')) return null;
@@ -80,6 +91,7 @@ function expandIpv6(value) {
     ? (missing < 0 ? null : [...headGroups, ...Array(missing).fill('0'), ...tailGroups])
     : raw.split(':');
   if (!groups || groups.length !== 8) return null;
+  /** @type {number[]} */
   const out = [];
   for (const group of groups) {
     if (!/^[0-9a-fA-F]{1,4}$/.test(group)) return null;
@@ -88,6 +100,7 @@ function expandIpv6(value) {
   return out;
 }
 
+/** @param {number[]} groups */
 function isBlockedIpv6(groups) {
   const allZero = groups.every((g) => g === 0);
   if (allZero) return true; // ::
@@ -115,7 +128,10 @@ function isBlockedIpv6(groups) {
   return false;
 }
 
-/** Ist die IP-Adresse (v4 oder v6) fuer den Abruf gesperrt? */
+/**
+ * Ist die IP-Adresse (v4 oder v6) fuer den Abruf gesperrt?
+ * @param {unknown} value
+ */
 function isBlockedAddress(value) {
   if (typeof value !== 'string' || !value.trim()) return true;
   const octets = parseIpv4(value.trim());
@@ -125,7 +141,10 @@ function isBlockedAddress(value) {
   return true; // Was sich nicht als Adresse lesen laesst, wird nicht abgerufen.
 }
 
-/** Hostname, der ohne Aufloesung schon feststeht (localhost, *.local, IP-Literal). */
+/**
+ * Hostname, der ohne Aufloesung schon feststeht (localhost, *.local, IP-Literal).
+ * @param {unknown} hostname
+ */
 function isBlockedHostname(hostname) {
   if (typeof hostname !== 'string' || !hostname.trim()) return true;
   const host = hostname.trim().toLowerCase().replace(/\.$/, '');
@@ -139,6 +158,9 @@ function isBlockedHostname(hostname) {
 /**
  * Liest eine vom Modell gelieferte Adresse. Liefert `{ url }` oder `{ error }`
  * mit Klartext; `error` ist bereits die Meldung fuer das Tool-Ergebnis.
+ *
+ * @param {unknown} raw
+ * @returns {{ url: URL, error?: undefined } | { error: string, url?: undefined }}
  */
 function parseHttpUrl(raw) {
   const value = typeof raw === 'string' ? raw.trim() : '';

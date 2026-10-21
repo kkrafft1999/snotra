@@ -1,0 +1,467 @@
+'use strict';
+
+const path = require('path');
+const { createFileInfo, formatFields } = require('../services/file-info');
+const { createTranslator } = require('../../shared/i18n');
+
+/**
+ * Kontextmenü für Dateien und Ordner im Dateibaum (Issues #58, #59, #120, #123, #349).
+ *
+ * Baut ein natives Electron-Menü mit Dateioperationen. Die Pfadprüfung gegen
+ * den Workspace passiert vorher im IPC-Handler; hier kommt nur noch ein
+ * bereits validierter absoluter Pfad an.
+ *
+ * Ordner bekommen dasselbe Menü ohne „Öffnen“: Auf- und Zuklappen erledigt
+ * schon der Linksklick im Baum, und „mit Standardprogramm öffnen“ hätte für
+ * einen Ordner keine sinnvolle Bedeutung.
+ */
+
+/**
+ * @typedef {import('electron').BrowserWindow} BrowserWindow
+ * @typedef {import('electron').MenuItemConstructorOptions} MenuItem
+ * @typedef {import('../services/file-info').InfoField} InfoField
+ */
+
+/**
+ * What the information dialog is drawn from (#849).
+ * @typedef {object} FileInfoPayload
+ * @property {string} name
+ * @property {string} path
+ * @property {'file' | 'folder'} kind
+ * @property {string} type
+ * @property {string} summary
+ * @property {InfoField[]} details
+ * @property {string} revealLabel
+ */
+
+/**
+ * What the caller of `buildTemplate` and `popup` decides: which entries the
+ * menu has and what they do. A `null` callback leaves its entry out.
+ * @typedef {object} FileMenuOptions
+ * @property {BrowserWindow | null} [window]
+ * @property {((filePath: string) => void) | null} [onDeleted]
+ * @property {boolean} [isDirectory]
+ * @property {((filePath: string) => void) | null} [onClearAgentMark]
+ * @property {((filePath: string) => void) | null} [onShowChanges]
+ * @property {((kind: 'file' | 'directory') => void) | null} [onCreate]
+ * @property {((filePath: string) => void) | null} [onRename]
+ * @property {boolean} [isRoot]
+ * @property {((info: FileInfoPayload) => boolean) | null} [onShowInfo]
+ */
+
+const REVEAL_KEYS = Object.freeze({
+  darwin: 'contextMenu.reveal.darwin',
+  win32: 'contextMenu.reveal.win32',
+});
+
+/** @type {Readonly<Record<string, string>>} */
+const REVEAL_KEY_BY_PLATFORM = REVEAL_KEYS;
+
+/**
+ * @param {string} platform
+ * @param {string | undefined} locale
+ */
+function revealLabelForPlatform(platform, locale) {
+  return createTranslator(locale)(REVEAL_KEY_BY_PLATFORM[platform] || 'contextMenu.reveal.other');
+}
+
+/**
+ * Types that "Open" runs instead of showing (#649): shell.openPath hands them
+ * to the operating system, which executes them with the user's full rights —
+ * outside the shell switch (#102) and the sandbox (#329). Files Snotra writes
+ * carry no Mark-of-the-Web and no quarantine attribute, so SmartScreen and
+ * Gatekeeper do not ask either. On Windows PATHEXT is added on top.
+ */
+/** @type {Readonly<Record<string, readonly string[]>>} */
+const LAUNCHABLE_EXTENSIONS = Object.freeze({
+  win32: Object.freeze([
+    '.exe', '.com', '.bat', '.cmd', '.ps1', '.psm1', '.vbs', '.vbe', '.vb', '.js', '.jse', '.wsf',
+    '.wsh', '.ws', '.wsc', '.sct', '.hta', '.msi', '.msp', '.msc', '.lnk', '.url', '.scr', '.pif',
+    '.cpl', '.reg', '.jar', '.application', '.appref-ms', '.chm', '.settingcontent-ms',
+    // The python.org, Strawberry Perl and RubyInstaller setups associate
+    // these with their interpreter, which runs them; run_python writes .py.
+    '.py', '.pyw', '.pyz', '.pl', '.rb',
+  ]),
+  darwin: Object.freeze([
+    '.app', '.command', '.tool', '.sh', '.zsh', '.bash', '.csh', '.ksh', '.tcsh', '.terminal',
+    '.workflow', '.action', '.pkg', '.mpkg', '.scpt', '.scptd', '.applescript', '.jar',
+    '.fileloc', '.inetloc',
+    // Python Launcher, which the python.org installer sets up, runs them.
+    '.py', '.pyw', '.pyz',
+  ]),
+  linux: Object.freeze([
+    '.desktop', '.sh', '.bash', '.zsh', '.csh', '.ksh', '.run', '.appimage', '.jar', '.py',
+  ]),
+});
+
+/**
+ * @param {string} platform
+ * @param {NodeJS.ProcessEnv} env
+ */
+function launchableExtensions(platform, env) {
+  const listed = LAUNCHABLE_EXTENSIONS[platform] || LAUNCHABLE_EXTENSIONS.linux;
+  const pathExt = platform === 'win32' && typeof env?.PATHEXT === 'string' ? env.PATHEXT.split(';') : [];
+  return new Set([...listed, ...pathExt]
+    .map((ext) => ext.trim().toLowerCase())
+    .filter((ext) => ext.startsWith('.')));
+}
+
+/**
+ * Lower-case extension of a path's last segment as the platform reads it.
+ *
+ * @param {string} filePath
+ * @param {string} platform
+ */
+function launchExtension(filePath, platform) {
+  const pathApi = platform === 'win32' ? path.win32 : path.posix;
+  let name = pathApi.basename(filePath);
+  // Windows drops trailing dots and spaces: "setup.bat. " runs as setup.bat.
+  if (platform === 'win32') name = name.replace(/[. ]+$/, '');
+  return pathApi.extname(name).toLowerCase();
+}
+
+/**
+ * @param {object} deps
+ * @param {Pick<typeof import('electron').Menu, 'buildFromTemplate'>} deps.Menu
+ * @param {Pick<import('electron').Shell, 'openPath' | 'showItemInFolder' | 'trashItem'>} deps.shell
+ * @param {Pick<import('electron').Dialog, 'showMessageBox'> | null} [deps.dialog]
+ * @param {Pick<import('electron').Clipboard, 'writeText'> | null} [deps.clipboard]
+ * @param {string} [deps.platform]
+ * @param {Pick<Console, 'warn'>} [deps.logger]
+ * @param {{ describe: ReturnType<typeof createFileInfo>['describe'] } | null} [deps.fileInfo]
+ * @param {() => string | undefined} [deps.getLocale]
+ * @param {Pick<typeof import('fs').promises, 'realpath' | 'stat'>} [deps.fs]
+ * @param {NodeJS.ProcessEnv} [deps.env]
+ * @param {((target: string) => Promise<void>) | null} [deps.trashItem]
+ */
+function createFileContextMenu({
+  Menu,
+  shell,
+  dialog = null,
+  clipboard = null,
+  platform = process.platform,
+  logger = console,
+  fileInfo = null,
+  // The language is read afresh every time the menu opens (epic #277): a
+  // context menu lives only until the click, so a rebuild is unnecessary.
+  getLocale = () => undefined,
+  // For the look at what "Open" would launch (#649).
+  fs = require('fs').promises,
+  env = process.env,
+  // shell.trashItem with the macOS way out of #712 (move-to-trash.js).
+  trashItem = null,
+}) {
+  const info = fileInfo || createFileInfo({ platform, logger });
+  const moveToTrash = trashItem || ((target) => shell.trashItem(target));
+  const launchable = launchableExtensions(platform, env);
+
+  /**
+   * Whether "Open" would run the path rather than show it (#649): a program
+   * or script by its extension, an `.app` bundle, or — on macOS and Linux — a
+   * regular file without an extension that has an execute bit. A file with
+   * an extension is opened by its type, so `report.pdf` from an exFAT stick,
+   * where everything is 0777, still opens in a viewer and does not ask. A
+   * link counts as what it points to, so `notes` → `tool.app` asks as well.
+   * Unreadable or gone: decided by the name alone, and shell.openPath reports
+   * the rest.
+   *
+   * @param {string} filePath
+   */
+  async function opensAsProgram(filePath) {
+    const names = [filePath];
+    /** @type {import('fs').Stats | null} */
+    let stats = null;
+    try {
+      const realPath = await fs.realpath(filePath);
+      if (realPath !== filePath) names.push(realPath);
+      stats = await fs.stat(realPath);
+    } catch {
+      // Decided by the name below.
+    }
+    if (names.some((name) => launchable.has(launchExtension(name, platform)))) return true;
+    const withoutExtension = names.every((name) => launchExtension(name, platform) === '');
+    return platform !== 'win32' && withoutExtension && stats !== null && stats.isFile() && (stats.mode & 0o111) !== 0;
+  }
+
+  /**
+   * "Open": a document opens directly, a program or script only after a
+   * native warning with "Cancel" as default and Escape answer (#649). A
+   * failure from shell.openPath — no app for the type, say — is shown, not
+   * only logged. Ergebnis: { opened } | { cancelled } | { error }.
+   *
+   * @param {string} filePath
+   * @param {BrowserWindow | null} [window]
+   */
+  async function openWithDefaultApp(filePath, window = null) {
+    const t = createTranslator(getLocale());
+    if (await opensAsProgram(filePath)) {
+      // Without a dialog nothing can ask, and a program is not run unasked.
+      if (!dialog) return { error: t('contextMenu.noDialog') };
+      const { response } = await showMessageBox(window, {
+        type: 'warning',
+        buttons: [t('contextMenu.openProgram.confirm'), t('contextMenu.openProgram.cancel')],
+        defaultId: 1,
+        cancelId: 1,
+        noLink: true,
+        message: t('contextMenu.openProgram.title', { name: path.basename(filePath) }),
+        detail: `${filePath}\n\n${t('contextMenu.openProgram.detail')}`,
+      });
+      if (response !== 0) return { cancelled: true };
+    }
+    // shell.openPath löst mit '' auf, wenn es geklappt hat, sonst mit Fehlertext.
+    const failure = await shell.openPath(filePath);
+    if (!failure) return { opened: true };
+    logger.warn('[file-context-menu] The file could not be opened:', failure);
+    if (dialog) {
+      await showMessageBox(window, {
+        type: 'error',
+        buttons: [t('contextMenu.ok')],
+        noLink: true,
+        message: t('contextMenu.open.failedTitle', { name: path.basename(filePath) }),
+        detail: `${filePath}\n\n${failure}`,
+      });
+    }
+    return { error: failure };
+  }
+
+  /**
+   * @param {string} filePath
+   */
+  function revealInFileManager(filePath) {
+    shell.showItemInFolder(filePath);
+  }
+
+  /**
+   * @param {BrowserWindow | null | undefined} window
+   * @param {import('electron').MessageBoxOptions} options
+   */
+  function showMessageBox(window, options) {
+    // Every caller has checked for a dialog before it gets here.
+    if (!dialog) throw new Error('No dialog is available.');
+    return window ? dialog.showMessageBox(window, options) : dialog.showMessageBox(options);
+  }
+
+  /**
+   * Sicherheitsabfrage, dann Papierkorb (shell.trashItem) statt hartem Löschen.
+   * „Abbrechen“ ist Standard- und Escape-Antwort, damit Enter nichts löscht.
+   * Ergebnis: { cancelled } | { deleted } | { error }.
+   *
+   * @param {string} filePath
+   * @param {BrowserWindow | null | undefined} window
+   * @param {{ isDirectory?: boolean }} [options]
+   */
+  async function deleteWithConfirmation(filePath, window, { isDirectory = false } = {}) {
+    const t = createTranslator(getLocale());
+    if (!dialog) return { error: t('contextMenu.noDialog') };
+    const hint = t(isDirectory ? 'contextMenu.delete.directory' : 'contextMenu.delete.file');
+    const { response } = await showMessageBox(window, {
+      type: 'warning',
+      buttons: [t('contextMenu.delete.confirm'), t('contextMenu.delete.cancel')],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+      message: t('contextMenu.delete.confirmTitle', { name: path.basename(filePath) }),
+      detail: `${filePath}\n\n${hint}`,
+    });
+    if (response !== 0) return { cancelled: true };
+
+    try {
+      await moveToTrash(filePath);
+      return { deleted: true };
+    } catch (err) {
+      const message = err?.message ?? String(err);
+      logger.warn('[file-context-menu] The file could not be deleted:', message);
+      await showMessageBox(window, {
+        type: 'error',
+        buttons: [t('contextMenu.ok')],
+        message: t('contextMenu.delete.failedTitle'),
+        detail: `${filePath}\n\n${message}`,
+      });
+      return { error: message };
+    }
+  }
+
+  /**
+   * Issue #123: „Informationen“ als nativer Dialog — dieselbe Machart wie die
+   * Lösch-Rückfrage, kein neuer Renderer-Code, auf allen drei Plattformen
+   * sofort richtig gesetzt.
+   *
+   * Der zweite Knopf legt den vollständigen Pfad in die Zwischenablage; ohne
+   * `clipboard` gibt es ihn nicht, statt einen toten Knopf zu zeigen.
+   *
+   * Since #849 the information is shown in Snotra's own dialog when `present`
+   * is given: it receives what the renderer draws and returns whether it
+   * reached a window. Only when it did not — or without `present` — does the
+   * native dialog above come up, so there is always something on screen.
+   * Ergebnis: { presented } | { shown } | { copied } | { error }.
+   *
+   * @param {string} filePath
+   * @param {BrowserWindow | null | undefined} window
+   * @param {{ isDirectory?: boolean, present?: ((info: FileInfoPayload) => boolean) | null }} [options]
+   */
+  async function showInfo(filePath, window, { isDirectory = false, present = null } = {}) {
+    const t = createTranslator(getLocale());
+    if (!dialog && typeof present !== 'function') return { error: t('contextMenu.noDialog') };
+
+    // Die Sprache geht mit: Die Feldnamen, die Typangaben und die Zahlen- und
+    // Datumsformate der Tabelle entstehen erst in `describe()` (#292).
+    const described = await info.describe(filePath, { isDirectory, locale: t.locale });
+    if ('error' in described) {
+      logger.warn('[file-context-menu] The information could not be read:', described.error);
+      if (!dialog) return { error: described.error };
+      await showMessageBox(window, {
+        type: 'error',
+        buttons: [t('contextMenu.ok')],
+        noLink: true,
+        message: t('contextMenu.info.unavailable'),
+        detail: `${filePath}\n\n${described.error}`,
+      });
+      return { error: described.error };
+    }
+
+    if (typeof present === 'function' && present({
+      name: described.name,
+      path: described.path,
+      kind: described.kind,
+      type: described.type,
+      summary: described.summary,
+      details: described.details,
+      revealLabel: revealLabelForPlatform(platform, getLocale()),
+    })) {
+      return { presented: true };
+    }
+    if (!dialog) return { error: t('contextMenu.noDialog') };
+
+    const canCopy = Boolean(clipboard && typeof clipboard.writeText === 'function');
+    const { response } = await showMessageBox(window, {
+      type: 'info',
+      buttons: canCopy ? [t('contextMenu.ok'), t('contextMenu.info.copyPath')] : [t('contextMenu.ok')],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+      message: t('contextMenu.info.title', { name: described.name }),
+      detail: formatFields(described.fields),
+    });
+
+    if (canCopy && response === 1) {
+      clipboard?.writeText(described.path);
+      return { copied: true };
+    }
+    return { shown: true };
+  }
+
+  /**
+   * `isDirectory` is main's own lstat of the path (#649), never a renderer
+   * flag: it decides whether "Open" is offered and how the delete
+   * confirmation words it.
+   *
+   * @param {string} filePath
+   * @param {FileMenuOptions} [options]
+   * @returns {MenuItem[]}
+   */
+  function buildTemplate(filePath, {
+    window = null, onDeleted = null, isDirectory = false, onClearAgentMark = null, onShowChanges = null,
+    onCreate = null, onRename = null, isRoot = false, onShowInfo = null,
+  } = {}) {
+    const t = createTranslator(getLocale());
+    // Der Klick-Handler wird nicht abgewartet: Eine Ablehnung — etwa weil
+    // das Fenster während des Dialogs zugeht — wäre sonst eine
+    // unbehandelte Rejection und damit ein Absturz des Main-Prozesses.
+    // Every click that opens a dialog is guarded so (#649 for Open and Delete).
+    const guarded = (/** @type {Promise<unknown>} */ promise, /** @type {string} */ what) => promise.catch((err) => {
+      logger.warn(`[file-context-menu] ${what}:`, err?.message ?? err);
+    });
+    // Groups, with a separator between those that have something in them.
+    // "Open" stays first for a file; the new entries follow it (#349) — for a
+    // folder, where there is no "Open", they lead.
+    const opening = isDirectory ? [] : [
+      {
+        label: t('contextMenu.open'),
+        click: () => guarded(openWithDefaultApp(filePath, window), 'The file could not be opened'),
+      },
+      // Only for a file the agent changed in the conversation on screen (#348).
+      ...(typeof onShowChanges === 'function' ? [{
+        label: t('contextMenu.showChanges'),
+        click: () => onShowChanges(filePath),
+      }] : []),
+    ];
+    // New file and folder (#349): inside a folder, next to a file. The
+    // renderer asks for the name in the tree.
+    const creating = typeof onCreate === 'function' ? [
+      { label: t('contextMenu.newFile'), click: () => onCreate('file') },
+      { label: t('contextMenu.newFolder'), click: () => onCreate('directory') },
+    ] : [];
+    const looking = [
+      { label: revealLabelForPlatform(platform, getLocale()), click: () => revealInFileManager(filePath) },
+      {
+        label: t('contextMenu.info'),
+        click: () => guarded(
+          showInfo(filePath, window, { isDirectory, present: onShowInfo }),
+          'The information could not be shown',
+        ),
+      },
+      // Only when the row carries what the agent read or changed (#347).
+      ...(typeof onClearAgentMark === 'function' ? [{
+        label: t(isDirectory ? 'contextMenu.clearAgentMark.folder' : 'contextMenu.clearAgentMark'),
+        click: () => onClearAgentMark(filePath),
+      }] : []),
+    ];
+    // The open folder itself (#349) is neither renamed nor deleted from here:
+    // the app would be left pointing at a folder that is gone.
+    const changing = isRoot ? [] : [
+      // F2 is only shown here; the tree handles the key itself (#349).
+      ...(typeof onRename === 'function' ? [{
+        label: t('contextMenu.rename'),
+        accelerator: 'F2',
+        registerAccelerator: false,
+        click: () => onRename(filePath),
+      }] : []),
+      {
+        label: t('contextMenu.delete'),
+        click: () => guarded((async () => {
+          const result = await deleteWithConfirmation(filePath, window, { isDirectory });
+          if (result.deleted && typeof onDeleted === 'function') onDeleted(filePath);
+          return result;
+        })(), 'The file could not be deleted'),
+      },
+    ];
+    // Without the new entries "Open" and the looks share one group, as before.
+    const groups = creating.length > 0
+      ? [opening, creating, looking, changing]
+      : [[...opening, ...looking], changing];
+    return groups
+      .filter((group) => group.length > 0)
+      .flatMap((group, index) => (index === 0 ? group : [{ type: 'separator' }, ...group]));
+  }
+
+  /**
+   * `position`: where the keyboard opened it (#74), in window coordinates;
+   * without one the menu opens at the mouse pointer.
+   *
+   * @param {string} filePath
+   * @param {BrowserWindow | null | undefined} window
+   * @param {Omit<FileMenuOptions, 'window'> & { position?: { x?: number, y?: number } | null }} [options]
+   */
+  function popup(filePath, window, {
+    onDeleted = null, isDirectory = false, onClearAgentMark = null, onShowChanges = null, position = null,
+    onCreate = null, onRename = null, isRoot = false, onShowInfo = null,
+  } = {}) {
+    const menu = Menu.buildFromTemplate(buildTemplate(filePath, {
+      window, onDeleted, isDirectory, onClearAgentMark, onShowChanges, onCreate, onRename, isRoot, onShowInfo,
+    }));
+    menu.popup({ ...(window ? { window } : {}), ...(position ?? {}) });
+    return menu;
+  }
+
+  return {
+    buildTemplate,
+    popup,
+    get revealLabel() { return revealLabelForPlatform(platform, getLocale()); },
+    deleteWithConfirmation,
+    showInfo,
+    // "Reveal" from the information dialog (#849); the caller has checked the path.
+    reveal: revealInFileManager,
+  };
+}
+
+module.exports = { createFileContextMenu, revealLabelForPlatform, LAUNCHABLE_EXTENSIONS };

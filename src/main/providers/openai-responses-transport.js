@@ -7,6 +7,38 @@
  */
 'use strict';
 
+/** @typedef {import('../../application/ports/llm-port').LlmMessage} LlmMessage */
+/** @typedef {import('../../application/ports/llm-port').LlmToolDefinition} LlmToolDefinition */
+/** @typedef {import('../ports/provider-runtime-port').StreamCallbacks} StreamCallbacks */
+/** @typedef {import('../ports/provider-runtime-port').ChatRoundResult} ChatRoundResult */
+/** @typedef {NonNullable<import('../ports/provider-runtime-port').AssistantMessage['tool_calls']>[number]} ToolCall */
+
+/**
+ * What of a streamed Responses event is read.
+ * @typedef {Object} ResponsesEvent
+ * @property {unknown} [delta]
+ * @property {number|string} [output_index]
+ * @property {{ type?: string, name?: string, call_id?: string, id?: string, arguments?: unknown }} [item]
+ * @property {{ incomplete_details?: { reason?: string }, usage?: unknown, error?: { message?: string } }} [response]
+ * @property {{ message?: string }} [error]
+ * @property {unknown} [message]
+ *
+ * @typedef {Object} ResponsesRoundOptions
+ * @property {string} baseUrl
+ * @property {Record<string, string>} headers
+ * @property {string} model
+ * @property {LlmMessage[]} messages
+ * @property {LlmToolDefinition[]} [tools]
+ * @property {StreamCallbacks} callbacks
+ * @property {AbortSignal} [abortSignal]
+ * @property {import('undici').Dispatcher} [dispatcher]  for a connection with its own TLS settings
+ * @property {boolean} [supportsImages]
+ * @property {boolean} [sendTools]
+ * @property {boolean} [includeStatus]  an error result carries the HTTP status
+ * @property {number} [maxOutputTokens]
+ * @property {Record<string, unknown>} [extraBody]
+ */
+
 const { imageAttachmentsOf, toDataUrl } = require('../../shared/contracts/attachments');
 const { createMessage } = require('../../shared/contracts/message');
 const { FINISH_REASONS, finishReasonOf } = require('../../shared/contracts/finish-reason');
@@ -27,8 +59,13 @@ const {
 
 // Tools: Chat-Completions-Form ({type:"function", function:{name,description,parameters}})
 // → Responses-Form (flach: {type:"function", name, description, parameters}).
+/**
+ * @param {LlmToolDefinition[]|undefined} tools
+ * @returns {Array<Record<string, unknown>>|undefined}
+ */
 function translateToolsToResponses(tools) {
   if (!Array.isArray(tools) || tools.length === 0) return undefined;
+  /** @type {Array<Record<string, unknown>>} */
   const out = [];
   for (const t of tools) {
     const fn = t?.function;
@@ -53,7 +90,13 @@ function translateToolsToResponses(tools) {
 // (system/user/assistant + assistant.tool_calls + tool/tool_call_id) → Responses-input.
 // Pro Round wird der gesamte Verlauf als Items uebergeben; previous_response_id
 // nutzen wir nicht, weil der chat-handler den Verlauf bereits selbst pflegt.
+/**
+ * @param {LlmMessage[]} messages
+ * @param {{ supportsImages?: boolean }} [options]
+ * @returns {Array<Record<string, unknown>>}
+ */
 function translateMessagesToResponsesInput(messages, { supportsImages = true } = {}) {
+  /** @type {Array<Record<string, unknown>>} */
   const out = [];
   for (const m of messages) {
     if (m.role === 'system' || m.role === 'user') {
@@ -66,6 +109,7 @@ function translateMessagesToResponsesInput(messages, { supportsImages = true } =
       // Mit Bild verlangt die Responses-API getypte Teile statt eines
       // Strings (Issue #84). Ein leerer Text-Teil entfaellt — ein Screenshot
       // ohne Begleitfrage ist eine gueltige Eingabe.
+      /** @type {Array<Record<string, unknown>>} */
       const content = [];
       if (text) content.push({ type: 'input_text', text });
       for (const image of images) {
@@ -108,6 +152,9 @@ function translateMessagesToResponsesInput(messages, { supportsImages = true } =
  * generische Provider erkennt daran, ob er einmalig auf Chat Completions
  * zurueckfallen soll (Issue #193). Ohne das Flag bleibt die Ergebnisform
  * unveraendert die der uebrigen Provider.
+ *
+ * @param {ResponsesRoundOptions} options
+ * @returns {Promise<ChatRoundResult>}
  */
 async function streamResponsesRound({
   baseUrl,
@@ -125,6 +172,7 @@ async function streamResponsesRound({
   extraBody,
 }) {
   const extra = extraBody && typeof extraBody === 'object' ? extraBody : {};
+  /** @type {Record<string, unknown>} */
   const body = {
     model,
     input: translateMessagesToResponsesInput(messages, { supportsImages }),
@@ -172,12 +220,16 @@ async function streamResponsesRound({
   const reader = res.body.getReader();
   const unbindAbort = bindAbortSignalToReader(reader, abortSignal);
   const fullContentRef = { v: '' };
+  /** @type {ToolCall[]} */
   const toolCalls = [];
   // A round ends with `response.completed` or `response.incomplete`; a stream
   // that stops before either was cut off on the way (#538).
   let ended = false;
+  /** @type {string|null} */
   let cutOff = null;
+  /** @type {string|import('../../shared/contracts/message').Message|null} */
   let streamError = null;
+  /** @type {ChatRoundResult['usage']} */
   let usage = null;
 
   try {
@@ -186,6 +238,7 @@ async function streamResponsesRound({
       const ev = evt.event || '';
       const data = evt.data;
       if (!data || data === '[DONE]') continue;
+      /** @type {ResponsesEvent} */
       let json;
       try { json = JSON.parse(data); } catch { continue; }
 
@@ -229,7 +282,7 @@ async function streamResponsesRound({
         const item = json.item;
         if (item?.type === 'function_call') {
           toolCalls.push({
-            id: item.call_id || item.id,
+            id: item.call_id || item.id || '',
             type: 'function',
             function: {
               name: item.name || '',
@@ -284,6 +337,7 @@ async function streamResponsesRound({
   }
 
   const fullContent = fullContentRef.v;
+  /** @type {import('../ports/provider-runtime-port').AssistantMessage} */
   const message = {
     role: 'assistant',
     content: fullContent.length > 0 ? fullContent : toolCalls.length ? null : '',

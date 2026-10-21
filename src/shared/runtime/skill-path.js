@@ -17,6 +17,7 @@ const SKILL_PATH_PREFIX = 'skill:';
 
 /**
  * Zerlegt "skill:<name>/<rest>" in Name und Restpfad.
+ * @param {unknown} raw
  * @returns {{ name: string, rest: string } | null} null, wenn kein Skill-Pfad.
  */
 function parseSkillPath(raw) {
@@ -31,7 +32,11 @@ function parseSkillPath(raw) {
   return { name, rest };
 }
 
-/** Baut "skill:<name>/<rest>"; ohne rest bleibt es "skill:<name>". */
+/**
+ * Baut "skill:<name>/<rest>"; ohne rest bleibt es "skill:<name>".
+ * @param {unknown} name
+ * @param {unknown} [rest]
+ */
 function formatSkillPath(name, rest = '') {
   const cleanName = String(name ?? '').trim();
   const cleanRest = String(rest ?? '').trim().replace(/^[/\\]+/, '');

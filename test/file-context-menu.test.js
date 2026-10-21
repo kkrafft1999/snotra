@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createFileContextMenu, revealLabelForPlatform } = require('../src/main/services/file-context-menu');
+const { createFileContextMenu, revealLabelForPlatform } = require('../src/main/electron/file-context-menu');
 
 function createFakes() {
   const calls = {

@@ -38,6 +38,7 @@ import {
 // What a writing call changed (#348): summaries from main, diffs on demand.
 import { changedFilesOf, changesAreLive, markChangesLive, normalizeChanges } from '../chat/fileChanges.js';
 import { syncSandboxBlocked } from '../chat/sandboxBlocked.js';
+import { syncInjectionFlags } from '../chat/injectionFlags.js';
 // Diagnose-Puffer für den Tool-Log (Issue #87): Ereignisse, Zustände, Fehler.
 import { toolLogDebug } from '../chat/toolLogDebug.js';
 import { compactToolLinePayload } from '../utils/tool-log-debug.js';
@@ -55,7 +56,7 @@ import { resolveNative } from '../utils/nativePath.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 import { settingsHelpTarget } from '../manual/settings-help-links.js';
 
-const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, isDerivedChatTitle, mergeSessionCost, normalizeSessionCost, PROPOSE_CONFIG_CHANGE_TOOL } = contracts;
+const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, normalizeSessionCost, PROPOSE_CONFIG_CHANGE_TOOL } = contracts;
 
 /** Why a save did not go through (#977), and what the banner says about it. */
 const SAVE_PROBLEMS = Object.freeze({ UNREADABLE: 'unreadable', FAILED: 'failed' });
@@ -148,6 +149,7 @@ export function initChatStream({
   activeProviderConfigured,
   activeProviderSupportsImages,
   activeImageLimit,
+  activeImageFormats,
   syncLiveDot,
   syncChatTitle,
   onWorkspaceFileWritten,
@@ -343,9 +345,10 @@ export function initChatStream({
   }
 
   function applyUsageFromResult(result) {
-    // The cost adds up over the chat, unlike the context size below (#949).
-    if (result?.cost) {
-      appStore.chatCost = mergeSessionCost(appStore.chatCost, result.cost);
+    // The chat's cost as main summed it (#949, #981), unlike the context size
+    // below; a turn that cost nothing brings no sum and the shown one stays.
+    if (result && 'chatCost' in result) {
+      appStore.chatCost = normalizeSessionCost(result.chatCost);
       costPanel.refresh();
     }
     // contextUsage = letzte Runde (Kontext). Aeltere Engine-Ergebnisse ohne
@@ -895,62 +898,15 @@ export function initChatStream({
   }
 
   /**
-   * Writes a chat into the history. Any chat, not only the one on screen: a
-   * run that ends in the background writes its own (#320) — and does not make
-   * it the folder's active chat, which stays the one the user looks at.
-   *
-   * Never rejects: several callers run it as `void`, and a new chat or a
-   * folder switch must not fail over a save. A save that does not go through
-   * shows the banner instead (#977).
+   * Main saved a chat of a run, or could not (#981). The banner follows what
+   * main says (#977), and the history column shows the new state — it stands
+   * next to the chat since epic #223 and would show the old title and time.
    */
-  async function persistChat(chat, { markActive = false } = {}) {
-    if (!chat?.id || lastPersisted.get(chat.id) === DELETED) return;
-    try {
-      const persistable = persistableMessages(chat.messages);
-      if (persistable.length === 0) return;
-      lastPersisted.set(chat.id, { messages: chat.messages, count: persistable.length });
-      // Ohne Zeitstempel: Wann ein Chat zuletzt gefuehrt wurde, entscheidet der
-      // Main am Nachrichtenstand (Issue #245). Diese Funktion laeuft auch beim
-      // blossen Verlassen eines Chats — ein Stempel von hier hiesse „heute
-      // gesprochen“, obwohl niemand etwas gesagt hat.
-      const result = await api.upsertChatSession({
-        id: chat.id,
-        workspaceRoot: chat.workspaceRoot,
-        messages: persistable,
-        tokenUsage: chat.tokenUsage,
-        // Only ever grows (#949): a chat without a sum here sends none, and the
-        // one already stored stays.
-        ...(chat.cost ? { cost: chat.cost } : {}),
-        // Nur einen bereits benannten Chat betiteln — sonst leitet die Ablage
-        // den Titel selbst aus der ersten Frage ab.
-        ...(chat.title ? { title: chat.title } : {}),
-      });
-      if (result?.unreadable) {
-        // Main skipped the save rather than write over a file it could not read (#473).
-        setSaveProblem(SAVE_PROBLEMS.UNREADABLE);
-        return;
-      }
-    } catch (error) {
-      toolLogDebug.record('save failed', { chatId: chat.id, message: String(error?.message || error) });
-      setSaveProblem(SAVE_PROBLEMS.FAILED);
-      return;
-    }
-    setSaveProblem(null);
-    if (markActive) {
-      // Only which chat the folder opens with next; the chat itself is saved.
-      try {
-        await api.setActiveChatId(chat.id);
-      } catch (error) {
-        toolLogDebug.record('save failed', { chatId: chat.id, step: 'active', message: String(error?.message || error) });
-      }
-    }
-    // Die Verlaufsspalte steht seit Epic #223 (Phase B) dauerhaft daneben und
-    // wuerde sonst den alten Titel und den alten Zeitpunkt zeigen.
-    onChatPersisted();
-  }
-
-  async function persistCurrentChat() {
-    await persistChat(currentChatSnapshot(), { markActive: true });
+  function onChatSaved(payload) {
+    if (payload?.problem === 'unreadable') setSaveProblem(SAVE_PROBLEMS.UNREADABLE);
+    else if (payload?.problem === 'failed') setSaveProblem(SAVE_PROBLEMS.FAILED);
+    else setSaveProblem(null);
+    if (payload?.ok === true) onChatPersisted();
   }
 
   /**
@@ -968,7 +924,6 @@ export function initChatStream({
 
   async function showChatForWorkspace(workspaceRoot) {
     stopChatVoiceListening();
-    await persistCurrentChat();
     appStore.chatSessionId += 1;
 
     const hist = await api.getChatHistory();
@@ -1035,7 +990,6 @@ export function initChatStream({
 
   async function showNewChat() {
     stopChatVoiceListening();
-    await persistCurrentChat();
     // A run in the chat just left goes on in the background (#320).
     detachCurrentChat();
     appStore.chatSessionId += 1;
@@ -1082,61 +1036,9 @@ export function initChatStream({
   // without touching the list; opening the chat again puts it back on screen.
 
   let runSeq = 0;
-  // chatId → what was written last: the message array and how many messages
-  // went in. A title that arrives late only writes its snapshot if that is
-  // still the latest state of the chat.
-  const lastPersisted = new Map();
-  const DELETED = Symbol('deleted');
+  // Chats deleted in this session: a name that arrives late does not show (#981).
+  const deletedChats = new Set();
 
-  function persistableMessages(messages) {
-    return messages.filter((m) => !m.greeting).map(withoutRunningStep);
-  }
-
-  /**
-   * A turn saved mid-run (#979) keeps the steps that are done. The one still
-   * running has no result yet; written down, it would come back after a crash
-   * looking finished.
-   */
-  function withoutRunningStep(message) {
-    if (!message.streaming || !message.toolRunning || !Array.isArray(message.toolTrace)) return message;
-    return { ...message, toolTrace: message.toolTrace.slice(0, -1) };
-  }
-
-  /**
-   * Saves a running turn after each finished step (#979), so that a crash, a
-   * quit or a reload keeps the chat up to the last step done; the turn is
-   * stored as cut off until the run settles and writes it once more. One
-   * write at a time per run: steps that finish while one is under way go
-   * with the next, and a run that has ended writes nothing more from here.
-   */
-  function checkpointRun(run) {
-    if (pageUnloading) return;
-    if (run.checkpointing) {
-      run.checkpointDue = true;
-      return;
-    }
-    run.checkpointing = true;
-    void (async () => {
-      try {
-        do {
-          run.checkpointDue = false;
-          if (!isRunning(run) || appStore.chatRuns.get(run.chatId) !== run) break;
-          const chat = isOnScreen(run) ? currentChatSnapshot() : run.chat;
-          if (!chat) break;
-          await persistChat(chat);
-        } while (run.checkpointDue);
-      } finally {
-        run.checkpointing = false;
-      }
-    })();
-  }
-
-  /** Whether `chat` is exactly what the history holds for it right now. */
-  function isLatestWritten(chat) {
-    const latest = lastPersisted.get(chat.id);
-    return !!latest && latest !== DELETED && latest.messages === chat.messages
-      && latest.count === persistableMessages(chat.messages).length;
-  }
 
   function isRunning(run) {
     return !!run && !run.settled && !run.aborted;
@@ -1150,6 +1052,8 @@ export function initChatStream({
     // What the sandbox refused (#792) stands first, right under the log —
     // and takes the place of a sandbox card whose answer it holds now.
     syncSandboxBlocked(messageEl, message?.toolTrace, { homeDir: getHomeDir() });
+    // A result that looked like a prompt injection (#1011) stands below it.
+    syncInjectionFlags(messageEl, message?.toolTrace);
     approvalCards?.retireRecorded?.(messageEl, message);
     syncChangesStrip(messageEl, changedFilesOf(message?.toolTrace), {
       isLive: changesAreLive,
@@ -1254,7 +1158,7 @@ export function initChatStream({
 
   /** The chat is being deleted: its run stops and must not write the chat back. */
   function discardChatRun(chatId) {
-    lastPersisted.set(chatId, DELETED);
+    deletedChats.add(chatId);
     const run = appStore.chatRuns.get(chatId);
     if (!run) return;
     run.discarded = true;
@@ -1285,6 +1189,128 @@ export function initChatStream({
     const run = runsAwaitingEnd.get(payload?.runId);
     toolLogDebug.record('run-end', { runId: payload?.runId ?? null, known: !!run });
     if (run && run.chatId === payload?.chatId) run.markEnded();
+  }
+
+  /**
+   * A turn this window did not start — one a phone sent (#1194) — has saved
+   * its question. The window follows it as one of its own: the question and
+   * a streaming answer go into the chat, and the turn's events, which arrive
+   * on the same channels, find their run. Main keeps the chat (#981), so
+   * there is no reply to settle on: the run ends with its `run-end`, and the
+   * chat on screen is then drawn from what main saved.
+   */
+  function onTurnStarted(payload) {
+    const chatId = typeof payload?.chatId === 'string' && payload.chatId ? payload.chatId : null;
+    const runId = typeof payload?.runId === 'string' && payload.runId ? payload.runId : null;
+    if (!chatId || !runId || deletedChats.has(chatId)) return;
+    // A run of this window in the chat: main does not let a second one in.
+    if (isRunning(appStore.chatRuns.get(chatId))) {
+      toolLogDebug.record('turn-started ignored', { chatId, runId });
+      return;
+    }
+    const userMessage = { role: 'user', content: typeof payload.content === 'string' ? payload.content : '' };
+    const assistantMessage = {
+      role: 'assistant',
+      content: '',
+      toolTrace: [],
+      pendingToolLines: [],
+      reasoningText: '',
+      streaming: true,
+      phase: 'waiting',
+      thinkingSince: Date.now(),
+    };
+    const onScreen = chatId === appStore.currentChatId && !canAttachChat(chatId);
+    const run = {
+      chatId,
+      runId,
+      // A remote turn works in the folder open at the desktop (#1194).
+      toolRoot: appStore.rootPath,
+      assistantMessage,
+      aborted: false,
+      settled: false,
+      discarded: false,
+      followed: true,
+      chat: onScreen ? null : {
+        id: chatId,
+        workspaceRoot: null,
+        messages: [userMessage, assistantMessage],
+        title: '',
+        tokenUsage: null,
+        contextBreakdown: null,
+        cost: null,
+      },
+    };
+    if (onScreen) appStore.chatMessages.push(userMessage, assistantMessage);
+    appStore.chatRuns.set(chatId, run);
+    expectRunEnd(run);
+    run.ended.then(() => settleFollowedRun(run)).catch((error) => console.error('[chat] a followed turn did not settle:', error));
+    approvalCards?.beginRun(chatId, assistantMessage);
+    syncChatInFlight();
+    syncElapsedTicker();
+    notifyRunsChanged();
+    if (onScreen) renderChatMessages({ follow: true });
+    else fillFollowedChat(run, userMessage).catch((error) => console.error('[chat] a followed chat could not be filled in:', error));
+  }
+
+  /**
+   * A followed turn in a chat off screen carries its chat, so that opening it
+   * shows the turn running (#320): the messages before the question come
+   * from what main saved, put in front of the turn in place — the chat may be
+   * on screen by the time they arrive.
+   */
+  async function fillFollowedChat(run, userMessage) {
+    let session = null;
+    try {
+      session = (await api.getChatSession(run.chatId))?.session;
+    } catch (error) {
+      // The turn still shows; only what came before it is missing.
+      toolLogDebug.record('followed chat not read', { chatId: run.chatId, message: error?.message || String(error) });
+      return;
+    }
+    if (!session || !Array.isArray(session.messages) || appStore.chatRuns.get(run.chatId) !== run) return;
+    let question = session.messages.length - 1;
+    while (question >= 0 && session.messages[question]?.role !== 'user') question -= 1;
+    const before = question >= 0 ? session.messages.slice(0, question) : session.messages;
+    const messages = run.chat ? run.chat.messages : appStore.chatMessages;
+    if (messages.indexOf(userMessage) !== 0) return;
+    messages.splice(0, 0, ...before);
+    if (run.chat) {
+      run.chat.workspaceRoot = session.workspaceRoot || null;
+      run.chat.title = session.title || '';
+      run.chat.tokenUsage = session.tokenUsage ?? null;
+      run.chat.cost = session.cost ?? null;
+    } else if (isOnScreen(run)) {
+      renderChatMessages({ follow: true });
+    }
+  }
+
+  /** A followed turn ended: its run goes, and the chat on screen shows what main saved. */
+  async function settleFollowedRun(run) {
+    run.settled = true;
+    const last = run.assistantMessage;
+    last.streaming = false;
+    last.phase = 'idle';
+    delete last.pendingToolLines;
+    delete last.thinkingSince;
+    delete last.toolRunning;
+    delete last.runningCallIndex;
+    delete last.permissionNote;
+    if (appStore.chatRuns.get(run.chatId) !== run) return;
+    const onScreen = isOnScreen(run);
+    appStore.chatRuns.delete(run.chatId);
+    syncChatInFlight();
+    syncElapsedTicker();
+    approvalCards?.retainChats?.(liveChatIds());
+    notifyRunsChanged();
+    // Off screen, the chat opens from main's copy next time.
+    if (!onScreen || pageUnloading) return;
+    const session = (await api.getChatSession(run.chatId))?.session;
+    // Switched away meanwhile, or a new turn began: that one shows.
+    if (!session || !Array.isArray(session.messages) || appStore.currentChatId !== run.chatId || appStore.chatRuns.has(run.chatId)) return;
+    appStore.chatMessages = session.messages;
+    setChatTokenUsage(session.tokenUsage, { cost: session.cost });
+    renderChatMessages({ follow: true });
+    if (session.title) showChatName(run.chatId, session.title);
   }
 
   /**
@@ -1400,6 +1426,8 @@ export function initChatStream({
     // daraus entstehen Symbol und gruppierte Zusammenfassung (#60).
     const tool = typeof payload?.tool === 'string' ? payload.tool : '';
     const skill = typeof payload?.skill === 'string' ? payload.skill : '';
+    // The tool's category comes from its descriptor in main (#1008).
+    const category = typeof payload?.category === 'string' ? payload.category : '';
     const permission =
       payload?.permission && typeof payload.permission === 'object' ? payload.permission : null;
     const changes = phase === 'done' ? normalizeChanges(payload?.changes) : undefined;
@@ -1409,8 +1437,9 @@ export function initChatStream({
     const sandboxDecision = phase === 'done' ? payload?.sandboxDecision : undefined;
     const sandboxLive = phase === 'done' ? payload?.sandboxLive : undefined;
     const sandboxOutside = phase === 'done' ? payload?.sandboxOutside : undefined;
+    const injectionFlag = phase === 'done' ? payload?.injectionFlag : undefined;
     const entry = toolTraceEntryForStore({
-      line, tool, skill, permission, changes, sandboxBlocked, sandboxDecision, sandboxLive, sandboxOutside,
+      line, tool, skill, category, permission, changes, sandboxBlocked, sandboxDecision, sandboxLive, sandboxOutside, injectionFlag,
     });
     if (phase === 'pending') {
       const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
@@ -1418,12 +1447,14 @@ export function initChatStream({
         existing.line = line;
         if (tool) existing.tool = tool;
         if (skill) existing.skill = skill;
+        if (category) existing.category = category;
       } else {
         last.pendingToolLines.push({
           callIndex,
           line,
           tool: tool || undefined,
           skill: skill || undefined,
+          category: category || undefined,
         });
       }
     } else if (phase === 'start') {
@@ -1437,15 +1468,14 @@ export function initChatStream({
       last.runningCallIndex = callIndex;
       delete last.permissionNote;
     } else if (phase === 'done') {
-      // Any finished step may have written an image — `run_python` and
-      // `shell_execute` do so without a `fileWritten` event (#590).
+      // Any finished step may have written an image — a program or a shell
+      // command does so without a `fileWritten` event (#590).
       clearWorkspaceImageCache();
       if (last.toolTrace.length > 0) last.toolTrace[last.toolTrace.length - 1] = entry;
       else last.toolTrace.push(entry);
       delete last.toolRunning;
       delete last.runningCallIndex;
       delete last.permissionNote;
-      checkpointRun(run);
     }
 
     if (!isOnScreen(run)) return;
@@ -1464,14 +1494,14 @@ export function initChatStream({
       wrap.appendChild(linesEl);
     }
 
-    const category = traceEntryCategory({ tool, skill });
+    const lineCategory = traceEntryCategory({ tool, skill, category });
     if (phase === 'pending') {
       // Vorläufige Zeile anlegen bzw. aktualisieren (z. B. sobald der Pfad bekannt ist).
       const row = findPendingToolLine(linesEl, callIndex);
       if (row) {
         setToolLineText(row, line);
-        setToolLineCategory(row, category);
-      } else appendToolLine(linesEl, buildToolLine(line, 'pending', callIndex, category));
+        setToolLineCategory(row, lineCategory);
+      } else appendToolLine(linesEl, buildToolLine(line, 'pending', callIndex, lineCategory));
     } else if (phase === 'done') {
       const runningRows = [...linesEl.querySelectorAll('.chat-tool-line--running')];
       const byIndex = Number.isInteger(callIndex)
@@ -1481,7 +1511,7 @@ export function initChatStream({
       setToolLineDone(doneRow, line);
       applyPermissionToRow(doneRow, permission);
       if (changes) applyChangesToRow(doneRow, changes);
-      if (changes || (entry && typeof entry === 'object' && (entry.sandboxBlocked || entry.sandboxLive || entry.sandboxOutside))) {
+      if (changes || (entry && typeof entry === 'object' && (entry.sandboxBlocked || entry.sandboxLive || entry.sandboxOutside || entry.injectionFlag))) {
         syncMessageChanges(wrap.parentElement, last);
       }
     } else {
@@ -1490,8 +1520,8 @@ export function initChatStream({
       });
       // Die passende vorläufige Zeile wird zur laufenden — sonst neue Zeile.
       const pendingRow = findPendingToolLine(linesEl, callIndex, true);
-      if (pendingRow) promoteToolLineToRunning(pendingRow, line, category);
-      else appendToolLine(linesEl, buildToolLine(line, 'running', callIndex, category));
+      if (pendingRow) promoteToolLineToRunning(pendingRow, line, lineCategory);
+      else appendToolLine(linesEl, buildToolLine(line, 'running', callIndex, lineCategory));
     }
 
     syncToolLogSummary(wrap, { thinking: isThinking(last), elapsedMs: thinkingElapsedMs(last) });
@@ -1504,6 +1534,16 @@ export function initChatStream({
     // still has to come in (#721).
     if (p?.type === CHAT_PROGRESS_TYPES.RUN_END) {
       onRunEnd(p);
+      return;
+    }
+    // What main did with the chat (#981) concerns the chat, not the step: a
+    // save comes after the last event, a name after the run has ended.
+    if (p?.type === CHAT_PROGRESS_TYPES.CHAT_SAVED) {
+      onChatSaved(p);
+      return;
+    }
+    if (p?.type === CHAT_PROGRESS_TYPES.CHAT_NAMED) {
+      showChatName(p.chatId, p.title);
       return;
     }
     const run = runForEvent(p);
@@ -1559,9 +1599,9 @@ export function initChatStream({
     }
   }
 
-  // Set when the page unloads — a reload, a quit (#979). From then on nothing
-  // of a run is written any more: what is saved is the turn up to its last
-  // finished step.
+  // Set when the page unloads — a reload, a quit (#979). Main stops the runs
+  // and keeps what it saved after their last finished step; a cancelled reply
+  // that still reaches this page is not drawn as a turn the user stopped.
   let pageUnloading = false;
   window.addEventListener('beforeunload', () => { pageUnloading = true; });
 
@@ -1576,6 +1616,9 @@ export function initChatStream({
   if (typeof api.onChatProgress === 'function') {
     api.onChatProgress((p) => toolLogDebug.guard('chat:progress', () => onChatProgress(p), p?.type));
   }
+  if (typeof api.onChatTurnStarted === 'function') {
+    api.onChatTurnStarted((payload) => toolLogDebug.guard('chat:turn-started', () => onTurnStarted(payload)));
+  }
 
   function abortChatRequest() {
     const run = appStore.chatRuns.get(appStore.currentChatId);
@@ -1587,7 +1630,6 @@ export function initChatStream({
     syncChatInFlight();
     syncElapsedTicker();
     notifyRunsChanged();
-    void persistCurrentChat();
   }
 
   /**
@@ -1655,12 +1697,11 @@ export function initChatStream({
       appStore.chatMessages.push(userMessage);
       renderChatMessages();
 
-      payload = appStore.chatMessages
-        .filter((m) => !m.greeting)
-        .map(({ role, content, attachments }) =>
-          (Array.isArray(attachments) && attachments.length > 0
-            ? { role, content, attachments }
-            : { role, content }));
+      // The question alone: main keeps the chat's history and adds the turn
+      // to it (#981).
+      payload = Array.isArray(userMessage.attachments) && userMessage.attachments.length > 0
+        ? { content: userMessage.content, attachments: userMessage.attachments }
+        : { content: userMessage.content };
       assistantMessage = {
         role: 'assistant',
         content: '',
@@ -1694,9 +1735,6 @@ export function initChatStream({
       renderChatMessages();
       syncElapsedTicker();
       notifyRunsChanged();
-      // The question is part of the chat from now on — also for the history
-      // column, which marks the chat as running while it is off screen.
-      void persistCurrentChat();
     } catch (error) {
       abandonSend({ userMessage, assistantMessage, run, error });
       return;
@@ -1808,12 +1846,12 @@ export function initChatStream({
   async function settleRun(run, result) {
     run.settled = true;
     // Replaced by a newer turn in the same chat (stop, then send again) or
-    // deleted with its chat: the turn has nothing left to write.
+    // deleted with its chat: the turn has nothing left to show.
     if (appStore.chatRuns.get(run.chatId) !== run) return;
     // The page is going away under a run (#979): main stops the run when the
-    // window reloads, and its cancelled reply can still reach this page. It
-    // would be saved as a turn the user stopped; the save made after its last
-    // finished step stays instead, marked as cut off.
+    // window reloads, and its cancelled reply can still reach this page. Main
+    // keeps the save made after its last finished step, marked as cut off;
+    // here it is not drawn as a turn the user stopped.
     if (pageUnloading) appStore.chatRuns.delete(run.chatId);
     syncChatInFlight();
     syncElapsedTicker();
@@ -1823,7 +1861,7 @@ export function initChatStream({
     const onScreen = isOnScreen(run);
     const chat = onScreen ? null : run.chat;
     if (!onScreen && !chat) {
-      // Neither on screen nor carrying its chat — nothing to write it into.
+      // Neither on screen nor carrying its chat — nothing to draw it into.
       appStore.chatRuns.delete(run.chatId);
       notifyRunsChanged();
       return;
@@ -1838,75 +1876,32 @@ export function initChatStream({
         chat.tokenUsage = coerceUsage(usage);
         chat.contextBreakdown = result?.contextBreakdown ?? null;
       }
-      if (result?.cost) chat.cost = mergeSessionCost(chat.cost, result.cost);
+      if (result && 'chatCost' in result) chat.cost = normalizeSessionCost(result.chatCost);
     }
 
-    try {
-      // Written into its own chat — not into whichever chat is open now.
-      if (onScreen) await persistCurrentChat();
-      else await persistChat(chat);
-    } finally {
-      if (appStore.chatRuns.get(run.chatId) === run) appStore.chatRuns.delete(run.chatId);
-      // The chat may have been opened during the write; then it is on screen
-      // and keeps its cards, otherwise they go with the run.
-      approvalCards?.retainChats?.(liveChatIds());
-      notifyRunsChanged();
-    }
-    // Ueberschrift im Hintergrund nachziehen: Sie darf die Antwort nicht
-    // aufhalten und ihr Fehlschlag darf den Chat nicht stoeren.
-    void maybeGenerateChatTitle(run.chatId, run.chat);
+    // Main has saved the turn into its own chat already (#981).
+    if (appStore.chatRuns.get(run.chatId) === run) appStore.chatRuns.delete(run.chatId);
+    // A chat on screen keeps its cards, otherwise they go with the run.
+    approvalCards?.retainChats?.(liveChatIds());
+    notifyRunsChanged();
   }
 
   /**
-   * Laesst das Modell die Konversation benennen, sobald die erste Antwort
-   * steht. Laeuft genau einmal je Chat: Danach steht im Titel etwas, das nicht
-   * mehr dem aus der Frage abgeleiteten entspricht. Aeltere Chats mit
-   * abgeleitetem Titel werden beim naechsten Zug nachbenannt.
-   *
-   * `offScreenChat` is the chat of a run that ended in the background (#320);
-   * without it, the chat on screen is meant.
+   * Main named the chat after its first answer (#359, #981). The name follows
+   * the chat to where it is shown: the header while it is on screen, its run
+   * while that carries it in the background, the history column always.
    */
-  async function maybeGenerateChatTitle(chatId, offScreenChat = null) {
-    if (!activeProviderConfigured?.()) return;
-    const source = offScreenChat || (appStore.currentChatId === chatId ? currentChatSnapshot() : null);
-    if (!source) return;
-    const messages = source.messages.filter((m) => !m.greeting && !m.isError && !m.streaming);
-    const firstUser = messages.find((m) => m.role === 'user');
-    const firstAnswer = messages.find((m) => m.role === 'assistant');
-    if (!firstUser || !firstAnswer) return;
-
-    // A German fallback stored before #359 still counts as "not named yet".
-    if (!isDerivedChatTitle(source.title, messages)) return;
-
-    let result = null;
-    try {
-      result = await api.generateChatTitle([
-        { role: 'user', content: String(firstUser.content ?? '') },
-        { role: 'assistant', content: String(firstAnswer.content ?? '') },
-      ]);
-    } catch {
-      return;
-    }
-    const title = typeof result?.title === 'string' ? result.title.trim() : '';
-    if (!title) return;
-    if (lastPersisted.get(chatId) === DELETED) return;
-    // Wherever the chat is by now, the title follows it there.
+  function showChatName(chatId, rawTitle) {
+    const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
+    if (!title || typeof chatId !== 'string' || deletedChats.has(chatId)) return;
     if (appStore.currentChatId === chatId && !canAttachChat(chatId)) {
       appStore.currentChatTitle = title;
       syncChatTitle?.();
-      await persistCurrentChat();
-      return;
+    } else {
+      const run = appStore.chatRuns.get(chatId);
+      if (run?.chat) run.chat.title = title;
     }
-    const run = appStore.chatRuns.get(chatId);
-    if (run?.chat) {
-      // Running again in the background: its next write takes the title along.
-      run.chat.title = title;
-      return;
-    }
-    // Nobody has the chat open. Only write if nothing newer went in since —
-    // otherwise the snapshot would take back what was said after it.
-    if (!isLatestWritten(source)) return;
-    await persistChat({ ...source, title });
+    onChatPersisted();
   }
 
   function formatAttachmentSize(bytes) {
@@ -1984,12 +1979,23 @@ export function initChatStream({
     // both see the same free slots, and main would drop the extra (#589).
     const imagesSupported = activeProviderSupportsImages?.() === true;
     const limit = imagesSupported ? null : activeImageLimit?.();
-    const { accepted, rejections } = planAttachmentIntake(pendingAttachments.length + preparingImages, files, {
-      imagesSupported,
-      imagesLimitedBy: limit?.limitedBy,
-    });
+    // Which formats it takes, when it takes images at all (#91).
+    const formats = imagesSupported ? activeImageFormats?.() : null;
+    const { accepted, rejections, refusedMediaType } = planAttachmentIntake(
+      pendingAttachments.length + preparingImages,
+      files,
+      {
+        imagesSupported,
+        imagesLimitedBy: limit?.limitedBy,
+        ...(formats?.mediaTypes ? { imageMediaTypes: formats.mediaTypes } : {}),
+      },
+    );
     for (const reason of rejections) {
-      flashTokenUsageNote(rejectionMessage(reason, { provider: limit?.provider }));
+      flashTokenUsageNote(rejectionMessage(reason, {
+        provider: limit?.provider || formats?.provider || '',
+        refusedMediaType,
+        mediaTypes: formats?.mediaTypes,
+      }));
     }
     if (accepted.length === 0) return;
 
@@ -2178,7 +2184,6 @@ export function initChatStream({
 
   return {
     renderChatMessages,
-    persistCurrentChat,
     loadChatForWorkspace,
     startNewChat,
     seedGreetingIfWorkspace,

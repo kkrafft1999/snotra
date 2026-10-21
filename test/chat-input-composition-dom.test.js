@@ -24,7 +24,7 @@ async function mountChatStream() {
     getChatHistory: async () => ({ sessions: [], activeChatId: null }),
     setActiveChatId: async () => {},
     upsertChatSession: async () => ({ ok: true }),
-    generateChatTitle: async () => ({ title: '' }),
+    nameChat: async () => ({ title: null }),
     writeClipboardText: async () => ({ ok: true }),
     abortChat: () => {},
     chat: (messages, options) =>

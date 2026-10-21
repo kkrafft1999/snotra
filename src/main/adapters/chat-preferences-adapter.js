@@ -1,12 +1,14 @@
 'use strict';
 
 /**
+ * @param {{ uiPrefsStore: import('../ports/ui-prefs-store-port').UiPrefsStorePort }} deps
  * @returns {import('../../application/ports/chat-preferences-port').ChatPreferencesPort}
  */
 function createChatPreferencesAdapter({ uiPrefsStore }) {
   return {
     async read() {
       const prefs = await uiPrefsStore.readUIPrefs();
+      /** @type {import('../../application/ports/chat-preferences-port').ChatPreferences} */
       const out = {
         // The language the tool lines are written in (#290). The parameter has
         // been threaded through to `tool-display.js` since #289, but nothing

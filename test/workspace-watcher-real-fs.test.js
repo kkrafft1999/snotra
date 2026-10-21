@@ -17,6 +17,7 @@ const os = require('os');
 
 const { createWorkspaceWatcher } = require('../src/main/services/workspace-watcher');
 const { createFsService } = require('../src/main/services/fs-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -81,7 +82,7 @@ for (const { label, platform } of MODES) {
     });
     t.after(async () => {
       watcher.close();
-      await nodeFs.promises.rm(root, { recursive: true, force: true });
+      await removeTempDir(root);
     });
 
     const writeAtomically = async (content) => {

@@ -7,10 +7,11 @@ const os = require('os');
 const path = require('path');
 
 const { writeFileAtomic } = require('../src/main/services/atomic-write');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 async function tempDir(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-atomic-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 

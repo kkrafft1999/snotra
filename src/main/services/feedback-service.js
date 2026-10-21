@@ -29,12 +29,17 @@ const FEEDBACK_ENDPOINT = 'https://snotra-ai.dev/api/feedback';
 const FEEDBACK_ENDPOINT_ENV = 'SNOTRA_FEEDBACK_ENDPOINT';
 const FEEDBACK_TIMEOUT_MS = 20_000;
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]']);
+/** @type {Record<string, string>} */
 const OS_NAMES = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
 /** The endpoint takes each diagnostic value as one line of at most 100 characters. */
 const DIAGNOSTIC_MAX = 100;
 const ISSUE_URL_PREFIX = `${FEEDBACK_REPO_URL}/issues/`;
 
-/** Only a loopback address may replace the real endpoint. */
+/**
+ * Only a loopback address may replace the real endpoint.
+ *
+ * @param {NodeJS.ProcessEnv} [env]
+ */
 function resolveFeedbackEndpoint(env = process.env) {
   const raw = typeof env?.[FEEDBACK_ENDPOINT_ENV] === 'string' ? env[FEEDBACK_ENDPOINT_ENV].trim() : '';
   if (!raw) return FEEDBACK_ENDPOINT;
@@ -47,29 +52,62 @@ function resolveFeedbackEndpoint(env = process.env) {
   return FEEDBACK_ENDPOINT;
 }
 
+/** @param {unknown} value */
 function diagnosticValue(value) {
   const line = String(value ?? '').replace(/\s+/g, ' ').trim();
   return [...line].slice(0, DIAGNOSTIC_MAX).join('');
 }
 
+/**
+ * @param {unknown} locale
+ * @returns {locale is string}
+ */
 function isLocaleTag(locale) {
   return typeof locale === 'string'
     && locale.length <= 35
     && /^[A-Za-z]{2,3}(-[A-Za-z0-9]{1,8})*$/.test(locale);
 }
 
+/**
+ * What the window hands over; it comes over IPC, so every field is checked.
+ *
+ * @typedef {{ kind?: unknown, message?: unknown, email?: unknown, includeDiagnostics?: unknown,
+ *   providerId?: unknown, locale?: unknown }} FeedbackInput
+ */
+
+/**
+ * What the form is told when a message did not go out; `reason` is a key it puts into words.
+ *
+ * @typedef {{ ok: true, issueUrl: string | null }
+ *   | { ok: false, reason: string, retryAfter?: number | null }} FeedbackResult
+ */
+
+/**
+ * @param {string} reason
+ * @param {{ retryAfter?: number | null }} [extra]
+ * @returns {FeedbackResult}
+ */
 function failure(reason, extra = {}) {
   return { ok: false, reason, ...extra };
 }
 
+/**
+ * @param {Response} response
+ * @returns {Promise<{ retryAfter?: unknown, issueUrl?: unknown, error?: unknown }|null>}
+ */
 async function readJson(response) {
   try {
-    return await response.json();
+    const json = await response.json();
+    return json && typeof json === 'object' ? json : null;
   } catch {
     return null;
   }
 }
 
+/**
+ * @param {Response} response
+ * @param {{ retryAfter?: unknown }|null} body
+ */
 function retryAfterSeconds(response, body) {
   const fromBody = Number(body?.retryAfter);
   if (Number.isFinite(fromBody) && fromBody > 0) return Math.ceil(fromBody);
@@ -115,6 +153,7 @@ function createFeedbackService({
    * The four values the form shows and may send. A provider the user set up
    * under a name of their own is not named — only a built-in one is.
    */
+  /** @param {unknown} providerId */
   function getDiagnostics(providerId) {
     let osVersion = '';
     try {
@@ -131,7 +170,11 @@ function createFeedbackService({
     };
   }
 
-  /** Checks the form's input; null when it holds, else the reason. */
+  /**
+   * Checks the form's input; null when it holds, else the reason.
+   *
+   * @param {FeedbackInput|null|undefined} input
+   */
   function invalidReason(input) {
     if (!input || typeof input !== 'object') return 'invalid';
     if (!isFeedbackKind(input.kind)) return 'invalid';
@@ -143,8 +186,10 @@ function createFeedbackService({
     return null;
   }
 
+  /** @param {FeedbackInput} input  already through `invalidReason` */
   function buildBody(input) {
-    const body = { kind: input.kind, message: input.message.trim() };
+    /** @type {{ kind: string, message: string, email?: string, diagnostics?: Record<string, string>, locale?: string }} */
+    const body = { kind: String(input.kind), message: String(input.message).trim() };
     const email = typeof input.email === 'string' ? input.email.trim() : '';
     if (email) body.email = email;
     if (input.includeDiagnostics === true) {
@@ -158,8 +203,8 @@ function createFeedbackService({
   }
 
   /**
-   * @returns {Promise<{ ok: true, issueUrl: string | null }
-   *   | { ok: false, reason: string, retryAfter?: number | null }>}
+   * @param {FeedbackInput} input
+   * @returns {Promise<FeedbackResult>}
    *   reason: emptyMessage, tooLong, invalidEmail, duplicate, rateLimited,
    *   timeout, network, server or invalid.
    */
@@ -190,9 +235,8 @@ function createFeedbackService({
     try {
       const body = await readJson(response);
       if (response.status === 201) {
-        const issueUrl = typeof body?.issueUrl === 'string' && body.issueUrl.startsWith(ISSUE_URL_PREFIX)
-          ? body.issueUrl
-          : null;
+        const reported = body?.issueUrl;
+        const issueUrl = typeof reported === 'string' && reported.startsWith(ISSUE_URL_PREFIX) ? reported : null;
         return { ok: true, issueUrl };
       }
       if (response.status === 409) return failure('duplicate');

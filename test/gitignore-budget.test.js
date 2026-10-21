@@ -18,6 +18,7 @@ const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
 const { createGitignoreMatcher } = require('../src/main/services/glob-match');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // 1,040 rules of `**/R/**/R` with R = `*` + 120 × `a` + `b`, filling 256 KB:
 // against a name of `a`s every rule backtracks through the whole name.
@@ -78,7 +79,7 @@ test(
   { skip: process.platform === 'win32' },
   async (t) => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-gitignore-budget-'));
-    t.after(() => fs.rm(root, { recursive: true, force: true }));
+    t.after(() => removeTempDir(root));
     // Sorts before the long names, so it is matched while the budget lasts.
     await fs.writeFile(path.join(root, '0-ignored.txt'), 'x\n');
     for (let i = 0; i < 60; i += 1) {

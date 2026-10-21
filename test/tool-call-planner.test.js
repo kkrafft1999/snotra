@@ -7,12 +7,14 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createToolCallPlanner, validateArguments, buildPreview, PREVIEW_MAX_CHARS } = require('../src/main/tools/tool-call-planner');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
+const { createToolCallPlanner, validateArguments, buildPreview, PREVIEW_MAX_CHARS } = require('../src/application/tools/tool-call-planner');
+const { descriptorOf } = require('./helpers/tool-descriptors');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 async function makeFixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-planner-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const workspace = path.join(base, 'projekt');
   const userData = path.join(base, 'userData');
   const skillDir = path.join(base, 'skills', 'demo');
@@ -128,15 +130,15 @@ test('Vorschau stammt aus den Argumenten, ist maskiert und gekürzt', async (t) 
   assert.match(plan.preview.text, /\n…$/);
 
   // The markers follow the interface language (#555).
-  const edit = buildPreview('edit_file', { old_string: 'a', new_string: 'b', replace_all: true });
+  const edit = buildPreview(descriptorOf('edit_file').preview, { old_string: 'a', new_string: 'b', replace_all: true });
   assert.equal(edit.kind, 'replace');
   assert.equal(edit.text, '--- old (all occurrences)\na\n+++ new\nb');
-  const editDe = buildPreview('edit_file', { old_string: 'a', new_string: 'b', replace_all: true }, { locale: 'de' });
+  const editDe = buildPreview(descriptorOf('edit_file').preview, { old_string: 'a', new_string: 'b', replace_all: true }, { locale: 'de' });
   assert.equal(editDe.text, '--- alt (alle Vorkommen)\na\n+++ neu\nb');
-  const patch = buildPreview('apply_patch', { edits: [{ old_string: 'x', new_string: 'y' }, { old_string: 'p', new_string: 'q', replace_all: true }] });
+  const patch = buildPreview(descriptorOf('apply_patch').preview, { edits: [{ old_string: 'x', new_string: 'y' }, { old_string: 'p', new_string: 'q', replace_all: true }] });
   assert.equal(patch.kind, 'diff');
   assert.equal(patch.text, '# Step 1\n--- old\nx\n+++ new\ny\n\n# Step 2 (all occurrences)\n--- old\np\n+++ new\nq');
-  const patchDe = buildPreview('apply_patch', { edits: [{ old_string: 'x', new_string: 'y' }] }, { locale: 'de' });
+  const patchDe = buildPreview(descriptorOf('apply_patch').preview, { edits: [{ old_string: 'x', new_string: 'y' }] }, { locale: 'de' });
   assert.equal(patchDe.text, '# Schritt 1\n--- alt\nx\n+++ neu\ny');
   const planned = await planner.plan(
     registry.getDefinition('edit_file'),
@@ -144,7 +146,7 @@ test('Vorschau stammt aus den Argumenten, ist maskiert und gekürzt', async (t) 
     { workspaceRoot: workspace, locale: 'de' }
   );
   assert.match(planned.preview.text, /^--- alt\n/);
-  assert.equal(buildPreview('read_file_text', {}), null);
+  assert.equal(buildPreview(descriptorOf('read_file_text').preview, {}), null);
 });
 
 // #551: the card of an execution tool showed neither stdin nor argv, and cut
@@ -177,9 +179,9 @@ test('the preview of an execution tool carries its input, in full or not at all 
   const hugeInput = await planner.plan(registry.getDefinition('shell_execute'), { command: 'sh', stdin: 'y'.repeat(PREVIEW_MAX_CHARS + 1) }, { workspaceRoot: workspace });
   assert.equal(hugeInput.reason, 'invalid_arguments');
   // A file tool keeps its preview cut and marked: the write is recoverable.
-  assert.equal(buildPreview('write_file_text', { content: 'z'.repeat(PREVIEW_MAX_CHARS + 1) }).truncated, true);
+  assert.equal(buildPreview(descriptorOf('write_file_text').preview, { content: 'z'.repeat(PREVIEW_MAX_CHARS + 1) }).truncated, true);
   // Only the execution tools take input.
-  assert.equal(buildPreview('write_file_text', { content: 'a', stdin: 'b' }).stdin, undefined);
+  assert.equal(buildPreview(descriptorOf('write_file_text').preview, { content: 'a', stdin: 'b' }).stdin, undefined);
 });
 
 test('apply_patch: alle Ziele eines Mehrdatei-Patches werden geprüft, kaputte Patches nennen den Grund', async (t) => {

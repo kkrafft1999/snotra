@@ -41,7 +41,7 @@ function overviewWith(patch = {}) {
 }
 
 function permissionsState(patch = {}) {
-  return { mode: 'smart', workspaceRoot: ROOT, workspaceMode: 'smart', encryptionAvailable: true, homeDir: '/Users/u', ...patch };
+  return { mode: 'smart', workspaceRoot: ROOT, workspaceMode: 'smart', platformCapabilities: { secureStorage: true }, homeDir: '/Users/u', ...patch };
 }
 
 /** The renderer's permission state, reduced to what the page uses. */
@@ -346,8 +346,8 @@ test('Windows without a sandbox: the platform reason, not the workspace switch',
 test('without safeStorage: "Auto" cannot be the default', async () => {
   const dom = setupRendererDom();
   try {
-    await openPage(overviewWith({ integrity: 'unsigned', encryptionAvailable: false }), {
-      state: permissionsState({ encryptionAvailable: false }),
+    await openPage(overviewWith({ integrity: 'unsigned', platformCapabilities: { secureStorage: false } }), {
+      state: permissionsState({ platformCapabilities: { secureStorage: false } }),
     });
     const doc = dom.document;
     // The warning itself is ToolPermissionsPanel's, in the same header.
@@ -580,3 +580,32 @@ async function poll(check, timeoutMs = 3000) {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
 }
+
+// Which outside service a built-in tool reaches is in its descriptor (#1008):
+// the page says it from `externalService`, not from the tool's name.
+test('"What leaves your computer?" names the service of each tool that is on', async () => {
+  const dom = setupRendererDom();
+  try {
+    const { describeSecurityRow } = await importRenderer('utils', 'security-overview-view.js');
+    const overview = overviewWith({
+      tools: [
+        tool('web_search', ['external'], { externalService: 'web-search' }),
+        tool('fetch_url', ['external'], { externalService: 'fetch-url' }),
+        tool('generate_image', ['write', 'external'], { externalService: 'image-generation' }),
+        tool('mcp__gh__issues', ['execute', 'external'], { mcpServer: 'GitHub', mcpServerId: 'gh' }),
+        tool('brand_new_tool', ['external']),
+      ],
+    });
+    const external = overview.classes.find((entry) => entry.riskClass === 'external');
+    const { where } = describeSecurityRow(external, overview);
+    assert.deepEqual([...where.facts].sort(), [
+      'Fetching a web page loads the address the model names',
+      'Image generation sends the image description to OpenAI, which bills every image',
+      'Web search sends the search query to Tavily',
+      'brand_new_tool contacts a service outside',
+      'mcp__gh__issues sends its arguments to the MCP server GitHub',
+    ].sort());
+  } finally {
+    dom.cleanup();
+  }
+});

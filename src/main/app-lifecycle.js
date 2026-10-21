@@ -19,6 +19,12 @@ const { createTranslator, localeFromSystem } = require('../shared/i18n');
  * @returns {boolean} true when this process is the one that runs; false when
  *   another instance already does — this one has been told to quit and must
  *   start nothing.
+ *
+ * @param {object} deps
+ * @param {Pick<import('electron').App, 'requestSingleInstanceLock' | 'quit' | 'on'>} deps.app
+ * @param {() => import('electron').BrowserWindow|null} deps.getMainWindow
+ * @param {() => unknown} deps.createWindow
+ * @param {() => boolean} [deps.canCreateWindow]
  */
 function claimSingleInstance({ app, getMainWindow, createWindow, canCreateWindow = () => true }) {
   if (!app.requestSingleInstanceLock()) {
@@ -47,14 +53,23 @@ function claimSingleInstance({ app, getMainWindow, createWindow, canCreateWindow
  * (#509): on macOS a dock icon that does nothing, on Windows and Linux an
  * invisible process. The error is logged, shown, and the app ends.
  * `logFilePath` is where the log file is (#978), named in the box.
+ *
+ * @param {object} deps
+ * @param {Pick<import('electron').App, 'getLocale' | 'exit'>} deps.app
+ * @param {Pick<import('electron').Dialog, 'showErrorBox'>} deps.dialog
+ * @param {{ error?: (...args: unknown[]) => void }} [deps.log]
+ * @param {string} [deps.appName]
+ * @param {string|null} [deps.logFilePath]
  */
 function createStartupFailureHandler({ app, dialog, log = console, appName = 'Snotra Agent', logFilePath = null }) {
+  /** @param {unknown} error */
   return (error) => {
     log.error?.('Start-up failed:', error);
     try {
       // The stored language is not known yet; the system's is the best guess.
       const t = createTranslator(localeFromSystem(app.getLocale?.()));
-      const detail = String(error?.message || error);
+      const message = typeof error === 'object' && error !== null && 'message' in error ? error.message : undefined;
+      const detail = String(message || error);
       dialog.showErrorBox(
         t('app.startupFailed.title', { appName }),
         // The stack is in the log file (#978); the box carries the sentence
@@ -84,6 +99,12 @@ const QUIT_WRITE_GRACE_MS = 5000;
  *
  * `before-quit` is held once, the stores are given up to `graceMs`, and the
  * quit is then started again — that second one goes through.
+ *
+ * @param {object} deps
+ * @param {Pick<import('electron').App, 'on' | 'quit'>} deps.app
+ * @param {() => unknown} deps.whenWritesSettled
+ * @param {number} [deps.graceMs]
+ * @param {{ warn?: (...args: unknown[]) => void }} [deps.log]
  */
 function holdQuitForPendingWrites({ app, whenWritesSettled, graceMs = QUIT_WRITE_GRACE_MS, log = console }) {
   let released = false;
@@ -91,11 +112,12 @@ function holdQuitForPendingWrites({ app, whenWritesSettled, graceMs = QUIT_WRITE
     if (released) return;
     released = true;
     event.preventDefault();
+    /** @type {ReturnType<typeof setTimeout>|undefined} */
     let timer;
     const grace = new Promise((resolve) => {
       timer = setTimeout(() => {
         log.warn?.(`[quit] The stores were still writing after ${graceMs} ms; quitting anyway.`);
-        resolve();
+        resolve(undefined);
       }, graceMs);
     });
     Promise.race([Promise.resolve().then(whenWritesSettled).catch(() => {}), grace])

@@ -9,12 +9,13 @@ const os = require('os');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { createFsService } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
+const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
 const { planSpawn } = require('../src/main/services/sandboxed-spawn');
 const { createToolApprovalRequestDto } = require('../src/shared/contracts/tool-permissions');
 const { buildApprovalRequest } = require('../src/application/permissions/approval-request');
 const { SKILL_DATA_DIR, SKILL_FOLDER_READ_ONLY } = require('../src/shared/contracts/skills');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const loadRenderer = (file) =>
   import(pathToFileURL(path.join(__dirname, '..', 'src', 'renderer', 'utils', file)).href);
@@ -25,7 +26,7 @@ const READ_ONLY = /Skill folders are read-only\. Keep what a skill produces in "
 
 async function makeFixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skill-ro-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const workspace = path.join(base, 'projekt');
   const skillDir = path.join(base, 'skills', 'demo');
   await fs.mkdir(path.join(skillDir, 'assets'), { recursive: true });

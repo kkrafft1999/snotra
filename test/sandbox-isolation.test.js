@@ -18,6 +18,7 @@ const os = require('os');
 
 const { createSandboxService } = require('../src/main/services/sandbox-service');
 const { createShellRunnerService } = require('../src/main/services/shell-runner-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const REQUIRED = process.env.SNOTRA_REQUIRE_SANDBOX === '1';
 
@@ -88,27 +89,50 @@ function run(ctx, command, extra = {}) {
 }
 
 /**
+ * A run's stderr for an assertion message: whole when short, otherwise its
+ * beginning (the command's own error) and its end (the sandbox's notes).
+ */
+function said(result, limit = 2_000) {
+  const text = String(result?.stderr ?? '').trim();
+  if (text.length <= limit) return `stderr: ${text || '(empty)'}`;
+  const half = Math.floor(limit / 2);
+  return `stderr: ${text.slice(0, half)}\n[… ${text.length - limit} characters …]\n${text.slice(-half)}`;
+}
+
+/** The note the run appends when its command did not reach the proxy (#368). */
+const PROXY_NOT_REACHED = /<sandbox_network>\s*The sandbox's network proxy on localhost:(\d+) did not accept/;
+
+/**
  * A run whose command goes through the sandbox's network proxy. Seen on
  * macOS CI (#368, #714): curl did not reach the proxy at all — on the blocked
  * call once, later on the allowed one. Nothing got out, and the run says so
  * itself. Whether the proxy was listening at that moment tells a dead proxy
  * from a refused connect, so the test records it — and tries once more. A
  * proxy that stays out of reach still fails the caller's assertions.
+ *
+ * A run that exited 0 is taken as it is, whatever note its stderr carries:
+ * the release gate of 1.26.0 saw the allowed call succeed with a proxy note
+ * on it (#1136). The note is recorded, not judged.
  */
 async function runThroughProxy(t, ctx, label, command, extra = {}) {
   const result = await run(ctx, command, extra);
+  if (result.exitCode === 0) {
+    if (result.stderr.includes('<sandbox_network>')) {
+      t.diagnostic(`${label}: exited 0 with a sandbox network note; ${said(result)}`);
+    }
+    return result;
+  }
   // The proxy let the connection through, but the host did not answer it:
   // the sandbox did its part, the internet did not (#907). Once more, too.
   if (/CONNECT tunnel failed, response 50[234]/.test(result.stderr)) {
-    t.diagnostic(`${label}: the proxy could not reach the host; stderr: ${result.stderr}`);
+    t.diagnostic(`${label}: the proxy could not reach the host; ${said(result)}`);
     return run(ctx, command, extra);
   }
-  const unreachable = result.stderr.match(/<sandbox_network>[^]*?localhost:(\d+)/);
+  const unreachable = result.stderr.match(PROXY_NOT_REACHED);
   if (!unreachable) return result;
-  assert.notEqual(result.exitCode, 0);
   const listening = await reachable(Number(unreachable[1]));
   t.diagnostic(`${label}: proxy not reached, listening from outside the sandbox: ${listening}; `
-    + `stderr: ${result.stderr}`);
+    + said(result));
   return run(ctx, command, extra);
 }
 
@@ -116,7 +140,7 @@ test.after(async () => {
   if (!setup) return;
   const ctx = await setup;
   await ctx.sandbox.shutdown();
-  await fs.rm(ctx.base, { recursive: true, force: true });
+  await removeTempDir(ctx.base);
 });
 
 test('a run writes inside the workspace, and nowhere outside it', async (t) => {
@@ -228,16 +252,17 @@ test('no network unless a domain is allowed — an allowed domain works', async 
     networkDomains: ['example.com'], timeoutMs: 30_000,
   });
 
-  assert.notEqual(blocked.exitCode, 0);
+  assert.notEqual(blocked.exitCode, 0, said(blocked));
   // The model learns what was refused, not just that curl failed.
-  assert.match(blocked.stderr, /<sandbox_blocked>[^]*example\.com:443/);
+  assert.match(blocked.stderr, /<sandbox_blocked>[^]*example\.com:443/, said(blocked));
   assert.deepEqual(
     blocked.sandboxBlocked?.entries.map((e) => [e.kind, e.target]),
     [['network', 'example.com:443']],
+    said(blocked),
   );
-  assert.equal(allowed.sandboxBlocked, undefined);
-  assert.equal(allowed.exitCode, 0, allowed.stderr);
-  assert.match(allowed.stdout, /^[23]\d\d$/);
+  assert.equal(allowed.sandboxBlocked, undefined, said(allowed));
+  assert.equal(allowed.exitCode, 0, said(allowed));
+  assert.match(allowed.stdout, /^[23]\d\d$/, said(allowed));
   assert.deepEqual(allowed.isolation, { isolated: true, domains: ['example.com'] });
 });
 
@@ -252,20 +277,21 @@ test('a connection outside the run\'s domains waits for the user: allowed it goe
     timeoutMs: 30_000,
     onSandboxNetworkAsk: answering((r) => ({ outcome: 'allowed', pattern: r.allow[0] })),
   });
-  assert.equal(allowed.exitCode, 0, allowed.stderr);
-  assert.match(allowed.stdout, /^[23]\d\d$/);
-  assert.equal(allowed.sandboxBlocked, undefined);
-  assert.equal(asked[0].target, 'example.com:443', 'the proxy named the command that waited');
+  assert.equal(allowed.exitCode, 0, said(allowed));
+  assert.match(allowed.stdout, /^[23]\d\d$/, said(allowed));
+  assert.equal(allowed.sandboxBlocked, undefined, said(allowed));
+  assert.equal(asked[0]?.target, 'example.com:443', 'the proxy named the command that waited');
   assert.deepEqual(asked[0].allow, ['example.com:443']);
 
   const denied = await runThroughProxy(t, ctx, 'denied live', curl, {
     timeoutMs: 30_000,
     onSandboxNetworkAsk: answering(() => ({ outcome: 'denied' })),
   });
-  assert.notEqual(denied.exitCode, 0);
+  assert.notEqual(denied.exitCode, 0, said(denied));
   assert.deepEqual(
     denied.sandboxBlocked?.entries.map((e) => [e.kind, e.target, e.reason, e.allow]),
     [['network', 'example.com:443', 'user denied', []]],
+    said(denied),
   );
 });
 
@@ -280,11 +306,12 @@ test('a connection still waiting when the command gives up is offered with a ret
       signal.addEventListener('abort', () => { ended = Date.now(); resolve({ outcome: 'unanswered' }); }, { once: true });
     }),
   });
-  assert.notEqual(result.exitCode, 0);
-  assert.ok(ended, 'the question ended with the command');
+  assert.notEqual(result.exitCode, 0, said(result));
+  assert.ok(ended, `the question ended with the command; ${said(result)}`);
   assert.deepEqual(
     result.sandboxBlocked?.entries.map((e) => [e.kind, e.target, e.reason, e.allow]),
     [['network', 'example.com:443', 'host is not on the allow list', ['example.com:443']]],
+    said(result),
   );
 });
 
@@ -303,16 +330,17 @@ test('git\'s SSH reaches an allowed host through the proxy on macOS, and an unli
   const allowed = await runThroughProxy(t, ctx, 'ssh allowed', ssh, { networkDomains: ['ssh.github.com'], timeoutMs: 40_000 });
   // The server answered: the handshake went through the tunnel. Whether the
   // key on this machine is known to GitHub does not matter here.
-  assert.match(allowed.stderr, /Permission denied \(publickey\)|successfully authenticated/, allowed.stderr);
-  assert.doesNotMatch(allowed.stderr, /proxy requires authentication/);
-  assert.equal(allowed.sandboxBlocked, undefined);
+  assert.match(allowed.stderr, /Permission denied \(publickey\)|successfully authenticated/, said(allowed));
+  assert.doesNotMatch(allowed.stderr, /proxy requires authentication/, said(allowed));
+  assert.equal(allowed.sandboxBlocked, undefined, said(allowed));
 
   const blocked = await runThroughProxy(t, ctx, 'ssh blocked', ssh, { timeoutMs: 40_000 });
-  assert.notEqual(blocked.exitCode, 0);
-  assert.match(blocked.stderr, /the sandbox refused the connection to ssh\.github\.com:443/);
+  assert.notEqual(blocked.exitCode, 0, said(blocked));
+  assert.match(blocked.stderr, /the sandbox refused the connection to ssh\.github\.com:443/, said(blocked));
   assert.deepEqual(
     blocked.sandboxBlocked?.entries.map((e) => [e.kind, e.target]),
     [['network', 'ssh.github.com:443']],
+    said(blocked),
   );
 });
 

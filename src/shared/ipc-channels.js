@@ -84,6 +84,11 @@ const REQUEST_CHANNELS = Object.freeze({
    * ausschließlich über DIALOG_OPEN_FOLDER herein.
    */
   SETTINGS_ACTIVATE_FOLDER: 'settings:activateFolder',
+  /** Developer mode (#1213): `{ on }`, and the shortcut's switch, which answers the same. */
+  DEVELOPER_MODE_GET: 'developerMode:get',
+  DEVELOPER_MODE_TOGGLE: 'developerMode:toggle',
+  /** The window's answer to `workspace:switch-requested` (#1194): `{ requestId, outcome }`. */
+  WORKSPACE_SWITCH_ANSWER: 'workspace:switch-answer',
   SETTINGS_GET_FOLDER_HISTORY: 'settings:getFolderHistory',
   /** Einzelnen Eintrag aus „Zuletzt geöffnete Ordner“ entfernen (Issue #57). */
   SETTINGS_REMOVE_FOLDER_FROM_HISTORY: 'settings:removeFolderFromHistory',
@@ -241,11 +246,17 @@ const REQUEST_CHANNELS = Object.freeze({
   REMOTE_PAIR_START: 'remote:pair:start',
   REMOTE_PAIR_CANCEL: 'remote:pair:cancel',
   REMOTE_UNPAIR: 'remote:unpair',
+  /**
+   * Which workspaces are open to the paired phone (#1195): read, and one
+   * opened or closed by its root. Opening is confirmed by main in a native
+   * dialog (#980); changes arrive over PUSH_CHANNELS.REMOTE_RELEASE_CHANGED.
+   */
+  REMOTE_RELEASE_GET: 'remote:release:get',
+  REMOTE_RELEASE_SET: 'remote:release:set',
 
   CHAT_HISTORY_GET: 'chatHistory:get',
   /** One chat with its messages, when it is opened; the list has none (#985). */
   CHAT_HISTORY_GET_SESSION: 'chatHistory:getSession',
-  CHAT_HISTORY_UPSERT: 'chatHistory:upsert',
   CHAT_HISTORY_DELETE: 'chatHistory:delete',
   CHAT_HISTORY_SET_ACTIVE: 'chatHistory:setActive',
   /**
@@ -260,9 +271,8 @@ const REQUEST_CHANNELS = Object.freeze({
    */
   CHAT_ATTACHMENT_READ: 'chatHistory:readAttachment',
 
+  /** A question for a chat (#981): main keeps the history, saves the turn and names the chat. */
   CHAT_SEND: 'chat:send',
-  /** Laesst das aktive Modell eine Ueberschrift fuer die Konversation bilden. */
-  CHAT_TITLE: 'chat:title',
   /** Renderer → Main (ipcRenderer.send), bricht laufenden CHAT_SEND ab. */
   CHAT_ABORT: 'chat:abort',
   /** What one or more writing calls changed in a file (#348). */
@@ -290,6 +300,19 @@ const PUSH_CHANNELS = Object.freeze({
   CHAT_DELTA: 'chat:delta',
   CHAT_TOOL_LINE: 'chat:tool-line',
   CHAT_PROGRESS: 'chat:progress',
+  /**
+   * A turn the window did not start — a phone's (#1194) — has saved its
+   * question: `{ chatId, runId, content }`. Its events follow on the three
+   * channels above, under that `runId`, up to its `run-end`.
+   */
+  CHAT_TURN_STARTED: 'chat:turn-started',
+  /** Developer mode was switched (#1213): `{ on }`. */
+  DEVELOPER_MODE_CHANGED: 'developerMode:changed',
+  /**
+   * The phone asks the window to open another known folder (#1194, step 2c):
+   * `{ requestId, folderPath }`. The window answers on `workspace:switch-answer`.
+   */
+  WORKSPACE_SWITCH_REQUESTED: 'workspace:switch-requested',
   /** The transcript of a recording so far (#859): `{ id, turns }` or `{ id, error }`. */
   VOICE_TRANSCRIPT: 'voice:transcript',
   /** A notice for the window (#1001): a normalized notice, see contracts/notices.js. */
@@ -298,6 +321,8 @@ const PUSH_CHANNELS = Object.freeze({
   NOTICE_WITHDRAWN: 'notices:withdrawn',
   /** The pairing state changed (#1114): a normalized state, see contracts/remote/pairing-state.js. */
   REMOTE_STATE: 'remote:state',
+  /** A workspace was opened to the phone or closed again (#1195); no payload, the window reads again. */
+  REMOTE_RELEASE_CHANGED: 'remote:release:changed',
   UPDATE_AVAILABLE: 'update:available',
   /** Fortschritt des laufenden Update-Downloads (Issue #232). */
   UPDATE_PROGRESS: 'update:progress',
@@ -359,6 +384,8 @@ const PUSH_CHANNELS = Object.freeze({
   UI_TOGGLE_MARKDOWN_SOURCE: 'ui:toggle-markdown-source',
   /** Menu "View > Show Hidden Files" or Cmd+Shift+. / Ctrl+Shift+. (#436). */
   UI_TOGGLE_HIDDEN_FILES: 'ui:toggle-hidden-files',
+  /** The developer mode shortcut was pressed (#1213); the window switches it through main. */
+  UI_TOGGLE_DEVELOPER_MODE: 'ui:toggle-developer-mode',
   /** Menu "View > Filter Files…" or Cmd/Ctrl+P (#350). */
   UI_FILTER_FILES: 'ui:filter-files',
   /** Menu "View > Back / Forward", Cmd+[ / Cmd+] or Alt+Left / Alt+Right (#822). */

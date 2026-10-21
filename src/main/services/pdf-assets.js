@@ -13,12 +13,26 @@
 
 const { PDF_ASSET_DIRS, isPdfAssetName } = require('../../shared/contracts/workspace-pdf');
 
+/** @type {Readonly<Record<string, string>>} */
+const ASSET_DIRS = PDF_ASSET_DIRS;
+
+/**
+ * @param {object} deps
+ * @param {Pick<typeof import('fs/promises'), 'readFile'>} deps.fs
+ * @param {Pick<typeof import('path'), 'resolve' | 'join' | 'dirname'>} deps.path
+ * @param {string} deps.rootDir
+ */
 function createPdfAssetReader({ fs, path, rootDir }) {
   const root = path.resolve(rootDir);
 
-  /** `{ ok: true, bytes }` or `{ ok: false }` — pdf.js only needs to know it failed. */
+  /**
+   * `{ ok: true, bytes }` or `{ ok: false }` — pdf.js only needs to know it failed.
+   *
+   * @param {string} kind
+   * @param {string} filename
+   */
   async function readPdfAsset(kind, filename) {
-    const dir = Object.hasOwn(PDF_ASSET_DIRS, kind) ? PDF_ASSET_DIRS[kind] : null;
+    const dir = Object.hasOwn(ASSET_DIRS, kind) ? ASSET_DIRS[kind] : null;
     if (!dir || !isPdfAssetName(filename)) return { ok: false };
     const folder = path.join(root, dir);
     const target = path.join(folder, filename);

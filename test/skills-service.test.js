@@ -10,10 +10,11 @@ const { translateMessage } = require('../src/shared/i18n');
 // the catalogue.
 const de = (message) => translateMessage('de', message);
 const { SKILL_SOURCES, SKILL_STATUS } = require('../src/shared/contracts/skills');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 async function makeTempTree(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skills-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 
@@ -406,7 +407,7 @@ test('the per-folder cap keeps the first skills by name, whatever the directory 
 });
 
 test('the system skills sit next to the app, and there are none without an app path', () => {
-  assert.equal(bundledSystemSkillsDir({ app: { getAppPath: () => '/App' }, path: path.posix }), '/App/system-skills');
-  assert.equal(bundledSystemSkillsDir({ app: {}, path }), null);
-  assert.equal(bundledSystemSkillsDir({ app: undefined, path }), null);
+  assert.equal(bundledSystemSkillsDir({ appPath: '/App', path: path.posix }), '/App/system-skills');
+  assert.equal(bundledSystemSkillsDir({ appPath: null, path }), null);
+  assert.equal(bundledSystemSkillsDir({ appPath: undefined, path }), null);
 });

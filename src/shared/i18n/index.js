@@ -39,6 +39,9 @@ const {
  * Anything not in the list is not a language — `de-DE` is not, while `EN` is
  * read as `en`: case says nothing, a region would claim more than the
  * catalogue has. The value comes from a file on disk and is not taken on trust.
+ *
+ * @param {unknown} raw
+ * @returns {string}
  */
 function normalizeLocale(raw) {
   const value = typeof raw === 'string' ? raw.trim().toLowerCase() : '';
@@ -50,6 +53,9 @@ function normalizeLocale(raw) {
  * all mean German, and a language the app does not speak means the default.
  * Unlike `normalizeLocale` this one reads the language off a full tag — it
  * is given what the operating system reports, not what the app wrote itself.
+ *
+ * @param {unknown} raw
+ * @returns {string}
  */
 function localeFromSystem(raw) {
   const language = typeof raw === 'string' ? raw.trim().toLowerCase().split(/[-_]/)[0] : '';
@@ -60,6 +66,9 @@ function localeFromSystem(raw) {
  * Placeholders of the form `{name}`. A missing value leaves the placeholder
  * standing rather than printing `undefined` — the first is noticed at a glance,
  * the second reads like text.
+ *
+ * @param {string} template
+ * @param {Record<string, unknown>} [params]
  */
 function interpolate(template, params) {
   if (!params) return template;
@@ -73,7 +82,7 @@ function interpolate(template, params) {
  *
  * @param {string} locale  A registered language; anything else counts as DEFAULT_LOCALE.
  * @param {string} key     Dotted key, e.g. `settings.nav.general`.
- * @param {object} [params] Values for `{placeholders}`.
+ * @param {Record<string, unknown>} [params] Values for `{placeholders}`.
  */
 function translate(locale, key, params) {
   if (typeof key !== 'string' || !key) return '';
@@ -85,12 +94,21 @@ function translate(locale, key, params) {
   return key;
 }
 
+/** @type {Map<string, Intl.PluralRules>} */
 const pluralRules = new Map();
 
-/** The plural rule of a language, from the platform's CLDR data — one per language. */
+/**
+ * The plural rule of a language, from the platform's CLDR data — one per language.
+ *
+ * @param {string} locale
+ */
 function pluralRulesFor(locale) {
-  if (!pluralRules.has(locale)) pluralRules.set(locale, new Intl.PluralRules(locale));
-  return pluralRules.get(locale);
+  let rules = pluralRules.get(locale);
+  if (!rules) {
+    rules = new Intl.PluralRules(locale);
+    pluralRules.set(locale, rules);
+  }
+  return rules;
 }
 
 /**
@@ -100,6 +118,11 @@ function pluralRulesFor(locale) {
  * no entry for the category its language asks for falls back to `key.other`.
  * The counter travels along as `{count}` automatically, so the common case
  * costs nothing at the call site.
+ *
+ * @param {unknown} locale
+ * @param {string} baseKey
+ * @param {unknown} count
+ * @param {Record<string, unknown>} [params]
  */
 function translatePlural(locale, baseKey, count, params) {
   const lc = normalizeLocale(locale);
@@ -116,6 +139,9 @@ function translatePlural(locale, baseKey, count, params) {
  * `…Keys` (several); both are looked up here and put in under the bare name,
  * so the entry itself only ever sees `{mode}` or `{effect}`. A number named
  * `…Time` is a point in time in epoch ms and comes out as a clock time.
+ *
+ * @param {string} locale
+ * @param {Record<string, unknown>} [params]
  */
 function resolveKeyParams(locale, params) {
   if (!params) return params;
@@ -150,13 +176,21 @@ function resolveKeyParams(locale, params) {
  * words. Plain text passes through untouched — since #308 that is only ever
  * quoted material: the error text of a provider's API, a network error, a
  * message from a third-party library. Snotra's own sentences travel as keys.
+ *
+ * @param {string} locale
+ * @param {unknown} message  A `Message` descriptor or plain text.
+ * @returns {string}
  */
 function translateMessage(locale, message) {
   if (isMessage(message)) return translate(locale, message.key, resolveKeyParams(locale, message.params));
   return typeof message === 'string' ? message : '';
 }
 
-/** Does this key exist at all? For tests and debug output. */
+/**
+ * Does this key exist at all? For tests and debug output.
+ *
+ * @param {string} key
+ */
 function hasKey(key) {
   return Object.prototype.hasOwnProperty.call(MESSAGES[DEFAULT_LOCALE], key);
 }
@@ -165,11 +199,23 @@ function hasKey(key) {
  * A translator bound to one language. Saves threading the locale through every
  * function — the main process builds one per language change in
  * `create-application`, the renderer keeps one in `i18n.js`.
+ *
+ * @param {unknown} [locale]  none: the default language
  */
 function createTranslator(locale) {
   const lc = normalizeLocale(locale);
+  /**
+   * @param {string} key
+   * @param {Record<string, unknown>} [params]
+   */
   const t = (key, params) => translate(lc, key, params);
+  /**
+   * @param {string} baseKey
+   * @param {unknown} count
+   * @param {Record<string, unknown>} [params]
+   */
   t.plural = (baseKey, count, params) => translatePlural(lc, baseKey, count, params);
+  /** @param {unknown} message */
   t.message = (message) => translateMessage(lc, message);
   t.locale = lc;
   return t;

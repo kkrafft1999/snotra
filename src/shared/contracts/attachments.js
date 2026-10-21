@@ -19,14 +19,42 @@
 'use strict';
 
 const { LIMITS } = require('../limits');
+const { isRecord } = require('../runtime/is-record');
+
+/**
+ * @typedef {'image/png'|'image/jpeg'|'image/gif'|'image/webp'} ImageMediaType
+ */
+
+/**
+ * An image as it travels: the data itself, base64 (#84).
+ *
+ * @typedef {Object} ImageAttachment
+ * @property {'image'} kind
+ * @property {string} mediaType
+ * @property {string} dataBase64
+ * @property {number} bytes  size of the decoded data
+ * @property {string} [name]
+ */
+
+/**
+ * An image as the stored history keeps it: the file next to the session
+ * instead of the data (#94).
+ *
+ * @typedef {Object} StoredImageAttachment
+ * @property {'image'} kind
+ * @property {string} mediaType
+ * @property {string} file  name of the file in the attachment store
+ * @property {number} [bytes]
+ * @property {string} [name]
+ */
 
 /** Formate, die alle unterstuetzten Anbieter gemeinsam annehmen. */
-const IMAGE_ATTACHMENT_MEDIA_TYPES = Object.freeze([
+const IMAGE_ATTACHMENT_MEDIA_TYPES = /** @type {readonly ImageMediaType[]} */ (Object.freeze([
   'image/png',
   'image/jpeg',
   'image/gif',
   'image/webp',
-]);
+]));
 
 const ATTACHMENT_KINDS = Object.freeze({ IMAGE: 'image' });
 
@@ -35,19 +63,19 @@ const ATTACHMENT_KINDS = Object.freeze({ IMAGE: 'image' });
  * ab und traegt in der Nachricht nur die Referenz (Issue #94) — die Endung
  * muss deshalb eindeutig aus dem Medientyp folgen und umgekehrt.
  */
-const IMAGE_ATTACHMENT_EXTENSIONS = Object.freeze({
+const IMAGE_ATTACHMENT_EXTENSIONS = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
   'image/png': 'png',
   'image/jpeg': 'jpg',
   'image/gif': 'gif',
   'image/webp': 'webp',
-});
+}));
 
-const IMAGE_ATTACHMENT_MEDIA_TYPE_BY_EXTENSION = Object.freeze({
+const IMAGE_ATTACHMENT_MEDIA_TYPE_BY_EXTENSION = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
   png: 'image/png',
   jpg: 'image/jpeg',
   gif: 'image/gif',
   webp: 'image/webp',
-});
+}));
 
 /**
  * Erlaubter Dateiname einer abgelegten Anhangsdatei: Inhalts-Hash plus Endung.
@@ -72,11 +100,16 @@ const IMAGE_ATTACHMENT_CHAR_COST = 1600 * 4;
 
 const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
 
+/** @param {unknown} value */
 function isImageMediaType(value) {
-  return typeof value === 'string' && IMAGE_ATTACHMENT_MEDIA_TYPES.includes(value.toLowerCase());
+  return typeof value === 'string' && IMAGE_ATTACHMENT_MEDIA_TYPES.some((type) => type === value.toLowerCase());
 }
 
-/** Groesse der dekodierten Daten, ohne dafuer wirklich zu dekodieren. */
+/**
+ * Groesse der dekodierten Daten, ohne dafuer wirklich zu dekodieren.
+ *
+ * @param {unknown} data
+ */
 function base64ByteLength(data) {
   if (typeof data !== 'string' || data.length === 0) return 0;
   const padding = data.endsWith('==') ? 2 : data.endsWith('=') ? 1 : 0;
@@ -88,9 +121,12 @@ function base64ByteLength(data) {
  * `{ kind, mediaType, dataBase64, name }` — oder `null`, wenn etwas nicht
  * stimmt. Ein `data:`-Praefix wird abgetrennt, damit der Renderer eine
  * Data-URL uebergeben darf.
+ *
+ * @param {unknown} raw
+ * @returns {ImageAttachment|null}
  */
 function normalizeImageAttachment(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   if (raw.kind !== undefined && raw.kind !== ATTACHMENT_KINDS.IMAGE) return null;
 
   let mediaType = typeof raw.mediaType === 'string' ? raw.mediaType.trim().toLowerCase() : '';
@@ -110,6 +146,7 @@ function normalizeImageAttachment(raw) {
   const bytes = base64ByteLength(data);
   if (bytes <= 0 || bytes > LIMITS.MAX_IMAGE_ATTACHMENT_BYTES) return null;
 
+  /** @type {ImageAttachment} */
   const out = { kind: ATTACHMENT_KINDS.IMAGE, mediaType, dataBase64: data, bytes };
   const name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 120) : '';
   if (name) out.name = name;
@@ -119,9 +156,13 @@ function normalizeImageAttachment(raw) {
 /**
  * Normalisiert eine Anhangsliste und kappt sie bei MAX_IMAGES_PER_MESSAGE.
  * Ungueltige Eintraege fallen weg; das Ergebnis ist immer ein Array.
+ *
+ * @param {unknown} list
+ * @returns {ImageAttachment[]}
  */
 function normalizeAttachments(list) {
   if (!Array.isArray(list) || list.length === 0) return [];
+  /** @type {ImageAttachment[]} */
   const out = [];
   for (const raw of list) {
     if (out.length >= LIMITS.MAX_IMAGES_PER_MESSAGE) break;
@@ -131,13 +172,21 @@ function normalizeAttachments(list) {
   return out;
 }
 
-/** Endung, unter der ein Bild dieses Medientyps abgelegt wird ('' = unbekannt). */
+/**
+ * Endung, unter der ein Bild dieses Medientyps abgelegt wird ('' = unbekannt).
+ *
+ * @param {unknown} mediaType
+ */
 function attachmentFileExtension(mediaType) {
   if (typeof mediaType !== 'string') return '';
   return IMAGE_ATTACHMENT_EXTENSIONS[mediaType.trim().toLowerCase()] || '';
 }
 
-/** Medientyp zu einer Anhangsdatei — aus der Endung, nicht aus fremden Angaben. */
+/**
+ * Medientyp zu einer Anhangsdatei — aus der Endung, nicht aus fremden Angaben.
+ *
+ * @param {unknown} file
+ */
 function attachmentMediaTypeForFile(file) {
   if (typeof file !== 'string') return '';
   const dot = file.lastIndexOf('.');
@@ -145,7 +194,12 @@ function attachmentMediaTypeForFile(file) {
   return IMAGE_ATTACHMENT_MEDIA_TYPE_BY_EXTENSION[file.slice(dot + 1).toLowerCase()] || '';
 }
 
-/** Ist das ein Dateiname, den die Ablage selbst vergeben haben kann? */
+/**
+ * Ist das ein Dateiname, den die Ablage selbst vergeben haben kann?
+ *
+ * @param {unknown} value
+ * @returns {value is string}
+ */
 function isAttachmentFileName(value) {
   return typeof value === 'string' && ATTACHMENT_FILE_RE.test(value);
 }
@@ -155,9 +209,12 @@ function isAttachmentFileName(value) {
  * Liefert `null`, sobald etwas nicht stimmt — insbesondere, wenn Endung und
  * Medientyp auseinanderlaufen. Base64 wird hier nie uebernommen; genau das
  * haelt die Verlaufsdatei schlank.
+ *
+ * @param {unknown} raw
+ * @returns {StoredImageAttachment|null}
  */
 function normalizeStoredAttachment(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   if (raw.kind !== undefined && raw.kind !== ATTACHMENT_KINDS.IMAGE) return null;
 
   const mediaType = typeof raw.mediaType === 'string' ? raw.mediaType.trim().toLowerCase() : '';
@@ -165,6 +222,7 @@ function normalizeStoredAttachment(raw) {
   if (!isImageMediaType(mediaType) || !isAttachmentFileName(file)) return null;
   if (attachmentMediaTypeForFile(file) !== mediaType) return null;
 
+  /** @type {StoredImageAttachment} */
   const out = { kind: ATTACHMENT_KINDS.IMAGE, mediaType, file };
   const bytes = Math.round(Number(raw.bytes) || 0);
   if (bytes > 0) out.bytes = bytes;
@@ -173,9 +231,15 @@ function normalizeStoredAttachment(raw) {
   return out;
 }
 
-/** Anhangsliste in Ablage-Form, bei MAX_IMAGES_PER_MESSAGE gekappt. */
+/**
+ * Anhangsliste in Ablage-Form, bei MAX_IMAGES_PER_MESSAGE gekappt.
+ *
+ * @param {unknown} list
+ * @returns {StoredImageAttachment[]}
+ */
 function normalizeStoredAttachments(list) {
   if (!Array.isArray(list) || list.length === 0) return [];
+  /** @type {StoredImageAttachment[]} */
   const out = [];
   for (const raw of list) {
     if (out.length >= LIMITS.MAX_IMAGES_PER_MESSAGE) break;
@@ -185,24 +249,75 @@ function normalizeStoredAttachments(list) {
   return out;
 }
 
-/** Zaehlt die Bild-Anhaenge einer Nachricht, gleich ob Base64 oder Referenz. */
+/**
+ * Zaehlt die Bild-Anhaenge einer Nachricht, gleich ob Base64 oder Referenz.
+ *
+ * @param {{ attachments?: unknown }|null|undefined} message
+ */
 function countImageAttachments(message) {
   const list = Array.isArray(message?.attachments) ? message.attachments : [];
   return list.filter((a) => a && (a.kind === undefined || a.kind === ATTACHMENT_KINDS.IMAGE)).length;
 }
 
-/** Nur die Bilder einer Nachricht — bequemer Zugriff fuer die Provider. */
+/**
+ * Nur die Bilder einer Nachricht — bequemer Zugriff fuer die Provider.
+ *
+ * @param {{ attachments?: unknown }|null|undefined} message
+ * @returns {ImageAttachment[]}
+ */
 function imageAttachmentsOf(message) {
   const list = Array.isArray(message?.attachments) ? message.attachments : [];
   return list.filter((a) => a?.kind === ATTACHMENT_KINDS.IMAGE && isImageMediaType(a.mediaType) && a.dataBase64);
 }
 
-/** Geschaetzte Zeichenkosten der Anhaenge einer Nachricht (Fensterung). */
+/**
+ * Geschaetzte Zeichenkosten der Anhaenge einer Nachricht (Fensterung).
+ *
+ * @param {{ attachments?: unknown }|null|undefined} message
+ */
 function attachmentsCharCost(message) {
   return imageAttachmentsOf(message).length * IMAGE_ATTACHMENT_CHAR_COST;
 }
 
-/** Data-URL zur Anzeige im Renderer bzw. fuer die OpenAI-Responses-API. */
+/** How the formats are named in messages that list them (#91). */
+const IMAGE_ATTACHMENT_FORMAT_NAMES = /** @type {Readonly<Record<string, string>>} */ (Object.freeze({
+  'image/png': 'PNG',
+  'image/jpeg': 'JPEG',
+  'image/gif': 'GIF',
+  'image/webp': 'WebP',
+}));
+
+/**
+ * The image formats a provider passes on (#91). A provider that takes fewer
+ * than all of IMAGE_ATTACHMENT_MEDIA_TYPES names them in
+ * `capabilities.imageMediaTypes` of its resolved capabilities
+ * (provider-capabilities.js; Gemini takes no GIF); without the field it takes
+ * them all. The order is always that of IMAGE_ATTACHMENT_MEDIA_TYPES.
+ *
+ * @param {{ imageMediaTypes?: readonly string[] }|null|undefined} capabilities
+ * @returns {ImageMediaType[]}
+ */
+function providerImageMediaTypes(capabilities) {
+  const own = capabilities?.imageMediaTypes;
+  if (!Array.isArray(own)) return [...IMAGE_ATTACHMENT_MEDIA_TYPES];
+  return IMAGE_ATTACHMENT_MEDIA_TYPES.filter((type) => own.includes(type));
+}
+
+/**
+ * "PNG, JPEG, WebP" — the formats by name, for a message.
+ *
+ * @param {readonly string[]} mediaTypes
+ */
+function imageFormatNames(mediaTypes) {
+  const list = Array.isArray(mediaTypes) ? mediaTypes : [];
+  return list.map((type) => IMAGE_ATTACHMENT_FORMAT_NAMES[type] || String(type)).join(', ');
+}
+
+/**
+ * Data-URL zur Anzeige im Renderer bzw. fuer die OpenAI-Responses-API.
+ *
+ * @param {{ mediaType?: string, dataBase64?: string }|null|undefined} attachment
+ */
 function toDataUrl(attachment) {
   if (!attachment?.mediaType || !attachment?.dataBase64) return '';
   return `data:${attachment.mediaType};base64,${attachment.dataBase64}`;
@@ -228,5 +343,8 @@ module.exports = {
   normalizeAttachments,
   imageAttachmentsOf,
   attachmentsCharCost,
+  IMAGE_ATTACHMENT_FORMAT_NAMES,
+  providerImageMediaTypes,
+  imageFormatNames,
   toDataUrl,
 };

@@ -2,10 +2,10 @@
 // Heuristik statt echter Tokenizer: 1 Token ≈ 4 Zeichen; das Budget wird
 // deshalb in Zeichen gefuehrt und ist ueber ui-preferences.json
 // (historyCharLimit) konfigurierbar. Ohne Einstellung haengt das Budget am
-// Anbieter: lokale Modelle bekommen weniger als Cloud-Anbieter.
+// Anbieter: lokale Modelle bekommen weniger als Cloud-Anbieter. Which models
+// run locally, the provider's traits say (#996) — this file knows no provider.
 
 const { attachmentsCharCost } = require('../../shared/contracts/attachments');
-const { isLocalEndpoint } = require('../../shared/contracts/provider-endpoint');
 // One source for the bounds: the settings validate against them, the engine
 // windows with them (#531).
 const {
@@ -14,6 +14,8 @@ const {
   clampHistoryCharLimit,
 } = require('../../shared/contracts/settings');
 
+/** @typedef {import('../ports/llm-port').LlmMessage} LlmMessage */
+
 const CHARS_PER_TOKEN = 4;
 const DEFAULT_HISTORY_CHAR_LIMIT = 200_000;
 // Lokale Modelle verarbeiten den Prompt um Groessenordnungen langsamer als
@@ -21,7 +23,6 @@ const DEFAULT_HISTORY_CHAR_LIMIT = 200_000;
 // allein fuer das Fuellen des Standardbudgets). Fuer sie gilt deshalb ein
 // engeres Budget; eine ausdrueckliche Einstellung sticht es weiterhin.
 const DEFAULT_LOCAL_HISTORY_CHAR_LIMIT = 40_000;
-const LOCAL_PROVIDER_IDS = new Set(['ollama']);
 
 // Model channel, so English (#276, #532).
 const TOOL_OUTPUT_PLACEHOLDER = JSON.stringify({
@@ -29,29 +30,30 @@ const TOOL_OUTPUT_PLACEHOLDER = JSON.stringify({
 });
 
 /**
- * Lokal ist, wessen ID in der Liste steht **oder** wessen Server-URL auf diesen
- * Rechner zeigt (Issue #193). Die zweite Haelfte gibt es, seit ein Anbieter
- * dieselbe ID fuer localhost und fuer ein Gateway im Netz benutzt; sie greift
- * zusaetzlich und nimmt den bestehenden IDs nichts weg.
+ * `runsLocally` is the provider's trait for this connection
+ * (`resolveProviderTraits`): declared by the provider, or a server address on
+ * this machine (#193).
+ *
+ * @param {boolean} [runsLocally]
  */
-function isLocalProvider(providerId, baseUrl) {
-  if (typeof providerId === 'string' && LOCAL_PROVIDER_IDS.has(providerId.trim().toLowerCase())) {
-    return true;
-  }
-  return isLocalEndpoint(baseUrl);
-}
-
-function defaultHistoryCharLimit(providerId, baseUrl) {
-  return isLocalProvider(providerId, baseUrl)
+function defaultHistoryCharLimit(runsLocally) {
+  return runsLocally === true
     ? DEFAULT_LOCAL_HISTORY_CHAR_LIMIT
     : DEFAULT_HISTORY_CHAR_LIMIT;
 }
 
-function resolveHistoryCharLimit(uiPrefs, providerId, baseUrl) {
+/**
+ * @param {{ historyCharLimit?: unknown }|null|undefined} uiPrefs
+ * @param {boolean} [runsLocally]
+ */
+function resolveHistoryCharLimit(uiPrefs, runsLocally) {
   return clampHistoryCharLimit(uiPrefs?.historyCharLimit)
-    ?? defaultHistoryCharLimit(providerId, baseUrl);
+    ?? defaultHistoryCharLimit(runsLocally);
 }
 
+/**
+ * @param {LlmMessage|null|undefined} message
+ */
 function estimateMessageChars(message) {
   if (!message || typeof message !== 'object') return 0;
   let chars = 24; // Rolle + Struktur-Overhead
@@ -77,6 +79,9 @@ function estimateMessageChars(message) {
   return chars;
 }
 
+/**
+ * @param {unknown} messages
+ */
 function estimateMessagesChars(messages) {
   if (!Array.isArray(messages)) return 0;
   let total = 0;
@@ -84,6 +89,9 @@ function estimateMessagesChars(messages) {
   return total;
 }
 
+/**
+ * @param {unknown} messages
+ */
 function estimateTokens(messages) {
   return Math.ceil(estimateMessagesChars(messages) / CHARS_PER_TOKEN);
 }
@@ -92,11 +100,16 @@ function estimateTokens(messages) {
  * Fenstert den vom Renderer uebergebenen Verlauf (nur user/assistant-Texte):
  * von der neuesten Nachricht rueckwaerts, bis das Budget erschoepft ist.
  * Die letzte Nachricht (die aktuelle User-Frage) bleibt immer erhalten.
+ *
+ * @param {LlmMessage[]} messages
+ * @param {number} [charLimit]
+ * @returns {{ messages: LlmMessage[], dropped: number }}
  */
 function trimHistoryMessages(messages, charLimit = DEFAULT_HISTORY_CHAR_LIMIT) {
   if (!Array.isArray(messages) || messages.length === 0) {
     return { messages: [], dropped: 0 };
   }
+  /** @type {LlmMessage[]} */
   const kept = [];
   let used = 0;
   for (let i = messages.length - 1; i >= 0; i -= 1) {
@@ -114,6 +127,10 @@ function trimHistoryMessages(messages, charLimit = DEFAULT_HISTORY_CHAR_LIMIT) {
  * Die Ausgaben der juengsten Runde (nach der letzten Assistant-Nachricht)
  * bleiben unangetastet, ebenso alle user/assistant-Nachrichten — die
  * Nachrichtenstruktur (tool_call_id-Paarung) bleibt API-gueltig.
+ *
+ * @param {LlmMessage[]} apiMessages  changed in place
+ * @param {number} [charLimit]
+ * @returns {number} how many outputs were shortened
  */
 function truncateStaleToolOutputs(apiMessages, charLimit = DEFAULT_HISTORY_CHAR_LIMIT) {
   if (!Array.isArray(apiMessages)) return 0;
@@ -140,6 +157,8 @@ function truncateStaleToolOutputs(apiMessages, charLimit = DEFAULT_HISTORY_CHAR_
  * What goes out besides the messages (#169): the tool schemas travel in their
  * own field, and the budget has to see them — the 15 built-ins alone are
  * about 15,000 characters before a single message is written.
+ *
+ * @param {unknown} toolDefs
  */
 function estimateToolDefsChars(toolDefs) {
   if (!Array.isArray(toolDefs) || toolDefs.length === 0) return 0;
@@ -155,6 +174,9 @@ function estimateToolDefsChars(toolDefs) {
 const MIN_TOOL_OUTPUT_CHARS = 2000;
 const TOOL_MESSAGE_OVERHEAD = estimateMessageChars({ role: 'tool', content: '' });
 
+/**
+ * @param {LlmMessage[]} apiMessages
+ */
 function lastAssistantIndex(apiMessages) {
   for (let i = apiMessages.length - 1; i >= 0; i -= 1) {
     if (apiMessages[i]?.role === 'assistant') return i;
@@ -167,6 +189,9 @@ function lastAssistantIndex(apiMessages) {
  * count with the size of the placeholder they are shortened to before the next
  * request — the newest output takes precedence over older ones, the way
  * `truncateStaleToolOutputs` has always treated them.
+ *
+ * @param {LlmMessage[]} apiMessages
+ * @param {number} charLimit
  */
 function toolOutputRoom(apiMessages, charLimit) {
   if (!Array.isArray(apiMessages)) return charLimit - TOOL_MESSAGE_OVERHEAD;
@@ -183,6 +208,10 @@ function toolOutputRoom(apiMessages, charLimit) {
   return charLimit - fixed - TOOL_MESSAGE_OVERHEAD;
 }
 
+/**
+ * @param {string} content
+ * @param {number} keep
+ */
 function shortenedToolOutput(content, keep) {
   // Model channel, so English (#276).
   return JSON.stringify({
@@ -196,6 +225,10 @@ function shortenedToolOutput(content, keep) {
  * Cuts a tool output down to the room left in the budget while it is being
  * appended (#169), instead of waiting for the total to overflow. Returns
  * `null` when the output fits as it is.
+ *
+ * @param {unknown} content
+ * @param {number} room
+ * @returns {{ content: string, originalChars: number, keptChars: number }|null}
  */
 function capToolOutput(content, room) {
   if (typeof content !== 'string') return null;
@@ -216,12 +249,10 @@ module.exports = {
   CHARS_PER_TOKEN,
   DEFAULT_HISTORY_CHAR_LIMIT,
   DEFAULT_LOCAL_HISTORY_CHAR_LIMIT,
-  LOCAL_PROVIDER_IDS,
   HISTORY_CHAR_LIMIT_MIN,
   HISTORY_CHAR_LIMIT_MAX,
   TOOL_OUTPUT_PLACEHOLDER,
   clampHistoryCharLimit,
-  isLocalProvider,
   defaultHistoryCharLimit,
   resolveHistoryCharLimit,
   estimateMessageChars,

@@ -39,7 +39,7 @@ async function getHarness() {
     getChatHistory: async () => ({ sessions: [] }),
     setActiveChatId: async () => {},
     upsertChatSession: async () => ({ ok: true }),
-    generateChatTitle: async () => ({ title: '' }),
+    nameChat: async () => ({ title: null }),
     writeClipboardText: async () => ({ ok: true }),
     abortChat: async () => ({ ok: true }),
     chat: async () => ({ ok: true }),
@@ -251,6 +251,7 @@ test('a generated image opens in the preview, whatever its type (#968)', async (
     toolTrace: [{
       line: 'generate_image assets/header.png',
       tool: 'generate_image',
+      category: 'image',
       changes: [{ id: 'ab12-1', relativePath: 'assets/header.png', status: 'binary', created: true, added: 0, removed: 0 }],
     }],
   }];

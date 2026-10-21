@@ -11,7 +11,8 @@ const { createFilesystemIpcAdapter } = require('../src/main/adapters/filesystem-
 const { registerFsHandlers } = require('../src/main/ipc/fs-handlers');
 const { REQUEST_CHANNELS: REQ, PUSH_CHANNELS: PUSH } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
-const { createNativeConfirmationAdapter } = require('../src/main/adapters/native-confirmation-adapter');
+const { createNativeConfirmationAdapter } = require('../src/main/electron/native-confirmation-adapter');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 /** The dialog for notices, and the confirmation port over the same dialog (#980). */
 function withDialog(dialog) {
@@ -75,7 +76,7 @@ function loadPreload(ipcRenderer) {
 
 async function makeFixture(t) {
   const base = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-b17-')));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const workspace = path.join(base, 'ws');
   const home = path.join(base, 'home');
   await fs.mkdir(workspace);

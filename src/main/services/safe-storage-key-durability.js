@@ -29,24 +29,26 @@
  * What the old key encrypted is lost at that point anyway.
  */
 
+const { KEY_ALWAYS_DURABLE } = require('../../shared/contracts/safe-storage-key');
+
 const LOCAL_STATE_FILENAME = 'Local State';
 /** How often `Local State` is looked at while a write waits. */
 const KEY_POLL_MS = 250;
 /** Chromium writes after 10 s; twice that, counted from creation, is the cap. */
 const KEY_WAIT_CAP_MS = 20000;
 
-/** No wait anywhere: macOS, Linux, and the default for callers without one. */
-const KEY_ALWAYS_DURABLE = Object.freeze({
-  whenDurable: () => Promise.resolve(),
-  wouldWait: () => false,
-  releaseForQuit: () => {},
-});
-
 /**
  * @param {object} deps
  * @param {string} [deps.platform]
  * @param {() => string} deps.localStatePath path of Chromium's `Local State`
  * @param {(filePath: string) => Promise<string>} deps.readFile
+ * @param {{ warn?: (message: string) => void, info?: (message: string) => void } | null} [deps.log]
+ * @param {() => number} [deps.now]
+ * @param {typeof setTimeout} [deps.setTimer]
+ * @param {typeof clearTimeout} [deps.clearTimer]
+ * @param {number} [deps.pollMs]
+ * @param {number} [deps.capMs]
+ * @returns {import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability}
  */
 function createSafeStorageKeyDurability({
   platform = process.platform,
@@ -63,9 +65,13 @@ function createSafeStorageKeyDurability({
 
   const startedAt = now();
   let settled = false;
+  /** @type {Array<() => void>} */
   let waiters = [];
+  /** @type {number|null} */
   let waitingSince = null;
+  /** @type {ReturnType<typeof setTimeout>|null} */
   let timer = null;
+  /** @type {Promise<void>|null} */
   let checking = null;
 
   async function keyOnDisk() {
@@ -80,6 +86,7 @@ function createSafeStorageKeyDurability({
     }
   }
 
+  /** @param {'cap'|'quit'|'durable'} reason */
   function settle(reason) {
     if (settled) return;
     settled = true;
@@ -138,6 +145,7 @@ function createSafeStorageKeyDurability({
     whenDurable() {
       if (settled) return Promise.resolve();
       if (waitingSince === null) waitingSince = now();
+      /** @type {Promise<void>} */
       const pending = new Promise((resolve) => waiters.push(resolve));
       if (timer === null) runCheck();
       return pending;

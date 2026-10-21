@@ -6,6 +6,8 @@ const path = require('path');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { LLM_CONFIG_VERSION } = require('../src/shared/contracts/settings');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
+const { removeTempDir } = require('./helpers/temp-dir');
+const { ACCEPT_EVERY_RECEIPT } = require('./helpers/confirmations');
 
 /**
  * Files the store finds but cannot use (#557, #561, #562). A file that is there
@@ -30,8 +32,8 @@ const safeStorage = {
 
 function makeStorage(dir, { fsImpl = fs, platform = 'linux' } = {}) {
   return createStorageService({
-    app: { getPath: () => dir },
-    safeStorage,
+    userDataPath: dir,
+    secretStore: safeStorage,
     fs: fsImpl,
     path,
     providerCatalog: createMockProviderCatalog((id) => PROVIDERS[id] || null),
@@ -40,6 +42,8 @@ function makeStorage(dir, { fsImpl = fs, platform = 'linux' } = {}) {
     defaultProviderId: 'openai',
     platform,
     log: { warn() {}, info() {} },
+    // What is checked here is the file, not the confirmation (#1104).
+    confirmationReceipts: ACCEPT_EVERY_RECEIPT,
   });
 }
 
@@ -61,7 +65,7 @@ function fsFailingRenameTo(marker, { times = Infinity } = {}) {
 
 async function tmpDir(t) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-unreadable-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
   return dir;
 }
 

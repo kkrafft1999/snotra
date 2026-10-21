@@ -16,23 +16,32 @@
 
 const { withRequestTimeout } = require('../services/request-timeout');
 const { WEB_SEARCH_ERROR_CODES, WEB_SEARCH_LIMITS } = require('../../shared/contracts/web-search');
+const { isRecord } = require('../../shared/runtime/is-record');
+
+/** @typedef {import('../../application/ports/web-search-port').WebSearchResult} WebSearchResult */
 
 const TAVILY_ENDPOINT = 'https://api.tavily.com/search';
 const SEARCH_TIMEOUT_MS = 20_000;
 
+/** @param {unknown} raw */
 function clampMaxResults(raw) {
   const value = Number(raw);
   if (!Number.isFinite(value)) return WEB_SEARCH_LIMITS.DEFAULT_MAX_RESULTS;
   return Math.min(WEB_SEARCH_LIMITS.MAX_MAX_RESULTS, Math.max(1, Math.floor(value)));
 }
 
+/** @param {unknown} raw */
 function clampSnippet(raw) {
   const text = String(raw ?? '').replace(/\s+/g, ' ').trim();
   if (text.length <= WEB_SEARCH_LIMITS.MAX_SNIPPET_CHARS) return text;
   return `${text.slice(0, WEB_SEARCH_LIMITS.MAX_SNIPPET_CHARS - 1)}…`;
 }
 
-/** Nur http/https — ein Treffer soll nichts anderes in den Chat tragen. */
+/**
+ * Nur http/https — ein Treffer soll nichts anderes in den Chat tragen.
+ * @param {unknown} raw
+ * @returns {raw is string}
+ */
 function isHttpUrl(raw) {
   if (typeof raw !== 'string' || !raw.trim()) return false;
   try {
@@ -43,9 +52,14 @@ function isHttpUrl(raw) {
   }
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {WebSearchResult | null}
+ */
 function toResult(raw) {
-  if (!raw || typeof raw !== 'object') return null;
+  if (!isRecord(raw)) return null;
   if (!isHttpUrl(raw.url)) return null;
+  /** @type {WebSearchResult} */
   const out = {
     title: String(raw.title ?? '').replace(/\s+/g, ' ').trim() || raw.url.trim(),
     url: raw.url.trim(),
@@ -56,6 +70,10 @@ function toResult(raw) {
   return out;
 }
 
+/**
+ * @param {number} status
+ * @param {unknown} body
+ */
 function errorForStatus(status, body) {
   if (status === 401 || status === 403) {
     return {
@@ -174,14 +192,15 @@ function createTavilyWebSearchAdapter({ readApiKey, hasApiKey, fetchImpl = fetch
         };
       }
 
-      const results = (Array.isArray(payload?.results) ? payload.results : [])
+      const answered = isRecord(payload) ? payload : {};
+      const results = (Array.isArray(answered.results) ? answered.results : [])
         .map(toResult)
-        .filter(Boolean)
+        .filter((result) => result !== null)
         .slice(0, clampMaxResults(maxResults));
 
       /** @type {import('../../application/ports/web-search-port').WebSearchOk} */
       const out = { ok: true, query: text, results };
-      const answer = typeof payload?.answer === 'string' ? payload.answer.trim() : '';
+      const answer = typeof answered.answer === 'string' ? answered.answer.trim() : '';
       if (answer) out.answer = clampSnippet(answer);
       return out;
     },

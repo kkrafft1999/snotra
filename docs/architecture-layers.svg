@@ -89,7 +89,7 @@
 
   <rect x="50" y="252" width="1148" height="58" rx="8" fill="#f8fbff" stroke="#2f6db3" stroke-width="1" stroke-dasharray="4 3"/>
   <text x="62" y="272" font-size="11" font-weight="700" fill="#1c4b82">Normalised view data from main (no provider wire, no tool name logic, no cross-round parsing)</text>
-  <text x="62" y="290" font-size="10.5" fill="#475569">Settings form · tool rows (entry.line) · chat history (title, usage, sanitising) — and still here: run registry, persistence, cost sum (#981)</text>
+  <text x="62" y="290" font-size="10.5" fill="#475569">Settings form · tool rows (entry.line) · chat history (title, usage, sanitising) — the conversation itself is the core's (#981)</text>
   <text x="62" y="306" font-size="10.5" fill="#475569">Legitimate in the renderer: DOM/Markdown (marked+DOMPurify) · local time/a11y · displaying prepared DTO fields — only window.electronAPI + contracts</text>
 
   <!-- ============ PRELOAD BRIDGE ============ -->
@@ -235,7 +235,7 @@
 
   <rect class="tool" x="372" y="1240" width="280" height="112" rx="10" fill="#fdf1f6"/>
   <text class="btitle tt-tool" x="384" y="1262">Tool registry</text>
-  <text class="bsub" x="384" y="1278">src/main/tools (registry + planner)</text>
+  <text class="bsub" x="384" y="1278">src/application/tools (in the core since #982)</text>
   <g>
     <rect class="tool" x="384" y="1290" width="120" height="26" rx="6"/><text class="chip tt-tool" x="444" y="1308">list_directory</text>
     <rect class="tool" x="516" y="1290" width="120" height="26" rx="6"/><text class="chip tt-tool" x="576" y="1308">read_file_text</text>

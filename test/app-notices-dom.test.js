@@ -206,3 +206,25 @@ test('in German', async () => {
   assert.equal(button(entry, 'copy-diagnostics').textContent, 'Diagnose kopieren');
   assert.equal(button(entry, 'reveal').textContent, 'Logdatei zeigen');
 });
+
+test('the phone\'s switch informs, in both languages, without a help link (#1194)', async (t) => {
+  const SWITCHED = { id: 'remote-workspace-switched', kind: 'remote-workspace-switched', folder: 'beta', location: null, canReveal: false };
+  const { dom, entries, button } = await mount({ listed: [SWITCHED] });
+  t.after(() => dom.cleanup());
+  const [entry] = entries();
+  assert.ok(entry.classList.contains('app-notice--info'));
+  assert.equal(entry.querySelector('.app-notice-heading').textContent, 'Switched from your phone');
+  assert.equal(entry.querySelector('.app-notice-text').textContent, 'Your phone opened the folder “beta”.');
+  assert.equal(button(entry, 'help'), null, 'no manual chapter to point to yet');
+  assert.equal(entry.querySelector('.app-notice-actions'), null, 'no empty action row');
+  assert.ok(button(entry, 'dismiss'));
+});
+
+test('the phone\'s switch in German', async (t) => {
+  const SWITCHED = { id: 'remote-workspace-switched', kind: 'remote-workspace-switched', folder: 'beta', location: null, canReveal: false };
+  const { dom, entries } = await mount({ locale: 'de', listed: [SWITCHED] });
+  t.after(() => dom.cleanup());
+  const [entry] = entries();
+  assert.equal(entry.querySelector('.app-notice-heading').textContent, 'Vom Handy gewechselt');
+  assert.equal(entry.querySelector('.app-notice-text').textContent, 'Dein Handy hat den Ordner „beta“ geöffnet.');
+});

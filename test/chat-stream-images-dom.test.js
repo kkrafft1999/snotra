@@ -70,7 +70,7 @@ test.before(async () => {
     getChatHistory: async () => ({ sessions: [] }),
     setActiveChatId: async () => {},
     upsertChatSession: async () => ({ ok: true }),
-    generateChatTitle: async () => ({ title: '' }),
+    nameChat: async () => ({ title: null }),
     writeClipboardText: async () => ({ ok: true }),
     abortChat: async () => ({ ok: true }),
     // Main ends every run with a marker behind its events (#721).

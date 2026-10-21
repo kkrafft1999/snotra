@@ -15,7 +15,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const fsp = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
@@ -26,6 +25,7 @@ const {
   buildLinuxDirScript,
 } = require('../src/main/services/update-installer');
 const { createUpdateService } = require('../src/main/services/update-service');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 const SKIP = process.platform === 'win32' ? 'the POSIX helpers need /bin/sh' : false;
 const VERSION = '1.8.0';
@@ -61,7 +61,7 @@ function makeFixture(t) {
     for (const child of fixture.pids) {
       try { child.kill('SIGKILL'); } catch { /* gone already */ }
     }
-    await fsp.rm(root, { recursive: true, force: true });
+    await removeTempDir(root);
   });
   return fixture;
 }
@@ -85,7 +85,7 @@ function readLines(file) {
  */
 function writeStandIn(fixture, file, label, behaviour) {
   const confirm = `${JSON.stringify(process.execPath)} -e ${shellQuote(
-    `require(${JSON.stringify(SERVICE)}).createUpdateService({ app: { getVersion: () => ${JSON.stringify(VERSION)},`
+    `require(${JSON.stringify(SERVICE)}).createUpdateService({ installation: { getVersion: () => ${JSON.stringify(VERSION)},`
     + ` getPath: () => ${JSON.stringify(fixture.userData)} } }).confirmInstallStarted()`
     + '.then((ok) => process.exit(ok ? 0 : 9))',
   )} || exit 9`;
@@ -157,7 +157,7 @@ function isRunning(pid) {
 /** What the next start of the app makes of the status file. */
 async function nextStartReads(fixture, runningVersion = '1.7.1') {
   const svc = createUpdateService({
-    app: { getVersion: () => runningVersion, getPath: () => fixture.userData },
+    installation: { getVersion: () => runningVersion, getPath: () => fixture.userData },
     storage: { readUIPrefs: async () => ({}), updateUIPrefs: async () => {} },
   });
   return svc.readInstallFailure();

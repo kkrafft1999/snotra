@@ -7,10 +7,11 @@ const assert = require('node:assert/strict');
 const path = require('path');
 const { createChatEngine, CHAT_ENGINE_EVENTS } = require('../src/application/chat/chat-engine');
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
-const { formatToolDisplayLine } = require('../src/shared/presentation/tool-display');
+const { formatLine: formatToolDisplayLine } = require('./helpers/tool-descriptors');
 
 const { translateMessage } = require('../src/shared/i18n');
 const { PERMISSION_DENIED_MESSAGE_KEYS } = require('../src/shared/contracts/tool-permissions');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // Die Begruendung der Karte reist seit #290 als Schluesselliste; zum Pruefen
 // des Wortlauts wird sie hier ausgesprochen.
@@ -494,7 +495,7 @@ test('deaktivierte Tools, ungültige Argumente und Plan-Fehler blockieren ohne H
 // stored name stays, but no longer counts — the settings do not list the two
 // any more, so a refusal could never be lifted.
 test('a stale switch-off does not refuse the basic equipment (#552)', async () => {
-  const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+  const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
   const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
   const listed = [];
   const fsService = {
@@ -659,7 +660,7 @@ test('broad searches leave out hits under a user-defined sensitive pattern (#525
   const fs = require('fs/promises');
   const os = require('os');
   const { createFsService } = require('../src/main/services/fs-service');
-  const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+  const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
   const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 
   const ws = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-525-'));
@@ -697,7 +698,7 @@ test('broad searches leave out hits under a user-defined sensitive pattern (#525
     }
     assert.equal(approvals.requests.length, 0, 'leaving a hit out asks nothing');
   } finally {
-    await fs.rm(ws, { recursive: true, force: true });
+    await removeTempDir(ws);
   }
 });
 

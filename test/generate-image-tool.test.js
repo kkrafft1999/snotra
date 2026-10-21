@@ -7,12 +7,14 @@ const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
 const { createFsService } = require('../src/main/services/fs-service');
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
 const { createWorkspaceToolAdapter } = require('../src/main/adapters/workspace-tool-adapter');
 const { createFileChangeRecorder } = require('../src/main/services/file-change-recorder');
-const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
-const { buildPreview } = require('../src/main/tools/tool-call-planner');
+const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
+const { buildPreview } = require('../src/application/tools/tool-call-planner');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 const { IMAGE_GENERATION_ERROR_CODES: CODES } = require('../src/shared/contracts/image-generation');
+const { removeTempDir } = require('./helpers/temp-dir');
 
 // 1x1 PNG.
 const PNG = Buffer.from(
@@ -36,7 +38,7 @@ function makeImageService({ configured = true, generate } = {}) {
 
 async function makeWorkspace(t) {
   const root = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-image-')));
-  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  t.after(() => removeTempDir(root));
   return root;
 }
 
@@ -222,5 +224,5 @@ test('the target is one file that may be replaced', () => {
   assert.deepEqual(registry.getDefinition('generate_image').targets({ relative_path: 'a.png' }), [
     { path: 'a.png', kind: 'file', access: 'write', overwrite: true },
   ]);
-  assert.equal(buildPreview('generate_image', { prompt: 'a red fox', relative_path: 'a.png' }, { locale: 'en' }).text, 'a red fox');
+  assert.equal(buildPreview(descriptorOf('generate_image').preview, { prompt: 'a red fox', relative_path: 'a.png' }, { locale: 'en' }).text, 'a red fox');
 });

@@ -3,13 +3,16 @@ const assert = require('node:assert/strict');
 const fs = require('fs/promises');
 const os = require('os');
 const path = require('path');
+const { registerSettingsForTest: registerSettingsHandlers } = require('./helpers/settings-handlers');
 const {
-  registerSettingsHandlers,
-  mergeProviderPatchIntoConfigImpl,
-  applyActivePreset,
-  isPresetUsable,
-} = require('../src/main/ipc/settings-handlers');
+  mergeProviderPatchIntoConfig: mergeProviderPatchIntoConfigImpl,
+  createLlmPresets,
+} = require('../src/main/services/llm-settings');
+const presetsOf = (deps) => createLlmPresets({ ...deps, secretStore: deps.secretStore ?? deps.safeStorage });
+const applyActivePreset = (deps, presetId, options) => presetsOf(deps).applyActivePreset(presetId, options);
+const isPresetUsable = (deps, presetId) => presetsOf(deps).isPresetUsable(presetId);
 const { createStorageService } = require('../src/main/services/storage-service');
+const { createTestConfirmations } = require('./helpers/confirmations');
 const { createSkillsService } = require('../src/main/services/skills-service');
 const { translateMessage } = require('../src/shared/i18n');
 const { createWorkspaceActivation } = require('../src/main/services/workspace-activation');
@@ -30,6 +33,7 @@ const { createProviderSecretsPort } = require('../src/main/adapters/provider-sec
 const { createSettingsPresentationService } = require('../src/main/services/settings-presentation-service');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockIpcMain } = require('./helpers/mock-ipc');
+const { removeDir, removeTempDir } = require('./helpers/temp-dir');
 
 const mockProviders = {
   getProvider(id) {
@@ -68,7 +72,7 @@ const mockProviders = {
 function makeDeps(encryptionAvailable = true) {
   const runtime = createMockProviderRuntime((id) => mockProviders.getProvider(id));
   return {
-    safeStorage: {
+    secretStore: {
       isEncryptionAvailable: () => encryptionAvailable,
       encryptString(plaintext) {
         return Buffer.from(`enc:${plaintext}`, 'utf8');
@@ -177,9 +181,22 @@ function makeHandlerProviders({ listModelsImpl } = {}) {
   };
 }
 
-async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog, storageFs = fs, shellSettings = null, chatSessionSettings = null } = {}) {
+/**
+ * `dialogResponse` answers every native confirmation (#1104): 0 confirms,
+ * 1 cancels; null leaves the port without a dialog, which confirms nothing.
+ */
+async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, toolCatalog, skillCatalog, storageFs = fs, shellSettings = null, chatSessionSettings = null, dialogResponse = 0, platform = 'darwin' } = {}) {
+  const prompts = [];
+  const { confirmations, storeReceipts } = createTestConfirmations({
+    dialog: dialogResponse === null ? null : {
+      showMessageBox: async (options) => {
+        prompts.push(options);
+        return { response: dialogResponse };
+      },
+    },
+  });
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-settings-'));
-  t.after(() => fs.rm(tmpDir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(tmpDir));
   const safeStorage = {
     isEncryptionAvailable: () => encryptionAvailable,
     encryptString: (plaintext) => Buffer.from(`enc:${plaintext}`, 'utf8'),
@@ -199,14 +216,15 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     { listMeta: () => providers.listProviderMeta() }
   );
   const storage = createStorageService({
-    app: { getPath: () => tmpDir },
-    safeStorage,
+    userDataPath: tmpDir,
+    secretStore: safeStorage,
     fs: storageFs,
     path,
     providerCatalog,
     maxChatSessions: 10,
     maxFolderHistory: 5,
     defaultProviderId: 'openai',
+    confirmationReceipts: storeReceipts,
   });
   const llmConfigStore = createLlmConfigStorePort(storage);
   const providerSecrets = createProviderSecretsPort(storage);
@@ -245,10 +263,13 @@ async function setupHandlers(t, { encryptionAvailable = true, listModelsImpl, to
     skillCatalog,
     shellSettings,
     chatSessionSettings,
+    confirmations,
+    platform,
   });
   return {
     ipcMain,
     storage,
+    prompts,
     llmConfigStore,
     uiPrefsStore,
     workspaceActivation,
@@ -594,7 +615,7 @@ test('getLLMState returns normalized preset and provider view DTOs', async (t) =
   });
 
   const state = await ipcMain.invoke(REQ.SETTINGS_GET_LLM_STATE);
-  assert.equal(state.encryptionAvailable, true);
+  assert.equal('encryptionAvailable' in state, false);
   assert.equal(state.presets.length, 1);
   assert.equal(state.presets[0].label, 'OpenAI · gpt-4o');
   assert.equal(state.presets[0].sublabel, 'reasoning_effort: low');
@@ -745,7 +766,7 @@ test('an unreadable stored key does not block the save; the chat moves to a usab
 test('removeFolderFromHistory drops one entry and returns the remaining list', async (t) => {
   const { ipcMain, workspaceActivation } = await setupHandlers(t);
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-ws-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const a = path.join(base, 'a');
   const b = path.join(base, 'b');
   await fs.mkdir(a);
@@ -778,7 +799,7 @@ test('getSkillCatalog reicht die gespeicherte Auswahl an den Skill-Service durch
   });
 
   const ws = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skills-'));
-  t.after(() => fs.rm(ws, { recursive: true, force: true }));
+  t.after(() => removeTempDir(ws));
   await workspaceActivation.activateChosenFolder(ws);
 
   // Auch ein mitgeschickter Pfad aendert nichts: es zaehlt der aktive Root.
@@ -806,7 +827,7 @@ test('reloadSkills verwirft den Cache und liefert den frischen Katalog', async (
 
 test('a ticked workspace skill is stored for the open folder, never in the global list (#576)', async (t) => {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skill-bind-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const home = path.join(base, 'home');
   const ws = path.join(base, 'ws');
   const writeSkill = async (dir, name) => {
@@ -845,7 +866,7 @@ test('activeSkills überleben den Weg durch setUIPrefs', async (t) => {
 test('activateFolder nimmt nur bekannte Ordner an (#68)', async (t) => {
   const { ipcMain, workspaceActivation, getActiveWorkspaceRoot } = await setupHandlers(t);
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-activate-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const known = path.join(base, 'known');
   const fremd = path.join(base, 'fremd');
   await fs.mkdir(known);
@@ -872,7 +893,7 @@ test('activateFolder nimmt nur bekannte Ordner an (#68)', async (t) => {
 test('activateFolder akzeptiert den letzten Ordner auch ohne Verlaufseintrag (#68)', async (t) => {
   const { ipcMain, workspaceActivation, getActiveWorkspaceRoot } = await setupHandlers(t);
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-last-'));
-  t.after(() => fs.rm(dir, { recursive: true, force: true }));
+  t.after(() => removeTempDir(dir));
 
   await workspaceActivation.activateChosenFolder(dir);
   assert.deepEqual(await ipcMain.invoke(REQ.SETTINGS_REMOVE_FOLDER_FROM_HISTORY, dir), {
@@ -888,11 +909,11 @@ test('activateFolder akzeptiert den letzten Ordner auch ohne Verlaufseintrag (#6
 test('activateFolder lehnt einen geloeschten Ordner ab (#68)', async (t) => {
   const { ipcMain, workspaceActivation } = await setupHandlers(t);
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-gone-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const gone = path.join(base, 'gone');
   await fs.mkdir(gone);
   await workspaceActivation.activateChosenFolder(gone);
-  await fs.rm(gone, { recursive: true, force: true });
+  await removeDir(gone);
 
   const res = await ipcMain.invoke(REQ.SETTINGS_ACTIVATE_FOLDER, gone);
   assert.equal(res.ok, false);
@@ -901,7 +922,7 @@ test('activateFolder lehnt einen geloeschten Ordner ab (#68)', async (t) => {
 test('activateChosenFolder lehnt eine Datei ab (#68)', async (t) => {
   const { workspaceActivation, getActiveWorkspaceRoot } = await setupHandlers(t);
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-file-'));
-  t.after(() => fs.rm(base, { recursive: true, force: true }));
+  t.after(() => removeTempDir(base));
   const file = path.join(base, 'notes.md');
   await fs.writeFile(file, 'hallo', 'utf8');
 
@@ -1187,4 +1208,94 @@ test('without a level of its own the chat shows the default; an older model show
     levels: [],
     defaultLevel: null,
   });
+});
+
+// --- Execution tools switched on only with a person at the machine (#1104) ---
+
+test('switching shell_execute on asks in a native dialog; cancel is the default (#1104)', async (t) => {
+  const { ipcMain, storage, prompts } = await setupHandlers(t);
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { appLocale: 'en' });
+
+  const prefs = await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true });
+  assert.equal(prefs.shellExecutionEnabled, true);
+  assert.equal(prefs.notConfirmed, undefined);
+  assert.equal((await storage.readUIPrefs()).shellExecutionEnabled, true);
+
+  assert.equal(prompts.length, 1);
+  assert.equal(prompts[0].message, 'Switch on shell_execute?');
+  assert.deepEqual(prompts[0].buttons, ['Switch on', 'Cancel']);
+  assert.equal(prompts[0].defaultId, 1);
+  assert.equal(prompts[0].cancelId, 1);
+  assert.match(prompts[0].detail, /runs in the sandbox/);
+  assert.match(prompts[0].detail, /Settings › Tools › Autonomy/);
+});
+
+test('cancelled, the switch stays off and the answer names it as not confirmed (#1104)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t, { dialogResponse: 1 });
+  const prefs = await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { pythonExecutionEnabled: true });
+  assert.equal(prefs.pythonExecutionEnabled, false);
+  assert.deepEqual(prefs.notConfirmed, ['pythonExecutionEnabled']);
+  assert.equal((await storage.readUIPrefs()).pythonExecutionEnabled, false);
+});
+
+test('a declined switch does not hold up the rest of the same write (#1104)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t, { dialogResponse: 1 });
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true, markdownZoom: 1.25 });
+  const stored = await storage.readUIPrefs();
+  assert.equal(stored.shellExecutionEnabled, false);
+  assert.equal(stored.markdownZoom, 1.25);
+});
+
+test('without a person at the machine nothing is switched on (#1104)', async (t) => {
+  const { ipcMain, storage } = await setupHandlers(t, { dialogResponse: null });
+  const prefs = await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true, pythonExecutionEnabled: true });
+  assert.deepEqual(prefs.notConfirmed, ['shellExecutionEnabled', 'pythonExecutionEnabled']);
+  const stored = await storage.readUIPrefs();
+  assert.equal(stored.shellExecutionEnabled, false);
+  assert.equal(stored.pythonExecutionEnabled, false);
+});
+
+test('commitSettings asks for an execution tool in its preferences as well (#1104)', async (t) => {
+  const { ipcMain, storage, llmConfigStore, prompts } = await setupHandlers(t, { dialogResponse: 1 });
+  await seedTwoPresets(llmConfigStore);
+  await ipcMain.invoke(REQ.SETTINGS_COMMIT_SETTINGS, {
+    presets: [{ id: 'p1', providerId: 'openai', model: 'gpt-4o' }],
+    activePresetId: 'p1',
+    uiPrefs: { baseSystemPrompt: 'Sei knapp.', shellExecutionEnabled: true },
+  });
+  assert.equal(prompts.length, 1);
+  const stored = await storage.readUIPrefs();
+  assert.equal(stored.baseSystemPrompt, 'Sei knapp.');
+  assert.equal(stored.shellExecutionEnabled, false);
+});
+
+test('switching off, or on when already on, asks nothing (#1104)', async (t) => {
+  const { ipcMain, storage, prompts } = await setupHandlers(t);
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true });
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: true });
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { shellExecutionEnabled: false });
+  assert.equal(prompts.length, 1);
+  assert.equal((await storage.readUIPrefs()).shellExecutionEnabled, false);
+});
+
+test('on Windows the prompt says there is no sandbox, in the language of the interface (#1104)', async (t) => {
+  const { ipcMain, prompts } = await setupHandlers(t, { platform: 'win32', dialogResponse: 1 });
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { appLocale: 'de' });
+  await ipcMain.invoke(REQ.SETTINGS_SET_UI_PREFS, { pythonExecutionEnabled: true });
+  assert.equal(prompts[0].message, 'run_python einschalten?');
+  assert.match(prompts[0].detail, /keine Sandbox/);
+  assert.match(prompts[0].detail, /Einstellungen › Tools › Autonomie/);
+  assert.deepEqual(prompts[0].buttons, ['Einschalten', 'Abbrechen']);
+});
+
+test('the preferences store switches no execution tool on without a receipt (#1104)', async (t) => {
+  const { storage } = await setupHandlers(t);
+  const written = await storage.updateUIPrefs((prefs) => ({ ...prefs, shellExecutionEnabled: true, pythonExecutionEnabled: true }));
+  assert.equal(written.shellExecutionEnabled, false);
+  assert.equal(written.pythonExecutionEnabled, false);
+  const forged = await storage.updateUIPrefs(
+    (prefs) => ({ ...prefs, shellExecutionEnabled: true }),
+    { confirmations: { shellExecutionEnabled: {} } }
+  );
+  assert.equal(forged.shellExecutionEnabled, false);
 });

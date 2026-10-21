@@ -41,10 +41,104 @@ const { writeFileAtomic } = require('./atomic-write');
 const { createChatHistoryStore } = require('./chat-history-store');
 const { NOTICE_STORES } = require('../../shared/contracts/notices');
 const { KEY_ALWAYS_DURABLE } = require('./safe-storage-key-durability');
+const { CONFIRMATION_ACTIONS, NO_RECEIPTS } = require('../../application/permissions/user-confirmation');
+const {
+  launchBeforeFromStored,
+  mcpLaunchNeedsConfirmation,
+  mcpLaunchSubject,
+} = require('./mcp-launch-confirmation');
 
+/**
+ * The preferences that switch an execution tool on, and what switching each
+ * on has to be confirmed as (#1104). Switching one off needs nothing.
+ */
+/** @type {Readonly<{ shellExecutionEnabled: string, pythonExecutionEnabled: string }>} */
+const EXECUTION_SWITCHES = Object.freeze({
+  shellExecutionEnabled: CONFIRMATION_ACTIONS.SHELL_EXECUTION,
+  pythonExecutionEnabled: CONFIRMATION_ACTIONS.PYTHON_EXECUTION,
+});
+
+/** @type {Array<keyof typeof EXECUTION_SWITCHES>} */
+const EXECUTION_SWITCH_KEYS = ['shellExecutionEnabled', 'pythonExecutionEnabled'];
+
+/**
+ * @typedef {import('../ports/ui-prefs-store-port').UiPrefs} UiPrefs
+ *
+ * A parsed file: its shape is checked field by field by whoever reads it.
+ *
+ * @typedef {Record<string, any>} JsonObject
+ */
+
+/**
+ * The LLM configuration file. Its entries are parsed JSON whose fields the
+ * migrations and `normalizePresetEntry` settle one by one, hence the open
+ * shape.
+ *
+ * @typedef {{
+ *   version: number,
+ *   activeProvider: string,
+ *   activePresetId: string|null,
+ *   defaultPresetId: string|null,
+ *   presets: JsonObject[],
+ *   providers: JsonObject,
+ *   presetAliases?: JsonObject,
+ *   [field: string]: any,
+ * }} LlmConfig
+ */
+
+/**
+ * What happened to a store's file (#1001), as the notices are told.
+ *
+ * @typedef {{ type: 'set-aside'|'not-saved'|'saved-again', store: string, file: string, path: string, keptAs: string|null }} StoreFileEvent
+ *
+ * The active entry, or the active provider when no entry is active.
+ * @typedef {{ providerId: string, model?: string, presetId?: string, providerOptions?: Record<string, string> }} ResolvedChatTarget
+ *
+ * A provider's connection as a request is made with it: secrets decrypted,
+ * the defaults of the provider filled in. It stays in the main process.
+ * @typedef {Object} EffectiveProviderConfig
+ * @property {string} [model]
+ * @property {string} [baseUrl]
+ * @property {string} [displayName]
+ * @property {string} [apiStyle]
+ * @property {boolean} [insecureTls]
+ * @property {boolean} [supportsImages]
+ * @property {boolean} [sendTools]
+ * @property {number} [maxOutputTokens]
+ * @property {string} [apiKey]
+ * @property {string} [extraHeaders]
+ *
+ * A saved MCP server: `env` and `headers` hold each value encrypted or as plain text.
+ * @typedef {Omit<import('../../shared/contracts/mcp').McpServerConfig, 'env' | 'headers'> & {
+ *   env: Record<string, import('../../shared/contracts/mcp').McpStoredSecret>,
+ *   headers?: Record<string, import('../../shared/contracts/mcp').McpStoredSecret>,
+ * }} StoredMcpServer
+ *
+ * What went wrong with the secrets of one save, by kind (names only, never values).
+ * @typedef {{ keepMissing: string[], keepChanged: string[], emptySecrets: string[], unencryptable: string[] }} SecretProblems
+ */
+
+/**
+ * @param {object} deps
+ * @param {string} deps.userDataPath  the folder every store file lives in
+ * @param {import('../../application/ports/secret-store-port').SecretStorePort} deps.secretStore
+ * @param {() => string} [deps.getSystemLocale]  the system's locale, for the first run's interface language
+ * @param {Pick<import('../../shared/contracts/safe-storage-key').SafeStorageKeyDurability, 'whenDurable' | 'wouldWait'>} [deps.safeStorageKey]
+ * @param {typeof import('fs/promises')} deps.fs
+ * @param {typeof import('path')} deps.path
+ * @param {import('../ports/provider-catalog-port').ProviderCatalogPort} deps.providerCatalog
+ * @param {number} deps.maxChatSessions
+ * @param {number} deps.maxFolderHistory
+ * @param {string} deps.defaultProviderId
+ * @param {{ warn?: (message: string) => void, info?: (message: string) => void }|null} [deps.log]
+ * @param {string} [deps.platform]
+ * @param {((event: StoreFileEvent) => void)|null} [deps.onStoreFileEvent]
+ * @param {{ redeem: (receipt: unknown, action: string, subject?: string) => boolean }} [deps.confirmationReceipts]
+ */
 function createStorageService({
-  app,
-  safeStorage,
+  userDataPath,
+  secretStore,
+  getSystemLocale = () => '',
   /** When ciphertext may reach the disk (#1060); without it, at once. */
   safeStorageKey = KEY_ALWAYS_DURABLE,
   fs,
@@ -56,6 +150,12 @@ function createStorageService({
   log = console,
   platform = process.platform,
   onStoreFileEvent = null,
+  /**
+   * Redeems the receipts of the user-confirmation port (#980, #1104): an
+   * execution tool switched on and a local MCP command stored need one.
+   * Without it, neither is taken.
+   */
+  confirmationReceipts = NO_RECEIPTS,
 }) {
   const LLM_CONFIG_FILENAME = 'llm-config.json';
   const LEGACY_OPENAI_CONFIG_FILENAME = 'openai-config.json';
@@ -78,7 +178,9 @@ function createStorageService({
   const KNOWN_LLM_CONFIG_VERSIONS = Object.freeze([2, 3, 4, 5, LLM_CONFIG_VERSION]);
   const MCP_CONFIG_VERSION = 1;
 
+  /** @type {Map<string, Promise<unknown>>} */
   const fileLocks = new Map();
+  /** @type {Map<string, Promise<unknown>>} */
   const pendingWrites = new Map();
 
   /**
@@ -89,8 +191,15 @@ function createStorageService({
    * Files that are not a store are not reported. `store` is for a file whose
    * name says nothing — a chat's file in the history folder (#985).
    */
+  /** @type {Set<string>} */
   const filesNotSaved = new Set();
 
+  /**
+   * @param {StoreFileEvent['type']} type
+   * @param {string} filePath
+   * @param {string|null} [keptAs]
+   * @param {string} [store]
+   */
   function reportStoreFile(type, filePath, keptAs = null, store = NOTICE_STORES[path.basename(filePath)]) {
     if (typeof onStoreFileEvent !== 'function') return;
     const file = path.basename(filePath);
@@ -110,6 +219,10 @@ function createStorageService({
    * is held by the other rename, so retrying only shortens the odds. This is
    * deliberately a queue of its own rather than `withFileLock`: callers that
    * already hold the file lock for a read-modify-write write from inside it.
+   *
+   * @param {string} targetPath
+   * @param {object} data
+   * @returns {Promise<void>}
    */
   function writeJsonAtomic(targetPath, data) {
     const prev = pendingWrites.get(targetPath) || Promise.resolve();
@@ -122,6 +235,10 @@ function createStorageService({
     return task;
   }
 
+  /**
+   * @param {string} targetPath
+   * @param {object} data
+   */
   async function writeJsonAtomicNow(targetPath, data) {
     await fs.mkdir(path.dirname(targetPath), { recursive: true });
     // Flushed before the rename (#1013), and the rename retries: these files
@@ -138,6 +255,9 @@ function createStorageService({
    * Windows' transient locks — is thrown, so the caller writes nothing and the
    * file on disk stays as it was. A read for display may still fall back; the
    * harm is only in writing the defaults over what is there.
+   *
+   * @param {string} filePath
+   * @returns {Promise<string|null>}
    */
   async function readForUpdate(filePath) {
     try {
@@ -148,6 +268,10 @@ function createStorageService({
     }
   }
 
+  /**
+   * @param {string} raw
+   * @returns {any}  the parsed file, or undefined when it is not JSON
+   */
   function parseJson(raw) {
     try {
       return JSON.parse(raw);
@@ -156,6 +280,10 @@ function createStorageService({
     }
   }
 
+  /**
+   * @param {unknown} data
+   * @returns {data is JsonObject}
+   */
   function isJsonObject(data) {
     return !!data && typeof data === 'object' && !Array.isArray(data);
   }
@@ -167,6 +295,8 @@ function createStorageService({
    * installed over a newer one). The copy keeps every byte; the caller then
    * starts from its defaults as before. A move that fails throws, so the
    * caller writes nothing.
+   *
+   * @param {string} filePath
    */
   async function setAsideUnreadable(filePath) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -187,6 +317,10 @@ function createStorageService({
    * Reads a JSON file that is about to be written back, under its file lock
    * (#473, #557). `null` means "start from the defaults": the file is
    * missing, or it was not understood and has just been moved aside.
+   *
+   * @param {string} filePath
+   * @param {(data: unknown) => boolean} isUnderstood
+   * @returns {Promise<any>}  the parsed file; null when it is missing or was set aside
    */
   async function readJsonForUpdate(filePath, isUnderstood) {
     let raw;
@@ -203,6 +337,12 @@ function createStorageService({
     return null;
   }
 
+  /**
+   * @template T
+   * @param {string} targetPath
+   * @param {() => Promise<T>} fn
+   * @returns {Promise<T>}
+   */
   function withFileLock(targetPath, fn) {
     const prev = fileLocks.get(targetPath) || Promise.resolve();
     const task = prev.then(fn, fn);
@@ -224,18 +364,26 @@ function createStorageService({
     }
   }
 
+  /**
+   * @template T
+   * @param {() => Promise<T>} fn
+   * @returns {Promise<T>}
+   */
   function withChatHistoryLock(fn) {
     return withFileLock(chatHistory.storeDir(), fn);
   }
 
   function getLLMConfigPath() {
-    return path.join(app.getPath('userData'), LLM_CONFIG_FILENAME);
+    return path.join(userDataPath, LLM_CONFIG_FILENAME);
   }
 
   function getLegacyOpenAIConfigPath() {
-    return path.join(app.getPath('userData'), LEGACY_OPENAI_CONFIG_FILENAME);
+    return path.join(userDataPath, LEGACY_OPENAI_CONFIG_FILENAME);
   }
 
+  /**
+   * @returns {LlmConfig}
+   */
   function defaultLLMConfig() {
     return {
       version: LLM_CONFIG_VERSION,
@@ -249,22 +397,35 @@ function createStorageService({
     };
   }
 
+  /**
+   * @param {unknown} raw
+   */
   function normalizePresetEntry(raw) {
     return normalizePresetWire(raw, (id) => providerCatalog.getProvider(id));
   }
 
+  /**
+   * @param {unknown} preset
+   * @param {import('../ports/provider-catalog-port').ProviderCatalogEntry} provider
+   */
   function buildProviderOptionsFromPreset(preset, provider) {
     const opts = extractPresetOptions(preset, provider);
     return Object.keys(opts).length > 0 ? opts : undefined;
   }
 
-  /** Chat-Ziel aus LLM-Konfiguration (Preset-first, Fallback aktiv/Provider-Modell). */
+  /**
+   * Chat-Ziel aus LLM-Konfiguration (Preset-first, Fallback aktiv/Provider-Modell).
+   *
+   * @param {JsonObject} llmConfig
+   * @returns {ResolvedChatTarget}
+   */
   function resolveChatModelTarget(llmConfig) {
     const list = Array.isArray(llmConfig.presets) ? llmConfig.presets : [];
     const preset = list.find((p) => p && p.id === llmConfig.activePresetId);
-    if (preset && providerCatalog.getProvider(preset.providerId)) {
-      const pMeta = providerCatalog.getProvider(preset.providerId);
-      const providerOptions = buildProviderOptionsFromPreset(preset, pMeta);
+    const presetProvider = preset ? providerCatalog.getProvider(preset.providerId) : null;
+    if (preset && presetProvider) {
+      const providerOptions = buildProviderOptionsFromPreset(preset, presetProvider);
+      /** @type {ResolvedChatTarget} */
       const target = {
         providerId: preset.providerId,
         // Ohne die Eintrags-Kennung laesst sich bei `connectionPerPreset` die
@@ -272,7 +433,7 @@ function createStorageService({
         presetId: preset.id,
         model: typeof preset.model === 'string' && preset.model.trim()
           ? preset.model.trim()
-          : pMeta.defaultModel,
+          : presetProvider.defaultModel,
       };
       if (providerOptions) target.providerOptions = providerOptions;
       return target;
@@ -289,6 +450,11 @@ function createStorageService({
     };
   }
 
+  /**
+   * @param {LlmConfig} existing
+   * @param {{ persist?: boolean }} [options]
+   * @returns {Promise<LlmConfig>}
+   */
   async function migrateLLMConfigToV3(existing, { persist = true } = {}) {
     const out = { ...existing };
     out.version = 3;
@@ -304,7 +470,7 @@ function createStorageService({
       const model =
         typeof entry.model === 'string' && entry.model.trim()
           ? entry.model.trim()
-          : pMeta.defaultModel;
+          : pMeta?.defaultModel;
       const id = randomUUID();
       out.presets = [
         {
@@ -341,6 +507,10 @@ function createStorageService({
    * Ohne diesen Schritt verlieren bestehende Eintraege ihre Server-URL und
    * fallen beim naechsten Start auf den Standard zurueck — der Chat ginge
    * stillschweigend an die falsche Adresse.
+   *
+   * @param {LlmConfig} existing
+   * @param {{ persist?: boolean }} [options]
+   * @returns {Promise<LlmConfig>}
    */
   async function migrateLLMConfigToV4(existing, { persist = true } = {}) {
     const out = { ...existing };
@@ -351,6 +521,7 @@ function createStorageService({
     for (const providerId of Object.keys(providers)) {
       const provider = providerCatalog.getProvider(providerId);
       if (!provider || !hasPresetConnection(provider)) continue;
+      /** @type {Record<string, unknown>} */
       const alt = providers[providerId] || {};
       for (const preset of presets) {
         if (!preset || preset.providerId !== providerId) continue;
@@ -392,6 +563,10 @@ function createStorageService({
    *
    * Works on the raw id on purpose — the catalog cannot answer for `mlx-lm`
    * any more. Idempotent: once nothing refers to `mlx-lm`, nothing changes.
+   *
+   * @param {LlmConfig} existing
+   * @param {{ persist?: boolean }} [options]
+   * @returns {Promise<LlmConfig>}
    */
   async function migrateLLMConfigToV5(existing, { persist = true } = {}) {
     const out = { ...existing };
@@ -461,6 +636,10 @@ function createStorageService({
    *
    * Only entries of providers that declare reasoning levels are merged; for
    * the others nothing changes. Idempotent: a second run finds nothing to do.
+   *
+   * @param {LlmConfig} existing
+   * @param {{ persist?: boolean }} [options]
+   * @returns {Promise<LlmConfig>}
    */
   async function migrateLLMConfigToV6(existing, { persist = true } = {}) {
     const out = { ...existing };
@@ -510,12 +689,23 @@ function createStorageService({
     return out;
   }
 
-  /** v3 file -> current version, persisting only at the end. */
+  /**
+   * v3 file -> current version, persisting only at the end.
+   *
+   * @param {LlmConfig} existing
+   * @param {{ persist: boolean }} options
+   * @returns {Promise<LlmConfig>}
+   */
   async function migrateFromV3(existing, { persist }) {
     const v4 = await migrateLLMConfigToV4(existing, { persist: false });
     return migrateFromV4(v4, { persist });
   }
 
+  /**
+   * @param {LlmConfig} existing
+   * @param {{ persist: boolean }} options
+   * @returns {Promise<LlmConfig>}
+   */
   async function migrateFromV4(existing, { persist }) {
     const v5 = await migrateLLMConfigToV5(existing, { persist: false });
     return migrateLLMConfigToV6(v5, { persist });
@@ -525,6 +715,9 @@ function createStorageService({
    * `unreadable`: the file is there but could not be read (#473). That is not
    * a missing file, and the migrations below must not write their defaults
    * over it. With `forUpdate` such a read throws instead.
+   *
+   * @param {{ forUpdate?: boolean }} [options]
+   * @returns {Promise<{ data: LlmConfig|null, unreadable: boolean }>}
    */
   async function readLLMConfigRaw({ forUpdate = false } = {}) {
     if (forUpdate) {
@@ -542,7 +735,11 @@ function createStorageService({
     return isKnownLLMConfig(data) ? { data, unreadable: false } : { data: null, unreadable: true };
   }
 
-  /** A version `readLLMConfig` can read or migrate — nothing newer (#557). */
+  /**
+   * A version `readLLMConfig` can read or migrate — nothing newer (#557).
+   *
+   * @param {unknown} data
+   */
   function isKnownLLMConfig(data) {
     return isJsonObject(data)
       && KNOWN_LLM_CONFIG_VERSIONS.includes(data.version)
@@ -563,6 +760,9 @@ function createStorageService({
    * das Feld nicht — dann gilt einmalig der aktive Eintrag. Ohne diesen Schritt
    * wanderte der Standard mit: Das Herstellen eines alten Chats setzt
    * `activePresetId`, und der naechste neue Chat haette dessen Modell geerbt.
+   *
+   * @param {LlmConfig} config
+   * @returns {LlmConfig}
    */
   function withDefaultPresetId(config) {
     if (!config || typeof config !== 'object') return config;
@@ -570,6 +770,10 @@ function createStorageService({
     return config;
   }
 
+  /**
+   * @param {{ persistMigration?: boolean, forUpdate?: boolean }} [options]
+   * @returns {Promise<LlmConfig>}
+   */
   async function readLLMConfig({ persistMigration = true, forUpdate = false } = {}) {
     const { data: existing, unreadable } = await readLLMConfigRaw({ forUpdate });
     // Shown as defaults, but never written over the file that is there (#473).
@@ -615,7 +819,7 @@ function createStorageService({
     if (legacy && legacy.apiKeyEnc) {
       migrated.providers.openai = {
         apiKeyEnc: legacy.apiKeyEnc,
-        model: legacy.model || providerCatalog.getProvider('openai').defaultModel,
+        model: legacy.model || providerCatalog.getProvider('openai')?.defaultModel,
       };
       migrated.activeProvider = 'openai';
     }
@@ -623,10 +827,17 @@ function createStorageService({
     return withDefaultPresetId(await migrateFromV3(withV3, { persist }));
   }
 
+  /**
+   * @param {object} config
+   */
   async function writeLLMConfig(config) {
     await withFileLock(getLLMConfigPath(), () => writeJsonAtomic(getLLMConfigPath(), config));
   }
 
+  /**
+   * @param {(config: LlmConfig) => object|Promise<object>} updater
+   * @returns {Promise<object>}
+   */
   async function updateLLMConfig(updater) {
     return withFileLock(getLLMConfigPath(), async () => {
       const config = await readLLMConfig({ persistMigration: false, forUpdate: true });
@@ -636,11 +847,15 @@ function createStorageService({
     });
   }
 
+  /**
+   * @param {unknown} b64
+   * @returns {string|null}
+   */
   function decryptIfPossible(b64) {
-    if (!b64) return null;
-    if (!safeStorage.isEncryptionAvailable()) return null;
+    if (!b64 || typeof b64 !== 'string') return null;
+    if (!secretStore.isEncryptionAvailable()) return null;
     try {
-      return safeStorage.decryptString(Buffer.from(b64, 'base64'));
+      return secretStore.decryptString(Buffer.from(b64, 'base64'));
     } catch {
       return null;
     }
@@ -650,12 +865,15 @@ function createStorageService({
    * Encrypts for a file. On a fresh Windows profile that waits until the key
    * behind safeStorage is on disk itself (#1060): ciphertext written before it
    * would outlive its key if the app died in between.
+   *
+   * @param {string} plaintext
+   * @returns {Promise<string|null>}
    */
   async function encryptForDisk(plaintext) {
-    if (!plaintext || !safeStorage.isEncryptionAvailable()) return null;
+    if (!plaintext || !secretStore.isEncryptionAvailable()) return null;
     await safeStorageKey.whenDurable();
     try {
-      return safeStorage.encryptString(plaintext).toString('base64');
+      return secretStore.encryptString(plaintext).toString('base64');
     } catch {
       return null;
     }
@@ -664,9 +882,14 @@ function createStorageService({
   /**
    * Verbindung eines Eintrags (Issue #202). Klartext-Geheimnisse entstehen hier
    * und bleiben im Main-Prozess.
+   *
+   * @param {import('../ports/provider-catalog-port').ProviderCatalogEntry} provider
+   * @param {JsonObject|null} preset
+   * @returns {EffectiveProviderConfig}
    */
   function connectionConfigFromPreset(provider, preset) {
     const conn = (preset && typeof preset.connection === 'object' && preset.connection) || {};
+    /** @type {EffectiveProviderConfig} */
     const out = { model: preset?.model || provider.defaultModel };
     out.baseUrl = conn.baseUrl || provider.defaultBaseUrl || '';
     out.displayName = typeof conn.displayName === 'string' ? conn.displayName : '';
@@ -709,6 +932,7 @@ function createStorageService({
       return connectionConfigFromPreset(provider, preset || null);
     }
     const entry = (config.providers && config.providers[providerId]) || {};
+    /** @type {EffectiveProviderConfig} */
     const out = { model: entry.model || provider.defaultModel };
     if (provider.fields?.apiKey && entry.apiKeyEnc) {
       const k = decryptIfPossible(entry.apiKeyEnc);
@@ -761,7 +985,7 @@ function createStorageService({
   // Schluessel liegt wie die Provider-Keys verschluesselt (safeStorage).
 
   function getWebSearchConfigPath() {
-    return path.join(app.getPath('userData'), WEB_SEARCH_CONFIG_FILENAME);
+    return path.join(userDataPath, WEB_SEARCH_CONFIG_FILENAME);
   }
 
   async function readWebSearchConfig() {
@@ -789,6 +1013,8 @@ function createStorageService({
    * Legt den Schluessel ab oder loescht ihn (leerer String). Ohne verfuegbare
    * Verschluesselung wird nichts geschrieben — ein Klartext-Key auf der Platte
    * waere schlechter als kein Key.
+   *
+   * @param {unknown} plaintext
    */
   async function setWebSearchApiKey(plaintext) {
     const value = typeof plaintext === 'string' ? plaintext.trim() : '';
@@ -832,10 +1058,15 @@ function createStorageService({
   // gedacht, der die Prozesse startet.
 
   function getMcpConfigPath() {
-    return path.join(app.getPath('userData'), MCP_CONFIG_FILENAME);
+    return path.join(userDataPath, MCP_CONFIG_FILENAME);
   }
 
-  /** With `forUpdate`, a file that cannot be read throws instead of looking empty (#473). */
+  /**
+   * With `forUpdate`, a file that cannot be read throws instead of looking empty (#473).
+   *
+   * @param {{ forUpdate?: boolean }} [options]
+   * @returns {Promise<JsonObject & { servers: JsonObject[] }>}
+   */
   async function readMcpConfigRaw({ forUpdate = false } = {}) {
     if (forUpdate) {
       return (await readJsonForUpdate(getMcpConfigPath(), isKnownMcpConfig)) || { servers: [] };
@@ -850,48 +1081,73 @@ function createStorageService({
     return isKnownMcpConfig(data) ? data : { servers: [] };
   }
 
+  /**
+   * @param {unknown} data
+   */
   function isKnownMcpConfig(data) {
     return isJsonObject(data)
       && Array.isArray(data.servers)
       && !(typeof data.version === 'number' && data.version > MCP_CONFIG_VERSION);
   }
 
+  /**
+   * @param {{ transport?: string }} server
+   */
   function isRemoteMcpServer(server) {
     return server.transport === MCP_TRANSPORTS.HTTP;
   }
 
-  /** Gespeicherte Eintraege in geprueftem Zustand, env und headers in gespeicherter Form. */
+  /**
+   * Gespeicherte Eintraege in geprueftem Zustand, env und headers in gespeicherter Form.
+   *
+   * @param {{ forUpdate?: boolean }} [options]
+   * @returns {Promise<StoredMcpServer[]>}
+   */
   async function readMcpStoredServers({ forUpdate = false } = {}) {
     const data = await readMcpConfigRaw({ forUpdate });
+    /** @type {StoredMcpServer[]} */
     const out = [];
+    /** @type {Set<string>} */
     const seen = new Set();
     for (const entry of data.servers) {
       const { ok, value } = validateMcpServerConfig({ ...entry, env: {}, headers: {} });
-      if (!ok || seen.has(value.id)) continue;
+      if (!ok || !value || seen.has(value.id)) continue;
       seen.add(value.id);
+      // The validated form carries plain-text maps; the stored ones replace them.
+      const { env: _plainEnv, headers: _plainHeaders, ...base } = value;
       out.push(isRemoteMcpServer(value)
-        ? { ...value, headers: normalizeStoredMcpHeaders(entry?.headers) }
-        : { ...value, env: normalizeStoredMcpEnv(entry?.env) });
+        ? { ...base, env: {}, headers: normalizeStoredMcpHeaders(entry?.headers) }
+        : { ...base, env: normalizeStoredMcpEnv(entry?.env) });
     }
     return out;
   }
 
-  /** Anzeigeform fuer die Oberflaeche — ohne jedes Geheimnis. */
+  /**
+   * Anzeigeform fuer die Oberflaeche — ohne jedes Geheimnis.
+   *
+   * @returns {Promise<import('../../shared/contracts/mcp').McpServerView[]>}
+   */
   async function readMcpServers() {
-    return (await readMcpStoredServers()).map((server) => ({
-      ...server,
-      env: maskStoredMcpEnv(server.env),
-      ...(isRemoteMcpServer(server) ? { headers: maskStoredMcpHeaders(server.headers) } : {}),
+    return (await readMcpStoredServers()).map(({ env, headers, ...rest }) => ({
+      ...rest,
+      env: maskStoredMcpEnv(env),
+      ...(isRemoteMcpServer(rest) ? { headers: maskStoredMcpHeaders(headers) } : {}),
     }));
   }
 
-  /** A stored map in flat runtime form; a value that cannot be decrypted is left out. */
+  /**
+   * A stored map in flat runtime form; a value that cannot be decrypted is left out.
+   *
+   * @param {Record<string, import('../../shared/contracts/mcp').McpStoredSecret>|undefined} stored
+   * @returns {Record<string, string>}
+   */
   function decryptStoredMap(stored) {
+    /** @type {Record<string, string>} */
     const out = {};
     for (const [key, entry] of Object.entries(stored || {})) {
-      if (typeof entry.value === 'string') out[key] = entry.value;
+      if ('value' in entry && typeof entry.value === 'string') out[key] = entry.value;
       else {
-        const plain = decryptIfPossible(entry.enc);
+        const plain = decryptIfPossible('enc' in entry ? entry.enc : undefined);
         if (plain !== null) out[key] = plain;
       }
     }
@@ -903,12 +1159,14 @@ function createStorageService({
    * der sich nicht entschluesseln laesst (fremder safeStorage-Schluessel nach
    * Nutzerwechsel), faellt weg statt den ganzen Server zu verhindern — der
    * Server startet dann ohne ihn und scheitert sichtbar am eigenen Fehler.
+   *
+   * @returns {Promise<import('../../shared/contracts/mcp').McpServerConfig[]>}
    */
   async function getMcpServersForRuntime() {
-    return (await readMcpStoredServers()).map((server) => ({
-      ...server,
-      env: decryptStoredMap(server.env),
-      ...(isRemoteMcpServer(server) ? { headers: decryptStoredMap(server.headers) } : {}),
+    return (await readMcpStoredServers()).map(({ env, headers, ...rest }) => ({
+      ...rest,
+      env: decryptStoredMap(env),
+      ...(isRemoteMcpServer(rest) ? { headers: decryptStoredMap(headers) } : {}),
     }));
   }
 
@@ -918,10 +1176,11 @@ function createStorageService({
    * noch in einem stderr-Auszug auftaucht. Wird nie protokolliert.
    */
   async function getMcpSecretValues() {
+    /** @type {string[]} */
     const out = [];
     for (const server of await readMcpStoredServers()) {
       for (const entry of [...Object.values(server.env), ...Object.values(server.headers || {})]) {
-        if (typeof entry.enc !== 'string') continue;
+        if (!('enc' in entry) || typeof entry.enc !== 'string') continue;
         const plain = decryptIfPossible(entry.enc);
         if (plain) out.push(plain);
       }
@@ -933,12 +1192,17 @@ function createStorageService({
    * Stores the entries of one secret map — `env` or `headers` — against what
    * was stored before. Collects the refusals by kind instead of throwing, so
    * one save names every problem at once.
+   *
+   * @param {import('../../shared/contracts/mcp').McpSecretInputEntry[]} entries
+   * @param {Record<string, import('../../shared/contracts/mcp').McpStoredSecret>|undefined} before
+   * @param {SecretProblems} problems
    */
   async function storeSecretEntries(entries, before, problems) {
+    /** @type {Record<string, import('../../shared/contracts/mcp').McpStoredSecret>} */
     const stored = {};
     for (const entry of entries) {
       const previous = before?.[entry.key];
-      const storedSecret = typeof previous?.enc === 'string';
+      const storedSecret = previous !== undefined && 'enc' in previous && typeof previous.enc === 'string';
       if (entry.keep) {
         if (!previous) problems.keepMissing.push(entry.key);
         else if (storedSecret !== entry.secret) problems.keepChanged.push(entry.key);
@@ -946,7 +1210,7 @@ function createStorageService({
         continue;
       }
       if (!entry.secret) {
-        stored[entry.key] = { value: entry.value };
+        stored[entry.key] = { value: entry.value ?? '' };
         continue;
       }
       if (!entry.value) {
@@ -964,11 +1228,16 @@ function createStorageService({
     return stored;
   }
 
+  /** @returns {SecretProblems} */
   function secretProblems() {
     return { keepMissing: [], keepChanged: [], emptySecrets: [], unencryptable: [] };
   }
 
-  /** Where a server's messages go: a process, or one address (#341). */
+  /**
+   * Where a server's messages go: a process, or one address (#341).
+   *
+   * @param {{ transport?: string, url?: string }} server
+   */
   function mcpEndpointOf(server) {
     return isRemoteMcpServer(server) ? `${server.transport} ${server.url}` : server.transport;
   }
@@ -978,19 +1247,23 @@ function createStorageService({
    * a form that only knew stdio would otherwise save a remote server back as
    * a local one. Its address and headers stay with it when they are not sent
    * either.
+   *
+   * @param {JsonObject|null|undefined} input
+   * @param {StoredMcpServer|undefined} previous
    */
   function withStoredTransport(input, previous) {
     if (!previous || !input || typeof input !== 'object') return input;
     if (input.transport !== undefined && input.transport !== null) return input;
+    /** @type {JsonObject} */
     const out = { ...input, transport: previous.transport };
     if (isRemoteMcpServer(previous)) {
       if (out.url === undefined) out.url = previous.url;
       if (out.headers === undefined) {
         out.headers = {};
         for (const [key, entry] of Object.entries(previous.headers || {})) {
-          out.headers[key] = typeof entry.enc === 'string'
+          out.headers[key] = 'enc' in entry && typeof entry.enc === 'string'
             ? { secret: true, keep: true }
-            : { secret: false, value: entry.value };
+            : { secret: false, value: 'value' in entry ? entry.value : undefined };
         }
       }
     }
@@ -1014,8 +1287,17 @@ function createStorageService({
    * the server off and forgets its tool catalogue (#341, concept §11): what
    * the user accepted from one endpoint never carries over to another. It
    * comes back on only after the user switched it on again.
+   *
+   * A local server whose command is new or changed — the command, its
+   * arguments, its folder or its environment — is stored only with a
+   * receipt of the user-confirmation port bound to exactly that launch
+   * (#1104): it would run with the user's rights, outside the sandbox and
+   * without a card, the moment it is switched on or tested.
+   *
+   * @param {JsonObject} input
+   * @param {{ confirmation?: object|null }} [options]
    */
-  async function saveMcpServer(input) {
+  async function saveMcpServer(input, { confirmation = null } = {}) {
     const precheck = validateMcpServerInput(input);
     // Only an input without a transport may still be completed from what is
     // stored under its identifier; anything else is refused as it is.
@@ -1030,12 +1312,16 @@ function createStorageService({
       const { ok, value, env, headers, create, errors } = validateMcpServerInput(
         input?.create === true ? input : withStoredTransport(input, stored),
       );
-      if (!ok) return { ok: false, errors };
+      if (!ok || !value) return { ok: false, errors };
       const previous = servers.find((server) => server.id === value.id);
       // A new server must not take over an existing one — with its token and
       // its switch (CR-B14-03). Decided here, under the lock, not by the form.
       if (create && previous) {
         return { ok: false, errors: [createMessage('mcp.error.idExists', { id: value.id })] };
+      }
+      if (mcpLaunchNeedsConfirmation(value, env, launchBeforeFromStored(previous ?? null))
+        && confirmationReceipts.redeem(confirmation, CONFIRMATION_ACTIONS.MCP_LAUNCH, mcpLaunchSubject(value, env)) !== true) {
+        return { ok: false, notConfirmed: true, errors: [createMessage('mcp.error.launchNotConfirmed')] };
       }
 
       const envProblems = secretProblems();
@@ -1044,9 +1330,10 @@ function createStorageService({
       const storedHeaders = await storeSecretEntries(headers, previous?.headers, headerProblems);
 
       // Die Meldungen nennen die Schluessel, niemals die Werte.
-      const names = (list) => ({ names: list.join(', ') });
+      const names = (/** @type {string[]} */ list) => ({ names: list.join(', ') });
+      /** @type {import('../../shared/contracts/message').Message[]} */
       const refusals = [];
-      const refuse = (list, key) => { if (list.length > 0) refusals.push(createMessage(key, names(list))); };
+      const refuse = (/** @type {string[]} */ list, /** @type {string} */ key) => { if (list.length > 0) refusals.push(createMessage(key, names(list))); };
       refuse(envProblems.keepMissing, 'mcp.error.envKeepMissing');
       refuse(headerProblems.keepMissing, 'mcp.error.headerKeepMissing');
       refuse(envProblems.keepChanged, 'mcp.error.envKeepChanged');
@@ -1057,15 +1344,17 @@ function createStorageService({
       refuse([...envProblems.unencryptable, ...headerProblems.unencryptable], 'mcp.error.noSecureStorage');
       if (refusals.length > 0) return { ok: false, errors: refusals };
 
-      const endpointChanged = Boolean(previous) && mcpEndpointOf(previous) !== mcpEndpointOf(value);
+      const endpointChanged = previous !== undefined && mcpEndpointOf(previous) !== mcpEndpointOf(value);
       // Der Tool-Katalog gehoert dem Server, nicht dem Formular: schickt die
       // Oberflaeche keinen mit (sie kennt ihn nur bei laufender Verbindung),
       // bleibt der gespeicherte stehen — unless it belongs to another endpoint.
       const knownTools = endpointChanged
         ? []
         : value.knownTools.length > 0 ? value.knownTools : previous?.knownTools || [];
+      // The plain-text `env` and `headers` of the validated form give way to the stored ones.
+      const { env: _plainEnv, headers: _plainHeaders, ...base } = value;
       const entry = {
-        ...value,
+        ...base,
         enabled: endpointChanged ? false : value.enabled,
         knownTools,
         env: storedEnv,
@@ -1083,6 +1372,9 @@ function createStorageService({
    * Schreibt den zuletzt gemeldeten Tool-Katalog eines Servers fort. Bewusst
    * getrennt von saveMcpServer: hier kommt kein Formular her, sondern eine
    * geglueckte Verbindung — env und alle uebrigen Felder bleiben unberuehrt.
+   *
+   * @param {unknown} id
+   * @param {unknown} toolNames
    */
   async function updateMcpServerKnownTools(id, toolNames) {
     const wanted = typeof id === 'string' ? id.trim().toLowerCase() : '';
@@ -1122,6 +1414,9 @@ function createStorageService({
     });
   }
 
+  /**
+   * @param {unknown} id
+   */
   async function deleteMcpServer(id) {
     const wanted = typeof id === 'string' ? id.trim().toLowerCase() : '';
     if (!wanted) return { ok: false, errors: [createMessage('mcp.error.idMissingForDelete')] };
@@ -1137,9 +1432,12 @@ function createStorageService({
   }
 
   function getLastFolderConfigPath() {
-    return path.join(app.getPath('userData'), LAST_FOLDER_FILENAME);
+    return path.join(userDataPath, LAST_FOLDER_FILENAME);
   }
 
+  /**
+   * @returns {Promise<string|null>}
+   */
   async function readLastFolderRaw() {
     try {
       const raw = await fs.readFile(getLastFolderConfigPath(), 'utf8');
@@ -1175,16 +1473,22 @@ function createStorageService({
     }
   }
 
+  /**
+   * @param {unknown} raw
+   */
   function clampSidebarWidthLocal(raw) {
     return clampSidebarWidth(raw);
   }
 
+  /**
+   * @param {unknown} raw
+   */
   function clampChatPanelWidthLocal(raw) {
     return clampChatPanelWidth(raw);
   }
 
   function getUIPrefsPath() {
-    return path.join(app.getPath('userData'), UI_PREFS_FILENAME);
+    return path.join(userDataPath, UI_PREFS_FILENAME);
   }
 
   /**
@@ -1215,28 +1519,48 @@ function createStorageService({
   function firstRunUiPrefs() {
     let systemLocale = '';
     try {
-      systemLocale = app.getLocale?.() || '';
+      systemLocale = getSystemLocale() || '';
     } catch {
       // Before `ready` there is no locale to read; English it is.
     }
     return normalizeUiPrefs({ appLocale: localeFromSystem(systemLocale) });
   }
 
+  /**
+   * @param {string} raw
+   * @returns {UiPrefs}
+   */
   function uiPrefsFromFile(raw) {
     const data = parseJson(raw);
     return isJsonObject(data) ? uiPrefsFromData(data) : firstRunUiPrefs();
   }
 
+  /**
+   * @param {JsonObject} data
+   * @returns {UiPrefs}
+   */
   function uiPrefsFromData(data) {
     if (!('appLocale' in data)) return normalizeUiPrefs({ ...data, appLocale: APP_LOCALES.DE });
     return normalizeUiPrefs(data);
   }
 
+  /**
+   * @param {object} data
+   */
   async function writeUIPrefs(data) {
     await withFileLock(getUIPrefsPath(), () => writeJsonAtomic(getUIPrefsPath(), data));
   }
 
-  async function updateUIPrefs(updater) {
+  /**
+   * `confirmations` carries the receipts for execution tools switched on
+   * (#1104), keyed by preference. One switched on without a receipt for it
+   * stays off; the rest of the update is written.
+   *
+   * @param {(prefs: UiPrefs) => UiPrefs|Promise<UiPrefs>} updater
+   * @param {{ confirmations?: Partial<Record<keyof typeof EXECUTION_SWITCHES, unknown>> }} [options]
+   * @returns {Promise<UiPrefs>}
+   */
+  async function updateUIPrefs(updater, { confirmations = {} } = {}) {
     return withFileLock(getUIPrefsPath(), async () => {
       // Not `readUIPrefs`: its defaults for an unreadable file would be
       // written back, and every other preference with them (#473). A file
@@ -1245,11 +1569,20 @@ function createStorageService({
       const current = data === null ? firstRunUiPrefs() : uiPrefsFromData(data);
       const updated = await updater({ ...current });
       const normalized = normalizeUiPrefs(updated);
+      for (const key of EXECUTION_SWITCH_KEYS) {
+        const action = EXECUTION_SWITCHES[key];
+        if (normalized[key] !== true || current[key] === true) continue;
+        if (confirmationReceipts.redeem(confirmations?.[key], action, '') !== true) normalized[key] = false;
+      }
       await writeJsonAtomic(getUIPrefsPath(), normalized);
       return normalized;
     });
   }
 
+  /**
+   * @param {unknown} raw
+   * @returns {string|null}
+   */
   function normalizeWorkspaceRoot(raw) {
     if (typeof raw !== 'string') return null;
     const trimmed = raw.trim();
@@ -1257,18 +1590,31 @@ function createStorageService({
     return path.resolve(trimmed);
   }
 
+  /**
+   * @param {string|null} workspaceRoot
+   */
   function workspaceBucketKey(workspaceRoot) {
     return workspaceRoot ? workspaceRoot : NO_WORKSPACE_KEY;
   }
 
+  /**
+   * @param {unknown} raw
+   */
   function sanitizeChatMessagesForStoreLocal(raw) {
     return sanitizeChatMessagesForStore(raw);
   }
 
+  /**
+   * @param {unknown} raw
+   */
   function normalizeTokenUsageForStoreLocal(raw) {
     return normalizeTokenUsageForStore(raw);
   }
 
+  /**
+   * @param {import('./chat-history-normalization').SessionRowInput|null|undefined} s
+   * @param {{ existingTitle?: string, requireMessages?: boolean }} [options]
+   */
   function normalizeSessionForStore(s, options = {}) {
     return buildNormalizedSessionForStore(s, { normalizeWorkspaceRoot, ...options });
   }
@@ -1277,9 +1623,9 @@ function createStorageService({
   const chatHistory = createChatHistoryStore({
     fs,
     path,
-    safeStorage,
+    secretStore,
     safeStorageKey,
-    userDataPath: () => app.getPath('userData'),
+    userDataPath: () => userDataPath,
     writeJsonAtomic,
     encryptForDisk,
     decryptIfPossible,
@@ -1291,6 +1637,9 @@ function createStorageService({
     platform,
   });
 
+  /**
+   * @param {unknown} folderPath
+   */
   async function persistLastFolder(folderPath) {
     const raw = typeof folderPath === 'string' ? folderPath.trim() : '';
     if (!raw) return;
@@ -1306,10 +1655,15 @@ function createStorageService({
   }
 
   function getFolderHistoryPath() {
-    return path.join(app.getPath('userData'), FOLDER_HISTORY_FILENAME);
+    return path.join(userDataPath, FOLDER_HISTORY_FILENAME);
   }
 
-  /** With `forUpdate`, a file that cannot be read throws instead of looking empty (#473). */
+  /**
+   * With `forUpdate`, a file that cannot be read throws instead of looking empty (#473).
+   *
+   * @param {{ forUpdate?: boolean }} [options]
+   * @returns {Promise<string[]>}
+   */
   async function readFolderHistoryRaw({ forUpdate = false } = {}) {
     let data;
     if (forUpdate) {
@@ -1322,13 +1676,19 @@ function createStorageService({
       }
     }
     if (!isKnownFolderHistory(data)) return [];
-    return data.paths.filter((p) => typeof p === 'string' && p.trim());
+    return data.paths.filter((/** @type {unknown} */ p) => typeof p === 'string' && p.trim());
   }
 
+  /**
+   * @param {unknown} data
+   */
   function isKnownFolderHistory(data) {
     return isJsonObject(data) && Array.isArray(data.paths);
   }
 
+  /**
+   * @param {string[]} paths
+   */
   async function writeFolderHistory(paths) {
     await writeJsonAtomic(getFolderHistoryPath(), { paths });
   }
@@ -1337,6 +1697,9 @@ function createStorageService({
    * Read, change and write the history under its file lock (#562): two
    * folders opened while the list is being validated must not cost an entry.
    * `change` returns the new list, or `null` to leave the file alone.
+   *
+   * @param {(list: string[]) => string[]|null} change
+   * @returns {Promise<string[]|null>}
    */
   function updateFolderHistory(change) {
     return withFileLock(getFolderHistoryPath(), async () => {
@@ -1346,6 +1709,9 @@ function createStorageService({
     });
   }
 
+  /**
+   * @param {string} resolvedPath
+   */
   async function addFolderToHistory(resolvedPath) {
     try {
       await updateFolderHistory((list) => {
@@ -1364,6 +1730,8 @@ function createStorageService({
    * Entfernt einen Eintrag bewusst aus dem Verlauf (Issue #57). Fasst weder
    * den Ordner auf der Platte noch last-folder.json an. Liefert true, wenn
    * tatsächlich ein Eintrag entfernt wurde.
+   *
+   * @param {unknown} folderPath
    */
   async function removeFolderFromHistory(folderPath) {
     const raw = typeof folderPath === 'string' ? folderPath.trim() : '';
@@ -1410,6 +1778,10 @@ function createStorageService({
     return out;
   }
 
+  /**
+   * @param {{ workspaceRoot?: string|null }} sessionRow
+   * @param {string|null|undefined} workspaceRoot
+   */
   function sessionMatchesWorkspace(sessionRow, workspaceRoot) {
     const sessionWs = sessionRow.workspaceRoot || null;
     return sessionWs === (workspaceRoot || null);

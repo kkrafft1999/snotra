@@ -43,9 +43,13 @@ class RemoteRelayError extends Error {
   }
 }
 
-/** The reason for an HTTP status; the status decides, a body cannot claim another. */
+/**
+ * The reason for an HTTP status; the status decides, a body cannot claim another.
+ * @param {number} status
+ */
 function reasonForStatus(status) {
-  if (BY_STATUS.has(status)) return BY_STATUS.get(status);
+  const known = BY_STATUS.get(status);
+  if (known !== undefined) return known;
   return status >= 500 ? RELAY_REASONS.UNAVAILABLE : RELAY_REASONS.INVALID_RESPONSE;
 }
 
@@ -53,6 +57,8 @@ function reasonForStatus(status) {
  * Whatever a call threw, as a relay error. Anything that is not one already —
  * a `fetch` failure, an abort — becomes `network`, and its message is
  * dropped: undici quotes the URL it could not reach.
+ *
+ * @param {unknown} error
  */
 function toRelayError(error) {
   return error instanceof RemoteRelayError ? error : new RemoteRelayError(RELAY_REASONS.NETWORK);

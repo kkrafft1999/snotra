@@ -8,10 +8,12 @@ const assert = require('node:assert/strict');
 const nodePath = require('path');
 const { pathToFileURL } = require('url');
 
-const { createWorkspaceToolRegistry } = require('../src/main/tools/workspace-tool-registry');
-const { createToolCallPlanner } = require('../src/main/tools/tool-call-planner');
-const { summarizeToolCall } = require('../src/shared/presentation/tool-display');
-const { toolCategory, TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
+const { createWorkspaceToolRegistry } = require('../src/application/tools/workspace-tool-registry');
+const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
+const { summarize: summarizeToolCall } = require('./helpers/tool-descriptors');
+const { TOOL_CATEGORIES } = require('../src/shared/contracts/tool-categories');
+const { normalizeToolPresentation } = require('../src/shared/contracts/tool-presentation');
+const { descriptorOf } = require('./helpers/tool-descriptors');
 
 const loadApprovalView = () =>
   import(pathToFileURL(nodePath.join(__dirname, '..', 'src', 'renderer', 'utils', 'tool-approval-view.js')).href);
@@ -260,6 +262,7 @@ test('die Karte nennt Shell und Arbeitsordner und warnt vor der fehlenden Grenze
     mode: 'smart',
     sessionAllowed: false,
     preview: { kind: 'shell', text: 'npm run build', truncated: false, masked: false, shell: 'zsh', shellLogin: true, cwd: '/tmp/projekt/app' },
+    presentation: normalizeToolPresentation(descriptorOf('shell_execute')),
   });
 
   assert.equal(view.title, 'Confirm execution');
@@ -380,6 +383,7 @@ function executeCardDto(tool, isolation) {
     mode: 'smart',
     sessionAllowed: false,
     preview: { ...preview, ...(isolation ? { isolation } : {}) },
+    presentation: normalizeToolPresentation(descriptorOf(tool)),
   };
 }
 
@@ -430,7 +434,7 @@ test('without a sandbox wired the card stays as it was (#329)', async () => {
 });
 
 test('shell_execute has the category "exec" and a display line', () => {
-  assert.equal(toolCategory('shell_execute'), TOOL_CATEGORIES.EXEC);
+  assert.equal(descriptorOf('shell_execute').category, TOOL_CATEGORIES.EXEC);
   assert.equal(
     summarizeToolCall('shell_execute', { command: 'git status --short' }, 'start'),
     'Running command “git status --short” …',

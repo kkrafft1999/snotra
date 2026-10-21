@@ -18,6 +18,7 @@ const {
 } = require('../src/main/manual-window');
 const { MANUAL_URL, RENDERER_URL, isManualRendererUrl, isTrustedRendererUrl } = require('../src/main/permissions');
 const { MANUAL_REQUEST_CHANNELS: REQ, MANUAL_PUSH_CHANNELS: PUSH } = require('../src/shared/manual-channels');
+const { removeTempDirSync } = require('./helpers/temp-dir');
 
 function makeBundle() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'snotra-manual-svc-'));
@@ -54,7 +55,7 @@ test('the service reads pages by slug and screenshots by motif, nothing else', (
     assert.throws(() => manual.getScreenshot('../secret', 'de', 'dark'), /Invalid screenshot motif/);
     assert.throws(() => manual.getScreenshot('overview', 'en', 'dark'), /ENOENT/);
   } finally {
-    fs.rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   }
 });
 

@@ -19,6 +19,13 @@ const MAX_CLIPBOARD_TEXT_BYTES = 1024 * 1024;
 // One predicate with the renderer's sanitizer (CR-B11-09), see the contract.
 const { isOpenableUrl } = require('../../shared/contracts/links');
 
+/**
+ * @param {object} deps
+ * @param {import('./trusted-sender').GuardedIpcMain} deps.ipcMain
+ * @param {Pick<import('electron').Shell, 'openExternal'>} deps.shell
+ * @param {Pick<import('electron').Clipboard, 'writeText'>|null} [deps.clipboard]
+ * @param {Record<string, string>} deps.REQ
+ */
 function registerShellHandlers({ ipcMain, shell, clipboard = null, REQ }) {
   ipcMain.handle(REQ.SHELL_OPEN_EXTERNAL, async (_event, url) => {
     if (!isOpenableUrl(url)) {

@@ -27,6 +27,8 @@ const {
   PERSISTENT_ALLOW_CLASSES,
   TOOL_RISK_CLASS_ORDER,
   COMMAND_RULE_UNAVAILABLE_REASONS,
+  TOOL_APPROVAL_VERBS,
+  TOOL_APPROVAL_WARNINGS,
   isCommandRule,
   isToolApprovalRequestDto,
   normalizeRulePathPattern,
@@ -68,7 +70,7 @@ const RISK_CLASS_KEYS = Object.freeze({
  * so that it can still be seen and left.
  */
 export function toolModeOptions(state = null, current = state?.mode) {
-  const autoBlocked = state?.encryptionAvailable === false && current !== TOOL_PERMISSION_MODES.AUTO;
+  const autoBlocked = state?.platformCapabilities?.secureStorage === false && current !== TOOL_PERMISSION_MODES.AUTO;
   return MODE_ORDER.map((value) => {
     const unavailable = autoBlocked && value === TOOL_PERMISSION_MODES.AUTO;
     return {
@@ -198,16 +200,19 @@ function shellVerb(dto) {
 export function approvalHeadline(dto) {
   const classes = Array.isArray(dto?.riskClasses) ? dto.riskClasses : [];
   const targets = Array.isArray(dto?.targets) ? dto.targets : [];
+  // The verb the tool's descriptor asks for (#1008), where the risk class
+  // alone would say it wrong.
+  const toolVerb = dto?.presentation?.verb;
   let verb = t('approval.verb.read');
   // The image tool sends a prompt and writes a file; "send to an external
   // service assets/header.png" would read as if the file left (#85). What it
   // does to the file says it better — unless replacing it has no way back.
-  if (dto?.tool === 'generate_image' && !hasClass(classes, TOOL_RISK_CLASSES.DELETE)) {
+  if (toolVerb === TOOL_APPROVAL_VERBS.IMAGE && !hasClass(classes, TOOL_RISK_CLASSES.DELETE)) {
     verb = targets.some((entry) => entry.exists === true)
       ? t('approval.verb.generateImage.replace')
       : t('approval.verb.generateImage');
   } else if (hasClass(classes, TOOL_RISK_CLASSES.EXTERNAL)) verb = t('approval.verb.external');
-  else if (dto?.tool === 'shell_execute') verb = shellVerb(dto);
+  else if (toolVerb === TOOL_APPROVAL_VERBS.SHELL) verb = shellVerb(dto);
   else if (hasClass(classes, TOOL_RISK_CLASSES.EXECUTE)) verb = t('approval.verb.execute');
   else if (hasClass(classes, TOOL_RISK_CLASSES.DELETE)) verb = t('approval.verb.delete');
   else if (hasClass(classes, TOOL_RISK_CLASSES.WRITE)) {
@@ -293,8 +298,8 @@ const ALWAYS_UNAVAILABLE_KEYS = Object.freeze({
 });
 
 /**
- * Whether the card is one that can remember its command (#121) — a
- * `shell_execute` card before the run. It then offers "always allow" where
+ * Whether the card is one that can remember its command (#121) — a shell
+ * command's card before the run. It then offers "always allow" where
  * other cards offer "for this session", which a command never gets.
  */
 export function offersAlways(dto) {
@@ -370,8 +375,9 @@ export function describeAutoIsolationWarning(state) {
   if (state?.mode !== TOOL_PERMISSION_MODES.AUTO) return '';
   const isolation = state?.executionIsolation;
   if (!isolation || isolation.unisolated !== true) return '';
+  // Main lists the execution tools that are on (#1008); their names are shown.
   const tools = (Array.isArray(isolation.tools) ? isolation.tools : [])
-    .filter((entry) => entry === 'shell_execute' || entry === 'run_python');
+    .filter((entry) => typeof entry === 'string' && entry);
   if (tools.length === 0) return '';
   return t(isolation.reason === 'workspace' ? 'chat.toolMode.unisolated.workspace' : 'chat.toolMode.unisolated.system', {
     tools: tools.join(t('chat.toolMode.unisolated.and')),
@@ -457,7 +463,7 @@ export function describeWorkspaceDefault(state) {
   view.label = splitAtFolder(t('chat.toolMode.remember.label', { mode: modeLabel(mode), folder: FOLDER_MARK }), folder);
   if (view.checked) {
     view.hint = t('chat.toolMode.remember.hint.checked', { mode: modeLabel(SMART) });
-  } else if (mode === TOOL_PERMISSION_MODES.AUTO && state?.encryptionAvailable === false) {
+  } else if (mode === TOOL_PERMISSION_MODES.AUTO && state?.platformCapabilities?.secureStorage === false) {
     view.disabled = true;
     view.hint = t('chat.toolMode.remember.hint.needsEncryption');
   } else if (workspaceMode !== SMART) {
@@ -471,21 +477,24 @@ export function describeWorkspaceDefault(state) {
 /** Warning when overwriting (concept §6): with or without a way back. */
 export function overwriteWarning(dto) {
   const classes = Array.isArray(dto?.riskClasses) ? dto.riskClasses : [];
-  if (dto?.tool === 'shell_execute' || dto?.tool === 'run_python') {
+  // Which warning the tool carries comes from its descriptor (#1008).
+  const warning = dto?.presentation?.warning;
+  if (warning === TOOL_APPROVAL_WARNINGS.SHELL || warning === TOOL_APPROVAL_WARNINGS.PYTHON) {
     const isolation = dto?.preview?.isolation;
     // Isolated: the boundary exists, and the pill and the note say so (#329).
     if (isolation?.isolated === true) return '';
     // No workspace boundary: that belongs on the card, not only in the
     // settings (issue #102) — and if a sandbox was expected, why it is
-    // missing (#329).
-    const base = t(dto.tool === 'shell_execute' ? 'approval.warning.shell' : 'approval.warning.python');
+    // missing (#329). A program is only warned about then.
+    const shell = warning === TOOL_APPROVAL_WARNINGS.SHELL;
+    const base = t(shell ? 'approval.warning.shell' : 'approval.warning.python');
     if (isolation && isolation.isolated === false) return `${describeIsolation(isolation).reason} ${base}`;
-    return dto.tool === 'shell_execute' ? base : '';
+    return shell ? base : '';
   }
   const targets = Array.isArray(dto?.targets) ? dto.targets : [];
   const existing = targets.filter((entry) => entry.exists === true && (entry.kind === 'file' || !entry.kind));
   if (hasClass(classes, TOOL_RISK_CLASSES.DELETE)) return t('approval.warning.delete');
-  if (dto?.tool === 'write_file_text' && existing.length > 0) {
+  if (warning === TOOL_APPROVAL_WARNINGS.OVERWRITE && existing.length > 0) {
     return existing.some((entry) => entry.recovery === 'trash')
       ? t('approval.warning.overwriteTrash')
       : t('approval.warning.overwrite');

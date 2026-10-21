@@ -21,12 +21,24 @@
  * Abhaengigkeit auf den Shell-Dienst.
  */
 
-const { PYTHON_EXECUTION_LIMITS } = require('../../application/ports/code-execution-port');
+const { PYTHON_EXECUTION_LIMITS } = require('../../shared/contracts/code-execution');
+
+/** @typedef {import('../../application/ports/code-execution-port').CodeDescription} CodeDescription */
+/** @typedef {import('../../application/ports/code-execution-port').CodeExecutionRequest} CodeExecutionRequest */
+/** @typedef {import('../../application/ports/code-execution-port').CodeExecutionResult} CodeExecutionResult */
 const { createChildRunner } = require('./child-run');
+const { pythonJobArgs } = require('./windows-job');
 const { planSpawn } = require('./sandboxed-spawn');
 const { createMessage } = require('../../shared/contracts/message');
 
-/** Kandidaten in der Reihenfolge, in der wir sie ausprobieren. */
+/** @typedef {import('./sandboxed-spawn').SandboxForSpawn} SandboxForSpawn */
+
+/**
+ * Kandidaten in der Reihenfolge, in der wir sie ausprobieren.
+ *
+ * @param {string} platform
+ * @returns {Array<{ command: string, args: string[] }>}
+ */
 function interpreterCandidates(platform) {
   if (platform === 'win32') {
     return [
@@ -41,6 +53,10 @@ function interpreterCandidates(platform) {
   ];
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {number}
+ */
 function clampTimeout(raw) {
   const value = Number(raw);
   if (!Number.isFinite(value)) return PYTHON_EXECUTION_LIMITS.DEFAULT_TIMEOUT_MS;
@@ -50,8 +66,13 @@ function clampTimeout(raw) {
   );
 }
 
+/**
+ * @param {unknown} raw
+ * @returns {string[]}
+ */
 function normalizeArgv(raw) {
   if (!Array.isArray(raw)) return [];
+  /** @type {string[]} */
   const out = [];
   for (const value of raw) {
     if (out.length >= PYTHON_EXECUTION_LIMITS.MAX_ARGV) break;
@@ -70,6 +91,11 @@ function normalizeArgv(raw) {
  * @param {() => Promise<string>} [deps.readInterpreterOverride] eigener Pfad aus den Einstellungen
  * @param {() => Promise<string>} [deps.readShellPath] PATH aus dem Shell-Profil (Issue #111)
  * @param {string} [deps.platform]
+ * @param {NodeJS.ProcessEnv} [deps.env]
+ * @param {() => string} [deps.randomId]  names the run's temp folder
+ * @param {SandboxForSpawn | null} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
+ * @returns {import('../../application/ports/code-execution-port').CodeExecutionPort & {
+ *   detect: () => Promise<CodeDescription>, disposeSync: () => void }}
  */
 function createPythonRunnerService({
   spawn,
@@ -90,6 +116,7 @@ function createPythonRunnerService({
   // `error` is the detail Settings shows next to "No Python 3 found": a
   // catalogue message, or the quoted output of the probe (#338). The model
   // never reads it — `run()` has its own English sentence.
+  /** @type {CodeDescription} */
   let detected = { found: false, error: createMessage('runner.error.notChecked') };
   // PATH aus dem Shell-Profil, bei der Erkennung ermittelt. Leer heisst:
   // nichts zu reparieren (Windows) oder keine Shell gefunden.
@@ -104,6 +131,11 @@ function createPythonRunnerService({
     return { ...env, ...(shellPath ? { PATH: shellPath } : {}), ...extra };
   }
 
+  /**
+   * @param {string} command
+   * @param {string[]} args
+   * @returns {Promise<{ ok: true, version: string } | { ok: false, error: string | import('../../shared/contracts/message').Message }>}
+   */
   function probe(command, args) {
     return new Promise((resolve) => {
       let child;
@@ -192,6 +224,7 @@ function createPythonRunnerService({
   // Time limit, "Stop", output cap and the process tree (CR-B03-01).
   const children = createChildRunner({ spawn, platform });
 
+  /** @param {Partial<CodeExecutionRequest>} [request]  a missing program is refused, not thrown */
   async function run({
     code, stdin, argv, timeoutMs, cwd, workspaceRoot, networkDomains,
     // Allowed on a sandbox card (#792): `{ writePaths, readPaths, hosts }`.
@@ -201,7 +234,9 @@ function createPythonRunnerService({
     sandboxDisabled = false,
     abortSignal,
   } = {}) {
-    if (!detected.found) {
+    // Read once: `detected` is replaced as a whole by a later detection.
+    const { command: interpreter, args: interpreterArgs = [] } = detected;
+    if (!detected.found || !interpreter) {
       return { error: 'No Python 3 interpreter is available.' };
     }
     const source = typeof code === 'string' ? code : '';
@@ -229,17 +264,26 @@ function createPythonRunnerService({
     // Isolation (#329): the script's temp directory doubles as the run's own
     // writable place next to the workspace.
     // What the script printed so far, for the card about a waiting connection.
+    /** @type {(() => { stdout: string, stderr: string }) | null} */
     let readOutput = null;
     let target;
+    // -B: keine .pyc-Dateien neben dem Skript. -u: ungepuffert, sonst geht
+    // die Ausgabe eines abgebrochenen Laufs verloren.
+    const pythonArgs = ['-B', '-u', scriptPath, ...normalizeArgv(argv)];
     try {
       target = await planSpawn({
         sandbox,
         // Switched off for this workspace by the user (#357).
         disabled: sandboxDisabled === true,
         grants: sandboxGrants,
-        // -B: keine .pyc-Dateien neben dem Skript. -u: ungepuffert, sonst
-        // geht die Ausgabe eines abgebrochenen Laufs verloren.
-        argv: [detected.command, ...(detected.args || []), '-B', '-u', scriptPath, ...normalizeArgv(argv)],
+        // On Windows a first interpreter puts itself into a Job Object and
+        // runs this one inside it, so that what the script leaves in the
+        // background ends with it (#991).
+        argv: [
+          interpreter,
+          ...interpreterArgs,
+          ...(platform === 'win32' ? pythonJobArgs(pythonArgs) : pythonArgs),
+        ],
         workspaceRoot,
         runTmp: dir,
         domains: networkDomains,
@@ -274,13 +318,15 @@ function createPythonRunnerService({
         exposeOutput: (read) => { readOutput = read; },
         startError: 'Python could not be started.',
       });
-      if (outcome.error) return outcome;
+      // Narrows the union for the type check (#1098); the error is never empty.
+      if ('error' in outcome) return outcome;
       // What the sandbox refused (#792): as a list for the chat's tool row,
       // and in stderr for the model (#329). Looked up before annotating.
       const blocked = await target.blocked?.({
         failed: outcome.exitCode !== 0 && !outcome.aborted,
         output: outcome.stderr,
       });
+      /** @type {CodeExecutionResult} */
       const result = {
         ...outcome,
         stderr: target.annotate(outcome.stderr),
