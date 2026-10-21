@@ -25,6 +25,13 @@ procedure that creates them.
   `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` and `APPLE_TEAM_ID`. How they were made
   and when they expire is in
   [`release/macos-signing-plan.md`](release/macos-signing-plan.md).
+- The secret **`SNOTRA_RELAY_API_KEY`** holds the web API key of the mobile
+  remote's relay (#1193). Every platform's build writes it into the package
+  (`node scripts/write-relay-key.js --require`) and fails without it. It is
+  not in the repository so that scanners leave it alone and it can be
+  replaced without a commit — not because it is secret: every shipped app
+  carries it. Set or replace it with
+  `gh secret set SNOTRA_RELAY_API_KEY --repo kkrafft1999/snotra`.
 - `gh` has to be authenticated (`gh auth status`).
 
 ## The flow at a glance
@@ -76,6 +83,11 @@ npm run make            # macOS arm64  -> out/make/Snotra-Agent-<version>-mac-ar
 npm run package:win     # Windows x64  -> out/<productName>-win32-x64/  (to be zipped)
 npm run make:linux      # Linux x64    -> out/make/{deb,AppImage}/x64/* + out/<productName>-linux-x64/
 ```
+
+A local build pairs a phone only with the relay key: put
+`SNOTRA_RELAY_API_KEY=…` into `.env` (ignored by git) and run
+`node scripts/write-relay-key.js` before building. Without it the build works,
+and *Settings › Remote access* says the relay is unreachable.
 
 The Linux run needs `dpkg`, `fakeroot` (deb) and `mksquashfs` (AppImage,
 package `squashfs-tools`) — macOS has none of them, and Forge aborts there with
