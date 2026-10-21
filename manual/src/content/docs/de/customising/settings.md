@@ -1,6 +1,6 @@
 ---
 title: Dich in den Einstellungen zurechtfinden
-description: Die sieben Bereiche der Einstellungen, was sofort wirkt und was erst mit Übernehmen, und was im Bereich Allgemein steht.
+description: Die sechs Bereiche der Einstellungen, was sofort wirkt und was erst mit Übernehmen, und was im Bereich Allgemein steht.
 sidebar:
   order: 1
 ---
@@ -21,7 +21,6 @@ Alles, was du in Snotra einrichten kannst, steht an einer Stelle: in den Einstel
 | *Tools › Einrichtung* | Der Python-Interpreter, der Schlüssel für die Websuche, das Bildmodell und die MCP-Server. Siehe [Die eingebauten Tools einrichten](../built-in-tools/) und [Einen MCP-Server anbinden](../mcp-servers/). |
 | *Skills* | Die Skills, mit denen das Modell arbeitet. Siehe [Skills nutzen](../skills/). |
 | *Gedächtnis* | Was Snotra über Chats hinweg behält. Siehe [Snotra etwas merken lassen](../memory/). |
-| *Fernzugriff* | [seit 1.28] Deine Chats auf dem iPhone – noch nicht offen. Siehe [Deine Chats vom Handy aus verfolgen](../remote-access/). |
 | *Allgemein* | Anweisungen für jeden Chat, das Aussehen, die Sprache — siehe unten. |
 
 [seit 1.26] *Autonomie*, *Sicherheit* und *Einrichtung* stehen zusammen unter der Überschrift *Tools*; die Überschrift selbst ist kein Bereich.
@@ -33,7 +32,7 @@ Alles, was du in Snotra einrichten kannst, steht an einer Stelle: in den Einstel
 Die Zeile unten in jedem Bereich sagt es, weil es sich unterscheidet:
 
 - *Modelle* und *Skills* wirken, wenn du auf *Übernehmen* klickst. *Schließen* ohne *Übernehmen* lässt sie, wie sie waren.
-- *Tools › Autonomie*, *Tools › Sicherheit*, *Gedächtnis* und *Fernzugriff* wirken sofort.
+- *Tools › Autonomie*, *Tools › Sicherheit* und *Gedächtnis* wirken sofort.
 - Unter *Tools › Einrichtung* wird ein Schlüssel mit seinem eigenen Knopf gespeichert und ein MCP-Server sofort; Interpreter und Bildmodell warten auf *Übernehmen*.
 - Unter *Allgemein* wirken Schalter, Erscheinungsbild und Sprache sofort; die Textfelder warten auf *Übernehmen*.
 

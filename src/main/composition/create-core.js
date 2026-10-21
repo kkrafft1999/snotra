@@ -88,7 +88,8 @@ const { translateMessage } = require('../../shared/i18n');
 const { createChatHistoryAdapter } = require('../adapters/chat-history-adapter');
 const { createChatSessionSettings } = require('../../application/chat/chat-session-settings');
 const { createFeedbackService, osVersionReader, resolveFeedbackEndpoint } = require('../services/feedback-service');
-const { createAppNotices, postStoreFileEvent, postRemoteWorkspaceSwitch } = require('../services/app-notices');
+const { createAppNotices, postStoreFileEvent, postRemoteWorkspaceSwitch, developerModeNotices } = require('../services/app-notices');
+const { createDeveloperMode } = require('../services/developer-mode');
 const { createChatConfigurationService } = require('../../application/chat/chat-configuration-service');
 const { createChatApplication } = require('./create-chat-application');
 const { startToolRuntimes } = require('./start-tool-runtimes');
@@ -178,6 +179,8 @@ function createCore({
   const llmConfigStore = createLlmConfigStorePort(storage);
   const providerSecrets = createProviderSecretsPort(storage);
   const uiPrefsStore = createUiPrefsStorePort(storage);
+  // Developer mode (#1213): read from the preferences, switched with its shortcut.
+  const developerMode = createDeveloperMode({ uiPrefsStore });
   const chatHistoryStore = createChatHistoryStorePort(storage);
   const workspaceFolderStore = createWorkspaceFolderStorePort(storage);
   const webSearchStore = createWebSearchStorePort(storage);
@@ -779,6 +782,11 @@ function createCore({
   // Nothing of it runs before the user starts a pairing or the application
   // starts it with a phone already paired (R7); its Allow comes from the
   // user-confirmation port.
+  // Switching developer mode says so in a notice; reading it at start does not (#1213).
+  developerMode.subscribe(developerModeNotices(notices));
+  // Never rejects: a preference that cannot be read counts as off, with a warning.
+  void developerMode.load();
+
   // The cards a phone follows, and who answered them (#1194, step 3).
   approvals.observe((event) => remoteActivity.publishApproval(event));
 
@@ -786,6 +794,8 @@ function createCore({
   const remoteWorkspaceSwitch = createWindowWorkspaceSwitch({ push: pushToWindow, PUSH, randomUUID: () => crypto.randomUUID() });
 
   const remote = createRemoteBridge({
+    // Opens Settings › Remote access and pairing while it is on (#1213).
+    developerMode,
     userDataPath,
     secretStore,
     safeStorageKey,
@@ -914,6 +924,7 @@ function createCore({
     toolPermissions,
     remote,
     remoteWorkspaceSwitch,
+    developerMode,
     notifyToolPermissionsChanged,
     dispose,
     /** The quit waits for this before the process ends (#679). */

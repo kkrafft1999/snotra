@@ -23,7 +23,8 @@ const workspace = await makeTempDir('snotra-remote-look-');
 const userDataDir = await makeTempDir('snotra-remote-look-userdata-');
 await writeFile(path.join(workspace, 'README.md'), '# Garden Planner\n', 'utf8');
 await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
-await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: locale }), 'utf8');
+// Developer mode on (#1213): without it the section is not in the settings.
+await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: locale, developerMode: true }), 'utf8');
 
 const snotra = await launchApp({ userDataDir });
 const { app, page } = snotra;

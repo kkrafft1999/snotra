@@ -84,6 +84,9 @@ const REQUEST_CHANNELS = Object.freeze({
    * ausschließlich über DIALOG_OPEN_FOLDER herein.
    */
   SETTINGS_ACTIVATE_FOLDER: 'settings:activateFolder',
+  /** Developer mode (#1213): `{ on }`, and the shortcut's switch, which answers the same. */
+  DEVELOPER_MODE_GET: 'developerMode:get',
+  DEVELOPER_MODE_TOGGLE: 'developerMode:toggle',
   /** The window's answer to `workspace:switch-requested` (#1194): `{ requestId, outcome }`. */
   WORKSPACE_SWITCH_ANSWER: 'workspace:switch-answer',
   SETTINGS_GET_FOLDER_HISTORY: 'settings:getFolderHistory',
@@ -303,6 +306,8 @@ const PUSH_CHANNELS = Object.freeze({
    * channels above, under that `runId`, up to its `run-end`.
    */
   CHAT_TURN_STARTED: 'chat:turn-started',
+  /** Developer mode was switched (#1213): `{ on }`. */
+  DEVELOPER_MODE_CHANGED: 'developerMode:changed',
   /**
    * The phone asks the window to open another known folder (#1194, step 2c):
    * `{ requestId, folderPath }`. The window answers on `workspace:switch-answer`.
@@ -379,6 +384,8 @@ const PUSH_CHANNELS = Object.freeze({
   UI_TOGGLE_MARKDOWN_SOURCE: 'ui:toggle-markdown-source',
   /** Menu "View > Show Hidden Files" or Cmd+Shift+. / Ctrl+Shift+. (#436). */
   UI_TOGGLE_HIDDEN_FILES: 'ui:toggle-hidden-files',
+  /** The developer mode shortcut was pressed (#1213); the window switches it through main. */
+  UI_TOGGLE_DEVELOPER_MODE: 'ui:toggle-developer-mode',
   /** Menu "View > Filter Files…" or Cmd/Ctrl+P (#350). */
   UI_FILTER_FILES: 'ui:filter-files',
   /** Menu "View > Back / Forward", Cmd+[ / Cmd+] or Alt+Left / Alt+Right (#822). */

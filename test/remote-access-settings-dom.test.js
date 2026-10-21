@@ -222,3 +222,74 @@ test('in German the panel speaks German, the words stay as they are', async (t) 
   assert.deepEqual([...root.querySelectorAll('.ra-words .w')].map((w) => w.textContent), WORDS);
   setLocale('en', { force: true });
 });
+
+// ---------------------------------------------------------------- developer mode (#1213)
+
+async function mountVisibility(t, { developer = false, phone = null } = {}) {
+  const dom = setupRendererDom();
+  t.after(dom.cleanup);
+  const { setLocale } = await importRenderer('i18n.js');
+  setLocale('en', { force: true });
+  const { initRemoteSectionVisibility } = await importRenderer('components', 'RemoteAccessSettings.js');
+  const hooks = {};
+  let toggles = 0;
+  let active = false;
+  const left = [];
+  const api = {
+    developerMode: {
+      get: async () => ({ on: developer }),
+      toggle: async () => { toggles += 1; return { on: !developer }; },
+      onChange: (cb) => { hooks.change = cb; },
+      onShortcut: (cb) => { hooks.shortcut = cb; },
+    },
+    remote: {
+      getState: async () => ({ ...base, state: phone ? 'paired' : 'empty', phone }),
+      onState: (cb) => { hooks.state = cb; },
+    },
+  };
+  const tab = dom.document.getElementById('tab-settings-remote');
+  const section = initRemoteSectionVisibility({ api, tab, leave: () => left.push('models'), isActive: () => active });
+  await section.refresh();
+  const chip = tab.querySelector('.settings-nav-chip');
+  return { tab, chip, hooks, left, toggles: () => toggles, setActive: (value) => { active = value; } };
+}
+
+test('without developer mode and without a phone, Remote access is not in the settings', async (t) => {
+  const { tab } = await mountVisibility(t);
+  assert.equal(tab.hidden, true);
+});
+
+test('developer mode shows Remote access with a Developer chip; switching it off hides it and leaves the section', async (t) => {
+  const { tab, chip, hooks, left, setActive } = await mountVisibility(t, { developer: true });
+  assert.equal(tab.hidden, false);
+  assert.equal(chip.hidden, false);
+  assert.equal(chip.textContent, 'Developer');
+  setActive(true);
+  hooks.change({ on: false });
+  assert.equal(tab.hidden, true);
+  assert.deepEqual(left, ['models'], 'an open section that disappears gives way to Models');
+});
+
+test('a paired phone keeps Remote access in the settings without developer mode, so it can be removed', async (t) => {
+  const { tab, chip, hooks } = await mountVisibility(t, { phone: { pairedAt: 1, connected: false } });
+  assert.equal(tab.hidden, false);
+  assert.equal(chip.hidden, true, 'no Developer chip: it is shown for the phone');
+  hooks.state({ ...base, state: 'empty', phone: null });
+  assert.equal(tab.hidden, true, 'removed: gone with it');
+});
+
+test('the shortcut, caught by main, switches developer mode through main', async (t) => {
+  const { hooks, toggles } = await mountVisibility(t);
+  hooks.shortcut();
+  await flush();
+  assert.equal(toggles(), 1);
+});
+
+test('Remote access is hidden in the markup until main says otherwise', async (t) => {
+  const dom = setupRendererDom();
+  t.after(dom.cleanup);
+  const tabs = [...dom.document.querySelectorAll('.settings-nav-item[role="tab"]')];
+  const remote = dom.document.getElementById('tab-settings-remote');
+  assert.equal(remote.hidden, true, 'hidden in the markup until main says otherwise');
+  assert.ok(tabs.includes(remote));
+});

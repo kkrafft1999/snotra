@@ -613,8 +613,9 @@ listed together where they share their class.
 | `feedback:getDiagnostics`, `feedback:send` | desktop | The feedback form |
 | `remote:getState`, `remote:pair:start`, `remote:pair:cancel`, `remote:unpair`, `remote:state` (push) | desktop, **never** remote | Pairing and removing the phone (#1114); a phone must not be able to pair another or remove itself through the protocol, and the *Allow* is the confirmation port's |
 | `remote:release:get`, `remote:release:set`, `remote:release:changed` (push) | desktop, **never** remote | Which workspaces the phone sees (#1195): opening one is a loosening with a receipt, and a phone must not widen what it may see |
+| `developerMode:get`, `developerMode:toggle`, `developerMode:changed` (push) | desktop, **never** remote | Developer mode (#1213) opens pairing; a phone must not open pairing for another |
 | `voice:start`, `voice:audio`, `voice:stop`, `voice:cancel`, `voice:transcript` (push), `whisper:transcribe`, `whisper:cancel` | desktop | The microphone belongs to the window; a phone has its own dictation |
-| all eleven `ui:*` pushes and `ui:preview-history-choice` | desktop | Menu items and shortcuts of the window |
+| all `ui:*` pushes and `ui:preview-history-choice` | desktop | Menu items and shortcuts of the window |
 | all `manual:*` channels | desktop | The manual window; it is also published at docs.snotra-ai.dev |
 
 When the catalogue becomes code, a test checks that every request and push

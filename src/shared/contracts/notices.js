@@ -19,12 +19,16 @@ const NOTICE_KINDS = Object.freeze({
   BACKGROUND_ERROR: 'background-error',
   /** The phone opened another folder at the desktop (#1194): the folder's name, never its path. */
   REMOTE_WORKSPACE_SWITCHED: 'remote-workspace-switched',
+  /** Developer mode was switched on or off with its shortcut (#1213). */
+  DEVELOPER_MODE: 'developer-mode',
 });
 
 /** The one id of the background-error notice: a second error counts up instead of stacking. */
 const BACKGROUND_ERROR_NOTICE_ID = 'background-error';
 /** The one id of the phone's switch notice: a second switch replaces the first. */
 const REMOTE_WORKSPACE_SWITCHED_NOTICE_ID = 'remote-workspace-switched';
+/** The one id of the developer mode notice: switching again replaces it. */
+const DEVELOPER_MODE_NOTICE_ID = 'developer-mode';
 /** How long a folder's name in a notice may be. */
 const NOTICE_FOLDER_MAX = 255;
 
@@ -64,6 +68,9 @@ const NOTICE_STORE_IDS = Object.freeze([...new Set([...Object.values(NOTICE_STOR
  * The background-error notice is `{ id, kind, count, location, canReveal }`:
  * how many errors this start has caught so far, and the log file they went to.
  *
+ * The developer mode notice is `{ id, kind, on, location: null, canReveal:
+ * false }` (#1213).
+ *
  * The phone's switch notice is `{ id, kind, folder, location: null,
  * canReveal: false }`: the name of the folder the phone opened (#1194).
  *
@@ -75,6 +82,10 @@ function normalizeNotice(input) {
   if (typeof id !== 'string' || !id) return null;
   if (!Object.values(NOTICE_KINDS).some((known) => known === kind)) return null;
   const at = typeof location === 'string' && location ? location : null;
+  if (kind === NOTICE_KINDS.DEVELOPER_MODE) {
+    if (typeof input.on !== 'boolean') return null;
+    return { id, kind, on: input.on, location: null, canReveal: false };
+  }
   if (kind === NOTICE_KINDS.REMOTE_WORKSPACE_SWITCHED) {
     const { folder } = input;
     if (typeof folder !== 'string' || !folder || folder.length > NOTICE_FOLDER_MAX) return null;
@@ -95,6 +106,7 @@ module.exports = {
   NOTICE_KINDS,
   BACKGROUND_ERROR_NOTICE_ID,
   REMOTE_WORKSPACE_SWITCHED_NOTICE_ID,
+  DEVELOPER_MODE_NOTICE_ID,
   NOTICE_STORES,
   NOTICE_STORE_IDS,
   CHAT_SESSION_NOTICE_STORE,

@@ -623,8 +623,9 @@
             <span data-i18n="settings.nav.memory">Memory</span>
             <span class="settings-nav-item__desc" data-i18n="settings.nav.memory.desc">What Snotra keeps across chats</span>
           </button>
-          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-remote" id="tab-settings-remote" data-settings-panel="remote">
-            <span data-i18n="settings.nav.remote">Remote access</span>
+          <!-- Hidden until developer mode is on or a phone is paired (#1213). -->
+          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-remote" id="tab-settings-remote" data-settings-panel="remote" hidden>
+            <span><span data-i18n="settings.nav.remote">Remote access</span><span class="settings-nav-chip" id="settings-nav-remote-developer" data-i18n="settings.nav.developer" hidden>Developer</span></span>
             <span class="settings-nav-item__desc" data-i18n="settings.nav.remote.desc">Your chats on your iPhone</span>
           </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-general" id="tab-settings-general" data-settings-panel="general">

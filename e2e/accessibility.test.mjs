@@ -144,7 +144,8 @@ test('the workspace and every settings section pass axe, light and dark; System 
   await writeFile(path.join(workspace, 'README.md'), '# Garden notes\n\nTomatoes go out after the last frost.\n', 'utf8');
   await writeFile(path.join(workspace, 'beds.md'), '- Bed 1: tomatoes\n- Bed 2: beans\n', 'utf8');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
-  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en' }), 'utf8');
+  // Developer mode on (#1213), so that Settings › Remote access is there to be checked.
+  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en', developerMode: true }), 'utf8');
 
   const snotra = await launchApp({ userDataDir });
   t.after(async () => {

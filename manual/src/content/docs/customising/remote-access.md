@@ -1,15 +1,15 @@
 ---
 title: Follow your chats from your phone
-description: Settings › Remote access — what it is for, why pairing a phone is not open yet, and what the relay can see.
+description: Remote access — what it will be for, why it is not part of Snotra yet, and what the relay can see.
 sidebar:
   order: 9
 ---
 
 [since 1.28] With remote access you follow your chats from the Snotra app on your iPhone while you are away from this computer: you read them, write in them and answer approvals. The chats stay on this computer; the phone only shows them, end-to-end encrypted through a relay that cannot read them.
 
-## Not open yet
+## Not there yet
 
-*Settings › Remote access* is already there, but pairing a phone is not: the Snotra app for iPhone is not out yet. Until it is, the section shows *No phone paired* with *Pair a phone* switched off and a *Coming soon* label, and nothing connects to the relay. Pairing opens with the app; this page then describes how.
+Remote access comes with the Snotra app for iPhone, which is not out yet. Until then the settings have no section for it, no phone can be paired, and nothing connects to the relay. Once the app is out, *Settings › Remote access* appears, and this page describes how to pair your phone.
 
 ## What it is for
 

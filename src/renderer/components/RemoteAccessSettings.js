@@ -485,3 +485,52 @@ export function initRemoteAccessSettings({ root, api, openPanel = () => {}, now 
     },
   };
 }
+
+/**
+ * Whether *Settings › Remote access* is in the navigation (#1213): while
+ * developer mode is on — switched with ⌘⌥⇧D, which main catches and this
+ * passes on — or while a phone is paired, so that it can still be removed.
+ * The *Developer* chip says which. A hidden section that is open gives way
+ * to *Models*.
+ *
+ * @param {{
+ *   api: any,
+ *   tab: HTMLElement | null,
+ *   leave: () => void,
+ *   isActive: () => boolean,
+ * }} deps
+ */
+export function initRemoteSectionVisibility({ api, tab, leave, isActive }) {
+  if (!tab || !api?.developerMode) return { refresh: async () => {} };
+  const chip = tab.querySelector('.settings-nav-chip');
+  let developer = false;
+  let paired = false;
+
+  function sync() {
+    const shown = developer || paired;
+    tab.hidden = !shown;
+    if (chip) chip.hidden = !developer;
+    if (!shown && isActive()) leave();
+  }
+
+  api.developerMode.onChange?.((payload) => {
+    developer = payload?.on === true;
+    sync();
+  });
+  api.developerMode.onShortcut?.(() => {
+    Promise.resolve(api.developerMode.toggle()).catch((error) => console.error('[settings] developer mode could not be switched:', error));
+  });
+  api.remote?.onState?.((raw) => {
+    paired = !!contracts.normalizeRemotePairingState(raw).phone;
+    sync();
+  });
+
+  async function refresh() {
+    const [mode, state] = await Promise.all([api.developerMode.get(), api.remote?.getState?.()]);
+    developer = mode?.on === true;
+    paired = !!contracts.normalizeRemotePairingState(state).phone;
+    sync();
+  }
+  refresh().catch((error) => console.error('[settings] developer mode could not be read:', error));
+  return { refresh };
+}
