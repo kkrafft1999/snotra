@@ -1,6 +1,6 @@
 'use strict';
 
-const { NOTICE_KINDS, normalizeNotice } = require('../../shared/contracts/notices');
+const { NOTICE_KINDS, REMOTE_WORKSPACE_SWITCHED_NOTICE_ID, normalizeNotice } = require('../../shared/contracts/notices');
 
 /**
  * The notices of this start (#1001, the notice channel of #978).
@@ -102,4 +102,16 @@ function postStoreFileEvent(notices, event) {
   }
 }
 
-module.exports = { createAppNotices, postStoreFileEvent };
+/**
+ * The phone opened another folder at the desktop (#1194): whoever sits there
+ * sees why the tree and the chat changed. One notice — a second switch
+ * replaces it — with the folder's name only.
+ *
+ * @param {{ post: (input: unknown) => unknown }} notices
+ * @param {string} folder
+ */
+function postRemoteWorkspaceSwitch(notices, folder) {
+  notices.post({ id: REMOTE_WORKSPACE_SWITCHED_NOTICE_ID, kind: NOTICE_KINDS.REMOTE_WORKSPACE_SWITCHED, folder });
+}
+
+module.exports = { createAppNotices, postStoreFileEvent, postRemoteWorkspaceSwitch };

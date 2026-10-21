@@ -47,6 +47,13 @@ const WORDING = Object.freeze({
     tone: 'error',
     help: 'notice.backgroundError',
   },
+  // No help link until the manual has its remote access chapter (#1110).
+  [NOTICE_KINDS.REMOTE_WORKSPACE_SWITCHED]: {
+    heading: () => t('notice.remoteWorkspaceSwitched'),
+    text: (notice) => t('notice.remoteWorkspaceSwitched.text', { folder: notice.folder }),
+    tone: 'info',
+    help: null,
+  },
 });
 
 /** How long *Copied* stays on the button before it reads *Copy diagnostics* again. */
@@ -158,11 +165,13 @@ export function initAppNotices({ api, root = document.getElementById('app-notice
         void Promise.resolve(api.revealNotice?.(notice.id)).catch(() => {});
       }));
     }
-    actions.appendChild(linkButton('help', t('notice.help'), () => {
-      const target = settingsHelpTarget(wording.help, getLocale());
-      if (target) void Promise.resolve(api.openManual?.({ slug: target.slug, fragment: target.fragment })).catch(() => {});
-    }));
-    body.appendChild(actions);
+    if (wording.help) {
+      actions.appendChild(linkButton('help', t('notice.help'), () => {
+        const target = settingsHelpTarget(wording.help, getLocale());
+        if (target) void Promise.resolve(api.openManual?.({ slug: target.slug, fragment: target.fragment })).catch(() => {});
+      }));
+    }
+    if (actions.childElementCount > 0) body.appendChild(actions);
     el.appendChild(body);
 
     const close = document.createElement('button');

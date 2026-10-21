@@ -617,3 +617,20 @@ test('without an opener a view is told the file is not there', async (t) => {
   assert.equal(log[0].context.workspaceRoot, null);
   assert.deepEqual(await log[0].context.openFile('/ws/b.txt'), { ok: false, reason: 'not-found' });
 });
+
+test('hasUnsaved tells about an editor with unsaved text, without asking or saving (#1194)', async (t) => {
+  let saves = 0;
+  const { host, asked, log } = await mountWithDirtyEditor(t, { answer: 'discard', save: async () => { saves += 1; return false; } });
+  assert.equal(host.hasUnsaved(), true);
+  assert.deepEqual(asked, []);
+  assert.equal(saves, 0);
+  log[0].context.setDirty(false);
+  assert.equal(host.hasUnsaved(), false);
+});
+
+test('hasUnsaved is false for an empty pane and for a viewer', async (t) => {
+  const { host } = await mountHost(t, { files: { '/ws/a.txt': text('A') } });
+  assert.equal(host.hasUnsaved(), false);
+  await host.open(item('a.txt'));
+  assert.equal(host.hasUnsaved(), false);
+});

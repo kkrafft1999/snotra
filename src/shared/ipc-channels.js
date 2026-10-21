@@ -84,6 +84,8 @@ const REQUEST_CHANNELS = Object.freeze({
    * ausschließlich über DIALOG_OPEN_FOLDER herein.
    */
   SETTINGS_ACTIVATE_FOLDER: 'settings:activateFolder',
+  /** The window's answer to `workspace:switch-requested` (#1194): `{ requestId, outcome }`. */
+  WORKSPACE_SWITCH_ANSWER: 'workspace:switch-answer',
   SETTINGS_GET_FOLDER_HISTORY: 'settings:getFolderHistory',
   /** Einzelnen Eintrag aus „Zuletzt geöffnete Ordner“ entfernen (Issue #57). */
   SETTINGS_REMOVE_FOLDER_FROM_HISTORY: 'settings:removeFolderFromHistory',
@@ -301,6 +303,11 @@ const PUSH_CHANNELS = Object.freeze({
    * channels above, under that `runId`, up to its `run-end`.
    */
   CHAT_TURN_STARTED: 'chat:turn-started',
+  /**
+   * The phone asks the window to open another known folder (#1194, step 2c):
+   * `{ requestId, folderPath }`. The window answers on `workspace:switch-answer`.
+   */
+  WORKSPACE_SWITCH_REQUESTED: 'workspace:switch-requested',
   /** The transcript of a recording so far (#859): `{ id, turns }` or `{ id, error }`. */
   VOICE_TRANSCRIPT: 'voice:transcript',
   /** A notice for the window (#1001): a normalized notice, see contracts/notices.js. */

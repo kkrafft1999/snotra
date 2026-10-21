@@ -225,6 +225,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // The phone asks to open another folder (#1194); the window answers with the outcome.
+  onWorkspaceSwitchRequested: (callback) => {
+    const channel = PUSH.WORKSPACE_SWITCH_REQUESTED;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  answerWorkspaceSwitch: (answer) => ipcRenderer.send(REQ.WORKSPACE_SWITCH_ANSWER, {
+    requestId: typeof answer?.requestId === 'string' ? answer.requestId : null,
+    outcome: typeof answer?.outcome === 'string' ? answer.outcome : null,
+  }),
   // A turn another front end started, a phone's (#1194): the window follows it.
   onChatTurnStarted: (callback) => {
     const channel = PUSH.CHAT_TURN_STARTED;

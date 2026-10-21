@@ -285,6 +285,7 @@ function createApplication({
       listKnownWorkspaces: core.securityPageData.listKnownWorkspaces,
       getLocale: core.getAppLocale,
     }),
+    workspaceSwitch: core.remoteWorkspaceSwitch,
     pushToWindow,
     REQ,
     PUSH,

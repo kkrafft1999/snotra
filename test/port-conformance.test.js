@@ -46,6 +46,8 @@ const NOT_A_PORT = new Set([
   'createUpdateCheck',
   // The window's half of a remote turn (#1194): a push mapping the desktop adapter is handed.
   'createWindowFollower',
+  // … and the request it sends the window to open a folder, with the answer it waits for.
+  'createWindowWorkspaceSwitch',
 ]);
 
 function read(rel) {

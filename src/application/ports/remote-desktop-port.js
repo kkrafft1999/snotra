@@ -54,6 +54,9 @@
  *   `run-end` after its last one, arrive through `subscribe` under `turn.runId`
  * @property {(chatId: string) => boolean} stopChat  stops the chat's turn, whoever started it; false when none ran
  * @property {(chatId: string, root: string) => Promise<RemoteChatConfiguration>} chatConfiguration
+ * @property {(root: string) => Promise<{ ok: true } | { ok: false, reason: 'unsaved' | 'refused' | 'no-answer' }>} activateWorkspace
+ *   opens a known folder at the desktop, through the window when there is one, and tells
+ *   whoever sits there (step 2c); `unsaved` when the file on show has unsaved changes
  */
 
 /**

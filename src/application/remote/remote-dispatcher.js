@@ -58,12 +58,16 @@ const CLIENT_MESSAGE_ID_MAX = 64;
 /** How many `clientMessageId`s are remembered, and chats made by `chat.new` not written yet. */
 const REMEMBERED_MAX = 500;
 
-/** A request the dispatcher refuses, with the reason of §6.3. */
+/** A request the dispatcher refuses, with the reason of §6.3 and, where it helps the client, `data.why`. */
 class Refusal extends Error {
-  /** @param {Parameters<typeof remoteRpcError>[1]} reason */
-  constructor(reason) {
+  /**
+   * @param {Parameters<typeof remoteRpcError>[1]} reason
+   * @param {Record<string, unknown>} [extra]
+   */
+  constructor(reason, extra = {}) {
     super(reason);
     this.reason = reason;
+    this.extra = extra;
   }
 }
 
@@ -534,6 +538,26 @@ function createRemoteDispatcher({
 
     // ---- step 2: writing (§8.1) — only in the workspace open at the desktop
 
+    'workspace.activate': {
+      kinds: ['local', 'relay'],
+      async run(_entry, params) {
+        const { workspaceId } = params;
+        if (typeof workspaceId !== 'string' || !workspaceId) throw new Refusal('invalid-params');
+        const root = (await visible()).byId.get(workspaceId);
+        if (root === undefined) throw new Refusal('not-found');
+        if (root === desktop.activeWorkspace()) return { workspaceId };
+        // Not while a turn works or waits: its tools work in the open folder (R6).
+        if (startedChats.size > 0 || desktop.runningChats().size > 0 || desktop.awaitingApproval().size > 0) {
+          throw new Refusal('busy', { why: 'running' });
+        }
+        const switched = await desktop.activateWorkspace(root);
+        if (switched.ok) return { workspaceId };
+        if (switched.reason === 'unsaved') throw new Refusal('busy', { why: 'unsaved-changes' });
+        if (switched.reason === 'refused') throw new Refusal('not-found');
+        throw new Refusal('busy');
+      },
+    },
+
     'chat.new': {
       kinds: ['local', 'relay'],
       async run(_entry, params) {
@@ -649,7 +673,7 @@ function createRemoteDispatcher({
       try {
         return { jsonrpc: '2.0', id: request.id, result: await method.run(entry, request.params) };
       } catch (error) {
-        if (error instanceof Refusal) return remoteRpcError(request.id, error.reason, wordIn);
+        if (error instanceof Refusal) return remoteRpcError(request.id, error.reason, wordIn, error.extra);
         // Only the method and the kind of error: never what the request asked for.
         log.warn(`[remote] ${request.method} failed (${error?.name || 'error'})`);
         return remoteRpcError(request.id, 'internal', wordIn);

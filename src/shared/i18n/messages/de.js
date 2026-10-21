@@ -503,6 +503,8 @@ module.exports = {
   'notice.backgroundError': 'Im Hintergrund ist etwas schiefgegangen.',
   'notice.backgroundError.text.one': 'Snotra ist auf einen unerwarteten Fehler gestoßen. Die App läuft weiter, die Einzelheiten stehen in der Logdatei. Wenn etwas nicht so funktioniert, wie es soll, kopier die Diagnose in einen Fehlerbericht.',
   'notice.backgroundError.text.other': 'Snotra ist auf {count} unerwartete Fehler gestoßen. Die App läuft weiter, die Einzelheiten stehen in der Logdatei. Wenn etwas nicht so funktioniert, wie es soll, kopier die Diagnose in einen Fehlerbericht.',
+  'notice.remoteWorkspaceSwitched': 'Vom Handy gewechselt',
+  'notice.remoteWorkspaceSwitched.text': 'Dein Handy hat den Ordner „{folder}“ geöffnet.',
   'notice.backgroundError.copy': 'Diagnose kopieren',
   'notice.backgroundError.copied': 'Kopiert',
   'notice.backgroundError.copyFailed': 'Kopieren fehlgeschlagen',
