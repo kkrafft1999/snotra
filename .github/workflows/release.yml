@@ -6,8 +6,9 @@ name: Release
 #
 # Signing (#662): the macOS app and its DMG are signed with a Developer ID,
 # notarised and stapled; the secrets are listed at the build-macos job.
-# Windows stays unsigned (SmartScreen may warn) until #911 lands. Linux needs
-# no signature.
+# Windows (#911): Snotra Agent.exe is signed through SSL.com eSigner once its
+# secrets are set; they are listed at the build-windows job. Linux needs no
+# signature.
 #
 # Test-Gate: Vor den Build-Jobs laeuft die Test-Suite aus ci.yml (macOS,
 # Windows, Linux). Schlaegt sie fehl, wird weder gebaut noch veroeffentlicht
@@ -243,6 +244,73 @@ jobs:
       - run: npm run package:win
       - name: Check package contents (allowlist)
         run: node scripts/check-asar-contents.js
+      # Authenticode signing (#911): Snotra Agent.exe is signed with an
+      # individual code signing certificate in the author's name; the key lives
+      # in SSL.com's eSigner cloud HSM. Secrets (docs/release/windows-signing.md):
+      #   ES_USERNAME, ES_PASSWORD  SSL.com account (its own password, not a social login)
+      #   ES_CREDENTIAL_ID          the certificate's eSigner credential
+      #   ES_TOTP_SECRET            eSigner TOTP secret, the text next to the QR code
+      # None set: the build stays unsigned, with a warning. All four set: a
+      # failed signing or check fails the release. Only the executable is
+      # signed, since every signed file counts against the eSigner allowance.
+      - name: Find the executable to sign
+        id: exe
+        shell: pwsh
+        env:
+          HAS_ES_USERNAME: ${{ secrets.ES_USERNAME != '' }}
+          HAS_ES_PASSWORD: ${{ secrets.ES_PASSWORD != '' }}
+          HAS_ES_CREDENTIAL_ID: ${{ secrets.ES_CREDENTIAL_ID != '' }}
+          HAS_ES_TOTP_SECRET: ${{ secrets.ES_TOTP_SECRET != '' }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $set = @(@('ES_USERNAME', 'ES_PASSWORD', 'ES_CREDENTIAL_ID', 'ES_TOTP_SECRET') |
+            Where-Object { (Get-Item "env:HAS_$_").Value -eq 'true' })
+          if ($set.Count -eq 0) {
+            "::warning::The Windows build is not signed: no eSigner secrets are set (#911)."
+            "sign=false" >> $env:GITHUB_OUTPUT
+            exit 0
+          }
+          if ($set.Count -ne 4) {
+            throw "Only some eSigner secrets are set ($($set -join ', ')); set all four or none."
+          }
+          $dir = (Get-ChildItem -Path out -Directory -Filter '*-win32-x64' | Select-Object -First 1).FullName
+          if (-not $dir) { throw 'No *-win32-x64 package folder found.' }
+          $exe = Join-Path $dir 'Snotra Agent.exe'
+          if (-not (Test-Path -LiteralPath $exe)) { throw "Not found: $exe" }
+          "sign=true" >> $env:GITHUB_OUTPUT
+          "path=$exe" >> $env:GITHUB_OUTPUT
+      - name: Sign the executable (eSigner)
+        if: steps.exe.outputs.sign == 'true'
+        uses: sslcom/esigner-codesign@cf5f6c1d38ad10f47e3ed9aca873f429b1a8d85b # v1.3.2
+        with:
+          command: sign
+          username: ${{ secrets.ES_USERNAME }}
+          password: ${{ secrets.ES_PASSWORD }}
+          credential_id: ${{ secrets.ES_CREDENTIAL_ID }}
+          totp_secret: ${{ secrets.ES_TOTP_SECRET }}
+          file_path: ${{ steps.exe.outputs.path }}
+          override: true
+          clean_logs: true
+      # CodeSignTool can report an error without failing the step, so the
+      # signature itself is the proof: valid, timestamped, signed by the author.
+      - name: Verify the signature
+        if: steps.exe.outputs.sign == 'true'
+        shell: pwsh
+        env:
+          EXE: ${{ steps.exe.outputs.path }}
+          EXPECTED_SIGNER: Konrad Krafft
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sig = Get-AuthenticodeSignature -LiteralPath $env:EXE
+          "Status:    $($sig.Status) ($($sig.StatusMessage))"
+          "Signer:    $($sig.SignerCertificate.Subject)"
+          "Issuer:    $($sig.SignerCertificate.Issuer)"
+          "Expires:   $($sig.SignerCertificate.NotAfter.ToString('yyyy-MM-dd'))"
+          "Timestamp: $($sig.TimeStamperCertificate.Subject)"
+          if ($sig.Status -ne 'Valid') { throw "The signature is not valid: $($sig.Status)." }
+          if (-not $sig.TimeStamperCertificate) { throw 'The signature carries no timestamp.' }
+          $signer = $sig.SignerCertificate.GetNameInfo([System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName, $false)
+          if ($signer -ne $env:EXPECTED_SIGNER) { throw "Signed by '$signer', expected '$env:EXPECTED_SIGNER'." }
       - name: Zip package
         shell: pwsh
         run: |
