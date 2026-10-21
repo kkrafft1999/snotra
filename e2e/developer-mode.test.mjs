@@ -70,7 +70,14 @@ test('the shortcut switches developer mode: Remote access appears, pairing opens
 
   await openSettings(app, page);
   await page.click('#tab-settings-remote');
-  await poll(() => page.evaluate(() => document.querySelector('[data-action="pair"]')?.disabled === false), { what: 'Pair a phone enabled' });
+  // Open now — unless this system cannot keep keys encrypted (the Linux runner has no keyring), which the panel says instead.
+  const encrypted = (await page.evaluate(() => window.electronAPI.remote.getState())).encryptionAvailable;
+  await poll(() => page.evaluate((canPair) => {
+    const pair = document.querySelector('[data-action="pair"]');
+    const why = document.getElementById('ra-pair-why')?.textContent ?? '';
+    return !!pair && !document.querySelector('.ra-soon') && !/Pairing opens once/.test(why)
+      && (canPair ? pair.disabled === false : /cannot keep the phone’s keys encrypted/.test(why));
+  }, encrypted), { what: 'Pair a phone no longer locked' });
 
   // A restart keeps it.
   await snotra.stop();
