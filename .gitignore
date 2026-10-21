@@ -23,6 +23,8 @@ src/manual/
 
 # Auto-generated ESM-Bundle der Contract-Schicht fuer den Renderer
 src/renderer/generated/
+# The relay's web API key, written at build time from SNOTRA_RELAY_API_KEY (#1193)
+src/main/remote/relay-key.generated.json
 
 # Logs
 *.log

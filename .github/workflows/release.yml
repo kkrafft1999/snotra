@@ -132,6 +132,11 @@ jobs:
             echo "APPLE_API_KEY=$RUNNER_TEMP/AuthKey.p8"
           } >> "$GITHUB_ENV"
           echo "Signing as: $identity"
+      # The relay's web API key goes into the build, not into the repository (#1193).
+      - name: Write the relay key
+        env:
+          SNOTRA_RELAY_API_KEY: ${{ secrets.SNOTRA_RELAY_API_KEY }}
+        run: node scripts/write-relay-key.js --require
       # The afterComplete hook (scripts/sign-macos.js) signs the app with the
       # identity from the step above, notarises it and staples the ticket.
       # scripts/make-dmg.js then builds the DMG with hdiutil (#685); the retry
@@ -240,6 +245,11 @@ jobs:
       # Electron's binary comes separately since Electron 44 (#666).
       - name: Download the Electron binary
         run: node scripts/install-electron.js
+      # The relay's web API key goes into the build, not into the repository (#1193).
+      - name: Write the relay key
+        env:
+          SNOTRA_RELAY_API_KEY: ${{ secrets.SNOTRA_RELAY_API_KEY }}
+        run: node scripts/write-relay-key.js --require
       - run: npm run package:win
       - name: Check package contents (allowlist)
         run: node scripts/check-asar-contents.js
@@ -288,6 +298,11 @@ jobs:
       # Electron's binary comes separately since Electron 44 (#666).
       - name: Download the Electron binary
         run: node scripts/install-electron.js
+      # The relay's web API key goes into the build, not into the repository (#1193).
+      - name: Write the relay key
+        env:
+          SNOTRA_RELAY_API_KEY: ${{ secrets.SNOTRA_RELAY_API_KEY }}
+        run: node scripts/write-relay-key.js --require
       - run: npm run make:linux
       - name: Check package contents (allowlist)
         run: node scripts/check-asar-contents.js
