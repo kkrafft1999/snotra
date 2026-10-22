@@ -258,6 +258,32 @@ export async function sendChat(page, text, { explain = null, t = null } = {}) {
 }
 
 /**
+ * Waits until the app lets its first ciphertext reach the disk (#1060, #1190).
+ *
+ * On a fresh Windows profile main holds every encrypted write — the chat
+ * history among them — until Chromium has written its os_crypt key to
+ * `Local State`, about ten seconds after the start and on a busy runner later
+ * (src/main/services/safe-storage-key-durability.js). A turn saves its
+ * question before the engine sends anything, so the first request of such a
+ * start comes only then. A test that times that request is timing Chromium's
+ * write instead; it waits here first. The hold also ends at its cap, with a
+ * warning in main's output. Elsewhere nothing is held, and this returns at once.
+ *
+ * @param {{ userDataDir: string, mainOutput: () => string }} snotra
+ */
+export async function waitForEncryptionKey({ userDataDir, mainOutput }) {
+  if (process.platform !== 'win32') return;
+  const keyOnDisk = async () => /"encrypted_key"\s*:\s*"[^"]+"/.test(
+    await readFile(path.join(userDataDir, 'Local State'), 'utf8').catch(() => '')
+  );
+  // The cap is 20 s from the start (KEY_WAIT_CAP_MS); this waits a little longer.
+  await poll(async () => (await keyOnDisk()) || /\[safe-storage\] No encryption key/.test(mainOutput()), {
+    what: 'the encryption key in Local State',
+    timeoutMs: 30000,
+  });
+}
+
+/**
  * Legt ein frisches userData-Verzeichnis an: geoeffneter Ordner, ein Preset auf
  * den Fake-Modellserver, Standardeinstellungen. Damit startet die App fertig
  * eingerichtet — der native Ordnerdialog und der Einstellungsdialog muessen im
