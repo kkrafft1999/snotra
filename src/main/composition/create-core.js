@@ -36,6 +36,7 @@ const { TOOL_SETUPS } = require('../../shared/contracts/chat-configuration');
 const { createWorkspaceToolRegistry } = require('../../application/tools/workspace-tool-registry');
 const { createFileToolsAdapter } = require('../adapters/file-tools-adapter');
 const { createManualLookup, loadVendoredMarkedLexer } = require('../services/manual-lookup');
+const { createReleaseNotesService } = require('../services/release-notes-service');
 const { createMcpService } = require('../services/mcp-service');
 const { createMcpAdapter } = require('../adapters/mcp-adapter');
 const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-adapter');
@@ -505,6 +506,12 @@ function createCore({
     // Built further down: it needs the skills and the MCP servers (#773).
     configuration: { describeForModel: (input) => chatConfiguration.describeForModel(input) },
     manual: manualLookup,
+    // What the releases changed for the user (#1191): the public list on GitHub.
+    releaseNotes: createReleaseNotesService({
+      fetchImpl: fetchImpl || globalThis.fetch,
+      getCurrentVersion: getAppVersion,
+      getLocale: getAppLocale,
+    }),
   });
 
   // MCP-Server (Issue #106/#107). Verbunden wird traege — `setServers` startet

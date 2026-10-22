@@ -1665,6 +1665,8 @@ module.exports = {
   'tools.desc.search_manual': 'Lets the model search the user manual that ships with this version of Snotra, the same way the search in the help window does. It uses it for questions about Snotra itself — how to do something, where a setting is, why something does not work — so that the answer follows the manual instead of a guess. It only reads the manual: none of your files, nothing on the internet, and it changes nothing.',
   'tools.short.read_manual_page': 'Lets the model read a page of Snotra’s own user manual.',
   'tools.desc.read_manual_page': 'Lets the model read a page of the user manual that ships with this version of Snotra, or one section of it, in the language of the app or the other one. Links in the page come along as addresses on docs.snotra-ai.dev, so the answer can point you to the page; a click on one opens it in the help window. It only reads the manual: none of your files, nothing on the internet, and it changes nothing.',
+  'tools.short.list_release_notes': 'Lets the model read what the releases of Snotra changed for you.',
+  'tools.desc.list_release_notes': 'Lets the model read the notes of Snotra’s releases — per version its number, date and what changed for you, in the language of the app. It uses it for questions such as “What has changed since 1.24.0?” or “What is new in my version?”, so that the answer comes from the notes instead of a guess. To do so it asks GitHub for the public list of releases, the same request as the update check; nothing of your files or this conversation goes along. If GitHub cannot be reached, it says so. It changes nothing.',
   'tools.short.propose_config_change': 'Lets the model suggest switching a skill or tool on or off for this chat; you decide on a card.',
   'tools.desc.propose_config_change': 'Lets the model suggest switching a skill or tool on or off when that would help with what you asked. You see a card with what the skill or tool does and the model\'s reason, and decide. Accepted, the change applies to this chat only — new chats keep your settings. The model never switches anything itself, and a suggestion you declined is not shown again in the same chat.',
 
@@ -2290,6 +2292,8 @@ module.exports = {
   'tools.line.readManualPage.done': 'Manual page {page} read',
   'tools.line.readManualPage.start.plain': 'Reading a manual page …',
   'tools.line.readManualPage.done.plain': 'Manual page read',
+  'tools.line.listReleaseNotes.start': 'Reading the release notes …',
+  'tools.line.listReleaseNotes.done': 'Release notes read',
 
   'tools.line.fetchUrl.start': 'Reading page {host} …',
   'tools.line.fetchUrl.done': 'Page {host} read',

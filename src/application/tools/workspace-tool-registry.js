@@ -43,6 +43,15 @@ const {
  * @property {(request: { query?: unknown, locale?: unknown, limit?: unknown }) => unknown} search
  * @property {(request: { slug?: unknown, anchor?: unknown, locale?: unknown }) => unknown} read
  */
+
+/**
+ * The model's look into the release history (#1191); on the desktop
+ * `src/main/services/release-notes-service.js`. Each answer goes to the model
+ * as JSON.
+ *
+ * @typedef {Object} ReleaseNotesLookup
+ * @property {(request: { from?: unknown, to?: unknown, locale?: unknown }) => Promise<unknown>} read
+ */
 const { LOCALES, createTranslator, normalizeLocale } = require('../../shared/i18n');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { createGenerateImageTool } = require('./generate-image-tool');
@@ -761,6 +770,7 @@ function sandboxDisabledByPlan(plan) {
  *     overrides?: import('../../shared/contracts/chat-configuration').ChatConfigOverrides | null,
  *     canPropose: boolean }) => Promise<unknown> } | null,
  *   manual?: ManualLookup | null,
+ *   releaseNotes?: ReleaseNotesLookup | null,
  * }} deps
  */
 function createWorkspaceToolRegistry({
@@ -776,6 +786,8 @@ function createWorkspaceToolRegistry({
   configuration = null,
   /** Searches and reads the bundled user manual (#947), see manual-lookup.js. */
   manual = null,
+  /** Reads the notes of the releases (#1191), see release-notes-service.js. */
+  releaseNotes = null,
 }) {
   /** @type {BuiltInTool[]} */
   const builtIn = [
@@ -2014,6 +2026,61 @@ function createWorkspaceToolRegistry({
           return JSON.stringify(manual.read({ slug: args.slug, anchor: args.anchor, locale: args.locale ?? locale }));
         } catch (error) {
           return JSON.stringify({ error: error?.message || 'The manual page could not be read.' });
+        }
+      },
+    },
+    {
+      name: 'list_release_notes',
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.OTHER,
+      configGroup: CONFIG_TOOL_GROUPS.READ,
+      display: { key: 'tools.line.listReleaseNotes', target: TOOL_LINE_TARGETS.NONE },
+      // Asks GitHub for the public release list — the request of the update
+      // check, to the same host, with nothing of the user's in it — and
+      // changes nothing: `read`, and so never a card (#1191).
+      riskClass: TOOL_RISK_CLASSES.READ,
+      requiresWorkspace: false,
+      targets: () => [],
+      isAvailable: () => Boolean(releaseNotes),
+      descriptionKey: 'tools.desc.list_release_notes',
+      modelDescription:
+        'Reads what the releases of Snotra changed for the user: per version its number, date, link and '
+        + 'the notes written for the user, in the language of the app. Use it for every question about '
+        + 'versions or changes — "what has changed since 1.24.0?", "what is new in my version?", '
+        + '"is there a newer version and what does it bring?", "when did Snotra learn X?" — and answer from '
+        + 'what it returns, never from memory. `from` is exclusive, `to` inclusive. Without `to` it is the '
+        + 'installed version (`installedVersion` in the result); "latest" is the newest release. Without '
+        + '`from` only the release `to` itself comes back. Group the answer (new, better, fixed), name '
+        + 'the version numbers, and link the manual page where a feature is described. Releases listed '
+        + 'under `versionsWithoutUserNotes` have no notes for users: say so, do not invent changes. '
+        + 'An `error` means the history could not be read (offline): tell the user, do not guess. '
+        + 'The request goes to GitHub and carries nothing of the conversation.',
+      shortDescriptionKey: 'tools.short.list_release_notes',
+      parameters: {
+        type: 'object',
+        properties: {
+          from: {
+            type: 'string',
+            description: 'Version after which to list, exclusive, e.g. "1.24.0". Optional.',
+          },
+          to: {
+            type: 'string',
+            description: 'Last version to list, inclusive, e.g. "1.27.1", or "latest". Defaults to the installed version.',
+          },
+          locale: {
+            type: 'string',
+            enum: [...LOCALES],
+            description: 'Language of the notes. Defaults to the language of the app.',
+          },
+        },
+        required: [],
+      },
+      handler: async (args, { locale } = {}) => {
+        if (!releaseNotes) return JSON.stringify({ error: 'The release history is not available.' });
+        try {
+          return JSON.stringify(await releaseNotes.read({ from: args.from, to: args.to, locale: args.locale ?? locale }));
+        } catch (error) {
+          return JSON.stringify({ error: error?.message || 'The release history could not be read.' });
         }
       },
     },

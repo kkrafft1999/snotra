@@ -101,7 +101,7 @@ test('snotra-capabilities is a lookup, not a second manual (#952)', () => {
   // towards that size is collecting facts that belong in the manual.
   assert.ok(body.length < 6000, `The skill body has ${body.length} characters; move facts to the manual.`);
   assert.doesNotMatch(body, /^\|/m, 'Tables of features or settings belong in the manual.');
-  for (const tool of ['get_configuration', 'search_manual', 'read_manual_page', 'propose_config_change']) {
+  for (const tool of ['get_configuration', 'search_manual', 'read_manual_page', 'list_release_notes', 'propose_config_change']) {
     assert.ok(skillText.includes(`\`${tool}\``), `The skill does not tell the model to use ${tool}.`);
   }
   // A run's own result is the only place that knows whether it was isolated (#405).

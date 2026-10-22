@@ -24,6 +24,7 @@ This page is the overview. Every row links to the page that explains it.
 | MCP servers | Uses the tools of MCP servers you connect: tickets, a database, a calendar, anything a server offers | [Connect an MCP server](../../customising/mcp-servers/) |
 | Models | Works with OpenAI, Anthropic and Google in the cloud; with Ollama, LM Studio and any server with an OpenAI-compatible interface on your machine or in your network; and through gateways such as OpenRouter | [Connect a model](../../getting-started/connect-a-model/) |
 | Questions about Snotra | Looks the answer up in this manual and links the page it used | [Set up the built-in tools](../../customising/built-in-tools/#the-built-in-tools) |
+| Questions about versions | Tells you what the releases changed, since a version you name or in the one you have, from the release notes | [Read the release notes](../../updating/release-notes/#ask-snotra-about-versions) |
 
 What a chat may do on its own depends on its mode and on the risk class of each tool — see [Why Snotra asks before it acts](../../safety/why-snotra-asks/).
 

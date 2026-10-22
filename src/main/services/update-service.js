@@ -577,6 +577,10 @@ function createUpdateService({
 
 module.exports = {
   createUpdateService,
+  GITHUB_API,
+  DEFAULT_REPO,
+  REQUEST_TIMEOUT_MS,
+  readRateLimit,
   parseSemver,
   compareSemver,
   isNewerVersion,
