@@ -8,7 +8,8 @@
  *
  * - **macOS Seatbelt** (log monitor): `curl(4711) deny(1) file-write-create /Users/me/x`
  *   — also `file-read-*` for the protected locations and `network-outbound
- *   1.2.3.4:5432` for a connection that bypassed the proxy;
+ *   remote:*:5432` for a connection that bypassed the proxy (Seatbelt names
+ *   the port, not the address);
  * - **Linux** (seccomp observer, write intents only): `deny openat /home/me/x`;
  * - **the network proxy**: `deny network-outbound host:443 (host is not on the allow list)`
  *   and `deny http-request GET https://host/path (reason)`.
@@ -73,10 +74,32 @@ const UNASKED_REASON = 'permission prompt failed';
  */
 
 /**
+ * Whether a Seatbelt `network-outbound` target is the sandbox's own proxy
+ * (#1164): one of its ports, on a loopback address or on `*`. Seatbelt logs
+ * a refused connection without its address (`remote:*:49283`), so the port
+ * is all there is to go by; the proxy's is an ephemeral one the runtime
+ * picked, and a refused attempt to reach it went to the proxy, not around
+ * it. On macOS CI a curl through the proxy exited 0 with such a line next to
+ * it — one attempt refused, another one through.
+ *
+ * @param {string} target
+ * @param {number[]} proxyPorts
+ */
+function isProxyTarget(target, proxyPorts) {
+  if (proxyPorts.length === 0) return false;
+  const m = /^(?:remote:)?(.*):(\d+)$/.exec(target);
+  if (!m || !proxyPorts.includes(Number(m[2]))) return false;
+  const host = m[1].replace(/^\[(.*)\]$/, '$1').toLowerCase();
+  return host === '*' || host === 'localhost' || host === '::1'
+    || /^(?:::ffff:)?127\.\d+\.\d+\.\d+$/.test(host);
+}
+
+/**
  * @param {unknown} line  one violation line as the runtime stored it
+ * @param {{ proxyPorts?: number[] }} [options]  the ports of the sandbox's own network proxy
  * @returns {Violation|null}
  */
-function parseViolationLine(line) {
+function parseViolationLine(line, { proxyPorts = [] } = {}) {
   const text = String(line ?? '').trim();
   if (!text) return null;
 
@@ -98,8 +121,10 @@ function parseViolationLine(line) {
     const base = { operation, process: process.trim(), target };
     if (operation.startsWith('file-write')) return { ...base, kind: KINDS.WRITE };
     if (operation.startsWith('file-read')) return { ...base, kind: KINDS.READ };
-    // A path is a local socket, not a host: nothing left the machine.
-    if (operation === 'network-outbound' && target && !target.startsWith('/')) return { ...base, kind: KINDS.DIRECT };
+    // A path is a local socket, not a host: nothing left the machine. Nor did
+    // a connection to the sandbox's own proxy, which is no bypass of it.
+    if (operation === 'network-outbound' && target && !target.startsWith('/')
+      && !isProxyTarget(target, proxyPorts)) return { ...base, kind: KINDS.DIRECT };
     return { ...base, kind: KINDS.OTHER };
   }
 
@@ -239,14 +264,15 @@ function groupWrites(paths, homeDir) {
  * that exist already too, and those attempts wrote nothing.
  *
  * @param {string[]} lines  the run's violation lines, oldest first
- * @param {{homeDir?: string, isPermittedWrite?: (path: string, operation: string) => boolean}} [options]
+ * @param {{homeDir?: string, isPermittedWrite?: (path: string, operation: string) => boolean,
+ *   proxyPorts?: number[]}} [options]
  * @returns {ViolationSummary|null}
  */
-function summarizeViolations(lines, { homeDir = '', isPermittedWrite } = {}) {
+function summarizeViolations(lines, { homeDir = '', isPermittedWrite, proxyPorts = [] } = {}) {
   const list = (Array.isArray(lines) ? lines : []).map((l) => String(l ?? '').trim()).filter(Boolean);
   if (list.length === 0) return null;
   const permitted = typeof isPermittedWrite === 'function' ? isPermittedWrite : () => false;
-  const parsed = list.map(parseViolationLine).map((p) => (p?.observed && permitted(p.target, p.operation) ? null : p));
+  const parsed = list.map((l) => parseViolationLine(l, { proxyPorts })).map((p) => (p?.observed && permitted(p.target, p.operation) ? null : p));
 
   /** @type {ViolationEntry[]} */
   const entries = [];

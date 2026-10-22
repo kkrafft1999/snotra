@@ -266,6 +266,21 @@ test('no network unless a domain is allowed — an allowed domain works', async 
   assert.deepEqual(allowed.isolation, { isolated: true, domains: ['example.com'] });
 });
 
+test('a connection that goes around the proxy is refused and named as direct, not the proxy\'s own port (#1164)', async (t) => {
+  const ctx = await ready(t);
+  if (!ctx) return;
+  // An address, no proxy: nothing to ask the user about, nothing to allow.
+  const direct = await run(ctx, 'curl --noproxy "*" -sS -m 5 -o /dev/null http://192.0.2.1:9/', { timeoutMs: 20_000 });
+
+  assert.notEqual(direct.exitCode, 0, said(direct));
+  // Linux keeps the run in a network namespace of its own and records no line for it.
+  if (process.platform !== 'darwin') return;
+  const entries = direct.sandboxBlocked?.entries ?? [];
+  // Seatbelt names the port only (`remote:*:9`), not the address.
+  assert.ok(entries.some((e) => e.kind === 'direct' && /:9$/.test(e.target)), said(direct));
+  assert.doesNotMatch(direct.stderr, /<sandbox_network>/, said(direct));
+});
+
 test('a connection outside the run\'s domains waits for the user: allowed it goes through, denied it is refused (#792)', async (t) => {
   const ctx = await ready(t);
   if (!ctx) return;
