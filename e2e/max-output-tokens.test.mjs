@@ -8,6 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir, sendChat, waitForFolderChat } from './helpers/app.mjs';
@@ -57,7 +58,8 @@ test('the output limit is validated in the dialog and sent with the request', { 
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
   await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en' }), 'utf8');
 
-  const snotra = await launchApp({ userDataDir });
+  const snotra = await launchApp({ userDataDir, mainPreload: fileURLToPath(new URL('./helpers/diag-preload.cjs', import.meta.url)) });
+  t.after(() => t.diagnostic(snotra.mainOutput().split('\n').filter((l) => l.startsWith('[diag')).join('\n')));
   t.after(async () => {
     await snotra.stop().catch(() => {});
     await model.close();
@@ -90,8 +92,11 @@ test('the output limit is validated in the dialog and sent with the request', { 
   const stored = JSON.parse(await readFile(path.join(userDataDir, 'llm-config.json'), 'utf8'));
   assert.equal(stored.presets[0].connection.maxOutputTokens, 4096);
 
+  await app.evaluate(() => globalThis.__diag('MARK before send LIMIT-ON'));
   await sendChat(page, 'LIMIT-ON', { t });
-  const withLimit = await poll(() => model.requestFor('LIMIT-ON'), { what: 'request with limit' });
+  await app.evaluate(() => globalThis.__diag('MARK send taken LIMIT-ON'));
+  const withLimit = await poll(() => model.requestFor('LIMIT-ON'), { what: 'request with limit', explain: () => model.describeRequests() });
+  await app.evaluate(() => globalThis.__diag('MARK request seen LIMIT-ON'));
   assert.equal(withLimit.body.max_tokens, 4096);
 
   // Clearing the field removes the limit again.
