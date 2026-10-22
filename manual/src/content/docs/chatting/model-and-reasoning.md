@@ -37,7 +37,7 @@ At least one model under *Settings › Models* — see [Connect a model](../../g
 | | Other Gemini models from 3 on | `low` `medium` `high` | `medium` |
 | *Ollama (local)* | gpt-oss | `low` `medium` `high` | `medium` |
 | | Other thinking models: DeepSeek-R1, Qwen3 (not the Coder and Instruct variants), QwQ, Magistral, Phi-4 reasoning, Kimi K2 Thinking, GLM 4.6 and later | `none` `on` — the model thinks or it doesn't | `on` |
-| *OpenAI-compatible* | Every model of an entry with *Offer reasoning levels* switched on [since 1.28] | `low` `medium` `high` | `medium` |
+| *OpenAI-compatible* | Every model of an entry with *Offer reasoning levels* switched on [since 1.27.2] | `low` `medium` `high` | `medium` |
 
 ![The model menu on a Claude model: under "Model" claude-opus-5-5, claude-sonnet-4-6 and qwen3:8b; under "Reasoning" the levels low, medium, high, xhigh and max, with medium chosen. Below it the pill, the model name shortened and the level "medium" in full.](screenshots/model-menu-claude.webp)
 

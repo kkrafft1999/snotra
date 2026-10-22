@@ -20,7 +20,7 @@ Each tool can be switched off on its own under *Settings › Tools › Autonomy*
 
 **Questions about Snotra itself.** [since 1.22] Ask how to do something in Snotra, where a setting is or why something does not work, and the model looks it up in this manual with `search_manual` and reads the page with `read_manual_page` — in the language of the app — and links the page it used; the link opens in the help window. Both read only the manual that ships with your version: none of your files, nothing on the internet, so they never ask first.
 
-**Questions about versions.** [since 1.28] Ask what has changed since a version, or what is new in the one you have installed, and the model reads the notes of the releases with `list_release_notes` and answers from them, grouped and with the version numbers. For that it asks GitHub for the public list of releases — the same request as the update check, with nothing of your files or of the conversation in it — so it never asks first either. See [Read the release notes](../../updating/release-notes/#ask-snotra-about-versions).
+**Questions about versions.** [since 1.27.2] Ask what has changed since a version, or what is new in the one you have installed, and the model reads the notes of the releases with `list_release_notes` and answers from them, grouped and with the version numbers. For that it asks GitHub for the public list of releases — the same request as the update check, with nothing of your files or of the conversation in it — so it never asks first either. See [Read the release notes](../../updating/release-notes/#ask-snotra-about-versions).
 
 ## Python
 

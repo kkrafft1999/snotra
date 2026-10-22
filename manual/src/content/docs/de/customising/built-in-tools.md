@@ -20,7 +20,7 @@ Jedes Tool lässt sich einzeln unter *Einstellungen › Tools › Autonomie* aus
 
 **Fragen zu Snotra selbst.** [seit 1.22] Fragst du, wie etwas in Snotra geht, wo eine Einstellung liegt oder warum etwas nicht klappt, schlägt das Modell in diesem Handbuch nach: Es sucht mit `search_manual`, liest die Seite mit `read_manual_page` – in der Sprache der App – und verlinkt die Seite, auf die es sich stützt; der Link öffnet sich im Hilfefenster. Beide lesen nur das Handbuch, das mit deiner Version ausgeliefert wird: keine deiner Dateien, nichts aus dem Internet, deshalb fragen sie nie vorher.
 
-**Fragen zu Versionen.** [seit 1.28] Fragst du, was sich seit einer Version geändert hat oder was in der installierten neu ist, liest das Modell die Hinweise der Releases mit `list_release_notes` und antwortet daraus, gegliedert und mit den Versionsnummern. Dafür fragt es bei GitHub die öffentliche Liste der Releases ab – dieselbe Anfrage wie die Update-Prüfung, ohne etwas aus deinen Dateien oder dem Gespräch – und fragt deshalb ebenfalls nie vorher. Siehe [Die Release Notes lesen](../../updating/release-notes/#snotra-nach-versionen-fragen).
+**Fragen zu Versionen.** [seit 1.27.2] Fragst du, was sich seit einer Version geändert hat oder was in der installierten neu ist, liest das Modell die Hinweise der Releases mit `list_release_notes` und antwortet daraus, gegliedert und mit den Versionsnummern. Dafür fragt es bei GitHub die öffentliche Liste der Releases ab – dieselbe Anfrage wie die Update-Prüfung, ohne etwas aus deinen Dateien oder dem Gespräch – und fragt deshalb ebenfalls nie vorher. Siehe [Die Release Notes lesen](../../updating/release-notes/#snotra-nach-versionen-fragen).
 
 ## Python
 

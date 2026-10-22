@@ -37,7 +37,7 @@ Mindestens ein Modell unter *Einstellungen › Modelle* — siehe [Ein Modell an
 | | Andere Gemini-Modelle ab 3 | `low` `medium` `high` | `medium` |
 | *Ollama (lokal)* | gpt-oss | `low` `medium` `high` | `medium` |
 | | Andere Modelle, die nachdenken: DeepSeek-R1, Qwen3 (ohne die Coder- und Instruct-Varianten), QwQ, Magistral, Phi-4 reasoning, Kimi K2 Thinking, GLM 4.6 und neuer | `none` `on` — das Modell denkt nach oder nicht | `on` |
-| *OpenAI-kompatibel* | Jedes Modell eines Eintrags, für den *Reasoning-Level anbieten* eingeschaltet ist [seit 1.28] | `low` `medium` `high` | `medium` |
+| *OpenAI-kompatibel* | Jedes Modell eines Eintrags, für den *Reasoning-Level anbieten* eingeschaltet ist [seit 1.27.2] | `low` `medium` `high` | `medium` |
 
 ![Das Modell-Menü bei einem Claude-Modell: unter „Modell“ claude-opus-5-5, claude-sonnet-4-6 und qwen3:8b; unter „Reasoning“ die Stufen low, medium, high, xhigh und max, medium gewählt. Darunter die Pille, der Modellname gekürzt, die Stufe „medium“ ganz.](screenshots/model-menu-claude.webp)
 
