@@ -76,6 +76,8 @@ for (const [entry, out] of [
   [path.join('runtime', 'heading-slug.js'), 'heading-slug.js'],
   [path.join('manual', 'manual-search.js'), 'manual-search.js'],
   [path.join('manual', 'manual-address.js'), 'manual-address.js'],
+  // The release notes of the user, #1072: the update dialog and, since #1191, the model.
+  [path.join('runtime', 'release-notes.js'), 'release-notes.js'],
 ]) {
   esbuild.buildSync({
     entryPoints: [path.join(root, 'src', 'shared', entry)],

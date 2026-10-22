@@ -22,7 +22,19 @@ Das Feld gibt es auch im Schritt *Bereit*, nach dem Download, falls du die Hinwe
 
 Die Hinweise folgen der Oberflächensprache: Stellst du sie unter [*Einstellungen › Allgemein*](../../customising/settings/#der-bereich-allgemein) um, wechselt der offene Dialog mit. Die vollständige Liste aller Änderungen mit Links zu den Pull Requests steht auf Englisch in den [Releases auf GitHub](https://github.com/kkrafft1999/snotra/releases). Bei einer Installation, die sich nicht selbst aktualisiert, führt dich der Knopf *Release-Seite öffnen* im Dialog dorthin. Auf GitHub stehen auch die Hinweise übersprungener und älterer Versionen.
 
+## Snotra nach Versionen fragen
+
+[seit 1.28] Du musst keinen Dialog öffnen, um zu erfahren, was eine Version geändert hat. Frag im Chat:
+
+- *Was hat sich seit 1.25.0 geändert?* – alles zwischen dieser und der installierten Version.
+- *Was ist in meiner Version neu?* – die Hinweise der installierten Version.
+- *Gibt es eine neuere Version, und was bringt sie mir?* – die Hinweise der Versionen nach deiner.
+
+Snotra liest die Hinweise der Releases mit dem Tool `list_release_notes`, in der Sprache der Oberfläche, und antwortet gegliedert – was neu ist, was besser wurde, was behoben ist – mit den Versionsnummern und verlinkt die Handbuchseite, auf der eine Funktion beschrieben ist. Dafür fragt es bei GitHub die öffentliche Liste der Releases ab, dieselbe Anfrage wie die Update-Prüfung; nichts aus deinen Dateien oder dem Chat geht mit, deshalb fragt es nicht vorher. Die Anfrage geht nur, wenn du fragst – egal, was die Einstellung *Beim Start nach Updates suchen* sagt.
+
 ## Wenn es nicht klappt
 
 - **Das Feld *Was sich geändert hat* fehlt.** Das Release hat keine für dich geschriebenen Hinweise – Versionen vor 1.25 haben keine. Die Release-Seite zeigt trotzdem, was sich geändert hat.
-- **Du willst die Hinweise einer Version, die du schon installiert hast.** Der Dialog zeigt sie nur, solange ein Update angeboten wird. Lies sie auf der [Releases-Seite](https://github.com/kkrafft1999/snotra/releases).
+- **Du willst die Hinweise einer Version, die du schon installiert hast.** Der Dialog zeigt sie nur, solange ein Update angeboten wird. Frag Snotra im Chat, siehe oben, oder lies sie auf der [Releases-Seite](https://github.com/kkrafft1999/snotra/releases).
+- **Snotra sagt, es konnte die Release-Historie nicht lesen.** Die Abfrage braucht eine Verbindung zu GitHub, und GitHub begrenzt Anfragen aus einem gemeinsam genutzten Netz nach einer Weile. Versuche es später noch einmal; die Hinweise stehen auch auf der [Releases-Seite](https://github.com/kkrafft1999/snotra/releases). Snotra füllt die Lücke nicht aus dem Gedächtnis.
+- **Snotra sagt, zu einer Version gibt es keine Hinweise für dich.** Versionen vor 1.25 haben keine; Snotra nennt sie und erfindet keine Änderungen.

@@ -420,9 +420,13 @@ test('workspace registry declares all built-in tools with their minimum risk cla
     assert.equal(names.includes(name), false, name);
     assert.equal(classes[name], 'read', name);
   }
-  // 23 registered tools minus the two essential ones, list_directory and
+  // Reads the release list on GitHub (#1191) and nothing of the user's: `read`;
+  // without a reader nobody answers.
+  assert.equal(names.includes('list_release_notes'), false);
+  assert.equal(classes.list_release_notes, 'read');
+  // 24 registered tools minus the two essential ones, list_directory and
   // load_skill, which nobody deselects (#195).
-  assert.equal(Object.keys(classes).length, 21);
+  assert.equal(Object.keys(classes).length, 22);
   assert.equal(Object.hasOwn(classes, 'list_directory'), false);
   assert.equal(Object.hasOwn(classes, 'load_skill'), false);
 });

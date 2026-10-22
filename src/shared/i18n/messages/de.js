@@ -1672,6 +1672,8 @@ module.exports = {
   'tools.desc.search_manual': 'Lässt das Modell im Handbuch suchen, das mit dieser Version von Snotra ausgeliefert wird — genauso wie die Suche im Hilfefenster. Es nutzt das bei Fragen zu Snotra selbst: wie etwas geht, wo eine Einstellung liegt, warum etwas nicht klappt. So folgt die Antwort dem Handbuch statt einer Vermutung. Es liest nur das Handbuch: keine deiner Dateien, nichts aus dem Internet, und es ändert nichts.',
   'tools.short.read_manual_page': 'Lässt das Modell eine Seite aus dem Handbuch von Snotra lesen.',
   'tools.desc.read_manual_page': 'Lässt das Modell eine Seite des Handbuchs lesen, das mit dieser Version von Snotra ausgeliefert wird, oder einen Abschnitt daraus — in der Sprache der App oder in der anderen. Links der Seite kommen als Adressen auf docs.snotra-ai.dev mit, damit die Antwort dich zur Seite führen kann; ein Klick darauf öffnet sie im Hilfefenster. Es liest nur das Handbuch: keine deiner Dateien, nichts aus dem Internet, und es ändert nichts.',
+  'tools.short.list_release_notes': 'Lässt das Modell lesen, was die Releases von Snotra für dich geändert haben.',
+  'tools.desc.list_release_notes': 'Lässt das Modell die Hinweise zu den Releases von Snotra lesen — je Version Nummer, Datum und was sich für dich geändert hat, in der Sprache der App. Es nutzt das bei Fragen wie „Was hat sich seit 1.24.0 geändert?“ oder „Was ist in meiner Version neu?“, damit die Antwort aus den Hinweisen kommt statt aus einer Vermutung. Dafür fragt es bei GitHub die öffentliche Liste der Releases ab — dieselbe Anfrage wie die Update-Prüfung; nichts aus deinen Dateien oder diesem Gespräch geht mit. Ist GitHub nicht erreichbar, sagt es das. Es ändert nichts.',
   'tools.short.propose_config_change': 'Lässt das Modell vorschlagen, einen Skill oder ein Tool für diesen Chat ein- oder auszuschalten; du entscheidest auf einer Karte.',
   'tools.desc.propose_config_change': 'Lässt das Modell vorschlagen, einen Skill oder ein Tool ein- oder auszuschalten, wenn das bei deiner Anfrage hilft. Du siehst eine Karte mit dem, was der Skill oder das Tool tut, und der Begründung des Modells, und entscheidest. Angenommen, gilt die Änderung nur für diesen Chat – neue Chats behalten deine Einstellungen. Das Modell schaltet nie selbst, und einen abgelehnten Vorschlag zeigt Snotra im selben Chat nicht noch einmal.',
 
@@ -2296,6 +2298,8 @@ module.exports = {
   'tools.line.readManualPage.done': 'Handbuchseite {page} gelesen',
   'tools.line.readManualPage.start.plain': 'Eine Handbuchseite wird gelesen …',
   'tools.line.readManualPage.done.plain': 'Handbuchseite gelesen',
+  'tools.line.listReleaseNotes.start': 'Die Release Notes werden gelesen …',
+  'tools.line.listReleaseNotes.done': 'Release Notes gelesen',
 
   'tools.line.fetchUrl.start': 'Seite {host} wird gelesen …',
   'tools.line.fetchUrl.done': 'Seite {host} gelesen',

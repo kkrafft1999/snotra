@@ -18,6 +18,7 @@
  */
 
 import contracts from '../generated/contracts.js';
+import releaseNotesModule from '../generated/release-notes.js';
 import { t, tMessage, getLocale, onLocaleChange, DEFAULT_LOCALE } from '../i18n.js';
 import { formatMegabytes, formatSize, inertHtmlFragment, markdownToSafeHtml } from '../utils/helpers.js';
 import { invokeErrorMessage } from '../utils/invoke-error.js';
@@ -32,35 +33,15 @@ const FOCUSABLE = 'button:not([disabled]), a[href], summary, [tabindex]:not([tab
 
 
 /**
- * The part of a release body that is written for the user (#1072).
+ * The part of a release body that is written for the user (#1072): the section
+ * in the interface language, English standing in for a missing one. The cutting
+ * itself is shared with the chat model's lookup of past releases (#1191).
  *
- * GitHub's generated list names every pull request the way a developer titles
- * it — test runs, CI, documentation. The dialog leaves all of that to the
- * release page and shows only the section the release skill writes on top,
- * once in English and once in German, between HTML comments that GitHub does
- * not render:
- *
- *   <!-- snotra:notes en --> … <!-- snotra:notes de --> … <!-- snotra:notes end -->
- *
- * scripts/release-user-notes.js writes exactly this. The section in `locale`
- * wins, English stands in for a missing one; a body without the markers — any
- * release before #1072 — has nothing for the user, and the box stays away.
+ * @param {unknown} notes
+ * @param {string} locale
  */
-const NOTES_MARKER = /<!--\s*snotra:notes\s+([a-z]+)\s*-->/gi;
-
 function userReleaseNotes(notes, locale) {
-  const text = String(notes || '').replace(/\r\n?/g, '\n');
-  const sections = {};
-  let current = null;
-  let from = 0;
-  for (const match of text.matchAll(NOTES_MARKER)) {
-    if (current) sections[current] = text.slice(from, match.index).trim();
-    const name = match[1].toLowerCase();
-    if (name === 'end') break;
-    current = name;
-    from = match.index + match[0].length;
-  }
-  return sections[locale] || sections[DEFAULT_LOCALE] || '';
+  return releaseNotesModule.userReleaseNotes(notes, locale, DEFAULT_LOCALE);
 }
 
 export function initUpdateDialog({ api }) {
