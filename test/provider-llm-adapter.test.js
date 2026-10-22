@@ -424,12 +424,13 @@ const COMPAT_PROVIDER = {
   defaultModel: '',
   defaultBaseUrl: 'http://localhost:1234/v1',
   optionalApiKey: true,
-  fields: { apiKey: true, baseUrl: true, supportsImages: true, maxOutputTokens: true },
+  fields: { apiKey: true, baseUrl: true, supportsImages: true, supportsReasoning: true, maxOutputTokens: true },
   connectionPerPreset: true,
   capabilities: {
     images: { supported: 'per-connection', setting: 'supportsImages', reason: 'chat.image.error.connectionWithoutImages' },
-    reasoningLevels: { supported: false, reason: 'provider.capability.reasoningLevels.notBuilt', issue: 1148 },
+    reasoningLevels: { supported: 'per-connection', setting: 'supportsReasoning', reason: 'provider.compatible.reasoning.connectionOff' },
   },
+  reasoning: { levels: ['low', 'medium', 'high'], defaultLevel: 'medium' },
   async streamChatRound() {
     return { message: { role: 'assistant', content: 'ok' }, finishReason: 'stop' };
   },
@@ -474,6 +475,35 @@ test('prepareSendBundle nimmt Anzeigenamen und Bild-Faehigkeit aus der Konfigura
   assert.equal(plain.providerName, 'OpenAI-kompatibel');
   assert.equal(plain.capabilities.images, false);
   assert.equal(plain.capabilities.gaps.images.limitedBy, 'connection');
+});
+
+/** An OpenAI-compatible entry whose stored connection is `connection`. */
+function compatTargetAdapter(connection, ownLevel = null) {
+  return createProviderLlmAdapter(makeAdapterDeps({
+    providerRuntime: { getProvider: (id) => (id === 'openai-compatible' ? COMPAT_PROVIDER : null) },
+    llmConfigStore: {
+      readLLMConfig: async () => ({
+        presets: [{ id: 'p1', providerId: 'openai-compatible', model: 'gpt-oss-20b', connection }],
+      }),
+      resolveChatModelTarget: () => ({ providerId: 'openai-compatible', presetId: 'p1', model: 'gpt-oss-20b' }),
+    },
+    reasoningLevelFor: async () => ownLevel,
+  }));
+}
+
+test('an OpenAI-compatible entry gets a level only with its switch on (#1148)', async () => {
+  const off = await compatTargetAdapter({ baseUrl: 'http://localhost:1234/v1' }, 'high').resolveChatTarget();
+  assert.equal(off.reasoningEffort, undefined);
+  const on = await compatTargetAdapter({ baseUrl: 'http://localhost:1234/v1', supportsReasoning: true })
+    .resolveChatTarget();
+  assert.equal(on.reasoningEffort, 'medium');
+  const own = await compatTargetAdapter({ baseUrl: 'http://localhost:1234/v1', supportsReasoning: true }, 'high')
+    .resolveChatTarget();
+  assert.equal(own.reasoningEffort, 'high');
+  // A level the entry does not offer falls back to its default.
+  const foreign = await compatTargetAdapter({ baseUrl: 'http://localhost:1234/v1', supportsReasoning: true }, 'xhigh')
+    .resolveChatTarget();
+  assert.equal(foreign.reasoningEffort, 'medium');
 });
 
 test('prepareSendBundle hands the engine the traits instead of the provider ID (#996)', async () => {

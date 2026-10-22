@@ -43,7 +43,8 @@ test('the reasoning capability matches the levels the adapter offers', () => {
   for (const id of providers.PROVIDER_ORDER) {
     const provider = providerOf(id);
     const declared = provider.capabilities[PROVIDER_CAPABILITIES.REASONING_LEVELS].supported;
-    assert.equal(declared === true, !!provider.reasoning, id);
+    // Offered for good, or where the entry's switch says so (#1148).
+    assert.equal(declared !== false, !!provider.reasoning, id);
   }
 });
 
@@ -62,7 +63,7 @@ test('the check fails on an undeclared capability and on a gap without reason or
   const complete = {
     capabilities: {
       images: { supported: true },
-      reasoningLevels: { supported: false, reason: 'provider.capability.reasoningLevels.notBuilt', issue: 1148 },
+      reasoningLevels: { supported: false, reason: 'provider.compatible.reasoning.connectionOff', issue: 1148 },
     },
   };
   assert.deepEqual(declarationProblems(complete, { knownReasonKeys }), []);
@@ -119,12 +120,14 @@ test('an OpenAI-compatible entry takes images by its own switch (#193, #202)', (
   const on = resolveProviderCapabilities(compat, { supportsImages: true });
   assert.equal(on.images, true);
   assert.equal(on.gaps.images, undefined);
-  // The reasoning gap stays, with the issue that tracks it.
+  // Reasoning levels follow a switch of their own (#1148), independent of images.
   assert.deepEqual(on.gaps.reasoningLevels, {
-    limitedBy: CAPABILITY_LIMITS.PROVIDER,
-    reason: 'provider.capability.reasoningLevels.notBuilt',
-    issue: 1148,
+    limitedBy: CAPABILITY_LIMITS.CONNECTION,
+    reason: 'provider.compatible.reasoning.connectionOff',
   });
+  const reasoning = resolveProviderCapabilities(compat, { supportsReasoning: true });
+  assert.equal(reasoning.reasoningLevels, true);
+  assert.equal(reasoning.images, false);
 });
 
 test('local models: declared by Ollama, or a server address on this machine (#193)', () => {

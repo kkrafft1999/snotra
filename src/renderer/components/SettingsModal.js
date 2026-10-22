@@ -217,6 +217,8 @@ export function initSettingsModal(deps) {
   const maxOutputTokensError = document.getElementById('provider-max-output-tokens-error');
   const providerSupportsImagesRow = document.getElementById('provider-supports-images-row');
   const inputSupportsImages = document.getElementById('input-supports-images');
+  const providerSupportsReasoningRow = document.getElementById('provider-supports-reasoning-row');
+  const inputSupportsReasoning = document.getElementById('input-supports-reasoning');
   const presetFieldsPopup = document.getElementById('preset-fields-popup');
   const selectModel = document.getElementById('select-model');
   const inputModel = document.getElementById('input-model');
@@ -338,6 +340,7 @@ export function initSettingsModal(deps) {
       extraHeaders: '',
       removeExtraHeaders: false,
       supportsImages: false,
+      supportsReasoning: false,
       sendTools: true,
       // The field as typed (#931); parsed only when the entry is applied, so a
       // wrong value stays visible instead of being reset.
@@ -355,6 +358,7 @@ export function initSettingsModal(deps) {
       displayName: typeof conn.displayName === 'string' ? conn.displayName : '',
       apiStyle: conn.apiStyle || pv.form?.defaultApiStyle || 'chat',
       supportsImages: conn.supportsImages === true,
+      supportsReasoning: conn.supportsReasoning === true,
       sendTools: conn.sendTools !== false,
       maxOutputTokens: Number.isInteger(conn.maxOutputTokens) ? String(conn.maxOutputTokens) : '',
     };
@@ -478,13 +482,16 @@ export function initSettingsModal(deps) {
     // (`hasKey`, `hasExtraHeaders`) bleiben hier — der Main-Prozess weiss
     // selbst, was gespeichert ist.
     if (pr.connection && usesPresetConnection(pv)) {
-      const { displayName, baseUrl, apiStyle, insecureTls, supportsImages, sendTools, maxOutputTokens, draft } = pr.connection;
+      const {
+        displayName, baseUrl, apiStyle, insecureTls, supportsImages, supportsReasoning, sendTools, maxOutputTokens, draft,
+      } = pr.connection;
       row.connection = {
         displayName,
         baseUrl,
         apiStyle,
         insecureTls,
         supportsImages,
+        supportsReasoning,
         sendTools,
         // null removes a stored limit (#931).
         maxOutputTokens: Number.isInteger(maxOutputTokens) ? maxOutputTokens : null,
@@ -554,6 +561,7 @@ export function initSettingsModal(deps) {
       extraHeaders: '',
       removeExtraHeaders: false,
       supportsImages: pv.supportsImages === true,
+      supportsReasoning: pv.supportsReasoning === true,
       sendTools: pv.sendTools !== false,
     };
   }
@@ -586,6 +594,7 @@ export function initSettingsModal(deps) {
       if (draft.extraHeaders.trim()) draft.removeExtraHeaders = false;
     }
     if (form.showSupportsImages) draft.supportsImages = !!inputSupportsImages.checked;
+    if (form.showSupportsReasoning) draft.supportsReasoning = !!inputSupportsReasoning.checked;
     if (form.showSendTools) draft.sendTools = !!inputSendTools.checked;
     if (form.showMaxOutputTokens) draft.maxOutputTokens = inputMaxOutputTokens.value || '';
     stashPopupPresetFieldValues(id);
@@ -1074,6 +1083,14 @@ export function initSettingsModal(deps) {
     } else {
       providerSupportsImagesRow.classList.add('hidden');
       inputSupportsImages.checked = false;
+    }
+
+    if (form.showSupportsReasoning) {
+      providerSupportsReasoningRow.classList.remove('hidden');
+      inputSupportsReasoning.checked = draft.supportsReasoning === true;
+    } else {
+      providerSupportsReasoningRow.classList.add('hidden');
+      inputSupportsReasoning.checked = false;
     }
 
     renderPresetFieldsPopup(pv);
@@ -2548,6 +2565,7 @@ export function initSettingsModal(deps) {
       apiStyle: draft?.apiStyle || providerView.form?.defaultApiStyle || 'chat',
       insecureTls: draft?.insecureTls === true,
       supportsImages: draft?.supportsImages === true,
+      supportsReasoning: draft?.supportsReasoning === true,
       sendTools: draft?.sendTools !== false,
       maxOutputTokens: parseMaxOutputTokensInput(draft?.maxOutputTokens).value ?? null,
       hasKey: typedKey || (alt.hasKey === true && !draft?.removeApiKey),
@@ -2607,6 +2625,7 @@ export function initSettingsModal(deps) {
         }
       }
       if (pv.form?.showSupportsImages) patch.supportsImages = d.supportsImages === true;
+      if (pv.form?.showSupportsReasoning) patch.supportsReasoning = d.supportsReasoning === true;
       if (pv.form?.showSendTools) patch.sendTools = d.sendTools !== false;
       providerPatches[pid] = patch;
     }
@@ -2847,6 +2866,12 @@ export function initSettingsModal(deps) {
     const draft = activeDraft(selectProvider.value);
     if (!draft) return;
     draft.supportsImages = !!inputSupportsImages.checked;
+  });
+
+  inputSupportsReasoning?.addEventListener('change', () => {
+    const draft = activeDraft(selectProvider.value);
+    if (!draft) return;
+    draft.supportsReasoning = !!inputSupportsReasoning.checked;
   });
 
   btnLoadModels.addEventListener('click', () => {

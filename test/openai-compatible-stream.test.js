@@ -424,6 +424,96 @@ test('ein anderer Fehlerstatus loest keinen Rueckfall aus', async (t) => {
   assert.deepEqual(res, { error: 'Bumm', code: '500' });
 });
 
+// --- Reasoning levels (#1148) ----------------------------------------------
+
+test('reasoning_effort goes out only when the entry says its server takes it', async (t) => {
+  const calls = mockFetch(t, () => sseResponse([deltaChunk({ content: 'ok' }, 'stop')]));
+  const sink = collectCallbacks();
+  const round = (config) => compat.streamChatRound({ config, model: 'gpt-oss-20b', messages: [], callbacks: sink.callbacks });
+
+  await round({ ...LOCAL, supportsReasoning: true, reasoningEffort: 'high' });
+  assert.equal(JSON.parse(calls[0].options.body).reasoning_effort, 'high');
+
+  // Switch off: the chat's level stays at home, the server never sees the field.
+  await round({ ...LOCAL, reasoningEffort: 'high' });
+  assert.equal('reasoning_effort' in JSON.parse(calls[1].options.body), false);
+
+  // Switch on without a level, or with one the entry does not offer: nothing.
+  await round({ ...LOCAL, supportsReasoning: true });
+  await round({ ...LOCAL, supportsReasoning: true, reasoningEffort: 'xhigh' });
+  assert.equal('reasoning_effort' in JSON.parse(calls[2].options.body), false);
+  assert.equal('reasoning_effort' in JSON.parse(calls[3].options.body), false);
+});
+
+test('the Responses style sends the level as reasoning.effort, and the fallback as reasoning_effort', async (t) => {
+  const calls = mockFetch(t, (url) =>
+    url.endsWith('/responses')
+      ? statusResponse(404)
+      : sseResponse([deltaChunk({ content: 'ok' }, 'stop')])
+  );
+  const sink = collectCallbacks();
+  await compat.streamChatRound({
+    config: { ...REMOTE, apiStyle: 'full', supportsReasoning: true, reasoningEffort: 'low' },
+    model: 'm',
+    messages: [],
+    callbacks: sink.callbacks,
+  });
+  const [responses, chat] = calls.map((c) => JSON.parse(c.options.body));
+  assert.deepEqual(responses.reasoning, { effort: 'low' });
+  assert.equal('reasoning_effort' in responses, false);
+  assert.equal(chat.reasoning_effort, 'low');
+  assert.equal('reasoning' in chat, false);
+});
+
+test('a level the server turns down is explained, with its own words kept', async (t) => {
+  mockFetch(t, () => statusResponse(400, JSON.stringify({
+    error: { message: "Invalid value for 'reasoning_effort': 'high'." },
+  })));
+  const sink = collectCallbacks();
+  const res = await compat.streamChatRound({
+    config: { ...LOCAL, supportsReasoning: true, reasoningEffort: 'high' },
+    model: 'm',
+    messages: [],
+    callbacks: sink.callbacks,
+  });
+  assert.equal(res.code, '400');
+  assert.deepEqual(res.error, {
+    key: 'provider.compatible.error.effortRejected',
+    params: { effort: 'high', detail: "Invalid value for 'reasoning_effort': 'high'." },
+  });
+});
+
+test('a rejection about something else, or without a level sent, keeps the server text', async (t) => {
+  const answers = ['context length exceeded', 'unknown field reasoning_effort'];
+  mockFetch(t, () => statusResponse(400, JSON.stringify({ error: { message: answers.shift() } })));
+  const sink = collectCallbacks();
+  const other = await compat.streamChatRound({
+    config: { ...LOCAL, supportsReasoning: true, reasoningEffort: 'high' },
+    model: 'm',
+    messages: [],
+    callbacks: sink.callbacks,
+  });
+  assert.equal(other.error, 'context length exceeded');
+
+  const unsent = await compat.streamChatRound({
+    config: { ...LOCAL, reasoningEffort: 'high' },
+    model: 'm',
+    messages: [],
+    callbacks: sink.callbacks,
+  });
+  assert.equal(unsent.error, 'unknown field reasoning_effort');
+});
+
+test('reasoning levels follow the supportsReasoning switch of the entry (#1148)', () => {
+  assert.deepEqual(compat.capabilities.reasoningLevels, {
+    supported: 'per-connection',
+    setting: 'supportsReasoning',
+    reason: 'provider.compatible.reasoning.connectionOff',
+  });
+  assert.deepEqual([...compat.reasoning.levels], ['low', 'medium', 'high']);
+  assert.equal(compat.fields.supportsReasoning, true);
+});
+
 // --- Modellliste -----------------------------------------------------------
 
 test('listModels liefert die sortierte Liste mit Key und Zusatz-Headern', async (t) => {

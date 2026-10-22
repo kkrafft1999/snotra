@@ -1698,6 +1698,16 @@
                 </div>
               </div>
 
+              <div id="provider-supports-reasoning-row" class="hidden popup-form__row popup-form__row--toggle">
+                <div class="popup-form__field">
+                  <label class="popup-form__switch">
+                    <input type="checkbox" role="switch" class="ds-switch" id="input-supports-reasoning" aria-describedby="provider-supports-reasoning-hint" />
+                    <span data-i18n="addModel.reasoning.toggle">Offer reasoning levels</span>
+                  </label>
+                  <p id="provider-supports-reasoning-hint" class="modal-hint" data-i18n-html="addModel.reasoning.hint">Only switch on if the server takes <code>reasoning_effort</code> &mdash; vLLM, OpenRouter, or LM Studio with gpt-oss, for example. The chat then offers low, medium and high.</p>
+                </div>
+              </div>
+
               <div id="provider-max-output-tokens-row" class="hidden popup-form__row">
                 <label class="popup-form__label" for="input-max-output-tokens" data-i18n="addModel.maxOutputTokens.subhead">Max output tokens</label>
                 <div class="popup-form__field">

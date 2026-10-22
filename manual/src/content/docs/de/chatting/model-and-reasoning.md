@@ -37,10 +37,13 @@ Mindestens ein Modell unter *Einstellungen › Modelle* — siehe [Ein Modell an
 | | Andere Gemini-Modelle ab 3 | `low` `medium` `high` | `medium` |
 | *Ollama (lokal)* | gpt-oss | `low` `medium` `high` | `medium` |
 | | Andere Modelle, die nachdenken: DeepSeek-R1, Qwen3 (ohne die Coder- und Instruct-Varianten), QwQ, Magistral, Phi-4 reasoning, Kimi K2 Thinking, GLM 4.6 und neuer | `none` `on` — das Modell denkt nach oder nicht | `on` |
+| *OpenAI-kompatibel* | Jedes Modell eines Eintrags, für den *Reasoning-Level anbieten* eingeschaltet ist [seit 1.28] | `low` `medium` `high` | `medium` |
 
 ![Das Modell-Menü bei einem Claude-Modell: unter „Modell“ claude-opus-5-5, claude-sonnet-4-6 und qwen3:8b; unter „Reasoning“ die Stufen low, medium, high, xhigh und max, medium gewählt. Darunter die Pille, der Modellname gekürzt, die Stufe „medium“ ganz.](screenshots/model-menu-claude.webp)
 
-Ältere Modelle dieser Anbieter — Claude 3.5, Gemini 2.0 und früher, Ollama-Modelle, die nicht nachdenken — zeigen keine Stufen und funktionieren ohne weiter. *OpenAI-kompatible* Server zeigen ebenfalls keine.
+Ältere Modelle dieser Anbieter — Claude 3.5, Gemini 2.0 und früher, Ollama-Modelle, die nicht nachdenken — zeigen keine Stufen und funktionieren ohne weiter.
+
+Ein *OpenAI-kompatibler* Server kann nicht sagen, ob er eine Stufe annimmt, also sagst du es Snotra: Schalte für den Eintrag unter *Einstellungen › Modelle* *Reasoning-Level anbieten* ein — siehe [Einen Server mit OpenAI-kompatibler Schnittstelle anbinden](../../customising/models/#einen-server-mit-openai-kompatibler-schnittstelle-anbinden). Lass es bei einem Server aus, der das Feld nicht kennt; manche lehnen sonst die ganze Anfrage ab.
 
 Bei Claude, Gemini und Ollama erscheinen die Gedanken des Modells im Chat als *Zwischenschritte (Modell)*, während es arbeitet, genau wie bei OpenAI. Eine höhere Stufe heißt längeres Nachdenken: Die Antwort dauert länger und kostet mehr Tokens.
 
@@ -55,6 +58,7 @@ Bei Claude, Gemini und Ollama erscheinen die Gedanken des Modells im Chat als *Z
 
 - **Ein Modell fehlt im Menü.** Sein Schalter unter *Einstellungen › Modelle* ist aus, oder es steht noch nicht in der Liste.
 - **Der Chat erklärt, dass die Stufe nicht geht.** Welche Stufen ein Modell nimmt, entscheidet OpenAI. Die Meldung nennt die Stufen, die es nimmt, wo OpenAI sie angibt; wähle eine davon.
-- **Ein Modell zeigt keine Stufen.** Es ist älter als die Modelle in der Tabelle, oder Snotra weiß nicht, dass es nachdenken kann. Es funktioniert ohne Stufe weiter.
+- **Der Chat sagt, der Server habe die Stufe nicht angenommen.** Bei einem *OpenAI-kompatiblen* Eintrag entscheidet der Server. Wähle eine andere Stufe, oder schalte *Reasoning-Level anbieten* für den Eintrag aus, wenn der Server keine nimmt.
+- **Ein Modell zeigt keine Stufen.** Es ist älter als die Modelle in der Tabelle, oder Snotra weiß nicht, dass es nachdenken kann. Es funktioniert ohne Stufe weiter. Bei einem *OpenAI-kompatiblen* Eintrag ist *Reasoning-Level anbieten* aus.
 - **Ein Ollama-Modell unter eigenem Namen zeigt keine Stufen.** Snotra erkennt die nachdenkenden Modelle an ihrem Namen. Ein Modell, das unter einem anderen Namen importiert oder kopiert wurde, antwortet mit seiner eigenen Voreinstellung.
 - **Ein Ollama-Modell zeigt `none` und `on`, denkt aber trotzdem nach oder nie.** Manche Fine-Tunes behalten den Namen ihres Basismodells, aber nicht sein Nachdenken. Snotra schickt die Nachricht dann ohne Stufe, und das Modell antwortet wie immer.

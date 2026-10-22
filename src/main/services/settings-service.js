@@ -5,6 +5,7 @@ const {
   normalizeUiPrefsPatch,
   LLM_CONFIG_VERSION,
   hasPresetConnection,
+  storedConnectionFor,
   normalizeProviderPatch,
   normalizePresetConnectionPatch,
 } = require('../../shared/contracts/settings');
@@ -121,24 +122,27 @@ function createSettingsService({
 }) {
   /**
    * The levels the chat's model takes and the one it runs with (#725) — the
-   * same resolution a round makes in the LLM adapter.
+   * same resolution a round makes in the LLM adapter, over the entry's own
+   * connection (#1148).
    *
    * @param {ChatTarget} target
+   * @param {LlmConfigDocument} config
    */
-  function reasoningLevelsOf(target) {
+  function reasoningLevelsOf(target, config) {
     const provider = providerCatalog.getProvider(target?.providerId);
     const model = target?.model || provider?.defaultModel || '';
     return {
-      levels: reasoningLevelsFor(provider, model),
+      levels: reasoningLevelsFor(provider, model, storedConnectionFor(config, target, provider)),
       defaultLevel: reasoningDefaultFor(provider, model),
     };
   }
 
   /**
    * @param {ChatTarget} target
+   * @param {LlmConfigDocument} config
    */
-  async function chatReasoningState(target) {
-    const { levels, defaultLevel } = reasoningLevelsOf(target);
+  async function chatReasoningState(target, config) {
+    const { levels, defaultLevel } = reasoningLevelsOf(target, config);
     if (levels.length === 0) return { level: null, levels: [], defaultLevel: null };
     /** @type {string|null} */
     let own = null;
@@ -176,7 +180,7 @@ function createSettingsService({
       chatTarget,
       apiKeyDecryptable: describeKeyReadability(secretStore, config),
       locale: prefs.appLocale,
-      reasoning: await chatReasoningState(chatTarget),
+      reasoning: await chatReasoningState(chatTarget, config),
     };
   }
 
@@ -189,7 +193,7 @@ function createSettingsService({
   async function setReasoningEffort(rawLevel) {
     const level = normalizeReasoningLevel(rawLevel);
     const config = await llmConfigStore.readLLMConfig();
-    const { levels } = reasoningLevelsOf(llmConfigStore.resolveChatModelTarget(config));
+    const { levels } = reasoningLevelsOf(llmConfigStore.resolveChatModelTarget(config), config);
     if (!level || !levels.includes(level)) {
       return createSettingsError(createMessage('settings.error.reasoningLevel', { level: String(rawLevel ?? '').slice(0, 32) }));
     }

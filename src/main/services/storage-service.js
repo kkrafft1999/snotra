@@ -103,6 +103,7 @@ const EXECUTION_SWITCH_KEYS = ['shellExecutionEnabled', 'pythonExecutionEnabled'
  * @property {string} [apiStyle]
  * @property {boolean} [insecureTls]
  * @property {boolean} [supportsImages]
+ * @property {boolean} [supportsReasoning]
  * @property {boolean} [sendTools]
  * @property {number} [maxOutputTokens]
  * @property {string} [apiKey]
@@ -902,6 +903,7 @@ function createStorageService({
     out.supportsImages = typeof conn.supportsImages === 'boolean'
       ? conn.supportsImages
       : provider.defaultSupportsImages === true;
+    out.supportsReasoning = conn.supportsReasoning === true;
     out.sendTools = typeof conn.sendTools === 'boolean'
       ? conn.sendTools
       : provider.defaultSendTools !== false;
@@ -969,6 +971,9 @@ function createStorageService({
       out.supportsImages = typeof entry.supportsImages === 'boolean'
         ? entry.supportsImages
         : (provider.defaultSupportsImages === true);
+    }
+    if (provider.fields?.supportsReasoning) {
+      out.supportsReasoning = entry.supportsReasoning === true;
     }
     if (provider.fields?.sendTools) {
       out.sendTools = typeof entry.sendTools === 'boolean'

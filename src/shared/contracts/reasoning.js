@@ -11,8 +11,14 @@
  *
  * A model that takes none gets no level, whatever the chat has stored — the
  * chat keeps it for the next model that does.
+ *
+ * Where the capability register leaves reasoning levels to the connection
+ * (`supported: 'per-connection'`, an OpenAI-compatible entry, #1148), an
+ * entry whose switch is off offers none either.
  */
 'use strict';
+
+const { PER_CONNECTION } = require('./provider-capabilities');
 
 const DEFAULT_REASONING_LEVEL = 'medium';
 
@@ -24,6 +30,9 @@ const DEFAULT_REASONING_LEVEL = 'medium';
  * @property {readonly string[] | ((model: string) => readonly string[])} [levels]
  * @property {string | ((model: string) => string)} [defaultLevel]
  * @property {(model: string) => boolean} [appliesTo]
+ *
+ * @typedef {{ reasoning?: ReasoningDeclaration,
+ *   capabilities?: { reasoningLevels?: { supported?: boolean|string, setting?: string } } }} ReasoningProvider
  */
 
 /**
@@ -38,14 +47,29 @@ function normalizeReasoningLevel(raw) {
 }
 
 /**
- * The levels `model` takes with this provider; empty when it takes none.
- * @param {{ reasoning?: ReasoningDeclaration } | null | undefined} provider
+ * Whether the entry's connection lets the levels through: always, unless the
+ * provider leaves them to a connection setting that is not switched on.
+ * @param {ReasoningProvider | null | undefined} provider
+ * @param {Record<string, unknown> | null | undefined} connection
+ */
+function connectionTakesLevels(provider, connection) {
+  const declared = provider?.capabilities?.reasoningLevels;
+  if (declared?.supported !== PER_CONNECTION) return true;
+  return typeof declared.setting === 'string' && connection?.[declared.setting] === true;
+}
+
+/**
+ * The levels `model` takes with this provider over this connection; empty
+ * when it takes none.
+ * @param {ReasoningProvider | null | undefined} provider
  * @param {string} model
+ * @param {Record<string, unknown> | null} [connection]  the entry's connection settings
  * @returns {string[]}
  */
-function reasoningLevelsFor(provider, model) {
+function reasoningLevelsFor(provider, model, connection) {
   const reasoning = provider?.reasoning;
   if (!reasoning) return [];
+  if (!connectionTakesLevels(provider, connection)) return [];
   if (typeof reasoning.appliesTo === 'function' && !reasoning.appliesTo(model)) return [];
   const levels = typeof reasoning.levels === 'function' ? reasoning.levels(model) : reasoning.levels;
   if (!Array.isArray(levels)) return [];

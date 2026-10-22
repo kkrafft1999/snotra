@@ -33,7 +33,7 @@ Changes take effect when you click *Apply* at the bottom of the settings.
 | *Anthropic (Claude)* | API key | Yes [since 1.27] | One key for all Anthropic entries. Reasoning levels for the models that think — [which ones](../../chatting/model-and-reasoning/#which-models-have-levels). |
 | *Google (Gemini)* | API key | Yes, PNG, JPEG and WebP — no GIF [since 1.27] | One key for all Google entries. Reasoning levels from Gemini 2.5 on. |
 | *Ollama (local)* | Server URL | Yes, with a model that understands images [since 1.27] | Ollama's own interface, `http://localhost:11434` by default. Reasoning levels for gpt-oss, off and on for other thinking models. |
-| *OpenAI-compatible* | Server URL, key optional | When *Allow image attachments* is on for the entry | Everything else with an OpenAI-shaped interface. Each entry has its own address, key and name. |
+| *OpenAI-compatible* | Server URL, key optional | When *Allow image attachments* is on for the entry | Everything else with an OpenAI-shaped interface. Each entry has its own address, key and name. Reasoning levels when *Offer reasoning levels* is on for the entry. |
 
 ## Connect a server with an OpenAI-compatible interface
 
@@ -56,6 +56,7 @@ LM Studio, MLX-LM, llama.cpp, vLLM, a gateway of your organisation, or a router 
 | *Ignore TLS certificate (insecure)* | Only for a self-signed or internal certificate you trust. |
 | *Send tools along* | On by default. Switch it off for a server that chokes on tool descriptions — then it stays a plain chat, without files or commands. [since 1.24] While such a model is selected, the pill next to the message field says *No tools*. |
 | *Allow image attachments* | Off by default. Switch it on only if the model understands images. |
+| *Offer reasoning levels* | [since 1.28] Off by default. Switch it on if the server takes a reasoning level — vLLM, OpenRouter, or LM Studio and llama.cpp with gpt-oss. The chat's model menu then offers `low`, `medium` and `high` for this entry, and Snotra sends the level as `reasoning_effort` (Chat Completions) or `reasoning.effort` (Responses). Off, nothing is sent. See [Switch the model or the reasoning level](../../chatting/model-and-reasoning/). |
 | *Max output tokens* | [since 1.21.1] Empty by default: the server decides how long an answer may get. Enter a number if answers stop early or a model does not stop at all. Snotra sends it with every request, as `max_tokens` (Chat Completions) or `max_output_tokens` (Responses). |
 
 A key and extra headers go only to the address they were stored with. If you change the address, enter the key again.
@@ -72,4 +73,5 @@ A server counts as local when its address is `localhost`, `127.0.0.x`, `::1` or 
 - ***… is already in the list.*** The provider and model are listed already, under the name the message gives; edit that row instead. An entry that is only missing its key is the exception: adding it again with a key completes it.
 - ***The answer was cut off: the model reached its output limit.*** The server stopped the answer at its output limit, and many local servers set a small one. Raise *Max output tokens* for that entry; a few thousand is usually plenty.
 - ***Enter a whole number from 1 to 1,000,000*** under *Max output tokens*: the field takes digits only, or nothing at all, and the dialog stays open until the value fits.
+- ***The server did not take the reasoning level …*** The server turned the level down; its own words follow in the message. Choose another level in the model menu — some models take only some of them — or switch off *Offer reasoning levels* for the entry if the server takes none at all.
 - **A model only ever answers in text.** Either *Send tools along* is off — the pill next to the message field then says *No tools* — or the model cannot use tools. Snotra needs tools to read and change files.

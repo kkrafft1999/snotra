@@ -29,6 +29,7 @@ const { resolveProviderCapabilities } = require('../../shared/contracts/provider
  * @property {string} [apiStyle]
  * @property {boolean} [hasExtraHeaders]
  * @property {boolean} [supportsImages]
+ * @property {boolean} [supportsReasoning]
  * @property {boolean} [sendTools]
  * @property {string} defaultModel
  * @property {string} defaultBaseUrl
@@ -96,7 +97,7 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
    * @param {StoredProviderEntry} entry
    */
   function resolveExtendedFields(meta, entry) {
-    /** @type {Pick<ProviderView, 'displayName' | 'apiStyle' | 'hasExtraHeaders' | 'supportsImages' | 'sendTools'>} */
+    /** @type {Pick<ProviderView, 'displayName' | 'apiStyle' | 'hasExtraHeaders' | 'supportsImages' | 'supportsReasoning' | 'sendTools'>} */
     const out = {};
     if (meta.fields?.displayName) {
       out.displayName = typeof entry.displayName === 'string' ? entry.displayName : '';
@@ -113,6 +114,9 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
       out.supportsImages = typeof entry.supportsImages === 'boolean'
         ? entry.supportsImages
         : meta.defaultSupportsImages === true;
+    }
+    if (meta.fields?.supportsReasoning) {
+      out.supportsReasoning = entry.supportsReasoning === true;
     }
     if (meta.fields?.sendTools) {
       out.sendTools = typeof entry.sendTools === 'boolean'
@@ -206,6 +210,8 @@ function createSettingsPresentationService({ providerCatalog, defaultProviderId,
       supportsImages: typeof conn.supportsImages === 'boolean'
         ? conn.supportsImages
         : provider?.defaultSupportsImages === true,
+      // Off unless switched on: a server that takes no level rejects one (#1148).
+      supportsReasoning: conn.supportsReasoning === true,
       sendTools: typeof conn.sendTools === 'boolean'
         ? conn.sendTools
         : provider?.defaultSendTools !== false,

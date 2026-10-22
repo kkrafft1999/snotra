@@ -98,6 +98,10 @@ function mergeProviderPatchIntoConfig(deps, config, providerId, patch) {
     next.supportsImages = patch.supportsImages;
   }
 
+  if (provider.fields?.supportsReasoning && typeof patch?.supportsReasoning === 'boolean') {
+    next.supportsReasoning = patch.supportsReasoning;
+  }
+
   if (provider.fields?.sendTools && typeof patch?.sendTools === 'boolean') {
     next.sendTools = patch.sendTools;
   }

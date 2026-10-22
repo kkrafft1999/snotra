@@ -46,8 +46,8 @@ const { isRecord } = require('../runtime/is-record');
  * @typedef {Object} ProviderLike
  * @property {string|Message} [name]
  * @property {{ apiKey?: boolean, baseUrl?: boolean, insecureTls?: boolean, displayName?: boolean,
- *   apiStyle?: boolean, extraHeaders?: boolean, supportsImages?: boolean, sendTools?: boolean,
- *   maxOutputTokens?: boolean }} [fields]
+ *   apiStyle?: boolean, extraHeaders?: boolean, supportsImages?: boolean, supportsReasoning?: boolean,
+ *   sendTools?: boolean, maxOutputTokens?: boolean }} [fields]
  * @property {boolean} [optionalApiKey]
  * @property {boolean} [connectionPerPreset]
  * @property {string} [defaultModel]
@@ -391,6 +391,7 @@ function extractPresetOptions(raw, provider) {
  * @property {ApiStyle} [apiStyle]
  * @property {boolean} [insecureTls]
  * @property {boolean} [supportsImages]
+ * @property {boolean} [supportsReasoning]
  * @property {boolean} [sendTools]
  * @property {number} [maxOutputTokens]
  * @property {string} [apiKeyEnc]
@@ -402,6 +403,7 @@ function extractPresetOptions(raw, provider) {
  * @property {ApiStyle} [apiStyle]
  * @property {boolean} [insecureTls]
  * @property {boolean} [supportsImages]
+ * @property {boolean} [supportsReasoning]
  * @property {boolean} [sendTools]
  * @property {number|null} [maxOutputTokens]  `null` removes the limit
  * @property {string} [apiKey]
@@ -415,6 +417,7 @@ const PRESET_CONNECTION_PLAIN_FIELDS = Object.freeze([
   'apiStyle',
   'insecureTls',
   'supportsImages',
+  'supportsReasoning',
   'sendTools',
   'maxOutputTokens',
 ]);
@@ -444,6 +447,28 @@ function hasPresetConnection(provider) {
 }
 
 /**
+ * The stored connection a chat target runs over: the entry's own where the
+ * provider keeps it there (#202), else the provider's. Read for its plain
+ * settings — whether the server takes a reasoning level (#1148) — never for
+ * its secrets, which stay encrypted.
+ *
+ * @param {Record<string, unknown>|null|undefined} llmConfig  the stored configuration
+ * @param {{ providerId?: string, presetId?: string }|null|undefined} target
+ * @param {ProviderLike|null|undefined} provider
+ * @returns {Record<string, unknown>}
+ */
+function storedConnectionFor(llmConfig, target, provider) {
+  if (hasPresetConnection(provider)) {
+    const presets = Array.isArray(llmConfig?.presets) ? llmConfig.presets : [];
+    const preset = presets.find((p) => isRecord(p) && p.id === target?.presetId);
+    return isRecord(preset?.connection) ? preset.connection : {};
+  }
+  const providers = isRecord(llmConfig?.providers) ? llmConfig.providers : {};
+  const entry = target?.providerId ? providers[target.providerId] : undefined;
+  return isRecord(entry) ? entry : {};
+}
+
+/**
  * @param {string} key  one of PRESET_CONNECTION_PLAIN_FIELDS
  * @param {unknown} value
  * @param {ProviderLike|null|undefined} provider
@@ -462,7 +487,7 @@ function connectionPlainValue(key, value, provider) {
   if (key === 'sendTools') {
     return typeof value === 'boolean' ? value : undefined;
   }
-  if (key === 'insecureTls' || key === 'supportsImages') {
+  if (key === 'insecureTls' || key === 'supportsImages' || key === 'supportsReasoning') {
     return typeof value === 'boolean' ? value : undefined;
   }
   if (key === 'maxOutputTokens') {
@@ -644,6 +669,7 @@ function isApiStyle(value) {
  * @property {boolean} [removeExtraHeaders]
  * @property {string} [extraHeaders]
  * @property {boolean} [supportsImages]
+ * @property {boolean} [supportsReasoning]
  * @property {boolean} [sendTools]
  */
 
@@ -683,6 +709,9 @@ function normalizeProviderPatch(raw, provider) {
   }
   if (typeof raw.supportsImages === 'boolean' && provider.fields?.supportsImages) {
     patch.supportsImages = raw.supportsImages;
+  }
+  if (typeof raw.supportsReasoning === 'boolean' && provider.fields?.supportsReasoning) {
+    patch.supportsReasoning = raw.supportsReasoning;
   }
   if (typeof raw.sendTools === 'boolean' && provider.fields?.sendTools) {
     patch.sendTools = raw.sendTools;
@@ -1318,6 +1347,7 @@ function buildProviderFormView(provider, say = plainText) {
     defaultApiStyle: isApiStyle(provider?.defaultApiStyle) ? provider.defaultApiStyle : 'chat',
     showExtraHeaders: !!provider?.fields?.extraHeaders,
     showSupportsImages: !!provider?.fields?.supportsImages,
+    showSupportsReasoning: !!provider?.fields?.supportsReasoning,
     showSendTools: !!provider?.fields?.sendTools,
     showMaxOutputTokens: !!provider?.fields?.maxOutputTokens,
     // Ohne erreichbare Modellliste bleibt der Anbieter per Hand nutzbar.
@@ -1371,6 +1401,7 @@ module.exports = {
   presetIdentityKey,
   isModelOffered,
   hasPresetConnection,
+  storedConnectionFor,
   normalizeBaseUrl,
   normalizeStoredPresetConnection,
   normalizePresetConnectionPatch,

@@ -7,6 +7,7 @@ const { describeFetchErrorMessage } = require('../../shared/runtime/fetch-errors
 const {
   extractPresetOptions,
   filterDeclaredPresetOptions,
+  storedConnectionFor,
 } = require('../../shared/contracts/settings');
 const { reasoningDefaultFor, reasoningLevelsFor, resolveReasoningLevel } = require('../../shared/contracts/reasoning');
 const { createCostEntry } = require('../../shared/contracts/cost');
@@ -56,19 +57,21 @@ function createProviderLlmAdapter({
 
   /**
    * The level belongs to the chat (#725): a field of the target, set only
-   * when the model takes a level. Entries carry none since #726.
+   * when the model takes a level over the entry's connection (#1148).
+   * Entries carry none since #726.
    *
    * @param {RawChatTarget} raw
    * @param {string|null} ownLevel
+   * @param {Record<string, unknown>} connection  the entry's stored connection
    * @returns {ChatModelTarget}
    */
-  function toTarget(raw, ownLevel) {
+  function toTarget(raw, ownLevel, connection) {
     const provider = providerRuntime.getProvider(raw.providerId);
     const model = typeof raw.model === 'string' ? raw.model.trim() : '';
     const providerOptions = resolveProviderOptions(raw, provider);
     const levelModel = model || provider?.defaultModel || '';
     const reasoningEffort = resolveReasoningLevel({
-      levels: reasoningLevelsFor(provider, levelModel),
+      levels: reasoningLevelsFor(provider, levelModel, connection),
       own: ownLevel,
       defaultLevel: reasoningDefaultFor(provider, levelModel),
     });
@@ -146,7 +149,7 @@ function createProviderLlmAdapter({
         code: CHAT_ERROR_CODES.INVALID,
       });
     }
-    return toTarget(raw, await readOwnLevel(chatId));
+    return toTarget(raw, await readOwnLevel(chatId), storedConnectionFor(config, raw, provider));
   }
 
   /** @param {string} [chatId] */
