@@ -98,11 +98,15 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
   /** What to focus after the next draw, by `data-focus` key. */
   let pendingFocus = null;
   /**
-   * The workspaces open to the phone (#1195): `{ available, paired, released }`
+   * The workspaces open to the phone (#1195): `{ available, paired, shown, released }`
    * with `released` a Set of roots — or null where the window has no remote.
+   * `shown` follows *Settings › Remote access* (#1216): developer mode or a
+   * paired phone. Until then a folder gets the card only if it is already open
+   * to the phone, so that it can still be closed.
    */
   let phone = null;
   let unsubscribePhone = null;
+  let unsubscribeDeveloper = null;
   const canSwitchPhone = typeof api?.remote?.getReleases === 'function' && typeof api?.remote?.setReleased === 'function';
 
   // ── Feedback ───────────────────────────────────────────────────────────
@@ -539,7 +543,7 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
       // A folder that is gone can still be closed to the phone, never opened.
       return phone?.released.has(detail.root) ? [card, phoneCard(detail.root)] : [card];
     }
-    const phoneCards = phone ? [phoneCard(detail.root)] : [];
+    const phoneCards = phone && (phone.shown || phone.released.has(detail.root)) ? [phoneCard(detail.root)] : [];
     card.append(el('p', 'settings-sandbox-sub', detail.sub));
     card.append(sandboxTile(detail));
     if (detail.noSandbox) {
@@ -714,10 +718,13 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
 
   async function refresh() {
     const seq = ++requestSeq;
-    const [next, nextPhone] = await Promise.all([
+    const [next, nextPhone, developerMode] = await Promise.all([
       Promise.resolve().then(() => api.getSandboxOverview()).catch(() => null /* said below, in the page's error line */),
       canSwitchPhone
         ? Promise.resolve().then(() => api.remote.getReleases()).catch(() => null /* without it the page shows no phone switch */)
+        : null,
+      canSwitchPhone && typeof api?.developerMode?.get === 'function'
+        ? Promise.resolve().then(() => api.developerMode.get()).catch(() => null /* read as off */)
         : null,
     ]);
     // A slower answer to an older request must not overwrite a newer one.
@@ -727,13 +734,19 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
       return;
     }
     overview = next;
+    const developer = developerMode?.on === true;
     phone = nextPhone && Array.isArray(nextPhone.released)
-      ? { available: nextPhone.available === true, paired: nextPhone.paired === true, released: new Set(nextPhone.released) }
+      ? {
+        available: nextPhone.available === true,
+        paired: nextPhone.paired === true,
+        shown: developer || nextPhone.paired === true,
+        released: new Set(nextPhone.released),
+      }
       : null;
     selected = selected === null ? defaultSelection(overview) : validSelection(overview, selected);
     // A form for a scope that is gone goes with it.
     if (hostForm && hostForm.scope !== ALL_WORKSPACES && !overview.workspaces.some((ws) => ws.root === hostForm.scope)) hostForm = null;
-    const key = JSON.stringify({ overview, phone: nextPhone, selected, hostScope: hostForm?.scope || null });
+    const key = JSON.stringify({ overview, phone: nextPhone, developer, selected, hostScope: hostForm?.scope || null });
     if (key === drawnKey && !pendingFocus) return;
     drawnKey = key;
     render();
@@ -1084,6 +1097,12 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
         if (isOpen) refresh().catch(failed);
       });
     }
+    // Developer mode shows or hides the phone card with *Remote access* (#1216).
+    if (!unsubscribeDeveloper && canSwitchPhone && typeof api?.developerMode?.onChange === 'function') {
+      unsubscribeDeveloper = api.developerMode.onChange(() => {
+        if (isOpen) refresh().catch(failed);
+      });
+    }
     return refresh();
   }
 
@@ -1101,6 +1120,8 @@ export function initToolSecurityPanel({ api, toolPermissions, allowanceDialog = 
     unsubscribe = null;
     if (typeof unsubscribePhone === 'function') unsubscribePhone();
     unsubscribePhone = null;
+    if (typeof unsubscribeDeveloper === 'function') unsubscribeDeveloper();
+    unsubscribeDeveloper = null;
   }
 
   /**

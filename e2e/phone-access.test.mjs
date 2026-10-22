@@ -1,5 +1,6 @@
 // Access from your phone in the real app (#1195): on Settings › Tools ›
-// Security every workspace starts closed to the phone; with encrypted storage,
+// Security the card is there only with developer mode or a paired phone, as
+// Settings › Remote access is (#1216); every workspace starts closed to the phone; with encrypted storage,
 // opening it is confirmed in the system dialog — Cancel keeps it closed
 // without a word — and closing it asks nothing; without encrypted storage (the
 // Linux runner has no keyring) the switch cannot be opened and says why. The
@@ -54,6 +55,10 @@ test('Tools › Security: a workspace is opened to the phone through the system 
   await page.evaluate(() => document.getElementById('btn-sidebar-settings')?.click());
   await poll(() => page.evaluate(() => !document.getElementById('btn-settings-save').disabled), { what: 'settings ready' });
   await page.evaluate(() => document.getElementById('tab-settings-sandbox').click());
+  await poll(() => page.evaluate(() => !!document.querySelector('.settings-sandbox-card')), { what: 'the sandbox page', timeoutMs: 30000 });
+  assert.equal(await page.evaluate(() => !!document.querySelector('.settings-sandbox-card--phone')), false,
+    'no phone card without developer mode or a paired phone');
+  await page.evaluate(() => window.electronAPI.developerMode.toggle());
   await poll(() => page.evaluate(() => !!document.querySelector('input[data-action="phone"]')), { what: 'the phone switch', timeoutMs: 30000 });
 
   const state = await releases();

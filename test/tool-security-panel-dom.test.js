@@ -38,7 +38,7 @@ function overviewWith(patch = {}) {
   };
 }
 
-async function mount({ overview = overviewWith(), answers = {}, chosen = { ok: true, path: CACHE }, open = true, phone = null } = {}) {
+async function mount({ overview = overviewWith(), answers = {}, chosen = { ok: true, path: CACHE }, open = true, phone = null, developer = null } = {}) {
   const dom = setupRendererDom();
   const { setLocale } = await importRenderer('i18n.js');
   setLocale('en', { force: true });
@@ -157,6 +157,15 @@ async function mount({ overview = overviewWith(), answers = {}, chosen = { ok: t
       onReleasesChanged: (fn) => { releaseListeners.add(fn); return () => releaseListeners.delete(fn); },
     };
   }
+  // Developer mode (#1213), which shows the phone card with *Remote access* (#1216).
+  let developerOn = developer === true;
+  const developerListeners = new Set();
+  if (developer !== null) {
+    api.developerMode = {
+      get: async () => ({ on: developerOn }),
+      onChange: (fn) => { developerListeners.add(fn); return () => developerListeners.delete(fn); },
+    };
+  }
   const dialog = initProgramAllowanceDialog({ api, toolPermissions });
   const panel = initToolSecurityPanel({ api, toolPermissions, allowanceDialog: dialog });
   if (open) await panel.open();
@@ -171,6 +180,7 @@ async function mount({ overview = overviewWith(), answers = {}, chosen = { ok: t
     dom, doc, panel, sent, $, listItem, detail, focus, overlayOpen,
     setOverview: (next) => { current = clone(next); notify(); },
     setReleases: (next) => { releases = clone(next); releaseListeners.forEach((fn) => fn()); },
+    setDeveloper: (on) => { developerOn = on; developerListeners.forEach((fn) => fn({ on })); },
   };
 }
 
@@ -623,8 +633,36 @@ test('a window without the remote shows no phone switch', async (t) => {
   assert.equal(page.focus(`phone:${OPEN}`), undefined);
 });
 
+test('without developer mode or a paired phone there is no phone card, as there is no Remote access', async (t) => {
+  const page = await mount({ phone: NO_PHONE, developer: false });
+  t.after(page.dom.cleanup);
+  assert.equal(page.focus(`phone:${OPEN}`), undefined);
+  assert.equal(page.detail().querySelector('.settings-sandbox-card--phone'), null);
+  assert.equal(page.listItem(OPEN).querySelector('.settings-sandbox-ws__meta').textContent.includes('phone'), false);
+});
+
+test('developer mode shows the phone card and takes it away again, while the page is open', async (t) => {
+  const page = await mount({ phone: NO_PHONE, developer: false });
+  t.after(page.dom.cleanup);
+  page.setDeveloper(true);
+  await wait(5);
+  await flush();
+  assert.ok(page.focus(`phone:${OPEN}`), 'on: the card is there');
+  page.setDeveloper(false);
+  await wait(5);
+  await flush();
+  assert.equal(page.focus(`phone:${OPEN}`), undefined, 'off: gone again');
+});
+
+test('a folder already open to the phone keeps its card, so that it can be closed', async (t) => {
+  const page = await mount({ phone: { available: true, paired: false, released: [OPEN] }, developer: false });
+  t.after(page.dom.cleanup);
+  assert.equal(page.focus(`phone:${OPEN}`).checked, true);
+  assert.equal(page.focus(`phone:${OTHER}`), undefined, 'a closed one gets none');
+});
+
 test('every workspace starts closed to the phone; without a paired phone the card says so', async (t) => {
-  const page = await mount({ phone: NO_PHONE });
+  const page = await mount({ phone: NO_PHONE, developer: true });
   t.after(page.dom.cleanup);
   const input = page.focus(`phone:${OPEN}`);
   assert.equal(input.checked, false);
