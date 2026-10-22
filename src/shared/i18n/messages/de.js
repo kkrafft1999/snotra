@@ -1382,6 +1382,8 @@ module.exports = {
   'addModel.maxOutputTokens.invalid': 'Gib eine ganze Zahl von 1 bis {max} ein oder lass das Feld leer.',
   'addModel.images.toggle': 'Bild-Anhänge erlauben',
   'addModel.images.hint': 'Nur einschalten, wenn das Modell dahinter Bilder versteht. Sonst werden Anhänge im Chat gar nicht erst angeboten.',
+  'addModel.reasoning.toggle': 'Reasoning-Level anbieten',
+  'addModel.reasoning.hint': 'Nur einschalten, wenn der Server <code>reasoning_effort</code> annimmt — etwa vLLM, OpenRouter oder LM Studio mit gpt-oss. Der Chat bietet dann low, medium und high an.',
   'addModel.baseUrl.subhead': 'Server-URL',
   'addModel.model.subhead': 'Modell',
   'addModel.model.load': 'Modelle laden',
@@ -1786,7 +1788,6 @@ module.exports = {
   // ── Errors the providers report (#308) ─────────────────────────────────────
   // What the provider's API or the network said is quoted as it stands; these
   // are only the sentences Snotra adds itself.
-  'provider.capability.reasoningLevels.notBuilt': 'Snotra bietet für diesen Anbieter noch kein Reasoning-Level an.',
   'provider.error.unknown': 'Unbekannter Anbieter: {id}.',
   'provider.error.noApiKey': 'Kein API-Key hinterlegt.',
   'provider.error.noApiKeyFor': 'Kein API-Key für {provider} hinterlegt.',
@@ -1825,6 +1826,8 @@ module.exports = {
   'provider.compatible.apiKeyPlaceholder': 'leer lassen, wenn der Server keinen Key verlangt',
   'provider.compatible.apiStyle.chat': 'Nur Chat Completions',
   'provider.compatible.apiStyle.full': 'Responses, sonst Chat Completions',
+  'provider.compatible.reasoning.connectionOff': 'Für diese Verbindung sind Reasoning-Level ausgeschaltet.',
+  'provider.compatible.error.effortRejected': 'Der Server hat das Reasoning-Level „{effort}“ nicht angenommen: {detail} Wähle im Modellmenü ein anderes, oder schalte für diesen Eintrag unter Einstellungen › Modelle „Reasoning-Level anbieten“ aus.',
 
   // ── Estimated chat cost (#949) ───────────────────────────────────────────
   'cost.title': 'Kosten dieses Chats',

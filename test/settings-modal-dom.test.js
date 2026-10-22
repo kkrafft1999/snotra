@@ -127,6 +127,7 @@ const COMPAT_VIEW = {
     defaultApiStyle: 'chat',
     showExtraHeaders: true,
     showSupportsImages: true,
+    showSupportsReasoning: true,
     showSendTools: true,
     allowManualModel: true,
     connectionPerPreset: true,
@@ -159,6 +160,57 @@ async function zeileAnlegen({ name, baseUrl, model, apiKey, extraHeaders }) {
 
 const zeilenTitel = () => [...document.querySelectorAll('#pref-model-list strong')].map((n) => n.textContent);
 const zeilenServer = () => [...document.querySelectorAll('#pref-model-list .settings-pref-detail')].map((n) => n.textContent);
+
+test('the reasoning switch is offered for an OpenAI-compatible entry and reaches the main process (#1148)', async (t) => {
+  let sent = null;
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    commitSettings: async (payload) => { sent = payload; return { ok: true }; },
+  });
+  t.after(dom.cleanup);
+
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  const sel = document.getElementById('select-provider');
+  sel.value = 'openai-compatible';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+  const row = document.getElementById('provider-supports-reasoning-row');
+  const toggle = document.getElementById('input-supports-reasoning');
+  assert.equal(row.classList.contains('hidden'), false);
+  assert.equal(toggle.checked, false, 'off until the user says the server takes a level');
+
+  const type = (id, value) => {
+    const el = document.getElementById(id);
+    el.value = value;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  type('input-base-url', 'http://localhost:8000/v1');
+  type('input-model', 'gpt-oss-20b');
+  toggle.checked = true;
+  toggle.dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+  document.getElementById('btn-add-preset-row').click();
+  await flush();
+  document.getElementById('btn-settings-save').click();
+  await flush();
+
+  const entry = sent.presets.find((pr) => pr.model === 'gpt-oss-20b');
+  assert.equal(entry.connection.supportsReasoning, true);
+});
+
+test('the reasoning switch stays hidden for a provider without it (#1148)', async (t) => {
+  const withoutSwitch = { ...COMPAT_VIEW, form: { ...COMPAT_VIEW.form, showSupportsReasoning: false } };
+  const { dom } = await mountSettings({ providers: [withoutSwitch] });
+  t.after(dom.cleanup);
+  document.getElementById('btn-open-add-model').click();
+  await flush();
+  const sel = document.getElementById('select-provider');
+  sel.value = 'openai-compatible';
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+  await flush();
+  assert.equal(document.getElementById('provider-supports-reasoning-row').classList.contains('hidden'), true);
+});
 
 test('zwei Zeilen desselben Anbieters behalten je eigene Adresse und Namen (#202)', async (t) => {
   const { dom } = await mountSettings({ providers: [COMPAT_VIEW] });
@@ -203,6 +255,7 @@ test('getippte Verbindungswerte erreichen den Main-Prozess (#202)', async (t) =>
     apiStyle: 'chat',
     insecureTls: false,
     supportsImages: false,
+    supportsReasoning: false,
     sendTools: true,
     maxOutputTokens: null,
     apiKey: 'sk-geheim',

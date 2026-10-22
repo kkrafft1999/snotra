@@ -37,10 +37,13 @@ At least one model under *Settings › Models* — see [Connect a model](../../g
 | | Other Gemini models from 3 on | `low` `medium` `high` | `medium` |
 | *Ollama (local)* | gpt-oss | `low` `medium` `high` | `medium` |
 | | Other thinking models: DeepSeek-R1, Qwen3 (not the Coder and Instruct variants), QwQ, Magistral, Phi-4 reasoning, Kimi K2 Thinking, GLM 4.6 and later | `none` `on` — the model thinks or it doesn't | `on` |
+| *OpenAI-compatible* | Every model of an entry with *Offer reasoning levels* switched on [since 1.28] | `low` `medium` `high` | `medium` |
 
 ![The model menu on a Claude model: under "Model" claude-opus-5-5, claude-sonnet-4-6 and qwen3:8b; under "Reasoning" the levels low, medium, high, xhigh and max, with medium chosen. Below it the pill, the model name shortened and the level "medium" in full.](screenshots/model-menu-claude.webp)
 
-Older models of these providers — Claude 3.5, Gemini 2.0 and earlier, Ollama models that do not think — show no levels and keep working without. *OpenAI-compatible* servers show none either.
+Older models of these providers — Claude 3.5, Gemini 2.0 and earlier, Ollama models that do not think — show no levels and keep working without.
+
+An *OpenAI-compatible* server cannot say whether it takes a level, so you tell Snotra: switch on *Offer reasoning levels* for the entry under *Settings › Models* — see [Connect a server with an OpenAI-compatible interface](../../customising/models/#connect-a-server-with-an-openai-compatible-interface). Leave it off for a server that does not know the field; some turn the whole request down when it comes along.
 
 With Claude, Gemini and Ollama the model's thoughts appear in the chat as *Intermediate steps (model)* while it works, the same way as with OpenAI. A higher level means a longer think, so the answer takes longer and costs more tokens.
 
@@ -55,6 +58,7 @@ With Claude, Gemini and Ollama the model's thoughts appear in the chat as *Inter
 
 - **A model is missing from the menu.** Its switch under *Settings › Models* is off, or it is not in the list yet.
 - **The chat explains that the level is not available.** OpenAI decides which levels a model takes. The message names the levels it does take, where OpenAI says so; choose one of them.
-- **A model shows no levels.** It is older than the models in the table, or Snotra does not know that it can think. It keeps working without a level.
+- **The chat says the server did not take the level.** On an *OpenAI-compatible* entry the server decides. Choose another level, or switch off *Offer reasoning levels* for the entry if the server takes none.
+- **A model shows no levels.** It is older than the models in the table, or Snotra does not know that it can think. It keeps working without a level. On an *OpenAI-compatible* entry, *Offer reasoning levels* is off.
 - **An Ollama model under its own name shows no levels.** Snotra recognises the thinking models by their name. A model imported or copied under another name answers at its own default.
 - **An Ollama model shows `none` and `on`, but thinks anyway, or never.** Some fine-tunes keep the name of their base model but not its thinking. Snotra then sends the message without the level, and the model answers as it always does.

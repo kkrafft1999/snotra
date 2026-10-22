@@ -69,6 +69,7 @@
  * @property {string} [apiStyle]      `chat` or `full` (OpenAI-compatible).
  * @property {string} [extraHeaders]  Decrypted, one `Name: value` per line.
  * @property {boolean} [supportsImages]
+ * @property {boolean} [supportsReasoning]
  * @property {boolean} [sendTools]
  * @property {number} [maxOutputTokens]
  * @property {string} [reasoningEffort] The chat's reasoning level, one of the
@@ -113,7 +114,8 @@
  *
  * Which connection fields a provider needs.
  * @typedef {{apiKey?: boolean, baseUrl?: boolean, insecureTls?: boolean, displayName?: boolean,
- *   apiStyle?: boolean, extraHeaders?: boolean, supportsImages?: boolean, sendTools?: boolean, maxOutputTokens?: boolean}} ProviderFields
+ *   apiStyle?: boolean, extraHeaders?: boolean, supportsImages?: boolean, supportsReasoning?: boolean,
+ *   sendTools?: boolean, maxOutputTokens?: boolean}} ProviderFields
  *
  * What `listProviderMeta` lists for each provider: the plain facts, without the
  * functions of the adapter.

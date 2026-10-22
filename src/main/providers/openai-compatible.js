@@ -15,6 +15,7 @@
 
 /** @typedef {import('../ports/provider-runtime-port').ProviderAdapter} ProviderAdapter */
 /** @typedef {import('../ports/provider-runtime-port').ProviderConfig} ProviderConfig */
+/** @typedef {import('../ports/provider-runtime-port').ChatRoundResult} ChatRoundResult */
 
 const { Agent } = require('undici');
 const { createMessage } = require('../../shared/contracts/message');
@@ -35,6 +36,13 @@ const DEFAULT_BASE = 'http://localhost:1234/v1';
 const API_STYLE_CHAT = 'chat';
 /** @type {'full'} */
 const API_STYLE_FULL = 'full';
+/**
+ * The levels an entry offers once its server takes one (#1148): the three
+ * that `reasoning_effort` means on every server that knows it — vLLM, LM
+ * Studio and llama.cpp with gpt-oss, OpenRouter. Which of them a model really
+ * honours the server decides; a rejected one is explained in the chat.
+ */
+const REASONING_LEVELS = Object.freeze(['low', 'medium', 'high']);
 
 /**
  * Vorlagen belegen nur Werte vor; gespeichert wird die Auswahl nicht. Nach dem
@@ -152,6 +160,20 @@ function maxOutputTokensOf(config) {
 /** @param {ProviderConfig|null|undefined} config */
 function supportsImagesOf(config) {
   return config?.supportsImages === true;
+}
+
+/**
+ * The level this round sends: the chat's, and only when the entry says its
+ * server takes one (#1148). A server that does not know the field may turn
+ * the whole request down, so without the switch nothing goes out.
+ *
+ * @param {ProviderConfig|null|undefined} config
+ * @returns {string}
+ */
+function reasoningEffortOf(config) {
+  if (config?.supportsReasoning !== true) return '';
+  const effort = typeof config.reasoningEffort === 'string' ? config.reasoningEffort.trim() : '';
+  return REASONING_LEVELS.includes(effort) ? effort : '';
 }
 
 /**
@@ -290,7 +312,17 @@ function meansNoResponsesApi(status) {
 }
 
 /** @type {ProviderAdapter['streamChatRound']} */
-async function streamChatRound({ config, model, messages, tools, callbacks, abortSignal }) {
+async function streamChatRound(options) {
+  const effort = reasoningEffortOf(options.config);
+  return withEffortRejectionExplained(await streamWithFallback(options, effort), effort);
+}
+
+/**
+ * @param {Parameters<ProviderAdapter['streamChatRound']>[0]} options
+ * @param {string} effort  the level to send, or '' for none
+ * @returns {Promise<ChatRoundResult>}
+ */
+async function streamWithFallback({ config, model, messages, tools, callbacks, abortSignal }, effort) {
   const base = baseUrlOf(config);
   const shared = {
     baseUrl: base,
@@ -313,6 +345,7 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
       ...shared,
       dispatcher: dispatcherFor(`${base}/responses`, config),
       includeStatus: true,
+      ...(effort ? { extraBody: { reasoning: { effort } } } : {}),
     });
     if (!meansNoResponsesApi(result?.status)) {
       // `status` ist nur die interne Weiche und gehört nicht ins Ergebnis.
@@ -326,7 +359,34 @@ async function streamChatRound({ config, model, messages, tools, callbacks, abor
     ...shared,
     dispatcher: dispatcherFor(`${base}/chat/completions`, config),
     callIdPrefix: 'compat_call_',
+    ...(effort ? { extraBody: { reasoning_effort: effort } } : {}),
   });
+}
+
+/**
+ * A server that does not take the level — not that one, or none at all —
+ * answers 400, or 422 where it validates the request (#1148). Its own text
+ * stays in the message; the app adds what to do about it, since only the
+ * user knows whether the entry's switch or the level is wrong.
+ *
+ * @param {ChatRoundResult} result
+ * @param {string} effort
+ * @returns {ChatRoundResult}
+ */
+function withEffortRejectionExplained(result, effort) {
+  if (!effort || (result?.code !== '400' && result?.code !== '422')) return result;
+  if (typeof result.error !== 'string') return result;
+  const aboutEffort = result.param === 'reasoning.effort'
+    || result.param === 'reasoning_effort'
+    || /reasoning[._]effort/i.test(result.error);
+  if (!aboutEffort) return result;
+  return {
+    ...result,
+    error: createMessage('provider.compatible.error.effortRejected', {
+      effort,
+      detail: result.error.trim().slice(0, 300),
+    }),
+  };
 }
 
 function dispose() {
@@ -350,6 +410,7 @@ module.exports = {
     apiStyle: true,
     extraHeaders: true,
     supportsImages: true,
+    supportsReasoning: true,
     sendTools: true,
     maxOutputTokens: true,
   },
@@ -361,8 +422,8 @@ module.exports = {
   // übrigen fünf Anbietern bleibt sie am Anbieter, damit sich etwa der
   // OpenAI-Schlüssel nicht über mehrere Zeilen verteilt.
   connectionPerPreset: true,
-  // Images follow the entry's own switch (*Supports images*), since two entries
-  // can point at servers of which only one understands them.
+  // Images and reasoning levels follow the entry's own switches, since two
+  // entries can point at servers of which only one understands them.
   capabilities: {
     images: {
       supported: PER_CONNECTION,
@@ -370,9 +431,9 @@ module.exports = {
       reason: 'chat.image.error.connectionWithoutImages',
     },
     reasoningLevels: {
-      supported: false,
-      reason: 'provider.capability.reasoningLevels.notBuilt',
-      issue: 1148,
+      supported: PER_CONNECTION,
+      setting: 'supportsReasoning',
+      reason: 'provider.compatible.reasoning.connectionOff',
     },
   },
   // Local or remote, and so the history budget, the price and the tokenizer
@@ -381,6 +442,12 @@ module.exports = {
     priceTable: { litellmProviders: ['openrouter'], keyPrefixes: ['openrouter/'] },
   },
   defaultModel: '',
+  // The levels a chat can choose where the entry's switch is on (#1148); the
+  // capability above keeps them away from every other entry.
+  reasoning: {
+    levels: REASONING_LEVELS,
+    defaultLevel: 'medium',
+  },
   defaultBaseUrl: DEFAULT_BASE,
   defaultInsecureTls: false,
   defaultApiStyle: API_STYLE_CHAT,

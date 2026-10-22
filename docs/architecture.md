@@ -1795,7 +1795,10 @@ Two kinds of entry:
   `docs/quality-requirements.md` §3. `images` may name `mediaTypes` where a
   provider takes fewer than all formats (Gemini: no GIF, #91).
   `per-connection` follows a boolean setting of the entry's own connection
-  (*Supports images* on an OpenAI-compatible entry).
+  (*Allow image attachments* and *Offer reasoning levels* on an
+  OpenAI-compatible entry). For reasoning levels `reasoningLevelsFor` reads
+  the same setting, so an entry whose switch is off offers no level and its
+  rounds carry none (#1148).
 - **`traits`** are facts that steer behaviour without being a feature:
   `runsLocally`, `tokenizerProfile` (`local` or `o200k`, only what was
   measured, #178), `priceTable` (`litellmProviders`, `keyPrefixes` in LiteLLM's
@@ -1808,7 +1811,7 @@ Two kinds of entry:
 | `anthropic` | yes | yes | LiteLLM `anthropic` |
 | `google` | yes, no GIF | yes | LiteLLM `gemini`, prefix `gemini/` |
 | `ollama` | yes | yes | runs locally, `local` |
-| `openai-compatible` | per connection | no — [#1148](https://github.com/kkrafft1999/snotra/issues/1148) | LiteLLM `openrouter`, prefix `openrouter/`; output limit setting |
+| `openai-compatible` | per connection | per connection (#1148) | LiteLLM `openrouter`, prefix `openrouter/`; output limit setting |
 
 The declaration is resolved against one entry's configuration where it travels
 on, never re-derived after that:

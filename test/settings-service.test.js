@@ -165,3 +165,39 @@ test('the reasoning level is refused for a model without levels', async () => {
   const result = await service.setReasoningEffort('high');
   assert.equal(result.ok, false);
 });
+
+test('an OpenAI-compatible entry offers levels only with its switch on (#1148)', async () => {
+  const compat = require('../src/main/providers/openai-compatible');
+  const withCompat = { getProvider: (/** @type {string} */ id) => (id === compat.id ? compat : PROVIDERS[id] || null) };
+  const build = (/** @type {Record<string, unknown>} */ connection) => {
+    const llmConfigStore = memoryLlmConfigStore({
+      presets: [{ id: 'c1', providerId: compat.id, model: 'gpt-oss-20b', connection }],
+      activePresetId: 'c1',
+    });
+    return createSettingsService({
+      secretStore,
+      llmConfigStore,
+      uiPrefsStore: memoryUiPrefsStore(),
+      providerCatalog: withCompat,
+      presets: createLlmPresets({ llmConfigStore, providerCatalog: withCompat, secretStore }),
+      chatSessionSettings: {
+        reasoningEffortFor: async () => null,
+        rememberReasoningEffort: async () => true,
+        rememberPreset: async () => {},
+      },
+    });
+  };
+
+  const off = build({ baseUrl: 'http://localhost:1234/v1' });
+  assert.deepEqual((await off.describeLlmState()).reasoning, { level: null, levels: [], defaultLevel: null });
+  assert.equal((await off.setReasoningEffort('high')).ok, false);
+
+  const on = build({ baseUrl: 'http://localhost:1234/v1', supportsReasoning: true });
+  assert.deepEqual((await on.describeLlmState()).reasoning, {
+    level: 'medium',
+    levels: ['low', 'medium', 'high'],
+    defaultLevel: 'medium',
+  });
+  assert.equal((await on.setReasoningEffort('high')).ok, true);
+  assert.equal((await on.setReasoningEffort('xhigh')).ok, false);
+});

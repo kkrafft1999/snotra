@@ -265,9 +265,14 @@ test('an entry with a connection of its own carries the capabilities of that con
   const on = compatPresetView({ baseUrl: 'x', supportsImages: true });
   assert.equal(on.capabilities.images, true);
   assert.equal(on.capabilities.gaps.images, undefined);
-  // The gap that is not the user's to close names its issue.
+  // Reasoning levels follow a switch of their own (#1148).
   assert.equal(on.capabilities.reasoningLevels, false);
-  assert.equal(on.capabilities.gaps.reasoningLevels.issue, 1148);
+  assert.equal(on.capabilities.gaps.reasoningLevels.limitedBy, 'connection');
+  const reasoning = compatPresetView({ baseUrl: 'x', supportsReasoning: true });
+  assert.equal(reasoning.capabilities.reasoningLevels, true);
+  assert.equal(reasoning.capabilities.images, false);
+  assert.equal(reasoning.connection.supportsReasoning, true);
+  assert.equal(off.connection.supportsReasoning, false);
 });
 
 test('Eintraege der uebrigen Anbieter tragen keine eigene Verbindung', () => {

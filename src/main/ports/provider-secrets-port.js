@@ -10,6 +10,7 @@
  * @property {string} [apiStyle]         "OpenAI-compatible": `chat` or `full`
  * @property {string} [extraHeaders]     decrypted, one `Name: value` per line
  * @property {boolean} [supportsImages]
+ * @property {boolean} [supportsReasoning]  "OpenAI-compatible": the server takes a reasoning level (#1148)
  * @property {boolean} [sendTools]
  * @property {number} [maxOutputTokens]  only where the provider declares the field (#931)
  *

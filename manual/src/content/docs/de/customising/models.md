@@ -33,7 +33,7 @@ Jede Zeile ist ein Eintrag: ein Anbieter mit einem Modell. Jede Zeile hat
 | *Anthropic (Claude)* | API-Schlüssel | Ja [seit 1.27] | Ein Schlüssel für alle Anthropic-Einträge. Reasoning-Stufen für die Modelle, die nachdenken — [welche](../../chatting/model-and-reasoning/#welche-modelle-stufen-haben). |
 | *Google (Gemini)* | API-Schlüssel | Ja, PNG, JPEG und WebP — kein GIF [seit 1.27] | Ein Schlüssel für alle Google-Einträge. Reasoning-Stufen ab Gemini 2.5. |
 | *Ollama (lokal)* | Server-URL | Ja, mit einem Modell, das Bilder versteht [seit 1.27] | Die eigene Schnittstelle von Ollama, standardmäßig `http://localhost:11434`. Reasoning-Stufen für gpt-oss, aus und an für andere nachdenkende Modelle. |
-| *OpenAI-kompatibel* | Server-URL, Schlüssel optional | Wenn für den Eintrag *Bild-Anhänge erlauben* eingeschaltet ist | Alles andere mit einer Schnittstelle nach OpenAI-Muster. Jeder Eintrag hat seine eigene Adresse, seinen eigenen Schlüssel und Namen. |
+| *OpenAI-kompatibel* | Server-URL, Schlüssel optional | Wenn für den Eintrag *Bild-Anhänge erlauben* eingeschaltet ist | Alles andere mit einer Schnittstelle nach OpenAI-Muster. Jeder Eintrag hat seine eigene Adresse, seinen eigenen Schlüssel und Namen. Reasoning-Stufen, wenn für den Eintrag *Reasoning-Level anbieten* eingeschaltet ist. |
 
 ## Einen Server mit OpenAI-kompatibler Schnittstelle anbinden
 
@@ -56,6 +56,7 @@ LM Studio, MLX-LM, llama.cpp, vLLM, ein Gateway deiner Organisation oder ein Rou
 | *TLS-Zertifikat ignorieren (insecure)* | Nur für ein selbst signiertes oder internes Zertifikat, dem du vertraust. |
 | *Tools mitschicken* | Standardmäßig an. Schalte es für einen Server aus, der an Tool-Beschreibungen scheitert — dann bleibt es ein reiner Chat, ohne Dateien und Befehle. [seit 1.24] Solange so ein Modell gewählt ist, steht in der Pille neben dem Eingabefeld *Keine Tools*. |
 | *Bild-Anhänge erlauben* | Standardmäßig aus. Schalte es nur ein, wenn das Modell Bilder versteht. |
+| *Reasoning-Level anbieten* | [seit 1.28] Standardmäßig aus. Schalte es ein, wenn der Server eine Reasoning-Stufe annimmt — vLLM, OpenRouter oder LM Studio und llama.cpp mit gpt-oss. Das Modell-Menü des Chats bietet dann für diesen Eintrag `low`, `medium` und `high` an, und Snotra schickt die Stufe als `reasoning_effort` (Chat Completions) oder `reasoning.effort` (Responses) mit. Ist es aus, geht nichts mit. Siehe [Modell oder Reasoning-Stufe wechseln](../../chatting/model-and-reasoning/). |
 | *Max. Ausgabe-Tokens* | [seit 1.21.1] Standardmäßig leer: Der Server entscheidet, wie lang eine Antwort werden darf. Trag eine Zahl ein, wenn Antworten zu früh abbrechen oder ein Modell gar nicht aufhört. Snotra schickt sie mit jeder Anfrage mit, als `max_tokens` (Chat Completions) oder `max_output_tokens` (Responses). |
 
 Schlüssel und zusätzliche Header gehen nur an die Adresse, mit der sie gespeichert wurden. Änderst du die Adresse, gib den Schlüssel neu ein.
@@ -72,4 +73,5 @@ Ein Server gilt als lokal, wenn seine Adresse `localhost`, `127.0.0.x` oder `::1
 - ***… steht schon in der Liste.*** Anbieter und Modell stehen schon in der Liste, unter dem Namen aus der Meldung; bearbeite stattdessen diese Zeile. Die Ausnahme ist ein Eintrag, dem nur der Schlüssel fehlt: Fügst du ihn mit Schlüssel noch einmal hinzu, wird er ergänzt.
 - ***Die Antwort wurde abgeschnitten: Das Modell hat seine Ausgabegrenze erreicht.*** Der Server hat die Antwort an seiner Ausgabegrenze gestoppt, und viele lokale Server setzen eine kleine. Erhöhe *Max. Ausgabe-Tokens* für diesen Eintrag; ein paar Tausend reichen meist.
 - ***Gib eine ganze Zahl von 1 bis 1.000.000 ein*** unter *Max. Ausgabe-Tokens*: Das Feld nimmt nur Ziffern oder gar nichts, und der Dialog bleibt offen, bis der Wert passt.
+- ***Der Server hat das Reasoning-Level … nicht angenommen.*** Der Server hat die Stufe abgelehnt; seine eigenen Worte stehen in der Meldung dahinter. Wähle im Modell-Menü eine andere Stufe — manche Modelle nehmen nur einige davon — oder schalte *Reasoning-Level anbieten* für den Eintrag aus, wenn der Server gar keine nimmt.
 - **Ein Modell antwortet immer nur mit Text.** Entweder ist *Tools mitschicken* aus — die Pille neben dem Eingabefeld zeigt dann *Keine Tools* —, oder das Modell kann keine Tools benutzen. Snotra braucht Tools, um Dateien zu lesen und zu ändern.

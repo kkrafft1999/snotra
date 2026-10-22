@@ -1375,6 +1375,8 @@ module.exports = {
   'addModel.maxOutputTokens.invalid': 'Enter a whole number from 1 to {max}, or leave the field empty.',
   'addModel.images.toggle': 'Allow image attachments',
   'addModel.images.hint': 'Only switch on if the model behind it understands images. Otherwise attachments are not offered in the chat at all.',
+  'addModel.reasoning.toggle': 'Offer reasoning levels',
+  'addModel.reasoning.hint': 'Only switch on if the server takes <code>reasoning_effort</code> — vLLM, OpenRouter, or LM Studio with gpt-oss, for example. The chat then offers low, medium and high.',
   'addModel.baseUrl.subhead': 'Server URL',
   'addModel.model.subhead': 'Model',
   'addModel.model.load': 'Load models',
@@ -1779,7 +1781,6 @@ module.exports = {
   // ── Errors the providers report (#308) ───────────────────────────────────
   // What the provider's API or the network said is quoted as it stands; these
   // are only the sentences Snotra adds itself.
-  'provider.capability.reasoningLevels.notBuilt': 'Snotra does not offer a reasoning level for this provider yet.',
   'provider.error.unknown': 'Unknown provider: {id}.',
   'provider.error.noApiKey': 'No API key stored.',
   'provider.error.noApiKeyFor': 'No API key stored for {provider}.',
@@ -1818,6 +1819,8 @@ module.exports = {
   'provider.compatible.apiKeyPlaceholder': 'leave empty if the server needs no key',
   'provider.compatible.apiStyle.chat': 'Chat Completions only',
   'provider.compatible.apiStyle.full': 'Responses, falling back to Chat Completions',
+  'provider.compatible.reasoning.connectionOff': 'Reasoning levels are switched off for this connection.',
+  'provider.compatible.error.effortRejected': 'The server did not take the reasoning level “{effort}”: {detail} Choose another level in the model menu, or switch off “Offer reasoning levels” for this entry under Settings › Models.',
 
   // ── Estimated chat cost (#949) ───────────────────────────────────────────
   'cost.title': 'Cost of this chat',
