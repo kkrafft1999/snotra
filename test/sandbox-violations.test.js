@@ -43,6 +43,21 @@ test('parseViolationLine: a Seatbelt network-outbound to an address bypassed the
   assert.equal(p.target, '10.0.0.5:5432');
 });
 
+test('parseViolationLine: a Seatbelt network-outbound to the sandbox\'s own proxy is no bypass (#1164)', () => {
+  const proxyPorts = [49283];
+  for (const target of ['remote:*:49283', '*:49283', '127.0.0.1:49283', 'localhost:49283', '[::1]:49283', '::ffff:127.0.0.1:49283']) {
+    assert.equal(parseViolationLine(`curl(5120) deny(1) network-outbound ${target}`, { proxyPorts }).kind, KINDS.OTHER, target);
+  }
+  // Another port on the same wildcard, another host on the proxy's port, or no proxy known: a bypass as before.
+  assert.equal(parseViolationLine('curl(5120) deny(1) network-outbound remote:*:5432', { proxyPorts }).kind, KINDS.DIRECT);
+  assert.equal(parseViolationLine('nc(1) deny(1) network-outbound 10.0.0.5:49283', { proxyPorts }).kind, KINDS.DIRECT);
+  assert.equal(parseViolationLine('curl(5120) deny(1) network-outbound remote:*:49283').kind, KINDS.DIRECT);
+});
+
+test('summarizeViolations: the proxy\'s own port alone is nothing to report (#1164)', () => {
+  assert.equal(summarizeViolations(['curl(5120) deny(1) network-outbound remote:*:49283'], { proxyPorts: [49283] }), null);
+});
+
 test('parseViolationLine: a Seatbelt network-outbound to a socket path is no connection to a host', () => {
   assert.equal(parseViolationLine('x(1) deny(1) network-outbound /private/var/run/foo.sock').kind, KINDS.OTHER);
 });

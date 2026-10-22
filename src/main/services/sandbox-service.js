@@ -1119,6 +1119,11 @@ function createSandboxService({
     /** @type {number | undefined} */
     let proxyPort;
     try { proxyPort = manager.getProxyPort?.(); } catch { /* no proxy, nothing to name */ }
+    /** @type {number | undefined} */
+    let socksPort;
+    try { socksPort = manager.getSocksProxyPort?.(); } catch { /* no SOCKS proxy */ }
+    // A refused connection to one of these went to the proxy, not around it (#1164).
+    const proxyPorts = [proxyPort, socksPort].filter((p) => Number.isInteger(p)).map(Number);
     const commandKey = String(commandId || inner).slice(0, COMMAND_KEY_LENGTH);
     const live = createLiveRun({ key: commandKey, domains, onNetworkAsk, readOutput });
     liveRuns.set(commandKey, live);
@@ -1134,6 +1139,7 @@ function createSandboxService({
       homeDir: os.homedir(),
       isPermittedWrite: (target, operation) => isPermittedWrite(target)
         || (/^mkdir/.test(operation || '') && existingFolders.has(target)),
+      proxyPorts,
     });
     let released = false;
     return {
@@ -1181,6 +1187,10 @@ function createSandboxService({
       },
       /** @param {unknown} stderr */
       annotate(stderr) {
+        // Whether the proxy was unreachable is read from what the command
+        // wrote, never from the notes added below: a `<sandbox_blocked>` line
+        // naming the proxy port would read as a failed connect (#1164).
+        const unreachable = proxyNotReached(String(stderr ?? ''), proxyPort);
         let text = String(stderr ?? '');
         if (collector) {
           // In place of the runtime's raw lines, which with the monitor on
@@ -1192,7 +1202,7 @@ function createSandboxService({
             text = manager.annotateStderrWithSandboxFailures(commandId || inner, text);
           } catch { /* keep stderr as it is */ }
         }
-        text = annotateUnreachableProxy(text, proxyPort);
+        if (unreachable) text = annotateUnreachableProxy(text, proxyPort);
         if (platform === 'linux') return annotateSsh(text, { tunnel: true, agent: Boolean(agentSocket()), platform });
         if (platform !== 'darwin') return text;
         text = annotateSsh(text, { tunnel: Boolean(ssh), agent: Boolean(agentSocket()), platform });
@@ -1384,6 +1394,21 @@ function firstLine(text) {
 }
 
 /**
+ * Whether a command's stderr says it could not connect to the sandbox's
+ * proxy, and carries no note about it yet (see annotateUnreachableProxy).
+ *
+ * @param {string} text
+ * @param {number|undefined} proxyPort
+ */
+function proxyNotReached(text, proxyPort) {
+  if (!Number.isInteger(proxyPort) || text.includes('<sandbox_network>')) return false;
+  const namesPort = new RegExp(`(?:port\\s+|:)${proxyPort}\\b`).test(text)
+    && /connect|refused|not permitted/i.test(text);
+  const namesProxy = /(?:unable to|cannot|can't|could not) connect to (?:the )?proxy/i.test(text);
+  return namesPort || namesProxy;
+}
+
+/**
  * A command that cannot reach the sandbox's own network proxy fails with an
  * ordinary connection error — curl's "Failed to connect to localhost port …"
  * reads as if the target host were down (#368). The runtime records nothing
@@ -1396,11 +1421,7 @@ function firstLine(text) {
  */
 function annotateUnreachableProxy(stderr, proxyPort) {
   const text = String(stderr ?? '');
-  if (!Number.isInteger(proxyPort) || text.includes('<sandbox_network>')) return text;
-  const namesPort = new RegExp(`(?:port\\s+|:)${proxyPort}\\b`).test(text)
-    && /connect|refused|not permitted/i.test(text);
-  const namesProxy = /(?:unable to|cannot|can't|could not) connect to (?:the )?proxy/i.test(text);
-  if (!namesPort && !namesProxy) return text;
+  if (!proxyNotReached(text, proxyPort)) return text;
   const note = `The sandbox's network proxy on localhost:${proxyPort} did not accept the connection, `
     + 'so this command could not reach the network at all. This is a problem of the sandbox, '
     + 'not a sign that the target host is down.';
