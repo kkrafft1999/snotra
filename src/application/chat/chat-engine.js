@@ -18,6 +18,7 @@ const {
   CONTEXT_CONTENT_KINDS,
   createContextPart,
   createContextBreakdown,
+  toolDefinitionChars,
 } = require('../../shared/contracts/context-breakdown');
 const {
   CHAT_ERROR_CODES,
@@ -512,20 +513,10 @@ function buildSkillsSystemPrompt(
 /* ── Aufschlüsselung des Kontextfensters (Issue #174) ────────────────────────
  * Die Engine ist die einzige Stelle, die weiss, woraus der Prompt besteht. Sie
  * zaehlt hier die Zeichen ihrer Bausteine; die echte Tokenzahl kommt danach
- * vom Anbieter und verteilt sich auf sie (context-breakdown.js).
+ * vom Anbieter und verteilt sich auf sie (context-breakdown.js). Die Zeichen
+ * eines Tool-Schemas zaehlt `toolDefinitionChars` dort, damit die
+ * Einstellungen dieselbe Zahl sehen (#1219).
  */
-
-/**
- * Zeichen eines Tool-Schemas, so wie es an den Anbieter geht.
- * @param {LlmToolDefinition|null|undefined} definition
- */
-function toolDefinitionChars(definition) {
-  try {
-    return JSON.stringify(definition ?? {}).length;
-  } catch {
-    return 0;
-  }
-}
 
 /**
  * Tool-Definitionen als Zeilen: die eingebauten zusammen, jeder MCP-Server

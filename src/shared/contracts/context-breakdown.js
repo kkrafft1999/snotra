@@ -218,6 +218,34 @@ function estimateTokensFromChars(chars, contentKind, profileName) {
   return Math.max(1, Math.round(count / charsPerToken(contentKind, profileName)));
 }
 
+/**
+ * Characters of a tool schema as it goes to the provider: the serialised
+ * `{ type, function: { name, description, parameters } }` the registry hands
+ * the engine. The chat's breakdown and the settings (#1219) both count it
+ * here, so they never disagree about the same tool.
+ *
+ * @param {unknown} definition
+ */
+function toolDefinitionChars(definition) {
+  try {
+    return JSON.stringify(definition ?? {}).length;
+  } catch {
+    // A schema that cannot be serialised cannot be sent either: it costs nothing.
+    return 0;
+  }
+}
+
+/**
+ * Estimated tokens of one tool schema, with the divisor of the given
+ * tokenizer profile (#1219).
+ *
+ * @param {unknown} definition
+ * @param {string} [profileName]
+ */
+function estimateToolDefinitionTokens(definition, profileName) {
+  return estimateTokensFromChars(toolDefinitionChars(definition), CONTEXT_CONTENT_KINDS.JSON, profileName);
+}
+
 /** @param {unknown} value */
 function text(value) {
   return typeof value === 'string' ? value : '';
@@ -439,6 +467,8 @@ module.exports = {
   DEFAULT_CHARS_PER_TOKEN_PROFILE,
   charsPerTokenProfile,
   estimateTokensFromChars,
+  toolDefinitionChars,
+  estimateToolDefinitionTokens,
   createContextPart,
   shortPathDetail,
   createContextBreakdown,

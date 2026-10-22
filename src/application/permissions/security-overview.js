@@ -55,6 +55,8 @@ const { isToolExternalService } = require('../../shared/contracts/tool-presentat
  * @property {string|null} [mcpServer]
  * @property {string|null} [mcpServerId]
  * @property {string|null} [externalService]
+ * @property {string|null} [execution]  the process an execution tool starts (`TOOL_EXECUTION_KINDS`)
+ * @property {number|null} [contextTokens]  estimated tokens of its schema (#1219); null when not known yet
  */
 
 /**
@@ -133,6 +135,11 @@ function cleanTools(raw) {
         mcpServerId: typeof tool.mcpServerId === 'string' && tool.mcpServerId ? tool.mcpServerId : null,
         // The outside service a built-in tool talks to, from its descriptor (#1008).
         externalService: isToolExternalService(tool.externalService) ? tool.externalService : null,
+        execution: typeof tool.execution === 'string' && tool.execution ? tool.execution : null,
+        // What its schema adds to every request, estimated (#1219): null
+        // while it is not known (an MCP tool remembered by name), absent
+        // when nobody measured.
+        contextTokens: contextTokensOf(tool.contextTokens),
         // Why a tool is not offered matters for what the user does next:
         // switched off → switch it on; unavailable → set it up (a key, the
         // execution switch, a server).
@@ -256,6 +263,31 @@ function describeExecution(execution, tools) {
 }
 
 /**
+ * @param {unknown} value
+ * @returns {number|null|undefined}
+ */
+function contextTokensOf(value) {
+  if (value === null) return null;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : undefined;
+}
+
+/**
+ * What some tools add to every request together: the estimated tokens of
+ * those whose schema is known, and how many are not known yet (#1219).
+ *
+ * @param {Array<{ contextTokens?: number|null }>} tools
+ */
+function describeContext(tools) {
+  let tokens = 0;
+  let unknown = 0;
+  for (const tool of tools) {
+    if (typeof tool.contextTokens === 'number') tokens += tool.contextTokens;
+    else if (tool.contextTokens === null) unknown += 1;
+  }
+  return { tokens, unknown };
+}
+
+/**
  * @param {Object} [input]
  * @param {string|null} [input.root]            the open workspace, or null
  * @param {string} [input.mode]                 the workspace default (#413); `smart` without a folder
@@ -312,6 +344,8 @@ function describeSecurityOverview(input = {}) {
       // Amber on the execute row: a command would run with the user's full
       // rights (#357, #396).
       noSandbox: riskClass === EXECUTE && status !== SECURITY_ROW_STATUSES.OFF && input.execution?.unisolated === true,
+      // The tools counted as on above, what they cost together (#1219).
+      context: describeContext(offered),
       tools: rowTools.map((tool) => ({ ...tool, blocked: tool.state === 'on' && toolFullyBlocked(tool, riskClass, denyRules) })),
       allowRules: allowRules.filter((rule) => ruleNamesRow(rule, riskClass, toolNames)).map(ruleView),
       denyRules: denyRules.filter((rule) => ruleNamesRow(rule, riskClass, toolNames)).map(ruleView),
@@ -328,6 +362,8 @@ function describeSecurityOverview(input = {}) {
     chatsWithOtherMode: root ? cleanChats(input.chats, mode) : [],
     classes,
     execution: describeExecution(input.execution, tools),
+    // Every tool that is on, once — a tool shows in more than one row (#1219).
+    context: describeContext(tools.filter((tool) => tool.state === 'on')),
     sensitive: {
       builtInNames: [...DEFAULT_SENSITIVE_NAME_PATTERNS],
       builtInDirectories: [...DEFAULT_SENSITIVE_DIRECTORY_NAMES],

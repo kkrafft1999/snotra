@@ -221,6 +221,7 @@ function createApplication({
     pythonSettings: core.pythonSettings,
     shellSettings: core.shellSettings,
     confirmations,
+    describeMcpContextCosts: core.securityPageData.describeMcpContextCosts,
   });
   registerModelPriceHandlers({ ipcMain, modelPrices: core.modelPrices, REQ });
   registerChatHistoryHandlers({ ipcMain, chatHistory: core.chatHistory, REQ });

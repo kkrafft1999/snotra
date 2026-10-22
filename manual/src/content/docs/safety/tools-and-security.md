@@ -13,11 +13,12 @@ Open the settings — *Snotra Agent › Settings…* on macOS, *View › Setting
 
 The sandbox, the programs with more room and the hosts kept open have a page of their own next to it, *Settings › Tools › Security*: see [Run commands in the sandbox](../sandbox/#set-up-the-sandbox).
 
-![Settings › Tools › Autonomy for the folder garden-planner: at the top the default mode Smart and a summary — reads without asking, asks before changing a file, asks before every command (in the sandbox), asks before using the web or MCP. Below, the rows Read (Runs), Read sensitive data, Change and Overwrite with no way back (each Asks).](screenshots/tools-and-security.webp)
+![Settings › Tools › Autonomy for the folder garden-planner: at the top the default mode Smart and a summary — reads without asking, asks before changing a file, asks before every command (in the sandbox), asks before using the web or MCP — and a line with about how many tokens of context the tools that are on take. Below, the rows Read (Runs), Read sensitive data, Change and Overwrite with no way back (each Asks).](screenshots/tools-and-security.webp)
 
 ## What it shows
 
 - **At the top**, the folder it applies to, its *Default mode* and one sentence that sums up what Snotra does there. How the default mode works is on [Choose a mode](../choose-a-mode/#give-a-folder-a-default-mode).
+- [since 1.28] **What the tools cost.** Under that sentence, one line says about how many tokens of context the tools that are on take in every request. Each row adds the figure for its tools to its count, and each tool shows its own figure next to its switch — also while it is off, so you see what switching it on would add. The figures are estimates from the length of each tool's description and parameters; the exact count depends on the model. An MCP tool that is only known by name shows *tokens unknown* until its server has connected.
 - **Six rows**, one per risk class — *Read*, *Read sensitive data*, *Change*, *Overwrite with no way back*, *Execute*, *External services*. Each says how many tools it has, why it behaves as it does, and whether its calls *Run*, *Ask* or are *Off*.
 - **An opened row** answers three questions: May Snotra do this (the tools, each with its switch)? Does it ask first (the mode, your allowances, remembered commands, session allowances)? And where or what exactly (the folders, the sensitive patterns, your blocks, what leaves your computer)? [since 1.26] In the row *Execute*, the third question is one line with the state of the sandbox in the open folder — *Isolated in the sandbox* with how many programs and hosts have more room, or *Not isolated* in amber — and leads to *Settings › Tools › Security*.
 - **At the bottom**, the *Session allowances* still in force and the two ways to reset.
@@ -27,6 +28,8 @@ Everything on this page takes effect at once. Anything that loosens protection i
 ## Switch a tool on or off
 
 Open the row and use the tool's switch. Two tools are off until you switch them on, both in the row *Execute*: *Allow shell commands* and *Allow Python execution*. Read what they can do first: [Run commands in the sandbox](../sandbox/).
+
+Every tool that is on sends its description with each request, whether the model uses it or not. To keep the context small — for a local model with a small context window, say — switch off the tools you don't need. [since 1.28] The figure next to each switch shows what you save.
 
 ## Block something
 

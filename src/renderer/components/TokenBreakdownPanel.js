@@ -13,16 +13,13 @@
 import contracts from '../generated/contracts.js';
 import { dismissOnFocusLeave, dismissOnOutsideClick } from '../utils/helpers.js';
 import { getLocale, onLocaleChange, t } from '../i18n.js';
+import { formatTokensShort } from '../utils/token-format.js';
 
 const { normalizeContextBreakdown, groupContextParts } = contracts;
 
 // Separators and the space before the percent sign differ between the two
 // languages, so the formatters follow the interface language (#290).
 const tokenFormatter = () => new Intl.NumberFormat(getLocale());
-const oneDecimalFormatter = () => new Intl.NumberFormat(getLocale(), {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-});
 const percentFormatter = () => new Intl.NumberFormat(getLocale(), {
   style: 'percent',
   maximumFractionDigits: 1,
@@ -32,14 +29,8 @@ const percentWholeFormatter = () => new Intl.NumberFormat(getLocale(), {
   maximumFractionDigits: 0,
 });
 
-/** Kompakte Tokenzahl für die Zeilen: „980", „3,1 K", „17 K". */
-export function formatTokensShort(value) {
-  const n = Math.max(0, Math.round(Number(value) || 0));
-  if (n < 1000) return tokenFormatter().format(n);
-  const inK = n / 1000;
-  if (inK < 10) return `${oneDecimalFormatter().format(inK)} K`;
-  return `${tokenFormatter().format(Math.round(inK))} K`;
-}
+// Kept here for the callers that know it by this module (CostPanel).
+export { formatTokensShort };
 
 /**
  * Anteile unter 1 % nicht auf „0 %" runden — sonst sieht klein aus wie nichts.

@@ -4,6 +4,7 @@ import { describeSandboxStatus } from './sandbox-status-view.js';
 import { describeSandboxLink } from './tool-security-view.js';
 import { settingsPageName } from './settings-pages.js';
 import { describeConnection } from './mcp-connection-view.js';
+import { formatTokensShort } from './token-format.js';
 import contracts from '../generated/contracts.js';
 
 const { TOOL_EXTERNAL_SERVICES } = contracts;
@@ -84,6 +85,40 @@ export function describeSecurityHeader(overview) {
     otherChats: shown,
     otherChatsMore: chats.length > shown.length ? tPlural('security.header.otherChats.more', chats.length - shown.length) : '',
     summary: describeSummary(overview),
+    context: describeContextTotal(overview?.context),
+  };
+}
+
+/**
+ * What the tools that are on take of every request, as one sentence, and
+ * the MCP tools not counted yet (#1219). Empty when nothing is on.
+ */
+export function describeContextTotal(context) {
+  const tokens = Number(context?.tokens) || 0;
+  const unknown = Number(context?.unknown) || 0;
+  return {
+    total: tokens > 0 ? t('security.context.total', { tokens: formatTokensShort(tokens) }) : '',
+    unknown: unknown > 0 ? tPlural('security.context.unknown', unknown) : '',
+  };
+}
+
+/**
+ * One tool's context cost (#1219): the short figure that is shown, and the
+ * words a screen reader says instead of "tilde". `null` where nothing was
+ * measured.
+ */
+export function describeToolTokens(contextTokens) {
+  // Not known yet: an MCP tool remembered by name, whose schema comes with
+  // the server's first connection.
+  if (contextTokens === null) {
+    return { text: t('security.tokens.unknown'), spoken: t('security.tokens.unknownSpoken'), known: false };
+  }
+  if (typeof contextTokens !== 'number' || !Number.isFinite(contextTokens)) return null;
+  const tokens = formatTokensShort(contextTokens);
+  return {
+    text: t('security.tokens.estimate', { tokens }),
+    spoken: t('security.tokens.estimateSpoken', { tokens }),
+    known: true,
   };
 }
 
@@ -106,7 +141,11 @@ export function describeSummary(overview) {
 function toolCountLabel(row) {
   if (row.riskClass === 'read-sensitive') return t('security.row.readSensitive.sub');
   const on = row.tools.filter((tool) => tool.state === 'on').length;
-  return on === 0 ? t('security.row.noTools') : tPlural('security.row.toolCount', on);
+  if (on === 0) return t('security.row.noTools');
+  const count = tPlural('security.row.toolCount', on);
+  // What they take of every request together (#1219).
+  const tokens = Number(row.context?.tokens) || 0;
+  return tokens > 0 ? `${count} · ${t('security.tokens.estimate', { tokens: formatTokensShort(tokens) })}` : count;
 }
 
 function reasonText(row, mode, hasWorkspace) {
@@ -192,6 +231,8 @@ function toolItem(tool, row) {
     // Without its key or server a tool cannot be switched on here; the link
     // under the list goes where it is set up.
     switchDisabled: tool.state === 'unavailable',
+    // Shown where it is switched; a row that only lists it leaves it out.
+    tokens: switchable ? describeToolTokens(tool.contextTokens) : null,
   };
 }
 
@@ -233,6 +274,12 @@ export function describeMcpGroups(row, mcp) {
   return groups;
 }
 
+/** The cost of the tool that starts this process, or null without a figure. */
+function executionToolTokens(row, execution) {
+  const tool = row.tools.find((entry) => entry.execution === execution && !entry.mcpServer);
+  return tool ? describeToolTokens(tool.contextTokens) : null;
+}
+
 function describeMay(row, mcp) {
   const key = classKey(row.riskClass);
   let answer;
@@ -260,6 +307,13 @@ function describeMay(row, mcp) {
     answer,
     note: row.riskClass === 'delete' ? t('security.a.may.delete.note') : '',
     execution: isExecute,
+    // The execution tools are switched in their own blocks; their cost
+    // goes there (#1219).
+    // Keyed by the process the tool starts, as the slots are.
+    executionTokens: isExecute ? {
+      python: executionToolTokens(row, 'python'),
+      shell: executionToolTokens(row, 'shell'),
+    } : null,
     tools: tools.map((tool) => toolItem(tool, row)),
     mcpGroups: isExternal ? describeMcpGroups(row, mcp) : [],
     links,

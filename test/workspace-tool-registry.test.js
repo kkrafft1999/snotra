@@ -902,3 +902,34 @@ test('the tool prompt points to get_configuration only while it is offered', () 
   assert.match(description, /before you tell the user that something is not possible/);
   assert.match(description, /earlier result may be outdated/);
 });
+
+test('listToolSchemas gives every switchable tool the schema getTools sends, switched on or off (#1219)', () => {
+  const registry = createToolRegistry([
+    definition('read'),
+    definition('write', { riskClass: TOOL_RISK_CLASSES.WRITE }),
+    { ...definition('always'), essential: true },
+  ]);
+  registry.setDynamicDefinitions([{
+    name: 'mcp__github__get_issue',
+    description: 'Gets an issue.',
+    riskClass: TOOL_RISK_CLASSES.EXECUTE,
+    requiresWorkspace: false,
+    parameters: { type: 'object', properties: {} },
+    handler: () => '',
+    mcp: { serverId: 'github' },
+    shortDescriptionParams: { server: 'GitHub' },
+  }]);
+  const schemas = registry.listToolSchemas();
+  // The essential tools are no choice and are left out, as in the catalogue.
+  assert.deepEqual(schemas.map((entry) => entry.name), ['read', 'write', 'mcp__github__get_issue']);
+  assert.deepEqual(schemas.map((entry) => entry.mcpServerId), [null, null, 'github']);
+  // A switched-off tool still has its schema: it is what switching it on adds.
+  const offered = registry.getTools({ disabledNames: ['write'] });
+  assert.equal(offered.some((tool) => tool.function.name === 'write'), false);
+  // What the settings measure is exactly what the chat sends.
+  const sent = registry.getTools({}).filter((tool) => tool.function.name !== 'always');
+  assert.equal(sent.length, 3);
+  for (const tool of sent) {
+    assert.deepEqual(schemas.find((entry) => entry.name === tool.function.name)?.schema, tool);
+  }
+});
