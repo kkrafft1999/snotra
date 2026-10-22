@@ -651,10 +651,10 @@ function fakeViolationStore() {
   };
 }
 
-async function preparedWithStore(commandId = 'shell-9', deps = {}) {
+async function preparedWithStore(commandId = 'shell-9', deps = {}, fake = {}) {
   const store = fakeViolationStore();
   const { service, calls } = makeService({
-    fake: { store },
+    fake: { store, ...fake },
     deps: { violationSettleMs: 0, os: { ...os, homedir: () => '/home/u' }, ...deps },
   });
   await service.detect();
@@ -700,6 +700,38 @@ test('ssh reaching for its key files is no refusal to show on macOS; any other p
     ['read', '/home/u/.aws/credentials'],
   ]);
   assert.equal(blocked.total, 2);
+});
+
+test('a refused connection to the sandbox\'s own proxy port is no bypass and no unreachable proxy (#1164)', posixOnly, async () => {
+  const { store, prepared } = await preparedWithStore('shell-9', { platform: 'darwin', readPythonCommand: async () => '/nonexistent/python' },
+    { proxyPort: 49283 });
+  // The line macOS CI logged on a curl through the proxy that exited 0.
+  store.add('shell-9', 'curl(5120) deny(1) network-outbound remote:*:49283');
+
+  assert.equal(await prepared.blocked(), null);
+  const text = prepared.annotate('');
+  assert.doesNotMatch(text, /sandbox_blocked/);
+  assert.doesNotMatch(text, /sandbox_network/);
+  prepared.release();
+});
+
+test('a direct connection is still reported next to the proxy port, without an unreachable-proxy note (#1164)', posixOnly, async () => {
+  const { store, prepared } = await preparedWithStore('shell-9', { platform: 'darwin', readPythonCommand: async () => '/nonexistent/python' },
+    { proxyPort: 49283 });
+  store.add('shell-9', 'curl(5120) deny(1) network-outbound remote:*:49283');
+  store.add('shell-9', 'psql(77) deny(1) network-outbound 10.0.0.5:5432');
+  store.add('shell-9', 'nc(78) deny(1) network-outbound 10.0.0.5:49283');
+
+  const blocked = await prepared.blocked();
+  assert.deepEqual(blocked.entries.map((e) => [e.kind, e.target]), [
+    ['direct', '10.0.0.5:5432'],
+    ['direct', '10.0.0.5:49283'],
+  ]);
+  // The block note names port 49283 and "connection"; that is no failed connect to the proxy.
+  const text = prepared.annotate('psql: error: connection to server failed\n');
+  assert.match(text, /<sandbox_blocked>/);
+  assert.doesNotMatch(text, /sandbox_network/);
+  prepared.release();
 });
 
 test('a run keeps refusals past the runtime\'s hundred (#792)', posixOnly, async () => {
