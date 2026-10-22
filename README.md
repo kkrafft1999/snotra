@@ -78,10 +78,11 @@ Get the latest release from the
   ([#662](https://github.com/kkrafft1999/snotra/issues/662)). Open the DMG,
   drag the app into Applications and start it — macOS only asks once whether
   you want to open an app downloaded from the internet.
-- **Windows:** the build is not signed yet
-  ([#19](https://github.com/kkrafft1999/snotra/issues/19)), so SmartScreen
-  warns on first launch. Unzip, start `Snotra Agent.exe`, then *SmartScreen › More
-  info › Run anyway*.
+- **Windows:** since 1.27.2, `Snotra Agent.exe` is signed in the developer's
+  name ([#911](https://github.com/kkrafft1999/snotra/issues/911)). The
+  certificate is new, so SmartScreen may still warn on first launch until it
+  has built up a reputation. Unzip, start `Snotra Agent.exe`, check that the
+  publisher reads *Konrad Krafft*, then *More info › Run anyway*.
 
 ## Why Snotra?
 
@@ -116,8 +117,7 @@ corrections welcome.
   are code editors. Snotra keeps the folder in view without being an IDE, for
   work that isn't code.
 
-What Snotra doesn't have yet: signed builds
-([#19](https://github.com/kkrafft1999/snotra/issues/19)), a sandbox on Windows
+What Snotra doesn't have yet: a sandbox on Windows
 (on macOS and Linux, commands and Python run isolated — see [Run commands in the sandbox](https://docs.snotra-ai.dev/safety/sandbox/)), and
 OAuth sign-in for remote MCP servers — they connect with an API key or token in
 a header.

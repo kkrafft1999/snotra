@@ -458,8 +458,9 @@ a suffix, a regular release is created as before.
 > Note: the macOS build is signed with a Developer ID, notarised and stapled
 > (#662) — the job `Build macOS` fails if Gatekeeper would not accept it. A
 > prerelease is signed the same way, so a `-rc` tag is the test run for a change
-> to the signing. Windows is still unsigned; SmartScreen warns there on first
-> launch. Linux needs no signature; the only relevant point there is the sandbox
+> to the signing. Windows signs `Snotra Agent.exe` through SSL.com eSigner
+> (#911, see [release/windows-signing.md](release/windows-signing.md)); the job
+> `Build Windows (x64)` fails if the signature does not verify. Linux needs no signature; the only relevant point there is the sandbox
 > note about the tarball (see the README).
 
 ## What the app checks
