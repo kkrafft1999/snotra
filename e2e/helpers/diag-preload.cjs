@@ -54,3 +54,59 @@ if (originalFetch) {
     try { return await originalFetch(input, init); } finally { log(`fetch< ${url} ${Date.now() - started}ms`); }
   };
 }
+
+// Round 2: where in main the time goes.
+let expected = Date.now() + 50;
+setInterval(() => {
+  const lag = Date.now() - expected;
+  if (lag > 200) log(`event loop blocked ~${lag}ms`);
+  expected = Date.now() + 50;
+}, 50).unref();
+
+const slow = (label, started, extra = '') => {
+  const ms = Date.now() - started;
+  if (ms >= 80) log(`slow ${label} ${ms}ms ${extra}`);
+};
+const fs = require('fs');
+for (const [name, fn] of Object.entries(fs.promises)) {
+  if (typeof fn !== 'function') continue;
+  fs.promises[name] = async function wrapped(...args) {
+    const started = Date.now();
+    try { return await fn.apply(this, args); } finally { slow(`fs.promises.${name}`, started, String(args[0]).slice(-120)); }
+  };
+}
+for (const name of Object.keys(fs)) {
+  if (!name.endsWith('Sync') || typeof fs[name] !== 'function') continue;
+  const fn = fs[name];
+  fs[name] = function wrapped(...args) {
+    const started = Date.now();
+    try { return fn.apply(this, args); } finally { slow(`fs.${name}`, started, String(args[0]).slice(-120)); }
+  };
+}
+const crypto = require('crypto');
+for (const name of ['pbkdf2', 'scrypt', 'generateKeyPair', 'randomBytes']) {
+  const fn = crypto[name];
+  crypto[name] = function wrapped(...args) {
+    const started = Date.now();
+    const cb = args[args.length - 1];
+    if (typeof cb === 'function') {
+      args[args.length - 1] = (...r) => { slow(`crypto.${name}`, started); return cb(...r); };
+    }
+    return fn.apply(this, args);
+  };
+}
+for (const name of ['pbkdf2Sync', 'scryptSync', 'generateKeyPairSync']) {
+  const fn = crypto[name];
+  crypto[name] = function wrapped(...args) {
+    const started = Date.now();
+    try { return fn.apply(this, args); } finally { slow(`crypto.${name}`, started); }
+  };
+}
+const { safeStorage } = require('electron');
+for (const name of ['encryptString', 'decryptString', 'isEncryptionAvailable']) {
+  const fn = safeStorage[name].bind(safeStorage);
+  safeStorage[name] = (...args) => {
+    const started = Date.now();
+    try { return fn(...args); } finally { slow(`safeStorage.${name}`, started); }
+  };
+}

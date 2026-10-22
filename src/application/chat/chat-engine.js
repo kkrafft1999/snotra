@@ -1323,7 +1323,7 @@ function createChatEngine({
   async function send(args) {
     /** @type {{ value: ReturnType<typeof mergeSessionCost> }} */
     const turnCost = { value: null };
-    const result = await runSend(args, turnCost);
+    globalThis.__diag?.('engine runSend>'); const result = await runSend(args, turnCost);
     if (!turnCost.value || !result || typeof result !== 'object') return result;
     return { ...result, cost: turnCost.value };
   }
@@ -1398,17 +1398,17 @@ function createChatEngine({
         return createChatErrorResult({ error: createMessage('chat.error.noMessages'), code: CHAT_ERROR_CODES.INVALID });
       }
 
-      const resolved = await resolveTarget(true, chatId);
+      globalThis.__diag?.('engine start'); const resolved = await resolveTarget(true, chatId);
       if (resolved.error) return resolved.error;
       const { target } = resolved;
       awaitingProvider = true;
-      const sendBundle = await llm.prepareSendBundle(target);
+      globalThis.__diag?.('engine resolved'); const sendBundle = await llm.prepareSendBundle(target);
       awaitingProvider = false;
       // Der Composer laesst Bilder gar nicht erst zu, wenn der Anbieter sie
       // nicht weiterreicht (Issue #93). Hier greift der Fall, dass nach dem
       // Anhaengen auf ein anderes Modell umgeschaltet wurde: lieber eine klare
       // Meldung als ein Bild, das unterwegs verschwindet.
-      const attachmentBlock = findUnsupportedAttachment(messages, sendBundle);
+      globalThis.__diag?.('engine bundle'); const attachmentBlock = findUnsupportedAttachment(messages, sendBundle);
       if (attachmentBlock) return attachmentBlock;
       const providerKey = buildProviderKey(target, sendBundle);
       const providerLabel = buildProviderLabel(target, sendBundle);
@@ -1422,7 +1422,7 @@ function createChatEngine({
           )
         : null;
 
-      const uiPrefs = await preferences.read();
+      globalThis.__diag?.('engine prefs>'); const uiPrefs = await preferences.read();
       const appLocale = resolveAppLocale(uiPrefs);
       const systemPrompt = typeof uiPrefs.baseSystemPrompt === 'string' ? uiPrefs.baseSystemPrompt.trim() : '';
       // What this chat switched for itself on a card (#774): read when the
@@ -1435,7 +1435,7 @@ function createChatEngine({
           return null;
         }
       };
-      let configOverrides = await readConfigOverrides();
+      globalThis.__diag?.('engine overrides>'); let configOverrides = await readConfigOverrides();
       /** @type {string[]} */
       let disabledNames = [];
       // Deaktivierte Tools bleiben unsichtbar und gesperrt; der Modus allein
@@ -1489,7 +1489,7 @@ function createChatEngine({
         skillRoots = [];
         if (skills) {
           try {
-            const loaded = await skills.getActiveSkills({
+            globalThis.__diag?.('engine skills>'); const loaded = await skills.getActiveSkills({
               workspaceRoot,
               activeSkills: Array.isArray(uiPrefs.activeSkills) ? uiPrefs.activeSkills : null,
               // A workspace skill is on only where it was ticked (#576).
@@ -1504,7 +1504,7 @@ function createChatEngine({
               // instructions around it stay English (#276).
               locale: appLocale,
             });
-            activeSkills = guardEmbeddedSkills(loaded, await readOwnSecretList())
+            globalThis.__diag?.('engine skills<'); activeSkills = guardEmbeddedSkills(loaded, await readOwnSecretList())
               .filter((skill) => !cardSkillsOff.has(skill?.name))
               // Switched on by a card, not called by name: listed and loaded
               // on demand like a skill from the settings (#173), not written
@@ -1531,8 +1531,8 @@ function createChatEngine({
         // Tools, die erst zur Laufzeit feststehen, einmal je Lauf auffrischen
         // (Issue #107). Danach ist die Liste fuer diesen Lauf fest — ein Server,
         // der mittendrin dazukommt, wirkt ab der naechsten Nachricht.
-        if (!refresh && typeof tools.prepare === 'function') await tools.prepare(toolOptions);
-        toolsPrompt = tools.buildSystemPrompt(toolOptions);
+        globalThis.__diag?.('engine tools.prepare>'); if (!refresh && typeof tools.prepare === 'function') await tools.prepare(toolOptions);
+        globalThis.__diag?.('engine tools.prepare<'); toolsPrompt = tools.buildSystemPrompt(toolOptions);
         availableToolDefs = tools.getTools(toolOptions);
         // Gibt es keinen Weg zur Anleitung, fällt der Prompt auf das alte
         // Verhalten zurück, statt Skills still wirkungslos zu lassen (#173).
@@ -1563,7 +1563,7 @@ function createChatEngine({
           : buildNoWorkspaceSystemPrompt({ toolsPrompt, skillFiles: skillFilesWithoutFolder });
       }
       await setupCapabilities();
-      // The session approvals stay bound to the skills the run started with.
+globalThis.__diag?.('engine capabilities<');       // The session approvals stay bound to the skills the run started with.
       const skillSignature = skillRoots.map((entry) => entry.name).sort().join(',');
 
       // Umgebungsangaben (Issue #138). Abschaltbar, weil der absolute Pfad den
@@ -1581,7 +1581,7 @@ function createChatEngine({
         }
       }
 
-      // Projektanweisungen aus AGENTS.md (Issue #212). Anders als bei den
+globalThis.__diag?.('engine env<');       // Projektanweisungen aus AGENTS.md (Issue #212). Anders als bei den
       // Skills gibt es hier keine Auswahl: Wer den Ordner öffnet, übernimmt
       // seine Anweisungen — der Schalter ist die Notbremse dafür und steht
       // wie bei #138 standardmäßig an.
@@ -1603,7 +1603,7 @@ function createChatEngine({
         }
       }
 
-      // Gedächtnis (Issue #166). Je Ebene abschaltbar, weil beide mit jeder
+globalThis.__diag?.('engine instructions<');       // Gedächtnis (Issue #166). Je Ebene abschaltbar, weil beide mit jeder
       // Anfrage zum Anbieter gehen — der Ordner-Schalter ist zugleich die
       // Notbremse für einen fremden Ordner, dessen `memory.md` man nicht
       // übernehmen will.
@@ -1632,7 +1632,7 @@ function createChatEngine({
         }
       }
 
-      // Der Prompt des Nutzers steht vorn und behält damit den Vorrang. Das
+globalThis.__diag?.('engine memory<');       // Der Prompt des Nutzers steht vorn und behält damit den Vorrang. Das
       // Gedächtnis des Nutzers steht direkt dahinter, weil es dasselbe ist: was
       // der Nutzer selbst gesagt hat, nur über mehrere Unterhaltungen hinweg.
       // Zwischen beide soll sich nichts Fremdes schieben. The folder's memory
@@ -2902,7 +2902,7 @@ function createChatEngine({
         ];
 
         awaitingProvider = true;
-        const streamed = await llm.streamRound({
+        globalThis.__diag?.('engine streamRound>'); const streamed = await llm.streamRound({
           target,
           sendBundle,
           messages: sentMessages,
