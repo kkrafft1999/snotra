@@ -1,6 +1,7 @@
 'use strict';
 
 const { describeRememberedMcpTools } = require('../tools/mcp-remembered-tools');
+const { estimateToolDefinitionTokens } = require('../../shared/contracts/context-breakdown');
 
 /**
  * @typedef {NonNullable<NonNullable<Parameters<typeof describeRememberedMcpTools>[0]>['servers']>} McpServers
@@ -28,7 +29,8 @@ const { describeRememberedMcpTools } = require('../tools/mcp-remembered-tools');
  * @param {object} deps
  * @param {ChatList} deps.chatHistoryStore
  * @param {{ readUIPrefs: () => Promise<import('../../shared/contracts/settings').UiPrefs> }} deps.uiPrefsStore
- * @param {Pick<ReturnType<typeof import('../tools/workspace-tool-registry').createWorkspaceToolRegistry>, 'listRiskCatalog'>} deps.toolRegistry
+ * @param {Pick<ReturnType<typeof import('../tools/workspace-tool-registry').createWorkspaceToolRegistry>, 'listRiskCatalog'>
+ *   & Partial<Pick<ReturnType<typeof import('../tools/workspace-tool-registry').createWorkspaceToolRegistry>, 'listToolSchemas'>>} deps.toolRegistry
  * @param {{ readMcpServers: () => Promise<McpServers> }} deps.mcpConfigStore
  * @param {Pick<import('../ports/code-execution-port').CodeExecutionPort, 'isAvailable'>} deps.pythonRunner
  * @param {Pick<import('../ports/shell-execution-port').ShellExecutionPort, 'isAvailable'>} deps.shellRunner
@@ -36,6 +38,7 @@ const { describeRememberedMcpTools } = require('../tools/mcp-remembered-tools');
  * @param {{ getValidatedFolderHistory?: () => Promise<string[]>, getValidatedLastFolder?: () => Promise<string | null> }|null} [deps.workspaceFolderStore]
  * @param {Pick<typeof import('fs/promises'), 'stat'>|null} [deps.fs]
  * @param {() => void} [deps.onSandboxDetected]
+ * @param {() => Promise<string | undefined>} [deps.tokenizerProfile]  the active model's, for the context cost (#1219)
  */
 function createSecurityPageData({
   chatHistoryStore,
@@ -51,6 +54,7 @@ function createSecurityPageData({
   fs = null,
   /** Called once a sandbox detection started from here is done. */
   onSandboxDetected = () => {},
+  tokenizerProfile = async () => undefined,
 }) {
   /**
    * Titles of the given chats, for the list of session approvals (#447).
@@ -90,8 +94,58 @@ function createSecurityPageData({
     } catch {
       servers = [];
     }
+    const costs = await describeContextCosts();
     return [...catalog, ...describeRememberedMcpTools({ servers, present: catalog, locale: prefs.appLocale })]
-      .map((tool) => ({ ...tool, disabled: disabled.has(tool.name) }));
+      .map((tool) => ({
+        ...tool,
+        disabled: disabled.has(tool.name),
+        // A remembered MCP tool has no schema yet: its cost is not known (#1219).
+        contextTokens: costs.has(tool.name) ? costs.get(tool.name) : null,
+      }));
+  }
+
+  /**
+   * What each tool's schema adds to every request, estimated with the
+   * divisor of the active model's tokenizer (#1219) — the same estimate as
+   * the chat's context breakdown. Name → tokens.
+   */
+  async function describeContextCosts() {
+    /** @type {Map<string, number>} */
+    const costs = new Map();
+    for (const entry of await measureSchemas()) costs.set(entry.name, entry.tokens);
+    return costs;
+  }
+
+  /**
+   * The same per MCP server, for Settings › Tools › MCP servers (#1219): the
+   * sum over the tools the registry has from it. A server whose tools it
+   * does not have yet — never connected in this session — is missing.
+   * Server id → tokens.
+   */
+  async function describeMcpContextCosts() {
+    /** @type {Map<string, number>} */
+    const costs = new Map();
+    for (const entry of await measureSchemas()) {
+      if (entry.mcpServerId) costs.set(entry.mcpServerId, (costs.get(entry.mcpServerId) || 0) + entry.tokens);
+    }
+    return costs;
+  }
+
+  async function measureSchemas() {
+    if (typeof toolRegistry.listToolSchemas !== 'function') return [];
+    let profile;
+    try {
+      profile = await tokenizerProfile();
+    } catch {
+      // No model to ask (none set up, a provider gone): the default profile
+      // gives a figure, which beats none on a page about choosing tools.
+      profile = undefined;
+    }
+    return toolRegistry.listToolSchemas().map(({ name, mcpServerId, schema }) => ({
+      name,
+      mcpServerId,
+      tokens: estimateToolDefinitionTokens(schema, profile),
+    }));
   }
 
   /**
@@ -179,7 +233,7 @@ function createSecurityPageData({
     }
   }
 
-  return { describeChats, describeTools, describeWorkspaceChats, describeExecutionTools, listKnownWorkspaces, folderExists };
+  return { describeChats, describeTools, describeMcpContextCosts, describeWorkspaceChats, describeExecutionTools, listKnownWorkspaces, folderExists };
 }
 
 module.exports = { createSecurityPageData };

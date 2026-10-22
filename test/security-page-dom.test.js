@@ -609,3 +609,123 @@ test('"What leaves your computer?" names the service of each tool that is on', a
     dom.cleanup();
   }
 });
+
+// ── What each tool takes of the context (#1219) ──────────────────────────
+
+const COSTED = [
+  tool('read_file_text', ['read'], { contextTokens: 420 }),
+  tool('find_files', ['read'], { contextTokens: 380, disabled: true }),
+  tool('write_file_text', ['write'], { mayOverwrite: true, contextTokens: 1240 }),
+  tool('fetch_url', ['external'], { contextTokens: 300 }),
+  tool('mcp__gh__issues', ['execute', 'external'], { mcpServer: 'GitHub', mcpServerId: 'gh', contextTokens: 2600 }),
+  tool('mcp__gh__pulls', ['execute', 'external'], { mcpServer: 'GitHub', mcpServerId: 'gh', contextTokens: null }),
+];
+
+test('every tool shows its estimated cost next to its switch, each row and the page their sum (#1219)', async () => {
+  const dom = setupRendererDom();
+  try {
+    await openPage(overviewWith({ tools: COSTED }), {
+      mcp: { ...MCP_CATALOG, connections: [{ serverId: 'gh', state: 'ready', toolCount: 2, contextTokens: 2600 }] },
+    });
+    const doc = dom.document;
+    // The page: every tool that is on, once, and what is not known yet.
+    assert.equal(
+      doc.getElementById('settings-security-context').textContent,
+      'The tools switched on here take about 4.6 K tokens of context in every request — an estimate from the length of their descriptions; the exact count depends on the model. '
+        + '1 tool of an MCP server is not counted yet; its size is known once the server has connected.'
+    );
+    // The closed row: how many are on and what they cost together.
+    assert.equal(row(doc, 'read').querySelector('.settings-security-row__sub').textContent, '1 tool on · ~420 tokens');
+    assert.equal(row(doc, 'write').querySelector('.settings-security-row__sub').textContent, '1 tool on · ~1.2 K tokens');
+
+    row(doc, 'read').querySelector('.settings-security-row__toggle').click();
+    const figure = (name) => {
+      const input = doc.querySelector(`[data-tool-switch="${name}"]`);
+      return doc.getElementById(input.getAttribute('aria-describedby'));
+    };
+    // Shown short, said in words, explained on hover.
+    const read = figure('read_file_text');
+    assert.equal(read.querySelector('[aria-hidden="true"]').textContent, '~420 tokens');
+    assert.equal(read.querySelector('.visually-hidden').textContent, 'about 420 tokens of context per request');
+    assert.match(read.title, /Estimated from the length/);
+    // A switched-off tool keeps its figure: it is what switching it on adds.
+    assert.equal(figure('find_files').querySelector('[aria-hidden="true"]').textContent, '~380 tokens');
+
+    // A row that only lists a tool switched elsewhere shows no figure for it.
+    row(doc, 'delete').querySelector('.settings-security-row__toggle').click();
+    assert.equal(row(doc, 'delete').querySelector('.settings-security-item__tokens'), null);
+
+    // MCP: the server says what its tools take; a tool remembered by name is not known yet.
+    row(doc, 'external').querySelector('.settings-security-row__toggle').click();
+    const [github] = servers(doc);
+    assert.equal(github.querySelector('.settings-security-server__head').textContent, 'GitHubconnected · 2 tools · ~2.6 K tokens');
+    const unknown = figure('mcp__gh__pulls');
+    assert.ok(unknown.classList.contains('settings-security-item__tokens--unknown'));
+    assert.equal(unknown.querySelector('[aria-hidden="true"]').textContent, 'tokens unknown');
+    assert.equal(unknown.title, '');
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('nothing on, nothing measured: no total and no figures (#1219)', async () => {
+  const dom = setupRendererDom();
+  try {
+    await openPage(overviewWith({ tools: TOOLS.map((entry) => ({ ...entry, disabled: true })) }));
+    const doc = dom.document;
+    assert.equal(doc.getElementById('settings-security-context').textContent, '');
+    assert.equal(doc.querySelectorAll('.settings-security-item__tokens').length, 0);
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('German: the figures in German words and separators (#1219)', async () => {
+  const dom = setupRendererDom();
+  try {
+    const { setLocale } = await importRenderer('i18n.js');
+    setLocale('de');
+    try {
+      await openPage(overviewWith({ tools: COSTED }));
+      const doc = dom.document;
+      assert.match(doc.getElementById('settings-security-context').textContent, /^Die hier eingeschalteten Tools belegen in jeder Anfrage etwa 4,6 K Tokens Kontext/);
+      assert.equal(row(doc, 'write').querySelector('.settings-security-row__sub').textContent, '1 Tool an · ~1,2 K Tokens');
+      row(doc, 'read').querySelector('.settings-security-row__toggle').click();
+      const figure = row(doc, 'read').querySelector('.settings-security-item__tokens');
+      assert.equal(figure.querySelector('.visually-hidden').textContent, 'etwa 420 Tokens Kontext je Anfrage');
+    } finally {
+      setLocale('en');
+      await settle();
+    }
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('the execution switches carry their tool\'s cost too, and keep only one figure across redraws (#1219)', async () => {
+  const dom = setupRendererDom();
+  try {
+    const tools = [
+      tool('shell_execute', ['execute'], { contextTokens: 1300, execution: 'shell' }),
+      tool('run_python', ['execute'], { contextTokens: 900, disabled: true, execution: 'python' }),
+    ];
+    const page = await openPage(overviewWith({ tools }));
+    const doc = dom.document;
+    row(doc, 'execute').querySelector('.settings-security-row__toggle').click();
+    const shellInput = doc.getElementById('input-shell-enabled');
+    const figure = doc.getElementById(shellInput.getAttribute('aria-describedby'));
+    assert.equal(figure.querySelector('[aria-hidden="true"]').textContent, '~1.3 K tokens');
+    assert.ok(doc.getElementById('settings-shell-card').contains(figure));
+    const python = doc.getElementById(doc.getElementById('input-python-enabled').getAttribute('aria-describedby'));
+    assert.equal(python.querySelector('[aria-hidden="true"]').textContent, '~900 tokens');
+    page.setOverview(overviewWith({ tools: tools.map((entry) => ({ ...entry, contextTokens: 1400 })) }));
+    page.toolPermissions.emit();
+    await settle();
+    await settle();
+    const figures = doc.querySelectorAll('#settings-shell-card .settings-security-item__tokens');
+    assert.equal(figures.length, 1);
+    assert.equal(figures[0].querySelector('[aria-hidden="true"]').textContent, '~1.4 K tokens');
+  } finally {
+    dom.cleanup();
+  }
+});

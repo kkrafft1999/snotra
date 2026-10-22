@@ -1,5 +1,6 @@
 import contracts from '../generated/contracts.js';
 import { t, tPlural, tMessage } from '../i18n.js';
+import { formatTokensShort } from './token-format.js';
 
 const { MCP_CONNECTION_STATES, MCP_TRANSPORTS } = contracts;
 
@@ -16,7 +17,16 @@ export function describeConnection(server, connection) {
   if (!server?.enabled) return { kind: 'off', text: t('settings.mcp.state.off') };
   const state = connection?.state;
   if (state === MCP_CONNECTION_STATES.READY) {
-    return { kind: 'on', text: tPlural('settings.mcp.state.connected', connection.toolCount ?? 0) };
+    // What its tools take of every request, once the registry has them (#1219).
+    const tokens = Number.isFinite(connection.contextTokens) && connection.contextTokens > 0
+      ? connection.contextTokens
+      : 0;
+    return {
+      kind: 'on',
+      text: tokens > 0
+        ? tPlural('settings.mcp.state.connectedTokens', connection.toolCount ?? 0, { tokens: formatTokensShort(tokens) })
+        : tPlural('settings.mcp.state.connected', connection.toolCount ?? 0),
+    };
   }
   // A remote server is connected to, not started (#341).
   const remote = server.transport === MCP_TRANSPORTS.HTTP;

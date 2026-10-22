@@ -233,3 +233,29 @@ test('the Delete row is blocked by a block on writes exactly when the policy is 
   const verdict = decideToolPolicy({ mode: 'auto', toolName: 'write_file_text', riskClasses: ['delete'], targets: [{ path: 'a.txt' }], rules: [denyWrite] });
   assert.equal(verdict.decision, 'deny');
 });
+
+test('each row sums what its tools that are on cost; the page counts every tool once (#1219)', () => {
+  const overview = describeSecurityOverview({
+    root: ROOT,
+    mode: 'smart',
+    tools: [
+      tool('read_file_text', ['read'], { contextTokens: 100 }),
+      tool('find_files', ['read'], { contextTokens: 50, disabled: true }),
+      tool('write_file_text', ['write'], { contextTokens: 200 }),
+      tool('web_search', ['external'], { contextTokens: 300, available: false }),
+      tool('mcp__gh__issues', ['execute', 'external'], { mcpServer: 'GitHub', mcpServerId: 'gh', contextTokens: 400 }),
+      tool('mcp__gh__remembered', ['execute', 'external'], { mcpServer: 'GitHub', mcpServerId: 'gh', contextTokens: null }),
+      tool('no_figure', ['write']),
+    ],
+  });
+  assert.deepEqual(row(overview, 'read').context, { tokens: 100, unknown: 0 });
+  assert.deepEqual(row(overview, 'write').context, { tokens: 200, unknown: 0 });
+  assert.deepEqual(row(overview, 'external').context, { tokens: 400, unknown: 1 });
+  // A reading tool shows in the sensitive row as well.
+  assert.deepEqual(row(overview, 'read-sensitive').context, { tokens: 100, unknown: 0 });
+  // Switched off and not set up cost nothing; a tool in two rows counts once.
+  assert.deepEqual(overview.context, { tokens: 700, unknown: 1 });
+  const tools = row(overview, 'write').tools;
+  assert.equal(tools.find((entry) => entry.name === 'no_figure').contextTokens, undefined);
+  assert.equal(row(overview, 'read').tools.find((entry) => entry.name === 'find_files').contextTokens, 50);
+});

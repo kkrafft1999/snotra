@@ -62,10 +62,11 @@ function fakeSafeStorage() {
 
 // --- Teil 1: die Kanäle ---
 
-function makeHandlers(mcpSettings, { confirmations } = {}) {
+function makeHandlers(mcpSettings, { confirmations, describeMcpContextCosts } = {}) {
   const ipcMain = createMockIpcMain();
   registerSettingsHandlers({
     ...(confirmations ? { confirmations } : {}),
+    ...(describeMcpContextCosts ? { describeMcpContextCosts } : {}),
     ipcMain,
     safeStorage: { isEncryptionAvailable: () => true },
     llmConfigStore: {},
@@ -102,6 +103,20 @@ test('der Katalog liefert Server, Verbindungen und ausgelassene Tools', async ()
   assert.deepEqual(result.servers.map((s) => s.id), ['github']);
   assert.equal(result.connections[0].toolCount, 2);
   assert.deepEqual(result.skippedTools, []);
+});
+
+test('each connection says what its tools take of every request, or null when not known (#1219)', async () => {
+  const ipcMain = makeHandlers(fakeMcpSettings({
+    describeConnections: () => [
+      { serverId: 'github', state: MCP_CONNECTION_STATES.READY, toolCount: 2 },
+      { serverId: 'jira', state: MCP_CONNECTION_STATES.IDLE, toolCount: 0 },
+    ],
+  }), { describeMcpContextCosts: async () => new Map([['github', 2600]]) });
+  const result = await ipcMain.handlers.get(REQ.SETTINGS_GET_MCP_CATALOG)({});
+  assert.deepEqual(result.connections.map((c) => [c.serverId, c.contextTokens]), [['github', 2600], ['jira', null]]);
+  // A failing estimate costs the figures, not the catalogue.
+  const failing = makeHandlers(fakeMcpSettings(), { describeMcpContextCosts: async () => { throw new Error('no registry'); } });
+  assert.equal((await failing.handlers.get(REQ.SETTINGS_GET_MCP_CATALOG)({})).connections[0].contextTokens, null);
 });
 
 test('the catalogue says when the saved servers never reached the service (#1002)', async () => {

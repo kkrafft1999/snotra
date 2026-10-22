@@ -68,6 +68,7 @@ const {
 const { createOwnSecrets } = require('../services/own-secrets');
 const { createMcpSettings } = require('../services/mcp-settings');
 const { createSecurityPageData } = require('../../application/permissions/security-page-data');
+const { createActiveTokenizerProfile } = require('../../application/chat/active-tokenizer-profile');
 const { createProviderSecretsPort } = require('../adapters/provider-secrets-adapter');
 const { createCredentialAdapter } = require('../adapters/credential-adapter');
 const { createFilesystemIpcAdapter } = require('../adapters/filesystem-ipc-adapter');
@@ -727,6 +728,8 @@ function createCore({
     workspaceFolderStore,
     fs,
     onSandboxDetected: notifyToolPermissionsChanged,
+    // The tokenizer the tools' context cost is estimated with (#1219).
+    tokenizerProfile: createActiveTokenizerProfile(chatLlm),
   });
 
   // What the settings, the chat history and the tool permissions decide —

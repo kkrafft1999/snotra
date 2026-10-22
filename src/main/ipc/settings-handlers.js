@@ -60,6 +60,7 @@ const { mcpLaunchDialog } = require('../services/settings-confirmation-dialogs')
  * @param {SettingsExecutionTool|null} [deps.pythonSettings]
  * @param {SettingsExecutionTool|null} [deps.shellSettings]
  * @param {import('../../application/ports/user-confirmation-port').UserConfirmationPort} [deps.confirmations]
+ * @param {() => Promise<Map<string, number>>} [deps.describeMcpContextCosts]  server id → estimated tokens (#1219)
  */
 function registerSettingsHandlers({
   ipcMain,
@@ -85,6 +86,7 @@ function registerSettingsHandlers({
    * through — the store takes none without its receipt.
    */
   confirmations = createRefusingConfirmation(),
+  describeMcpContextCosts = async () => new Map(),
 }) {
   if (!presentation || typeof presentation.buildLlmStateDto !== 'function') {
     throw new Error('registerSettingsHandlers requires an injected settings presentation service.');
@@ -271,9 +273,15 @@ function registerSettingsHandlers({
   // masked from the composition, never raw from the service (CR-B14-01).
   async function buildMcpCatalog() {
     if (!mcpSettings) return { servers: [], connections: [], skippedTools: [], loadFailed: false };
+    const costs = await describeMcpContextCosts().catch(() => new Map() /* without the figures the servers are listed as before */);
     return {
       servers: await mcpSettings.listServers(),
-      connections: await mcpSettings.describeConnections(),
+      // What a connected server's tools add to every request (#1219); null
+      // while its schemas are not known.
+      connections: (await mcpSettings.describeConnections()).map((connection) => ({
+        ...connection,
+        contextTokens: costs.has(connection.serverId) ? costs.get(connection.serverId) : null,
+      })),
       skippedTools: mcpSettings.describeSkippedTools(),
       // The saved servers never reached the service — at start-up, say (#1002).
       loadFailed: mcpSettings.hasLoadFailed?.() === true,

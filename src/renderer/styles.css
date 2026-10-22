@@ -11413,6 +11413,19 @@ select.modal-input {
   display: none;
 }
 
+/* What the tools that are on take of every request (#1219). */
+.settings-security-context {
+  margin: 6px 0 0;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.5;
+  color: var(--ds-grey-strong);
+  max-width: 72ch;
+}
+
+.settings-security-context:empty {
+  display: none;
+}
+
 .settings-security-rows {
   list-style: none;
   margin: 0;
@@ -11713,6 +11726,19 @@ select.modal-input {
 
 .settings-security-item--muted .settings-security-item__label {
   color: var(--ds-grey-strong);
+}
+
+/* A tool's context cost (#1219): quiet, right-aligned figures. */
+.settings-security-item__tokens {
+  font-size: var(--ds-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--ds-grey-strong);
+  white-space: nowrap;
+  cursor: help;
+}
+
+.settings-security-item__tokens--unknown {
+  cursor: default;
 }
 
 .settings-security-item__tag,

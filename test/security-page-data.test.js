@@ -94,3 +94,53 @@ test('describeExecutionTools detects nothing when no execution tool is offered',
   assert.deepEqual((await data.describeExecutionTools()).active, []);
   assert.equal(detections.length, 0);
 });
+
+test('describeTools adds what each schema costs, with the active tokenizer; a remembered MCP tool is not known yet (#1219)', async () => {
+  const { estimateToolDefinitionTokens } = require('../src/shared/contracts/context-breakdown');
+  const schemaOf = (name) => ({ type: 'function', function: { name, description: `${name} does it.`, parameters: { type: 'object' } } });
+  const profiles = [];
+  const { data } = makeData({
+    toolRegistry: {
+      listRiskCatalog: () => [
+        { name: 'read_file', riskClasses: ['read'] },
+        { name: 'write_file', riskClasses: ['write'] },
+      ],
+      listToolSchemas: () => [
+        { name: 'read_file', mcpServerId: null, schema: schemaOf('read_file') },
+        { name: 'write_file', mcpServerId: null, schema: schemaOf('write_file') },
+        { name: 'mcp__jira__search', mcpServerId: 'jira', schema: schemaOf('mcp__jira__search') },
+        { name: 'mcp__jira__get', mcpServerId: 'jira', schema: schemaOf('mcp__jira__get') },
+      ],
+    },
+    tokenizerProfile: async () => { profiles.push('asked'); return 'o200k'; },
+  });
+  const tools = await data.describeTools();
+  const byName = Object.fromEntries(tools.map((tool) => [tool.name, tool]));
+  assert.equal(byName.read_file.contextTokens, estimateToolDefinitionTokens(schemaOf('read_file'), 'o200k'));
+  // Switched off, it still shows what switching it on would cost.
+  assert.equal(byName.read_file.disabled, true);
+  assert.equal(byName.write_file.contextTokens, estimateToolDefinitionTokens(schemaOf('write_file'), 'o200k'));
+  const remembered = tools.find((tool) => tool.mcpServerId === 'gh');
+  assert.equal(remembered.contextTokens, null);
+  assert.ok(profiles.length > 0);
+
+  const perServer = await data.describeMcpContextCosts();
+  assert.deepEqual([...perServer], [[
+    'jira',
+    estimateToolDefinitionTokens(schemaOf('mcp__jira__search'), 'o200k') + estimateToolDefinitionTokens(schemaOf('mcp__jira__get'), 'o200k'),
+  ]]);
+});
+
+test('without a tokenizer the estimate falls back to the default profile, and a failing lookup changes nothing (#1219)', async () => {
+  const { estimateToolDefinitionTokens } = require('../src/shared/contracts/context-breakdown');
+  const schema = { type: 'function', function: { name: 'read_file', description: 'Reads.', parameters: {} } };
+  const { data } = makeData({
+    toolRegistry: {
+      listRiskCatalog: () => [{ name: 'read_file', riskClasses: ['read'] }],
+      listToolSchemas: () => [{ name: 'read_file', mcpServerId: null, schema }],
+    },
+    tokenizerProfile: async () => { throw new Error('no provider'); },
+  });
+  const [tool] = await data.describeTools();
+  assert.equal(tool.contextTokens, estimateToolDefinitionTokens(schema));
+});

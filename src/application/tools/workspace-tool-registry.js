@@ -440,6 +440,9 @@ function createToolRegistry(initialDefinitions = []) {
         mayOverwrite: definition.mayOverwrite === true,
         // What it reaches outside, for "where it goes" on the page (#1008).
         externalService: definition.externalService || null,
+        // The process it starts: the page finds the tool behind its
+        // execution switch by it (#1219).
+        execution: entry.execution || null,
         mcpServer: definition.mcp
           ? String(definition.shortDescriptionParams?.server || definition.mcp.serverId || '')
           : null,
@@ -463,7 +466,17 @@ function createToolRegistry(initialDefinitions = []) {
    * @param {OfferOptions} [options]
    */
   function getTools(options = {}) {
-    return getAvailableDefinitions(options).map((definition) => ({
+    return getAvailableDefinitions(options).map((definition) => toLlmTool(definition, options));
+  }
+
+  /**
+   * The schema of one tool as it goes to the model.
+   *
+   * @param {{ name: string, [field: string]: any }} definition
+   * @param {OfferOptions} [options]
+   */
+  function toLlmTool(definition, options = {}) {
+    return {
       type: 'function',
       function: {
         name: definition.name,
@@ -479,7 +492,22 @@ function createToolRegistry(initialDefinitions = []) {
             ? definition.parametersFor(options)
             : definition.parameters,
       },
-    }));
+    };
+  }
+
+  /**
+   * The schema every tool in the settings would send, switched on or not
+   * (#1219): what it costs is what switching it on adds to each request.
+   * The essential tools are left out, as in `listCatalog`.
+   */
+  function listToolSchemas() {
+    return allDefinitions()
+      .filter((definition) => definition.essential !== true)
+      .map((definition) => ({
+        name: definition.name,
+        mcpServerId: definition.mcp ? String(definition.mcp.serverId || '') || null : null,
+        schema: toLlmTool(definition),
+      }));
   }
 
   /** Namen einer Liste als Aufzaehlung: „a, b und c". */
@@ -649,6 +677,7 @@ function createToolRegistry(initialDefinitions = []) {
     getTools,
     buildSystemPrompt,
     listCatalog,
+    listToolSchemas,
     listRiskCatalog,
     describeOffers,
     listDefinitions,

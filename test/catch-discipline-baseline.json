@@ -1,6 +1,6 @@
 {
   "quietCatch": {
-    "application/chat/chat-engine.js": 8,
+    "application/chat/chat-engine.js": 7,
     "application/chat/chat-history-trim.js": 1,
     "main/adapters/environment-adapter.js": 2,
     "main/adapters/http-url-fetch-adapter.js": 4,

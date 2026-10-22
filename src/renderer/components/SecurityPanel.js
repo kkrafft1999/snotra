@@ -101,6 +101,7 @@ export function initSecurityPanel({
   const modeNote = document.getElementById('settings-security-mode-note');
   const chatsEl = document.getElementById('settings-security-other-chats');
   const summaryEl = document.getElementById('settings-security-summary');
+  const contextEl = document.getElementById('settings-security-context');
   const errorEl = document.getElementById('settings-security-error');
   const rowsEl = document.getElementById('settings-security-rows');
   const slotsHome = document.getElementById('settings-security-slots');
@@ -167,7 +168,7 @@ export function initSecurityPanel({
    * An entry of a list inside an answer: text, optional code, a quiet tag and
    * at most one control — a tool switch, a remove or a revoke button.
    */
-  function itemRow({ label, code, tag, scope, muted = false, codeFirst = false, control = null }) {
+  function itemRow({ label, code, tag, scope, muted = false, codeFirst = false, control = null, tokens = null }) {
     const li = el('li', `settings-security-item${muted ? ' settings-security-item--muted' : ''}${codeFirst ? ' settings-security-item--tool' : ''}`);
     const main = el('span', 'settings-security-item__main');
     const labelEl = label ? el('span', 'settings-security-item__label', label) : null;
@@ -182,10 +183,29 @@ export function initSecurityPanel({
     for (const node of codeFirst ? [codeEl, labelEl] : [labelEl, codeEl]) if (node) main.appendChild(node);
     li.appendChild(main);
     const end = el('span', 'settings-security-item__end');
+    const tokensEl = tokens ? tokenFigure(tokens, code) : null;
+    if (tokensEl) end.appendChild(tokensEl);
     if (tag) end.appendChild(scope ? scopeTag(tag, scope) : el('span', 'settings-security-item__tag', tag));
-    if (control) end.appendChild(control);
+    if (control) {
+      if (tokensEl) control.setAttribute('aria-describedby', tokensEl.id);
+      end.appendChild(control);
+    }
     li.appendChild(end);
     return li;
+  }
+
+  /**
+   * A tool's context cost (#1219): "~420 tokens" on screen, the same in
+   * words for a screen reader, and how it is estimated on hover.
+   */
+  function tokenFigure(tokens, toolName) {
+    const span = el('span', `settings-security-item__tokens${tokens.known ? '' : ' settings-security-item__tokens--unknown'}`);
+    span.id = `settings-security-tokens-${String(toolName).replace(/[^A-Za-z0-9_-]/g, '-')}`;
+    if (tokens.known) span.title = t('security.tokens.title');
+    const shown = el('span', null, tokens.text);
+    shown.setAttribute('aria-hidden', 'true');
+    span.append(shown, el('span', 'visually-hidden', tokens.spoken));
+    return span;
   }
 
   function itemList(items) {
@@ -233,6 +253,24 @@ export function initSecurityPanel({
     if (node) body.appendChild(node);
   }
 
+  /**
+   * The cost of an execution tool next to its switch in the slot (#1219).
+   * The slot outlives the redraws, so the old figure goes first.
+   */
+  function slotTokens(key, tokens) {
+    const row = slots[key]?.querySelector('.settings-switch-row');
+    if (!row) return;
+    row.querySelector('.settings-security-item__tokens')?.remove();
+    const input = row.querySelector('input.ds-switch');
+    if (!tokens) {
+      input?.removeAttribute('aria-describedby');
+      return;
+    }
+    const figure = tokenFigure(tokens, `exec-${key}`);
+    row.insertBefore(figure, row.querySelector('.settings-instant-status') || input);
+    input?.setAttribute('aria-describedby', figure.id);
+  }
+
   /** Every slot back home, before the rows it sits in are replaced. */
   function parkSlots() {
     if (!slotsHome) return;
@@ -267,6 +305,7 @@ export function initSecurityPanel({
       // A tool that is not set up has nothing to switch yet; its tag and
       // the link under the list say where it is set up.
       control: tool.switchable && !tool.switchDisabled ? toolSwitch(tool) : null,
+      tokens: tool.tokens,
     })));
   }
 
@@ -276,6 +315,7 @@ export function initSecurityPanel({
     if (view.execution) {
       placeSlot('shell', body);
       placeSlot('python', body);
+      for (const key of ['shell', 'python']) slotTokens(key, view.executionTokens?.[key] || null);
     }
     if (view.tools.length > 0) body.appendChild(toolList(view.tools));
     for (const group of view.mcpGroups) body.appendChild(serverGroup(group));
@@ -482,6 +522,11 @@ export function initSecurityPanel({
       }
     }
     if (summaryEl) summaryEl.textContent = header.summary;
+    if (contextEl) {
+      const text = [header.context.total, header.context.unknown].filter(Boolean).join(' ');
+      // A redraw with the same words must not be read out again.
+      if (contextEl.textContent !== text) contextEl.textContent = text;
+    }
   }
 
   /**

@@ -232,3 +232,17 @@ test('fewer tokens than rows keep the estimate instead of scaling to it (#532)',
   assert.equal(breakdown.parts.length, 61);
   assert.equal(breakdown.parts.reduce((sum, part) => sum + part.tokens, 0), breakdown.total);
 });
+
+test('a tool schema is counted as it is sent and estimated as JSON (#1219)', () => {
+  const { toolDefinitionChars, estimateToolDefinitionTokens, estimateTokensFromChars } = require('../src/shared/contracts/context-breakdown');
+  const schema = { type: 'function', function: { name: 'read_file', description: 'Reads a file.', parameters: { type: 'object' } } };
+  const chars = JSON.stringify(schema).length;
+  assert.equal(toolDefinitionChars(schema), chars);
+  assert.equal(estimateToolDefinitionTokens(schema, 'o200k'), estimateTokensFromChars(chars, CONTEXT_CONTENT_KINDS.JSON, 'o200k'));
+  // The local tokenizer packs JSON tighter: more tokens for the same schema.
+  assert.ok(estimateToolDefinitionTokens(schema, 'local') > estimateToolDefinitionTokens(schema, 'o200k'));
+  assert.equal(toolDefinitionChars(null), 2);
+  const circular = {};
+  circular.self = circular;
+  assert.equal(toolDefinitionChars(circular), 0);
+});
