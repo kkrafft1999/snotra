@@ -86,7 +86,11 @@ test('the markup and the mapping name the same help links', () => {
   const sectionKeys = keys.filter((key) => !key.startsWith('panel.') && !builtByScript.has(key));
   for (const key of sectionKeys) assert.ok(inMarkup.has(key), `no button for "${key}" in index.html`);
   for (const key of inMarkup) assert.ok(keys.includes(key), `index.html names "${key}", the mapping does not`);
-  const panels = [...markup.matchAll(/data-settings-panel="([^"]+)"/g)].map((m) => `panel.${m[1]}`);
+  // Remote access has no manual page until the iPhone app is out (#1211);
+  // without an entry the header button hides itself in that section.
+  const withoutPage = new Set(['panel.remote']);
+  const panels = [...markup.matchAll(/data-settings-panel="([^"]+)"/g)].map((m) => `panel.${m[1]}`)
+    .filter((key) => !withoutPage.has(key));
   assert.deepEqual(keys.filter((key) => key.startsWith('panel.')).sort(), panels.sort(),
     'every section of the settings has a page for the header button');
 });

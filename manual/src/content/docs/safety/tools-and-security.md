@@ -52,28 +52,8 @@ The row *Read sensitive data* lists the built-in patterns — `.env*`, `*.pem`, 
 - ***Reset workspace rules*** deletes the blocks and allowances of the open folder only, closes the hosts kept open for it, removes its own program allowances, switches its sandbox back on and sets its default mode back to *Smart*.
 - ***Reset all permissions*** deletes every rule, your own sensitive patterns, every program allowance, every host kept open and every session allowance, switches the sandbox back on everywhere — for new workspaces as well — and restores *Smart*, also as the default of every folder. It always asks in a system dialog that lists the protection that goes.
 
-## Open a folder to your phone
-
-[since 1.28] A paired phone sees only the folders you open for it; every folder starts closed. A folder with sensitive material stays invisible to the phone even when another one is open. The switch sits on *Settings › Tools › Security*, once per workspace.
-
-### Steps
-
-1. Open *Settings › Tools › Security* and choose the folder in the list on the left. It does not have to be open in Snotra: the list shows the open folder and every folder with a setting of its own.
-2. Under *Phone*, switch on *Access from your phone*.
-3. Confirm with *Open to phone* in the system dialog. *Cancel* is the default, so Enter or Escape opens nothing.
-
-![Settings › Tools › Security for the folder garden-planner: in the list on the left the entry reads "Sandbox on · nothing extra · phone". On the right, below the sandbox, the card Phone with the switch "Access from your phone" on, the sentence on what the phone can do there, and the note that no phone is paired yet.](screenshots/phone-access.webp)
-
-### What happens
-
-- The phone lists the folder and can follow its chats, write in them and answer approval requests with *Allow once* or *Deny*. It can never loosen a protection: no allowance for good, no *Auto*, no sandbox switched off.
-- The folder's entry in the list says *· phone*.
-- **Switching it off takes effect at once** and asks nothing. The folder disappears from the phone, and whatever the phone was following there ends. If Snotra is working in that folder on the desktop, it stays there; only the phone's view changes.
-- Without a paired phone the folder can be opened all the same; the card says that no phone is paired yet, and a phone you pair later sees it.
-
 ## If it doesn't work
 
 - **The page says *No workspace open*.** It shows what applies in every folder until you open one. Rules for *This workspace* need an open folder.
 - **A row says *Off*.** No tool of that kind is switched on, or a block covers every path.
 - **The page says the permissions file was damaged or altered.** Snotra then runs in *Smart*, or in *Always ask* if that was set; allowances are discarded, blocks stay in force. Set up what you need again.
-- **The switch *Access from your phone* cannot be switched on.** The system keychain does not encrypt here — on Linux without a keyring, for example — so nothing can be kept for the phone. The card says so.

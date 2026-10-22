@@ -1,6 +1,7 @@
 // Look instead of trust (#1195): starts the real app with two workspaces and
 // photographs *Access from your phone* on Settings › Tools › Security in
-// every state — closed without a paired phone, the native dialog cancelled,
+// every state — absent without developer mode or a paired phone (#1216),
+// closed without a paired phone, the native dialog cancelled,
 // opened with keyboard focus on the switch, and closed again without a dialog. Light and dark each. The native dialog is
 // answered by a stub in main; its text is printed. Not a test — a look. Run
 // it outside the Claude Code sandbox, or the app's own sandbox cannot start.
@@ -70,7 +71,15 @@ try {
   await page.evaluate(() => document.getElementById('btn-sidebar-settings')?.click());
   await poll(() => page.evaluate(() => !document.getElementById('btn-settings-save').disabled), { what: 'settings ready' });
   await page.evaluate(() => document.getElementById('tab-settings-sandbox').click());
+  await poll(() => page.evaluate(() => !!document.querySelector('.settings-sandbox-card')), { what: 'the sandbox page' });
+
+  // 0. Without developer mode and without a paired phone: no card (#1216).
+  await pause(500);
+  console.log('card without developer mode:', await page.evaluate(() => !!document.querySelector('.settings-sandbox-card--phone')));
+  await shoot('hidden');
+  await page.evaluate(() => window.electronAPI.developerMode.toggle());
   await poll(() => page.evaluate(() => !!document.querySelector('input[data-action="phone"]')), { what: 'the phone switch' });
+  console.log('card with developer mode:', true);
 
   // 1. Closed, no phone paired.
   await showPhoneCard();
