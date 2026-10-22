@@ -24,7 +24,7 @@ Die Hinweise folgen der Oberflächensprache: Stellst du sie unter [*Einstellunge
 
 ## Snotra nach Versionen fragen
 
-[seit 1.28] Du musst keinen Dialog öffnen, um zu erfahren, was eine Version geändert hat. Frag im Chat:
+[seit 1.27.2] Du musst keinen Dialog öffnen, um zu erfahren, was eine Version geändert hat. Frag im Chat:
 
 - *Was hat sich seit 1.25.0 geändert?* – alles zwischen dieser und der installierten Version.
 - *Was ist in meiner Version neu?* – die Hinweise der installierten Version.

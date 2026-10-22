@@ -24,7 +24,7 @@ The notes follow the interface language: switch it under [*Settings › General*
 
 ## Ask Snotra about versions
 
-[since 1.28] You don't have to open a dialog to find out what a version changed. Ask in the chat:
+[since 1.27.2] You don't have to open a dialog to find out what a version changed. Ask in the chat:
 
 - *What has changed since 1.25.0?* — everything between that version and the one you have installed.
 - *What's new in my version?* — the notes of the installed version.

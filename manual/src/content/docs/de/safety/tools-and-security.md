@@ -18,7 +18,7 @@ Die Sandbox, die Programme mit mehr Spielraum und die offen gehaltenen Hosts hab
 ## Was sie zeigt
 
 - **Oben** den Ordner, für den sie gilt, seinen *Standardmodus* und einen Satz, der zusammenfasst, was Snotra dort tut. Wie der Standardmodus funktioniert, steht unter [Einen Modus wählen](../choose-a-mode/#einem-ordner-einen-standardmodus-geben).
-- [seit 1.28] **Was die Tools kosten.** Unter diesem Satz steht in einer Zeile, wie viele Tokens Kontext die eingeschalteten Tools in jeder Anfrage ungefähr belegen. Jede Zeile nennt neben ihrer Zahl an Tools auch deren Summe, und jedes Tool zeigt seinen eigenen Wert neben seinem Schalter — auch wenn es aus ist, damit du siehst, was das Einschalten hinzufügen würde. Die Werte sind geschätzt aus der Länge von Beschreibung und Parametern; wie viele es genau sind, hängt vom Modell ab. Ein MCP-Tool, das nur dem Namen nach bekannt ist, zeigt *Tokens unbekannt*, bis sein Server verbunden war.
+- [seit 1.27.2] **Was die Tools kosten.** Unter diesem Satz steht in einer Zeile, wie viele Tokens Kontext die eingeschalteten Tools in jeder Anfrage ungefähr belegen. Jede Zeile nennt neben ihrer Zahl an Tools auch deren Summe, und jedes Tool zeigt seinen eigenen Wert neben seinem Schalter — auch wenn es aus ist, damit du siehst, was das Einschalten hinzufügen würde. Die Werte sind geschätzt aus der Länge von Beschreibung und Parametern; wie viele es genau sind, hängt vom Modell ab. Ein MCP-Tool, das nur dem Namen nach bekannt ist, zeigt *Tokens unbekannt*, bis sein Server verbunden war.
 - **Sechs Zeilen**, eine pro Risikoklasse — *Lesen*, *Sensible Daten lesen*, *Ändern*, *Überschreiben ohne Rückweg*, *Ausführen*, *Externe Dienste*. Jede sagt, wie viele Tools sie hat, warum sie sich so verhält und ob ihre Aufrufe *Läuft*, *Fragt* oder *Aus* sind.
 - **Eine aufgeklappte Zeile** beantwortet drei Fragen: Darf Snotra das (die Tools, jedes mit seinem Schalter)? Fragt es vorher (der Modus, deine Freigaben, gemerkte Befehle, Sitzungsfreigaben)? Und wo oder was genau (die Ordner, die sensiblen Muster, deine Sperren, was deinen Rechner verlässt)? [seit 1.26] In der Zeile *Ausführen* ist die dritte Frage eine Zeile mit dem Zustand der Sandbox im geöffneten Ordner — *In der Sandbox abgeschirmt* mit der Zahl der Programme und Hosts, die mehr Spielraum haben, oder *Nicht isoliert* in Bernstein — und führt zu *Einstellungen › Tools › Sicherheit*.
 - **Unten** die *Sitzungsfreigaben*, die noch gelten, und die beiden Wege zum Zurücksetzen.
@@ -29,7 +29,7 @@ Alles auf dieser Seite wirkt sofort. Was den Schutz lockert, bestätigst du vorh
 
 Klapp die Zeile auf und nutze den Schalter des Tools. Zwei Tools sind aus, bis du sie einschaltest, beide in der Zeile *Ausführen*: *Shell-Befehle erlauben* und *Python-Ausführung erlauben*. Lies vorher, was sie können: [Befehle in der Sandbox ausführen](../sandbox/).
 
-Jedes eingeschaltete Tool schickt seine Beschreibung mit jeder Anfrage mit, ob das Modell es benutzt oder nicht. Willst du den Kontext klein halten — etwa für ein lokales Modell mit kleinem Kontextfenster —, schalte die Tools aus, die du nicht brauchst. [seit 1.28] Der Wert neben jedem Schalter zeigt, was du dabei sparst.
+Jedes eingeschaltete Tool schickt seine Beschreibung mit jeder Anfrage mit, ob das Modell es benutzt oder nicht. Willst du den Kontext klein halten — etwa für ein lokales Modell mit kleinem Kontextfenster —, schalte die Tools aus, die du nicht brauchst. [seit 1.27.2] Der Wert neben jedem Schalter zeigt, was du dabei sparst.
 
 ## Etwas sperren
 
