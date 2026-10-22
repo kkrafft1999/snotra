@@ -37,7 +37,9 @@ The app is signed by its developer and notarised by Apple, so this one question 
 
 1. Right-click the downloaded `.zip` and choose *Extract All…*. Pick a place inside your user folder, for example `C:\Users\<you>\Snotra Agent`.
 2. Open that folder and start `Snotra Agent.exe`.
-3. Windows SmartScreen warns that it does not recognise the app, because the Windows build is not signed yet. Click *More info*, then *Run anyway*. Windows asks this only on the first start.
+3. Windows SmartScreen may warn that it does not recognise the app. Click *More info* and check that the publisher reads *Konrad Krafft*, then click *Run anyway*. Windows asks this only on the first start.
+
+[since 1.27.2] The app is signed in the name of its developer. The certificate is new, and SmartScreen trusts a certificate only once enough people have installed apps signed with it. Until then it may warn, but it names the publisher. The warning goes away on its own over time.
 
 Keep the app in a folder you can write to — not in `C:\Program Files`. Snotra updates itself by replacing its own folder, and it cannot do that where Windows asks for administrator rights. To start it from the Start menu or the taskbar later, pin `Snotra Agent.exe` there with a right-click.
 
@@ -80,7 +82,8 @@ Settings and chats are kept in a profile folder of their own, outside the app: `
 
 ## If it doesn't work
 
-- **Windows offers no *Run anyway*.** The button only appears after you click *More info*. On a computer managed by an organisation, a policy may block unsigned apps altogether; then only your IT department can allow it.
+- **Windows offers no *Run anyway*.** The button only appears after you click *More info*. On a computer managed by an organisation, a policy may block apps it does not know yet; then only your IT department can allow it.
+- **SmartScreen names no publisher, or a different one.** Then the file is not the one from the release page. Don't start it; download it again from the [releases on GitHub](https://github.com/kkrafft1999/snotra/releases/latest).
 - **Linux, tarball: the app does not start and reports** *The SUID sandbox helper binary was found, but is not configured correctly.* Some distributions, Ubuntu 24.04 and later among them, restrict what the browser engine inside Snotra needs. Fix it once inside the extracted folder:
 
   ```bash
