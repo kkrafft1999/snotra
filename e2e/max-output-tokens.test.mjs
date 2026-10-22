@@ -10,7 +10,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
-import { launchApp, prepareUserData, poll, makeTempDir, sendChat, waitForFolderChat } from './helpers/app.mjs';
+import {
+  launchApp, prepareUserData, poll, makeTempDir, sendChat, waitForEncryptionKey, waitForFolderChat,
+} from './helpers/app.mjs';
 
 const shown = (page, id) => page.evaluate((id) => !document.getElementById(id).classList.contains('hidden'), id);
 
@@ -90,8 +92,15 @@ test('the output limit is validated in the dialog and sent with the request', { 
   const stored = JSON.parse(await readFile(path.join(userDataDir, 'llm-config.json'), 'utf8'));
   assert.equal(stored.presets[0].connection.maxOutputTokens, 4096);
 
+  // The turn saves its question before the request goes out, and on a fresh
+  // Windows profile that save waits for the encryption key (#1060). The poll
+  // below is about the request, not about Chromium's timer (#1190).
+  await waitForEncryptionKey({ userDataDir, mainOutput: snotra.mainOutput });
   await sendChat(page, 'LIMIT-ON', { t });
-  const withLimit = await poll(() => model.requestFor('LIMIT-ON'), { what: 'request with limit' });
+  const withLimit = await poll(() => model.requestFor('LIMIT-ON'), {
+    what: 'request with limit',
+    explain: () => model.describeRequests(),
+  });
   assert.equal(withLimit.body.max_tokens, 4096);
 
   // Clearing the field removes the limit again.
