@@ -544,8 +544,12 @@ function createReferencePhone({
       streams.clear();
     },
 
-    /** §12.3: the phone's presence record, stamped by the server — or gone, as `onDisconnect` would leave it. */
-    setPresence: () => put('presence/phone', { online: true, since: SERVER_TIME }),
+    /**
+     * §12.3 (#1227): one beat of the phone's heartbeat, stamped by the server —
+     * the app writes one every 30 seconds in the foreground — or the record
+     * deleted, as the app does when it goes to the background.
+     */
+    setPresence: () => put('presence/phone', { lastSeen: SERVER_TIME }),
     clearPresence: () => put('presence/phone', null),
 
     /**

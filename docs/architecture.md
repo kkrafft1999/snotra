@@ -3596,8 +3596,11 @@ are in `application/remote/remote-channel.js`, the bytes in
   doubles from 2 to 60 seconds (five minutes after a refusal). Pairing,
   replacing or removing a phone makes the channel follow at once.
 - **Presence.** `presence/desktop` every 30 seconds while the streams stand,
-  deleted when the app quits. The phone's own record is read and never taken
-  for a connection.
+  deleted when the app quits. The phone's heartbeat is read as well: the relay
+  adapter hands its `lastSeen` to the core on this machine's clock (the
+  relay's `Date` header gives the offset), and the core counts the phone
+  present while it is at most 90 seconds old, with a timer for the moment it
+  turns stale (#1227). Presence is never taken for a connection.
 - **Handshake and keys.** Every new handshake 1 ends the session before it
   and gets handshake 2 — a fresh X25519 key and the highest shared version,
   or `protocol-unsupported`. `ss` comes from the identity store's `agree`,

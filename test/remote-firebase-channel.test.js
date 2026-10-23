@@ -9,7 +9,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const nodeCrypto = require('node:crypto');
 
-const { createFirebaseRelayAdapter, envelopesOf, phoneHandshakeOf, TOKEN_RENEW_MARGIN_MS } = require('../src/main/remote/firebase-relay-adapter');
+const { createFirebaseRelayAdapter, envelopesOf, phoneHandshakeOf, phoneLastSeenOf, TOKEN_RENEW_MARGIN_MS } = require('../src/main/remote/firebase-relay-adapter');
 const protocol = require('../src/main/remote/pairing-protocol');
 
 const ENDPOINT = Object.freeze({
@@ -34,7 +34,7 @@ function desktopIdentity() {
 const json = (status, body) => new Response(body === undefined ? null : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
 /** The relay's endpoints and the database behind `fetch`; each stream is one the test writes events into. */
-function fakeDatabase({ identity, tokenStatus = 200 }) {
+function fakeDatabase({ identity, tokenStatus = 200, serverDate = null }) {
   const encoder = new TextEncoder();
   const requests = [];
   const streams = [];
@@ -84,7 +84,9 @@ function fakeDatabase({ identity, tokenStatus = 200 }) {
           controller.error(new DOMException('aborted', 'AbortError'));
         });
         streams.push(entry);
-        return new Response(stream, { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
+        const headers = { 'Content-Type': 'text/event-stream' };
+        if (serverDate !== null) headers.Date = new Date(serverDate).toUTCString();
+        return new Response(stream, { status: 200, headers });
       }
       return new Response(null, { status: writeStatus.next.shift() ?? 204 });
     }
@@ -131,7 +133,7 @@ function setup(t, options = {}) {
   const identity = desktopIdentity();
   const db = fakeDatabase({ identity, ...options });
   const clock = timers();
-  const adapter = createFirebaseRelayAdapter({ endpoint: ENDPOINT, fetchImpl: db.fetchImpl, wait: async () => {}, ...clock });
+  const adapter = createFirebaseRelayAdapter({ endpoint: ENDPOINT, fetchImpl: db.fetchImpl, wait: async () => {}, now: options.now, ...clock });
   t.after(() => adapter.close());
   const seen = { live: 0, meta: [], handshakes: [], presence: [], envelopes: [], errors: [] };
   const link = adapter.openChannel(CHANNEL_ID, {
@@ -164,7 +166,7 @@ test('the channel follows the four nodes of §12 under its own token, never the 
   assert.deepEqual(ctx.db.streams.map((s) => s.node).sort(), [...NODES].sort());
   assert.deepEqual(ctx.seen.meta, [{ status: 'paired', phoneKeys: null, macP: null }]);
   assert.deepEqual(ctx.seen.handshakes, [null]);
-  assert.deepEqual(ctx.seen.presence, [false]);
+  assert.deepEqual(ctx.seen.presence, [null]);
 });
 
 test('envelopes, handshake 1 and the phone\'s presence reach the core once each', async (t) => {
@@ -188,9 +190,36 @@ test('envelopes, handshake 1 and the phone\'s presence reach the core once each'
   await until(() => ctx.seen.handshakes.length === 3, 'handshakes');
   assert.deepEqual(ctx.seen.handshakes, [null, { v: [1], e: 'eeee' }, null], 'the same record once; a malformed one as none');
 
-  ctx.db.open('presence/phone')[0].send('put', { path: '/', data: { online: true, since: 5 } });
-  await until(() => ctx.seen.presence.length === 2, 'presence');
-  assert.deepEqual(ctx.seen.presence, [false, true]);
+  const presence = ctx.db.open('presence/phone')[0];
+  presence.send('put', { path: '/', data: { lastSeen: 5 } });
+  presence.send('put', { path: '/', data: { lastSeen: 5 } });
+  presence.send('put', { path: '/', data: { lastSeen: 6 } });
+  await until(() => ctx.seen.presence.length === 3, 'presence');
+  assert.deepEqual(ctx.seen.presence, [null, 5, 6], 'the same heartbeat once');
+});
+
+test('the phone\'s heartbeat reaches the core on this machine\'s clock, from the relay\'s Date header (§12.3, #1227)', async (t) => {
+  const desktopNow = Date.UTC(2026, 9, 22, 12);
+  // The relay's clock runs two minutes ahead of this machine's.
+  const relayNow = desktopNow + 120_000;
+  const ctx = setup(t, { now: () => desktopNow, serverDate: relayNow });
+  await standUp(ctx);
+  const presence = ctx.db.open('presence/phone')[0];
+  presence.send('put', { path: '/', data: { lastSeen: relayNow - 5_000 } });
+  presence.send('put', { path: '/lastSeen', data: relayNow + 25_000 });
+  // The shape before #1227 is no heartbeat; neither is the record gone after it.
+  presence.send('put', { path: '/', data: { online: true, since: relayNow } });
+  presence.send('put', { path: '/', data: null });
+  presence.send('put', { path: '/', data: { lastSeen: relayNow } });
+  await until(() => ctx.seen.presence.length === 5, 'four changes');
+  assert.deepEqual(ctx.seen.presence, [null, desktopNow - 5_000, desktopNow + 25_000, null, desktopNow]);
+});
+
+test('a heartbeat is a positive whole number of milliseconds, or none', () => {
+  assert.equal(phoneLastSeenOf({ lastSeen: 1_761_134_400_000 }), 1_761_134_400_000);
+  for (const tree of [null, undefined, {}, [5], { online: true, since: 5 }, { lastSeen: '5' }, { lastSeen: 1.5 }, { lastSeen: 0 }, { lastSeen: -1 }]) {
+    assert.equal(phoneLastSeenOf(tree), null, JSON.stringify(tree));
+  }
 });
 
 test('the desktop\'s writes are silent and carry the current token', async (t) => {

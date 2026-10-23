@@ -9,7 +9,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { HOLD_MS, PRESENCE_INTERVAL_MS, SESSION_MAX_MS } = require('../src/application/remote/remote-channel');
+const { HOLD_MS, PHONE_PRESENCE_TIMEOUT_MS, PRESENCE_INTERVAL_MS, SESSION_MAX_MS } = require('../src/application/remote/remote-channel');
 const { REMOTE_RPC_ERRORS } = require('../src/shared/contracts/remote/rpc-errors');
 const { HELLO, createChannelFixture, createChannelPhone, pairedFixture, tick } = require('./helpers/remote-channel');
 
@@ -76,6 +76,43 @@ test('presence is renewed every 30 seconds and deleted when the channel stops', 
   ctx.channel.dispose();
   await ctx.until(() => ctx.relay.inspect.nodes(ctx.channelId).presence.desktop === null, 'presence deleted on quit');
   assert.equal(ctx.relay.inspect.links(), 0);
+});
+
+test('the phone is gone once its heartbeat is more than 90 seconds old, without another event (§12.3, #1227)', async (t) => {
+  const ctx = await connected(t);
+  await ctx.relay.phone.setPresence(ctx.channelId, true);
+  await ctx.until(() => ctx.channel.inspect().phoneOnline, 'the heartbeat read');
+  ctx.clock.advance(PHONE_PRESENCE_TIMEOUT_MS);
+  assert.equal(ctx.channel.inspect().phoneOnline, true, 'a heartbeat of exactly 90 seconds still counts');
+  ctx.clock.advance(1);
+  assert.equal(ctx.channel.inspect().phoneOnline, false, 'older, and nothing came: the phone is gone');
+
+  await ctx.relay.phone.setPresence(ctx.channelId, true);
+  await ctx.until(() => ctx.channel.inspect().phoneOnline, 'the next heartbeat brings it back');
+  ctx.clock.advance(PHONE_PRESENCE_TIMEOUT_MS / 2);
+  await ctx.relay.phone.setPresence(ctx.channelId, true);
+  await tick();
+  ctx.clock.advance(PHONE_PRESENCE_TIMEOUT_MS / 2 + 1);
+  assert.equal(ctx.channel.inspect().phoneOnline, true, 'each heartbeat starts the 90 seconds over');
+
+  await ctx.relay.phone.setPresence(ctx.channelId, false);
+  await ctx.until(() => !ctx.channel.inspect().phoneOnline, 'the record deleted');
+});
+
+test('a heartbeat found stale on connecting counts as gone from the start (§12.3, #1227)', async (t) => {
+  const ctx = await connected(t);
+  await ctx.relay.phone.setPresence(ctx.channelId, true);
+  await ctx.until(() => ctx.channel.inspect().phoneOnline, 'the heartbeat read');
+  ctx.relay.inspect.dropLinks();
+  await ctx.until(() => !ctx.channel.inspect().linked, 'the link to fail');
+  ctx.relay.inspect.setReachable(false);
+  ctx.clock.advance(PHONE_PRESENCE_TIMEOUT_MS);
+  await ctx.until(() => ctx.fixture.log.lines.filter((line) => line.includes('the channel failed')).length >= 2, 'a second failure');
+  ctx.relay.inspect.setReachable(true);
+  ctx.clock.advance(60_000);
+  await ctx.until(() => ctx.channel.inspect().live, 'connected again');
+  assert.ok(ctx.relay.inspect.nodes(ctx.channelId).presence.phone, 'the old record is still there');
+  assert.equal(ctx.channel.inspect().phoneOnline, false, 'but it is too old to count');
 });
 
 test('handshake 2 answers handshake 1, and session.hello mints a relay connection (§13, §17)', async (t) => {

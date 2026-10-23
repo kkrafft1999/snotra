@@ -84,7 +84,7 @@
  * @property {() => void} onLive  every stream is connected — after the first connect and after each reconnect
  * @property {(record: RemoteChannelRecord|null) => void} onMeta  `null`: the channel is gone (§12.2)
  * @property {(record: RemotePhoneHandshake|null) => void} onPhoneHandshake
- * @property {(online: boolean) => void} onPhonePresence  whether the phone's presence record exists — never a connection by itself
+ * @property {(lastSeen: number|null) => void} onPhonePresence  the phone's last heartbeat (§12.3) on this machine's clock, `null` without a record — the core judges its age; never a connection by itself
  * @property {(envelope: RemoteEnvelope) => void} onEnvelope  each envelope once, until it is deleted
  * @property {(error: Error) => void} onError  once, when the channel has failed for good; the link is closed then
  *

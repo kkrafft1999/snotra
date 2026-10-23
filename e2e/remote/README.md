@@ -82,11 +82,12 @@ relay to:
   desktop's stream sees `meta` vanish; a second delete finds nothing (`404`).
 - **channel** (part 2) — pair; before `paired` the phone may write neither
   its handshake, nor an envelope, nor its presence. Once paired both sides
-  get a token and follow their four nodes (§12); the desktop's presence
-  reaches the phone stamped with the server's time, the phone's reaches the
-  desktop. The phone may not write into its own inbox, the desktop's
-  handshake or presence, an envelope without the server's time or under a
-  malformed counter, and reads neither its own handshake nor its own presence
+  get a token and follow their four nodes (§12); each side's heartbeat
+  reaches the other stamped with the server's time. The phone may not write
+  into its own inbox, the desktop's handshake or presence, a heartbeat or an
+  envelope without the server's time, the presence record from before the
+  heartbeat (#1227), or an envelope under a malformed counter, and reads
+  neither its own handshake nor its own presence
   back. A handshake that offers only an unknown version is answered
   `protocol-unsupported` (§13); a real one gives both sides the same session
   (§14). `session.hello` goes to the desktop and its answer back, each opened

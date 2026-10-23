@@ -52,6 +52,7 @@ function createChannelFixture(t, paired, { messages = null } = {}) {
     appVersion: () => '9.9.9',
     newConnectionId: () => `conn-${(ids += 1)}`,
     onGone: (channelId) => gone.push(channelId),
+    now: fixture.clock.now,
     setTimer: fixture.clock.setTimer,
     clearTimer: fixture.clock.clearTimer,
     log: fixture.log,

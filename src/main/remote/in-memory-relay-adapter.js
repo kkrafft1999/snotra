@@ -17,7 +17,7 @@
  *
  * Part 2 (#1192): a paired channel's handshake, presence and outbox nodes,
  * with the relay's rules — only while paired, each side in its own outbox,
- * never overwriting a record. `phone` writes handshake 1, sets its presence,
+ * never overwriting a record. `phone` writes handshake 1, its heartbeat,
  * sends and takes envelopes; `inspect.dropLinks` fails the desktop's streams
  * as a lost network would.
  */
@@ -48,7 +48,7 @@ const { RELAY_REASONS, RemoteRelayError } = require('./relay-error');
  * The nodes of part 2 (§12–§15) under a paired channel; envelopes by sid, then by 16-hex-digit counter.
  * @typedef {Object} ChannelNodes
  * @property {{ phone: import('../../application/ports/remote-relay-port').RemotePhoneHandshake|null, desktop: object|null }} handshake
- * @property {{ phone: { online: true, since: number }|null, desktop: { lastSeen: number }|null }} presence
+ * @property {{ phone: { lastSeen: number }|null, desktop: { lastSeen: number }|null }} presence
  * @property {Map<string, Map<string, string>>} toDesktop
  * @property {Map<string, Map<string, string>>} toPhone
  *
@@ -71,7 +71,7 @@ const PAIRING_TTL_MS = 5 * 60_000;
  * @property {(channelId: string) => Promise<void>} deleteChannel  *Disconnect* on the phone (§5.8)
  * @property {(channelId: string, record: import('../../application/ports/remote-relay-port').RemotePhoneHandshake) => Promise<void>} writeHandshake  handshake 1 (§13)
  * @property {(channelId: string) => (object | null)} readHandshake  handshake 2, as the desktop wrote it
- * @property {(channelId: string, online: boolean) => Promise<void>} setPresence  `presence/phone`
+ * @property {(channelId: string, online: boolean) => Promise<void>} setPresence  `presence/phone`: one heartbeat, `lastSeen` = now (§12.3), or the record deleted
  * @property {(channelId: string) => ({ lastSeen: number } | null)} readPresence  `presence/desktop`
  * @property {(channelId: string, sid: string, counter: number, c: string) => Promise<void>} sendEnvelope  into `to-desktop`
  * @property {(channelId: string) => { sid: string, counter: number, c: string }[]} takeEnvelopes  reads and deletes `to-phone`
@@ -482,7 +482,7 @@ function createInMemoryRelayAdapter({
       handlers.onMeta(desktopView(channelId));
       if (entry.closed) return;
       handlers.onPhoneHandshake(target.handshake.phone ? structuredClone(target.handshake.phone) : null);
-      handlers.onPhonePresence(!!target.presence.phone);
+      handlers.onPhonePresence(target.presence.phone?.lastSeen ?? null);
       for (const [sid, bySid] of target.toDesktop) {
         for (const [key, c] of bySid) if (!entry.closed) handlers.onEnvelope({ sid, counter: Number.parseInt(key, 16), c });
       }
@@ -547,8 +547,9 @@ function createInMemoryRelayAdapter({
     },
     async setPresence(channelId, online) {
       const target = requirePaired(channelId);
-      target.presence.phone = online ? { online: true, since: now() } : null;
-      toLinks(channelId, (entry) => entry.handlers.onPhonePresence(!!online));
+      const lastSeen = online ? now() : null;
+      target.presence.phone = lastSeen === null ? null : { lastSeen };
+      toLinks(channelId, (entry) => entry.handlers.onPhonePresence(lastSeen));
     },
     readPresence(channelId) {
       const record = nodes.get(channelId)?.presence.desktop;

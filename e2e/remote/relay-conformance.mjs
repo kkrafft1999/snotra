@@ -460,7 +460,7 @@ export async function runConformance(config, { log = () => {}, fetchImpl = globa
 
       await denied(`${s}: before paired the phone cannot write its handshake (§13)`, () => phone.write('handshake/phone', { v: [1], e: anyEphemeral }));
       await denied(`${s}: before paired the phone cannot write into the desktop's inbox (§15)`, () => phone.write(`to-desktop/${anySid}/${hex16(0)}`, anyEnvelope));
-      await denied(`${s}: before paired the phone cannot write its presence (§12)`, () => phone.write('presence/phone', { online: true, since: SERVER_TIME }));
+      await denied(`${s}: before paired the phone cannot write its presence (§12)`, () => phone.write('presence/phone', { lastSeen: SERVER_TIME }));
       await confirm(s, pairing, phone);
 
       await step(`${s}: the phone gets a token and follows its four nodes (§12)`, () => phone.connect());
@@ -476,14 +476,17 @@ export async function runConformance(config, { log = () => {}, fetchImpl = globa
         expect(Math.abs(record.lastSeen - Date.now()) < 10 * 60_000, `lastSeen ${record.lastSeen} is not the server's time`);
       });
       let mark = desktop.mark();
-      await step(`${s}: the phone writes its presence (§12)`, () => phone.setPresence());
-      await desktop.until('presence', (online) => online === true, `${s}: the desktop sees the phone's presence (§12)`, 'the phone online', mark);
-      passed.push(`${s}: the desktop sees the phone's presence (§12)`);
+      await step(`${s}: the phone writes its heartbeat (§12)`, () => phone.setPresence());
+      await desktop.until('presence', (lastSeen) => typeof lastSeen === 'number' && Math.abs(lastSeen - Date.now()) < 10 * 60_000,
+        `${s}: the desktop sees the phone's heartbeat, stamped by the server (§12)`, 'the phone\'s lastSeen', mark);
+      passed.push(`${s}: the desktop sees the phone's heartbeat, stamped by the server (§12)`);
 
       // ---- what the rules refuse once paired
       await denied(`${s}: the phone cannot write into its own inbox (§15)`, () => phone.write(`to-phone/${anySid}/${hex16(0)}`, anyEnvelope));
       await denied(`${s}: the phone cannot write the desktop's handshake (§13)`, () => phone.write('handshake/desktop', { v: 1, e: anyEphemeral }));
       await denied(`${s}: the phone cannot write the desktop's presence (§12)`, () => phone.write('presence/desktop', { lastSeen: SERVER_TIME }));
+      await denied(`${s}: a heartbeat without the server's time is refused (§12)`, () => phone.write('presence/phone', { lastSeen: Date.now() }));
+      await denied(`${s}: the presence record from before the heartbeat is refused (§12)`, () => phone.write('presence/phone', { online: true, since: SERVER_TIME }));
       await denied(`${s}: an envelope without the server's time is refused (§15)`, () => phone.write(`to-desktop/${anySid}/${hex16(0)}`, { ...anyEnvelope, at: Date.now() }));
       await denied(`${s}: an envelope under a malformed counter is refused (§15)`, () => phone.write(`to-desktop/${anySid}/1`, anyEnvelope));
       await denied(`${s}: the phone does not read its own handshake back (§12)`, () => phone.read('handshake/phone'));
@@ -598,7 +601,7 @@ export async function runConformance(config, { log = () => {}, fetchImpl = globa
       await step(`${s}: the phone sees the desktop's presence gone (§12)`, () => phone.stream('presence/desktop').until((r) => r === null, 'no presence'));
       mark = desktop.mark();
       await step(`${s}: the phone's presence goes with it (§12)`, () => phone.clearPresence());
-      await desktop.until('presence', (online) => online === false, `${s}: the desktop sees the phone's presence gone (§12)`, 'the phone offline', mark);
+      await desktop.until('presence', (lastSeen) => lastSeen === null, `${s}: the desktop sees the phone's presence gone (§12)`, 'the phone offline', mark);
       passed.push(`${s}: the desktop sees the phone's presence gone (§12)`);
       // Which of a side's streams hears first that the channel is gone is the
       // database's choice; the meta stream of part 1 is the one that counts (§12).
