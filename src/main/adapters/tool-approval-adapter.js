@@ -168,6 +168,8 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
     if (!entry) return false;
     pending.delete(requestId);
     entry.cleanup?.();
+    // Who answered, kept and shown when it was not the window (#1197).
+    const remote = !outcome.invalidated && by.kind !== 'desktop';
     tell({
       type: 'resolved',
       requestId,
@@ -184,9 +186,11 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
         response: outcome.invalidated ? null : outcome.response,
         invalidated: outcome.invalidated === true,
         reason: outcome.reason || null,
+        // The card in the window says the phone answered it (#1197).
+        ...(remote ? { by } : {}),
       });
     }
-    entry.resolve({ ...outcome, requestId });
+    entry.resolve({ ...outcome, requestId, ...(remote ? { by } : {}) });
     return true;
   }
 

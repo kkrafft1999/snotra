@@ -180,6 +180,36 @@ test('the workspace and every settings section pass axe, light and dark; System 
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents
     .send('remote:presence', { connected: false, keepingAwake: false }));
 
+  // The same chat with a turn from the phone (#1197): the question marked
+  // under its bubble, the step and the folded card marked after their text.
+  // It comes as main tells the window of a phone's turn.
+  const chatId = (await page.evaluate(() => window.electronAPI.getChatHistory()))?.activeChatId;
+  assert.ok(chatId, 'the chat on screen has an id');
+  const phone = { kind: 'relay', client: 'iPhone' };
+  const route = { chatId, runId: 'a11y-phone-run' };
+  const toWindow = (channel, payload) => app.evaluate(({ BrowserWindow }, [c, p]) => {
+    BrowserWindow.getAllWindows()[0].webContents.send(c, p);
+  }, [channel, payload]);
+  await toWindow('chat:turn-started', { ...route, content: 'A11Y-2 And the beans?', origin: phone });
+  await toWindow('chat:tool-line', { ...route, phase: 'start', callIndex: 0, tool: 'read_file_text', category: 'read', line: 'Reading beds.md' });
+  await toWindow('toolApproval:request', {
+    contractVersion: 1, requestId: 'a11y-phone-card', tool: 'read_file_text', riskClasses: ['read'],
+    targets: [], reason: '', mode: 'ask-all', sessionAllowed: false, chatId,
+  });
+  await toWindow('toolApproval:resolved', { requestId: 'a11y-phone-card', response: 'allow-once', invalidated: false, reason: null, by: phone });
+  await toWindow('chat:tool-line', { ...route, phase: 'done', callIndex: 0, tool: 'read_file_text', category: 'read', line: 'Read beds.md', answeredBy: phone });
+  await toWindow('chat:delta', { ...route, text: 'Beans go into bed 2.' });
+  await poll(() => page.evaluate(() => Boolean(document.querySelector('#chat-messages .chat-msg-origin'))
+    && Boolean(document.querySelector('#chat-messages .chat-tool-line .chat-origin-tag'))
+    && Boolean(document.querySelector('#chat-messages .chat-approval-card__toggle .chat-origin-tag'))),
+  { what: 'the marks of the phone\'s turn' });
+  await page.evaluate(() => { document.querySelector('#chat-messages .chat-msg.assistant:last-of-type .chat-tool-log')?.setAttribute('open', ''); });
+  await waitForSettledWindow(page);
+  await checkScreen(page, 'workspace with a turn from the phone', findings, { context: '#chat-messages' });
+  await toWindow('chat:progress', { ...route, type: 'run-end' });
+  await poll(() => page.evaluate(() => !document.getElementById('btn-chat-send').classList.contains('chat-send--stop')),
+    { what: 'the phone\'s turn, ended' });
+
   // Each section of the settings, the dialog only: the window behind it is
   // inert while it is open and was checked above.
   await openSettings(app, page);

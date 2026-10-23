@@ -1707,6 +1707,12 @@ module.exports = {
   'chat.error.runLost': 'Die Antwort ist nicht angekommen. Frag bitte noch einmal.',
   'chat.interrupted.label': 'Unterbrochen.',
   'chat.interrupted.text': 'Snotra wurde geschlossen oder neu geladen, bevor diese Antwort fertig war – nur die abgeschlossenen Schritte sind erhalten.',
+  // A question or a card's answer from the phone keeps its mark (#1197).
+  'chat.origin.sent': 'Gesendet von {name}',
+  'chat.origin.sentPhone': 'Vom Handy gesendet',
+  'chat.origin.answered': 'Beantwortet auf {name}',
+  'chat.origin.answeredPhone': 'Auf dem Handy beantwortet',
+  'chat.origin.phone': 'Handy',
   'chat.error.prefix': 'Fehler:',
   'chat.error.cutOff.length': 'Die Antwort wurde abgeschnitten: Das Modell hat seine Ausgabegrenze erreicht. Bitte es weiterzumachen oder in kleineren Teilen zu antworten.',
   'chat.error.cutOff.lengthTool': 'Die Antwort wurde abgeschnitten, während das Modell einen Tool-Aufruf schrieb – der Aufruf lief deshalb nicht. Bitte um kleinere Schritte, zum Beispiel eine Datei nach der anderen.',

@@ -11,6 +11,7 @@
 
 const { isMessage } = require('../../shared/contracts/message');
 const { isRecord } = require('../../shared/runtime/is-record');
+const { normalizeMessageOrigin } = require('../../shared/contracts/remote/message-origin');
 
 /** The `progress` types a remote hears of; `chat-saved` and `chat-named` stay with the window. */
 const PROGRESS_TYPES = new Set(['phase', 'reasoning', 'workspace', 'permission', 'run-end']);
@@ -90,6 +91,9 @@ function displayMessage(message, index) {
       ...(isRecord(attachment) && typeof attachment.name === 'string' && attachment.name ? { name: attachment.name } : {}),
     }));
   }
+  // Written by a remote front end (#1197): its kind and the name it gave.
+  const origin = message.role === 'user' ? normalizeMessageOrigin(message.origin) : null;
+  if (origin) out.origin = origin;
   if (message.interrupted === true) out.interrupted = true;
   return out;
 }

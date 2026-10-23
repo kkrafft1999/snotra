@@ -1366,3 +1366,21 @@ test('outside: a block rule decides before any card', async () => {
   assert.equal(tools.calls.length, 0);
   assert.equal(result.toolTrace[0].permission.reason, 'policy_denied');
 });
+
+test('a card the phone answered leaves its mark on the step, live and in the trace; the window leaves none (#1197)', async () => {
+  const phone = { kind: 'relay', client: 'iPhone' };
+  const approvals = makeApprovals((request, n) => (n === 1 ? { response: 'allow-once', by: phone } : { response: 'deny', by: { kind: 'desktop' } }));
+  const events = [];
+  const { engine } = makeEngine([
+    assistantToolCall('c1', 'write_file_text', { relative_path: 'a.md', content: 'x' }),
+    assistantToolCall('c2', 'write_file_text', { relative_path: 'b.md', content: 'y' }),
+    assistantText('ok'),
+  ], { approvals, toolPolicy: policy() });
+  const result = await send(engine, { events });
+  assert.equal(approvals.requests.length, 2);
+  assert.deepEqual(result.toolTrace[0].answeredBy, phone);
+  assert.equal('answeredBy' in result.toolTrace[1], false, 'answered at the desktop');
+  const done = events.filter((e) => e.type === CHAT_ENGINE_EVENTS.TOOL_LINE && e.payload.phase === 'done');
+  assert.deepEqual(done[0].payload.answeredBy, phone, 'the done line carries it to the window');
+  assert.equal('answeredBy' in done[1].payload, false);
+});

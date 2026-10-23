@@ -75,6 +75,7 @@
  * @property {string} chatId
  * @property {string} text
  * @property {string} runId
+ * @property {{ kind: string, client: string }} [origin]  the front end's kind and name, kept with the question (#1197)
  */
 
 /**

@@ -1,6 +1,7 @@
 const { isDerivedChatTitle } = require('../../shared/contracts/chat');
 const { CHAT_PROGRESS_TYPES } = require('../../shared/contracts/enums');
 const { createMessage } = require('../../shared/contracts/message');
+const { normalizeMessageOrigin } = require('../../shared/contracts/remote/message-origin');
 const { createTurnAnswer, applyTurnEvent, answerForCheckpoint, settleTurn } = require('./turn-messages');
 
 /**
@@ -21,7 +22,8 @@ const { createTurnAnswer, applyTurnEvent, answerForCheckpoint, settleTurn } = re
  * @typedef {Object} TurnInput
  * @property {string|number} sessionId  the front end's window or connection
  * @property {string} chatId
- * @property {{ content?: unknown, attachments?: unknown[] }} message  the new question; attachments with their data
+ * @property {{ content?: unknown, attachments?: unknown[], origin?: unknown }} message  the new question; attachments with their data,
+ *   and where it came from when a remote front end asked (#1197)
  * @property {string|null} [workspaceRoot]
  * @property {string|null} [selectedPath]
  * @property {boolean} [selectedIsDirectory]
@@ -187,6 +189,8 @@ function createConversationService({ engine, history, describeError = (error) =>
     /** @type {ChatMessage} */
     const question = { role: 'user', content: typeof message?.content === 'string' ? message.content : '' };
     if (Array.isArray(message?.attachments) && message.attachments.length > 0) question.attachments = message.attachments;
+    const origin = normalizeMessageOrigin(message?.origin);
+    if (origin) question.origin = origin;
     /** @type {ChatMessage[]} */
     const asked = [...(unsaved.get(chatId) || stored?.messages || []), question];
     const answer = createTurnAnswer();

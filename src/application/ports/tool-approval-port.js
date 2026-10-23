@@ -50,6 +50,7 @@
  * @property {string} [requestId]
  * @property {string} [ruleId]  the command rule stored for `allow-always` (#121)
  * @property {string[]} [sandboxPaths]  on a sandbox card: the path chosen for each entry (#792)
+ * @property {{ kind: string, client?: string }} [by]  who answered, when it was not the window (#1197)
  */
 
 /**

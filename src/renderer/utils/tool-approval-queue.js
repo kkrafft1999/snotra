@@ -70,6 +70,9 @@ export function createToolApprovalQueue() {
         response: payload.invalidated === true ? null : normalizeApprovalResponse(payload.response),
         reason: typeof payload.reason === 'string' ? payload.reason : null,
       };
+      // Answered on the phone (#1197): the card says so next to the decision.
+      const by = payload.invalidated === true ? null : contracts.normalizeMessageOrigin(payload.by);
+      if (by) entry.outcome.by = by;
       return entry;
     },
     /** Drops entries outright, whatever their state — a chat that was left (#320). */

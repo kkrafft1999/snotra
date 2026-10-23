@@ -1515,6 +1515,14 @@ threw a run's result away as soon as another chat was opened.
   write after the run settles drops the mark. A crash, a quit or a reload
   therefore leaves the turn up to its last finished step, and the restored
   chat shows it with an *Interrupted* note.
+- **Where a turn came from (#1197):** a question the phone wrote is stored
+  with `origin: { kind: 'relay', client }`, and a step whose card the phone
+  answered with `answeredBy` of the same shape
+  (`shared/contracts/remote/message-origin.js`). The window marks both with a
+  phone glyph — a line under the question, the glyph and the name after the
+  step and the decided card (`renderer/chat/messageOrigin.js`). Nothing is
+  stored for the window, so a chat from before loads as it was; the model
+  never sees the field.
 - **A window that reloads or dies (#979):** `chat-handlers.js` watches a
   window from its first send on and abandons all of its runs on a main-frame
   `did-start-navigation`, on `render-process-gone` and on `destroyed`

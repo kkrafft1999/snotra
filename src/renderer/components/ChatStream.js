@@ -17,6 +17,7 @@ import contracts from '../generated/contracts.js';
 import {
   appendToolLine,
   applyPermissionToRow,
+  applyAnsweredByToRow,
   buildToolLine,
   buildToolLog,
   finalizeAllToolLines,
@@ -35,6 +36,7 @@ import {
   applyChangesToRow,
   syncChangesStrip,
 } from '../chat/toolLogView.js';
+import { buildSentFromLine, messageOriginOf } from '../chat/messageOrigin.js';
 // What a writing call changed (#348): summaries from main, diffs on demand.
 import { changedFilesOf, changesAreLive, markChangesLive, normalizeChanges } from '../chat/fileChanges.js';
 import { syncSandboxBlocked } from '../chat/sandboxBlocked.js';
@@ -861,6 +863,12 @@ export function initChatStream({
           textEl.textContent = m.content;
           li.appendChild(textEl);
         }
+        // Written on the phone (#1197): a quiet line under the bubble says so.
+        const origin = messageOriginOf(m.origin);
+        if (origin) {
+          li.classList.add('chat-msg--remote');
+          li.appendChild(buildSentFromLine(origin));
+        }
       }
       chatMessagesEl.appendChild(li);
     }
@@ -1209,6 +1217,9 @@ export function initChatStream({
       return;
     }
     const userMessage = { role: 'user', content: typeof payload.content === 'string' ? payload.content : '' };
+    // Marked from its first moment on screen, as main stores it (#1197).
+    const origin = messageOriginOf(payload.origin);
+    if (origin) userMessage.origin = origin;
     const assistantMessage = {
       role: 'assistant',
       content: '',
@@ -1438,8 +1449,10 @@ export function initChatStream({
     const sandboxLive = phase === 'done' ? payload?.sandboxLive : undefined;
     const sandboxOutside = phase === 'done' ? payload?.sandboxOutside : undefined;
     const injectionFlag = phase === 'done' ? payload?.injectionFlag : undefined;
+    // The phone answered the step's card (#1197): it says so on its row.
+    const answeredBy = phase === 'done' ? payload?.answeredBy : undefined;
     const entry = toolTraceEntryForStore({
-      line, tool, skill, category, permission, changes, sandboxBlocked, sandboxDecision, sandboxLive, sandboxOutside, injectionFlag,
+      line, tool, skill, category, permission, changes, sandboxBlocked, sandboxDecision, sandboxLive, sandboxOutside, injectionFlag, answeredBy,
     });
     if (phase === 'pending') {
       const existing = last.pendingToolLines.find((p) => p.callIndex === callIndex);
@@ -1510,6 +1523,7 @@ export function initChatStream({
       const doneRow = byIndex || runningRows[runningRows.length - 1];
       setToolLineDone(doneRow, line);
       applyPermissionToRow(doneRow, permission);
+      applyAnsweredByToRow(doneRow, answeredBy);
       if (changes) applyChangesToRow(doneRow, changes);
       if (changes || (entry && typeof entry === 'object' && (entry.sandboxBlocked || entry.sandboxLive || entry.sandboxOutside || entry.injectionFlag))) {
         syncMessageChanges(wrap.parentElement, last);

@@ -306,3 +306,39 @@ test('ab fünf Sekunden steht die Dauer hinter der Phasenzeile', async () => {
     assert.equal(thinkingElapsedMs({}), 0);
   });
 });
+
+test('a step whose card the phone answered carries the phone after its text, and says so (#1197)', async () => {
+  await withDom(({ buildToolLog, toolTraceEntryForStore }) => {
+    const phone = { kind: 'relay', client: 'iPhone' };
+    const trace = [
+      toolTraceEntryForStore({ line: 'Ran npm test', tool: 'shell_execute', answeredBy: phone }),
+      toolTraceEntryForStore({ line: 'Ran ls', tool: 'shell_execute', answeredBy: { kind: 'desktop' } }),
+      'Read README.md',
+    ];
+    assert.deepEqual(trace[0].answeredBy, phone);
+    assert.equal(typeof trace[1] === 'object' && 'answeredBy' in trace[1], false, 'the window leaves no mark');
+    const rows = stepRows(buildToolLog(trace, 'done'));
+    const tag = rows[0].querySelector('.chat-origin-tag');
+    assert.ok(tag, 'the phone is on the row');
+    assert.equal(tag.querySelector('.chat-origin-tag__name').textContent, 'iPhone');
+    assert.equal(tag.getAttribute('title'), 'Answered on your phone');
+    assert.equal(rows[0].getAttribute('aria-label'), 'Finished: Ran npm test · Answered on iPhone');
+    assert.equal(rows[0].querySelector('.chat-tool-line-text').nextElementSibling, tag, 'right after the text');
+    assert.equal(rows[1].querySelector('.chat-origin-tag'), null);
+    assert.equal(rows[2].querySelector('.chat-origin-tag'), null);
+  });
+});
+
+test('a phone without a name is still named as a phone, and a running row waits for its answer (#1197)', async () => {
+  await withDom(({ buildToolLine, applyAnsweredByToRow }) => {
+    const running = buildToolLine('Running npm test', 'running', 0, 'command');
+    applyAnsweredByToRow(running, { kind: 'relay', client: '' });
+    assert.equal(running.querySelector('.chat-origin-tag'), null);
+    const done = buildToolLine('Ran npm test', 'done', 0, 'command');
+    applyAnsweredByToRow(done, { kind: 'relay', client: '' });
+    applyAnsweredByToRow(done, { kind: 'relay', client: '' });
+    assert.equal(done.querySelectorAll('.chat-origin-tag').length, 1, 'once, however often it is applied');
+    assert.equal(done.querySelector('.chat-origin-tag__name').textContent, 'Phone');
+    assert.equal(done.getAttribute('aria-label'), 'Finished: Ran npm test · Answered on your phone');
+  });
+});

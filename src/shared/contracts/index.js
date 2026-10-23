@@ -358,6 +358,12 @@ const {
   REMOTE_PAIRING_REASONS,
   normalizeRemotePairingState,
 } = require('./remote/pairing-state');
+// A message or a card's answer from the phone keeps its mark in the chat (#1197).
+const {
+  MESSAGE_ORIGIN_KINDS,
+  MESSAGE_ORIGIN_CLIENT_MAX,
+  normalizeMessageOrigin,
+} = require('./remote/message-origin');
 
 module.exports = {
   createMessage,
@@ -663,5 +669,8 @@ module.exports = {
   normalizeNotice,
   REMOTE_PAIRING_STATES,
   REMOTE_PAIRING_REASONS,
+  MESSAGE_ORIGIN_KINDS,
+  MESSAGE_ORIGIN_CLIENT_MAX,
+  normalizeMessageOrigin,
   normalizeRemotePairingState,
 };

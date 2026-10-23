@@ -8,6 +8,7 @@ import { createToolApprovalQueue, APPROVAL_ENTRY_STATES } from '../utils/tool-ap
 import { APP_LOCALES, onLocaleChange, t, tMessage } from '../i18n.js';
 import { invokeErrorDetail } from '../utils/invoke-error.js';
 import { isCancelledResult } from '../state/tool-permissions.js';
+import { buildAnsweredOnTag } from '../chat/messageOrigin.js';
 
 const { APPROVAL_RESPONSES } = contracts;
 
@@ -740,6 +741,8 @@ export function initToolApprovalCards({
     if (hint) hint.hidden = true;
     const result = el('p', 'chat-approval-card__result');
     result.appendChild(el('strong', null, outcome.label));
+    // Answered on the phone (#1197): the mark goes next to the decision.
+    if (entry.outcome?.by) result.append(' ', buildAnsweredOnTag(entry.outcome.by));
     if (outcome.detail) result.append(` ${outcome.detail}`);
     card.querySelector('.chat-approval-card__result')?.remove();
     const body = card.querySelector('.chat-approval-card__body');
@@ -779,6 +782,7 @@ export function initToolApprovalCards({
     toggle.replaceChildren();
     toggle.insertAdjacentHTML('afterbegin', CHEVRON_HTML);
     toggle.appendChild(el('strong', 'chat-approval-card__toggle-label', outcome.label));
+    if (entry.outcome?.by) toggle.appendChild(buildAnsweredOnTag(entry.outcome.by));
     const headline = card.querySelector('.chat-approval-card__headline');
     if (headline) {
       toggle.appendChild(el('span', 'chat-approval-card__toggle-sep', '·'));

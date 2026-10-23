@@ -197,6 +197,24 @@ test('the window follows a remote turn from its saved question on, and hears its
   for (const event of windowSeen) assert.equal(event.chatId, 'c1') ;
 });
 
+test('the question keeps where it came from, for the chat and for the window that follows it (#1197)', async () => {
+  const { adapter, runs, windowSeen } = writer({
+    turn: ({ onEvent }) => {
+      onEvent({ type: 'progress', payload: { type: 'chat-saved', ok: true, problem: null } });
+      return {};
+    },
+  });
+  await adapter.startTurn({ connectionId: 'conn-1', chatId: 'c1', text: 'Hello', runId: 'run-1', origin: { kind: 'relay', client: ' iPhone\n' } });
+  await settle();
+  assert.deepEqual(runs[0].message, { content: 'Hello', origin: { kind: 'relay', client: 'iPhone' } });
+  assert.deepEqual(windowSeen[0].payload, { content: 'Hello', origin: { kind: 'relay', client: 'iPhone' } });
+
+  // A kind that leaves no mark sends the question as it is.
+  await adapter.startTurn({ connectionId: 'conn-2', chatId: 'c2', text: 'Hi', runId: 'run-2', origin: { kind: 'local', client: 'cli' } });
+  await settle();
+  assert.deepEqual(runs[1].message, { content: 'Hi' });
+});
+
 test('a window that cannot follow does not hold up the turn', async () => {
   const activity = createRemoteActivity({ log: { warn: () => {} } });
   const warnings = [];

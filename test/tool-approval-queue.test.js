@@ -67,3 +67,14 @@ test('forgetWhere drops entries whatever their state, and only those', async () 
   assert.equal(queue.size(), 1);
   assert.equal(queue.has('c'), true);
 });
+
+test('a card answered on the phone keeps who answered; the window and a voided card name nobody (#1197)', async () => {
+  const { createToolApprovalQueue } = await load();
+  const queue = createToolApprovalQueue();
+  queue.add(dto('req-1'));
+  queue.add(dto('req-2'));
+  queue.add(dto('req-3'));
+  assert.deepEqual(queue.resolve({ requestId: 'req-1', response: 'allow-once', by: { kind: 'relay', client: 'iPhone' } }).outcome.by, { kind: 'relay', client: 'iPhone' });
+  assert.equal('by' in queue.resolve({ requestId: 'req-2', response: 'deny' }).outcome, false);
+  assert.equal('by' in queue.resolve({ requestId: 'req-3', invalidated: true, by: { kind: 'relay', client: 'x' } }).outcome, false);
+});

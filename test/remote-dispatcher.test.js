@@ -246,7 +246,7 @@ test('chat.open shows the latest messages as the desktop shows them, and nothing
       streaming: false,
       isError: false,
     },
-    { role: 'user', content: 'Again' },
+    { role: 'user', content: 'Again', origin: { kind: 'relay', client: 'iPhone' } },
     { role: 'assistant', content: 'Cut off', toolTrace: [], interrupted: true },
   ];
   const desktop = fakeDesktop({ chats: [chat('a1', ALPHA, 10, messages)] });
@@ -262,7 +262,8 @@ test('chat.open shows the latest messages as the desktop shows them, and nothing
         messageId: 'm1', role: 'assistant', text: 'Done.',
         toolLines: [{ line: 'Read README.md', tool: null, status: 'done' }, { line: 'Wrote notes.md', tool: 'write_file', status: 'done' }],
       },
-      { messageId: 'm2', role: 'user', text: 'Again' },
+      // A question written from the phone says so (#1197).
+      { messageId: 'm2', role: 'user', text: 'Again', origin: { kind: 'relay', client: 'iPhone' } },
       { messageId: 'm3', role: 'assistant', text: 'Cut off', interrupted: true },
     ],
     before: 'm1',
@@ -463,7 +464,8 @@ test('message.send starts a turn in a chat of the open workspace and answers wit
   const answer = await call('message.send', { chatId: 'a1', text: 'next question', clientMessageId: 'c-1' });
   assert.deepEqual(answer.result, { runId: 'uuid-1', messageId: 'm2' });
   // The text and the chat, never a history, a path or a model (§8.1).
-  assert.deepEqual(desktop.state.turns, [{ connectionId: 'conn-1', chatId: 'a1', text: 'next question', runId: 'uuid-1' }]);
+  // …and where it came from, for the mark in the chat (#1197).
+  assert.deepEqual(desktop.state.turns, [{ connectionId: 'conn-1', chatId: 'a1', text: 'next question', runId: 'uuid-1', origin: { kind: 'relay', client: 'test' } }]);
 });
 
 test('a repeated clientMessageId answers again and starts nothing, also on another connection', async () => {
@@ -645,7 +647,8 @@ test('a saved question goes to the other followers as chat.message, marked when 
   await dispatcher.handle(other, { id: 1, method: 'chat.open', params: { chatId: 'a1' } });
 
   const sent = await call('message.send', { chatId: 'a1', text: 'from the phone', clientMessageId: 'c-1' });
-  desktop.state.chats[0].messages.push({ role: 'user', content: 'from the phone' }, { role: 'assistant', content: '' });
+  // The core stored the question with its mark (#1197).
+  desktop.state.chats[0].messages.push({ role: 'user', content: 'from the phone', origin: { kind: 'relay', client: 'test' } }, { role: 'assistant', content: '' });
   desktop.emit({ kind: 'run', chatId: 'a1', runId: sent.result.runId, type: 'progress', payload: { type: 'chat-saved', ok: true, problem: null } });
   // The next save of the same turn announces nothing again.
   desktop.emit({ kind: 'run', chatId: 'a1', runId: sent.result.runId, type: 'progress', payload: { type: 'chat-saved', ok: true, problem: null } });

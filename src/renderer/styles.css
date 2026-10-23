@@ -2665,6 +2665,82 @@ body {
   white-space: pre-wrap;
 }
 
+/* A question written on the phone (#1197): a quiet line under the bubble —
+ * the glyph and "Sent from iPhone" in small grey type, right-aligned with the
+ * bubble. It hangs below the bubble rather than inside it, so the bubble's
+ * wash stays the user's own; the bubble keeps the room it needs. In the DOM
+ * it is part of the message, so a copy and a screen reader carry it along. */
+.chat-msg.user.chat-msg--remote {
+  position: relative;
+  margin-bottom: var(--ds-chat-origin-room);
+}
+
+.chat-msg-origin {
+  position: absolute;
+  top: calc(100% + 3px);
+  right: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 40ch;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.chat-msg-origin > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The phone of Settings › Remote access, at the size of a tool row's icon. */
+.chat-origin-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* The same mark after a decision the phone gave: a tool row, a folded card. */
+.chat-origin-tag {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 24ch;
+  color: var(--text-muted);
+  font-family: var(--ds-font-ui);
+  font-weight: var(--ds-font-weight-regular);
+}
+
+.chat-origin-tag__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-tool-line .chat-origin-tag {
+  align-self: flex-start;
+  margin-top: 1px;
+}
+
+/* The folded card's line turns to a hover ground: small type there takes the
+ * stronger grey, as the rest of the line does (#610). */
+.chat-approval-card__toggle .chat-origin-tag {
+  color: inherit;
+}
+
+.chat-approval-card__result .chat-origin-tag {
+  vertical-align: -2px;
+}
+
 /* Phase 3: AI-Antwort in der Referenz-Typo (17px / 1.55) — luftiger zu lesen. */
 .chat-msg.assistant {
   align-self: stretch;
