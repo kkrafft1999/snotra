@@ -141,11 +141,12 @@ pairing id in the URL path, and proves that it knows the secret only through
   carry an App Check token in `X-Firebase-AppCheck` (App Attest); calls that
   need a role carry `Authorization: Bearer <Firebase ID token>`.
 - **Tokens:** the relay answers with a Firebase **custom token** whose claims
-  are `{ "ch": channelId, "role": "desktop" | "phone" }`. The desktop exchanges
+  are `{ "ch": channelId, "role": "desktop" | "phone" }`. Both sides exchange
   it for an ID token through the Identity Toolkit REST endpoint
-  `accounts:signInWithCustomToken` (no Firebase SDK in main); the phone signs
-  in with the iOS SDK. The ID token authorises the database (`?auth=` on the
-  REST interface) and the endpoints below.
+  `accounts:signInWithCustomToken` — no Firebase SDK in main, and none in the
+  app either (decided 2026-10-22, snotra-mobile#33: the iOS SDK keeps its
+  signed-in user in the Keychain). The ID token authorises the database
+  (`?auth=` on the REST interface) and the endpoints below.
 - **Errors:** an HTTP status and `{ "error": { "reason": "<reason>" } }`, with
   the reasons of [`remote-interface.md` §6.3](./remote-interface.md#63-errors)
   where they fit:
@@ -452,21 +453,28 @@ starts, either one finds its network again.
    | `handshake/phone` | `handshake/desktop` |
    | `presence/phone` | `presence/desktop` |
 
-   The desktop streams each one by REST (`Accept: text/event-stream`,
-   `?auth=<ID token>`); on `auth_revoked` it renews the token and resumes. The
-   phone listens through the SDK. A `meta` that disappears ends the channel
-   for both, whatever the other streams still show.
-3. **Presence** (decided 2026-10-18):
+   Both sides stream each one by REST (`Accept: text/event-stream`,
+   `?auth=<ID token>`); on `auth_revoked` a side renews the token and
+   resumes. A `meta` that disappears ends the channel for both, whatever the
+   other streams still show.
+3. **Presence** (decided 2026-10-18 for the desktop, 2026-10-22 for the phone,
+   #1227): REST has no `onDisconnect`, so each side's presence is a
+   heartbeat.
    - The **desktop** writes `/channels/{channelId}/presence/desktop` =
      `{ "lastSeen": {".sv": "timestamp"} }` every 30 seconds while it runs and
-     is connected, and deletes it when it quits. REST streaming has no
-     `onDisconnect`, so the phone shows the desktop as offline once
-     `lastSeen` is more than 90 seconds old, or the record is gone.
-   - The **phone** sets `/channels/{channelId}/presence/phone` =
-     `{ "online": true, "since": {".sv": "timestamp"} }` and registers
-     `onDisconnect().removeValue()` with the SDK.
+     is connected, and deletes it when it quits.
+   - The **phone** writes `/channels/{channelId}/presence/phone` =
+     `{ "lastSeen": {".sv": "timestamp"} }` every 30 seconds while the app is
+     in the foreground and connected, and deletes it when the app goes to the
+     background.
+   - Each side shows the other as offline once its `lastSeen` is more than
+     90 seconds old, or the record is gone. The age is taken on the relay's
+     clock — a side estimates it from the `Date` header of the relay's
+     answers — and looked at again as the heartbeat ages, not only when the
+     record changes: a side that is killed or loses its network deletes
+     nothing.
    - The desktop's indicator (R8) says *connected* only once a session stands,
-     not because the phone's presence record exists.
+     not because the phone's heartbeat is fresh.
 4. **Handshake** ([§13](#13-the-handshake)), always started by the phone:
    after connecting, when the desktop's presence comes back, and after any
    failure of [§16](#16-order-replay-and-failure).

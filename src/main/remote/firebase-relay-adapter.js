@@ -177,6 +177,19 @@ function phoneHandshakeOf(tree) {
 }
 
 /**
+ * The phone's heartbeat (§12.3, #1227): its `lastSeen`, the relay's time in
+ * milliseconds; `null` when there is no record or it is not one.
+ *
+ * @param {unknown} tree
+ * @returns {number | null}
+ */
+function phoneLastSeenOf(tree) {
+  return isRecord(tree) && Number.isSafeInteger(tree.lastSeen) && /** @type {number} */ (tree.lastSeen) > 0
+    ? /** @type {number} */ (tree.lastSeen)
+    : null;
+}
+
+/**
  * The envelopes of an inbox (§15), from `{ sid: { counter: { c, at } } }`; anything else is left out.
  * @param {unknown} tree
  * @returns {import('../../application/ports/remote-relay-port').RemoteEnvelope[]}
@@ -520,6 +533,18 @@ function createFirebaseRelayAdapter({
     /** The nodes whose stream has delivered since it last (re)connected. */
     const liveNodes = new Set();
     let metaVanished = false;
+    /**
+     * The relay's clock minus this machine's, from the `Date` header of the
+     * stream that connected last — so that the phone's `lastSeen` is judged on
+     * the relay's time (§12.3). Zero until a stream says otherwise.
+     */
+    let serverOffset = 0;
+
+    /** @param {Response} response */
+    function noteServerTime(response) {
+      const date = Date.parse(response.headers?.get('date') ?? '');
+      if (Number.isFinite(date)) serverOffset = date - now();
+    }
 
     /**
      * `meta` to the core; that it vanished is said once, whichever stream noticed.
@@ -611,6 +636,7 @@ function createFirebaseRelayAdapter({
           const url = databaseNodeUrl(endpoint.databaseUrl, `channels/${channelId}/${name}`, used);
           const response = await fetchImpl(url, { headers: { Accept: 'text/event-stream' }, signal: controller.signal });
           if (!response.ok || !response.body) throw new RemoteRelayError(reasonForStatus(response.status), { status: response.status });
+          noteServerTime(response);
           /** @type {unknown} */
           let tree;
           let gone = false;
@@ -688,7 +714,7 @@ function createFirebaseRelayAdapter({
     /** @type {Set<string>} */
     const reported = new Set();
     let handshakeSeen = /** @type {string|undefined} */ (undefined);
-    let presenceSeen = /** @type {boolean|undefined} */ (undefined);
+    let presenceSeen = /** @type {number|null|undefined} */ (undefined);
     const nodes = [
       follow('meta', (tree) => {
         const record = channelRecordOf(tree);
@@ -715,10 +741,10 @@ function createFirebaseRelayAdapter({
         handlers.onPhoneHandshake(record);
       }),
       follow('presence/phone', (tree) => {
-        const online = tree !== null && tree !== undefined;
-        if (online === presenceSeen) return;
-        presenceSeen = online;
-        handlers.onPhonePresence(online);
+        const lastSeen = phoneLastSeenOf(tree);
+        if (lastSeen === presenceSeen) return;
+        presenceSeen = lastSeen;
+        handlers.onPhonePresence(lastSeen === null ? null : lastSeen - serverOffset);
       }),
     ];
     for (const node of nodes) node.catch(fail);
@@ -814,6 +840,7 @@ module.exports = {
   databaseNodeUrl,
   envelopesOf,
   phoneHandshakeOf,
+  phoneLastSeenOf,
   STREAM_ATTEMPTS,
   TOKEN_RENEW_MARGIN_MS,
 };

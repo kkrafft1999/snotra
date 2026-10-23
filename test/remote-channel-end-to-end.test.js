@@ -174,6 +174,17 @@ test('a request before session.hello is answered connection-unknown (§17)', asy
   assert.equal(channel.isConnected(), false);
 });
 
+test('the phone\'s heartbeat makes it present on the desktop, and its deletion gone — no connection either way (§12, #1227)', async (t) => {
+  const setup = await paired(t);
+  const { channel, phone } = setup;
+  await connect(setup);
+  await phone.setPresence();
+  await eventually(() => channel.inspect().phoneOnline, 'the phone present');
+  assert.equal(channel.isConnected(), false, 'a heartbeat is no connection (§12)');
+  await phone.clearPresence();
+  await eventually(() => !channel.inspect().phoneOnline, 'the phone gone');
+});
+
 test('the desktop deletes its presence when it quits (§12)', async (t) => {
   const setup = await paired(t);
   const { channel, phone } = setup;

@@ -10,8 +10,10 @@
  *   for good, whatever the other streams still show, and the phone is
  *   forgotten through `onGone`.
  * - **Presence** (§12.3): `presence/desktop` written every 30 seconds while
- *   the streams stand, deleted when the channel stops. The phone's own record
- *   is read, never taken for a connection.
+ *   the streams stand, deleted when the channel stops. The phone counts as
+ *   present while its heartbeat is at most 90 seconds old — looked at again as
+ *   it ages, not only when it changes (#1227) — and is never taken for a
+ *   connection.
  * - **Handshake** (§13, §14): every new handshake 1 is answered — with a fresh
  *   ephemeral key and the highest common version, or `protocol-unsupported` —
  *   and ends the session before it.
@@ -42,6 +44,8 @@ const SESSION_MAX_ENVELOPES = 2 ** 32;
 const MAX_MESSAGE_BYTES = 256 * 1024;
 /** The desktop's heartbeat (§12.3). */
 const PRESENCE_INTERVAL_MS = 30_000;
+/** The phone counts as gone once its last heartbeat is older than this (§12.3). */
+const PHONE_PRESENCE_TIMEOUT_MS = 90_000;
 /** The pause before connecting again: doubling from the first, up to the last. */
 const RECONNECT_MIN_MS = 2_000;
 const RECONNECT_MAX_MS = 60_000;
@@ -119,6 +123,7 @@ function helloParams(params) {
  *   appVersion: () => string,
  *   newConnectionId: () => string,
  *   onGone?: (channelId: string) => void,
+ *   now?: () => number,
  *   setTimer?: (fn: () => void, ms: number) => unknown,
  *   clearTimer?: (timer: unknown) => void,
  *   log?: { warn: (...args: unknown[]) => void },
@@ -133,6 +138,7 @@ function createRemoteChannel({
   appVersion,
   newConnectionId,
   onGone = () => {},
+  now = () => Date.now(),
   setTimer = (fn, ms) => setTimeout(fn, ms),
   clearTimer = (timer) => clearTimeout(/** @type {any} */ (timer)),
   log = console,
@@ -144,7 +150,11 @@ function createRemoteChannel({
   /** @type {import('../ports/remote-relay-port').RemoteChannelLink | null} */
   let link = null;
   let live = false;
+  /** The phone's last heartbeat on this machine's clock, `null` without a record (§12.3). */
+  let phoneLastSeen = /** @type {number|null} */ (null);
   let phoneOnline = false;
+  /** @type {unknown} */
+  let phoneStaleTimer = null;
   /** @type {Session | null} */
   let session = null;
   /** The ephemeral key of the handshake 1 answered last: a stream that reconnects sends it again. */
@@ -481,6 +491,25 @@ function createRemoteChannel({
   }
 
   /**
+   * The phone is present while its heartbeat is at most 90 seconds old. A
+   * heartbeat ages without an event, so it is judged again the moment it
+   * turns stale.
+   */
+  function judgePhone() {
+    if (phoneStaleTimer !== null) clearTimer(phoneStaleTimer);
+    phoneStaleTimer = null;
+    const age = phoneLastSeen === null ? Infinity : now() - phoneLastSeen;
+    phoneOnline = age <= PHONE_PRESENCE_TIMEOUT_MS;
+    if (phoneOnline) phoneStaleTimer = setTimer(judgePhone, PHONE_PRESENCE_TIMEOUT_MS - age + 1);
+  }
+
+  /** @param {number|null} lastSeen */
+  function onPhonePresence(lastSeen) {
+    phoneLastSeen = lastSeen;
+    judgePhone();
+  }
+
+  /**
    * Closes the link; the presence record goes first, while the token is still held.
    * @param {{ keepPresence?: boolean }} [options]
    */
@@ -492,7 +521,7 @@ function createRemoteChannel({
     link = null;
     if (target && live && !keepPresence) tidy('deleting presence', () => target.deletePresence());
     live = false;
-    phoneOnline = false;
+    onPhonePresence(null);
     target?.close();
   }
 
@@ -549,7 +578,7 @@ function createRemoteChannel({
         }
       },
       onPhoneHandshake: (record) => { if (link === handle) onPhoneHandshake(record); },
-      onPhonePresence: (online) => { if (link === handle) phoneOnline = online; },
+      onPhonePresence: (lastSeen) => { if (link === handle) onPhonePresence(lastSeen); },
       onEnvelope: (envelope) => { if (link === handle) onEnvelope(envelope); },
       onError: (error) => { if (link === handle) onLinkError(error); },
     });
@@ -612,7 +641,7 @@ function createRemoteChannel({
     dispose,
     subscribe,
     isConnected: connected,
-    /** For tests and diagnostics: whether the streams stand and the phone's presence record exists. */
+    /** For tests and diagnostics: whether the streams stand and the phone's heartbeat is fresh. */
     inspect: () => ({ linked: !!link, live, phoneOnline, session: session ? { next: session.next, out: session.out, held: session.held.size } : null }),
   };
 }
@@ -621,6 +650,7 @@ module.exports = {
   createRemoteChannel,
   HOLD_MS,
   HOLD_WINDOW,
+  PHONE_PRESENCE_TIMEOUT_MS,
   PRESENCE_INTERVAL_MS,
   SESSION_MAX_MS,
   SPOKEN_VERSIONS,

@@ -93,7 +93,7 @@ const VALID = Object.freeze({
   /** @param {unknown} value */
   desktopPresence: (value) => shaped(value, ['lastSeen'], { lastSeen: isServerTime }),
   /** @param {unknown} value */
-  phonePresence: (value) => shaped(value, ['online', 'since'], { online: (online) => online === true, since: isServerTime }),
+  phonePresence: (value) => shaped(value, ['lastSeen'], { lastSeen: isServerTime }),
 });
 
 class HttpError extends Error {
