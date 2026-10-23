@@ -189,3 +189,55 @@ test('a turn in a chat the window is running itself, or without ids, is not foll
   assert.equal(appStore.chatRuns.get('chat-a'), first, 'the running turn keeps its chat');
   assert.equal(chat.runs.stateOf('chat-a'), 'running');
 });
+
+test('a question from the phone is marked from its first moment, and stays marked once main has saved it (#1197)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { saved, emit, end } = env;
+  const phone = { kind: 'relay', client: 'iPhone' };
+
+  const list = document.getElementById('chat-messages');
+  const marks = () => [...list.querySelectorAll('.chat-msg.user')].map((li) => li.querySelector('.chat-msg-origin')?.textContent ?? null);
+  // The earlier question was asked at the desk: no mark.
+  assert.deepEqual(marks(), [null]);
+
+  // `chat:turn-started` carries the origin as main stored it.
+  emit('turnStarted', 'chat-a', 'run-phone', { content: 'From the train', origin: phone });
+  assert.deepEqual(marks(), [null, 'Sent from iPhone']);
+  const mark = list.querySelector('.chat-msg-origin');
+  assert.equal(mark.getAttribute('title'), 'Sent from your phone');
+  assert.ok(mark.closest('.chat-msg.user').classList.contains('chat-msg--remote'));
+  assert.match(mark.closest('.chat-msg.user').textContent, /From the train.*Sent from iPhone/, 'a copy of the message carries it as text');
+
+  emit('toolLine', 'chat-a', 'run-phone', { phase: 'start', callIndex: 0, tool: 'shell_execute', line: 'Running npm test' });
+  emit('toolLine', 'chat-a', 'run-phone', { phase: 'done', callIndex: 0, tool: 'shell_execute', line: 'Ran npm test', answeredBy: phone });
+  assert.equal(list.querySelector('.chat-tool-line .chat-origin-tag__name')?.textContent, 'iPhone', 'the decision is marked live');
+
+  saved.set('chat-a', {
+    id: 'chat-a',
+    workspaceRoot: '/ws',
+    messages: [
+      { role: 'user', content: 'Earlier question' },
+      { role: 'assistant', content: 'Earlier answer' },
+      { role: 'user', content: 'From the train', origin: phone },
+      { role: 'assistant', content: 'Done.', toolTrace: [{ line: 'Ran npm test', tool: 'shell_execute', answeredBy: phone }] },
+    ],
+  });
+  end('chat-a', 'run-phone');
+  await flush();
+  await flush();
+  assert.deepEqual(marks(), [null, 'Sent from iPhone']);
+  assert.equal(list.querySelector('.chat-tool-line .chat-origin-tag__name')?.textContent, 'iPhone', 'and stays on the stored step');
+});
+
+test('a phone without a name, and in German, is still named as a phone (#1197)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { setLocale } = await importRenderer('i18n.js');
+  setLocale('de', { force: true });
+  t.after(() => setLocale('en', { force: true }));
+  env.emit('turnStarted', 'chat-a', 'run-phone', { content: 'Vom Zug aus', origin: { kind: 'relay', client: '' } });
+  const mark = document.querySelector('.chat-msg-origin');
+  assert.equal(mark.textContent, 'Vom Handy gesendet');
+  assert.equal(mark.getAttribute('title'), 'Vom Handy gesendet');
+});

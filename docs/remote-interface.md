@@ -447,7 +447,9 @@ one place at registration that no handler can forget.
 5. **The first valid answer wins.** Every connection the request was offered
    to receives `approval.resolved`, naming who answered (kind and client
    name), and the chat keeps that mark next to the decision (mobile concept
-   §4.1, R8).
+   §4.1, R8): the step stores `answeredBy: { kind, client }` and the window
+   shows the phone on its tool line and on the folded card (#1197). An answer
+   at the desktop stores nothing.
 6. **No connection that can answer** means the request expires as today
    (`no_approval_ui`). In the desktop app the window counts as subscribed to
    every chat of its workspace, so this happens only headless or when the
@@ -532,6 +534,12 @@ again, and a chat should not mix two languages (decided 2026-10-20, #1194);
 no tool arguments, no schemas, no tool results. `messageId` is `m<index>`,
 the message's place in the chat, and `before` in `chat.more` is such an id.
 The history keeps no time per message, so `createdAt` is left out for now.
+`origin` is stored with the question since #1197 —
+`{ kind: 'relay', client }`, the name from `session.hello`, cleaned and cut
+to 64 characters by
+[`message-origin.js`](../src/shared/contracts/remote/message-origin.js) —
+so a question from the phone carries it in `chat.open` and `chat.more` as
+well as in `chat.message`. A question asked at the desktop has none.
 
 **`ApprovalRequest`** — the card's DTO (`createToolApprovalRequestDto`,
 `contractVersion: 1`) as the connection's kind may see it: `requestId`,

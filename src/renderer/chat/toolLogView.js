@@ -19,6 +19,7 @@ import {
 import { describePermissionAudit, permissionStatusKey } from '../utils/tool-approval-view.js';
 import { toolLogDebug } from './toolLogDebug.js';
 import { normalizeChanges } from './fileChanges.js';
+import { answeredOnText, buildAnsweredOnTag, messageOriginOf } from './messageOrigin.js';
 import { t, tPlural } from '../i18n.js';
 
 const {
@@ -247,6 +248,22 @@ export function applyPermissionToRow(row, permission) {
   if (description) row.title = description;
 }
 
+/**
+ * A step whose card the phone answered carries the phone after its text
+ * (#1197), and its label says so. Only a finished row: the answer comes with
+ * the done line.
+ */
+export function applyAnsweredByToRow(row, answeredBy) {
+  const origin = messageOriginOf(answeredBy);
+  if (!row || !origin || !row.classList.contains('chat-tool-line--done')) return;
+  row.querySelector('.chat-origin-tag')?.remove();
+  const textEl = row.querySelector('.chat-tool-line-text');
+  if (textEl) textEl.after(buildAnsweredOnTag(origin));
+  else row.appendChild(buildAnsweredOnTag(origin));
+  const text = textEl?.textContent || '';
+  row.setAttribute('aria-label', `${t('toolLog.line.done.label', { text })} · ${answeredOnText(origin)}`);
+}
+
 export function setToolLineDone(row, doneText) {
   if (!row || row.classList.contains('chat-tool-line--done')) return;
   row.classList.remove('chat-tool-line--running');
@@ -465,7 +482,9 @@ export function toolTraceEntryForStore(entry) {
   const sandboxLive = normalizeSandboxLive(entry?.sandboxLive);
   const sandboxOutside = normalizeSandboxOutside(entry?.sandboxOutside);
   const injectionFlag = normalizeInjectionFlag(entry?.injectionFlag);
-  if (!tool && !skill && !permission && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside && !injectionFlag) return line;
+  // Who answered the step's card, when it was the phone (#1197).
+  const answeredBy = messageOriginOf(entry?.answeredBy);
+  if (!tool && !skill && !permission && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside && !injectionFlag && !answeredBy) return line;
   const out = { line };
   if (tool) out.tool = tool;
   if (skill) out.skill = skill;
@@ -477,6 +496,7 @@ export function toolTraceEntryForStore(entry) {
   if (sandboxLive) out.sandboxLive = sandboxLive;
   if (sandboxOutside) out.sandboxOutside = sandboxOutside;
   if (injectionFlag) out.injectionFlag = injectionFlag;
+  if (answeredBy) out.answeredBy = answeredBy;
   return out;
 }
 
@@ -570,9 +590,9 @@ export function buildToolLog(trace, state /* 'running' | 'done' */, pendingLines
       // Beim Nachdenken ist die vorige Runde komplett erledigt.
       const lineState =
         state === 'running' && !thinking && i === trace.length - 1 ? 'running' : 'done';
-      lines.appendChild(
-        buildToolLine(text, lineState, undefined, traceEntryCategory(trace[i]), trace[i]?.permission, trace[i]?.changes)
-      );
+      const row = buildToolLine(text, lineState, undefined, traceEntryCategory(trace[i]), trace[i]?.permission, trace[i]?.changes);
+      applyAnsweredByToRow(row, trace[i]?.answeredBy);
+      lines.appendChild(row);
     }
   }
   if (state === 'running' && Array.isArray(pendingLines)) {

@@ -1693,6 +1693,12 @@ module.exports = {
   'chat.error.runLost': 'The answer did not come through. Ask again.',
   'chat.interrupted.label': 'Interrupted.',
   'chat.interrupted.text': 'Snotra was closed or reloaded before this answer was finished — only the completed steps were kept.',
+  // A question or a card's answer from the phone keeps its mark (#1197).
+  'chat.origin.sent': 'Sent from {name}',
+  'chat.origin.sentPhone': 'Sent from your phone',
+  'chat.origin.answered': 'Answered on {name}',
+  'chat.origin.answeredPhone': 'Answered on your phone',
+  'chat.origin.phone': 'Phone',
   'chat.error.prefix': 'Error:',
   'chat.error.cutOff.length': 'The answer was cut off: the model reached its output limit. Ask it to carry on, or to answer in smaller parts.',
   'chat.error.cutOff.lengthTool': 'The answer was cut off while the model was writing a tool call, so the call did not run. Ask for smaller steps, for example one file at a time.',

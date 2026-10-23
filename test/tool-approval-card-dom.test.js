@@ -185,6 +185,22 @@ test('a decided card folds to one line that names the decision and the question,
   assert.equal(body.hidden, true);
 }));
 
+test('a card answered on the phone says so next to the decision, folded and open (#1197)', withDom(async () => {
+  const page = await mountCards();
+  page.request(dto('r1'));
+  page.request(dto('r2'));
+  page.resolve({ requestId: 'r1', response: 'allow-once', by: { kind: 'relay', client: 'iPhone' } });
+  page.resolve({ requestId: 'r2', response: 'deny' });
+  const toggle = card('r1').querySelector('.chat-approval-card__toggle');
+  const tag = toggle.querySelector('.chat-origin-tag');
+  assert.ok(tag, 'the folded line carries the phone');
+  assert.equal(toggle.querySelector('.chat-approval-card__toggle-label').nextElementSibling, tag, 'right after the decision');
+  assert.equal(tag.querySelector('.chat-origin-tag__name').textContent, 'iPhone');
+  assert.match(toggle.textContent, /Answered on iPhone/, 'the button\'s name says it to a screen reader');
+  assert.ok(card('r1').querySelector('.chat-approval-card__result .chat-origin-tag'), 'and the open card too');
+  assert.equal(card('r2').querySelector('.chat-origin-tag'), null, 'an answer at the desk leaves no mark');
+}));
+
 test('an opened decided card stays open across a language change (#290)', withDom(async () => {
   const { setLocale } = await importRenderer('i18n.js');
   const page = await mountCards();
