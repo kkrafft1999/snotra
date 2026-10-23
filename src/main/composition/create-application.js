@@ -9,6 +9,7 @@ const { KEY_ALWAYS_DURABLE } = require('../services/safe-storage-key-durability'
 const { createNativeConfirmationAdapter } = require('../electron/native-confirmation-adapter');
 const { createConfirmationReceipts } = require('../../application/permissions/user-confirmation');
 const { createSystemNotificationAdapter } = require('../electron/system-notification-adapter');
+const { createPowerSaveAdapter } = require('../electron/power-save-adapter');
 const { createSafeStorageSecretStore } = require('../electron/safe-storage-backend');
 const { resolveRunningPlatform } = require('../platforms/running-platform');
 const { createUpdateAdapter, createUpdateCheck } = require('../adapters/update-adapter');
@@ -70,6 +71,7 @@ function createApplication({
   shell = null,
   clipboard = null,
   Notification = null,
+  powerSaveBlocker = null,
   REQ,
   PUSH,
   LIMITS,
@@ -129,6 +131,7 @@ function createApplication({
     confirmationReceipts,
     confirmations,
     notifications: createSystemNotificationAdapter({ Notification, getMainWindow }),
+    powerSave: createPowerSaveAdapter({ powerSaveBlocker }),
     eventPush,
     trashItem: moveToTrash,
     // What this platform can do, resolved once at start (#1149).
@@ -289,6 +292,7 @@ function createApplication({
       getLocale: core.getAppLocale,
     }),
     workspaceSwitch: core.remoteWorkspaceSwitch,
+    presence: core.remote.presence,
     pushToWindow,
     REQ,
     PUSH,

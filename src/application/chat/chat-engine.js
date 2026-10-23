@@ -1060,6 +1060,7 @@ function mergeSandboxGrants(session, chosen) {
  * @property {import('../ports/own-secrets-port').OwnSecretsPort|null} [ownSecrets]
  * @property {ReturnType<typeof createSessionGrants>} [sessionGrants]
  * @property {number} [maxToolRounds]
+ * @property {(run: { sessionId: string|number, chatId: string|null }) => void} [onRunStarted]
  * @property {(run: { sessionId: string|number, chatId: string|null }) => void} [onRunSettled]
  * @property {import('../ports/config-proposal-port').ConfigProposalPort|null} [configProposals]
  * @property {ReadonlyArray<import('../ports/injection-flag-port').InjectionFlagPort>} [injectionFlags]
@@ -1083,7 +1084,8 @@ function createChatEngine({
   ownSecrets = null,
   sessionGrants = createSessionGrants(),
   maxToolRounds,
-  // Called once a run has ended, however it ended (#320).
+  // Called once a run has started (#1196), and once it has ended, however it ended (#320).
+  onRunStarted = () => {},
   onRunSettled = () => {},
   // What a chat switched for itself, and the card that changes it (#774).
   configProposals = null,
@@ -1343,6 +1345,11 @@ function createChatEngine({
       previous.controller.abort(createChatAbortError());
     }
     activeRuns.set(key, { sessionId, chatId, controller: abortController });
+    try {
+      onRunStarted({ sessionId, chatId });
+    } catch {
+      // Whoever follows the runs never holds one up.
+    }
 
     /** @type {import('../ports/tool-port').ToolTraceEntry[]} */
     const toolTrace = [];

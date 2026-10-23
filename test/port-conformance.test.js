@@ -26,6 +26,7 @@ const IMPLEMENTING_SERVICES = [
   'src/main/services/shell-runner-service.js',
   'src/main/services/python-runner-service.js',
   'src/main/electron/native-confirmation-adapter.js',
+  'src/main/electron/power-save-adapter.js',
   'src/main/electron/safe-storage-backend.js',
   'src/main/electron/system-notification-adapter.js',
   'src/main/electron/window-push.js',

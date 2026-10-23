@@ -29,6 +29,7 @@ import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
 import { initMcpPanel } from './components/McpPanel.js';
 import { initMemoryPanel } from './components/MemoryPanel.js';
 import { initAppVersionBadge } from './components/AppVersionBadge.js';
+import { initRemoteIndicator } from './components/RemoteIndicator.js';
 import { initWorkspaceHeader } from './components/WorkspaceHeader.js';
 import { contentPaneVisibleOnStart } from './utils/startupLayout.js';
 import { restoreMarkdownZoom } from './file-views/markdown-zoom.js';
@@ -543,6 +544,8 @@ const settingsModal = initSettingsModal({
 const feedbackDialog = initFeedbackDialog({ api, appStore });
 document.getElementById('btn-sidebar-feedback')?.addEventListener('click', () => feedbackDialog.open());
 document.getElementById('btn-sidebar-settings')?.addEventListener('click', () => settingsModal.openSettingsModal());
+// The paired phone in the title bar while it is connected; a click goes to where it is removed (#1196).
+initRemoteIndicator({ api, openSettings: () => settingsModal.openSettingsModal({ panel: 'remote' }) });
 
 // Grundrauschen gegen den Chromium-Default (Issue #101): ein Drop *neben*
 // der Drop-Zone im Dateibaum darf die Datei nicht im Fenster oeffnen. Bewusst

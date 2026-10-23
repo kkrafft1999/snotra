@@ -90,7 +90,7 @@ function makeWorkspacePaths() {
   };
 }
 
-function makeEngine({ llm, tools = makeToolPort(), toolPolicy = null, approvals = null, sessionGrants, onRunSettled } = {}) {
+function makeEngine({ llm, tools = makeToolPort(), toolPolicy = null, approvals = null, sessionGrants, onRunStarted, onRunSettled } = {}) {
   return createChatEngine({
     llm,
     tools,
@@ -100,6 +100,7 @@ function makeEngine({ llm, tools = makeToolPort(), toolPolicy = null, approvals 
     approvals,
     sessionGrants: sessionGrants || createSessionGrants(),
     maxToolRounds: 4,
+    onRunStarted,
     onRunSettled,
   });
 }
@@ -118,12 +119,19 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 test('two chats of one window run side by side; stop only stops its own chat', async () => {
   const llm = makeHeldLlm();
   const settled = [];
-  const engine = makeEngine({ llm, onRunSettled: (run) => settled.push(run.chatId) });
+  const started = [];
+  // The start is heard with the run already counted: main asks runningChatIds() then (#1196).
+  const engine = makeEngine({
+    llm,
+    onRunStarted: (run) => started.push([run.chatId, engine.runningChatIds().has(run.chatId)]),
+    onRunSettled: (run) => settled.push(run.chatId),
+  });
 
   const runA = send(engine, 'chat-a');
   const runB = send(engine, 'chat-b');
   await flush();
   assert.deepEqual([...engine.runningChatIds()].sort(), ['chat-a', 'chat-b']);
+  assert.deepEqual(started, [['chat-a', true], ['chat-b', true]]);
 
   engine.abort('renderer-1', 'chat-a');
   const resultA = await runA;

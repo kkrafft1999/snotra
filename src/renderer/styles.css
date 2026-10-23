@@ -205,6 +205,49 @@ summary:focus-visible,
   -webkit-app-region: drag;
 }
 
+/* The paired phone, while it is connected (#1196): a status you can click,
+ * so round, with the chip's inviting hover. Phone shape and word together —
+ * never the colour alone. It does not shrink; the folder name gives way. */
+.titlebar-remote {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 10px 0 8px;
+  border: 1px solid var(--ds-blue-border);
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-blue-soft);
+  color: var(--ds-blue-strong);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: border-color var(--ds-motion-fast);
+}
+
+.titlebar-remote[hidden],
+.titlebar-remote__awake[hidden] {
+  display: none;
+}
+
+.titlebar-remote:hover {
+  border-color: var(--ds-blue);
+}
+
+.titlebar-remote svg {
+  flex-shrink: 0;
+}
+
+.titlebar-remote__awake {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 /* The open workspace, first (#676). With it, the brand steps back to a
  * sender; without a folder it stands alone as before. */
 #titlebar-workspace {

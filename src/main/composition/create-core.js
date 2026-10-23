@@ -144,6 +144,7 @@ function createCore({
   env = process.env,
   notices: givenNotices = null,
   remoteRelay = null,
+  powerSave = null,
 }) {
   // Every adapter below asks this `os` for the home folder (#707).
   const os = withHomeDir(baseOs);
@@ -269,6 +270,8 @@ function createCore({
   // The engine is built further down; until then no chat is running.
   /** @type {() => Iterable<string | null>} */
   let runningChatIds = () => [];
+  // And nobody follows them before the remote bridge is built (#1196).
+  let onRunsChanged = () => {};
 
   /**
    * Open cards and session approvals belong to a chat (concept §7, #320). They
@@ -650,7 +653,11 @@ function createCore({
     resolveReasoningLevel: (chatId) => chatSessionSettings.reasoningEffortFor(chatId),
     modelPrices,
     // A run that ended off screen takes its approvals with it.
-    onRunSettled: () => pruneChatScopedPermissions(),
+    onRunStarted: () => onRunsChanged(),
+    onRunSettled: () => {
+      pruneChatScopedPermissions();
+      onRunsChanged();
+    },
     // The chat's own skills and tools, and the card that changes them (#774).
     configProposals: createConfigProposalAdapter({
       chatSessionSettings,
@@ -849,7 +856,10 @@ function createCore({
       onSwitched: (root) => postRemoteWorkspaceSwitch(notices, path.basename(root)),
     }),
     normalizeRoot: (root) => storage.normalizeWorkspaceRoot(root),
+    // Awake while the phone follows a run that works (#1196).
+    powerSave,
   });
+  onRunsChanged = () => remote.presence.setRunningChats(runningChatIds());
 
   // A card granted for the session, a chat left, a rule changed: the settings
   // list of session approvals follows at once (#447).

@@ -1,6 +1,6 @@
 const {
   app, BrowserWindow, ipcMain, dialog, safeStorage, Menu, shell, clipboard, protocol, session, WebContentsView,
-  Notification,
+  Notification, powerSaveBlocker,
 } = require('electron');
 const path = require('path');
 const fs = require('fs/promises');
@@ -219,6 +219,8 @@ function start() {
       WebContentsView,
       // A card waiting out of sight (#792, step 5).
       Notification,
+      // Awake while the phone follows a working run (#1196).
+      powerSaveBlocker,
       REQ,
       PUSH,
       LIMITS,

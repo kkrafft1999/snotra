@@ -22,6 +22,13 @@ module.exports = {
   'titlebar.chat.show': 'Show chat',
   'titlebar.history.hide': 'Hide chat history',
   'titlebar.history.show': 'Show chat history',
+  // The paired phone, while it is connected (#1196).
+  'titlebar.remote.connected': 'iPhone connected',
+  'titlebar.remote.awake': 'keeping awake',
+  'titlebar.remote.hint': 'Open Settings › Remote access',
+  'titlebar.remote.hintAwake': 'This computer stays awake while a run works. Open Settings › Remote access',
+  'titlebar.remote.announceConnected': 'Your iPhone is connected.',
+  'titlebar.remote.announceDisconnected': 'Your iPhone is no longer connected.',
 
   // ── Sidebar ──────────────────────────────────────────────────────────────
   'sidebar.noFolder': 'No folder open',

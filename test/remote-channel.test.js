@@ -99,6 +99,20 @@ test('the phone is gone once its heartbeat is more than 90 seconds old, without 
   await ctx.until(() => !ctx.channel.inspect().phoneOnline, 'the record deleted');
 });
 
+test('listeners hear of a session and of the phone\'s heartbeat, once per change (#1196)', async (t) => {
+  const ctx = await session(t);
+  assert.deepEqual(ctx.states, [{ connected: true, phonePresent: false }], 'a session, but no phone yet');
+  await ctx.relay.phone.setPresence(ctx.channelId, true);
+  await ctx.until(() => ctx.states.length === 2, 'the heartbeat heard');
+  assert.deepEqual(ctx.states.at(-1), { connected: true, phonePresent: true });
+  await ctx.relay.phone.setPresence(ctx.channelId, true);
+  await tick();
+  assert.equal(ctx.states.length, 2, 'a heartbeat that changes nothing is not news');
+  ctx.clock.advance(PHONE_PRESENCE_TIMEOUT_MS + 1);
+  assert.deepEqual(ctx.states.at(-1), { connected: true, phonePresent: false }, 'stale: the phone is gone, the session stays');
+  assert.equal(ctx.channel.isConnected(), true);
+});
+
 test('a heartbeat found stale on connecting counts as gone from the start (§12.3, #1227)', async (t) => {
   const ctx = await connected(t);
   await ctx.relay.phone.setPresence(ctx.channelId, true);
@@ -131,7 +145,7 @@ test('handshake 2 answers handshake 1, and session.hello mints a relay connectio
   assert.equal(message.result.limits.maxRequestBytes, 256 * 1024);
 
   assert.equal(ctx.channel.isConnected(), true);
-  assert.deepEqual(ctx.states.at(-1), { connected: true });
+  assert.deepEqual(ctx.states.at(-1), { connected: true, phonePresent: false });
   assert.deepEqual(inbox(ctx), {}, 'the envelope was deleted once handled');
 });
 
@@ -193,7 +207,7 @@ test('a new handshake 1 ends the session before it', async (t) => {
   await ctx.mobile.handshake({ until: ctx.until });
   await ctx.until(() => !ctx.channel.isConnected(), 'the old session to end');
   assert.notEqual(ctx.mobile.sid, oldSid);
-  assert.deepEqual(ctx.states.at(-1), { connected: false });
+  assert.deepEqual(ctx.states.at(-1), { connected: false, phonePresent: false });
   await ctx.mobile.send(HELLO);
   const [{ message }] = await nextAnswers(ctx);
   assert.equal(message.result.connectionId, 'conn-2', 'a new session is a new connection');
@@ -341,6 +355,9 @@ test('wired as the bridge: the panel learns the connection, and a channel the ph
   const relay = createInMemoryRelayAdapter({ relayHost: 'relay.test' });
   const dialog = createFakeDialog();
   const registry = createConfirmationReceipts();
+  const held = new Set();
+  let handles = 0;
+  const powerSave = { hold: () => { held.add(++handles); return handles; }, release: (handle) => held.delete(handle) };
   const bridge = createRemoteBridge({
     // Pairing is closed in this build until the phone's side is out (#1110); these tests pair.
     pairingOpen: true,
@@ -353,6 +370,7 @@ test('wired as the bridge: the panel learns the connection, and a channel the ph
     getLocale: () => 'en',
     getAppVersion: () => '1.2.3',
     relay,
+    powerSave,
     log: createLog(),
   });
   t.after(() => bridge.dispose());
@@ -383,10 +401,24 @@ test('wired as the bridge: the panel learns the connection, and a channel the ph
   const mobile = createChannelPhone(relay, phone, channelId, relay.inspect.record(channelId).desktopKeys);
   await mobile.handshake({ until });
   await mobile.send(HELLO);
+  const [answer] = await until(() => {
+    const got = mobile.receive();
+    return got.length ? got : null;
+  }, 'the answer to session.hello');
+  assert.equal(answer.message.result.app.version, '1.2.3');
+  assert.equal(states.at(-1)?.phone?.connected, false, 'a session alone is not connected — the phone is not there (#1196)');
+  await relay.phone.setPresence(channelId, true);
   await until(() => states.at(-1)?.phone?.connected === true, 'the panel to say connected');
-  assert.equal(mobile.receive()[0].message.result.app.version, '1.2.3');
+  // A run that works while the phone is connected keeps the computer awake (#1196).
+  assert.deepEqual(bridge.presence.getState(), { connected: true, keepingAwake: false });
+  bridge.presence.setWorking(true);
+  assert.deepEqual(bridge.presence.getState(), { connected: true, keepingAwake: true });
+  assert.equal(held.size, 1);
 
   await relay.phone.deleteChannel(channelId);
   await until(() => states.at(-1)?.state === 'empty', 'the phone forgotten');
   assert.equal(relay.inspect.links(), 0);
+  // A phone that is gone is not held for the grace, and lets the computer sleep.
+  assert.deepEqual(bridge.presence.getState(), { connected: false, keepingAwake: false });
+  assert.equal(held.size, 0);
 });

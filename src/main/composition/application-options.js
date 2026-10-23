@@ -26,6 +26,8 @@
  * @property {typeof import('electron').Menu | null} [Menu]
  * @property {import('electron').Shell | null} [shell]
  * @property {import('electron').Clipboard | null} [clipboard]
+ * @property {Pick<import('electron').PowerSaveBlocker, 'start' | 'stop' | 'isStarted'> | null} [powerSaveBlocker]
+ *   Electron's, to stay awake while the phone follows a working run (#1196); without it, never.
  * @property {typeof import('electron').Notification | null} [Notification]
  *   Electron's, for a card waiting out of sight (#792, step 5); without it,
  *   none.
