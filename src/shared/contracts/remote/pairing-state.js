@@ -117,7 +117,9 @@ function normalizeWords(words) {
 /** @param {*} phone */
 function normalizePhone(phone) {
   if (!phone || typeof phone !== 'object') return null;
-  return { pairedAt: finiteTime(phone.pairedAt), connected: phone.connected === true };
+  const connected = phone.connected === true;
+  // When a phone that is away was last there (#1233); a connected one needs none.
+  return { pairedAt: finiteTime(phone.pairedAt), connected, lastSeen: connected ? null : finiteTime(phone.lastSeen) };
 }
 
 /**
@@ -128,7 +130,7 @@ function normalizePhone(phone) {
  * @returns {{
  *   state: string,
  *   encryptionAvailable: boolean,
- *   phone: { pairedAt: number|null, connected: boolean } | null,
+ *   phone: { pairedAt: number|null, connected: boolean, lastSeen: number|null } | null,
  *   code: { display: string, qr: string, expiresAt: number, modules?: string[] } | null,
  *   words: string[] | null,
  *   replacing: boolean,

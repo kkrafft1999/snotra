@@ -58,7 +58,8 @@ const STATES = {
   code: { ...base, state: 'code', code: { display: '0111-EP9D-ZH4Q-PYT4-HWWF', qr: 'snotra-pair:v1/relay.snotra-ai.dev/0111EP9DZH4QPYT4HWWF', expiresAt: Date.now() + 272_000, modules: modules() } },
   confirm: { ...base, state: 'confirm', words: ['coffeecake', 'groundhog', 'maestro', 'kangaroo', 'ozone', 'oncoming'] },
   connected: { ...base, state: 'paired', phone: { pairedAt: Date.parse('2026-10-18T12:02:00Z'), connected: true } },
-  offline: { ...base, state: 'paired', phone: { pairedAt: Date.parse('2026-10-18T12:02:00Z'), connected: false } },
+  // Last seen 12 minutes ago (#1233).
+  offline: { ...base, state: 'paired', phone: { pairedAt: Date.parse('2026-10-18T12:02:00Z'), connected: false, lastSeen: Date.now() - 12 * 60_000 } },
   expired: { ...base, state: 'expired' },
   stopped: { ...base, state: 'stopped', reason: 'mac' },
   unreachable: { ...base, state: 'unreachable', reason: 'network' },

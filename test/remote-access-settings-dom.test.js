@@ -134,6 +134,30 @@ test('paired: the phone with its status, the released workspaces and a link to T
   assert.match(text(), /Not connected/);
 });
 
+test('paired, not connected: when the phone was last there, in words (#1233)', async (t) => {
+  const NOW = Date.parse('2026-10-23T18:00:00Z');
+  const { q, text, push } = await mount(t, {
+    state: { ...base, state: 'paired', phone: { pairedAt: 1, connected: false, lastSeen: null } },
+    now: () => NOW,
+  });
+  assert.equal(q('.ra-status__seen'), null, 'nothing known, nothing said');
+  assert.match(text(), /Not connected/);
+
+  const seen = (ago) => {
+    push({ state: 'paired', phone: { pairedAt: 1, connected: false, lastSeen: NOW - ago } });
+    return q('.ra-status__seen')?.textContent;
+  };
+  assert.equal(seen(20_000), 'last seen just now');
+  assert.equal(seen(3 * 60_000), 'last seen 3 minutes ago');
+  assert.equal(seen(5 * 60 * 60_000), 'last seen 5 hours ago');
+  assert.equal(seen(30 * 60 * 60_000), 'last seen yesterday');
+  assert.equal(seen(9 * 24 * 60 * 60_000), 'last seen on Oct 14, 2026');
+  assert.equal(q('.ra-status span[aria-hidden="true"]:not(.ra-status__dot)')?.textContent, '·', 'the separator is not read out');
+
+  push({ state: 'paired', phone: { pairedAt: 1, connected: true, lastSeen: NOW - 60_000 } });
+  assert.equal(q('.ra-status__seen'), null, 'a connected phone says nothing of when it was last seen');
+});
+
 test('paired and locked: Replace is closed like pairing, Remove still works', async (t) => {
   const { action, q, calls, buttonNamed } = await mount(t, {
     state: { ...base, state: 'paired', locked: true, phone: { pairedAt: 1, connected: false } },
@@ -220,6 +244,11 @@ test('in German the panel speaks German, the words stay as they are', async (t) 
   state = { ...base, state: 'confirm', words: WORDS };
   await panel.open();
   assert.deepEqual([...root.querySelectorAll('.ra-words .w')].map((w) => w.textContent), WORDS);
+  // When the phone was last there, in German (#1233).
+  state = { ...base, state: 'paired', phone: { pairedAt: 1, connected: false, lastSeen: Date.now() - 10 * 60_000 } };
+  await panel.open();
+  assert.match(root.textContent, /Nicht verbunden/);
+  assert.equal(root.querySelector('.ra-status__seen')?.textContent, 'zuletzt vor 10 Minuten');
   setLocale('en', { force: true });
 });
 

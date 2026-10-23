@@ -69,6 +69,33 @@ function minutesSeconds(ms) {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+/** How often *last seen* is said again while the panel is open (#1233). */
+const LAST_SEEN_TICK_MS = 30_000;
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * *last seen 3 minutes ago* for a phone that is away (#1233): *just now*
+ * under a minute, then minutes, hours and days in the app's language, and
+ * the date once it is a week or more.
+ * @param {number} at  when the phone was last there
+ * @param {number} nowMs
+ */
+function lastSeenText(at, nowMs) {
+  const age = Math.max(0, nowMs - at);
+  if (age < MINUTE_MS) return t('settings.remote.lastSeen.justNow');
+  if (age >= 7 * DAY_MS) {
+    const date = new Intl.DateTimeFormat(getLocale(), { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(at));
+    return t('settings.remote.lastSeen.on', { date });
+  }
+  const [value, unit] = age < HOUR_MS ? [Math.floor(age / MINUTE_MS), 'minute']
+    : age < DAY_MS ? [Math.floor(age / HOUR_MS), 'hour']
+      : [Math.floor(age / DAY_MS), 'day'];
+  const when = new Intl.RelativeTimeFormat(getLocale(), { numeric: 'auto' }).format(-value, /** @type {Intl.RelativeTimeFormatUnit} */ (unit));
+  return t('settings.remote.lastSeen', { when });
+}
+
 /** The QR code from main's modules, on a plate that stays light in both themes. */
 function qrCode(modules, { expired = false } = {}) {
   const plate = el('div', `ra-qr${expired ? ' ra-qr--expired' : ''}`);
@@ -383,6 +410,17 @@ export function initRemoteAccessSettings({ root, api, openPanel = () => {}, now 
     const dot = el('span', 'ra-status__dot');
     dot.setAttribute('aria-hidden', 'true');
     status.append(dot, el('strong', null, t(on ? 'settings.remote.connected' : 'settings.remote.notConnected')));
+    const lastSeen = on ? null : state.phone?.lastSeen ?? null;
+    if (lastSeen !== null) {
+      // When the phone was last there (#1233), kept current while the panel is open.
+      const separator = el('span', null, '·');
+      separator.setAttribute('aria-hidden', 'true');
+      const seen = el('span', 'ra-status__seen');
+      const tick = () => { seen.textContent = lastSeenText(lastSeen, now()); };
+      tick();
+      ticker = setInterval(tick, LAST_SEEN_TICK_MS);
+      status.append(separator, seen);
+    }
     about.append(el('p', 'ra-device__name', t('settings.remote.phone')), status);
     if (state.phone?.pairedAt) about.appendChild(el('p', 'ra-meta', t('settings.remote.pairedOn', { date: formatDate(state.phone.pairedAt) })));
     const buttons = el('div', 'ra-device__actions');
