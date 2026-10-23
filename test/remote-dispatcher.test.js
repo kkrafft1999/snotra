@@ -539,6 +539,69 @@ test('chat.new makes a chat in the open workspace that the first send writes int
   assert.deepEqual((await call('chats.list')).result.chats.map((c) => c.chatId), ['a1', 'b1']);
 });
 
+test('the sender of a new chat hears its turn from the first event, without chat.open (#1228)', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call, named } = await setup({ desktop });
+  const { chatId } = (await call('chat.new')).result;
+  // Not saved yet: chat.open cannot find it, so only the send can subscribe.
+  assertError(await call('chat.open', { chatId }), 'not-found');
+  const { runId } = (await call('message.send', { chatId, text: 'hello', clientMessageId: 'c-1' })).result;
+  const run = (type, payload) => desktop.emit({ kind: 'run', chatId, runId, type, payload });
+
+  run('delta', { text: 'Hi' });
+  run('tool-line', { phase: 'start', line: 'Reading notes.md', tool: 'read_file', callIndex: 0 });
+  run('progress', { type: 'phase', phase: 'thinking' });
+  run('progress', { type: 'chat-saved', ok: true, problem: null });
+  run('progress', { type: 'run-end' });
+  await settle();
+
+  assert.deepEqual(named('chat.delta'), [{ chatId, runId, text: 'Hi' }]);
+  assert.deepEqual(named('chat.tool-line').map((e) => e.line), ['Reading notes.md']);
+  assert.deepEqual(named('chat.progress').map((e) => e.type), ['phase', 'run-end']);
+  assert.deepEqual(named('chat.message'), [], 'the connection that asked knows its question');
+
+  // The subscription is an ordinary one: chat.close ends it.
+  await call('chat.close', { chatId });
+  desktop.emit({ kind: 'run', chatId, runId: 'r-later', type: 'delta', payload: { text: 'after close' } });
+  assert.equal(named('chat.delta').length, 1);
+});
+
+test('a send that does not start leaves no subscription behind', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call, named } = await setup({ desktop });
+  desktop.state.available = false;
+  assertError(await call('message.send', { chatId: 'a1', text: 'hi', clientMessageId: 'c-1' }), 'unavailable');
+  desktop.emit({ kind: 'run', chatId: 'a1', runId: 'desk-1', type: 'delta', payload: { text: 'from the desktop' } });
+  assert.deepEqual(named('chat.delta'), []);
+
+  // A chat the connection already followed stays followed.
+  await call('chat.open', { chatId: 'a1' });
+  assertError(await call('message.send', { chatId: 'a1', text: 'hi', clientMessageId: 'c-2' }), 'unavailable');
+  desktop.emit({ kind: 'run', chatId: 'a1', runId: 'desk-1', type: 'delta', payload: { text: 'still followed' } });
+  assert.deepEqual(named('chat.delta').map((e) => e.text), ['still followed']);
+});
+
+test('a send counts towards the chats a connection may follow, as chat.open does', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  let refusedAt = -1;
+  for (let i = 0; i < 40 && refusedAt < 0; i += 1) {
+    const { chatId } = (await call('chat.new')).result;
+    const sent = await call('message.send', { chatId, text: 'hi', clientMessageId: `c-${i}` });
+    if (sent.error) {
+      assertError(sent, 'busy');
+      refusedAt = i;
+    }
+  }
+  assert.equal(refusedAt, 32, 'SUBSCRIPTIONS_MAX in remote-dispatcher.js');
+  assert.equal(desktop.state.turns.length, 32, 'the refused send started nothing');
+  // A chat it already follows takes a send at the limit.
+  const followed = desktop.state.turns[0].chatId;
+  desktop.emit({ kind: 'run', chatId: followed, runId: 'uuid-2', type: 'progress', payload: { type: 'run-end' } });
+  assert.ok((await call('message.send', { chatId: followed, text: 'again', clientMessageId: 'c-again' })).result);
+  assertError(await call('chat.open', { chatId: 'a1' }), 'busy');
+});
+
 test('chat.new is not-found while the open workspace is not released', async () => {
   const desktop = fakeDesktop({ active: HIDDEN });
   const { call } = await setup({ desktop });
