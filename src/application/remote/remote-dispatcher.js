@@ -706,22 +706,31 @@ function createRemoteDispatcher({
         }
         const chat = await writableChat(params.chatId);
         if (isBusy(chat.chatId)) throw new Refusal('busy');
+        // The sender follows the chat it writes in, from the turn's first event
+        // on — a chat from `chat.new` cannot be opened before its question is
+        // saved (#1228). It counts like a subscription of `chat.open`.
+        const subscribes = !entry.subscriptions.has(chat.chatId);
+        if (subscribes && entry.subscriptions.size >= SUBSCRIPTIONS_MAX) throw new Refusal('busy');
         const runId = randomUUID();
         const answer = { runId, messageId: display.messageId(chat.messageCount) };
         // Known before the turn starts, so that a second send cannot slip in while it loads.
         startedChats.add(chat.chatId);
         remoteRuns.set(runId, { connectionId: entry.connection.id, kind: entry.connection.kind, client: entry.connection.client?.name || '' });
+        if (subscribes) entry.subscriptions.set(chat.chatId, chat.root);
+        const undo = () => {
+          remoteRuns.delete(runId);
+          startedChats.delete(chat.chatId);
+          if (subscribes) unsubscribeChat(entry, chat.chatId);
+        };
         let started;
         try {
           started = await desktop.startTurn({ connectionId: entry.connection.id, chatId: chat.chatId, text, runId });
         } catch (error) {
-          remoteRuns.delete(runId);
-          startedChats.delete(chat.chatId);
+          undo();
           throw error;
         }
         if (!started.ok) {
-          remoteRuns.delete(runId);
-          startedChats.delete(chat.chatId);
+          undo();
           throw new Refusal('unavailable');
         }
         sent.set(key, { chatId: chat.chatId, ...answer });
