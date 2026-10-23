@@ -167,18 +167,20 @@ test('a remote answers allow once or deny; the first valid answer wins and every
   assert.deepEqual(adapter.respondFromRemote('req-1', { response: 'allow-always' }, by), { ok: false, reason: 'refused' });
   assert.deepEqual(adapter.respondFromRemote('nope', { response: 'deny' }, by), { ok: false, reason: 'not-found' });
   assert.deepEqual(adapter.respondFromRemote('req-1', { response: 'allow-once' }, by), { ok: true, response: 'allow-once' });
-  assert.deepEqual(await pending, { response: 'allow-once', requestId: 'req-1' });
+  // The tool step keeps who answered (#1197).
+  assert.deepEqual(await pending, { response: 'allow-once', requestId: 'req-1', by });
   // The window comes second: the card is settled already.
   assert.equal(adapter.respond(1, { requestId: 'req-1', response: 'deny' }).ok, false);
   assert.deepEqual(events[1], {
     type: 'resolved', requestId: 'req-1', chatId: 'chat-a', response: 'allow-once', invalidated: false, reason: null, by,
   });
-  assert.deepEqual(wc.sent.at(-1).payload, { requestId: 'req-1', response: 'allow-once', invalidated: false, reason: null }, 'the window takes its card down');
+  assert.deepEqual(wc.sent.at(-1).payload, { requestId: 'req-1', response: 'allow-once', invalidated: false, reason: null, by }, 'the window takes its card down, saying who answered it');
 
   // The window answering is named as the desktop; a voided card names nobody.
   const second = adapter.requestApproval({ sessionId: 1, request: { ...REQUEST, chatId: 'chat-a' } });
   adapter.respond(1, { requestId: 'req-2', response: 'deny' });
-  await second;
+  assert.equal('by' in (await second), false, 'the window leaves no mark on the step');
+  assert.equal('by' in wc.sent.at(-1).payload, false);
   assert.deepEqual(events.at(-1).by, { kind: 'desktop' });
   const third = adapter.requestApproval({ sessionId: 1, request: { ...REQUEST, chatId: 'chat-a' } });
   adapter.invalidateChat('chat-a');

@@ -25,11 +25,12 @@ const { normalizeChatConfigOverrides } = require('../../shared/contracts/chat-co
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
 const { isToolCategory } = require('../../shared/contracts/tool-categories');
 const { isRecord } = require('../../shared/runtime/is-record');
+const { normalizeMessageOrigin } = require('../../shared/contracts/remote/message-origin');
 
 /**
  * A tool step as the history keeps it: the display line alone, or the line with
  * what the display derives its icon, grouping and notes from (#60, #66, #187,
- * #348, #792, #1008, #1011).
+ * #348, #792, #1008, #1011, #1197).
  *
  * @typedef {string | {
  *   line: string,
@@ -45,6 +46,7 @@ const { isRecord } = require('../../shared/runtime/is-record');
  *   sandboxLive?: import('../../shared/contracts/chat').SandboxLiveEntry[],
  *   sandboxOutside?: import('../../shared/contracts/chat').SandboxOutsideEntry[],
  *   injectionFlag?: import('../../shared/contracts/injection-flag').InjectionFlag,
+ *   answeredBy?: { kind: string, client: string },
  * }} StoredTraceEntry
  */
 
@@ -72,6 +74,7 @@ const { isRecord } = require('../../shared/runtime/is-record');
  * @property {'user'} role
  * @property {string} content
  * @property {import('../../shared/contracts/attachments').StoredImageAttachment[]} [attachments]
+ * @property {{ kind: string, client: string }} [origin]  written from the phone (#1197); absent for the window
  */
 
 /**
@@ -362,7 +365,9 @@ function toolTraceEntryForStore(entry, toolCategoryOf = null) {
   const sandboxOutside = normalizeSandboxOutside(fields.sandboxOutside);
   // A result that looked like a prompt injection (#1011): kinds and short excerpts.
   const injectionFlag = normalizeInjectionFlag(fields.injectionFlag);
-  if (!tool && !skill && !permission && !round && !schema && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside && !injectionFlag) return line;
+  // Who answered the call's card, when it was the phone (#1197).
+  const answeredBy = normalizeMessageOrigin(fields.answeredBy);
+  if (!tool && !skill && !permission && !round && !schema && !changes && !sandboxBlocked && !sandboxLive && !sandboxOutside && !injectionFlag && !answeredBy) return line;
   /** @type {Exclude<StoredTraceEntry, string>} */
   const out = { line };
   if (tool) out.tool = tool;
@@ -377,6 +382,7 @@ function toolTraceEntryForStore(entry, toolCategoryOf = null) {
   if (sandboxLive) out.sandboxLive = sandboxLive;
   if (sandboxOutside) out.sandboxOutside = sandboxOutside;
   if (injectionFlag) out.injectionFlag = injectionFlag;
+  if (answeredBy) out.answeredBy = answeredBy;
   return out;
 }
 
@@ -455,6 +461,8 @@ function sanitizeChatMessagesForStore(raw) {
       /** @type {StoredUserMessage} */
       const row = { role: 'user', content };
       if (attachments.length) row.attachments = attachments;
+      const origin = normalizeMessageOrigin(m.origin);
+      if (origin) row.origin = origin;
       out.push(row);
       continue;
     }
@@ -513,6 +521,9 @@ function normalizeLoadedMessages(raw, toolCategoryOf = null) {
         // saemtliche Sessions eines Ordners auf einmal waeren zu viel.
         const attachments = normalizeStoredAttachments(m.attachments);
         if (attachments.length) row.attachments = attachments;
+        // Where it was written (#1197); a chat from before has none and loads as it was.
+        const origin = normalizeMessageOrigin(m.origin);
+        if (origin) row.origin = origin;
         return row;
       }
       const toolTrace = Array.isArray(m.toolTrace)

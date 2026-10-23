@@ -116,3 +116,20 @@ test('no name without an answer, for an unknown chat, or when the model gives no
   assert.deepEqual(await conversation.nameChat('plain'), { title: null });
   assert.equal(history.store.get('plain').title, '');
 });
+
+test('a question from the phone is stored with its origin, and the model never sees it (#1197)', async () => {
+  const history = memoryHistory({ c1: { id: 'c1', messages: TURN } });
+  /** @type {any[]} */
+  let sent = [];
+  const engine = { ...fakeEngine(), send: async (request) => { sent = request.payload.messages; return { content: 'ok' }; } };
+  const conversation = createConversationService({ engine, history });
+  await conversation.runTurn({ sessionId: 'remote:c', chatId: 'c1', message: { content: 'From the train', origin: { kind: 'relay', client: 'iPhone' } } });
+  const question = history.store.get('c1').messages[2];
+  assert.deepEqual(question, { role: 'user', content: 'From the train', origin: { kind: 'relay', client: 'iPhone' } });
+  assert.deepEqual(sent.at(-1), { role: 'user', content: 'From the train' });
+  assert.ok(sent.every((message) => !('origin' in message)));
+
+  // A question from the window, or one with a mark nobody gives, carries none.
+  await conversation.runTurn({ sessionId: 1, chatId: 'c1', message: { content: 'At the desk', origin: { kind: 'desktop' } } });
+  assert.deepEqual(history.store.get('c1').messages[4], { role: 'user', content: 'At the desk' });
+});

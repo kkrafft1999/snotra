@@ -470,3 +470,49 @@ test('a turn cut off before its first step is kept with its mark, and comes back
   // An ordinary answer has no mark at all, not a `false` one.
   assert.equal('interrupted' in normalizeLoadedMessages([{ role: 'assistant', content: 'Hi' }])[0], false);
 });
+
+test('a question from the phone keeps its origin through saving and loading (#1197)', () => {
+  const stored = sanitizeChatMessagesForStore([
+    { role: 'user', content: 'from the phone', origin: { kind: 'relay', client: '  iPhone\n15  ' } },
+    { role: 'user', content: 'from the window' },
+    { role: 'user', content: 'a kind nobody marks', origin: { kind: 'desktop', client: 'x' } },
+    { role: 'assistant', content: 'an answer', origin: { kind: 'relay', client: 'iPhone' } },
+  ]);
+  assert.deepEqual(stored, [
+    { role: 'user', content: 'from the phone', origin: { kind: 'relay', client: 'iPhone 15' } },
+    { role: 'user', content: 'from the window' },
+    { role: 'user', content: 'a kind nobody marks' },
+    { role: 'assistant', content: 'an answer' },
+  ]);
+  const loaded = normalizeLoadedMessages(stored);
+  assert.deepEqual(loaded[0].origin, { kind: 'relay', client: 'iPhone 15' });
+  assert.equal('origin' in loaded[1], false);
+  assert.equal('origin' in loaded[3], false, 'only a question has an origin');
+});
+
+test('a chat stored before #1197 loads unchanged, without an origin anywhere', () => {
+  const before = [
+    { role: 'user', content: 'question' },
+    { role: 'assistant', content: 'answer', toolTrace: [{ line: 'Read a.md', tool: 'read_file', permission: { decision: 'allow', source: 'allow-once' } }] },
+  ];
+  const loaded = normalizeLoadedMessages(before);
+  assert.deepEqual(loaded[0], { role: 'user', content: 'question' });
+  assert.deepEqual(loaded[1].toolTrace, [{ line: 'Read a.md', tool: 'read_file', permission: { decision: 'allow', source: 'allow-once' } }]);
+  assert.deepEqual(sanitizeChatMessagesForStore(loaded), sanitizeChatMessagesForStore(before));
+});
+
+test('a step whose card the phone answered keeps who answered it (#1197)', () => {
+  const [answer] = sanitizeChatMessagesForStore([{
+    role: 'assistant',
+    content: '',
+    toolTrace: [
+      { line: 'Ran npm test', tool: 'shell_execute', answeredBy: { kind: 'relay', client: 'iPhone' } },
+      { line: 'Ran ls', tool: 'shell_execute', answeredBy: { kind: 'desktop' } },
+      { line: 'Ran pwd', answeredBy: { kind: 'relay', client: 'x'.repeat(200) } },
+    ],
+  }]);
+  assert.deepEqual(answer.toolTrace[0], { line: 'Ran npm test', tool: 'shell_execute', answeredBy: { kind: 'relay', client: 'iPhone' } });
+  assert.deepEqual(answer.toolTrace[1], { line: 'Ran ls', tool: 'shell_execute' });
+  assert.equal(answer.toolTrace[2].answeredBy.client.length, 64, 'the name is bounded');
+  assert.deepEqual(normalizeLoadedMessages([answer])[0].toolTrace[0].answeredBy, { kind: 'relay', client: 'iPhone' });
+});

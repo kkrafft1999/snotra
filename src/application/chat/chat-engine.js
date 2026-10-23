@@ -79,6 +79,7 @@ const { createSessionGrants } = require('../permissions/session-grants');
 const { buildApprovalRequest } = require('../permissions/approval-request');
 const { createBuiltinInjectionDetector } = require('./injection-detector');
 const { flagToolResult } = require('./injection-flagging');
+const { normalizeMessageOrigin } = require('../../shared/contracts/remote/message-origin');
 const {
   createSensitiveMarker,
   redactSensitiveToolMessages,
@@ -954,6 +955,19 @@ function isSandboxKind(kind) {
  * @param {unknown} value
  * @returns {number|null}
  */
+/**
+ * Who answered a call's card, kept on its step when it was the phone (#1197)
+ * — the chat shows the mark next to the decision, and the history keeps it.
+ * A later card of the same call answered at the desktop leaves it standing.
+ *
+ * @param {Record<string, any>} entry
+ * @param {import('../ports/tool-approval-port').ToolApprovalOutcome | undefined} outcome
+ */
+function markAnsweredBy(entry, outcome) {
+  const by = outcome && !outcome.invalidated ? normalizeMessageOrigin(outcome.by) : null;
+  if (by) entry.answeredBy = by;
+}
+
 function integerOrNull(value) {
   return typeof value === 'number' && Number.isInteger(value) ? value : null;
 }
@@ -1926,6 +1940,8 @@ function createChatEngine({
         }
         // Abbruch des Laufs während der Karte ist ein Abbruch, kein Verfall.
         if (abortSignal.aborted) throw createChatAbortError();
+        // The step keeps who answered its card when it was the phone (#1197).
+        markAnsweredBy(entry, outcome);
         emit(
           onEvent,
           CHAT_ENGINE_EVENTS.PROGRESS,
@@ -2077,6 +2093,7 @@ function createChatEngine({
           outcome = { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
         }
         if (abortSignal.aborted) throw createChatAbortError();
+        markAnsweredBy(entry, outcome);
         emit(
           onEvent,
           CHAT_ENGINE_EVENTS.PROGRESS,

@@ -22,6 +22,7 @@
  * @property {unknown} [content]
  * @property {boolean} [isError]
  * @property {StoredAttachment[]} [attachments]
+ * @property {{ kind: string, client: string }} [origin]  a question a remote front end wrote (#1197)
  *
  * @typedef {Object} StoredChat
  * @property {string} id

@@ -14,6 +14,7 @@
 
 const { CHAT_ENGINE_EVENTS } = require('../../application/chat/chat-engine');
 const { createRunEndEvent } = require('../../shared/contracts/chat');
+const { normalizeMessageOrigin } = require('../../shared/contracts/remote/message-origin');
 const { createMessage } = require('../../shared/contracts/message');
 
 /**
@@ -130,7 +131,7 @@ function createRemoteDesktopAdapter({
     respondToApproval: (requestId, answer, by) => respondToApproval(requestId, answer, by),
     subscribe: (listener) => activity.subscribe(listener),
 
-    async startTurn({ connectionId, chatId, text, runId }) {
+    async startTurn({ connectionId, chatId, text, runId, origin }) {
       /** @param {Parameters<typeof followInWindow>[0]} event */
       const tellWindow = (event) => {
         try {
@@ -146,6 +147,10 @@ function createRemoteDesktopAdapter({
       if (isError(target) || (await llm.validateTarget(/** @type {any} */ (target), { forSend: true }))) {
         return { ok: false, reason: 'unavailable' };
       }
+      // Where the question came from goes with it into the chat (#1197).
+      const markOf = normalizeMessageOrigin(origin);
+      /** @type {{ content: string, origin?: { kind: string, client: string } }} */
+      const question = markOf ? { content: text, origin: markOf } : { content: text };
       let inWindow = false;
       /** @param {{ type?: string, payload?: unknown }} event */
       const publish = (event) => {
@@ -156,7 +161,7 @@ function createRemoteDesktopAdapter({
         // then on the window shows the turn, as one of its own (step 2b).
         if (!inWindow && payload.type === 'chat-saved' && payload.ok === true) {
           inWindow = true;
-          tellWindow({ chatId, runId, type: 'turn-started', payload: { content: text } });
+          tellWindow({ chatId, runId, type: 'turn-started', payload: { content: text, ...(question.origin ? { origin: question.origin } : {}) } });
         }
         if (inWindow) tellWindow({ chatId, runId, type: event.type, payload });
       };
@@ -164,7 +169,7 @@ function createRemoteDesktopAdapter({
       void conversation.runTurn({
         sessionId: remoteSessionId(connectionId),
         chatId,
-        message: { content: text },
+        message: question,
         // The open workspace, never one the request names (#68); the dispatcher
         // only lets a chat of that workspace through.
         workspaceRoot: getActiveWorkspaceRoot(),

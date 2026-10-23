@@ -371,8 +371,8 @@ function createRemoteDispatcher({
       let index = messages.length - 1;
       while (index >= 0 && messages[index]?.role !== 'user') index -= 1;
       if (index < 0) return;
+      // The mark of a remote's question is stored with it (#1197).
       const message = display.displayMessage(messages[index], index);
-      if (origin) message.origin = { kind: origin.kind, client: origin.client };
       for (const entry of followers()) emit(entry, 'chat.message', { chatId, message });
     }).catch((error) => log.warn(`[remote] a question could not be read (${error?.name || 'error'})`));
   }
@@ -724,7 +724,9 @@ function createRemoteDispatcher({
         };
         let started;
         try {
-          started = await desktop.startTurn({ connectionId: entry.connection.id, chatId: chat.chatId, text, runId });
+          // The question keeps where it came from in the chat (#1197).
+          const origin = { kind: entry.connection.kind, client: entry.connection.client?.name || '' };
+          started = await desktop.startTurn({ connectionId: entry.connection.id, chatId: chat.chatId, text, runId, origin });
         } catch (error) {
           undo();
           throw error;
