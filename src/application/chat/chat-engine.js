@@ -952,10 +952,6 @@ function isSandboxKind(kind) {
  */
 
 /**
- * @param {unknown} value
- * @returns {number|null}
- */
-/**
  * Who answered a call's card, kept on its step when it was the phone (#1197)
  * — the chat shows the mark next to the decision, and the history keeps it.
  * A later card of the same call answered at the desktop leaves it standing.
@@ -968,6 +964,10 @@ function markAnsweredBy(entry, outcome) {
   if (by) entry.answeredBy = by;
 }
 
+/**
+ * @param {unknown} value
+ * @returns {number|null}
+ */
 function integerOrNull(value) {
   return typeof value === 'number' && Number.isInteger(value) ? value : null;
 }
