@@ -288,6 +288,8 @@ test('the channel\'s session keys and messages never reach a log, an IPC payload
   await mobile.handshake({ until });
   sessionKeys.push(mobile.keys);
   await mobile.send(HELLO);
+  // Connected takes the phone's heartbeat as well (#1196).
+  await relay.phone.setPresence(channelId, true);
   await until(() => main.lastState()?.phone?.connected === true, 'connected in the window');
   await mobile.send({ jsonrpc: '2.0', id: 2, method: 'message.send', params: { chatId: 'c', text: SECRET_TEXT, clientMessageId: 'm' } });
   const answers = [];

@@ -317,6 +317,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on(PUSH.REMOTE_STATE, listener);
       return () => ipcRenderer.removeListener(PUSH.REMOTE_STATE, listener);
     },
+    // Whether a phone is connected, for the indicator in the title bar (#1196).
+    getPresence: () => ipcRenderer.invoke(REQ.REMOTE_GET_PRESENCE),
+    onPresence: (callback) => {
+      const listener = (_event, payload) => callback(payload);
+      ipcRenderer.on(PUSH.REMOTE_PRESENCE, listener);
+      return () => ipcRenderer.removeListener(PUSH.REMOTE_PRESENCE, listener);
+    },
     // The workspaces open to the phone (#1195). Opening one is asked by main
     // in a native dialog; the root is checked there against the known folders.
     getReleases: () => ipcRenderer.invoke(REQ.REMOTE_RELEASE_GET),

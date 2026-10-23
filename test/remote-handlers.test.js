@@ -127,11 +127,34 @@ test('the handlers: four requests without arguments, and a push per change', asy
   }]);
 });
 
+test('the phone\'s presence: read and pushed with its two flags only, and only with presence wired (#1196)', async () => {
+  const bare = createMockIpcMain();
+  registerRemoteHandlers({ ipcMain: bare, pairing: { getState: async () => ({}), subscribe() {} }, pushToWindow: () => true, REQ, PUSH });
+  assert.equal(bare.handlers.has(REQ.REMOTE_GET_PRESENCE), false);
+
+  const ipcMain = createMockIpcMain();
+  const pushed = [];
+  let listener = null;
+  const presence = {
+    getState: () => ({ connected: true, keepingAwake: true, channelId: 'secret' }),
+    subscribe: (fn) => { listener = fn; },
+  };
+  registerRemoteHandlers({
+    ipcMain, pairing: { getState: async () => ({}), subscribe() {} }, presence,
+    pushToWindow: (channel, payload) => pushed.push({ channel, payload }), REQ, PUSH,
+  });
+  assert.deepEqual(await ipcMain.invoke(REQ.REMOTE_GET_PRESENCE), { connected: true, keepingAwake: true });
+  listener({ connected: false, keepingAwake: true });
+  assert.deepEqual(pushed, [{ channel: 'remote:presence', payload: { connected: false, keepingAwake: false } }],
+    'never awake without a phone');
+});
+
 test('createApplication wires the pairing, and nothing reaches the relay before a pairing starts (R7)', async (t) => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-remote-app-'));
   t.after(() => removeTempDir(dir));
   const relay = createInMemoryRelayAdapter();
   const ipcMain = createMockIpcMain();
+  const powerSaveCalls = [];
   const application = createApplication({
     app: { getPath: () => dir, getVersion: () => '9.9.9' },
     ipcMain,
@@ -151,12 +174,16 @@ test('createApplication wires the pairing, and nothing reaches the relay before 
     PUSH,
     LIMITS: { MAX_CHAT_SESSIONS: 5, MAX_FOLDER_HISTORY: 3, MAX_READ_FILE_BYTES: 1024, MAX_WRITE_FILE_BYTES: 1024, MAX_TOOL_ROUNDS: 3 },
     remoteRelay: relay,
+    powerSaveBlocker: { start: (type) => { powerSaveCalls.push(type); return 1; }, stop: () => {}, isStarted: () => false },
   });
   t.after(() => application.dispose());
 
-  for (const channel of [REQ.REMOTE_GET_STATE, REQ.REMOTE_PAIR_START, REQ.REMOTE_PAIR_CANCEL, REQ.REMOTE_UNPAIR]) {
+  for (const channel of [REQ.REMOTE_GET_STATE, REQ.REMOTE_PAIR_START, REQ.REMOTE_PAIR_CANCEL, REQ.REMOTE_UNPAIR, REQ.REMOTE_GET_PRESENCE]) {
     assert.ok(ipcMain.handlers.has(channel), channel);
   }
+  // No phone, nothing kept awake (#1196).
+  assert.deepEqual(await ipcMain.invoke(REQ.REMOTE_GET_PRESENCE), { connected: false, keepingAwake: false });
+  assert.deepEqual(powerSaveCalls, []);
   const state = await ipcMain.invoke(REQ.REMOTE_GET_STATE);
   assert.equal(state.state, 'empty');
   assert.equal(state.encryptionAvailable, false);

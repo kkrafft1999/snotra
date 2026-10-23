@@ -49,6 +49,19 @@
       </span>
     </div>
     <div class="titlebar-spacer"></div>
+    <!-- The paired phone, while it is connected (#1196, R8): never a silent
+         state. Shape and word, the click opens Settings › Remote access.
+         RemoteIndicator fills and shows it; the status line beside it says
+         the change once to a screen reader. -->
+    <button type="button" id="titlebar-remote" class="titlebar-remote" hidden>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.875" aria-hidden="true">
+        <rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/>
+        <path d="M10.5 18.5h3" stroke-linecap="round"/>
+      </svg>
+      <span id="titlebar-remote-text" data-i18n="titlebar.remote.connected">iPhone connected</span>
+      <span id="titlebar-remote-awake" class="titlebar-remote__awake" hidden><span class="titlebar-remote__sep" aria-hidden="true">·</span> <span data-i18n="titlebar.remote.awake">keeping awake</span></span>
+    </button>
+    <span id="titlebar-remote-status" class="sr-only" role="status"></span>
     <!-- Wordmark and version on the right, directly before the column
          switches (#923): the left side belongs to the folder. -->
     <div class="titlebar-app">

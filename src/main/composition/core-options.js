@@ -52,6 +52,8 @@
  * @property {NodeJS.ProcessEnv} [env]
  * @property {ReturnType<typeof import('../services/app-notices').createAppNotices> | null} [notices]
  * @property {import('../../application/ports/remote-relay-port').RemoteRelayPort | null} [remoteRelay]
+ * @property {import('../../application/ports/power-save-port').PowerSavePort | null} [powerSave]
+ *   Without one, the computer is never kept awake for the phone (#1196).
  */
 
 module.exports = {};

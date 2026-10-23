@@ -612,6 +612,7 @@ listed together where they share their class.
 | `update:check`, `ignoreVersion`, `download`, `cancelDownload`, `discardDownload`, `install`, `update:available`, `update:progress` (push) | desktop | Updating the app is the desktop's business |
 | `feedback:getDiagnostics`, `feedback:send` | desktop | The feedback form |
 | `remote:getState`, `remote:pair:start`, `remote:pair:cancel`, `remote:unpair`, `remote:state` (push) | desktop, **never** remote | Pairing and removing the phone (#1114); a phone must not be able to pair another or remove itself through the protocol, and the *Allow* is the confirmation port's |
+| `remote:getPresence`, `remote:presence` (push) | desktop | The indicator in the desktop's title bar (#1196): whether a phone is connected and the computer kept awake for it; the phone knows it is connected |
 | `remote:release:get`, `remote:release:set`, `remote:release:changed` (push) | desktop, **never** remote | Which workspaces the phone sees (#1195): opening one is a loosening with a receipt, and a phone must not widen what it may see |
 | `developerMode:get`, `developerMode:toggle`, `developerMode:changed` (push) | desktop, **never** remote | Developer mode (#1213) opens pairing; a phone must not open pairing for another |
 | `voice:start`, `voice:audio`, `voice:stop`, `voice:cancel`, `voice:transcript` (push), `whisper:transcribe`, `whisper:cancel` | desktop | The microphone belongs to the window; a phone has its own dictation |

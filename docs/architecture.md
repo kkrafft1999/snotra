@@ -373,6 +373,10 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   The rules — the switch, one per card, the limits — stay in
   `services/approval-notifier.js`; `main/electron/system-notification-adapter.js`
   shows Electron's and brings the window up on a click
+- `power-save-port` — keeps the computer awake while the paired phone
+  follows a run that works (#1196). When it holds is decided in
+  `application/remote/remote-presence.js`; `main/electron/power-save-adapter.js`
+  is Electron's `powerSaveBlocker` with `prevent-app-suspension`
 - `event-push-port` — an event main sends the front end unasked (#983): the
   tree, the skills, an update, the permission state. `main/electron/window-push.js`
   sends it to the app window and drops it while there is none. Its
@@ -3536,6 +3540,7 @@ channel ([#1194](https://github.com/kkrafft1999/snotra/issues/1194)).
 | Dispatcher | `application/remote/remote-dispatcher.js`, `application/remote/remote-display.js`; `remote-message-layer-port` | The methods and events of `remote-interface.md` §8, steps 1 to 3 (#1194): the cards of followed chats, answered with *allow once* or *deny* only; workspaces, chats and their messages read only, a running turn's events to the connections following its chat, deltas batched every 150 ms on the relay; `chat.new`, `message.send` (once per `clientMessageId`), `run.abort`, `chat.configuration`, writing only in the workspace open at the desktop. No path, tool argument or chat outside the release reaches a connection |
 | Release list | `remote-release-port`; `main/remote/release-store-adapter.js`, action `remote-workspace` | `remote-release.json`: one `safeStorage` ciphertext of the workspaces opened to the phone and the id each folder goes by. Opening one takes a receipt; the switch *Access from your phone* on Tools › Security asks for it (#1195) |
 | Desktop side | `remote-desktop-port`; `main/remote/desktop-adapter.js`, `main/services/remote-activity.js` | The chat history and folder list read only, the engine's running chats, the open cards; the turns' events published from `ipc/chat-handlers.js` and the workspace switch from `workspace-activation.js`. A remote turn goes through the conversation service with its own chat's model, mode and level (`chat-session-settings.js` `presetFor`, `runModeFor`), its cards to the window |
+| Indicator | `application/remote/remote-presence.js`; `power-save-port`, `main/electron/power-save-adapter.js`; `renderer/components/RemoteIndicator.js` | R8 (#1196): *iPhone connected* in the title bar while a session stands **and** the phone's heartbeat is fresh, held 10 s after either ends so a reconnect does not flicker, at once gone when the phone is removed. While it shows and a run works, `powerSaveBlocker` holds and the pill adds *keeping awake*. Pushed as `remote:presence`; *Settings › Remote access* says *Connected* by the same rule. A click opens that panel |
 | Wiring | `main/composition/create-remote-bridge.js` | Puts the above together for `createApplication()`, which starts the channel |
 
 **The flow.** *Start* creates the identity keys on first use, opens a pairing

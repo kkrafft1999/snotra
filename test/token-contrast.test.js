@@ -110,6 +110,7 @@ const PAIRS = [
   ['--ds-grey-strong', [['--ds-diff-added-bg', '--ds-surface']], TEXT, 'line numbers of an added line (#348)'],
   ['--ds-blue-strong', [['--ds-diff-added-bg', '--ds-surface']], TEXT, 'the sign of an added line (#348)'],
   ['--ds-blue-strong', [['--ds-warning-bg', '--ds-surface']], TEXT, '"Saved" on the sandbox tile while it is off (#1119)'],
+  ['--ds-blue-strong', [['--ds-blue-soft', '--ds-bg-header']], TEXT, 'the phone indicator in the title bar (#1196)'],
   ['--ds-text-secondary', ['--ds-diff-removed-bg'], TEXT, 'a removed line (#348)'],
   ...['keyword', 'tag', 'string', 'comment', 'number', 'function', 'type', 'property', 'punctuation']
     .map((role) => [`--ds-syntax-${role}`, ['--ds-surface'], TEXT, 'source text in the preview (#745)']),

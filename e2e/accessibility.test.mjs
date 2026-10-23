@@ -172,6 +172,13 @@ test('the workspace and every settings section pass axe, light and dark; System 
   await waitForSettledWindow(page);
   await page.mouse.move(0, 0);
   await checkScreen(page, 'workspace', findings);
+  // The phone in the title bar, connected and keeping awake (#1196).
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents
+    .send('remote:presence', { connected: true, keepingAwake: true }));
+  await poll(() => shown(page, 'titlebar-remote'), { what: 'the phone in the title bar' });
+  await checkScreen(page, 'workspace › phone connected', findings, { context: '#titlebar' });
+  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents
+    .send('remote:presence', { connected: false, keepingAwake: false }));
 
   // Each section of the settings, the dialog only: the window behind it is
   // inert while it is open and was checked above.

@@ -19,6 +19,7 @@ const { createRemoteChannel } = require('../../application/remote/remote-channel
 const { createRemoteDispatcher } = require('../../application/remote/remote-dispatcher');
 const { createRemoteMessageStandIn } = require('../../application/remote/remote-message-stand-in');
 const { createRemotePairing } = require('../../application/remote/remote-pairing');
+const { createRemotePresence } = require('../../application/remote/remote-presence');
 const { translateMessage } = require('../../shared/i18n');
 const { writeFileAtomic } = require('../services/atomic-write');
 const { createRemoteChannelCryptoAdapter } = require('../remote/channel-protocol');
@@ -51,12 +52,14 @@ const RELAY_DELTA_BATCH_MS = 150;
  *   normalizeRoot?: (root: unknown) => string|null,
  *   pairingOpen?: boolean,
  *   developerMode?: { isOn: () => boolean, subscribe: (listener: () => void) => unknown } | null,
+ *   powerSave?: import('../../application/ports/power-save-port').PowerSavePort | null,
  *   log?: { warn: (...args: unknown[]) => void },
  * }} deps  `relay` replaces the Firebase relay — the in-memory one in tests;
  *   `pairingOpen` whether a phone may be paired — this build's `PAIRING_OPEN` (#1110), tests open it;
  *   `developerMode` opens it as well while it is on (#1213);
  *   `desktop` is what the dispatcher reads, and `normalizeRoot` the chat history's naming of a folder —
- *   without a desktop the stand-in answers; `messages` replaces either
+ *   without a desktop the stand-in answers; `messages` replaces either;
+ *   `powerSave` keeps the computer awake while the phone follows a working run (#1196)
  */
 function createRemoteBridge({
   userDataPath,
@@ -75,6 +78,7 @@ function createRemoteBridge({
   normalizeRoot = (root) => (typeof root === 'string' && root.trim() ? path.resolve(root.trim()) : null),
   pairingOpen = PAIRING_OPEN,
   developerMode = null,
+  powerSave = null,
   log = console,
 }) {
   const relayPort = relay || createFirebaseRelayAdapter({ endpoint: PRODUCTION_RELAY, fetchImpl: fetchImpl || globalThis.fetch });
@@ -90,6 +94,8 @@ function createRemoteBridge({
     : null;
   /** @type {ReturnType<typeof createRemoteChannel> | null} */
   let channel = null;
+  // What the window says of the phone, and whether the computer stays awake for it (#1196).
+  const presence = createRemotePresence({ powerSave, log });
   const pairing = createRemotePairing({
     relay: relayPort,
     identity,
@@ -98,7 +104,8 @@ function createRemoteBridge({
     receipts,
     prompt: pairingPrompt(getLocale),
     log,
-    connection: { isConnected: () => channel?.isConnected() === true },
+    // The panel says *Connected* when the window's indicator does (#1196).
+    connection: { isConnected: () => presence.getState().connected },
     // Open in this build, or while developer mode is on (#1213); asked at every start.
     open: () => pairingOpen === true || developerMode?.isOn() === true,
   });
@@ -117,15 +124,21 @@ function createRemoteBridge({
     onGone: (channelId) => { void pairing.forgetChannel(channelId); },
     log,
   });
-  // A phone paired, replaced or removed: the channel follows it.
-  pairing.subscribe(() => { void channel?.refresh(); });
-  // A session that stands or ends changes what the panel shows (R8).
-  channel.subscribe(() => pairing.notifyConnection());
+  // A phone paired, replaced or removed: the channel follows it, and a
+  // removed phone takes the indicator with it at once.
+  pairing.subscribe((state) => {
+    if (!/** @type {{ phone?: unknown }} */ (state)?.phone) presence.end();
+    void channel?.refresh();
+  });
+  // Connected means a standing session with a phone that is there (R8, #1196).
+  channel.subscribe(({ connected, phonePresent }) => presence.setConnected(connected && phonePresent));
+  presence.subscribe(() => pairing.notifyConnection());
 
   const started = { value: false };
   return {
     pairing,
     channel,
+    presence,
     releases,
     /** Connects the channel when a phone is paired. */
     start() {
@@ -138,6 +151,7 @@ function createRemoteBridge({
       // the presence record goes while the relay link still holds its token.
       if (!messages) dispatcher?.closeAll('quit');
       channel.dispose();
+      presence.dispose();
       pairing.dispose();
     },
   };

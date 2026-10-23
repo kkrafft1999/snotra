@@ -247,6 +247,12 @@ const REQUEST_CHANNELS = Object.freeze({
   REMOTE_PAIR_CANCEL: 'remote:pair:cancel',
   REMOTE_UNPAIR: 'remote:unpair',
   /**
+   * Whether a phone is connected and the computer kept awake for it (#1196),
+   * for the indicator in the title bar; changes arrive over
+   * PUSH_CHANNELS.REMOTE_PRESENCE.
+   */
+  REMOTE_GET_PRESENCE: 'remote:getPresence',
+  /**
    * Which workspaces are open to the paired phone (#1195): read, and one
    * opened or closed by its root. Opening is confirmed by main in a native
    * dialog (#980); changes arrive over PUSH_CHANNELS.REMOTE_RELEASE_CHANGED.
@@ -321,6 +327,8 @@ const PUSH_CHANNELS = Object.freeze({
   NOTICE_WITHDRAWN: 'notices:withdrawn',
   /** The pairing state changed (#1114): a normalized state, see contracts/remote/pairing-state.js. */
   REMOTE_STATE: 'remote:state',
+  /** A phone connected or left, or staying awake began or ended (#1196): `{ connected, keepingAwake }`. */
+  REMOTE_PRESENCE: 'remote:presence',
   /** A workspace was opened to the phone or closed again (#1195); no payload, the window reads again. */
   REMOTE_RELEASE_CHANGED: 'remote:release:changed',
   UPDATE_AVAILABLE: 'update:available',

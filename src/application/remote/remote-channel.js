@@ -13,7 +13,7 @@
  *   the streams stand, deleted when the channel stops. The phone counts as
  *   present while its heartbeat is at most 90 seconds old — looked at again as
  *   it ages, not only when it changes (#1227) — and is never taken for a
- *   connection.
+ *   connection. Listeners hear of both, for the window's indicator (#1196).
  * - **Handshake** (§13, §14): every new handshake 1 is answered — with a fresh
  *   ephemeral key and the highest common version, or `protocol-unsupported` —
  *   and ends the session before it.
@@ -114,6 +114,13 @@ function helloParams(params) {
  */
 
 /**
+ * What the channel's listeners are told (#1196).
+ * @typedef {Object} ChannelState
+ * @property {boolean} connected  a session stands (§17)
+ * @property {boolean} phonePresent  the phone's heartbeat is fresh (§12.3)
+ */
+
+/**
  * @param {{
  *   relay: import('../ports/remote-relay-port').RemoteRelayPort,
  *   identity: import('../ports/remote-identity-port').RemoteIdentityPort,
@@ -170,13 +177,18 @@ function createRemoteChannel({
   let generation = 0;
   /** The same for reading the paired phone. */
   let reads = 0;
-  /** @type {Set<(state: { connected: boolean }) => void>} */
+  /** @type {Set<(state: ChannelState) => void>} */
   const listeners = new Set();
+  /** @type {ChannelState} */
+  let lastState = { connected: false, phonePresent: false };
 
   const connected = () => !!session?.connection;
 
+  /** Tells the listeners, once per change: a session that stands or ends, a heartbeat that comes or goes stale. */
   function emit() {
-    const state = { connected: connected() };
+    const state = { connected: connected(), phonePresent: phoneOnline };
+    if (state.connected === lastState.connected && state.phonePresent === lastState.phonePresent) return;
+    lastState = state;
     for (const listener of listeners) {
       try {
         listener(state);
@@ -501,6 +513,8 @@ function createRemoteChannel({
     const age = phoneLastSeen === null ? Infinity : now() - phoneLastSeen;
     phoneOnline = age <= PHONE_PRESENCE_TIMEOUT_MS;
     if (phoneOnline) phoneStaleTimer = setTimer(judgePhone, PHONE_PRESENCE_TIMEOUT_MS - age + 1);
+    // The window's indicator needs both (#1196); the session stays what it is.
+    emit();
   }
 
   /** @param {number|null} lastSeen */
@@ -629,7 +643,7 @@ function createRemoteChannel({
     listeners.clear();
   }
 
-  /** @param {(state: { connected: boolean }) => void} listener */
+  /** @param {(state: ChannelState) => void} listener */
   function subscribe(listener) {
     listeners.add(listener);
     return () => listeners.delete(listener);

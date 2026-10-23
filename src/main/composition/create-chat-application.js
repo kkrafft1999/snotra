@@ -36,6 +36,7 @@ const { createOwnSecretsAdapter } = require('../adapters/own-secrets-adapter');
  * @param {(chatId: string) => string|null|Promise<string|null>} [deps.resolveChatMode]
  * @param {(chatId?: string) => Promise<string|null>} [deps.resolveReasoningLevel]
  * @param {(chatId?: string) => Promise<string|null>} [deps.resolveChatPreset]  the model entry of a chat off screen (#1194)
+ * @param {(run: { sessionId: string|number, chatId: string|null }) => void} [deps.onRunStarted]
  * @param {(run: { sessionId: string|number, chatId: string|null }) => void} [deps.onRunSettled]
  * @param {import('../../application/ports/config-proposal-port').ConfigProposalPort|null} [deps.configProposals]
  * @param {Parameters<typeof createProviderLlmAdapter>[0]['modelPrices']} [deps.modelPrices]
@@ -64,6 +65,7 @@ function createChatApplication({
   resolveReasoningLevel = async () => null,
   resolveChatPreset = async () => null,
   // Called when a run ends, so that main can drop what only lived for it.
+  onRunStarted = () => {},
   onRunSettled = () => {},
   // What a chat switched for itself, and the model's proposals (#774).
   configProposals = null,
@@ -102,6 +104,7 @@ function createChatApplication({
       : null,
     sessionGrants,
     maxToolRounds,
+    onRunStarted,
     onRunSettled,
     configProposals,
   });

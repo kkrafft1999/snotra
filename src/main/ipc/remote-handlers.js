@@ -34,13 +34,19 @@ const { withQrModules } = require('../remote/pairing-qr');
  *     subscribe: (listener: () => void) => unknown,
  *   } | null,
  *   workspaceSwitch?: { answer: (payload: unknown) => void } | null,
+ *   presence?: {
+ *     getState: () => { connected: boolean, keepingAwake: boolean },
+ *     subscribe: (listener: (state: { connected: boolean, keepingAwake: boolean }) => void) => unknown,
+ *   } | null,
  *   pushToWindow: (channel: string, payload?: unknown) => boolean,
  *   REQ: Record<string, string>,
  *   PUSH: Record<string, string>,
  * }} deps  without `releaseSettings` only the pairing is registered; `workspaceSwitch` takes the
- *   window's answer to a folder the phone asked to open (#1194)
+ *   window's answer to a folder the phone asked to open (#1194); `presence` feeds the indicator in the title bar (#1196)
  */
-function registerRemoteHandlers({ ipcMain, pairing, releaseSettings = null, workspaceSwitch = null, pushToWindow, REQ, PUSH }) {
+function registerRemoteHandlers({
+  ipcMain, pairing, releaseSettings = null, workspaceSwitch = null, presence = null, pushToWindow, REQ, PUSH,
+}) {
   // The QR code is drawn here and goes along as modules: the window only paints it (#1110).
   const forWindow = (/** @type {unknown} */ state) => normalizeRemotePairingState(withQrModules(normalizeRemotePairingState(state)));
   pairing.subscribe((state) => pushToWindow(PUSH.REMOTE_STATE, forWindow(state)));
@@ -49,6 +55,11 @@ function registerRemoteHandlers({ ipcMain, pairing, releaseSettings = null, work
   ipcMain.handle(REQ.REMOTE_PAIR_START, async () => normalizeRemotePairingResult(await pairing.start()));
   ipcMain.handle(REQ.REMOTE_PAIR_CANCEL, async () => normalizeRemotePairingResult(await pairing.cancel()));
   ipcMain.handle(REQ.REMOTE_UNPAIR, async () => normalizeRemotePairingResult(await pairing.unpair()));
+  // Whether a phone is connected, and the computer kept awake for it (#1196).
+  if (presence) {
+    presence.subscribe((state) => pushToWindow(PUSH.REMOTE_PRESENCE, normalizePresence(state)));
+    ipcMain.handle(REQ.REMOTE_GET_PRESENCE, () => normalizePresence(presence.getState()));
+  }
   // The window's answer to a folder the phone asked to open (#1194).
   if (workspaceSwitch) ipcMain.on(REQ.WORKSPACE_SWITCH_ANSWER, (_event, answer) => workspaceSwitch.answer(answer));
 
@@ -58,6 +69,16 @@ function registerRemoteHandlers({ ipcMain, pairing, releaseSettings = null, work
   releaseSettings.subscribe(() => pushToWindow(PUSH.REMOTE_RELEASE_CHANGED));
   ipcMain.handle(REQ.REMOTE_RELEASE_GET, async () => normalizeReleaseView(await releaseSettings.getState()));
   ipcMain.handle(REQ.REMOTE_RELEASE_SET, (_event, root, released) => releaseSettings.setReleased(root, released));
+}
+
+/**
+ * @param {unknown} state
+ * @returns {{ connected: boolean, keepingAwake: boolean }}  never more than the two flags
+ */
+function normalizePresence(state) {
+  const raw = /** @type {{ connected?: unknown, keepingAwake?: unknown } | null} */ (state);
+  const connected = raw?.connected === true;
+  return { connected, keepingAwake: connected && raw?.keepingAwake === true };
 }
 
 /**
