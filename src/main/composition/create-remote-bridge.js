@@ -96,6 +96,8 @@ function createRemoteBridge({
   let channel = null;
   // What the window says of the phone, and whether the computer stays awake for it (#1196).
   const presence = createRemotePresence({ powerSave, log });
+  // When a phone that is away was last there, for the panel (#1233).
+  let phoneLastSeen = /** @type {number|null} */ (null);
   const pairing = createRemotePairing({
     relay: relayPort,
     identity,
@@ -105,7 +107,7 @@ function createRemoteBridge({
     prompt: pairingPrompt(getLocale),
     log,
     // The panel says *Connected* when the window's indicator does (#1196).
-    connection: { isConnected: () => presence.getState().connected },
+    connection: { isConnected: () => presence.getState().connected, lastSeen: () => phoneLastSeen },
     // Open in this build, or while developer mode is on (#1213); asked at every start.
     open: () => pairingOpen === true || developerMode?.isOn() === true,
   });
@@ -131,7 +133,12 @@ function createRemoteBridge({
     void channel?.refresh();
   });
   // Connected means a standing session with a phone that is there (R8, #1196).
-  channel.subscribe(({ connected, phonePresent }) => presence.setConnected(connected && phonePresent));
+  channel.subscribe(({ connected, phonePresent, phoneLastSeen: seen }) => {
+    const moved = seen !== phoneLastSeen;
+    phoneLastSeen = seen;
+    presence.setConnected(connected && phonePresent);
+    if (moved) pairing.notifyConnection();
+  });
   presence.subscribe(() => pairing.notifyConnection());
 
   const started = { value: false };

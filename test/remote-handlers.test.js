@@ -41,7 +41,7 @@ test('the state contract lets the facts through and nothing else', () => {
   assert.deepEqual(state, {
     state: 'code',
     encryptionAvailable: true,
-    phone: { pairedAt: 5, connected: false },
+    phone: { pairedAt: 5, connected: false, lastSeen: null },
     code: CODE,
     words: null,
     replacing: true,
@@ -123,7 +123,7 @@ test('the handlers: four requests without arguments, and a push per change', asy
   listener({ state: 'paired', phone: { pairedAt: 1, connected: false, keys: 'x' } });
   assert.deepEqual(pushed, [{
     channel: 'remote:state',
-    payload: { state: 'paired', encryptionAvailable: false, phone: { pairedAt: 1, connected: false }, code: null, words: null, replacing: false, reason: null, locked: false },
+    payload: { state: 'paired', encryptionAvailable: false, phone: { pairedAt: 1, connected: false, lastSeen: null }, code: null, words: null, replacing: false, reason: null, locked: false },
   }]);
 });
 

@@ -12773,7 +12773,7 @@ select.modal-input {
 .ra-device { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; }
 .ra-device__icon { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: var(--ds-blue-soft); color: var(--ds-blue); }
 .ra-device__name { margin: 0; font-size: var(--ds-font-size-lg); font-weight: 600; }
-.ra-status { display: flex; align-items: center; gap: 7px; margin: 3px 0 0; font-size: var(--ds-font-size-md); color: var(--text-muted-strong); }
+.ra-status { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 7px; margin: 3px 0 0; font-size: var(--ds-font-size-md); color: var(--text-muted-strong); }
 .ra-status__dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 .ra-status--on .ra-status__dot { background: var(--ds-blue); }
 .ra-status--on strong { color: var(--ds-blue-strong); font-weight: 600; }

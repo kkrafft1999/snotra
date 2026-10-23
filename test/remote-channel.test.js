@@ -101,16 +101,57 @@ test('the phone is gone once its heartbeat is more than 90 seconds old, without 
 
 test('listeners hear of a session and of the phone\'s heartbeat, once per change (#1196)', async (t) => {
   const ctx = await session(t);
-  assert.deepEqual(ctx.states, [{ connected: true, phonePresent: false }], 'a session, but no phone yet');
+  assert.deepEqual(ctx.states, [{ connected: true, phonePresent: false, phoneLastSeen: null }], 'a session, but no phone yet');
   await ctx.relay.phone.setPresence(ctx.channelId, true);
   await ctx.until(() => ctx.states.length === 2, 'the heartbeat heard');
-  assert.deepEqual(ctx.states.at(-1), { connected: true, phonePresent: true });
+  assert.deepEqual(ctx.states.at(-1), { connected: true, phonePresent: true, phoneLastSeen: null });
   await ctx.relay.phone.setPresence(ctx.channelId, true);
   await tick();
   assert.equal(ctx.states.length, 2, 'a heartbeat that changes nothing is not news');
+  const heard = ctx.clock.now();
   ctx.clock.advance(PHONE_PRESENCE_TIMEOUT_MS + 1);
-  assert.deepEqual(ctx.states.at(-1), { connected: true, phonePresent: false }, 'stale: the phone is gone, the session stays');
+  assert.deepEqual(ctx.states.at(-1), { connected: true, phonePresent: false, phoneLastSeen: heard }, 'stale: the phone is gone, the session stays');
   assert.equal(ctx.channel.isConnected(), true);
+});
+
+test('a phone that is away was last seen at its last heartbeat, or when it took its record away (#1233)', async (t) => {
+  const ctx = await connected(t);
+  const lastSeen = () => ctx.states.at(-1)?.phoneLastSeen ?? null;
+  await ctx.relay.phone.setPresence(ctx.channelId, true);
+  await ctx.until(() => ctx.channel.inspect().phoneOnline, 'the heartbeat read');
+  assert.equal(lastSeen(), null, 'a phone that is there needs no "last seen"');
+  const beat = ctx.clock.now();
+  ctx.clock.advance(PHONE_PRESENCE_TIMEOUT_MS + 1);
+  assert.equal(lastSeen(), beat, 'stale: last seen at its last heartbeat, not when it went stale');
+
+  await ctx.relay.phone.setPresence(ctx.channelId, true);
+  await ctx.until(() => ctx.channel.inspect().phoneOnline, 'back again');
+  assert.equal(lastSeen(), null);
+  ctx.clock.advance(20_000);
+  const left = ctx.clock.now();
+  // The app goes to the background: the phone deletes its record (§12.3).
+  await ctx.relay.phone.setPresence(ctx.channelId, false);
+  await ctx.until(() => !ctx.channel.inspect().phoneOnline, 'the record deleted');
+  assert.equal(lastSeen(), left, 'it was there until it took its record away');
+  const told = ctx.states.length;
+  ctx.clock.advance(10 * 60_000);
+  assert.equal(ctx.states.length, told, 'time passing is no news; the window says how long ago');
+});
+
+test('a link the desktop loses keeps what was seen of the phone; another phone starts from nothing (#1233)', async (t) => {
+  const ctx = await connected(t);
+  const lastSeen = () => ctx.states.at(-1)?.phoneLastSeen ?? null;
+  await ctx.relay.phone.setPresence(ctx.channelId, true);
+  await ctx.until(() => ctx.channel.inspect().phoneOnline, 'the heartbeat read');
+  const beat = ctx.clock.now();
+  ctx.clock.advance(5_000);
+  ctx.relay.inspect.dropLinks();
+  await ctx.until(() => !ctx.channel.inspect().linked, 'the link to fail');
+  assert.equal(lastSeen(), beat, 'the desktop lost the link, the phone did not leave: its last heartbeat');
+
+  await ctx.fixture.pairing.unpair();
+  await ctx.channel.refresh();
+  assert.equal(lastSeen(), null, 'the phone removed: nothing is kept of it');
 });
 
 test('a heartbeat found stale on connecting counts as gone from the start (§12.3, #1227)', async (t) => {
@@ -145,7 +186,7 @@ test('handshake 2 answers handshake 1, and session.hello mints a relay connectio
   assert.equal(message.result.limits.maxRequestBytes, 256 * 1024);
 
   assert.equal(ctx.channel.isConnected(), true);
-  assert.deepEqual(ctx.states.at(-1), { connected: true, phonePresent: false });
+  assert.deepEqual(ctx.states.at(-1), { connected: true, phonePresent: false, phoneLastSeen: null });
   assert.deepEqual(inbox(ctx), {}, 'the envelope was deleted once handled');
 });
 
@@ -207,7 +248,7 @@ test('a new handshake 1 ends the session before it', async (t) => {
   await ctx.mobile.handshake({ until: ctx.until });
   await ctx.until(() => !ctx.channel.isConnected(), 'the old session to end');
   assert.notEqual(ctx.mobile.sid, oldSid);
-  assert.deepEqual(ctx.states.at(-1), { connected: false, phonePresent: false });
+  assert.deepEqual(ctx.states.at(-1), { connected: false, phonePresent: false, phoneLastSeen: null });
   await ctx.mobile.send(HELLO);
   const [{ message }] = await nextAnswers(ctx);
   assert.equal(message.result.connectionId, 'conn-2', 'a new session is a new connection');
@@ -398,6 +439,14 @@ test('wired as the bridge: the panel learns the connection, and a channel the ph
   dialog.open()[0].allow();
   await until(() => relay.inspect.links() === 1 && relay.inspect.nodes(channelId)?.presence.desktop, 'the channel to connect');
 
+  // A phone that came and went before any session: the panel says when it was last there (#1233).
+  assert.equal(states.at(-1)?.phone?.lastSeen, null, 'nothing seen yet');
+  await relay.phone.setPresence(channelId, true);
+  const before = Date.now();
+  await relay.phone.setPresence(channelId, false);
+  const seen = await until(() => states.at(-1)?.phone?.lastSeen, 'the panel to learn when the phone was last there');
+  assert.ok(seen >= before && seen <= Date.now());
+
   const mobile = createChannelPhone(relay, phone, channelId, relay.inspect.record(channelId).desktopKeys);
   await mobile.handshake({ until });
   await mobile.send(HELLO);
@@ -409,6 +458,7 @@ test('wired as the bridge: the panel learns the connection, and a channel the ph
   assert.equal(states.at(-1)?.phone?.connected, false, 'a session alone is not connected — the phone is not there (#1196)');
   await relay.phone.setPresence(channelId, true);
   await until(() => states.at(-1)?.phone?.connected === true, 'the panel to say connected');
+  assert.equal(states.at(-1).phone.lastSeen, null, 'a connected phone needs no "last seen"');
   // A run that works while the phone is connected keeps the computer awake (#1196).
   assert.deepEqual(bridge.presence.getState(), { connected: true, keepingAwake: false });
   bridge.presence.setWorking(true);

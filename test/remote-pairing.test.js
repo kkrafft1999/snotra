@@ -435,3 +435,14 @@ test('developer mode (#1213): pairing follows whether it is open, and a running 
   assert.equal(state.locked, true);
   await f.until(() => f.relay.inspect.channelIds().length === 0, 'the channel deleted');
 });
+
+test('the state carries when a phone that is away was last there, and only then (#1233)', () => {
+  const { normalizeRemotePairingState } = require('../src/shared/contracts/remote/pairing-state');
+  const phone = (fields) => normalizeRemotePairingState({ state: 'paired', phone: { pairedAt: 1, ...fields } }).phone;
+  assert.deepEqual(phone({ connected: false, lastSeen: 1_700_000_000_000 }), { pairedAt: 1, connected: false, lastSeen: 1_700_000_000_000 });
+  assert.equal(phone({ connected: true, lastSeen: 1_700_000_000_000 }).lastSeen, null, 'a connected phone needs none');
+  assert.equal(phone({ connected: false }).lastSeen, null, 'nothing known');
+  for (const lastSeen of ['yesterday', -5, 0, Number.NaN, Infinity]) {
+    assert.equal(phone({ connected: false, lastSeen }).lastSeen, null, `not a time: ${String(lastSeen)}`);
+  }
+});

@@ -186,7 +186,8 @@ test('the identity keys never reach a log, an IPC payload or a crash report', as
   const allowed = new Set(['state', 'encryptionAvailable', 'phone', 'code', 'words', 'replacing', 'reason', 'locked', 'ok', 'relayDeleted']);
   for (const { channel, payload } of main.ipc) {
     for (const key of Object.keys(payload)) assert.ok(allowed.has(key), `${channel} carries ${key}`);
-    if (payload.phone) assert.deepEqual(Object.keys(payload.phone).sort(), ['connected', 'pairedAt']);
+    // `lastSeen` is a time on this machine's clock (#1233), nothing of the phone's keys or channel.
+    if (payload.phone) assert.deepEqual(Object.keys(payload.phone).sort(), ['connected', 'lastSeen', 'pairedAt']);
   }
 });
 

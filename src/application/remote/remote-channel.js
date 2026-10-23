@@ -13,7 +13,11 @@
  *   the streams stand, deleted when the channel stops. The phone counts as
  *   present while its heartbeat is at most 90 seconds old — looked at again as
  *   it ages, not only when it changes (#1227) — and is never taken for a
- *   connection. Listeners hear of both, for the window's indicator (#1196).
+ *   connection. Listeners hear of both, for the window's indicator (#1196),
+ *   and, while the phone is away, when it was last there (#1233): its last
+ *   heartbeat, or the moment it took its record away (§12.3, the app going
+ *   to the background). A link the desktop loses itself is not the phone
+ *   leaving; another phone starts from nothing.
  * - **Handshake** (§13, §14): every new handshake 1 is answered — with a fresh
  *   ephemeral key and the highest common version, or `protocol-unsupported` —
  *   and ends the session before it.
@@ -118,6 +122,8 @@ function helloParams(params) {
  * @typedef {Object} ChannelState
  * @property {boolean} connected  a session stands (§17)
  * @property {boolean} phonePresent  the phone's heartbeat is fresh (§12.3)
+ * @property {number|null} phoneLastSeen  while it is not: when the phone was last there, on
+ *   this machine's clock; `null` while it is, or while nothing is known (#1233)
  */
 
 /**
@@ -160,6 +166,8 @@ function createRemoteChannel({
   /** The phone's last heartbeat on this machine's clock, `null` without a record (§12.3). */
   let phoneLastSeen = /** @type {number|null} */ (null);
   let phoneOnline = false;
+  /** When the phone was last there, kept after its record went (#1233); `null` for a phone not seen yet. */
+  let phoneLastHere = /** @type {number|null} */ (null);
   /** @type {unknown} */
   let phoneStaleTimer = null;
   /** @type {Session | null} */
@@ -180,14 +188,19 @@ function createRemoteChannel({
   /** @type {Set<(state: ChannelState) => void>} */
   const listeners = new Set();
   /** @type {ChannelState} */
-  let lastState = { connected: false, phonePresent: false };
+  let lastState = { connected: false, phonePresent: false, phoneLastSeen: null };
 
   const connected = () => !!session?.connection;
 
-  /** Tells the listeners, once per change: a session that stands or ends, a heartbeat that comes or goes stale. */
+  /**
+   * Tells the listeners, once per change: a session that stands or ends, a
+   * heartbeat that comes or goes stale, a phone away that was seen at another
+   * time. The heartbeats of a phone that is there change nothing.
+   */
   function emit() {
-    const state = { connected: connected(), phonePresent: phoneOnline };
-    if (state.connected === lastState.connected && state.phonePresent === lastState.phonePresent) return;
+    const state = { connected: connected(), phonePresent: phoneOnline, phoneLastSeen: phoneOnline ? null : phoneLastHere };
+    if (state.connected === lastState.connected && state.phonePresent === lastState.phonePresent
+      && state.phoneLastSeen === lastState.phoneLastSeen) return;
     lastState = state;
     for (const listener of listeners) {
       try {
@@ -517,8 +530,15 @@ function createRemoteChannel({
     emit();
   }
 
-  /** @param {number|null} lastSeen */
-  function onPhonePresence(lastSeen) {
+  /**
+   * @param {number|null} lastSeen
+   * @param {{ observed?: boolean }} [options]  `observed: false` when the desktop dropped the
+   *   record itself, closing its link: then the phone did not leave
+   */
+  function onPhonePresence(lastSeen, { observed = true } = {}) {
+    if (lastSeen !== null) phoneLastHere = Math.max(phoneLastHere ?? lastSeen, lastSeen);
+    // The phone took its record away (§12.3): it was there until now.
+    else if (observed && phoneOnline) phoneLastHere = now();
     phoneLastSeen = lastSeen;
     judgePhone();
   }
@@ -535,7 +555,7 @@ function createRemoteChannel({
     link = null;
     if (target && live && !keepPresence) tidy('deleting presence', () => target.deletePresence());
     live = false;
-    onPhonePresence(null);
+    onPhonePresence(null, { observed: false });
     target?.close();
   }
 
@@ -584,6 +604,7 @@ function createRemoteChannel({
           // §12.2: the channel is gone, whatever the other streams still show.
           log.warn('[remote] the relay removed the channel');
           generation += 1;
+          phoneLastHere = null;
           closeLink({ keepPresence: true });
           phone = null;
           onGone(channelId);
@@ -617,6 +638,8 @@ function createRemoteChannel({
     const at = ++generation;
     if (reconnectTimer !== null) clearTimer(reconnectTimer);
     reconnectTimer = null;
+    // Another phone, or none: what was seen of the one before is not its.
+    if (stored?.channelId !== phone?.channelId) phoneLastHere = null;
     closeLink();
     phone = stored;
     failures = 0;

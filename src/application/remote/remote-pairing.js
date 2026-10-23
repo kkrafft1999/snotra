@@ -95,10 +95,11 @@ function isGone(error) {
  *   setTimer?: (fn: () => void, ms: number) => unknown,
  *   clearTimer?: (timer: unknown) => void,
  *   log?: { warn: (...args: unknown[]) => void },
- *   connection?: { isConnected: () => boolean },
+ *   connection?: { isConnected: () => boolean, lastSeen?: () => number|null },
  *   open?: boolean | (() => boolean),
  * }} deps  `receipts` is the half of the registry that redeems; without it nothing is ever allowed.
- *   `connection` is the channel (#1192): whether a session with the paired phone stands.
+ *   `connection` is the channel (#1192): whether a session with the paired phone stands, and
+ *   when a phone that is away was last there (#1233).
  *   `open` false keeps pairing closed (#1110): `start` refuses with `locked` before anything
  *   reaches the relay; cancelling and removing a phone still work. A function is asked each
  *   time — developer mode opens it (#1213); `refresh()` after it changed.
@@ -144,12 +145,18 @@ function createRemotePairing({
     return phoneRead;
   }
 
+  /** @param {{ pairedAt: number }} paired */
+  function phoneView(paired) {
+    const connected = connection.isConnected() === true;
+    return { pairedAt: paired.pairedAt, connected, lastSeen: connected ? null : connection.lastSeen?.() ?? null };
+  }
+
   function snapshot() {
     const step = flow ? flow.step : phone ? STATES.PAIRED : STATES.EMPTY;
     return normalizeRemotePairingState({
       state: step,
       encryptionAvailable: identity.isAvailable(),
-      phone: phone ? { pairedAt: phone.pairedAt, connected: connection.isConnected() === true } : null,
+      phone: phone ? phoneView(phone) : null,
       code: flow && step === STATES.CODE ? { display: flow.display, qr: flow.qr, expiresAt: flow.expiresAt } : null,
       words: flow && step === STATES.CONFIRM ? flow.words : null,
       replacing: !!flow && ACTIVE_STEPS.has(step) && !!phone,
