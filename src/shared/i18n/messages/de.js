@@ -1221,7 +1221,7 @@ module.exports = {
   'settings.memory.unavailable': 'Das Gedächtnis ist in dieser Installation nicht verfügbar.',
 
   // ── Settings: MCP ──────────────────────────────────────────────────────────
-  'settings.mcp.warning': '<strong>Ein MCP-Server ist fremder Code.</strong> Ein lokaler wird auf deinem Rechner gestartet und läuft mit deinen Rechten; ein entfernter bekommt alles, was das Modell ihm schickt. Im Lieferzustand ist keiner eingetragen — es läuft nichts von selbst. Trag nur Server ein, deren Herkunft du kennst.',
+  'settings.mcp.warning': '<strong>Ein MCP-Server ist fremder Code.</strong> Ein lokaler wird auf deinem Rechner gestartet und läuft mit deinen vollen Rechten, außerhalb der Sandbox; ein entfernter bekommt alles, was das Modell ihm schickt. Im Lieferzustand ist keiner eingetragen — es läuft nichts von selbst. Trag nur Server ein, deren Herkunft du kennst.',
   'settings.mcp.heading': 'MCP-Server',
   'settings.mcp.reload': 'Neu laden',
   'settings.mcp.import': 'Importieren',

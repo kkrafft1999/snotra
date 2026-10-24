@@ -22,7 +22,7 @@ Für einen **lokalen Server** — einen, der als Prozess auf deinem Rechner läu
 
 Snotra spricht den aktuellen Netz-Transport von MCP, *Streamable HTTP*. Den älteren, *HTTP+SSE*, und eine Anmeldung über OAuth unterstützt es nicht; ein Dienst, der einen API-Schlüssel oder ein Token anbietet, funktioniert.
 
-Ein MCP-Server ist fremder Code. Ein lokaler läuft auf deinem Rechner mit deinen Rechten; ein entfernter bekommt alles, was das Modell ihm schickt. Füg nur Server hinzu, denen du vertraust.
+Ein MCP-Server ist fremder Code. Ein lokaler läuft auf deinem Rechner mit deinen vollen Rechten: Die [Sandbox](../../safety/sandbox/) isoliert Shell-Befehle und Python, keine MCP-Server — ein lokaler Server kann also alles lesen und ändern, was du kannst. Ein entfernter bekommt alles, was das Modell ihm schickt. Füg nur Server hinzu, denen du vertraust.
 
 ## Einen Server hinzufügen
 

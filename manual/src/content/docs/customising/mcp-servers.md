@@ -22,7 +22,7 @@ For a **local server** — one that runs as a process on your computer:
 
 Snotra speaks the current remote transport of MCP, *Streamable HTTP*. The older one, *HTTP+SSE*, and a sign-in through OAuth are not supported; a service that offers an API key or a token works.
 
-An MCP server is someone else's code. A local one runs on your computer with your rights; a remote one receives whatever the model sends it. Only add servers you trust.
+An MCP server is someone else's code. A local one runs on your computer with your full rights: the [sandbox](../../safety/sandbox/) isolates shell commands and Python, not MCP servers, so a local server can read and change anything you can. A remote one receives whatever the model sends it. Only add servers you trust.
 
 ## Add a server
 
