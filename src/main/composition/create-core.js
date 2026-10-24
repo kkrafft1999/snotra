@@ -790,6 +790,8 @@ function createCore({
     folderExists: securityPageData.folderExists,
     // Read on demand only, so `remote` below is there by then (#1195).
     listRemoteWorkspaces: async () => (await remote.releases.list()).map((entry) => entry.root),
+    // The workspace switcher's folders, listed whether or not they hold a setting (#1247).
+    listRecentWorkspaces: () => workspaceFolderStore.getValidatedFolderHistory(),
     platform: process.platform,
     platformCapabilities,
     homeDir: os.homedir(),
