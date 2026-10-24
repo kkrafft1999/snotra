@@ -61,7 +61,8 @@ test('Tools › Security: reached from the shield, changes a workspace that is n
   });
   const api = (name, ...args) => page.evaluate(([n, a]) => window.electronAPI[n](...a), [name, args]);
 
-  // invoice-tool gets a host of its own, so it is listed while another folder is open.
+  // invoice-tool gets a host of its own where it can be kept. It is listed
+  // while another folder is open either way: it is in the folder menu (#1247).
   // By name: on Windows the root may come back in another spelling of the same path.
   const openNow = async () => path.basename((await api('getSandboxOverview')).activeRoot || '');
   await poll(async () => (await openNow()) === 'invoice-tool', { what: 'invoice-tool open', timeoutMs: 30000 });
@@ -101,7 +102,7 @@ test('Tools › Security: reached from the shield, changes a workspace that is n
   assert.deepEqual(landed, {
     heading: 'Tools › Security',
     chosen: 'garden-planner',
-    list: encrypted ? ['All workspaces', 'garden-planner', 'invoice-tool'] : ['All workspaces', 'garden-planner'],
+    list: ['All workspaces', 'garden-planner', 'invoice-tool'],
   });
 
   const findings = [];
