@@ -5,6 +5,11 @@ const { LIST_DIRECTORY_MAX_ENTRIES } = require('../../shared/contracts/list-dire
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
 const {
+  LOAD_MCP_TOOLS_TOOL,
+  LAZY_MCP_TOOLS_THRESHOLD,
+  mcpToolNotLoadedError,
+} = require('../../shared/contracts/mcp');
+const {
   GET_CONFIGURATION_TOOL,
   PROPOSE_CONFIG_CHANGE_TOOL,
   CONFIG_PROPOSAL_KINDS,
@@ -90,10 +95,27 @@ function toDisabledNameSet(disabledNames) {
  *   [field: string]: any,
  * }} BuiltInTool
  *
- * Which tools the model is offered, and with what (#773).
+ * Which tools the model is offered, and with what (#773). `revealedNames`
+ * are the MCP tools whose schema the run has loaded with `load_tools` (#188).
  * @typedef {{ allowedNames?: string[] | null, disabledNames?: string[] | null, workspaceOpen?: boolean,
- *   skillNames?: string[] | null }} OfferOptions
+ *   skillNames?: string[] | null, revealedNames?: string[] | null }} OfferOptions
  */
+
+/** Longest catalog line text for a deferred MCP tool, in characters (#188). */
+const MAX_CATALOG_LINE_CHARS = 160;
+
+/**
+ * The text of an MCP tool's catalog line: one line, however the server wrote it.
+ *
+ * @param {{ catalogDescription?: unknown }} definition
+ */
+function catalogLineText(definition) {
+  const text = typeof definition.catalogDescription === 'string'
+    ? definition.catalogDescription.replace(/\s+/g, ' ').trim()
+    : '';
+  if (!text) return 'No description from the server.';
+  return text.length > MAX_CATALOG_LINE_CHARS ? `${text.slice(0, MAX_CATALOG_LINE_CHARS - 1)}…` : text;
+}
 
 /**
  * @param {BuiltInTool[]} [initialDefinitions]
@@ -340,10 +362,56 @@ function createToolRegistry(initialDefinitions = []) {
   }
 
   /**
+   * What goes out with a request, in two parts (#188). `withSchema` is what
+   * the tools field carries. `catalog` is set only when more MCP tools are on
+   * than `LAZY_MCP_TOOLS_THRESHOLD`: then every one of them is a line in the
+   * prompt instead, and only those the run has loaded (`revealedNames`) are
+   * in `withSchema` as well; `deferred` are the others. At or below the
+   * threshold nothing changes — `load_tools` stays out, every schema goes out.
+   *
+   * Without `load_tools` (an allowlist that leaves it out) there would be no
+   * way to a schema, so then every schema goes out, as with `load_skill`
+   * and the skill bodies (#173).
+   *
+   * @param {OfferOptions} [options]
+   */
+  function resolveOffer(options = {}) {
+    const offered = allDefinitions().filter((definition) => whyNotOffered(definition, options) === null);
+    const mcp = offered.filter((definition) => definition.mcp);
+    const lazy = mcp.length > LAZY_MCP_TOOLS_THRESHOLD
+      && offered.some((definition) => definition.name === LOAD_MCP_TOOLS_TOOL);
+    if (!lazy) {
+      return {
+        withSchema: offered.filter((definition) => definition.name !== LOAD_MCP_TOOLS_TOOL),
+        catalog: [],
+        deferred: [],
+      };
+    }
+    const revealed = new Set(Array.isArray(options.revealedNames) ? options.revealedNames : []);
+    return {
+      withSchema: offered.filter((definition) => !definition.mcp || revealed.has(definition.name)),
+      catalog: mcp,
+      deferred: mcp.filter((definition) => !revealed.has(definition.name)),
+    };
+  }
+
+  /**
    * @param {OfferOptions} [options]
    */
   function getAvailableDefinitions(options = {}) {
-    return allDefinitions().filter((definition) => whyNotOffered(definition, options) === null);
+    return resolveOffer(options).withSchema;
+  }
+
+  /**
+   * The MCP tools the prompt lists but whose schema the run has not loaded
+   * (#188). Calling one is refused — not as a security boundary, since
+   * `load_tools` reveals any of them on request, but because the model would
+   * be guessing its arguments.
+   *
+   * @param {OfferOptions} [options]
+   */
+  function listDeferredTools(options = {}) {
+    return resolveOffer(options).deferred.map((definition) => definition.name);
   }
 
   /**
@@ -549,7 +617,7 @@ function createToolRegistry(initialDefinitions = []) {
    * @param {OfferOptions} [options]
    */
   function buildSystemPrompt(options = {}) {
-    const available = getAvailableDefinitions(options);
+    const { withSchema: available, catalog } = resolveOffer(options);
     if (available.length === 0) return '';
 
     const parts = ['Your tools are listed with their full schema in the tools field of this request.'];
@@ -606,6 +674,18 @@ function createToolRegistry(initialDefinitions = []) {
       );
     }
 
+    // Many MCP tools on (#188): one line each instead of a schema. Every one
+    // of them, loaded or not, so that the prompt stays the same all run.
+    if (catalog.length > 0) {
+      parts.push(
+        'More MCP tools are switched on than are worth sending in full with every request, so they '
+          + 'are listed here with one line each. Before you call one, load it with '
+          + `"${LOAD_MCP_TOOLS_TOOL}" — several names at once if you need several; its schema is then `
+          + 'in the tools field from your next step on. A tool you have not loaded cannot be called.\n'
+          + catalog.map((definition) => `- ${definition.name}: ${catalogLineText(definition)}`).join('\n')
+      );
+    }
+
     // Hier stand bis #268 ein Vorbehalt gegen Schreib-Tools („nutze sie
     // zurueckhaltend"). Er hat das Gegenteil bewirkt: Manche Modelle haben
     // daraufhin gar nicht mehr geschrieben, auch auf ausdrueckliche Bitte
@@ -650,6 +730,16 @@ function createToolRegistry(initialDefinitions = []) {
     if (allowed && !allowed.has(name)) {
       return JSON.stringify({ error: `Tool is not enabled: ${name}` });
     }
+    // A tool the prompt only lists runs once its schema is loaded (#188).
+    // Asked here and not only in the engine: whatever calls `execute`, an
+    // unloaded tool does not run on arguments guessed without its schema.
+    if (listDeferredTools({
+      allowedNames: context.allowedNames,
+      disabledNames: context.disabledNames,
+      revealedNames: context.revealedNames,
+    }).includes(name)) {
+      return JSON.stringify({ error: mcpToolNotLoadedError(name) });
+    }
     if (isSwitchedOff(name, context.disabledNames)) {
       return JSON.stringify({
         // English sentence, quoted page in the interface language (#294/#276).
@@ -683,6 +773,7 @@ function createToolRegistry(initialDefinitions = []) {
     listDefinitions,
     getDefinition,
     isSwitchedOff,
+    listDeferredTools,
     execute,
   };
 }
@@ -921,6 +1012,55 @@ function createWorkspaceToolRegistry({
       },
       handler: (args, { workspaceRoot, skillRoots }) =>
         fsService.runLoadSkillTool(args, workspaceRoot, { skillRoots }),
+    },
+    {
+      name: LOAD_MCP_TOOLS_TOOL,
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.OTHER,
+      configGroup: CONFIG_TOOL_GROUPS.OTHER,
+      display: { key: 'tools.line.loadTools', target: TOOL_LINE_TARGETS.NONE },
+      // Reads nothing but the registry's own schemas: `read`, no target.
+      riskClass: TOOL_RISK_CLASSES.READ,
+      requiresWorkspace: false,
+      // Like `load_skill` (#195): not a choice, but the way to tools the user
+      // switched on elsewhere. Offered only while more MCP tools are on than
+      // `LAZY_MCP_TOOLS_THRESHOLD` (#188); see `resolveOffer`.
+      essential: true,
+      targets: () => [],
+      descriptionKey: 'tools.desc.load_tools',
+      modelDescription:
+        'Loads the full schema of MCP tools that the prompt lists with one line each. Pass the '
+        + 'names exactly as listed; the schemas are then in the tools field from your next step on.',
+      shortDescriptionKey: 'tools.short.load_tools',
+      parameters: {
+        type: 'object',
+        properties: {
+          names: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Names of the tools, exactly as listed in the prompt.',
+          },
+        },
+        required: ['names'],
+      },
+      // The registry answers which names are listed; the engine puts their
+      // schemas into the next request (#188).
+      handler: (args, { disabledNames } = {}) => {
+        const listed = new Set(registry.listDeferredTools({ disabledNames }));
+        /** @type {string[]} */
+        const asked = Array.isArray(args.names)
+          ? [...new Set(args.names.filter((/** @type {unknown} */ name) => typeof name === 'string' && name !== ''))]
+          : [];
+        if (listed.size === 0) {
+          return JSON.stringify({ error: 'There is nothing to load: every tool already has its schema in the tools field.' });
+        }
+        const loaded = asked.filter((name) => listed.has(name));
+        const unknown = asked.filter((name) => !listed.has(name));
+        if (loaded.length === 0) {
+          return JSON.stringify({ error: 'None of these is listed in the prompt. Use the names exactly as listed.', unknown });
+        }
+        return JSON.stringify({ loaded, ...(unknown.length > 0 ? { unknown } : {}) });
+      },
     },
     {
       name: 'read_file_text',
@@ -2204,7 +2344,8 @@ function createWorkspaceToolRegistry({
   ];
   // A built-in tool registers only with a complete descriptor (#1008): its
   // category, line, preview and card all come from it, nowhere else.
-  return createToolRegistry(builtIn.map(assertCompleteDescriptor));
+  const registry = createToolRegistry(builtIn.map(assertCompleteDescriptor));
+  return registry;
 }
 
 module.exports = {

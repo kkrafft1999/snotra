@@ -1674,6 +1674,8 @@ module.exports = {
   'tools.short.load_skill': 'Fetches the instructions of a skill that is switched on.',
   'tools.desc.load_skill': 'Loads the full instructions of a skill that is switched on. The prompt carries only a short description per skill — if it matches what is at hand, fetch the instructions with this tool before you start on the task, and then follow them. Do not guess what a set of instructions might say.',
   'tools.short.get_configuration': 'Lets the model read which skills and tools this chat has, and why one is missing.',
+  'tools.short.load_tools': 'Fetches the full description of MCP tools the prompt only lists by name.',
+  'tools.desc.load_tools': 'Fetches the full description of MCP tools. When more than 14 MCP tools are switched on, sending all of their descriptions with every message would cost more than it is worth, so the model gets one line per tool and loads the full description of the ones it needs for the task at hand. It saves tokens; it does not restrict what the model may call.',
   'tools.desc.get_configuration': 'Lets the model read which skills and tools this chat has: every skill with its state and short description, the tools that are on, and the tools that are off with the reason and the settings page that changes it. The model uses it when something fails or a capability seems to be missing, so that it can point you to the right setting instead of guessing. It only reads — it cannot switch anything on or off, and it never sees the instructions of a skill that is off.',
   'tools.short.search_manual': 'Lets the model search Snotra’s own user manual for an answer about the app.',
   'tools.desc.search_manual': 'Lets the model search the user manual that ships with this version of Snotra, the same way the search in the help window does. It uses it for questions about Snotra itself — how to do something, where a setting is, why something does not work — so that the answer follows the manual instead of a guess. It only reads the manual: none of your files, nothing on the internet, and it changes nothing.',
@@ -2211,6 +2213,9 @@ module.exports = {
   // get_configuration (#773): no target, one sentence each way.
   'tools.line.getConfiguration.start': 'Reading the skills and tools of this chat …',
   'tools.line.getConfiguration.done': 'Skills and tools of this chat read',
+  // load_tools (#188): no target, one sentence each way.
+  'tools.line.loadTools.start': 'Loading MCP tool descriptions …',
+  'tools.line.loadTools.done': 'MCP tool descriptions loaded',
   // propose_config_change (#774): what was proposed, and how it ended.
   'tools.line.proposeConfig.start.on': 'Suggesting to switch on {name} for this chat …',
   'tools.line.proposeConfig.start.off': 'Suggesting to switch off {name} for this chat …',
@@ -2636,7 +2641,7 @@ module.exports = {
   // Settings › Security (#448): the effective state of the open workspace.
   'security.intro': 'What Snotra can and may do in this workspace, and why.',
   'security.note.summary': 'Everything here takes effect immediately. Loosening is confirmed in the system dialog.',
-  'security.note.body': '<p>Main works the state out from the same rules that decide every tool call, so this page cannot show something different from what happens. Allowing something for good, deleting a block and “Auto” as the default are confirmed in the system dialog; switching something off or taking it back needs no confirmation.</p><p>Two tools are not listed because they are part of the basic equipment: <code>list_directory</code> is the look into the open folder, <code>load_skill</code> fetches the instructions of a skill that is switched on.</p>',
+  'security.note.body': '<p>Main works the state out from the same rules that decide every tool call, so this page cannot show something different from what happens. Allowing something for good, deleting a block and “Auto” as the default are confirmed in the system dialog; switching something off or taking it back needs no confirmation.</p><p>Two tools are not listed because they are part of the basic equipment: <code>list_directory</code> is the look into the open folder, <code>load_skill</code> fetches the instructions of a skill that is switched on. With more than 14 MCP tools on, a third joins them: <code>load_tools</code> fetches the full description of an MCP tool.</p>',
   'security.header.title': 'Applies to workspace',
   'security.header.titleNone': 'No workspace open',
   'security.header.scope': 'Every chat in this folder.',

@@ -185,6 +185,10 @@ function createWorkspaceToolAdapter(toolRegistry, deps = {}) {
     buildSystemPrompt(options) {
       return toolRegistry.buildSystemPrompt(options);
     },
+    // MCP tools listed by name only, not loaded yet (#188).
+    listDeferredTools(options) {
+      return typeof toolRegistry.listDeferredTools === 'function' ? toolRegistry.listDeferredTools(options) : [];
+    },
     // Braucht das Tool einen geoeffneten Projektordner? Unbekannte Tools gelten
     // als ordnergebunden — die Engine lehnt sie ohne Ordner ab (Issue #96).
     requiresWorkspace(name) {

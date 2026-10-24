@@ -1681,6 +1681,8 @@ module.exports = {
   'tools.short.load_skill': 'Lädt die Anleitung eines eingeschalteten Skills nach.',
   'tools.desc.load_skill': 'Lädt die vollständige Anleitung eines eingeschalteten Skills. Im Prompt steht je Skill nur eine kurze Beschreibung — passt sie zu dem, was ansteht, hole dir hiermit die Anleitung, bevor du mit der Aufgabe beginnst, und richte dich danach. Rate nicht, was in einer Anleitung stehen könnte.',
   'tools.short.get_configuration': 'Lässt das Modell nachsehen, welche Skills und Tools dieser Chat hat und warum eins fehlt.',
+  'tools.short.load_tools': 'Holt die vollständige Beschreibung von MCP-Tools, die der Prompt nur beim Namen nennt.',
+  'tools.desc.load_tools': 'Holt die vollständige Beschreibung von MCP-Tools. Sind mehr als 14 MCP-Tools eingeschaltet, kostet es mehr, als es bringt, alle Beschreibungen mit jeder Nachricht zu schicken. Das Modell bekommt dann je Tool eine Zeile und lädt die vollständige Beschreibung der Tools, die es für die Aufgabe braucht. Das spart Tokens; was das Modell aufrufen darf, schränkt es nicht ein.',
   'tools.desc.get_configuration': 'Lässt das Modell nachlesen, welche Skills und Tools dieser Chat hat: jeden Skill mit Zustand und kurzer Beschreibung, die eingeschalteten Tools und die ausgeschalteten mit Grund und der Einstellungsseite, die das ändert. Das Modell nutzt es, wenn etwas scheitert oder eine Fähigkeit zu fehlen scheint – so kann es dich auf die richtige Einstellung hinweisen, statt zu raten. Es liest nur: Es kann nichts ein- oder ausschalten und sieht nie die Anleitung eines ausgeschalteten Skills.',
   'tools.short.search_manual': 'Lässt das Modell im Handbuch von Snotra nach einer Antwort zur App suchen.',
   'tools.desc.search_manual': 'Lässt das Modell im Handbuch suchen, das mit dieser Version von Snotra ausgeliefert wird — genauso wie die Suche im Hilfefenster. Es nutzt das bei Fragen zu Snotra selbst: wie etwas geht, wo eine Einstellung liegt, warum etwas nicht klappt. So folgt die Antwort dem Handbuch statt einer Vermutung. Es liest nur das Handbuch: keine deiner Dateien, nichts aus dem Internet, und es ändert nichts.',
@@ -2217,6 +2219,9 @@ module.exports = {
   'tools.line.loadSkill.done.plain': 'Skill geladen',
   'tools.line.getConfiguration.start': 'Skills und Tools dieses Chats werden gelesen …',
   'tools.line.getConfiguration.done': 'Skills und Tools dieses Chats gelesen',
+  // load_tools (#188): no target, one sentence each way.
+  'tools.line.loadTools.start': 'Beschreibungen der MCP-Tools werden geladen …',
+  'tools.line.loadTools.done': 'Beschreibungen der MCP-Tools geladen',
   // propose_config_change (#774): was vorgeschlagen wurde und wie es ausging.
   'tools.line.proposeConfig.start.on': 'Schlage vor, {name} für diesen Chat einzuschalten …',
   'tools.line.proposeConfig.start.off': 'Schlage vor, {name} für diesen Chat auszuschalten …',
@@ -2640,7 +2645,7 @@ module.exports = {
   // Settings › Security (#448): the effective state of the open workspace.
   'security.intro': 'Was Snotra in diesem Workspace kann und darf, und warum.',
   'security.note.summary': 'Alles hier wirkt sofort. Lockerungen bestätigst du im Systemdialog.',
-  'security.note.body': '<p>Main ermittelt den Stand aus denselben Regeln, die über jeden Tool-Aufruf entscheiden. Die Seite kann also nichts anderes zeigen als das, was passiert. Etwas dauerhaft erlauben, eine Sperre löschen und „Auto“ als Standard bestätigst du im Systemdialog; etwas ausschalten oder zurücknehmen braucht keine Bestätigung.</p><p>Zwei Tools stehen nicht in den Listen, weil sie zur Grundausstattung gehören: <code>list_directory</code> ist der Blick in den offenen Ordner, <code>load_skill</code> holt die Anleitung eines eingeschalteten Skills.</p>',
+  'security.note.body': '<p>Main ermittelt den Stand aus denselben Regeln, die über jeden Tool-Aufruf entscheiden. Die Seite kann also nichts anderes zeigen als das, was passiert. Etwas dauerhaft erlauben, eine Sperre löschen und „Auto“ als Standard bestätigst du im Systemdialog; etwas ausschalten oder zurücknehmen braucht keine Bestätigung.</p><p>Zwei Tools stehen nicht in den Listen, weil sie zur Grundausstattung gehören: <code>list_directory</code> ist der Blick in den offenen Ordner, <code>load_skill</code> holt die Anleitung eines eingeschalteten Skills. Sind mehr als 14 MCP-Tools eingeschaltet, kommt ein drittes dazu: <code>load_tools</code> holt die vollständige Beschreibung eines MCP-Tools.</p>',
   'security.header.title': 'Gilt für den Workspace',
   'security.header.titleNone': 'Kein Workspace offen',
   'security.header.scope': 'Jeden Chat in diesem Ordner.',
