@@ -117,6 +117,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sandbox-runtime": "0.0.79",
+    "@noble/ciphers": "^2.4.0",
     "qrcode-generator": "^2.0.4",
     "undici": "^8.12.2"
   },

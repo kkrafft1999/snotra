@@ -4,8 +4,10 @@
  * The desktop's computations for docs/remote-protocol.md part 2 (#1192): the
  * answer to a handshake (§13), the session keys (§14), the envelopes (§15).
  *
- * Node's built-in `crypto` only — X25519, P-256 ECDH, HKDF-SHA256 and
- * ChaCha20-Poly1305 are all in OpenSSL. Proven byte for byte against
+ * X25519, P-256 ECDH and HKDF-SHA256 come from Node's built-in `crypto`;
+ * ChaCha20-Poly1305 from `@noble/ciphers`, because Electron's BoringSSL has no
+ * `chacha20-poly1305` cipher and the envelopes would neither seal nor open in
+ * the app (#1237). Proven byte for byte against
  * docs/remote-protocol/channel-v1.json, which the reference implementation
  * in scripts/remote-protocol-channel-vectors.js writes; the two are written
  * apart on purpose, as the iPhone app will be a third.
@@ -16,6 +18,7 @@
  */
 
 const nodeCrypto = require('node:crypto');
+const { chacha20poly1305 } = require('@noble/ciphers/chacha.js');
 const { lp, fromB64u, toB64u, keyBundleBytes } = require('./pairing-protocol');
 
 const LABELS = Object.freeze({
@@ -127,9 +130,8 @@ function deriveKeys(ss, ee, th) {
 function sealEnvelope(key, sid, direction, counter, plaintext) {
   const body = Buffer.from(plaintext, 'utf8');
   if (body.length > MAX_PLAINTEXT_BYTES) throw new RangeError('remote channel: envelope plaintext over the limit');
-  const cipher = nodeCrypto.createCipheriv('chacha20-poly1305', key, nonce(counter), { authTagLength: TAG_BYTES });
-  cipher.setAAD(associatedData(sid, direction, counter), { plaintextLength: body.length });
-  return toB64u(Buffer.concat([cipher.update(body), cipher.final(), cipher.getAuthTag()]));
+  // Ciphertext ‖ 16-byte tag.
+  return toB64u(chacha20poly1305(key, nonce(counter), associatedData(sid, direction, counter)).encrypt(body));
 }
 
 /**
@@ -145,12 +147,8 @@ function sealEnvelope(key, sid, direction, counter, plaintext) {
 function openEnvelope(key, sid, direction, counter, sealed) {
   const bytes = fromB64u(sealed);
   if (!bytes || bytes.length < TAG_BYTES || bytes.length > MAX_PLAINTEXT_BYTES + TAG_BYTES) return null;
-  const body = bytes.subarray(0, bytes.length - TAG_BYTES);
   try {
-    const decipher = nodeCrypto.createDecipheriv('chacha20-poly1305', key, nonce(counter), { authTagLength: TAG_BYTES });
-    decipher.setAAD(associatedData(sid, direction, counter), { plaintextLength: body.length });
-    decipher.setAuthTag(bytes.subarray(bytes.length - TAG_BYTES));
-    const plain = Buffer.concat([decipher.update(body), decipher.final()]);
+    const plain = chacha20poly1305(key, nonce(counter), associatedData(sid, direction, counter)).decrypt(bytes);
     return new TextDecoder('utf-8', { fatal: true }).decode(plain);
   } catch {
     // A tag that does not verify is the answer "no", not an error.
