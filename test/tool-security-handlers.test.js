@@ -52,7 +52,7 @@ const fakeAllowances = {
   },
 };
 
-async function setup(t, { dialogResponse = 0, workspaceRoot = OPEN, locale = 'en', platform = 'darwin', knownWorkspaces = [], platformCapabilities, safeStorageAvailable = true } = {}) {
+async function setup(t, { dialogResponse = 0, workspaceRoot = OPEN, locale = 'en', platform = 'darwin', knownWorkspaces = [], recentWorkspaces = [], platformCapabilities, safeStorageAvailable = true } = {}) {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-toolsec-ipc-'));
   t.after(() => removeTempDir(dir));
   const approvals = createToolApprovalAdapter({ randomUUID: () => crypto.randomUUID(), PUSH, log: { warn() {} } });
@@ -88,6 +88,7 @@ async function setup(t, { dialogResponse = 0, workspaceRoot = OPEN, locale = 'en
     describeWorkspaceChats: async () => [{ id: 'chat-1', title: 'Fix the build', mode: null }],
     describeChats: async () => new Map([['chat-1', 'Fix the build']]),
     listKnownWorkspaces: async () => knownWorkspaces,
+    listRecentWorkspaces: async () => recentWorkspaces,
     folderExists: async (root) => root !== GONE,
     platform,
     ...(platformCapabilities ? { platformCapabilities } : {}),
@@ -118,6 +119,30 @@ test('the overview lists the open workspace first, then every one with a sandbox
   assert.deepEqual(overview.global, { programs: [], hosts: ['gitlab.example.com:22'] });
   assert.equal(overview.newWorkspaceSandbox, true);
   assert.equal(overview.activeRoot, OPEN);
+});
+
+// The workspace switcher's folders are the user's current workspaces (#1247):
+// each one is listed, whether it holds a setting or not — the chats' folders
+// are not.
+test('the overview lists every folder of the workspace switcher, with or without a setting (#1247)', async (t) => {
+  const PLAIN = '/Users/u/alpha-notes';
+  const { call, toolPolicyStore, confirmed } = await setup(t, {
+    recentWorkspaces: [OPEN, PLAIN],
+    knownWorkspaces: [OPEN, PLAIN, '/Users/u/chat-only'],
+  });
+  await toolPolicyStore.setWorkspaceSandbox(OTHER, false, confirmed(CONFIRMATION_ACTIONS.SANDBOX_OFF, OTHER));
+  const overview = await call(REQ.TOOL_PERMISSIONS_GET_SANDBOX_OVERVIEW, makeSender());
+  assert.deepEqual(overview.workspaces.map((ws) => ws.root), [OPEN, PLAIN, OTHER]);
+  const plain = overview.workspaces.find((ws) => ws.root === PLAIN);
+  assert.deepEqual({ open: plain.open, missing: plain.missing, sandboxOff: plain.sandboxOff, programs: plain.programs, hosts: plain.hosts },
+    { open: false, missing: false, sandboxOff: false, programs: [], hosts: [] });
+
+  // Listed, so changeable without opening it — confirmed for that folder.
+  const off = await call(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, makeSender(), false, PLAIN);
+  assert.equal(off.ok, true);
+  assert.equal(await toolPolicyStore.isWorkspaceSandboxDisabled(PLAIN), true);
+  const chatOnly = await call(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_SANDBOX, makeSender(), false, '/Users/u/chat-only');
+  assert.equal(chatOnly.ok, false, 'a folder only a chat names is not listed, so not changeable');
 });
 
 test('without an open folder the overview lists only what is stored', async (t) => {
@@ -174,7 +199,7 @@ test('the overview lists the sandbox session allowances of the open workspace on
 
 // ── Which root the renderer may name ───────────────────────────────────────
 
-test('a workspace that is not open can be changed — but only one main already holds a setting for', async (t) => {
+test('a workspace that is not open can be changed — but only one main already lists', async (t) => {
   const { call, toolPolicyStore, confirmed, dialogCalls } = await setup(t);
   await toolPolicyStore.addWorkspaceHosts(OTHER, ['huggingface.co:443'], confirmed(CONFIRMATION_ACTIONS.WORKSPACE_HOSTS, OTHER));
   const sender = makeSender();

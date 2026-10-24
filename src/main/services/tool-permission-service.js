@@ -116,6 +116,7 @@ const {
  * @param {SecurityPageData['listKnownWorkspaces']} [deps.listKnownWorkspaces]
  * @param {SecurityPageData['folderExists']} [deps.folderExists]
  * @param {() => Promise<string[]>} [deps.listRemoteWorkspaces]
+ * @param {() => Promise<string[]>} [deps.listRecentWorkspaces]
  * @param {string} [deps.platform]
  * @param {import('../../shared/contracts/platform-capabilities').PlatformCapabilities} [deps.platformCapabilities]
  * @param {string} [deps.homeDir]
@@ -150,6 +151,9 @@ function createToolPermissionService({
   // The folders open to the paired phone (#1195): Tools › Security lists
   // them too, so that one can be closed there without opening it.
   listRemoteWorkspaces = async () => [],
+  // The folders of the workspace switcher (#1247): Tools › Security lists
+  // every one of them, with a setting of its own or without.
+  listRecentWorkspaces = async () => [],
   platform = process.platform,
   // The platform capability register, resolved at start (#1149): whether
   // there is a sandbox at all is read from it, not from the platform's name.
@@ -293,7 +297,8 @@ function createToolPermissionService({
 
   /**
    * Every workspace Tools › Security lists besides the open one: those with
-   * a sandbox setting, and those open to the phone (#1195).
+   * a sandbox setting, those open to the phone (#1195), and those of the
+   * workspace switcher (#1247).
    *
    * @param {PolicyState} state
    * @returns {Promise<string[]>}
@@ -306,14 +311,21 @@ function createToolPermissionService({
     } catch {
       // Without the release list the page still lists every sandbox setting.
     }
-    return [...new Set([...sandboxRootsOf(state), ...remote.filter((root) => typeof root === 'string' && root)])];
+    /** @type {string[]} */
+    let recent = [];
+    try {
+      recent = (await listRecentWorkspaces()) || [];
+    } catch {
+      // Without the folder history the page still lists every sandbox setting.
+    }
+    return [...new Set([...sandboxRootsOf(state), ...[...remote, ...recent].filter((root) => typeof root === 'string' && root)])];
   }
 
   /**
    * The workspace a sandbox setting is changed for (#1119): the open one
-   * when the renderer names none — or one the policy holds a sandbox
-   * setting for already, so a workspace can be checked and cleaned up
-   * without opening it. Never a path the renderer makes up: anything else is
+   * when the renderer names none — or one the page lists already (a sandbox
+   * setting, the phone, the workspace switcher), so a workspace can be
+   * checked and cleaned up without opening it. Never a path the renderer makes up: anything else is
    * null. Every loosening names the root in its system dialog.
    *
    * @param {any} raw  straight from the renderer
@@ -334,7 +346,8 @@ function createToolPermissionService({
 
   /**
    * Settings › Tools › Security (#1119): every workspace that has a sandbox
-   * setting or an allowance, and the open one; what applies in every
+   * setting or an allowance, every one of the workspace switcher (#1247),
+   * and the open one; what applies in every
    * workspace; and the sandbox's session allowances of the open workspace's
    * chats. The open workspace comes first, the others by name.
    */
