@@ -261,7 +261,10 @@ test('a 10k-line hunk displaced far into a 300k-line file is found quickly (#650
 
   assert.equal(out.error, undefined);
   assert.deepEqual(out.files[0].line_offsets, [240000]);
-  assert.ok(elapsedMs < 500, `took ${elapsedMs.toFixed(1)} ms`);
+  // Measured at ~50 ms locally and includes writing the 300k-line file; a quadratic
+  // search would need several seconds. The margin is for Windows runners with
+  // Defender scanning (610 ms seen once, #1208).
+  assert.ok(elapsedMs < 1000, `took ${elapsedMs.toFixed(1)} ms`);
   const text = await read(workspace, 'data.csv');
   assert.equal(text.split('\n')[250000], 'z');
 });
