@@ -67,6 +67,7 @@ Imported servers start **switched off**. [since 1.27.1] Each local one still ask
 ## What happens
 
 - The server's tools appear under *Settings › Tools › Autonomy*, in the row *External services*, grouped by server. Each one can be switched off on its own, and each group says how its server is doing: connected with its number of tools ([since 1.27.2] and about how many tokens they take in every request), not connected yet, switched off, or failed, with the reason.
+- [since 1.28] With **more than 14 MCP tools** switched on, the full description of every one of them would cost more tokens in every message than it is worth. Snotra then sends one line per tool, and the model loads the full description of the tools it needs for the task — in the chat that shows as *MCP tool descriptions loaded*. The token figure in the settings is what the full descriptions would take. This only saves tokens: the model can load any tool that is switched on, so to keep a tool away from it, switch the tool off.
 - In the chat, a tool shows where it comes from: `mcp__github__create_issue`. A tool of a remote server looks and behaves the same as one of a local server.
 - An MCP tool always counts as running a program **and** reaching an external service, so in *Smart* Snotra asks before every call. A server that marks a tool as destructive makes it stricter still: the tool then also counts as *Overwrite with no way back*.
 - A server is connected only when it is needed. It remembers the tools it reported last time, so you can switch one off before the model is ever offered it.

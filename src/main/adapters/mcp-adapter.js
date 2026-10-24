@@ -176,6 +176,9 @@ function createMcpAdapter({ mcpService } = {}) {
       // denselben Rahmen auf Englisch (#291). Getrennt, weil `listCatalog()`
       // in der Sprache der Oberflaeche aufloest und die nie an das Modell darf.
       modelDescription: describeTool(tool, serverLabel),
+      // The catalog line the prompt carries instead of the schema once many
+      // MCP tools are on (#188): the server's first sentence, nothing more.
+      catalogDescription: firstSentence(own),
       descriptionKey: own ? 'tools.mcp.desc' : 'tools.mcp.desc.empty',
       descriptionParams: { server: serverLabel, text: own },
       // Im Systemprompt stand nur der erste Satz — die Liste soll lesbar

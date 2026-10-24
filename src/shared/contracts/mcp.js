@@ -766,6 +766,41 @@ const MCP_TOOL_NAME_SEPARATOR = '__';
 const MCP_QUALIFIED_NAME_MAX_CHARS = 64;
 
 /**
+ * The tool that fetches the schemas of MCP tools the prompt only lists (#188).
+ */
+const LOAD_MCP_TOOLS_TOOL = 'load_tools';
+
+/**
+ * Above this many MCP tools on, their schemas stop going out with every
+ * request: the prompt carries one catalog line per tool and the model loads
+ * the schemas it needs with `load_tools` (#188).
+ *
+ * Measured 2026-09-18 on the Atlassian server: 10 tools on = 4,224 tokens of
+ * schema per round, all 73 = 21,880. The load step is not free — it costs a
+ * round, its tool result travels along in every round after it, and the
+ * catalog lines stay in the prompt. Below about 14 tools that outweighs what
+ * the schemas would cost: the heimat server with 4 tools and one reveal came
+ * out 19 % above sending every schema over 4 rounds. The same reckoning ruled
+ * the scheme out for the built-in tools altogether.
+ *
+ * Measured again on 2026-10-24 with this implementation (the real Atlassian
+ * schemas, o200k, the load round and its call and result included): 15 tools
+ * save 13–27 % when the rest of the request is about 2,000 tokens, but cost up
+ * to 13 % more when it is 8,000 and the turn needs one tool in two rounds;
+ * from about 30 tools it saves in every case, 42–70 % with all 73.
+ */
+const LAZY_MCP_TOOLS_THRESHOLD = 14;
+
+/**
+ * What the model reads when it calls an MCP tool it has not loaded (#188).
+ *
+ * @param {string} name
+ */
+function mcpToolNotLoadedError(name) {
+  return `Tool is not loaded: ${name}. Load its schema with "${LOAD_MCP_TOOLS_TOOL}" first, then call it.`;
+}
+
+/**
  * @param {string} serverId
  * @param {string} toolName
  */
@@ -1036,6 +1071,9 @@ module.exports = {
   MCP_TOOL_NAME_PREFIX,
   MCP_TOOL_NAME_SEPARATOR,
   MCP_QUALIFIED_NAME_MAX_CHARS,
+  LOAD_MCP_TOOLS_TOOL,
+  LAZY_MCP_TOOLS_THRESHOLD,
+  mcpToolNotLoadedError,
   MCP_BASE_RISK_CLASSES,
   qualifiedMcpToolName,
   parseQualifiedMcpToolName,

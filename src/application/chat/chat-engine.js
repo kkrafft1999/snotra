@@ -12,7 +12,11 @@ const {
   CONFIG_PROPOSAL_KINDS,
   effectiveDisabledTools,
 } = require('../../shared/contracts/chat-configuration');
-const { parseQualifiedMcpToolName } = require('../../shared/contracts/mcp');
+const {
+  parseQualifiedMcpToolName,
+  LOAD_MCP_TOOLS_TOOL,
+  mcpToolNotLoadedError,
+} = require('../../shared/contracts/mcp');
 const {
   CONTEXT_PART_GROUPS,
   CONTEXT_CONTENT_KINDS,
@@ -1483,6 +1487,11 @@ function createChatEngine({
       /** @type {LlmToolDefinition[]} */
       let availableToolDefs = [];
       let canLoadSkills = false;
+      // The MCP tools this run loaded with `load_tools` (#188): from then on
+      // their schemas go out with every round of the run. The next message
+      // starts without them, as its history holds no tool results either.
+      /** @type {Set<string>} */
+      const revealedToolNames = new Set();
       let skillFilesWithoutFolder = false;
       let skillsSystem = '';
       /** @type {ContextPart[]} */
@@ -1548,6 +1557,7 @@ function createChatEngine({
           // und wird gar nicht erst angeboten, mit ihnen stehen sie als enum in
           // seinem Schema (Issue #173).
           skillNames: skillRoots.map((entry) => entry.name),
+          ...(revealedToolNames.size > 0 ? { revealedNames: [...revealedToolNames] } : {}),
         };
         // Tools, die erst zur Laufzeit feststehen, einmal je Lauf auffrischen
         // (Issue #107). Danach ist die Liste fuer diesen Lauf fest — ein Server,
@@ -1726,7 +1736,7 @@ function createChatEngine({
       // The budget describes what actually goes out (#169): the system prompt
       // and the tool schemas come off the top before the history is windowed.
       const toolDefsChars = estimateToolDefsChars(availableToolDefs);
-      const messageCharLimit = historyCharLimit - toolDefsChars;
+      let messageCharLimit = historyCharLimit - toolDefsChars;
       const { messages: windowedHistory } = trimHistoryMessages(
         historyRows,
         Math.max(0, messageCharLimit - estimateMessagesChars(apiMessages))
@@ -1758,6 +1768,33 @@ function createChatEngine({
         else if (hasSystem) apiMessages.shift();
         toolDefs = availableToolDefs.length > 0 ? availableToolDefs : undefined;
       }
+      /**
+       * A `load_tools` call went through (#188): the names it listed go out
+       * with their schemas from the next round on. The system message stays
+       * as it is — its catalog lists every MCP tool, loaded or not — and the
+       * room for tool output shrinks by what the schemas add.
+       *
+       * @param {ToolArguments} args
+       */
+      function revealTools(args) {
+        const deferred = new Set(typeof tools.listDeferredTools === 'function' ? tools.listDeferredTools(toolOptions || {}) : []);
+        const asked = Array.isArray(args?.names) ? args.names : [];
+        const fresh = asked.filter((name) => typeof name === 'string' && deferred.has(name));
+        if (fresh.length === 0) return;
+        for (const name of fresh) revealedToolNames.add(name);
+        toolOptions = { ...(toolOptions || {}), revealedNames: [...revealedToolNames] };
+        availableToolDefs = tools.getTools(toolOptions);
+        toolDefs = availableToolDefs.length > 0 ? availableToolDefs : undefined;
+        messageCharLimit = historyCharLimit - estimateToolDefsChars(availableToolDefs);
+        composeSystem();
+      }
+      /**
+       * An MCP tool the prompt lists but the run has not loaded (#188).
+       *
+       * @param {string} toolName
+       */
+      const isUnloadedTool = (toolName) => typeof tools.listDeferredTools === 'function'
+        && tools.listDeferredTools(toolOptions || {}).includes(toolName);
       // Ohne Ordner gilt der Zusatz „kein Ordner geöffnet" nur noch für Tools,
       // die tatsächlich einen brauchen (Issue #96).
       /** @param {string} toolName */
@@ -2763,6 +2800,7 @@ function createChatEngine({
             sensitivePathPatterns: policy.sensitivePathPatterns,
             abortSignal,
             disabledNames,
+            ...(revealedToolNames.size > 0 ? { revealedNames: [...revealedToolNames] } : {}),
             // For the sentences the registry writes itself — they quote a
             // settings page, and it has to be the one the user sees (#294).
             locale: appLocale,
@@ -3026,6 +3064,17 @@ function createChatEngine({
             });
             continue;
           }
+          // Without its schema the model guessed the arguments (#188). Refused
+          // before the policy, so no card asks about a call that cannot run.
+          if (isUnloadedTool(toolName)) {
+            emitToolLine(TOOL_LINE_PHASES.DONE, entry, { callIndex });
+            apiMessages.push({
+              role: 'tool',
+              tool_call_id: toolCall.id,
+              content: JSON.stringify({ error: mcpToolNotLoadedError(toolName) }),
+            });
+            continue;
+          }
 
           let outcome;
           try {
@@ -3084,6 +3133,7 @@ function createChatEngine({
           };
           if (outcome.sensitiveMarker) toolMessage.sensitiveMarker = outcome.sensitiveMarker;
           apiMessages.push(toolMessage);
+          if (toolName === LOAD_MCP_TOOLS_TOOL && !outcome.denied) revealTools(args);
 
           if (outcome.endRun) {
             // Verfall oder wiederholte Ablehnung beenden den Lauf ohne weiteren

@@ -82,6 +82,7 @@
  *   hits under them as under the built-in ones (#525)
  * @property {AbortSignal} abortSignal
  * @property {string[]} [disabledNames]  in den Einstellungen abgewählte Tools
+ * @property {string[]} [revealedNames]  MCP tools whose schema the run loaded with `load_tools` (#188)
  * @property {boolean} approved — Policy hat den Aufruf freigegeben (Pflicht)
  * @property {ToolPlan} [plan]  der geprüfte Plan; Versionen werden vor Ausführung erneut verglichen
  * @property {string[]} [riskClasses]
@@ -124,6 +125,7 @@
  * @property {boolean} [workspaceOpen]
  * @property {string[]} [skillNames]  the switched-on skills: `load_skill` lists them, and the
  *   read tools stay without a folder while there is one (#173, #429, #548)
+ * @property {string[]} [revealedNames]  MCP tools whose schema the run loaded with `load_tools` (#188)
  */
 
 /**
@@ -196,6 +198,9 @@
  * @property {(name: string, disabledNames: string[]) => boolean} [isSwitchedOff]  whether the user's
  *   switch-off applies to this tool; never to the basic equipment (#552). Without it, the name list decides
  *   on its own
+ * @property {(options?: ToolListOptions) => string[]} [listDeferredTools]  MCP tools the prompt only
+ *   lists by name and whose schema the run has not loaded (#188); calling one is refused. Without it,
+ *   every tool has its schema
  * @property {(toolName: string, args: ToolArguments, extra?: object) => ToolTraceEntry} buildTraceEntry
  * @property {(name: string, args: ToolArguments) => (SchemaViolations|null)} [measureArguments]  optional:
  *   schema violations the planner lets through (#187); a measurement, never a refusal

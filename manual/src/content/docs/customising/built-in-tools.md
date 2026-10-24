@@ -11,7 +11,7 @@ Snotra comes with its own tools for reading, changing, running and searching. Mo
 
 | Risk class | Tools | Ready? |
 | --- | --- | --- |
-| *Read* | `list_directory`, `read_file_text`, `read_file_lines`, `list_directory_tree`, `find_files`, `search_in_files`, `stat_path`, `outline_file`, `extract_document_text` (PDF, Word, Excel, PowerPoint), `load_skill` (the instructions of a skill that is on), `get_configuration` (which skills and tools this chat has), `search_manual` and `read_manual_page` (this manual), `list_release_notes` (what the versions of Snotra changed), `propose_config_change` (suggests switching one on or off for this chat — you decide on a card) | yes |
+| *Read* | `list_directory`, `read_file_text`, `read_file_lines`, `list_directory_tree`, `find_files`, `search_in_files`, `stat_path`, `outline_file`, `extract_document_text` (PDF, Word, Excel, PowerPoint), `load_skill` (the instructions of a skill that is on), `load_tools` (the full description of an MCP tool, once more than 14 are on), `get_configuration` (which skills and tools this chat has), `search_manual` and `read_manual_page` (this manual), `list_release_notes` (what the versions of Snotra changed), `propose_config_change` (suggests switching one on or off for this chat — you decide on a card) | yes |
 | *Change* | `write_file_text`, `edit_file`, `apply_patch`, `remember`, `generate_image` | yes — `generate_image` needs an OpenAI key |
 | *Execute* | `shell_execute`, `run_python` | off until you switch them on |
 | *External services* | `fetch_url`, `web_search` | `web_search` needs a Tavily key |
