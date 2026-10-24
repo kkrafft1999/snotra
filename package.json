@@ -135,7 +135,7 @@
     "dompurify": "^3.4.17",
     "electron": "^44.9.1",
     "esbuild": "^0.28.2",
-    "happy-dom": "^21.0.1",
+    "happy-dom": "^21.0.4",
     "jsqr": "^1.4.0",
     "marked": "^18.1.1",
     "pdfjs-dist": "^6.4.299",
