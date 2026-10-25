@@ -40,6 +40,14 @@ An dem, was Snotra darf, hat sich nichts geändert: Der nächste Tool-Aufruf wir
 
 [seit 1.27.5] Unter jeder fertigen Antwort steht in einer kleinen Zeile, wie lange sie gedauert hat: *Antwort in 4,2 Sek.*, *Antwort in 3:05 Min.* Die Zeit läuft ab dem Absenden deiner Nachricht, bis die Antwort fertig ist — Nachdenken, Tool-Schritte und der Text zählen mit, ebenso die Zeit, in der eine Karte auf deine Entscheidung gewartet hat. Ein Lauf, den du gestoppt hast, zeigt *Abgebrochen nach …*; einer, der mit einem Fehler endete, trägt *Fehlgeschlagen nach …* unter dem Fehler. Fährst du mit der Maus über die Zeile, steht dort, was sie misst. Die Dauer bleibt bei der Antwort und ist auch da, wenn du den Chat wieder öffnest.
 
+## Eine Nachricht kopieren
+
+[seit 1.28] Fährst du mit der Maus über eine Nachricht — deine eigene Frage oder eine Antwort von Snotra —, erscheint darunter ein Kopieren-Button: unter einer Frage rechts, unter einer Antwort links vor ihrer Zeit. Ein Klick legt die ganze Nachricht in die Zwischenablage; der Button zeigt kurz ein Häkchen. Mit der Tastatur erreichst du den Button ebenfalls mit *Tab*, und er erscheint, sobald er den Fokus hat.
+
+Kopiert wird die Nachricht so, wie sie geschrieben wurde, nicht so, wie sie auf dem Bildschirm aussieht: eine Antwort als Markdown, mit Überschriften, Listen, Tabellen und Codeblöcken; eine Frage genau so, wie du sie getippt hast. Das Tool-Protokoll, die Zeit und eine Zeile wie *Gesendet von iPhone* gehören nicht dazu. Eine Antwort, die noch entsteht, hat noch keinen Button — er kommt, sobald sie fertig ist.
+
+![Die Frage „Wann kann ich die Bohnen draußen säen?“ und darunter die Antwort, eine kurze Liste mit drei Aussaatterminen. Die Maus steht auf der Antwort, und darunter steht der Kopieren-Button vor „Antwort in 4,2 Sek.“.](screenshots/copy-message.webp)
+
 ## Was dann passiert
 
 Das Tool-Protokoll bleibt bei der Antwort, auch im Chat-Verlauf. Dateien, die Snotra gelesen oder geändert hat, sind außerdem im Dateibaum markiert, und die Zeile *Geändert:* unter dem Protokoll führt zu jeder Änderung: [Sehen, was Snotra geändert hat](../review-changes/).
@@ -48,4 +56,5 @@ Das Tool-Protokoll bleibt bei der Antwort, auch im Chat-Verlauf. Dateien, die Sn
 
 - **Eine Antwort hat kein Tool-Protokoll.** Das Modell hat aus dem geantwortet, was es schon wusste, ohne ein Tool zu benutzen.
 - **Unter einer Antwort steht keine Zeit.** Sie stammt aus einer Version vor 1.28, oder Snotra wurde geschlossen oder neu geladen, bevor sie fertig war — dann sind nur die abgeschlossenen Schritte erhalten, aber keine Zeit.
+- **Der Kopieren-Button zeigt *Nicht kopiert*.** Snotra konnte nicht in die Zwischenablage schreiben. Klick noch einmal; klappt es weiterhin nicht, markiere den Text und kopiere ihn mit `Cmd+C` / `Strg+C`.
 - **Du willst ein Problem mit einem Lauf melden.** `Cmd+Shift+D` / `Strg+Shift+D` kopiert die Diagnose des Tool-Protokolls in die Zwischenablage, fertig zum Einfügen in einen Fehlerbericht.
