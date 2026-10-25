@@ -38,7 +38,8 @@ Chats, die ein Modell genutzt haben. Einrichten musst du nichts: Der Bericht lie
 - **Der Bericht ist dein Verlauf, wie er ist.** Ein Chat, den du löschst, zählt nicht mehr, und ebenso wenig einer, den der Verlauf losgelassen hat: Er behält die 200 neuesten Chats.
 - **Chats aus der Zeit vor 1.28** haben eine Summe, aber keine Tage. Sie zählen vollständig an dem Tag, an dem sie zuletzt genutzt wurden. Setzt du einen solchen Chat fort, zählen seine neuen Anfragen an ihren eigenen Tagen.
 - **Preise:** Der Hinweis unter den Summen nennt das Datum der Preistabelle, mit der die Chats bepreist wurden. Es sind Listenpreise in US-Dollar, wie bei einem einzelnen Chat.
-- **Nicht enthalten** sind der erzeugte Chat-Titel, Skill-Vorschläge, Bildgenerierung und Spracheingabe – dieselben Lücken wie bei den Kosten eines einzelnen Chats.
+- **Hilfsanfragen zählen mit.** [seit 1.28] Die Anfragen, die einen Chat benennen und mit *Das Modell fragen* einen Skill vorschlagen, gehören zu den Kosten des Chats und damit auch zum Bericht, an dem Tag, an dem sie gestellt wurden.
+- **Nicht enthalten** sind Bildgenerierung und Spracheingabe – dieselben Lücken wie bei den Kosten eines einzelnen Chats.
 
 ## Wenn es nicht klappt
 

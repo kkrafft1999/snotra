@@ -94,8 +94,9 @@ function createConversationService({ engine, history, describeError = (error) =>
   const runKey = (sessionId, chatId) => `${sessionId}\u0000${chatId}`;
 
   /**
-   * Adds a turn's cost to the chat (#949). Undefined when it could not be
-   * written: the reply then carries no sum, and the chat keeps the one it had.
+   * Adds the cost a run brought to the chat (#949) — a turn's, the name's or a
+   * skill suggestion's (#1266). Undefined when there was none or it could not
+   * be written: the reply then carries no sum, and the chat keeps the one it had.
    *
    * @param {string} chatId
    * @param {unknown} result
@@ -282,8 +283,8 @@ function createConversationService({ engine, history, describeError = (error) =>
       await save(settled, { tokenUsage: usage || stored?.tokenUsage });
       // In the background: the name must not hold up the answer, and its
       // failure must not disturb the chat.
-      const naming = nameChat(chatId).then(({ title }) => {
-        if (title) onEvent(progressEvent(CHAT_PROGRESS_TYPES.CHAT_NAMED, { title }));
+      const naming = nameChat(chatId).then(({ title, chatCost: namedCost }) => {
+        if (title) onEvent(progressEvent(CHAT_PROGRESS_TYPES.CHAT_NAMED, { title, ...(namedCost ? { chatCost: namedCost } : {}) }));
       }, (error) => console.error('[conversation] the chat was not named:', error));
       background.add(naming);
       void naming.finally(() => background.delete(naming));
@@ -342,7 +343,7 @@ function createConversationService({ engine, history, describeError = (error) =>
    * question. Older chats with a derived title are named on their next turn.
    *
    * @param {string} chatId
-   * @returns {Promise<{ title: string|null }>}
+   * @returns {Promise<{ title: string|null, chatCost?: SessionCost }>}  the chat's new sum when the naming round cost something (#1266)
    */
   async function nameChat(chatId) {
     const chat = typeof chatId === 'string' && chatId ? await history.load(chatId) : null;
@@ -357,10 +358,13 @@ function createConversationService({ engine, history, describeError = (error) =>
         { role: 'assistant', content: String(source.firstAnswer.content ?? '') },
       ],
     });
+    // The round is paid whether or not it gave a name (#1266).
+    const chatCost = await addTurnCost(chatId, generated);
+    const withCost = (/** @type {{ title: string|null }} */ named) => (chatCost ? { ...named, chatCost } : named);
     const title = 'title' in generated && typeof generated.title === 'string' ? generated.title.trim() : '';
-    if (!title) return { title: null };
+    if (!title) return withCost({ title: null });
     // Deleted in the meantime: nothing is brought back.
-    return { title: (await history.setTitle(chatId, title)) ? title : null };
+    return withCost({ title: (await history.setTitle(chatId, title)) ? title : null });
   }
 
   /** Resolves once no chat is being named any more — for a quit, and for tests. */
@@ -368,7 +372,7 @@ function createConversationService({ engine, history, describeError = (error) =>
     while (background.size > 0) await Promise.all([...background]);
   }
 
-  return { runTurn, stop, stopChat, abandon, nameChat, settled };
+  return { runTurn, stop, stopChat, abandon, nameChat, bookCost: addTurnCost, settled };
 }
 
 module.exports = { createConversationService, titleSource };

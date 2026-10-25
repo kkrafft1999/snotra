@@ -42,7 +42,7 @@ function memoryHistory(chats = {}) {
   };
 }
 
-function fakeEngine({ result = { content: 'ok' }, title = 'A name' } = {}) {
+function fakeEngine({ result = { content: 'ok' }, title = 'A name', titleCost = null } = {}) {
   const calls = [];
   return {
     calls,
@@ -53,7 +53,8 @@ function fakeEngine({ result = { content: 'ok' }, title = 'A name' } = {}) {
     abort: () => {},
     generateTitle: async ({ messages }) => {
       calls.push(['title', messages.map((m) => m.content)]);
-      return title ? { title } : { error: 'no title' };
+      const named = title ? { title } : { error: 'no title' };
+      return titleCost ? { ...named, cost: titleCost } : named;
     },
   };
 }
@@ -103,6 +104,43 @@ test('a chat is named from its first question and answer, once', async () => {
   // Named now: no second request.
   assert.deepEqual(await conversation.nameChat('c1'), { title: null });
   assert.equal(engine.calls.length, 1);
+});
+
+test('the naming round is added to the chat\'s cost, named or not (#1266)', async () => {
+  const history = memoryHistory({ c1: { id: 'c1', title: '', messages: TURN, cost: round(1) } });
+  const conversation = createConversationService({ engine: fakeEngine({ title: 'Simple sums', titleCost: round(1) }), history });
+  const named = await conversation.nameChat('c1');
+  assert.equal(named.title, 'Simple sums');
+  assert.equal(named.chatCost.models[0].rounds, 2);
+  assert.equal(history.store.get('c1').cost.models[0].rounds, 2);
+
+  // A round the provider billed but that gave no name still counts.
+  const failedHistory = memoryHistory({ c2: { id: 'c2', title: '', messages: TURN, cost: round(1) } });
+  const failing = createConversationService({ engine: fakeEngine({ title: '', titleCost: round(1) }), history: failedHistory });
+  const failed = await failing.nameChat('c2');
+  assert.equal(failed.title, null);
+  assert.equal(failedHistory.store.get('c2').cost.models[0].rounds, 2);
+});
+
+test('a finished turn tells the screen the new sum along with the name (#1266)', async () => {
+  const history = memoryHistory({ c1: { id: 'c1', title: '', messages: TURN } });
+  const engine = fakeEngine({ result: { content: 'ok', cost: round(1) }, title: 'Simple sums', titleCost: round(1) });
+  const conversation = createConversationService({ engine, history });
+  const events = [];
+  await conversation.runTurn({ sessionId: 1, chatId: 'c1', message: { content: 'More?' }, onEvent: (event) => events.push(event) });
+  await conversation.settled();
+  const named = events.find((event) => event.payload?.type === 'chat-named');
+  assert.equal(named.payload.chatCost.models[0].rounds, 2);
+  assert.equal(history.store.get('c1').cost.models[0].rounds, 2);
+});
+
+test('bookCost adds a round\'s cost to the chat and ignores a missing chat or cost (#1266)', async () => {
+  const history = memoryHistory({ c1: { id: 'c1', messages: TURN } });
+  const conversation = createConversationService({ engine: fakeEngine(), history });
+  assert.equal((await conversation.bookCost('c1', { cost: round(1) })).models[0].rounds, 1);
+  assert.equal(await conversation.bookCost('', { cost: round(1) }), undefined);
+  assert.equal(await conversation.bookCost('c1', {}), undefined);
+  assert.equal(history.store.get('c1').cost.models[0].rounds, 1);
 });
 
 test('no name without an answer, for an unknown chat, or when the model gives none', async () => {

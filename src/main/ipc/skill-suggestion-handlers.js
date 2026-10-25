@@ -13,13 +13,17 @@ const { SKILL_SUGGESTION_MODES } = require('../../shared/contracts/enums');
  * @param {Record<string, string>} deps.REQ
  */
 function registerSkillSuggestionHandlers({ ipcMain, skillSuggestionService, uiPrefsStore, REQ }) {
-  ipcMain.handle(REQ.SKILLS_SUGGEST, async (_event, text) => {
+  ipcMain.handle(REQ.SKILLS_SUGGEST, async (_event, text, chatId) => {
     // Only in the mode switched on for it does this reach the provider at
     // all — the renderer could claim the opposite.
     const prefs = await uiPrefsStore.readUIPrefs();
     if (prefs.skillSuggestionMode !== SKILL_SUGGESTION_MODES.MODEL) return { name: '' };
     try {
-      const match = await skillSuggestionService.suggest(typeof text === 'string' ? text : '');
+      const match = await skillSuggestionService.suggest(
+        typeof text === 'string' ? text : '',
+        // The chat the question is typed in pays for the round (#1266).
+        { chatId: typeof chatId === 'string' && chatId ? chatId : undefined }
+      );
       return { name: match?.name || '' };
     } catch {
       return { name: '' };

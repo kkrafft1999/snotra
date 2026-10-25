@@ -729,13 +729,6 @@ function createCore({
     isKnownProvider: (id) => providerCatalog.exists(id),
     endpoint: resolveFeedbackEndpoint(env),
   });
-  // Skill-Vorschlag durch das Modell (Issue #125, Modus `model`).
-  const skillSuggestionService = createSkillSuggestionService({
-    llm: chatLlm,
-    skillCatalog: skillsService,
-    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
-    uiPrefsStore,
-  });
 
   // What Settings › Security and the mode pill read (#357, #447, #448).
   const securityPageData = createSecurityPageData({
@@ -791,6 +784,15 @@ function createCore({
     history: createChatHistoryAdapter(chatHistory),
     // An error is kept in the chat as the interface says it, like the renderer did.
     describeError: (error) => translateMessage(getAppLocale(), error),
+  });
+  // Skill-Vorschlag durch das Modell (Issue #125, Modus `model`). Its round is
+  // paid by the chat the question is typed in (#1266).
+  const skillSuggestionService = createSkillSuggestionService({
+    llm: chatLlm,
+    skillCatalog: skillsService,
+    getActiveWorkspaceRoot: workspaceState.getActiveWorkspaceRoot,
+    uiPrefsStore,
+    bookCost: conversation.bookCost,
   });
   const toolPermissions = createToolPermissionService({
     confirmations,

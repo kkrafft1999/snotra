@@ -4,6 +4,7 @@ const { isAbortError, createChatAbortError } = require('../../shared/runtime/abo
 const { extractStringFromPartialJson } = require('../../shared/runtime/partial-json');
 const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
 const { mergeSessionCost } = require('../../shared/contracts/cost');
+const { roundCost } = require('../round-cost');
 const { normalizeAttachments, attachmentsCharCost, providerImageMediaTypes, imageFormatNames } = require('../../shared/contracts/attachments');
 const { extractInvokedSkillNames } = require('../../shared/contracts/skill-invocation');
 const { LOAD_SKILL_TOOL, SKILL_SOURCES } = require('../../shared/contracts/skills');
@@ -3197,6 +3198,8 @@ function createChatEngine({
    * Erwartet die ersten Nachrichten des Gespraechs; nutzt daraus die erste
    * Nutzerfrage und die erste Antwort. Liefert { title } oder { error } —
    * der Aufrufer faellt bei einem Fehler auf den abgeleiteten Titel zurueck.
+   * A round that cost something (#1266) brings it along as `cost`, errors
+   * included; the caller books it onto the chat.
    *
    * @param {{ messages?: Array<{ role: string, content?: unknown, greeting?: boolean }> }} [input]
    */
@@ -3231,11 +3234,15 @@ function createChatEngine({
         callbacks: silentStreamCallbacks(),
         abortSignal: abortController.signal,
       });
-      if (round?.cancelled) return { error: 'Title request cancelled.', code: CHAT_ERROR_CODES.INVALID };
-      if (round?.error) return { error: round.error, code: round.code || CHAT_ERROR_CODES.API };
+      // The round's cost goes along whatever came of it (#1266): a title the
+      // provider billed but could not use still counts, like a failed turn.
+      const cost = roundCost(round);
+      const withCost = (/** @type {Record<string, unknown>} */ result) => (cost ? { ...result, cost } : result);
+      if (round?.cancelled) return withCost({ error: 'Title request cancelled.', code: CHAT_ERROR_CODES.INVALID });
+      if (round?.error) return withCost({ error: round.error, code: round.code || CHAT_ERROR_CODES.API });
       const title = sanitizeChatTitle(round?.message?.content);
-      if (!title) return { error: 'Empty answer to the title request.', code: CHAT_ERROR_CODES.INVALID };
-      return { title };
+      if (!title) return withCost({ error: 'Empty answer to the title request.', code: CHAT_ERROR_CODES.INVALID });
+      return withCost({ title });
     } catch (error) {
       if (isAbortError(error)) return { error: 'Title request cancelled.', code: CHAT_ERROR_CODES.INVALID };
       return { error: llm.formatRoundError(error), code: CHAT_ERROR_CODES.API };

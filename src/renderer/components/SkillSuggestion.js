@@ -45,7 +45,7 @@ const MODEL_CACHE_MAX = 50;
  * fremder Inhalt, und ein Vorschlag darf ihn nie von selbst einschalten
  * (Issue #18).
  */
-export function initSkillSuggestion({ catalog, api, onInputChanged, onApplied }) {
+export function initSkillSuggestion({ catalog, api, onInputChanged, onApplied, getChatId = () => '' }) {
   const chatInput = document.getElementById('chat-input');
   const row = document.getElementById('chat-skill-suggestion');
   const inactive = { setMode() {}, refresh() {}, hide() {} };
@@ -100,7 +100,7 @@ export function initSkillSuggestion({ catalog, api, onInputChanged, onApplied })
       if (typeof api?.suggestSkills !== 'function') return null;
       if (modelCache.has(text)) return modelCache.get(text);
       try {
-        const result = await api.suggestSkills(text);
+        const result = await api.suggestSkills(text, getChatId());
         const name = typeof result?.name === 'string' ? result.name : '';
         if (!name) return null;
         const skills = await catalog.load();

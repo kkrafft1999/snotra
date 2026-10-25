@@ -15,7 +15,9 @@ import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir, waitForFolderChat, sendChat } from './helpers/app.mjs';
 
 // The fake model reports 11 prompt and 7 completion tokens per answer:
-// 11 × $0.01 + 7 × $0.02 = $0.25 per turn.
+// 11 × $0.01 + 7 × $0.02 = $0.25 per request. The first turn takes two
+// requests, the answer and the one that names the chat (#1266); the second
+// turn takes one, as the chat is named by then.
 const PRICE = { input: 0.01, output: 0.02 };
 
 function chipText(page) {
@@ -62,11 +64,11 @@ test('the chat cost adds up, shows in the history and survives a restart', { tim
 
   model.queueAnswer({ match: 'COST-1', text: 'First answer.' });
   await sendChat(page, 'COST-1', { explain, t });
-  await poll(async () => (await chipText(page)) === '~$0.25', { what: 'the cost of the first turn', explain });
+  await poll(async () => (await chipText(page)) === '~$0.50', { what: 'the cost of the first turn and the name of the chat', explain });
 
   model.queueAnswer({ match: 'COST-2', text: 'Second answer.' });
   await sendChat(page, 'COST-2', { explain, t });
-  await poll(async () => (await chipText(page)) === '~$0.50', { what: 'the cost of both turns', explain });
+  await poll(async () => (await chipText(page)) === '~$0.75', { what: 'the cost of both turns and the name', explain });
 
   // The popover splits it by model and kind of token.
   await page.evaluate(() => document.getElementById('chat-cost').click());
@@ -82,18 +84,18 @@ test('the chat cost adds up, shows in the history and survives a restart', { tim
   assert.equal(popover.open, true);
   assert.deepEqual(popover.models, ['fake-model']);
   assert.deepEqual(popover.rows, ['Input', 'Output']);
-  assert.match(popover.text, /~\$0\.50 · 22 in \/ 14 out · estimate/);
+  assert.match(popover.text, /~\$0\.75 · 33 in \/ 21 out · estimate/);
   await page.keyboard.press('Escape');
 
   await showHistory(page);
-  await poll(async () => (await currentHistoryCost(page)) === '~$0.50', { what: 'the cost in the history', explain });
+  await poll(async () => (await currentHistoryCost(page)) === '~$0.75', { what: 'the cost in the history', explain });
 
   // After a restart the chat comes back with its sum.
   await snotra.stop();
   snotra = await launchApp({ userDataDir });
   page = snotra.page;
   await waitForFolderChat(page, { explain });
-  await poll(async () => (await chipText(page)) === '~$0.50', { what: 'the cost after the restart', explain });
+  await poll(async () => (await chipText(page)) === '~$0.75', { what: 'the cost after the restart', explain });
   await showHistory(page);
-  await poll(async () => (await currentHistoryCost(page)) === '~$0.50', { what: 'the cost in the history after the restart', explain });
+  await poll(async () => (await currentHistoryCost(page)) === '~$0.75', { what: 'the cost in the history after the restart', explain });
 });

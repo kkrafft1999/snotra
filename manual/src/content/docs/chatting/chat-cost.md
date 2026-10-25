@@ -25,7 +25,8 @@ The history shows the same estimate next to each chat's time; see [Continue an e
 - **Each kind of token has its own price.** Reading from the prompt cache is cheaper than plain input, and writing to it can cost more. Reasoning is billed as output.
 - **A model on your computer costs nothing.** Ollama, LM Studio and other servers at a local address show *$0.00*: there is no API bill.
 - **An unknown model shows a dash.** If the table has no price for a model, its cost shows *–*, never *$0.00*. A sum that leaves such requests out ends in *+*, for example *~$0.42+*.
-- **What is not included:** image generation, voice input and the generated chat title. Batch, priority and long-context surcharges and regional prices are not modelled; the table's list price applies.
+- **The chat's own helper requests count.** [since 1.28] The short request that gives the chat its title, and the one that suggests a skill while *Suggestions in the chat* is set to *Ask the model*, are priced like any other request and added to the chat they belong to, on the model that served them. A request the provider billed but that gave no title or suggestion counts as well.
+- **What is not included:** image generation and voice input. Batch, priority and long-context surcharges and regional prices are not modelled; the table's list price applies.
 
 The cost is not a replacement for your provider's bill. Rounding, discounts and price changes can make the actual amount differ.
 
