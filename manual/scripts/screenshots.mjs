@@ -52,6 +52,7 @@ const { default: sharp } = await import('sharp');
 const { startFakeModel } = await import('../../e2e/helpers/fake-model.mjs');
 const { launchApp, makeTempDir, poll, prepareUserData } = await import('../../e2e/helpers/app.mjs');
 const { routeOpenAiImages } = await import('../../e2e/helpers/fake-images.mjs');
+const { usageFolderNames, writeUsageHistory } = await import('../../e2e/helpers/usage-fixture.mjs');
 const { startFakeRealtime, routeRealtime, feedMicrophone, speechLikeWav } = await import('../../e2e/helpers/fake-realtime.mjs');
 
 // The registered languages — a new catalogue is shot as well without a change here.
@@ -131,6 +132,27 @@ function clipAround(page, selectors, margin = 24) {
 const WIDE_CHAT = 560;
 
 const PENDING_CARD = '#chat-messages .chat-approval-card[data-state="pending"]';
+
+/**
+ * A history to add up (#1258): chats in the demo project and in two folders
+ * next to it, spread over six weeks. The folders lie under DEMO_PARENT, so
+ * they go with it.
+ */
+async function seedUsageHistory({ userDataDir, workspace, locale }) {
+  const folders = [workspace, ...usageFolderNames(locale).map((name) => path.join(path.dirname(workspace), name))];
+  for (const folder of folders.slice(1)) await mkdir(folder, { recursive: true });
+  await writeFile(path.join(userDataDir, 'folder-history.json'), JSON.stringify({ paths: folders }), 'utf8');
+  await writeUsageHistory(userDataDir, { folders, locale });
+}
+
+/** Opens the usage report from the foot of the sidebar and waits for its rows. */
+async function openUsageReport(page) {
+  await page.click('#btn-sidebar-usage');
+  await poll(() => page.evaluate(() => document.querySelectorAll('#usage-table .usage-table__row').length > 0),
+    { what: 'usage report with its rows' });
+  await page.mouse.move(0, 0);
+  await pause(200);
+}
 
 /** Waits for the approval card the run is waiting on, and scrolls it into view. */
 async function waitForCard(page) {
@@ -1354,6 +1376,33 @@ const MOTIFS = {
       await page.mouse.move(0, 0);
       await pause(200);
       return clipAround(page, '#modal-feedback .feedback-dialog', 24);
+    },
+  },
+
+  /** The usage report (#1258): six weeks over three folders, by model. */
+  'usage-report': {
+    prepare: seedUsageHistory,
+    async setUp({ page }) {
+      await openUsageReport(page);
+      return clipAround(page, '#modal-usage .usage-dialog', 24);
+    },
+  },
+
+  /** The same report by workspace: the first folder unfolded and its chats listed. */
+  'usage-report-chats': {
+    prepare: seedUsageHistory,
+    async setUp({ page }) {
+      await openUsageReport(page);
+      await page.click('input[name="usage-group"][value="workspaces"]', { force: true });
+      await poll(() => page.evaluate(() => document.querySelector('#usage-table .usage-table__name-main')?.textContent !== 'gpt-5'),
+        { what: 'rows by workspace' });
+      await page.click('#usage-table .usage-table__row .usage-table__disclosure');
+      await page.click('#usage-table .usage-table__row .usage-table__chats');
+      await poll(() => page.evaluate(() => document.querySelectorAll('#usage-table .usage-chats__item').length > 0), { what: 'the folder\'s chats' });
+      await page.evaluate(() => document.getElementById('usage-table').scrollIntoView({ block: 'start' }));
+      await page.mouse.move(0, 0);
+      await pause(200);
+      return clipAround(page, '#modal-usage .usage-dialog', 24);
     },
   },
 

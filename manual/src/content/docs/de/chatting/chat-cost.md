@@ -17,7 +17,7 @@ Einen Chat mit mindestens einer Antwort. Einrichten musst du nichts: Die Preista
 2. Klick darauf. Es öffnet sich eine Fläche mit der Summe und, für jedes Modell des Chats, seinen Token und Kosten: Eingabe, aus dem Cache gelesen, in den Cache geschrieben und Ausgabe einschließlich Reasoning.
 3. Zum Schließen klickst du noch einmal auf die Zahl, klickst daneben oder drückst `Esc`.
 
-Der Verlauf zeigt dieselbe Schätzung neben der Uhrzeit jedes Chats, siehe [Einen früheren Chat fortsetzen](../chat-history/).
+Der Verlauf zeigt dieselbe Schätzung neben der Uhrzeit jedes Chats, siehe [Einen früheren Chat fortsetzen](../chat-history/). [seit 1.28] Um alle Chats über einen Zeitraum zusammenzuzählen, nach Modell und nach Workspace, öffne den Nutzungsbericht, siehe [Sehen, was du über alle Chats ausgegeben hast](../usage-report/).
 
 ## Was passiert
 

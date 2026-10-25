@@ -16,6 +16,7 @@ Diese Kürzel wirken auch, wenn der Fokus im Chat-Eingabefeld liegt.
 | Einen neuen Chat beginnen | `Cmd+N` | `Strg+N` | *Ablage › Neuer Chat* (macOS), *Datei › Neuer Chat* |
 | Ein Diktat starten oder stoppen [seit 1.20] | `Cmd+D` | `Strg+D` | *Bearbeiten › Spracheingabe* |
 | Die Einstellungen öffnen | `Cmd+,` | `Strg+,` | *Snotra Agent › Einstellungen…* unter macOS, sonst *Ansicht › Einstellungen…* |
+| Den Nutzungsbericht öffnen [seit 1.28] | `Cmd+Shift+K` | `Strg+Shift+K` | *Ansicht › Nutzung & Kosten…* |
 | Die Seitenleiste ein- oder ausblenden | `Cmd+B` | `Strg+B` | *Ansicht › Seitenleiste ein-/ausblenden* |
 | Versteckte Dateien im Baum zeigen oder verbergen | `Cmd+Shift+.` | `Strg+Shift+.` | *Ansicht › Versteckte Dateien anzeigen* |
 | Den Dateibaum filtern | `Cmd+P` | `Strg+P` | *Ansicht › Dateien filtern…* |

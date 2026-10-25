@@ -11,6 +11,7 @@ const PUSH = {
   UI_PREVIEW_BACK: 'ui:preview-back',
   UI_PREVIEW_FORWARD: 'ui:preview-forward',
   UI_OPEN_FEEDBACK: 'ui:open-feedback',
+  UI_OPEN_USAGE_REPORT: 'ui:open-usage-report',
 };
 
 function buildTemplate(platform, overrides = {}) {
@@ -62,7 +63,9 @@ test('macOS: Ansicht traegt die Einstellungen nicht mehr', () => {
   assert.equal(view.submenu[3].label, 'Back');
   assert.equal(view.submenu[4].label, 'Forward');
   assert.equal(view.submenu[5].label, 'Preview or Source');
-  assert.equal(view.submenu[7].role, 'reload');
+  // Usage & Cost (#1258) keeps the place the settings have elsewhere.
+  assert.equal(view.submenu[7].label, 'Usage & Cost\u2026');
+  assert.equal(view.submenu[9].role, 'reload');
 });
 
 for (const platform of ['win32', 'linux']) {
@@ -72,9 +75,9 @@ for (const platform of ['win32', 'linux']) {
 
     const view = menuNamed(template, 'View');
     const labels = view.submenu.map(labelOf);
-    assert.deepEqual(labels.slice(0, 10), [
+    assert.deepEqual(labels.slice(0, 11), [
       'Toggle Sidebar', 'Show Hidden Files', 'Filter Files\u2026', 'Back', 'Forward', 'Preview or Source',
-      'separator', 'Settings\u2026', 'separator', 'Reload',
+      'separator', 'Settings\u2026', 'Usage & Cost\u2026', 'separator', 'Reload',
     ]);
   });
 }
@@ -227,6 +230,18 @@ for (const platform of ['darwin', 'win32', 'linux']) {
     assert.equal(item.accelerator, 'CmdOrCtrl+Shift+M');
     item.click();
     assert.deepEqual(sent, [PUSH.UI_TOGGLE_MARKDOWN_SOURCE]);
+  });
+
+  test(`${platform}: View > Usage & Cost… with CmdOrCtrl+Shift+K, in both languages (#1258)`, () => {
+    const { template, sent } = buildTemplate(platform);
+    const item = menuNamed(template, 'View').submenu.find((entry) => entry.label === 'Usage & Cost\u2026');
+    assert.ok(item, 'the item exists');
+    // Not Cmd/Ctrl+Shift+U: on Linux that starts the Unicode input of GTK and IBus.
+    assert.equal(item.accelerator, 'CmdOrCtrl+Shift+K');
+    item.click();
+    assert.deepEqual(sent, [PUSH.UI_OPEN_USAGE_REPORT]);
+    const german = buildTemplate(platform, { locale: 'de' }).template;
+    assert.ok(menuNamed(german, 'Ansicht').submenu.some((entry) => entry.label === 'Nutzung & Kosten\u2026'));
   });
 
   test(`${platform}: no accelerator is assigned twice (#381)`, () => {

@@ -285,6 +285,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   describeModelPrices: (models) => ipcRenderer.invoke(REQ.MODEL_PRICES_DESCRIBE, models),
   setModelPriceOverride: (model, price) => ipcRenderer.invoke(REQ.MODEL_PRICES_SET_OVERRIDE, { model, price }),
   updateModelPrices: () => ipcRenderer.invoke(REQ.MODEL_PRICES_UPDATE),
+  // The usage report (#1258): the renderer names the days, main adds up.
+  getUsageReport: (period) => ipcRenderer.invoke(REQ.USAGE_REPORT, period),
 
   // Notices for the window (#1001): what is there already, and what comes.
   // A notice is named by its id only; main knows which file it points to.
@@ -453,6 +455,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Menu "Help > Send Feedback…" (#1045): opens the feedback form.
   onOpenFeedback: (callback) => {
     const channel = PUSH.UI_OPEN_FEEDBACK;
+    const listener = () => callback();
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
+  // Menu "View > Usage & Cost…" or Cmd/Ctrl+Shift+K (#1258): opens the report.
+  onOpenUsageReport: (callback) => {
+    const channel = PUSH.UI_OPEN_USAGE_REPORT;
     const listener = () => callback();
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);

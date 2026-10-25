@@ -620,6 +620,7 @@ listed together where they share their class.
 | `shell:openExternal`, `shell:writeClipboardText`, `help:openManual` | desktop | The desktop's browser, clipboard and help window; a client opens links itself |
 | `approvalNotification:show`, `approvalNotification:close`, `approvalNotification:open` (push) | desktop | Notifications of the desktop; the phone's push notifications are a later phase of the mobile concept |
 | `modelPrices:describe`, `setOverride`, `update` | desktop | The settings; a chat's cost reaches clients in `chat.updated` once #981 keeps it |
+| `usage:report` | desktop | The usage report (#1258) adds up the chats of every folder; a phone sees only the workspaces released to it (#1195), so a remote report would need a scope of its own |
 | `notices:list`, `notices:dismiss`, `notices:reveal`, `notices:posted`, `notices:withdrawn` (push) | desktop; `notices.list` later | They name files of the desktop's store |
 | `diagnostics:report-error`, `diagnostics:copy` | desktop | The window's own errors; a client reports its own |
 | `update:check`, `ignoreVersion`, `download`, `cancelDownload`, `discardDownload`, `install`, `update:available`, `update:progress` (push) | desktop | Updating the app is the desktop's business |

@@ -208,6 +208,12 @@ const REQUEST_CHANNELS = Object.freeze({
   MODEL_PRICES_DESCRIBE: 'modelPrices:describe',
   MODEL_PRICES_SET_OVERRIDE: 'modelPrices:setOverride',
   MODEL_PRICES_UPDATE: 'modelPrices:update',
+  /**
+   * The usage report (#1258): `({ from, to })`, days as `YYYY-MM-DD` or null
+   * for an open side, answered with a `UsageReport` built from the history's
+   * index.
+   */
+  USAGE_REPORT: 'usage:report',
 
   /** The notices posted so far (#1001), oldest first; posted ones arrive over PUSH.NOTICE_POSTED. */
   NOTICES_LIST: 'notices:list',
@@ -384,6 +390,8 @@ const PUSH_CHANNELS = Object.freeze({
   UI_OPEN_SETTINGS: 'ui:open-settings',
   /** Menu "Help > Send Feedback…" (#1045). */
   UI_OPEN_FEEDBACK: 'ui:open-feedback',
+  /** Menu "View > Usage & Cost…" or Cmd/Ctrl+Shift+K (#1258). */
+  UI_OPEN_USAGE_REPORT: 'ui:open-usage-report',
   /** Menu "File > New Chat" or Cmd/Ctrl+N (issue #381). */
   UI_NEW_CHAT: 'ui:new-chat',
   /** Menu "Edit > Voice Input" or Cmd/Ctrl+D (#859): start or stop a recording. */

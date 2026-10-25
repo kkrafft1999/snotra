@@ -75,6 +75,7 @@ const {
 } = require('./skill-suggestion');
 const { toUsageNumber, createEmptyUsage, normalizeUsage, coerceUsage, mergeUsage } = require('./usage');
 const cost = require('./cost');
+const usageReport = require('./usage-report');
 const {
   CONTEXT_BREAKDOWN_VERSION,
   CONTEXT_PART_GROUPS,
@@ -439,6 +440,12 @@ module.exports = {
   summarizeSessionCost: cost.summarizeSessionCost,
   costEntryUsd: cost.costEntryUsd,
   formatUsd: cost.formatUsd,
+  dayKeyOf: cost.dayKeyOf,
+  isDayKey: cost.isDayKey,
+  USAGE_PERIODS: usageReport.USAGE_PERIODS,
+  USAGE_CHART_STEPS: usageReport.USAGE_CHART_STEPS,
+  resolveUsagePeriod: usageReport.resolveUsagePeriod,
+  usageChartBars: usageReport.usageChartBars,
   CONTEXT_BREAKDOWN_VERSION,
   CONTEXT_PART_GROUPS,
   CONTEXT_PART_GROUP_ORDER,

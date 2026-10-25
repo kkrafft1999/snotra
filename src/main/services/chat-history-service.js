@@ -13,7 +13,7 @@
 
 const { DEFAULT_REASONING_LEVEL } = require('../../shared/contracts/reasoning');
 const { CHAT_ACTIVATION, sanitizeChatId } = require('../../shared/contracts/chat');
-const { mergeSessionCost, normalizeSessionCost } = require('../../shared/contracts/cost');
+const { datedSessionCost, dayKeyOf, mergeSessionCost, normalizeSessionCost, withCostDays } = require('../../shared/contracts/cost');
 const { CHAT_HISTORY_UNREADABLE } = require('./chat-history-store');
 
 /**
@@ -381,7 +381,9 @@ function createChatHistoryService({
   }
 
   /**
-   * Adds a turn's cost to the chat's sum (#949, #981).
+   * Adds a turn's cost to the chat's sum (#949, #981), booked on today's date
+   * for the usage report (#1258). A sum from before that has no days yet: it
+   * is pinned to the chat's last save first, so it does not move to today.
    *
    * @param {string} chatId
    * @param {unknown} cost
@@ -390,13 +392,14 @@ function createChatHistoryService({
     return /** @type {Promise<import('../../shared/contracts/cost').SessionCost|null>} */ (chatHistoryStore.withChatHistoryLock(async () => {
       const id = sanitizeChatId(chatId);
       if (!id) return null;
+      const turnCost = datedSessionCost(cost, dayKeyOf(now()));
       const meta = await chatHistoryStore.getSessionMeta(id);
       if (!meta) {
-        const pending = mergeSessionCost(pendingCost.get(id), cost);
+        const pending = mergeSessionCost(pendingCost.get(id), turnCost);
         if (pending) pendingCost.set(id, pending);
         return pending;
       }
-      const next = mergeSessionCost(meta.cost, cost);
+      const next = mergeSessionCost(withCostDays(meta.cost, dayKeyOf(meta.updatedAt)), turnCost);
       if (next) await chatHistoryStore.patchSession(id, { cost: next });
       return next;
     }));

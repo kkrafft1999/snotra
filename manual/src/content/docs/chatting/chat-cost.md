@@ -17,7 +17,7 @@ A chat with at least one answer. Nothing has to be set up: the price table ships
 2. Click it. A panel opens with the sum and, for each model the chat used, its tokens and cost: input, read from the cache, written to the cache, and output, including reasoning.
 3. To close the panel, click the figure again, click elsewhere or press `Esc`.
 
-The history shows the same estimate next to each chat's time; see [Continue an earlier chat](../chat-history/).
+The history shows the same estimate next to each chat's time; see [Continue an earlier chat](../chat-history/). [since 1.28] To add up all chats over a period, per model and per workspace, open the usage report; see [See what you spent across chats](../usage-report/).
 
 ## What happens
 

@@ -84,6 +84,7 @@ const { createExecutionToolSettings, pythonCommandForSandbox } = require('../ser
 const { createLlmPresets } = require('../services/llm-settings');
 const { createSettingsService } = require('../services/settings-service');
 const { createChatHistoryService } = require('../services/chat-history-service');
+const { createUsageReportService } = require('../services/usage-report-service');
 const { createToolPermissionService } = require('../services/tool-permission-service');
 const { createConversationService } = require('../../application/chat/conversation-service');
 const { translateMessage } = require('../../shared/i18n');
@@ -779,6 +780,11 @@ function createCore({
     chatSessionSettings,
     toolCategoryOf: (name) => toolRegistry.getDefinition(name)?.category || null,
   });
+  // Cost and tokens across the history, per model and workspace (#1258).
+  const usageReport = createUsageReportService({
+    chatHistoryStore,
+    providerName: (providerId) => providerCatalog.getProvider(providerId)?.name,
+  });
   // What a turn means for the stored chat: its cost, its name (#981).
   const conversation = createConversationService({
     engine: chatEngine,
@@ -956,6 +962,7 @@ function createCore({
     securityPageData,
     settings,
     chatHistory,
+    usageReport,
     conversation,
     toolPermissions,
     remote,

@@ -21,3 +21,18 @@ export function formatTokensShort(value) {
   if (inK < 10) return `${oneDecimalFormatter().format(inK)} K`;
   return `${tokenFormatter().format(Math.round(inK))} K`;
 }
+
+/**
+ * Like `formatTokensShort`, with millions as "6.2 M" rather than "6,200 K" —
+ * for the sums of the usage report (#1258), which add up a whole history.
+ *
+ * @param {unknown} value
+ */
+export function formatTokensCompact(value) {
+  const n = Math.max(0, Math.round(Number(value) || 0));
+  // From 999,500 on the K figure would round to "1,000 K".
+  if (n < 999_500) return formatTokensShort(n);
+  const inM = n / 1_000_000;
+  if (inM < 10) return `${oneDecimalFormatter().format(inM)} M`;
+  return `${tokenFormatter().format(Math.round(inM))} M`;
+}

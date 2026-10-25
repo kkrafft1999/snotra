@@ -75,9 +75,18 @@ const { toUsageNumber, normalizeUsage } = require('./usage');
  */
 
 /**
+ * What one provider and model spent on one local calendar day (#1258), so a
+ * period can take what was spent inside it. A further dimension — the kind of
+ * task (#1259) — would become one more field here and one more part of the key.
+ *
+ * @typedef {CostEntry & { date: string }} CostDay
+ */
+
+/**
  * @typedef {Object} SessionCost
  * @property {number} version
  * @property {CostEntry[]} models
+ * @property {CostDay[]} [days]  the same spending by day, since #1258; older chats have none
  * @property {PriceTableInfo} [priceTable]  the table the last round was priced with
  */
 
@@ -371,6 +380,39 @@ function normalizeCostEntry(raw) {
   };
 }
 
+const DAY_KEY = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+/**
+ * Whether `value` is a calendar day as `YYYY-MM-DD` — one that exists, so
+ * `2026-02-30` is not.
+ *
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+function isDayKey(value) {
+  if (typeof value !== 'string') return false;
+  const match = DAY_KEY.exec(value);
+  if (!match) return false;
+  const [year, month, day] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+/**
+ * The local calendar day of a time stamp as `YYYY-MM-DD` (#1258), or null.
+ * Local on purpose: "today" and "this month" in the report are the user's.
+ *
+ * @param {unknown} ms
+ * @returns {string|null}
+ */
+function dayKeyOf(ms) {
+  if (typeof ms !== 'number' || !Number.isFinite(ms)) return null;
+  const date = new Date(ms);
+  if (Number.isNaN(date.getTime())) return null;
+  const pad = (/** @type {number} */ n) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 /**
  * @param {unknown} raw
  * @returns {PriceTableInfo|null}
@@ -383,8 +425,81 @@ function normalizePriceTableInfo(raw) {
 }
 
 /**
+ * @param {{ providerId: string, model: string }} entry
+ */
+function modelKeyOf(entry) {
+  return `${entry.providerId}\u0000${entry.model}`;
+}
+
+/**
+ * @param {CostDay} day
+ */
+function dayEntryKeyOf(day) {
+  return `${day.date}\u0000${modelKeyOf(day)}`;
+}
+
+/**
+ * Two entries of the same provider and model, summed.
+ *
+ * @param {CostEntry} prev
+ * @param {CostEntry} entry
+ * @returns {CostEntry}
+ */
+function sumCostEntries(prev, entry) {
+  return {
+    providerId: prev.providerId,
+    model: prev.model,
+    tokens: addTokens(prev.tokens, entry.tokens),
+    usd: addUsd(prev.usd, entry.usd),
+    priceSource: entry.usd ? entry.priceSource : prev.priceSource,
+    rounds: prev.rounds + entry.rounds,
+    unpricedRounds: prev.unpricedRounds + entry.unpricedRounds,
+  };
+}
+
+/**
+ * @template {CostEntry} T
+ * @param {T[]} entries
+ * @param {(entry: T) => string} keyOf
+ * @param {(prev: T, entry: T) => T} sum
+ * @returns {T[]}
+ */
+function sumByKey(entries, keyOf, sum) {
+  /** @type {Map<string, T>} */
+  const byKey = new Map();
+  for (const entry of entries) {
+    const key = keyOf(entry);
+    const prev = byKey.get(key);
+    byKey.set(key, prev ? sum(prev, entry) : { ...entry });
+  }
+  return [...byKey.values()];
+}
+
+/**
+ * Day entries summed per day, provider and model, oldest day first.
+ *
+ * @param {CostDay[]} days
+ * @returns {CostDay[]}
+ */
+function sumCostDays(days) {
+  return sumByKey(days, dayEntryKeyOf, (prev, entry) => ({ date: prev.date, ...sumCostEntries(prev, entry) }))
+    .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+}
+
+/**
+ * @param {unknown} raw
+ * @returns {CostDay|null}
+ */
+function normalizeCostDay(raw) {
+  const entry = normalizeCostEntry(raw);
+  if (!entry || !isRecord(raw) || !isDayKey(raw.date)) return null;
+  return { date: raw.date, ...entry };
+}
+
+/**
  * The cost of a chat as it is saved: one entry per provider and model, the
- * price table the last round was priced with. null when nothing was spent.
+ * same by day since #1258, and the price table the last round was priced
+ * with. null when nothing was spent.
  *
  * @param {unknown} raw
  * @returns {SessionCost|null}
@@ -400,6 +515,15 @@ function normalizeSessionCost(raw) {
   if (models.length === 0) return null;
   /** @type {SessionCost} */
   const cost = { version: SESSION_COST_VERSION, models };
+  if (Array.isArray(raw.days)) {
+    /** @type {CostDay[]} */
+    const days = [];
+    for (const entry of raw.days) {
+      const normalized = normalizeCostDay(entry);
+      if (normalized) days.push(normalized);
+    }
+    if (days.length > 0) cost.days = sumCostDays(days);
+  }
   const priceTable = normalizePriceTableInfo(raw.priceTable);
   if (priceTable) cost.priceTable = priceTable;
   return cost;
@@ -408,7 +532,8 @@ function normalizeSessionCost(raw) {
 /**
  * Adds the cost of a turn (`{ models, priceTable }`, as `chat:send` returns
  * it) to the cost of the chat so far. Entries of the same provider and model
- * are summed — a switch of model within the chat keeps both.
+ * are summed — a switch of model within the chat keeps both. Day entries are
+ * summed the same way, per day.
  *
  * @param {unknown} base
  * @param {unknown} addition
@@ -419,30 +544,112 @@ function mergeSessionCost(base, addition) {
   const next = normalizeSessionCost(addition);
   if (!next) return current;
   if (!current) return next;
-  const byKey = new Map(current.models.map((entry) => [`${entry.providerId}\u0000${entry.model}`, { ...entry }]));
-  for (const entry of next.models) {
-    const key = `${entry.providerId}\u0000${entry.model}`;
-    const prev = byKey.get(key);
-    if (!prev) {
-      byKey.set(key, { ...entry });
-      continue;
-    }
-    const usd = addUsd(prev.usd, entry.usd);
-    byKey.set(key, {
-      providerId: prev.providerId,
-      model: prev.model,
-      tokens: addTokens(prev.tokens, entry.tokens),
-      usd,
-      priceSource: entry.usd ? entry.priceSource : prev.priceSource,
-      rounds: prev.rounds + entry.rounds,
-      unpricedRounds: prev.unpricedRounds + entry.unpricedRounds,
-    });
-  }
   /** @type {SessionCost} */
-  const merged = { version: SESSION_COST_VERSION, models: [...byKey.values()] };
+  const merged = {
+    version: SESSION_COST_VERSION,
+    models: sumByKey([...current.models, ...next.models], modelKeyOf, sumCostEntries),
+  };
+  const days = sumCostDays([...(current.days || []), ...(next.days || [])]);
+  if (days.length > 0) merged.days = days;
   const priceTable = next.priceTable || current.priceTable;
   if (priceTable) merged.priceTable = priceTable;
   return merged;
+}
+
+/**
+ * A turn's cost booked on `date` (#1258): every model entry once more as a
+ * day entry. A turn counts on the day it ended.
+ *
+ * @param {unknown} raw
+ * @param {string|null} date
+ * @returns {SessionCost|null}
+ */
+function datedSessionCost(raw, date) {
+  const cost = normalizeSessionCost(raw);
+  if (!cost || !isDayKey(date)) return cost;
+  /** @type {SessionCost} */
+  const dated = { version: cost.version, models: cost.models, days: cost.models.map((entry) => ({ date, ...entry })) };
+  if (cost.priceTable) dated.priceTable = cost.priceTable;
+  return dated;
+}
+
+/**
+ * What `total` holds beyond `part`, both of one provider and model; null when nothing.
+ *
+ * @param {CostEntry} total
+ * @param {CostEntry|undefined} part
+ * @returns {CostEntry|null}
+ */
+function costEntryRemainder(total, part) {
+  if (!part) return { ...total, tokens: { ...total.tokens }, usd: total.usd ? { ...total.usd } : null };
+  const tokens = emptyTokens();
+  for (const key of TOKEN_KEYS) tokens[key] = Math.max(0, total.tokens[key] - part.tokens[key]);
+  const rounds = Math.max(0, total.rounds - part.rounds);
+  if (rounds === 0 && TOKEN_KEYS.every((key) => tokens[key] === 0)) return null;
+  const pricedRounds = Math.max(0, (total.rounds - total.unpricedRounds) - (part.rounds - part.unpricedRounds));
+  /** @type {CostUsd|null} */
+  let usd = null;
+  if (total.usd && pricedRounds > 0) {
+    usd = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
+    for (const kind of COST_TOKEN_KINDS) usd[kind] = Math.max(0, total.usd[kind] - (part.usd?.[kind] || 0));
+  }
+  const counted = Math.max(1, rounds);
+  return {
+    providerId: total.providerId,
+    model: total.model,
+    tokens,
+    usd,
+    priceSource: usd ? total.priceSource : null,
+    rounds: counted,
+    unpricedRounds: Math.min(counted, Math.max(0, counted - pricedRounds)),
+  };
+}
+
+/**
+ * Every day entry of a chat's cost, covering all of it (#1258). Whatever the
+ * day entries do not account for — a chat saved before #1258, or one an older
+ * release went on with — counts on `fallbackDate`, the chat's last save. []
+ * when nothing was spent.
+ *
+ * @param {unknown} raw
+ * @param {string|null} fallbackDate
+ * @returns {CostDay[]}
+ */
+function costDaysOf(raw, fallbackDate) {
+  const cost = normalizeSessionCost(raw);
+  if (!cost) return [];
+  const days = cost.days || [];
+  if (!isDayKey(fallbackDate)) return days;
+  const covered = new Map(sumByKey(days.map(({ date: _date, ...entry }) => entry), modelKeyOf, sumCostEntries)
+    .map((entry) => [modelKeyOf(entry), entry]));
+  /** @type {CostDay[]} */
+  const rest = [];
+  for (const entry of cost.models) {
+    const remainder = costEntryRemainder(entry, covered.get(modelKeyOf(entry)));
+    if (remainder) rest.push({ date: fallbackDate, ...remainder });
+  }
+  return rest.length > 0 ? sumCostDays([...days, ...rest]) : days;
+}
+
+/**
+ * A chat's cost with day entries for all of it: what had none is pinned to
+ * `fallbackDate`. Done before a turn is added, so that the total of a chat
+ * from before #1258 stays on the day it was last used rather than moving to
+ * the day of the new turn.
+ *
+ * @param {unknown} raw
+ * @param {string|null} fallbackDate
+ * @returns {SessionCost|null}
+ */
+function withCostDays(raw, fallbackDate) {
+  const cost = normalizeSessionCost(raw);
+  if (!cost) return null;
+  const days = costDaysOf(cost, fallbackDate);
+  if (days.length === 0) return cost;
+  /** @type {SessionCost} */
+  const out = { version: cost.version, models: cost.models, days };
+  if (cost.priceTable) out.priceTable = cost.priceTable;
+  return out;
 }
 
 /**
@@ -516,6 +723,11 @@ module.exports = {
   normalizePriceTableInfo,
   normalizeSessionCost,
   mergeSessionCost,
+  isDayKey,
+  dayKeyOf,
+  datedSessionCost,
+  costDaysOf,
+  withCostDays,
   summarizeSessionCost,
   costEntryUsd,
   formatUsd,
