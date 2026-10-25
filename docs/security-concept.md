@@ -878,7 +878,7 @@ replaced by an operating system boundary:
   sandbox cards of #792 and #946 keep a place or a host, not a call — see the
   revisions below). In "auto" a run
   executes without a card, but isolated. Local MCP servers are processes too and
-  are not covered (#62).
+  are not covered (#62); the plan for them is in section 11 (#992).
 
 ### Revision: a per-workspace opt-out (#357)
 
@@ -1546,7 +1546,7 @@ not a claim that the product modes are identical.
 
 | Decision | Ownership / the conservative interim state |
 | --- | --- |
-| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio or, since #341, over Streamable HTTP; every MCP tool carries `execute` **and** `external` whatever the transport, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. **Endpoint changes settled in #341:** saving a server with another address or another transport switches it off and forgets its remembered tool catalogue, so nothing accepted for one endpoint carries over to another; it connects again only after the user switched it on (a connection test works on a switched-off server and closes it right after). A remote address needs `https` except on loopback; private network addresses are allowed, because the user enters the address deliberately — unlike `fetch_url`, where the model picks the target. Credentials in the URL are refused; headers are stored like environment variables (secret by default, `{ enc }` via `safeStorage`, not stored at all without encryption), count as own secrets and are masked in every status. They go to the configured origin only: redirects are followed by hand and only on the same origin. OAuth is not supported. Still open: isolation of local server processes, which run with the user's rights (see #329 for the built-in execution tools); since #1104 a new or changed command is stored only after a native confirmation (section 5). |
+| MCP classification, trustworthy server metadata, endpoint changes and isolation of local servers | Classification settled in #62 and implemented: MCP servers are connected over stdio or, since #341, over Streamable HTTP; every MCP tool carries `execute` **and** `external` whatever the transport, server annotations may only tighten (`readOnlyHint` is ignored), and every call is approved individually — never for a session or a whole server. **Endpoint changes settled in #341:** saving a server with another address or another transport switches it off and forgets its remembered tool catalogue, so nothing accepted for one endpoint carries over to another; it connects again only after the user switched it on (a connection test works on a switched-off server and closes it right after). A remote address needs `https` except on loopback; private network addresses are allowed, because the user enters the address deliberately — unlike `fetch_url`, where the model picks the target. Credentials in the URL are refused; headers are stored like environment variables (secret by default, `{ enc }` via `safeStorage`, not stored at all without encryption), count as own secrets and are masked in every status. They go to the configured origin only: redirects are followed by hand and only on the same origin. OAuth is not supported. Still open: isolation of local server processes, which run with the user's full rights, outside the sandbox, on every platform — the settings page and the manual say so since #1249, and since #1104 a new or changed command is stored only after a native confirmation (section 5). **Planned in #992**, see *Plan: local MCP servers in the sandbox* below: a network path of its own per server (spike #1271), then the sandbox with a per-server opt-out on macOS and Linux (#1272). |
 | Web search providers, permitted targets and redirects, and the amount of data | To be decided in #63. The request including the search text is external; search responses are untrusted. Provider keys stay in the adapter. |
 | The exact content patterns, false positives and the limits with large files | To be versioned and tested in #66; the minimum groups from section 4 are mandatory. No broad detection of personal data or entropy in the first step. |
 | A separate persistent audit journal with retention and export | An extension of #66/#67 where needed; sanitised decisions in the existing chat history for now. No unlimited full-text logging. |
@@ -1577,3 +1577,98 @@ well.
 The concept and the sharpened issues are the handover for the next phase of
 work. #62 and #63 were blocked by the finished, tested results of #66 **and**
 #67; a concept alone enabled no external tools. All four are done.
+
+### Plan: local MCP servers in the sandbox (#992)
+
+The state on 2026-10-25: a local MCP server is started by
+[`mcp-stdio-transport.js`](../src/main/services/mcp-stdio-transport.js) as a
+child process with the user's full rights, on every platform. *Settings › Tools
+› Setup* and the manual say so (#1249). A remote server starts no process and
+is not part of this plan. Nothing below is built yet; it is the design the
+follow-ups work from.
+
+- **What carries over from #329 unchanged.** The same runtime, the same
+  self-test and detection (`detect()`, `describe()`), the same denied read
+  locations (`sensitiveReadPaths`) and the same fallback: where there is no
+  sandbox, a server runs as it does today — visibly. The transport stays in
+  charge of its process — process group, kill of the tree, stderr — and the
+  sandbox only rewrites what is spawned: `/bin/sh -c <wrapped>` instead of
+  command and arguments, the argument vector quoted with `quoteArgv`, as
+  `prepare()` hands it to a run.
+- **What does not carry over: the domain gate.** `prepare()` takes a slot of the
+  process-wide domain gate and holds it until `release()`, because the
+  runtime's proxy checks one process-wide allow list before it asks anyone
+  (`filterNetworkRequest`): a run is kept to its own domains only because
+  nothing with a different set runs beside it. A run lasts seconds; a server
+  lives as long as it is switched on and in use. Holding the gate would make
+  every `shell_execute` and `run_python` with another set wait for the server
+  to exit — in practice for good. Sharing the list instead would let the server
+  reach whatever the current run's card allowed. So a sandboxed server must not
+  use the shared proxy at all.
+- **Not the proxy credential either.** `encodedCommand`, the proxy user name the
+  ask callback of #792 reads, is derived from the command text and set in the
+  process's own environment, so a process can name another one's. It
+  attributes a connection to a card; it does not authorise one.
+- **A network path of its own.** Each sandboxed server gets a filtering proxy of
+  its own in main, whose allow list is that server's list and nothing else —
+  on its own loopback port on macOS, where the Seatbelt profile then names that
+  port instead of the shared one, and on its own Unix socket on Linux, which the
+  socat bridge inside `bwrap --unshare-net` connects to. A server with an empty
+  list gets no endpoint at all. The runtime starts one proxy per process and
+  takes its ports at `initialize()`, so a per-wrap endpoint needs a change to
+  the runtime — upstream if possible, otherwise a further patch in
+  [`patch-sandbox-runtime.js`](../scripts/patch-sandbox-runtime.js). Whether it
+  can be done cleanly on both systems, and whether `npx -y` and `uvx` servers
+  start under it, is the first step (**#1271**), before anything else is built.
+- **What a server may reach.** The registry its launcher needs (`npx` → npm,
+  `uvx` → PyPI), derived by
+  [`sandbox-domains.js`](../src/shared/runtime/sandbox-domains.js) as for a
+  detected package install — it knows `npx` today, `uvx` is to be added — plus the hosts the user enters in the server's
+  dialog — `api.github.com` for the GitHub server, say. There are no live asks:
+  a server runs without a card, so a host not on its list is refused and named
+  in the server's status, with the way to add it. The user widens the list, not
+  the model.
+- **What a server may write.** Servers are not bound to a workspace, so a
+  server has no workspace to write to. It gets a folder of its own for state and
+  caches, outside `userData` (which the sandbox keeps unreadable); `TMPDIR`,
+  `npm_config_cache`, `UV_CACHE_DIR` and `XDG_CACHE_HOME` point there, so
+  `npx -y` finds its package again on the next start. It reads what a run
+  reads. A server that needs more — a filesystem server for a project folder, a
+  CLI's token folder the sandbox denies — gets it as an extra folder in its
+  dialog, checked as a program allowance's folders are (#408): it must exist,
+  and it must not be the root, the home folder or above it, Snotra's storage or
+  a denied location.
+- **The per-server opt-out.** A switch *Run in the sandbox* in the dialog, on
+  for a new server. Switching it off, adding a host and adding a folder are
+  loosening: they go through the user-confirmation port (section 5), with a
+  prompt that names the server and its command line, and become part of the
+  launch that the receipt of #1104 binds — so the MCP store refuses them without
+  a receipt for that server and that launch, and a changed command asks again.
+  Switching the sandbox back on and removing a host or a folder ask nothing.
+- **Containers.** A server started through `docker` or `podman` talks to a
+  daemon outside the sandbox; the container is not inside it, and the sandbox
+  could only block the socket. Such a launch is recognised and shown as not
+  isolated by Snotra, with that reason — the container's mounts decide what it
+  reaches.
+- **Visible.** Each server row says *Isolated*, or *Not isolated* with the
+  reason: switched off for this server, no sandbox on this system, a container.
+  That puts the warning colour of #396 on one more place, which the design
+  rules (`ui-design-tokens.md`) list one by one, so the implementation shows a
+  mockup first. The notice on *Settings › Tools › Setup* then says what applies
+  instead of "outside the sandbox". What the sandbox refused — a host, a
+  write — goes into the server's status next to its stderr, from the same
+  violation collector as a run's.
+- **Existing servers (recommendation, to be decided in #1272).** On the update
+  that brings it, every local server moves into the sandbox and keeps its tool
+  catalogue; one that then fails shows the refusal and the opt-out. Keeping the
+  existing ones outside until the user switches would leave exactly the servers
+  in use unprotected.
+- **Windows and restricted user namespaces.** As in #329: not isolated, visibly.
+  Nothing here is MCP-specific.
+- **The remaining risk once built.** As for a run: a server reads everything
+  outside the denied locations and can send it to a host on its list — an
+  allowed host is a channel. Its responses stay untrusted content (section 5),
+  and every call of its tools stays on a card (section 6).
+
+The order: the spike **#1271**, then the implementation **#1272**, which turns
+this plan into a revision in section 9.
