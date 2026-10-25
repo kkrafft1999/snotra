@@ -72,7 +72,7 @@ const tools = {
   execute: async () => ({ output: JSON.stringify({ entries: ['README.md'] }), progressEvents: [] }),
 };
 
-async function setup(t, rounds, { titled = null } = {}) {
+async function setup(t, rounds, { titled = null, now } = {}) {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-turn-'));
   let conversation = null;
   t.after(async () => {
@@ -111,6 +111,7 @@ async function setup(t, rounds, { titled = null } = {}) {
     engine,
     history: createChatHistoryAdapter(chatHistory),
     describeError: (error) => `Error: ${typeof error === 'string' ? error : error?.key}`,
+    ...(now ? { now } : {}),
   });
   const events = [];
   const turn = (chatId, message, extra = {}) => conversation.runTurn({
@@ -361,4 +362,78 @@ test('stopChat stops the turn of a chat whichever front end started it (#1194)',
   assert.equal(result.cancelled, true);
   assert.equal(conversation.stopChat('remote-stop'), false, 'it ended');
   assert.deepEqual((await chatHistory.load('remote-stop')).messages.map((m) => m.content), ['Go', 'Partly']);
+});
+
+// How long a turn took (#1254): wall-clock time from the question to the end
+// of the run, on the turn's last message and in the reply.
+
+/** A clock the model moves on: each round takes `stepMs`. */
+function fakeClock(start = 50_000) {
+  const clock = { at: start, now: () => clock.at };
+  return clock;
+}
+
+test('an answered turn carries how long it took, in the reply and in the stored chat (#1254)', async (t) => {
+  const clock = fakeClock();
+  const { chatHistory, turn } = await setup(t, [async () => { clock.at += 4_200; return text('Done.'); }, text('Title')], { now: clock.now });
+  const result = await turn('timed', { content: 'Hi' });
+  assert.equal(result.durationMs, 4_200);
+  const [question, answer] = (await chatHistory.load('timed')).messages;
+  assert.equal(question.durationMs, undefined, 'the question has no duration');
+  assert.equal(answer.durationMs, 4_200);
+  assert.equal(answer.stopped, undefined);
+});
+
+test('a stopped turn says so, with the time until the stop took effect (#1254)', async (t) => {
+  const clock = fakeClock();
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const model = modelReached();
+  const { chatHistory, conversation, turn } = await setup(t, [async (params) => {
+    params.callbacks.onTextDelta('Half');
+    model.reached();
+    await gate;
+    return text('never seen');
+  }], { now: clock.now });
+  const running = turn('stopped-timed', { content: 'Tell me' });
+  await model.promise;
+  clock.at += 12_000;
+  conversation.stop(7, 'stopped-timed');
+  release();
+  const result = await running;
+  assert.equal(result.durationMs, 12_000);
+  const answer = (await chatHistory.load('stopped-timed')).messages[1];
+  assert.equal(answer.stopped, true);
+  assert.equal(answer.durationMs, 12_000);
+});
+
+test('a failed turn puts its duration on the error below it (#1254)', async (t) => {
+  const clock = fakeClock();
+  const { chatHistory, turn } = await setup(t, [async () => { clock.at += 3_100; return { error: 'boom', code: 'api' }; }], { now: clock.now });
+  const result = await turn('failed-timed', { content: 'Hi' });
+  assert.equal(result.durationMs, 3_100);
+  const messages = (await chatHistory.load('failed-timed')).messages;
+  assert.equal(messages.length, 2);
+  assert.equal(messages[1].isError, true);
+  assert.equal(messages[1].durationMs, 3_100);
+});
+
+test('a turn cut off mid-run has no duration: only a settled turn gets one (#1254)', async (t) => {
+  const clock = fakeClock();
+  let release;
+  const gate = new Promise((resolve) => { release = resolve; });
+  const model = modelReached();
+  const { chatHistory, conversation, turn } = await setup(t, [async (params) => {
+    params.callbacks.onTextDelta('Partial');
+    model.reached();
+    await gate;
+    return text('never seen');
+  }], { now: clock.now });
+  const running = turn('cut-timed', { content: 'Hi' });
+  await model.promise;
+  conversation.abandon(7);
+  release();
+  await running;
+  const answer = (await chatHistory.load('cut-timed')).messages[1];
+  assert.equal(answer?.durationMs, undefined);
 });

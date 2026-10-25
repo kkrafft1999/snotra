@@ -516,3 +516,31 @@ test('a step whose card the phone answered keeps who answered it (#1197)', () =>
   assert.equal(answer.toolTrace[2].answeredBy.client.length, 64, 'the name is bounded');
   assert.deepEqual(normalizeLoadedMessages([answer])[0].toolTrace[0].answeredBy, { kind: 'relay', client: 'iPhone' });
 });
+
+test('a turn\'s duration and its stop are stored and loaded; anything else in their place is dropped (#1254)', () => {
+  const stored = sanitizeChatMessagesForStore([
+    { role: 'user', content: 'Hi', durationMs: 5 },
+    { role: 'assistant', content: 'One', durationMs: 4200.4 },
+    { role: 'assistant', content: 'Two', durationMs: 900, stopped: true },
+    { role: 'assistant', content: 'Three', durationMs: -1, stopped: 'yes' },
+    { role: 'assistant', content: 'Four', durationMs: '12' },
+    { role: 'assistant', content: 'Five', durationMs: Number.NaN },
+  ]);
+  assert.deepEqual(stored.map((m) => [m.content, m.durationMs, m.stopped]), [
+    ['Hi', undefined, undefined],
+    ['One', 4200, undefined],
+    ['Two', 900, true],
+    ['Three', undefined, undefined],
+    ['Four', undefined, undefined],
+    ['Five', undefined, undefined],
+  ]);
+  const loaded = normalizeLoadedMessages([...stored, { role: 'assistant', content: 'Before #1254' }]);
+  assert.deepEqual(loaded.slice(1).map((m) => [m.content, m.durationMs, m.stopped]), [
+    ['One', 4200, undefined],
+    ['Two', 900, true],
+    ['Three', undefined, undefined],
+    ['Four', undefined, undefined],
+    ['Five', undefined, undefined],
+    ['Before #1254', undefined, undefined],
+  ]);
+});

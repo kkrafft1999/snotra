@@ -19,6 +19,8 @@
  * @property {boolean} streaming
  * @property {boolean} [toolRunning]  a step has started and not finished yet
  * @property {boolean} [isError]
+ * @property {number} [durationMs]  how long the turn took, on its last message (#1254)
+ * @property {true} [stopped]  the turn was stopped or cancelled before it answered (#1254)
  *
  * @typedef {Record<string, unknown> & { role: string, content?: unknown }} ChatMessage
  */
@@ -109,13 +111,33 @@ function finish(answer) {
  *   #538), and the error follows as a message of its own.
  * - Answered: the engine's text and steps.
  *
+ * The turn's last message — the answer, or the error below it — carries how
+ * long the turn took (#1254); a stopped or cancelled answer says so.
+ *
  * @param {ChatMessage[]} history
  * @param {TurnAnswer} answer
  * @param {any} result  the engine's result
- * @param {{ describeError: (error: unknown) => string, stopped?: boolean }} options
+ * @param {{ describeError: (error: unknown) => string, stopped?: boolean, durationMs?: number }} options
  * @returns {ChatMessage[]}
  */
-function settleTurn(history, answer, result, { describeError, stopped = false }) {
+function settleTurn(history, answer, result, { describeError, stopped = false, durationMs }) {
+  const settled = settleMessages(history, answer, result, { describeError, stopped });
+  const last = settled[settled.length - 1];
+  if (last === answer && (stopped || result?.cancelled)) answer.stopped = true;
+  if (settled.length > history.length && Number.isFinite(durationMs) && /** @type {number} */ (durationMs) >= 0) {
+    last.durationMs = Math.round(/** @type {number} */ (durationMs));
+  }
+  return settled;
+}
+
+/**
+ * @param {ChatMessage[]} history
+ * @param {TurnAnswer} answer
+ * @param {any} result
+ * @param {{ describeError: (error: unknown) => string, stopped: boolean }} options
+ * @returns {ChatMessage[]}
+ */
+function settleMessages(history, answer, result, { describeError, stopped }) {
   const trace = (/** @type {unknown} */ list) => (Array.isArray(list)
     ? list.map((entry) => (entry && typeof entry === 'object' ? traceEntryOf(/** @type {Record<string, unknown>} */ (entry)) : entry))
     : answer.toolTrace);

@@ -85,6 +85,8 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  * @property {true} [interrupted]  the turn was cut off before it was finished (#979)
  * @property {StoredTraceEntry[]} [toolTrace]
  * @property {string} [reasoningText]
+ * @property {number} [durationMs]  how long the turn took, on its last message (#1254)
+ * @property {true} [stopped]  the turn was stopped before it answered (#1254)
  */
 
 /** @typedef {StoredUserMessage | StoredAssistantMessage} StoredMessage */
@@ -100,6 +102,8 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  * @property {false} streaming
  * @property {boolean} isError
  * @property {true} [interrupted]
+ * @property {number} [durationMs]
+ * @property {true} [stopped]
  */
 
 /** @typedef {StoredUserMessage | LoadedAssistantMessage} LoadedMessage */
@@ -411,6 +415,20 @@ function sanitizeToolTraceForStore(raw) {
 }
 
 /**
+ * How long a turn took and whether it was stopped (#1254). A turn cut off
+ * mid-run never got its duration; a chat from before has none and loads as it
+ * was.
+ *
+ * @param {Record<string, unknown>} from
+ * @param {{ durationMs?: number, stopped?: true }} row
+ */
+function copyTurnDuration(from, row) {
+  const ms = from.durationMs;
+  if (typeof ms === 'number' && Number.isFinite(ms) && ms >= 0) row.durationMs = Math.round(ms);
+  if (from.stopped === true) row.stopped = true;
+}
+
+/**
  * @param {StoredAssistantMessage} row
  */
 function isStoredAssistantMessageWorthKeeping(row) {
@@ -478,6 +496,7 @@ function sanitizeChatMessagesForStore(raw) {
     if (typeof m.reasoningText === 'string' && m.reasoningText.trim()) {
       row.reasoningText = m.reasoningText.trim();
     }
+    copyTurnDuration(m, row);
     if (!isStoredAssistantMessageWorthKeeping(row)) continue;
     out.push(row);
   }
@@ -539,6 +558,7 @@ function normalizeLoadedMessages(raw, toolCategoryOf = null) {
         isError: Boolean(m.isError),
       };
       if (m.interrupted === true) row.interrupted = true;
+      copyTurnDuration(m, row);
       return row;
     })
     .filter(isLoadedMessageWorthKeeping);

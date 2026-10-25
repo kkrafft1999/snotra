@@ -36,6 +36,7 @@ import {
   syncChangesStrip,
 } from '../chat/toolLogView.js';
 import { buildSentFromLine, messageOriginOf } from '../chat/messageOrigin.js';
+import { buildTurnDurationLine, turnDurationOf } from '../chat/turnDuration.js';
 // What a writing call changed (#348): summaries from main, diffs on demand.
 import { changedFilesOf, changesAreLive, markChangesLive, normalizeChanges } from '../chat/fileChanges.js';
 import { syncSandboxBlocked } from '../chat/sandboxBlocked.js';
@@ -454,7 +455,7 @@ export function initChatStream({
   }
 
   /** An error bubble, the same from a full redraw and from a live settle (#591). */
-  function buildErrorMessage(text) {
+  function buildErrorMessage(text, message = null) {
     const li = document.createElement('li');
     li.classList.add('chat-msg', 'assistant', 'error');
     const prefix = document.createElement('span');
@@ -465,7 +466,14 @@ export function initChatStream({
     textEl.className = 'chat-msg-text';
     textEl.textContent = text || '';
     li.appendChild(textEl);
+    appendTurnDuration(li, message);
     return li;
+  }
+
+  /** How long the turn took, under its last message (#1254). */
+  function appendTurnDuration(li, message) {
+    const line = message ? buildTurnDurationLine(message) : null;
+    if (line) li.appendChild(line);
   }
 
   /**
@@ -769,7 +777,7 @@ export function initChatStream({
     chatMessagesEl.innerHTML = '';
     for (const m of appStore.chatMessages) {
       if (m.isError) {
-        chatMessagesEl.appendChild(buildErrorMessage(m.content));
+        chatMessagesEl.appendChild(buildErrorMessage(m.content, m));
         continue;
       }
       const li = document.createElement('li');
@@ -844,6 +852,7 @@ export function initChatStream({
           // Karten des abgeschlossenen Zuges (Entscheidung, Verfall, Abbruch)
           // bleiben an ihrer Nachricht, bis der Chat gewechselt wird.
           approvalCards?.mount(li, m);
+          appendTurnDuration(li, m);
         }
       } else {
         if (Array.isArray(m.attachments) && m.attachments.length > 0) {
@@ -1781,9 +1790,18 @@ export function initChatStream({
       delete last.runningCallIndex;
       delete last.permissionNote;
     };
+    // How long the turn took (#1254), measured by main; the turn's last
+    // message carries it.
+    const durationMs = turnDurationOf(result);
+    const timed = (message) => {
+      if (durationMs !== null) message.durationMs = durationMs;
+      return message;
+    };
     if (run.aborted || result?.cancelled) {
       if (!streaming) return { kind: 'render' };
       finish();
+      last.stopped = true;
+      timed(last);
       if (typeof result?.content === 'string' && result.content.length > 0) last.content = result.content;
       last.toolTrace = Array.isArray(result?.toolTrace)
         ? result.toolTrace.map(toolTraceEntryForStore)
@@ -1815,11 +1833,13 @@ export function initChatStream({
           messages.splice(messages.indexOf(last), 1);
         }
       }
-      messages.push({ role: 'assistant', content: errorText, isError: true });
-      return { kind, errorText };
+      const errorMessage = timed({ role: 'assistant', content: errorText, isError: true });
+      messages.push(errorMessage);
+      return { kind, errorText, errorMessage };
     }
     if (!streaming) return { kind: 'render' };
     finish();
+    timed(last);
     last.content = result?.content ?? '';
     last.toolTrace = Array.isArray(result?.toolTrace)
       ? result.toolTrace.map(toolTraceEntryForStore)
@@ -1832,6 +1852,7 @@ export function initChatStream({
     const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
     if (outcome.kind === 'finalize' && bubble) {
       finalizeStreamingAssistantBubble(bubble, run.assistantMessage);
+      appendTurnDuration(bubble, run.assistantMessage);
       syncChatBusyState();
       followNewOutput();
       announce(bubble.querySelector('.chat-md')?.textContent);
@@ -1839,7 +1860,7 @@ export function initChatStream({
     }
     if (outcome.kind === 'finalize-with-error' && bubble) {
       finalizeStreamingAssistantBubble(bubble, run.assistantMessage);
-      chatMessagesEl.appendChild(buildErrorMessage(outcome.errorText));
+      chatMessagesEl.appendChild(buildErrorMessage(outcome.errorText, outcome.errorMessage));
       syncChatBusyState();
       followNewOutput();
       announceError(outcome.errorText);

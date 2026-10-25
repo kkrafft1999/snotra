@@ -759,3 +759,83 @@ test('a finished answer is rendered once and copied on the next redraw (#998)', 
   await until(() => after[1].querySelector('img')?.getAttribute('src'), 'the image in the copy');
   assert.equal(after[1].innerHTML, before[1].innerHTML);
 });
+
+// --- #1254 ----------------------------------------------------------------------
+
+const durationLine = (li) => li?.querySelector('.chat-turn-duration')?.textContent ?? null;
+
+test('a settled answer shows how long it took, in the interface language (#1254)', async (t) => {
+  const env = await mount();
+  t.after(env.cleanup);
+  const { list, sends, ask, setLocale } = env;
+  ask('Hello');
+  await flush();
+  sends[0].resolve({ content: 'Hi.', toolTrace: [], durationMs: 4_200 });
+  await until(() => /Hi\./.test(list.textContent), 'the answer');
+  const answer = list.querySelector('.chat-msg.assistant:last-of-type');
+  assert.equal(durationLine(answer), 'Answered in 4.2 sec');
+  const line = answer.querySelector('.chat-turn-duration');
+  assert.equal(line, answer.lastElementChild, 'the line is the last thing in the message');
+  assert.match(line.title, /including any wait for your approval/);
+  assert.equal(line.querySelector('svg').getAttribute('aria-hidden'), 'true');
+
+  setLocale('de', { force: true });
+  assert.equal(durationLine(list.querySelector('.chat-msg.assistant:last-of-type')), 'Antwort in 4,2 Sek.');
+});
+
+test('a stopped answer and a failed turn say how long they ran (#1254)', async (t) => {
+  const env = await mount();
+  t.after(env.cleanup);
+  const { list, sends, ask } = env;
+  ask('Tell me');
+  await flush();
+  sends[0].resolve({ cancelled: true, content: 'Half', toolTrace: [], durationMs: 12_000 });
+  await until(() => /Half/.test(list.textContent), 'the stopped answer');
+  assert.equal(durationLine(list.querySelector('.chat-msg.assistant:last-of-type')), 'Stopped after 12 sec');
+
+  ask('Again');
+  await flush();
+  sends[1].resolve({ error: 'Out of tokens.', durationMs: 3_100 });
+  await until(() => list.querySelector('.chat-msg.error'), 'the error');
+  const error = list.querySelector('.chat-msg.error');
+  assert.equal(durationLine(error), 'Failed after 3.1 sec');
+  assert.equal(list.querySelectorAll('.chat-turn-duration').length, 2, 'one line per turn');
+});
+
+test('a reply without a duration shows no line (#1254)', async (t) => {
+  const env = await mount();
+  t.after(env.cleanup);
+  const { list, sends, ask } = env;
+  ask('Hello');
+  await flush();
+  sends[0].resolve({ content: 'Hi.', toolTrace: [] });
+  await until(() => /Hi\./.test(list.textContent), 'the answer');
+  assert.equal(list.querySelector('.chat-turn-duration'), null);
+});
+
+test('a chat opened again shows the stored durations; one from before shows none (#1254)', async (t) => {
+  const assistant = (content, extra = {}) => ({ role: 'assistant', content, toolTrace: [], streaming: false, isError: false, reasoningText: '', ...extra });
+  const history = {
+    sessions: [{
+      id: 'chat-a',
+      workspaceRoot: '/ws',
+      messages: [
+        { role: 'user', content: 'One' },
+        assistant('Old answer'),
+        { role: 'user', content: 'Two' },
+        assistant('Long answer', { durationMs: 185_000 }),
+        { role: 'user', content: 'Three' },
+        assistant('Very long answer', { durationMs: 3_730_000 }),
+        { role: 'user', content: 'Four' },
+        { role: 'assistant', content: 'Boom', isError: true, durationMs: 59_600 },
+      ],
+    }],
+    activeChatId: 'chat-a',
+  };
+  const env = await mount({ history });
+  t.after(env.cleanup);
+  const { chat, list } = env;
+  await chat.loadChatForWorkspace('/ws');
+  const lines = [...list.querySelectorAll('.chat-msg.assistant')].map(durationLine);
+  assert.deepEqual(lines, [null, 'Answered in 3:05 min', 'Answered in 1:02:10 h', 'Failed after 1:00 min']);
+});

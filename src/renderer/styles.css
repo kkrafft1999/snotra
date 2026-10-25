@@ -3859,6 +3859,36 @@ button.chat-image-open:hover {
   color: var(--text-primary);
 }
 
+/* How long the turn took (#1254): a quiet line under its last message,
+ * metadata like the phone line under a question. Grey and small; under an
+ * error it takes the stronger grey, the tinted ground costs contrast. */
+.chat-turn-duration {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 6px 0 0;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.5;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chat-msg.error .chat-turn-duration {
+  margin-top: 4px;
+  color: var(--text-muted-strong);
+}
+
+.chat-turn-duration-icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .chat-msg-error-prefix {
   margin-right: 6px;
   font-weight: var(--ds-font-weight-bold);
