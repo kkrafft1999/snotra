@@ -258,8 +258,23 @@ function createRemoteDispatcher({
     return { chatId, root, messageCount: chat ? chat.messages.length : 0 };
   }
 
+  /**
+   * A chat whose configuration the connection may read: a visible one, or one
+   * `chat.new` made under a released workspace before its first question is
+   * saved — it describes what the chat would start with.
+   * @param {unknown} rawId
+   * @returns {Promise<{ chatId: string, root: string }>}
+   */
+  async function describableChat(rawId) {
+    const chatId = chatIdOf(rawId);
+    const [chat, { byRoot }] = await Promise.all([desktop.loadChat(chatId), visible()]);
+    const root = chat ? chat.root : newChats.get(chatId) ?? null;
+    if (root === null || !byRoot.has(root)) throw new Refusal('not-found');
+    return { chatId, root };
+  }
+
   /** @param {string} chatId */
-  const isBusy = (chatId) => startedChats.has(chatId) || desktop.runningChats().has(chatId) || desktop.awaitingApproval().has(chatId);
+  const isBusy =(chatId) => startedChats.has(chatId) || desktop.runningChats().has(chatId) || desktop.awaitingApproval().has(chatId);
 
   // ---------------------------------------------------------------- events
 
@@ -754,8 +769,8 @@ function createRemoteDispatcher({
     'chat.configuration': {
       kinds: ['local', 'relay'],
       async run(_entry, params) {
-        const chat = await visibleChat(params.chatId);
-        const configuration = await desktop.chatConfiguration(chat.chatId, /** @type {string} */ (chat.root));
+        const chat = await describableChat(params.chatId);
+        const configuration = await desktop.chatConfiguration(chat.chatId, chat.root);
         return {
           model: { label: configuration.model.label },
           mode: configuration.mode,

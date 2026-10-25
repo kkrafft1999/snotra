@@ -637,6 +637,24 @@ test('chat.configuration describes a visible chat, read only and without paths',
   noPaths(answer);
 });
 
+test('chat.configuration describes a chat from chat.new before its first question (#1256)', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const releases = fakeReleases();
+  const { call } = await setup({ desktop, releases });
+  const { chatId } = (await call('chat.new')).result;
+  // What the chat would start with, in the workspace chat.new recorded.
+  assert.deepEqual((await call('chat.configuration', { chatId })).result, {
+    model: { label: `model of ${chatId}` },
+    mode: 'smart',
+    reasoning: 'high',
+    skills: [{ name: 'docs', state: 'on' }],
+    tools: [{ name: 'shell_execute', on: false }],
+  });
+  assertError(await call('chat.configuration', { chatId: 'uuid-unknown' }), 'not-found');
+  await releases.port.withdraw(ALPHA);
+  assertError(await call('chat.configuration', { chatId }), 'not-found');
+});
+
 test('a saved question goes to the other followers as chat.message, marked when a remote asked', async () => {
   const desktop = fakeDesktop({ chats: turnChats() });
   const { call, dispatcher, connection, named } = await setup({ desktop });
