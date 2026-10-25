@@ -238,7 +238,8 @@ test('prepareEntry: a typed value gets a new id and goes to the store apart from
   let n = 0;
   const service = createProgramAllowances({
     fs: { ...fs, constants: { X_OK: 1 }, realpath: async (p) => p, stat: async () => ({ isFile: () => true, isDirectory: () => false }), access: async () => {} },
-    path,
+    // POSIX paths on every runner: a program allowance only exists where there is a sandbox.
+    path: path.posix,
     os: { homedir: () => '/home/u' },
     platform: 'darwin',
     readUserPath: async () => '/opt/bin',
