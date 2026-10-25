@@ -2,8 +2,8 @@
  * *Settings › Remote access* (#1110): pair, show and remove the phone of the
  * mobile remote (#1081), drawn from main's pairing state (#1114,
  * `contracts/remote/pairing-state.js`). The design is the one decided on
- * 2026-10-18 in `docs/ui-design/remote-access-mockup.html`: the pairing runs
- * inside the panel, *Allow* is the system's dialog, one phone per computer.
+ * 2026-10-18 in #1109: the pairing runs inside the panel, *Allow* is the
+ * system's dialog, one phone per computer.
  *
  * Until the phone's side is out, pairing is closed (decided 2026-10-21): the
  * empty state shows *Pair a phone* disabled, a *Coming soon* chip and why.
