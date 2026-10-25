@@ -1023,6 +1023,38 @@ const MOTIFS = {
     },
   },
 
+  /** A question and its answer, the pointer resting on the answer: Copy shows under it (#1255). */
+  'copy-message': {
+    prefs: { chatPanelWidth: WIDE_CHAT },
+    text: {
+      en: {
+        question: 'When can I sow the beans outside?',
+        answer: 'Bush beans go outside once the soil stays above 10 °C:\n\n- **Mid-May** for the first row\n- **Every three weeks** after that\n- **Mid-July** for the last one',
+      },
+      de: {
+        question: 'Wann kann ich die Bohnen draußen säen?',
+        answer: 'Buschbohnen kommen raus, sobald der Boden über 10 °C bleibt:\n\n- **Mitte Mai** die erste Reihe\n- **Alle drei Wochen** die nächste\n- **Mitte Juli** die letzte',
+      },
+    },
+    async setUp({ page, model, text }) {
+      model.queueAnswer({ match: text.question, text: text.answer });
+      await send(page, text.question);
+      await waitForRunEnd(page);
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('#chat-messages .chat-msg.assistant:last-child .chat-msg-copy'))),
+        { what: 'Copy under the answer' });
+      await markLastAnswer(page);
+      await page.evaluate(() => {
+        document.querySelector('[data-motif="answer"]').previousElementSibling.dataset.motif = 'question';
+        const list = document.getElementById('chat-messages');
+        list.scrollTop = list.scrollHeight;
+      });
+      await page.hover('[data-motif="answer"] .chat-md');
+      await poll(() => page.evaluate(() => getComputedStyle(document.querySelector('[data-motif="answer"] .chat-msg-copy')).opacity === '1'),
+        { what: 'Copy shown on hover' });
+      return clipAround(page, ['[data-motif="question"]', '[data-motif="answer"]'], 16);
+    },
+  },
+
   /** The change to the calendar, opened from that line, in the middle column. */
   'changes-view': {
     text: SUMMER,

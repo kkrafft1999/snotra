@@ -266,8 +266,10 @@
   /* User-Bubble: hoechstens zwei Drittel der Lesespalte, damit die Frage
    * auch bei langem Text als Block rechts stehen bleibt. */
   --ds-chat-user-max-width: 66.6667%;
-  /* Room under a question from the phone for its "Sent from …" line (#1197): 12 px × 1.5 plus its gap. */
-  --ds-chat-origin-room: 22px;
+  /* Room under every question for its action row (#1255): the 32 px Copy button
+   * hangs below the bubble and reaches into the gap to the answer; this is what
+   * the gap itself does not cover. */
+  --ds-chat-actions-room: 6px;
   /* Chat-Grund: eigener Wert statt --ds-grey-bg. Der Chat ist die einzige
    * Flaeche, auf der eine Karte wirklich schwebt (die Composer-Karte); dort
    * traegt seit dem 2026-09-17 der Schatten die Tiefe, nicht mehr der

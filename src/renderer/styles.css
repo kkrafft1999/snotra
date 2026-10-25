@@ -2666,19 +2666,10 @@ body {
 }
 
 /* A question written on the phone (#1197): a quiet line under the bubble —
- * the glyph and "Sent from iPhone" in small grey type, right-aligned with the
- * bubble. It hangs below the bubble rather than inside it, so the bubble's
- * wash stays the user's own; the bubble keeps the room it needs. In the DOM
- * it is part of the message, so a copy and a screen reader carry it along. */
-.chat-msg.user.chat-msg--remote {
-  position: relative;
-  margin-bottom: var(--ds-chat-origin-room);
-}
-
+ * the glyph and "Sent from iPhone" in small grey type, in the message's action
+ * row (#1255) before Copy, right-aligned with the bubble. In the DOM it is part
+ * of the message, so a copy and a screen reader carry it along. */
 .chat-msg-origin {
-  position: absolute;
-  top: calc(100% + 3px);
-  right: 4px;
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -2687,6 +2678,10 @@ body {
   line-height: 1.5;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+.chat-msg-origin:last-child {
+  margin-right: 4px;
 }
 
 .chat-msg-origin > span {
@@ -3873,9 +3868,151 @@ button.chat-image-open:hover {
   font-variant-numeric: tabular-nums;
 }
 
+.chat-msg-actions .chat-turn-duration {
+  margin: 0;
+}
+
 .chat-msg.error .chat-turn-duration {
-  margin-top: 4px;
   color: var(--text-muted-strong);
+}
+
+/* The row under a message (#1255). Under an answer: Copy, then how long the
+ * turn took. Under a question: the phone line (#1197), then Copy, right-aligned
+ * with the bubble and hanging below it, so the bubble's wash stays the
+ * user's own. Copy shows while the pointer rests on the message or focus is
+ * inside it, and keeps its place while hidden: nothing moves when it appears. */
+.chat-msg-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.chat-msg.user:has(> .chat-msg-actions) {
+  position: relative;
+  margin-bottom: var(--ds-chat-actions-room);
+}
+
+.chat-msg.user > .chat-msg-actions {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  max-width: 100%;
+  margin-top: 0;
+  /* Padding, not a gap: the pointer on its way down to Copy never leaves the message. */
+  padding-top: 2px;
+}
+
+/* Two questions in a row: the second keeps clear of the first one's row. */
+#chat-messages > li.chat-msg.user + li.chat-msg.user {
+  margin-top: calc(var(--ds-chat-turn-gap) - var(--ds-chat-msg-gap));
+}
+
+.chat-msg-copy {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted-strong);
+  font: inherit;
+  font-weight: var(--ds-font-weight-medium);
+  cursor: pointer;
+  user-select: none;
+  opacity: 0;
+  transition:
+    opacity var(--ds-motion-fast) ease,
+    background var(--ds-motion-fast) ease,
+    color var(--ds-motion-fast) ease;
+}
+
+/* Under an answer the glyph lines up with the text above it. */
+.chat-msg-actions > .chat-msg-copy:first-child {
+  margin-left: -8px;
+}
+
+/* In an error bubble Copy follows the duration: the bubble's frame would show
+ * the room a hidden button keeps as an indent. It overlaps the bubble's
+ * padding rather than making the bubble taller. */
+.chat-msg.error .chat-msg-copy {
+  order: 1;
+  margin: -7px 0;
+}
+
+.chat-msg:hover .chat-msg-copy,
+.chat-msg:focus-within .chat-msg-copy,
+.chat-msg-copy--done,
+.chat-msg-copy--failed {
+  opacity: 1;
+}
+
+/* No pointer to rest anywhere: a touch screen shows it always. */
+@media (hover: none) {
+  .chat-msg-copy {
+    opacity: 1;
+  }
+}
+
+.chat-msg-copy:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.chat-msg-copy:active {
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+.chat-msg-copy:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.chat-msg-copy svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chat-msg-copy__check {
+  display: none;
+  stroke-width: 1.8;
+}
+
+.chat-msg-copy--done,
+.chat-msg-copy--done:hover {
+  color: var(--ds-blue);
+}
+
+.chat-msg-copy--done .chat-msg-copy__icon {
+  display: none;
+}
+
+.chat-msg-copy--done .chat-msg-copy__check {
+  display: block;
+}
+
+/* A failure says so in words next to the glyph, in the error colour. */
+.chat-msg-copy--failed,
+.chat-msg-copy--failed:hover {
+  color: var(--ds-error);
+}
+
+.chat-msg-copy__note:empty {
+  display: none;
 }
 
 .chat-turn-duration-icon {
