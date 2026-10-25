@@ -5,7 +5,7 @@ sidebar:
   order: 5
 ---
 
-Snotra can run shell commands and Python code: `git status`, a build, a test run, a script that sorts your data. Both are off until you switch them on. On macOS and Linux every run then happens in a sandbox, which keeps a command inside your project folder.
+Snotra can run shell commands and Python code: `git status`, a build, a test run, a script that sorts your data. Both are off until you switch them on. On macOS and Linux every run then happens in a sandbox, which keeps a command inside your project folder. The sandbox covers these two tools only: a local [MCP server](../../customising/mcp-servers/) runs outside it, with your rights.
 
 ## What you need
 
