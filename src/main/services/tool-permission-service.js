@@ -805,6 +805,8 @@ function createToolPermissionService({
       replacePath,
       replaceRoot,
       confirmation,
+      // New credential values (#1262), encrypted by the store; never sent back.
+      secrets: prepared.secrets,
     });
     if (!result.ok) return createSettingsError(result.error);
     afterPolicyChange(notify);

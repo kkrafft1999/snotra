@@ -10995,6 +10995,112 @@ select.modal-input {
   font-family: var(--font-mono);
 }
 
+/* Credentials (#1262): one row per variable — its name, then its value or,
+   once saved, a mask with "Replace". The same columns carry the heading
+   above the rows, so both line up. */
+.allowance-credentials__hint {
+  margin: 0 0 8px;
+}
+
+.allowance-credentials__hint code {
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-sm);
+}
+
+.allowance-credentials__head,
+.allowance-credential {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) 32px;
+  column-gap: 8px;
+  align-items: center;
+}
+
+.allowance-credentials__head {
+  margin: 0 0 4px;
+  font-size: var(--ds-font-size-xs);
+  font-weight: 600;
+  color: var(--text-muted-strong);
+}
+
+.allowance-credentials__head[hidden] {
+  display: none;
+}
+
+.allowance-credentials {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.allowance-credentials:empty {
+  display: none;
+}
+
+.allowance-credential__value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+/* The field keeps room for a pasted token; a button that does not fit
+   beside it in a longer language goes below it. */
+.allowance-credential__value .modal-input {
+  flex: 1 1 110px;
+  min-width: 110px;
+}
+
+/* Looks like the field it was, without a value to select: what is saved is
+   not shown again. */
+.allowance-credential__masked {
+  flex: 1 1 110px;
+  min-width: 110px;
+  padding: 9px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-grey-card);
+  color: var(--ds-grey-strong);
+  font-family: var(--font-mono);
+  font-size: var(--ds-font-size-md);
+  line-height: 1.4;
+  letter-spacing: 0.12em;
+  overflow: hidden;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.allowance-credential__action {
+  flex-shrink: 0;
+  padding: 6px 12px;
+}
+
+.allowance-credential__note {
+  grid-column: 2 / -1;
+  margin: 2px 0 0;
+  min-height: 0;
+  font-size: var(--ds-font-size-sm);
+}
+
+.allowance-credentials__error {
+  margin: -2px 0 8px;
+}
+
+#btn-allowance-credential-add[hidden] {
+  display: none;
+}
+
+#allowance-credentials-warning {
+  margin-top: 10px;
+}
+
+#allowance-credentials-warning[hidden] {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .allowance-row {
     grid-template-columns: minmax(0, 1fr);

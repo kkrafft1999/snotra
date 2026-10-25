@@ -149,11 +149,48 @@ Often it is a single program that needs more — a tool whose login has to be re
 3. [since 1.26] Under *Applies to*, keep *This workspace* — the usual choice — or choose *All workspaces* for a tool you trust in every folder. Without an open folder, only *All workspaces* is possible; from *All workspaces*, it is chosen already.
 4. Add the *Domains it may reach*, one per line, and under *Folders it may also write in* any folder it keeps its data in.
 5. On macOS, tick *Check certificates through macOS* for programs written in Go, such as `gh` and `terraform`. It weakens the isolation a little; the dialog says how.
-6. Click *Save* and confirm in the system dialog, which names the folder or says *in any workspace*.
+6. [since 1.28] If the program signs in with a token, add it under *Credentials* — see [Give a program a token](#give-a-program-a-token).
+7. Click *Save* and confirm in the system dialog, which names the folder or says *in any workspace*.
 
-The allowance applies only when a command runs that program on its own — without chaining, pipes or redirection — and only to the very file you chose, not to a file of the same name in a project. The card names the allowance, or says why it does not apply. Where a program has an allowance for all workspaces and one for this workspace, they add up there: every domain and folder of either.
+The allowance applies only when a command runs that program on its own — without chaining, pipes or redirection — and only to the very file you chose, not to a file of the same name in a project. The card names the allowance, or says why it does not apply. Where a program has an allowance for all workspaces and one for this workspace, they add up there: every domain, folder and credential of either — where both set the same variable, this workspace's.
 
 Program allowances made before 1.26 apply in all workspaces, as they did; move one to a single workspace with *Edit* under *All workspaces* and *Applies to*.
+
+## Give a program a token
+
+[since 1.28] Command-line tools for a code forge — `gh` for GitHub, `glab` for GitLab — cannot sign in inside the sandbox: it keeps their login closed, the folders under `~/.config` as well as the keychain, and that stays so. Give the program a token of its own through its allowance instead. Snotra keeps it encrypted and hands it only to runs of that program.
+
+### What you need
+
+- A [program allowance](#give-one-program-more-room) with the domain the program talks to: `api.github.com` for `gh`, your GitLab host for `glab`. On macOS both also need *Check certificates through macOS*.
+- A token made for this purpose, with no more rights than the work needs: on GitHub a *fine-grained personal access token* limited to the repositories and permissions the model is to use, on GitLab a project access token or a personal one with the narrowest scopes. Not the token you use every day.
+- The system's encrypted storage. Without it, Snotra stores no token.
+
+### Steps
+
+1. In *Settings › Tools › Security*, open the program's allowance with *Edit*, or add one with *Add program*.
+2. Under *Credentials*, click *Add credential*. The variable the program reads is filled in — `GH_TOKEN` for `gh`, `GITLAB_TOKEN` for `glab`. Change it if your program reads another one.
+3. Paste the token under *Token*.
+4. Click *Save* and confirm in the system dialog, which names the variable.
+
+![The Credentials section of the program dialog for gh: the variable GH_TOKEN, the token shown as dots with "Replace" next to it and "Stored encrypted, not shown again" below, the button "Add credential", and the note that the run can read the token, with the advice to use a dedicated token with as few rights as possible.](screenshots/allowance-credentials.webp)
+
+### What happens
+
+- **Stored encrypted.** The token goes into Snotra's encrypted storage, like the API keys of your providers, never into a settings file in plain text. Once saved, the dialog does not show it again: you see dots, *Replace* to enter a new one, and the remove button. You can rename the variable without entering the token again.
+- **Only for runs of that program.** A run gets the variable when the allowance applies to it: the program on its own, isolated in the sandbox, in the workspace the allowance belongs to — or in any workspace, for an allowance under *All workspaces*. Every other command, and a run of the program that chains or pipes, goes without it. The approval card says when a run gets it: *It gets GH_TOKEN from the allowance.*
+- **The sandbox stays as it is.** The folders with logins stay closed, and the token reaches only the domains of the allowance. `gh` and `glab` stop when they cannot read their usual settings folder, so for a run with a token they get an empty one of their own.
+- **Masked in the output.** Where the token turns up in what the run prints — as it is, or in base64, hex or URL encoding — the chat, the tool log and the model see `••••••••` in its place. Any other tool result that contains it is withheld, like one that contains one of your API keys.
+- **Removing it.** The remove button next to the variable, or removing the whole allowance, deletes the stored token.
+
+The program itself still sees the token, and so does whatever it starts. That is why it should be one you can give away: narrow, made for this purpose, and easy to revoke.
+
+### If it doesn't work
+
+- **`gh` says it is not logged in.** The command did more than run `gh` — a pipe, `&&`, a variable in front — so the allowance did not apply, and the card says so. Or the command ran in a workspace the allowance does not belong to.
+- **The answer says the stored token could not be read.** The encrypted storage on this computer no longer opens it, for example after moving your settings to another computer. Enter the token again with *Replace*.
+- **`gh` reaches GitHub, but GitHub refuses.** The token lacks the permission for that repository or action. Widen the token on GitHub, not the allowance.
+- **The dialog refuses the variable.** Names such as `PATH`, `HOME` or the proxy settings are set by the shell or the sandbox and cannot carry a token. Use the name the program documents.
 
 ## Keep a host open
 

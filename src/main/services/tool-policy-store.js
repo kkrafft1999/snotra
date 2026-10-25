@@ -27,6 +27,11 @@
  * in one workspace (`workspaceProgramAllowances`) or in every workspace
  * (`programAllowances`, the list every allowance was in before: a file
  * written before #1119 needs no rewrite, its allowances simply stay global).
+ * An allowance's credentials (#1262) hold only a variable name and an id;
+ * the values sit next to the allowances in `allowanceSecrets`, encrypted
+ * with `safeStorage` like the provider keys, and covered by the signature
+ * like everything else. They are decrypted for a run that matches and never
+ * leave main in any snapshot.
  * Hosts can be kept open per workspace (#946) or in every workspace
  * (`globalHosts`), and new workspaces can start with the sandbox off
  * (`newWorkspaceSandboxOff`) — every one of them a loosening as well.
@@ -70,6 +75,7 @@ const {
   PROGRAM_ALLOWANCE_LIMITS,
   combineProgramAllowances,
   combinationTooLarge,
+  credentialValueProblem,
 } = require('../../shared/contracts/program-allowances');
 
 const { readFileWithRetry } = require('./rename-with-retry');
@@ -752,10 +758,19 @@ function createToolPolicyStore({
    * taking rights away works without — and moving an allowance from every
    * workspace to one of them takes rights away, the other way round does not.
    *
+   * `secrets` brings the values of the entry's new credentials by id
+   * (#1262); they are encrypted here. A credential without one keeps the
+   * value stored for the entry it replaces.
+   *
    * @param {unknown} rawEntry
-   * @param {{ root?: string | null, replacePath?: string | null, replaceRoot?: string | null, confirmation?: Receipt }} [options]
+   * @param {{ root?: string | null, replacePath?: string | null, replaceRoot?: string | null, confirmation?: Receipt,
+   *   secrets?: Record<string, string> | null }} [options]
    */
-  async function setProgramAllowance(rawEntry, { root = null, replacePath = null, replaceRoot = root, confirmation = null } = {}) {
+  async function setProgramAllowance(rawEntry, { root = null, replacePath = null, replaceRoot = root, confirmation = null, secrets = null } = {}) {
+    /** @type {Record<string, string>} */
+    const newSecrets = isRecord(secrets) ? /** @type {Record<string, string>} */ (secrets) : {};
+    // Ciphertext reaches the disk only once the key behind it is there (#1060).
+    if (Object.keys(newSecrets).length > 0 && encryptionAvailable()) await safeStorageKey.whenDurable();
     return update((draft, { encryptionAvailable: enc }) => {
       const entry = normalizeProgramAllowance(rawEntry);
       if (!entry) return { error: createMessage('permissions.allowance.error.invalid') };
@@ -788,8 +803,25 @@ function createToolPolicyStore({
           error: createMessage('permissions.allowance.error.combinedTooLarge', {
             maxDomains: PROGRAM_ALLOWANCE_LIMITS.MAX_DOMAINS,
             maxFolders: PROGRAM_ALLOWANCE_LIMITS.MAX_WRITE_PATHS,
+            maxCredentials: PROGRAM_ALLOWANCE_LIMITS.MAX_CREDENTIALS,
           }),
         };
+      }
+      // A credential keeps the value stored for the entry it came from, or
+      // brings a new one (#1262) — never the id of another allowance's value.
+      for (const credential of entry.credentials) {
+        if (Object.hasOwn(newSecrets, credential.id)) {
+          const value = typeof newSecrets[credential.id] === 'string' ? newSecrets[credential.id].trim() : '';
+          if (credentialValueProblem(value) !== null) return { error: createMessage('permissions.allowance.error.invalid') };
+          try {
+            draft.allowanceSecrets[credential.id] = secretStore.encryptString(value).toString('base64');
+          } catch {
+            // The keychain refused: said as missing encryption, and nothing is written.
+            return { error: createMessage('permissions.allowance.error.needsEncryption') };
+          }
+        } else if (!previous?.credentials.some((other) => other.id === credential.id)) {
+          return { error: createMessage('permissions.allowance.error.invalid') };
+        }
       }
       if (previous && !inPlace) {
         setAllowanceList(draft, previousRoot, allowanceList(draft, previousRoot).filter((other) => other !== previous));
@@ -824,6 +856,77 @@ function createToolPolicyStore({
     const state = await read();
     const own = typeof root === 'string' && root ? state.workspaceProgramAllowances?.[root] : [];
     return combineProgramAllowances(state.programAllowances, own);
+  }
+
+  /**
+   * The payload with its secrets, as far as it was signed: what a failed
+   * check leaves holds no allowance, and so no credential either.
+   *
+   * @returns {Promise<PolicyPayload | null>}
+   */
+  async function loadSecrets() {
+    const loaded = await loadFromDisk();
+    return loaded.integrity === INTEGRITY.OK ? loaded.payload : null;
+  }
+
+  /** @param {string} cipher */
+  function decrypt(cipher) {
+    try {
+      return secretStore.decryptString(Buffer.from(cipher, 'base64'));
+    } catch {
+      // Another keychain's ciphertext: the caller names the variable as unavailable.
+      return null;
+    }
+  }
+
+  /**
+   * The variables a run of `programPath` in `root` gets (#1262): the
+   * credentials of its allowances there — global and own added up — whose
+   * name and id the approved plan names, decrypted. A value that cannot be
+   * decrypted (another keychain, a locked one) is left out and named in
+   * `unavailable`, so the run can say why the program is not signed in.
+   *
+   * Only for the run's environment and for masking its output: the values
+   * are never logged and never leave main.
+   *
+   * @param {string} programPath
+   * @param {{ root?: string | null, approved?: Array<{ name: string, id: string }> }} [options]
+   * @returns {Promise<{ env: Record<string, string>, unavailable: string[] }>}
+   */
+  async function readAllowanceCredentials(programPath, { root = null, approved = [] } = {}) {
+    /** @type {Record<string, string>} */
+    const env = {};
+    /** @type {string[]} */
+    const unavailable = [];
+    const payload = await loadSecrets();
+    if (!payload || !Array.isArray(approved) || approved.length === 0) return { env, unavailable };
+    const own = typeof root === 'string' && root ? payload.workspaceProgramAllowances[root] : [];
+    const entry = combineProgramAllowances(payload.programAllowances, own).find((other) => other.path === programPath);
+    for (const credential of entry?.credentials || []) {
+      if (!approved.some((other) => other?.id === credential.id && other?.name === credential.name)) continue;
+      const value = Object.hasOwn(payload.allowanceSecrets, credential.id) ? decrypt(payload.allowanceSecrets[credential.id]) : null;
+      if (value) env[credential.name] = value;
+      else unavailable.push(credential.name);
+    }
+    return { env, unavailable };
+  }
+
+  /**
+   * Every stored credential value, decrypted (#1262) — for the list of
+   * Snotra's own secrets, which no tool result may carry (concept §5).
+   *
+   * @returns {Promise<string[]>}
+   */
+  async function readAllowanceSecretValues() {
+    const payload = await loadSecrets();
+    if (!payload) return [];
+    /** @type {string[]} */
+    const out = [];
+    for (const cipher of Object.values(payload.allowanceSecrets)) {
+      const value = decrypt(cipher);
+      if (value) out.push(value);
+    }
+    return out;
   }
 
   /**
@@ -1111,6 +1214,8 @@ function createToolPolicyStore({
     setProgramAllowance,
     removeProgramAllowance,
     readProgramAllowances,
+    readAllowanceCredentials,
+    readAllowanceSecretValues,
     addWorkspaceHosts,
     removeWorkspaceHost,
     addGlobalHosts,

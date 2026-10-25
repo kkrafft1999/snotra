@@ -149,11 +149,48 @@ Oft ist es ein einzelnes Programm, das mehr braucht — ein Werkzeug, dessen Anm
 3. [seit 1.26] Behalte unter *Gilt für* *Dieser Workspace* — die übliche Wahl — oder wähle *Alle Workspaces* für ein Werkzeug, dem du in jedem Ordner traust. Ohne geöffneten Ordner geht nur *Alle Workspaces*; aus *Alle Workspaces* heraus ist es schon gewählt.
 4. Trag die *Domains, die es erreichen darf*, ein, eine pro Zeile, und unter *Ordner, in die es zusätzlich schreiben darf* jeden Ordner, in dem es seine Daten hält.
 5. Hak unter macOS *Zertifikate über macOS prüfen* an, für Programme in Go wie `gh` und `terraform`. Das schwächt die Isolation etwas ab; der Dialog sagt, wie.
-6. Klick auf *Speichern* und bestätige im Systemdialog, der den Ordner nennt oder *in jedem Workspace* sagt.
+6. [seit 1.28] Meldet sich das Programm mit einem Token an, trag ihn unter *Zugangsdaten* ein — siehe [Einem Programm einen Token geben](#einem-programm-einen-token-geben).
+7. Klick auf *Speichern* und bestätige im Systemdialog, der den Ordner nennt oder *in jedem Workspace* sagt.
 
-Die Freigabe gilt nur, wenn ein Befehl das Programm für sich allein ausführt — ohne Verkettung, Pipes oder Umleitungen — und nur für genau die Datei, die du gewählt hast, nicht für eine gleichnamige Datei in einem Projekt. Die Karte nennt die Freigabe oder sagt, warum sie nicht greift. Hat ein Programm eine Freigabe für alle Workspaces und eine für diesen Workspace, addieren sie sich dort: jede Domain und jeder Ordner von beiden.
+Die Freigabe gilt nur, wenn ein Befehl das Programm für sich allein ausführt — ohne Verkettung, Pipes oder Umleitungen — und nur für genau die Datei, die du gewählt hast, nicht für eine gleichnamige Datei in einem Projekt. Die Karte nennt die Freigabe oder sagt, warum sie nicht greift. Hat ein Programm eine Freigabe für alle Workspaces und eine für diesen Workspace, addieren sie sich dort: jede Domain, jeder Ordner und alle Zugangsdaten von beiden — setzen beide dieselbe Variable, die dieses Workspaces.
 
 Programmfreigaben von vor 1.26 gelten in allen Workspaces, wie bisher; eine davon verschiebst du mit *Bearbeiten* unter *Alle Workspaces* und *Gilt für* in einen einzelnen Workspace.
+
+## Einem Programm einen Token geben
+
+[seit 1.28] Kommandozeilen-Werkzeuge für eine Code-Plattform — `gh` für GitHub, `glab` für GitLab — können sich in der Sandbox nicht anmelden: Sie hält ihre Anmeldung verschlossen, die Ordner unter `~/.config` ebenso wie den Schlüsselbund, und dabei bleibt es. Gib dem Programm stattdessen über seine Freigabe einen eigenen Token. Snotra hält ihn verschlüsselt und gibt ihn nur an Läufe dieses Programms.
+
+### Was du brauchst
+
+- Eine [Freigabe für das Programm](#einem-programm-mehr-spielraum-geben) mit der Domain, mit der es spricht: `api.github.com` für `gh`, deinen GitLab-Host für `glab`. Unter macOS brauchen beide außerdem *Zertifikate über macOS prüfen*.
+- Einen Token eigens für diesen Zweck, mit nicht mehr Rechten, als die Arbeit braucht: bei GitHub einen *Fine-grained Personal Access Token*, beschränkt auf die Repositorys und Berechtigungen, die das Modell nutzen soll, bei GitLab einen Projekt-Token oder einen persönlichen mit den engsten Scopes. Nicht den Token, den du jeden Tag nutzt.
+- Den verschlüsselten Speicher des Systems. Ohne ihn speichert Snotra keinen Token.
+
+### Schritte
+
+1. Öffne unter *Einstellungen › Tools › Sicherheit* die Freigabe des Programms mit *Bearbeiten*, oder leg mit *Programm hinzufügen* eine an.
+2. Klick unter *Zugangsdaten* auf *Zugangsdaten hinzufügen*. Die Variable, die das Programm liest, ist schon eingetragen — `GH_TOKEN` für `gh`, `GITLAB_TOKEN` für `glab`. Ändere sie, wenn dein Programm eine andere liest.
+3. Füg den Token unter *Token* ein.
+4. Klick auf *Speichern* und bestätige im Systemdialog, der die Variable nennt.
+
+![Der Abschnitt Zugangsdaten im Programmdialog für gh: die Variable GH_TOKEN, der Token als Punkte mit „Ersetzen“ daneben und „Verschlüsselt gespeichert, wird nicht mehr angezeigt“ darunter, der Knopf „Zugangsdaten hinzufügen“ und der Hinweis, dass der Lauf den Token lesen kann, mit dem Rat zu einem eigenen Token mit so wenig Rechten wie möglich.](screenshots/allowance-credentials.webp)
+
+### Was passiert
+
+- **Verschlüsselt gespeichert.** Der Token kommt in Snotras verschlüsselten Speicher, wie die API-Schlüssel deiner Anbieter, nie im Klartext in eine Einstellungsdatei. Einmal gespeichert, zeigt der Dialog ihn nicht mehr: Du siehst Punkte, *Ersetzen* für einen neuen und den Knopf zum Entfernen. Die Variable kannst du umbenennen, ohne den Token neu einzugeben.
+- **Nur für Läufe dieses Programms.** Ein Lauf bekommt die Variable, wenn die Freigabe für ihn greift: das Programm für sich allein, isoliert in der Sandbox, in dem Workspace, zu dem die Freigabe gehört — oder in jedem Workspace, bei einer Freigabe unter *Alle Workspaces*. Jeder andere Befehl und ein Lauf des Programms mit Verkettung oder Pipe kommen ohne sie aus. Die Freigabekarte sagt, wenn ein Lauf ihn bekommt: *Es bekommt GH_TOKEN aus der Freigabe.*
+- **Die Sandbox bleibt, wie sie ist.** Die Ordner mit Anmeldungen bleiben zu, und der Token erreicht nur die Domains der Freigabe. `gh` und `glab` brechen ab, wenn sie ihren gewohnten Einstellungsordner nicht lesen können; für einen Lauf mit Token bekommen sie deshalb einen leeren eigenen.
+- **In der Ausgabe maskiert.** Wo der Token in dem auftaucht, was der Lauf ausgibt — unverändert oder in Base64, Hex oder URL-Kodierung —, sehen Chat, Tool-Protokoll und Modell an seiner Stelle `••••••••`. Jedes andere Tool-Ergebnis, das ihn enthält, wird zurückgehalten, wie eines mit einem deiner API-Schlüssel.
+- **Entfernen.** Der Knopf zum Entfernen neben der Variable oder das Entfernen der ganzen Freigabe löscht den gespeicherten Token.
+
+Das Programm selbst sieht den Token trotzdem, und ebenso alles, was es startet. Deshalb sollte es einer sein, den du hergeben kannst: eng, eigens für diesen Zweck und leicht zu widerrufen.
+
+### Wenn es nicht klappt
+
+- **`gh` sagt, du seist nicht angemeldet.** Der Befehl hat mehr getan, als `gh` auszuführen — eine Pipe, `&&`, eine Variable davor —, also griff die Freigabe nicht, und die Karte sagt es. Oder der Befehl lief in einem Workspace, zu dem die Freigabe nicht gehört.
+- **Die Antwort sagt, der gespeicherte Token sei nicht lesbar.** Der verschlüsselte Speicher dieses Rechners öffnet ihn nicht mehr, etwa nachdem du deine Einstellungen auf einen anderen Rechner gebracht hast. Gib den Token mit *Ersetzen* neu ein.
+- **`gh` erreicht GitHub, aber GitHub lehnt ab.** Dem Token fehlt die Berechtigung für dieses Repository oder diese Aktion. Erweitere den Token bei GitHub, nicht die Freigabe.
+- **Der Dialog lehnt die Variable ab.** Namen wie `PATH`, `HOME` oder die Proxy-Einstellungen setzen die Shell oder die Sandbox; sie können keinen Token tragen. Nimm den Namen, den das Programm dokumentiert.
 
 ## Einen Host offen halten
 

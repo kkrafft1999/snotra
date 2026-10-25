@@ -54,6 +54,16 @@ export function describeAllowanceRow(entry, { homeDir = '' } = {}) {
       tag: t('settings.allowances.weaker'),
     });
   }
+  // The variables only (#1262); the values never reach the renderer.
+  const credentials = Array.isArray(entry?.credentials) ? entry.credentials.map((credential) => credential?.name).filter(Boolean) : [];
+  if (credentials.length > 0) {
+    facts.push({
+      label: t('settings.allowances.fact.credentials'),
+      values: credentials,
+      mono: true,
+      tag: t('settings.allowances.credentials.encrypted'),
+    });
+  }
   return {
     name: programLabel(entry?.path),
     pathLabel: tildePath(entry?.path || '', homeDir),
@@ -84,10 +94,15 @@ export function describeAllowanceOnCard(isolation, { homeDir = '' } = {}) {
     if (folders.length > 0 && granted.trustd) key = 'approval.allowance.both';
     else if (folders.length > 0) key = 'approval.allowance.foldersOnly';
     else if (granted.trustd) key = 'approval.allowance.trustdOnly';
+    // The run gets these variables from the allowance (#1262).
+    const credentials = Array.isArray(granted.credentials) ? granted.credentials.filter((name) => typeof name === 'string' && name) : [];
+    const text = credentials.length > 0
+      ? `${t(key, params)} ${t('approval.allowance.credentials', { names: credentials.join(', ') })}`
+      : t(key, params);
     return {
       kind: 'applied',
       prefix: t('approval.allowance.prefix', { program: granted.program }),
-      text: t(key, params),
+      text,
       settingsLabel,
     };
   }

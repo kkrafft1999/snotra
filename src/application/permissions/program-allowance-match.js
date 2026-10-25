@@ -52,7 +52,8 @@ function createProgramAllowanceMatcher({ readAllowances, locate, realPath, sandb
    *
    * @param {{ command?: unknown, cwd?: string|null, workspaceRoot?: string|null }} [params]
    * @returns {Promise<null
-   *   | {allowance: {path: string, program: string, domains: string[], writePaths: string[], trustd: boolean},
+   *   | {allowance: {path: string, program: string, domains: string[], writePaths: string[], trustd: boolean,
+   *      credentials: Array<{name: string, id: string}>},
    *      command: string, entry: ProgramAllowance}
    *   | {skipped: {program: string, reason: string}}>}
    */
@@ -89,6 +90,9 @@ function createProgramAllowanceMatcher({ readAllowances, locate, realPath, sandb
           domains: entry.domains,
           writePaths: entry.writePaths,
           trustd: trustdApplies && entry.trustd,
+          // Names and ids only (#1262): the values stay in main's store and
+          // are read for the run, if the plan still names these ids then.
+          credentials: entry.credentials.map(({ name, id }) => ({ name, id })),
         },
         command: `${quoteArgv([entry.path])}${command.slice(first.end)}`,
         // The stored entry as it was matched, so a later change is noticed.

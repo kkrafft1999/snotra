@@ -42,6 +42,7 @@ test('an entry keeps only an absolute program path, host names and absolute fold
       domains: ['graph.microsoft.com', 'login.microsoftonline.com'],
       writePaths: ['/Users/u/Library/Application Support/ms-todo'],
       trustd: false,
+      credentials: [],
     },
   );
   assert.equal(normalizeProgramAllowance({ path: 'ms-todo-cli' }), null);
@@ -215,6 +216,7 @@ test('an entry from the dialog is checked in full; trustd only exists on macOS',
       domains: ['graph.microsoft.com', 'login.microsoftonline.com'],
       writePaths: [fx.cache],
       trustd: true,
+      credentials: [],
     });
     assert.equal((await makeService(fx, { platform: 'linux' }).prepareEntry(raw)).entry.trustd, false);
     const error = async (patch) => (await makeService(fx).prepareEntry({ ...raw, ...patch })).error?.key;
@@ -230,12 +232,12 @@ test('an entry from the dialog is checked in full; trustd only exists on macOS',
 test('a command that runs the allowed file on its own gets the allowance and its absolute path', posixOnly, async () => {
   const fx = await makeFixture();
   try {
-    const entry = { path: fx.tool, domains: ['graph.microsoft.com'], writePaths: [fx.cache], trustd: true };
+    const entry = { path: fx.tool, domains: ['graph.microsoft.com'], writePaths: [fx.cache], trustd: true, credentials: [] };
     const service = makeService(fx, { allowances: [entry] });
 
     const byName = await service.match({ command: 'ms-todo-cli tasks "Arbeit"', cwd: fx.project });
     assert.deepEqual(byName.allowance, {
-      path: fx.tool, program: 'ms-todo-cli', domains: ['graph.microsoft.com'], writePaths: [fx.cache], trustd: true,
+      path: fx.tool, program: 'ms-todo-cli', domains: ['graph.microsoft.com'], writePaths: [fx.cache], trustd: true, credentials: [],
     });
     // What runs is the allowed file — not whatever the shell would find first.
     assert.equal(byName.command, `${fx.tool} tasks "Arbeit"`);

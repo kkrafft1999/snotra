@@ -13,6 +13,12 @@
  * the sandbox is unavailable, a command can do everything the logged-in user
  * can, and the approval before every run is the protection.
  *
+ * A program allowance can carry credentials (#1262): variables such as
+ * `GH_TOKEN` whose values main keeps encrypted. They are read here, for an
+ * isolated run whose plan names them, put into that run's environment and
+ * nowhere else, and masked in everything the run prints — verbatim and in
+ * the encodings Snotra's own secrets are matched in.
+ *
  * Ein Befehl pro Aufruf, kein Zustand: kein dauerhafter Shell-Prozess, kein
  * `cd`, das den naechsten Aufruf beeinflusst. Nicht interaktiv (kein TTY,
  * stdin nur als mitgegebener String) — was auf Eingabe wartet, laeuft ins
@@ -36,6 +42,9 @@ const { withPowerShellJob, noteUncontained } = require('./windows-job');
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { planSpawn } = require('./sandboxed-spawn');
 const { createMessage } = require('../../shared/contracts/message');
+const { expandSecrets } = require('./own-secrets');
+const { lockedConfigDirVariable, programName } = require('../../shared/contracts/program-allowances');
+const { redactOwnSecrets } = require('../../shared/runtime/sensitive-content');
 
 /** @typedef {import('./sandboxed-spawn').SandboxForSpawn} SandboxForSpawn */
 
@@ -214,6 +223,9 @@ function clampTimeout(raw) {
  * @param {typeof import('fs/promises') | null} [deps.fs]  for the run's temp directory (#329)
  * @param {typeof import('path') | null} [deps.path]
  * @param {SandboxForSpawn | null} [deps.sandbox]  sandbox service; without it runs are not isolated (#329)
+ * @param {((programPath: string, options: { root: string | null, approved: Array<{ name: string, id: string }> })
+ *   => Promise<{ env: Record<string, string>, unavailable: string[] }>) | null} [deps.readAllowanceCredentials]
+ *   the decrypted credentials of a program allowance (#1262)
  * @returns {import('../../application/ports/shell-execution-port').ShellExecutionPort & {
  *   detect: () => Promise<ShellDescription>, disposeSync: () => void }}
  */
@@ -225,6 +237,7 @@ function createShellRunnerService({
   fs = null,
   path = null,
   sandbox = null,
+  readAllowanceCredentials = null,
 }) {
   // Ergebnis der letzten Erkennung. Synchron abrufbar, weil die Tool-Liste
   // ohne Warten gebaut wird.
@@ -341,6 +354,25 @@ function createShellRunnerService({
   // Time limit, "Stop", output cap and the process tree (CR-B03-01).
   const children = createChildRunner({ spawn, platform });
 
+  /**
+   * The credentials the approved plan names for its allowance (#1262),
+   * decrypted. A store that cannot be read gives none, and says which.
+   *
+   * @param {ShellExecutionRequest['programAllowance']} allowance
+   * @returns {Promise<{ env: Record<string, string>, unavailable: string[] }>}
+   */
+  async function allowanceCredentials(allowance) {
+    const approved = Array.isArray(allowance?.credentials) ? allowance.credentials : [];
+    if (approved.length === 0 || typeof allowance?.path !== 'string') return { env: {}, unavailable: [] };
+    if (typeof readAllowanceCredentials !== 'function') return { env: {}, unavailable: approved.map((entry) => entry.name) };
+    try {
+      return await readAllowanceCredentials(allowance.path, { root: allowance.root ?? null, approved });
+    } catch {
+      // An unreadable store hands out nothing; the model hears which variables are missing.
+      return { env: {}, unavailable: approved.map((entry) => entry.name) };
+    }
+  }
+
   /** @param {Partial<ShellExecutionRequest>} [request]  a missing command is refused, not thrown */
   async function run({
     command,
@@ -389,6 +421,10 @@ function createShellRunnerService({
       }
     }
     const removeRunTmp = () => (runTmp && fs ? fs.rm(runTmp, { recursive: true, force: true }).catch(() => {}) : undefined);
+    // Every form of the run's credential values (#1262), to mask its output.
+    /** @type {string[]} */
+    let secrets = [];
+    const mask = (/** @type {string} */ text) => (secrets.length > 0 ? redactOwnSecrets(text, secrets) : text);
     // What the command printed so far, for the card about a waiting connection.
     /** @type {(() => { stdout: string, stderr: string }) | null} */
     let readOutput = null;
@@ -413,7 +449,10 @@ function createShellRunnerService({
         commandId: `shell-${startedAt.toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
         commandText: line,
         onNetworkAsk: onSandboxNetworkAsk,
-        readOutput: () => readOutput?.() || null,
+        readOutput: () => {
+          const output = readOutput?.();
+          return output ? { stdout: mask(output.stdout), stderr: mask(output.stderr) } : null;
+        },
         abortSignal,
       });
     } catch (e) {
@@ -427,12 +466,35 @@ function createShellRunnerService({
       return { error: e?.message || 'The sandbox could not be prepared.' };
     }
 
+    // Only an isolated run gets an allowance's credentials: outside the
+    // sandbox its domains would not hold the token to them (#1262).
+    const credentials = target.isolation?.isolated === true
+      ? await allowanceCredentials(programAllowance)
+      : { env: {}, unavailable: [] };
+    secrets = expandSecrets(Object.values(credentials.env));
+    /** @type {Record<string, string>} */
+    const credentialEnv = { ...credentials.env };
+    // `gh` and `glab` give up when their locked configuration cannot be read;
+    // with the token from the allowance they get an empty one in the run's
+    // temp directory, and the lock stays where it is.
+    const configVariable = lockedConfigDirVariable(programAllowance?.path);
+    if (configVariable && runTmp && fs && path && Object.keys(credentials.env).length > 0 && !Object.hasOwn(credentialEnv, configVariable)) {
+      const configDir = path.join(runTmp, 'config', programName(programAllowance?.path));
+      try {
+        await fs.mkdir(configDir, { recursive: true });
+        credentialEnv[configVariable] = configDir;
+      } catch {
+        /* without it the program says itself what it could not read */
+      }
+    }
+
     try {
       const outcome = await children.run({
         command: target.command,
         args: target.args,
         cwd: cwd || os.homedir(),
-        env: { ...childEnv(), ...target.env },
+        // The sandbox's own variables come last and win over a credential.
+        env: { ...childEnv(), ...credentialEnv, ...target.env },
         stdin,
         maxStdinChars: SHELL_EXECUTION_LIMITS.MAX_STDIN_CHARS,
         maxOutputBytes: SHELL_EXECUTION_LIMITS.MAX_OUTPUT_BYTES,
@@ -442,17 +504,18 @@ function createShellRunnerService({
         startError: 'The shell could not be started.',
       });
       // Narrows the union for the type check (#1098); the error is never empty.
-      if ('error' in outcome) return outcome;
+      if ('error' in outcome) return { error: mask(outcome.error) };
       // What the sandbox refused (#792): as a list for the chat's tool row,
       // and in stderr for the model (#329). Looked up before annotating.
       const blocked = await target.blocked?.({
         failed: outcome.exitCode !== 0 && !outcome.aborted,
         output: outcome.stderr,
       });
-      const stderr = target.annotate(outcome.stderr);
+      const stderr = target.annotate(mask(outcome.stderr));
       /** @type {ShellExecutionResult} */
       const result = {
         ...outcome,
+        stdout: mask(outcome.stdout),
         // cmd.exe cannot make a Job Object; the model hears so (#991).
         stderr: platform === 'win32' && detected.invocation === INVOCATIONS.CMD ? noteUncontained(stderr) : stderr,
         durationMs: Date.now() - startedAt,
@@ -460,6 +523,10 @@ function createShellRunnerService({
       };
       if (target.isolation) result.isolation = target.isolation;
       if (blocked) result.sandboxBlocked = blocked;
+      const credentialNames = Object.keys(credentials.env);
+      if (credentialNames.length > 0 || credentials.unavailable.length > 0) {
+        result.credentials = { set: credentialNames, unavailable: credentials.unavailable };
+      }
       return result;
     } finally {
       target.release();
