@@ -28,7 +28,6 @@ import {
   setToolLineText,
   setToolLineCategory,
   syncPhaseLine,
-  syncToolListOverflow,
   syncToolLogSummary,
   thinkingElapsedMs,
   toolTraceEntryForStore,
@@ -398,13 +397,6 @@ export function initChatStream({
 
   function finalizeStreamingToolLog(wrap) {
     finalizeAllToolLines(wrap);
-    // Zugeklappt wieder an den Anfang: wer die Liste danach öffnet, liest von
-    // oben. Eine offene Liste bleibt dort, wo der Nutzer sie hat.
-    const lines = wrap.querySelector('.chat-tool-lines');
-    if (lines && !wrap.open) {
-      lines.scrollTop = 0;
-      syncToolListOverflow(lines);
-    }
     wrap.classList.remove('chat-tool-log--running');
     wrap.classList.add('chat-tool-log--done');
     wrap.removeAttribute('aria-busy');

@@ -2859,9 +2859,9 @@ body {
   display: none;
 }
 
-/* Aufgeklappte Liste: alle Schritte kompakt, erledigte gedimmt. Höhe ist
-   begrenzt, damit viele Schritte die Antwort nicht wegschieben; der Fade unten
-   erscheint nur, solange dort noch etwas folgt (Klasse aus dem Renderer). */
+/* Expanded list: every step, compact, finished ones dimmed. No height cap —
+   an inner scroll area hid most steps of a long run behind a second scrollbar
+   (#1252); the chat scrolls instead. */
 .chat-tool-lines {
   margin: 4px 0 0;
   padding: 0;
@@ -2869,16 +2869,6 @@ body {
   flex-direction: column;
   gap: 2px;
   background: transparent;
-  max-height: 176px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-
-/* Für die Maske zählt nur die Deckkraft, nicht der Farbwert — currentColor
-   hält die Regel „keine festen Farbwerte in Komponenten" ein. */
-.chat-tool-lines--fade {
-  mask-image: linear-gradient(to bottom, currentColor calc(100% - 22px), transparent);
-  -webkit-mask-image: linear-gradient(to bottom, currentColor calc(100% - 22px), transparent);
 }
 
 .chat-tool-lines .chat-tool-line {

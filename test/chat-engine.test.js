@@ -966,6 +966,37 @@ test('engine emits pending tool lines while the model still streams a tool call'
   assert.equal(result.toolTrace[0].callIndex, undefined);
 });
 
+test('pending shell command lines name the command once it has streamed in (#1252)', async () => {
+  const tools = makeToolPort(() => JSON.stringify({ ok: true }));
+  const rounds = [
+    assistantToolCall('call_1', 'shell_execute', { command: 'git status --short' }),
+    assistantText('Fertig.'),
+  ];
+  const { engine } = makeEngine((params, index) => {
+    if (index === 0) {
+      params.callbacks.onToolCallStart({ index: 0, name: 'shell_execute' });
+      params.callbacks.onToolCallArgumentsDelta({ index: 0, delta: '{"command":"git sta' });
+      params.callbacks.onToolCallArgumentsDelta({ index: 0, delta: 'tus --short"}' });
+    }
+    return rounds[Math.min(index, rounds.length - 1)];
+  }, { tools, approvals: makeApprovals('allow-once') });
+  const events = [];
+
+  await engine.send({
+    sessionId: 'renderer-1',
+    payload: {
+      messages: [{ role: 'user', content: 'Was ist geändert?' }],
+      workspaceRoot: '/tmp/snotra-project',
+    },
+    onEvent: (event) => events.push(event),
+  });
+
+  const pending = events
+    .filter((event) => event.type === CHAT_ENGINE_EVENTS.TOOL_LINE && event.payload.phase === TOOL_LINE_PHASES.PENDING)
+    .map((event) => event.payload.line);
+  assert.deepEqual(pending, ['Running command …', 'Running command “git status --short” …']);
+});
+
 test('engine reports usage as sum of rounds and contextUsage as the last round', async () => {
   const tools = makeToolPort(() => JSON.stringify({ ok: true }));
   const { engine } = makeEngine([

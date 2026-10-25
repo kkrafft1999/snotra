@@ -417,24 +417,9 @@ export function syncToolSummaryLine(line, summary) {
   }
 }
 
-/**
- * Die Schrittliste ist höhenbegrenzt und scrollt (Issue #60). Der Fade am
- * unteren Rand erscheint nur, solange dort wirklich noch etwas folgt — sonst
- * sähe die letzte Zeile dauerhaft ausgegraut aus.
- */
-export function syncToolListOverflow(linesEl) {
-  if (!linesEl) return;
-  const overflowing = linesEl.scrollHeight - linesEl.clientHeight > 1;
-  const atBottom = linesEl.scrollTop + linesEl.clientHeight >= linesEl.scrollHeight - 2;
-  linesEl.classList.toggle('chat-tool-lines--fade', overflowing && !atBottom);
-}
-
-/** Neue Schritte nachziehen, solange der Nutzer die Liste unten hat. */
+/** Appends a step. The list has no height cap (#1252), so nothing scrolls here. */
 export function appendToolLine(linesEl, row) {
-  const atBottom = linesEl.scrollTop + linesEl.clientHeight >= linesEl.scrollHeight - 2;
   linesEl.appendChild(row);
-  if (atBottom) linesEl.scrollTop = linesEl.scrollHeight;
-  syncToolListOverflow(linesEl);
 }
 
 /**
@@ -452,7 +437,6 @@ export function syncToolLogSummary(wrap, { thinking = false, elapsedMs = 0 } = {
   const line = wrap.querySelector('.chat-tool-summary-line');
   if (line) syncToolSummaryLine(line, summary);
 
-  syncToolListOverflow(wrap.querySelector('.chat-tool-lines'));
   wrap.classList.toggle('chat-tool-log--single', !summary.expandable);
   const summaryEl = wrap.querySelector('.chat-tool-summary');
   if (summaryEl) summaryEl.tabIndex = summary.expandable ? 0 : -1;
@@ -581,7 +565,6 @@ export function buildToolLog(trace, state /* 'running' | 'done' */, pendingLines
   lines.className = 'chat-tool-lines';
   lines.setAttribute('role', 'list');
   lines.setAttribute('aria-label', t('toolLog.allSteps'));
-  lines.addEventListener('scroll', () => syncToolListOverflow(lines));
   log.appendChild(lines);
 
   if (Array.isArray(trace) && trace.length > 0) {
