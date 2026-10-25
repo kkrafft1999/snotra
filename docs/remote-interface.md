@@ -454,10 +454,15 @@ one place at registration that no handler can forget.
    (`no_approval_ui`). In the desktop app the window counts as subscribed to
    every chat of its workspace, so this happens only headless or when the
    window is gone; headless, the last connection's 30 s grace covers a
-   reconnect. *As built (#1194):* a card still needs the window to go out —
-   a phone's turn included —, and a phone that follows the chat is offered
-   it besides; without a window it expires, until a headless process
-   (#983) changes that.
+   reconnect. *As built (#1194, #1251):* a card of a window's own turn
+   still needs the window. A phone's turn needs the window **or** a
+   connection that takes cards and follows the chat: without a window the
+   card is kept and offered to that connection alone, a window that opens
+   later takes it over, and a window that closes leaves it to the phone
+   instead of voiding it. Only with neither does it expire, and the run
+   ends with a message that says to open Snotra on the computer. A card
+   kept for the phone has no time limit, like one in the window; the
+   phone's `run.abort` ends it.
 
 ### 7.5 What a connection may see
 

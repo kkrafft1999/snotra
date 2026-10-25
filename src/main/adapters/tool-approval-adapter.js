@@ -14,6 +14,10 @@
  *
  * Kein Zeitlimit: Eine Karte wartet, bis der Nutzer entscheidet. Verfall nur
  * durch Abbruch, Fenster-Schließen, Kontext-/Regelwechsel (invalidate*).
+ *
+ * The one exception to "no window, no card" (#1251): a phone's turn in a chat
+ * that a phone which takes cards follows. Its card is kept without a window,
+ * answered on the phone, and taken over by a window that opens later.
  */
 
 const {
@@ -32,9 +36,11 @@ const { isRecord } = require('../../shared/runtime/is-record');
  * A window that registered for cards; checked again before every push.
  * @typedef {Partial<import('../../application/ports/event-push-port').EventPushTarget>} ApprovalWindow
  *
- * An open request: who asked, for which chat, and how to answer the waiting call.
+ * An open request: who answers it, who asked, for which chat, and how to
+ * answer the waiting call.
  * @typedef {Object} PendingApproval
- * @property {string|number} sessionId
+ * @property {string|number} sessionId  the window that answers it — or, while none is open, the asking session (#1251)
+ * @property {string|number} origin  the session whose run asked
  * @property {string|null} chatId
  * @property {ToolApprovalRequest} request
  * @property {(outcome: ToolApprovalOutcome) => void} resolve
@@ -87,6 +93,8 @@ function abortReason(signal) {
  * @param {{ warn?: Function }} [deps.log]
  * @param {(sessionId: string|number) => boolean} [deps.answeredByWindow]  a front end without cards of its
  *   own whose requests the app window answers — a phone's turn before it can answer them (#1194)
+ * @param {(chatId: string|null) => boolean} [deps.answeredRemotely]  a remote front end that takes cards
+ *   follows the chat: its card is kept and offered there even without a window (#1251)
  * @returns {import('../../application/ports/tool-approval-port').ToolApprovalPort & {
  *   subscribe: (sessionId: string|number, target: ApprovalWindow) => boolean,
  *   unsubscribe: (sessionId: string|number) => void,
@@ -102,7 +110,7 @@ function abortReason(signal) {
  *     { ok: true, response: string } | { ok: false, reason: 'not-found' | 'refused' },
  * }}
  */
-function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredByWindow = () => false }) {
+function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredByWindow = () => false, answeredRemotely = () => false }) {
   /** @type {Map<string|number, ApprovalWindow>} sessionId → push target (nur angemeldete Fenster). */
   const subscribers = new Map();
   /** @type {Map<string, PendingApproval>} requestId → the open request */
@@ -139,6 +147,31 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
       last = id;
     }
     return last;
+  }
+
+  /**
+   * The window subscribed under `sessionId`, if it is still there.
+   * @param {string|number} sessionId
+   */
+  function liveWindow(sessionId) {
+    const target = subscribers.get(sessionId);
+    if (!target) return null;
+    if (typeof target.isDestroyed === 'function' && target.isDestroyed()) {
+      subscribers.delete(sessionId);
+      return null;
+    }
+    return target;
+  }
+
+  /**
+   * Whether a request of `origin` can be answered without a window: a
+   * phone's turn, in a chat that a phone which takes cards follows (#1251).
+   *
+   * @param {string|number} origin
+   * @param {unknown} chatId
+   */
+  function remoteAnswers(origin, chatId) {
+    return answeredByWindow(origin) && answeredRemotely(chatKey(chatId)) === true;
   }
 
   /**
@@ -204,6 +237,33 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
     }
   }
 
+  /**
+   * A window went away (#1251). A request of a phone's turn moves to a window
+   * that is still open, or stays open for the phone that takes its cards;
+   * every other request of the window expires.
+   *
+   * @param {string|number} sessionId
+   * @param {string} reason
+   */
+  function releaseWindow(sessionId, reason) {
+    for (const [requestId, entry] of [...pending.entries()]) {
+      if (entry.sessionId !== sessionId) continue;
+      if (answeredByWindow(entry.origin)) {
+        const next = answeringSession(entry.origin);
+        const target = next === sessionId ? null : liveWindow(next);
+        if (target && send(target, PUSH.TOOL_APPROVAL_REQUEST, createToolApprovalRequestDto({ ...entry.request, requestId }))) {
+          entry.sessionId = next;
+          continue;
+        }
+        if (remoteAnswers(entry.origin, entry.chatId)) {
+          entry.sessionId = entry.origin;
+          continue;
+        }
+      }
+      settle(requestId, { invalidated: true, reason });
+    }
+  }
+
   /** @param {string} [reason] */
   function invalidateAll(reason = PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED) {
     for (const requestId of [...pending.keys()]) settle(requestId, { invalidated: true, reason });
@@ -240,32 +300,32 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
     subscribe(sessionId, target) {
       if (!target) return false;
       subscribers.set(sessionId, target);
+      // What a phone's turn asked while no window was open is this window's
+      // now (#1251); the renderer lists it right after subscribing.
+      for (const entry of pending.values()) {
+        if (entry.sessionId === entry.origin && answeredByWindow(entry.origin)) entry.sessionId = sessionId;
+      }
       if (typeof target.once === 'function') {
         target.once('destroyed', () => {
           if (subscribers.get(sessionId) === target) subscribers.delete(sessionId);
-          invalidateSession(sessionId, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
+          releaseWindow(sessionId, PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED);
         });
       }
       return true;
     },
     unsubscribe(sessionId) {
       subscribers.delete(sessionId);
-      invalidateSession(sessionId, PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI);
+      releaseWindow(sessionId, PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI);
     },
-    isAvailable(requestedBy) {
-      const sessionId = answeringSession(requestedBy);
-      const target = subscribers.get(sessionId);
-      if (!target) return false;
-      if (typeof target.isDestroyed === 'function' && target.isDestroyed()) {
-        subscribers.delete(sessionId);
-        return false;
-      }
-      return true;
+    isAvailable(requestedBy, chatId) {
+      return liveWindow(answeringSession(requestedBy)) !== null || remoteAnswers(requestedBy, chatId);
     },
     requestApproval({ sessionId: requestedBy, request, abortSignal }) {
       const sessionId = answeringSession(requestedBy);
-      const target = subscribers.get(sessionId);
-      if (!this.isAvailable(sessionId)) {
+      const target = liveWindow(sessionId);
+      // Without a window, a phone that takes cards answers it alone (#1251).
+      const remote = remoteAnswers(requestedBy, request?.chatId);
+      if (!target && !remote) {
         return Promise.resolve({ invalidated: true, reason: PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI, requestId: '' });
       }
       if (abortSignal?.aborted) {
@@ -275,17 +335,23 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
       return new Promise((resolve) => {
         const onAbort = () => settle(requestId, { invalidated: true, reason: abortReason(abortSignal) });
         abortSignal?.addEventListener?.('abort', onAbort, { once: true });
-        pending.set(requestId, {
-          sessionId,
+        /** @type {PendingApproval} */
+        const entry = {
+          sessionId: target ? sessionId : requestedBy,
+          origin: requestedBy,
           chatId: chatKey(request?.chatId),
           request,
           resolve,
           cleanup: () => abortSignal?.removeEventListener?.('abort', onAbort),
-        });
+        };
+        pending.set(requestId, entry);
         const dto = createToolApprovalRequestDto({ ...request, requestId });
-        if (!send(target, PUSH.TOOL_APPROVAL_REQUEST, dto)) {
-          settle(requestId, { invalidated: true, reason: PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI });
-          return;
+        if (target && !send(target, PUSH.TOOL_APPROVAL_REQUEST, dto)) {
+          if (!remote) {
+            settle(requestId, { invalidated: true, reason: PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI });
+            return;
+          }
+          entry.sessionId = requestedBy;
         }
         tell({ type: 'request', chatId: chatKey(request?.chatId), dto });
       });

@@ -160,7 +160,7 @@ const newestFirst = (/** @type {{ updatedAt: number, chatId: string }} */ a, /**
  *   clearTimer?: (timer: unknown) => void,
  *   log?: { warn: (...args: unknown[]) => void },
  * }} deps  `deltaBatchMs` the transport's batching of streamed text — 150 on the relay (protocol §17), 0 sends at once
- * @returns {import('../ports/remote-message-layer-port').RemoteMessageLayerPort & { closeAll: (reason: string) => void }}
+ * @returns {import('../ports/remote-message-layer-port').RemoteMessageLayerPort & { closeAll: (reason: string) => void, answersCards: (chatId: string|null) => boolean }}
  */
 function createRemoteDispatcher({
   desktop,
@@ -809,6 +809,14 @@ function createRemoteDispatcher({
       approvalResponses: METHODS['approval.respond'].kinds.includes(connection.kind) ? [...APPROVAL_RESPONSES] : [],
       limits: { ...LIMITS },
     }),
+
+    /**
+     * Whether a connection that takes cards follows the chat: then a card of
+     * the chat has someone to answer it even without a window (#1251).
+     * @param {string|null} chatId
+     */
+    answersCards: (chatId) => typeof chatId === 'string'
+      && [...open.values()].some((entry) => entry.approvals && entry.subscriptions.has(chatId)),
 
     open(connection, outlet) {
       /** @type {Open} */

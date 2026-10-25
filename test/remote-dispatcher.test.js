@@ -867,3 +867,22 @@ test('cards that go out and are settled reach the connections that follow the ch
   assert.equal(otherEvents.some((e) => e.method.startsWith('approval.')), false, 'a connection without the capability hears of no card');
   noPaths(named('approval.request'));
 });
+
+test('a chat has someone to answer its cards only while a connection that takes them follows it (#1251)', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const taking = await setup({ desktop, capabilities: ['approvals'] });
+  assert.equal(taking.dispatcher.answersCards('a1'), false, 'not before it opens the chat');
+  await taking.call('chat.open', { chatId: 'a1' });
+  assert.equal(taking.dispatcher.answersCards('a1'), true);
+  assert.equal(taking.dispatcher.answersCards('b1'), false, 'only the chats it follows');
+  assert.equal(taking.dispatcher.answersCards(null), false);
+  await taking.call('chat.close', { chatId: 'a1' });
+  assert.equal(taking.dispatcher.answersCards('a1'), false);
+  await taking.call('chat.open', { chatId: 'a1' });
+  taking.dispatcher.close(taking.connection);
+  assert.equal(taking.dispatcher.answersCards('a1'), false, 'nor once it is gone');
+
+  const watching = await setup({ desktop: fakeDesktop({ chats: turnChats() }) });
+  await watching.call('chat.open', { chatId: 'a1' });
+  assert.equal(watching.dispatcher.answersCards('a1'), false, 'a connection without the capability only watches');
+});
