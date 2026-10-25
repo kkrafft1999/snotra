@@ -14,11 +14,15 @@
  */
 
 const {
-  PROGRAM_ALLOWANCE_SKIP_REASONS,
   programName,
   normalizeAllowancePath,
   normalizeProgramAllowance,
   parseDomainInput,
+  grantsSomething,
+  credentialNameProblem,
+  credentialValueProblem,
+  CREDENTIAL_NAME_PROBLEMS,
+  CREDENTIAL_VALUE_PROBLEMS,
   PROGRAM_ALLOWANCE_LIMITS,
 } = require('../../shared/contracts/program-allowances');
 const { createMessage } = require('../../shared/contracts/message');
@@ -44,6 +48,7 @@ const { platformSupports } = require('../platforms');
  *   added up per program (#1119)
  * @param {string[]} [deps.protectedRoots]  Snotra's own storage, never writable
  * @param {string[]} [deps.sensitivePaths]  what the sandbox keeps unreadable (`~` allowed)
+ * @param {() => string} [deps.randomId]  the id a new credential value is stored under (#1262)
  */
 function createProgramAllowances({
   fs,
@@ -54,6 +59,7 @@ function createProgramAllowances({
   readAllowances = async () => [],
   protectedRoots = [],
   sensitivePaths = [],
+  randomId = () => require('crypto').randomUUID(),
 }) {
   const X_OK = fs?.constants?.X_OK ?? 1;
   const home = os.homedir();
@@ -191,12 +197,78 @@ function createProgramAllowances({
   }
 
   /**
+   * The credentials the dialog sends (#1262): each a variable name and
+   * either a new value or the id of the value the edited entry already has —
+   * the store checks that the id is really that entry's. A new value gets a
+   * new id, so a plan approved for the old one no longer runs.
+   *
+   * @param {unknown} list
+   * @returns {{ok: true, credentials: Array<{name: string, id: string}>, secrets: Record<string, string>}
+   *   | {ok: false, error: Message}}
+   */
+  function prepareCredentials(list) {
+    const rows = Array.isArray(list) ? list : [];
+    if (rows.length > PROGRAM_ALLOWANCE_LIMITS.MAX_CREDENTIALS) {
+      return { ok: false, error: createMessage('permissions.allowance.error.tooManyCredentials', { max: PROGRAM_ALLOWANCE_LIMITS.MAX_CREDENTIALS }) };
+    }
+    /** @type {Array<{name: string, id: string}>} */
+    const credentials = [];
+    /** @type {Record<string, string>} */
+    const secrets = {};
+    for (const raw of rows) {
+      const row = isRecord(raw) ? raw : {};
+      const name = typeof row.name === 'string' ? row.name.trim() : '';
+      const nameProblem = credentialNameProblem(name);
+      if (nameProblem === CREDENTIAL_NAME_PROBLEMS.EMPTY) {
+        return { ok: false, error: createMessage('permissions.allowance.error.credentialNameEmpty') };
+      }
+      if (nameProblem === CREDENTIAL_NAME_PROBLEMS.RESERVED) {
+        return { ok: false, error: createMessage('permissions.allowance.error.credentialNameReserved', { name }) };
+      }
+      if (nameProblem) {
+        return { ok: false, error: createMessage('permissions.allowance.error.credentialNameInvalid', { name: name.slice(0, 80) }) };
+      }
+      if (credentials.some((other) => other.name === name)) {
+        return { ok: false, error: createMessage('permissions.allowance.error.credentialNameTwice', { name }) };
+      }
+      const value = typeof row.value === 'string' ? row.value.trim() : '';
+      if (value) {
+        const valueProblem = credentialValueProblem(value);
+        if (valueProblem) {
+          const key = valueProblem === CREDENTIAL_VALUE_PROBLEMS.SHORT
+            ? 'permissions.allowance.error.credentialValueShort'
+            : valueProblem === CREDENTIAL_VALUE_PROBLEMS.LONG
+              ? 'permissions.allowance.error.credentialValueLong'
+              : 'permissions.allowance.error.credentialValueInvalid';
+          return {
+            ok: false,
+            error: createMessage(key, {
+              name,
+              min: PROGRAM_ALLOWANCE_LIMITS.MIN_SECRET_CHARS,
+              max: PROGRAM_ALLOWANCE_LIMITS.MAX_SECRET_CHARS,
+            }),
+          };
+        }
+        const id = randomId();
+        secrets[id] = value;
+        credentials.push({ name, id });
+      } else if (typeof row.id === 'string' && row.id) {
+        credentials.push({ name, id: row.id });
+      } else {
+        return { ok: false, error: createMessage('permissions.allowance.error.credentialValueEmpty', { name }) };
+      }
+    }
+    return { ok: true, credentials, secrets };
+  }
+
+  /**
    * The entry the settings dialog wants to store, checked the way main sees
    * the machine: program resolved, every domain a host name, every folder
-   * allowed. trustd only exists on macOS.
+   * allowed, every credential named and filled (#1262). trustd only exists
+   * on macOS. `secrets` carries the new credential values for the store.
    *
    * @param {unknown} raw
-   * @returns {Promise<{ok: true, entry: ProgramAllowance}|{ok: false, error: Message}>}
+   * @returns {Promise<{ok: true, entry: ProgramAllowance, secrets: Record<string, string>}|{ok: false, error: Message}>}
    */
   async function prepareEntry(raw) {
     /** @type {Record<string, unknown>} */
@@ -222,17 +294,24 @@ function createProgramAllowances({
       if (!checked.ok) return checked;
       writePaths.push(checked.path);
     }
+    const credentials = prepareCredentials(data.credentials);
+    if (!credentials.ok) return credentials;
     const entry = normalizeProgramAllowance({
       path: program.path,
       domains: parsed.domains,
       writePaths,
       trustd: platform === 'darwin' && data.trustd === true,
+      credentials: credentials.credentials,
     });
     if (!entry) return { ok: false, error: createMessage('permissions.allowance.error.programNotFound', { program: program.path }) };
-    if (entry.domains.length === 0 && entry.writePaths.length === 0 && !entry.trustd) {
+    // An id the contract does not take would drop a credential quietly.
+    if (entry.credentials.length !== credentials.credentials.length) {
+      return { ok: false, error: createMessage('permissions.allowance.error.invalid') };
+    }
+    if (!grantsSomething(entry)) {
       return { ok: false, error: createMessage('permissions.allowance.error.empty') };
     }
-    return { ok: true, entry };
+    return { ok: true, entry, secrets: credentials.secrets };
   }
 
   const { match } = createProgramAllowanceMatcher({

@@ -806,8 +806,10 @@ const ALLOWANCE_SKIP_TEXT = Object.freeze({
  *
  * @param {{ isolated?: boolean, domains?: string[], writePaths?: string[], trustd?: boolean, reason?: string } | null | undefined} isolation
  * @param {import('../ports/tool-port').ToolPlan['sandbox'] | null} [sandboxPlan]
+ * @param {{ set?: string[], unavailable?: string[] } | null} [credentials]  the allowance's
+ *   variables the run got, by name (#1262)
  */
-function describeIsolationForModel(isolation, sandboxPlan = null) {
+function describeIsolationForModel(isolation, sandboxPlan = null, credentials = null) {
   if (!isolation) return null;
   if (isolation.isolated) {
     /** @type {Record<string, unknown>} */
@@ -815,11 +817,26 @@ function describeIsolationForModel(isolation, sandboxPlan = null) {
     const granted = sandboxPlan?.allowance;
     const skipped = sandboxPlan?.allowanceSkipped;
     if (granted) {
-      out.program_allowance = {
+      /** @type {Record<string, unknown>} */
+      const allowance = {
         program: granted.program,
         write_paths: Array.isArray(isolation.writePaths) ? isolation.writePaths : [],
         macos_certificate_check: isolation.trustd === true,
       };
+      // The model should use the token, not try to sign in or print it (#1262).
+      const set = Array.isArray(credentials?.set) ? credentials.set : [];
+      const unavailable = Array.isArray(credentials?.unavailable) ? credentials.unavailable : [];
+      if (set.length > 0) {
+        allowance.environment_variables = set;
+        allowance.credential_note = 'These variables were set from the user\'s allowance. '
+          + 'Their values are masked in the output; do not try to print them or to sign in instead.';
+      }
+      if (unavailable.length > 0) {
+        allowance.credentials_not_set = unavailable;
+        allowance.credentials_not_set_note = 'Snotra could not read the stored value of these '
+          + 'variables, so the run went without them. The user can enter the token again in the program\'s allowance.';
+      }
+      out.program_allowance = allowance;
     } else if (skipped && ALLOWANCE_SKIP_TEXT[skipped.reason]) {
       out.program_allowance_not_applied = `The user's allowance for ${skipped.program} did not apply: `
         + `${ALLOWANCE_SKIP_TEXT[skipped.reason]}. Run the program on its own to get it.`;
@@ -1786,7 +1803,7 @@ function createWorkspaceToolRegistry({
         + 'folder and a temporary directory (caches are redirected there), no access to credential '
         + 'stores, and no network except the domains listed in network_domains — pip and npm installs '
         + 'get their registry automatically. Programs the user has given an allowance in Settings '
-        + '(Program allowances) get its domains and folders by themselves, but only when the command '
+        + '(Program allowances) get its domains, folders and token (such as GH_TOKEN for gh) by themselves, but only when the command '
         + 'runs the program on its own: no chaining, pipes, redirections or $ — so call such a program '
         + 'alone and filter its output afterwards. What the sandbox refused — a write, a read of a protected '
         + 'location, a connection — is listed in stderr under <sandbox_blocked>, and the user sees the same list. '
@@ -1848,7 +1865,16 @@ function createWorkspaceToolRegistry({
           cwd: resolved.absPath,
           workspaceRoot: workspaceRoot || undefined,
           networkDomains: resolveRunDomains(TOOL_EXECUTION_KINDS.SHELL, args, allowance),
-          programAllowance: allowance ? { writePaths: allowance.writePaths, trustd: allowance.trustd === true } : null,
+          programAllowance: allowance
+            ? {
+              writePaths: allowance.writePaths,
+              trustd: allowance.trustd === true,
+              // Names and ids of its credentials (#1262); the runner reads the values.
+              path: allowance.path,
+              root: plan?.sandbox?.root || null,
+              credentials: Array.isArray(allowance.credentials) ? allowance.credentials : [],
+            }
+            : null,
           sandboxDisabled: sandboxDisabledByPlan(plan),
           sandboxGrants: sandboxGrants || null,
           onSandboxNetworkAsk: onSandboxNetworkAsk || null,
@@ -1868,7 +1894,7 @@ function createWorkspaceToolRegistry({
           shell: result.shell,
           cwd: relativeCwd || '.',
         };
-        const sandbox = describeIsolationForModel(result.isolation, plan?.sandbox);
+        const sandbox = describeIsolationForModel(result.isolation, plan?.sandbox, result.credentials);
         if (sandbox) out.sandbox = sandbox;
         // The model reads the refusals in stderr; the tool row gets the list (#792).
         if (result.sandboxBlocked) onSandboxBlocked?.(result.sandboxBlocked);

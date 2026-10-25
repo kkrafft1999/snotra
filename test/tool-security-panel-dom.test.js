@@ -529,6 +529,7 @@ test('adding: This workspace is preselected; the program is looked up, bad hosts
     domains: ['graph.microsoft.com', 'login.microsoftonline.com'],
     writePaths: [CACHE],
     trustd: true,
+    credentials: [],
     scope: 'workspace',
     root: OPEN,
     previousPath: null,
@@ -591,6 +592,116 @@ test('editing starts from the entry in its scope; a refusal from main is shown i
   // Escape closes the dialog only.
   $('dialog-program-allowance').dispatchEvent(new dom.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   assert.equal(page.overlayOpen(), false);
+});
+
+test('credentials: proposed for the program, refused at the field, sent as typed — and never read back once saved (#1262)', async (t) => {
+  const page = await mount();
+  t.after(page.dom.cleanup);
+  const { $, dom } = page;
+  const doc = dom.document;
+  const rows = () => [...$('allowance-credential-list').querySelectorAll('.allowance-credential')];
+  const field = (row, name) => row.querySelector(`[data-field="${name}"]`);
+  const typeInto = (input, value) => {
+    input.value = value;
+    input.dispatchEvent(new dom.window.Event('input'));
+  };
+
+  page.focus(`program-add:${OPEN}`).click();
+  await flush();
+  assert.equal(rows().length, 0);
+  assert.equal($('allowance-credentials-head').hidden, true);
+  assert.equal($('allowance-credentials-warning').hidden, true, 'the guidance comes with the first token');
+  typeInto($('allowance-field-program'), 'gh');
+  $('allowance-field-domains').value = 'api.github.com';
+
+  $('btn-allowance-credential-add').click();
+  const [row] = rows();
+  assert.equal(field(row, 'name').value, 'GH_TOKEN', 'the variable gh reads');
+  assert.equal(field(row, 'value').type, 'password');
+  assert.equal(doc.activeElement, field(row, 'value'), 'what is left to type is the token');
+  assert.equal($('allowance-credentials-head').hidden, false);
+  assert.equal($('allowance-credentials-warning').hidden, false);
+  assert.equal(field(row, 'remove').getAttribute('aria-label'), 'Remove GH_TOKEN');
+
+  // Refused: said under the rows, the field marked and focused; nothing goes to main.
+  typeInto(field(row, 'name'), 'PATH');
+  $('btn-program-allowance-save').click();
+  await flush();
+  assert.equal(page.sent.length, 0);
+  assert.equal($('allowance-credentials-error').textContent, 'PATH is set by the shell or the sandbox and cannot carry a credential.');
+  assert.equal(doc.activeElement, field(rows()[0], 'name'));
+  assert.equal(field(rows()[0], 'name').getAttribute('aria-invalid'), 'true');
+  assert.equal(field(rows()[0], 'name').getAttribute('aria-describedby'), 'allowance-credentials-error');
+  typeInto(field(rows()[0], 'name'), 'GH_TOKEN');
+  assert.equal($('allowance-credentials-error').classList.contains('hidden'), true, 'a fix clears the complaint');
+  $('btn-program-allowance-save').click();
+  await flush();
+  assert.equal($('allowance-credentials-error').textContent, 'Enter the token for GH_TOKEN.');
+  assert.equal(doc.activeElement, field(rows()[0], 'value'));
+
+  typeInto(field(rows()[0], 'value'), ' ghp_new_token_value \n');
+  $('btn-program-allowance-save').click();
+  await wait(5);
+  await flush();
+  assert.deepEqual(page.sent[0][1].credentials, [{ name: 'GH_TOKEN', value: 'ghp_new_token_value' }]);
+  assert.equal(page.overlayOpen(), false);
+  assert.equal(doc.body.innerHTML.includes('ghp_new_token_value'), false, 'a typed token stays nowhere once the dialog is gone');
+});
+
+test('credentials: a saved one is masked; it can be renamed, replaced, kept or removed (#1262)', async (t) => {
+  const saved = { ...TODO, credentials: [{ name: 'TODO_TOKEN', id: '11111111-aaaa-4aaa-8aaa-111111111111' }] };
+  const page = await mount({ overview: overviewWith({
+    workspaces: [{ root: OPEN, open: true, missing: false, sandboxOff: false, programs: [saved], hosts: [] }],
+  }) });
+  t.after(page.dom.cleanup);
+  const { $, dom } = page;
+  const doc = dom.document;
+  const rows = () => [...$('allowance-credential-list').querySelectorAll('.allowance-credential')];
+  const field = (row, name) => row.querySelector(`[data-field="${name}"]`);
+
+  // The settings row names the variable.
+  assert.match(page.detail().textContent, /CredentialsTODO_TOKENencrypted/);
+  page.focus(`program-edit:${OPEN}:${TOOL}`).click();
+  await flush();
+  const [row] = rows();
+  assert.equal(field(row, 'name').value, 'TODO_TOKEN');
+  assert.equal(field(row, 'value'), null, 'no field holds the saved value');
+  assert.equal(row.querySelector('.allowance-credential__masked').getAttribute('aria-hidden'), 'true');
+  assert.equal(row.querySelector('.allowance-credential__note').textContent, 'Stored encrypted, not shown again');
+  assert.equal(field(row, 'replace').getAttribute('aria-label'), 'Replace the token in TODO_TOKEN');
+
+  field(row, 'replace').click();
+  assert.equal(doc.activeElement, field(rows()[0], 'value'));
+  assert.equal(field(rows()[0], 'keep').getAttribute('aria-label'), 'Keep the saved token in TODO_TOKEN');
+  field(rows()[0], 'keep').click();
+  assert.equal(doc.activeElement, field(rows()[0], 'replace'));
+
+  // Removing one moves the focus to the next row, the last one to Add.
+  $('btn-allowance-credential-add').click();
+  assert.equal(field(rows()[1], 'name').value, 'MS_TODO_CLI_TOKEN', 'a program without a known variable gets <PROGRAM>_TOKEN');
+  field(rows()[0], 'remove').click();
+  assert.equal(rows().length, 1);
+  assert.equal(doc.activeElement, field(rows()[0], 'remove'));
+  field(rows()[0], 'remove').click();
+  assert.equal(doc.activeElement, $('btn-allowance-credential-add'));
+  assert.equal($('allowance-credentials-warning').hidden, true);
+  $('btn-program-allowance-save').click();
+  await wait(5);
+  await flush();
+  assert.deepEqual(page.sent[0][1].credentials, [], 'removed: main stores none and drops the secret');
+
+  // Renamed, value kept: main gets the id, not a value.
+  page.setOverview(overviewWith({ workspaces: [{ root: OPEN, open: true, missing: false, sandboxOff: false, programs: [saved], hosts: [] }] }));
+  await flush();
+  page.focus(`program-edit:${OPEN}:${TOOL}`).click();
+  await flush();
+  field(rows()[0], 'name').value = 'MS_TODO_TOKEN';
+  field(rows()[0], 'name').dispatchEvent(new dom.window.Event('input'));
+  assert.equal(field(rows()[0], 'remove').getAttribute('aria-label'), 'Remove MS_TODO_TOKEN', 'the buttons follow the new name');
+  $('btn-program-allowance-save').click();
+  await wait(5);
+  await flush();
+  assert.deepEqual(page.sent[1][1].credentials, [{ name: 'MS_TODO_TOKEN', id: '11111111-aaaa-4aaa-8aaa-111111111111' }]);
 });
 
 test('off macOS the dialog does not offer the certificate check', async (t) => {

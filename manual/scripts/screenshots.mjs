@@ -797,6 +797,46 @@ const MOTIFS = {
     },
   },
 
+  /**
+   * The program dialog for `gh` with a token saved (#1262): the variable, the
+   * masked value with *Replace*, and the note on narrow tokens. Needs `gh` on
+   * the PATH of the login shell, as the page it illustrates does. The value is
+   * an example; the dialog never shows it again anyway.
+   */
+  'allowance-credentials': {
+    prefs: { shellExecutionEnabled: true },
+    async setUp({ app, page }) {
+      await app.evaluate(({ dialog }) => {
+        dialog.showMessageBox = async () => ({ response: 0 });
+      });
+      const call = (name, ...args) => page.evaluate(([n, a]) => window.electronAPI[n](...a), [name, args]);
+      const root = await poll(async () => (await call('getSandboxOverview')).activeRoot || null, { what: 'the demo project open' });
+      const saved = await call('setProgramAllowance', {
+        program: 'gh',
+        domains: ['api.github.com'],
+        writePaths: [],
+        trustd: process.platform === 'darwin',
+        credentials: [{ name: 'GH_TOKEN', value: 'github_pat_example_0000000000' }],
+        scope: 'workspace',
+        root,
+      });
+      if (!saved?.ok) throw new Error(`gh could not be given an allowance: ${JSON.stringify(saved?.error)}`);
+      await openSettingsPanel(app, page, 'sandbox');
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.allowance-row button[data-focus^="program-edit"]'))),
+        { what: 'the gh row' });
+      await page.evaluate(() => document.querySelector('.allowance-row button[data-focus^="program-edit"]').click());
+      await poll(() => page.evaluate(() => !document.getElementById('program-allowance-overlay').classList.contains('hidden')),
+        { what: 'the program dialog' });
+      await page.evaluate(() => {
+        document.activeElement?.blur();
+        const body = document.querySelector('#dialog-program-allowance .modal-dialog__body');
+        body.scrollTop = body.scrollHeight;
+      });
+      await pause(200);
+      return clipAround(page, ['#allowance-credentials-group'], 16);
+    },
+  },
+
   /** Settings › Tools › Autonomy for the demo project, shell commands on. */
   'tools-and-security': {
     prefs: { shellExecutionEnabled: true },

@@ -122,6 +122,7 @@ test('program allowances: a global and a workspace allowance for the same progra
     domains: ['api.github.com', 'uploads.github.com'],
     writePaths: ['/home/u/.config/gh'],
     trustd: true,
+    credentials: [],
   });
   const [elsewhere] = await store.readProgramAllowances(OTHER);
   assert.deepEqual(elsewhere.domains, ['api.github.com']);

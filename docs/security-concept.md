@@ -252,8 +252,8 @@ history without encrypted storage" in section 9 records that.
   cannot be approved. **Own secrets** are the API key of every provider and of
   every model entry with a connection of its own, the values of a gateway's
   extra headers, the secrets stored for the MCP servers — environment variables
-  of a local server, headers of a remote one (#341) — and the web search key
-  (#505). Each counts in every form it can turn up in: a header value with an
+  of a local server, headers of a remote one (#341) — the web search key
+  (#505) and the credentials of the program allowances (#1262). Each counts in every form it can turn up in: a header value with an
   auth scheme (`Bearer …`, `Basic …`, `Token …`) also as its bare token, since
   an `env` dump or a config file carries only that. The list is collected in
   `main/services/own-secrets.js`; values under eight characters do not count.
@@ -1424,6 +1424,56 @@ domains, so a card for a host that is already kept is not shown.
   `host:port` offer are what keep the list short enough to read.
 - **Not covered.** Direct `ssh`, `scp` or `psql` connections: only what goes
   through the proxy — HTTP(S) and Git over SSH — can be named per host.
+
+### Revision: credentials on a program allowance (#1262)
+
+`gh`, `glab` and their kind could not sign in inside the sandbox at all. Their
+token stores — `~/.config/gh`, `~/.config/glab-cli`, and on macOS the keychain
+`gh auth login` writes to — are on the deny-read list (CR-B03-04, #522), and
+opening them would have meant a token in clear on disk or every keychain item
+for the run. Instead, an allowance can now carry credentials: variables such
+as `GH_TOKEN` whose value Snotra keeps and hands to the run.
+
+- **Storage.** An entry holds each credential's variable name and an id. The
+  value is encrypted with `safeStorage`, like a provider key, and stored by id
+  in `allowanceSecrets` next to the allowances in the policy file, so the
+  signature covers it. A credential without a value, or a value no allowance
+  names any more, is dropped on every write: removing a credential or the
+  allowance — or a reset — removes the secret with it. No snapshot, IPC answer
+  or plan carries a value; the dialog gets names and ids and shows a saved
+  value as dots only. A new value gets a new id, so a card approved for the
+  old one is refused by `verifyTargets`. An id from the renderer is accepted
+  only when it belongs to the entry being edited, so no allowance can borrow
+  another one's value.
+- **Which runs get it.** Only the run the allowance applies to (see #408):
+  one simple command running the allowed file, in the workspace the allowance
+  belongs to, or anywhere for a global one; where both name the same variable,
+  the workspace's wins. The approved plan carries names and ids; the shell
+  runner decrypts exactly those, and only when the run is isolated — outside
+  the sandbox the allowance's domains would not hold the token to them. The
+  variables go into the run's environment before the sandbox's own, which win.
+  Names the shell or the sandbox set (`PATH`, `HOME`, the proxy variables,
+  `DYLD_*`, `LD_*`, `SNOTRA_*` and the like) are refused.
+- **The locked configuration stays locked.** `gh` and `glab` stop when they
+  cannot read their configuration folder. A run that gets a token from the
+  allowance gets `GH_CONFIG_DIR` / `GLAB_CONFIG_DIR` pointed at an empty folder
+  in its temporary directory instead; the deny-read list, `isGrantableReadPath()`,
+  the keychain block and the domain allowlist are unchanged.
+- **Masking.** Every form of the values the run got — verbatim and the encoded
+  forms of the own secrets — is replaced by the mask in stdout and stderr, in
+  the output a network card shows while the command waits, and in an error.
+  The values are also own secrets: any other tool result that carries one is
+  withheld. Main logs neither a run's environment nor its output.
+- **Visible.** The native confirmation names each variable and says that the
+  program and whatever it starts can read the value; the card says which
+  variables the run gets; the tool result tells the model the variables were
+  set and masked, or that a stored value could not be decrypted.
+- **The remaining risk.** The token is inside the sandbox: the program and
+  everything it starts can read it, and with an allowed domain it can be sent
+  there in any form the masking does not know — hashed, reversed, split. The
+  dialog therefore asks for a dedicated, narrowly scoped token. A broker that
+  runs the real `gh` outside the sandbox, so that the token never enters it, is
+  the stronger and more expensive alternative named in #1262.
 
 ### Revision: Git over SSH in the Linux sandbox (#1155)
 

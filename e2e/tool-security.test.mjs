@@ -4,7 +4,8 @@
 // off through the system dialog, which names it — without it (the Linux
 // runner has no keyring), every loosening is refused; on Windows, which has no
 // sandbox, the page says so and offers nothing to switch; and the page, the list,
-// All workspaces and the program dialog pass axe in both themes. The page's
+// All workspaces and the program dialog — also with a credential row (#1262) —
+// pass axe in both themes. The page's
 // own logic is tested on the markup in test/tool-security-panel-dom.test.js.
 
 import test from 'node:test';
@@ -147,6 +148,18 @@ test('Tools › Security: reached from the shield, changes a workspace that is n
   await poll(() => page.evaluate(() => !document.getElementById('program-allowance-overlay').classList.contains('hidden')), { what: 'the program dialog' });
   assert.equal(await page.evaluate(() => document.getElementById('allowance-scope-global').checked), true, 'from All workspaces, All workspaces is preselected');
   await checkScreen(page, 'the program dialog', findings, '#dialog-program-allowance');
+  // With a credential row, its refusal and the guidance under it (#1262).
+  await page.evaluate(() => {
+    // A program first: the form refuses a missing one before it looks at the rows.
+    document.getElementById('allowance-field-program').value = 'git';
+    document.getElementById('btn-allowance-credential-add').click();
+    const name = document.querySelector('#allowance-credential-list [data-field="name"]');
+    name.value = '1BAD';
+    name.dispatchEvent(new Event('input', { bubbles: true }));
+    document.getElementById('btn-program-allowance-save').click();
+  });
+  await poll(() => page.evaluate(() => document.getElementById('allowance-credentials-error').textContent !== ''), { what: 'the refused variable' });
+  await checkScreen(page, 'the program dialog with a credential', findings, '#dialog-program-allowance');
 
   assert.equal(findings.length, 0, describeViolations(findings));
 });

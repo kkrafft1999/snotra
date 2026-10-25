@@ -287,7 +287,8 @@ function stableStringify(value) {
  *
  * What a program allowance match says (#408): the allowance a shell command
  * gets, or why it does not.
- * @typedef {{ allowance: { path: string, program: string, writePaths?: string[], trustd?: boolean, [field: string]: any },
+ * @typedef {{ allowance: { path: string, program: string, writePaths?: string[], trustd?: boolean,
+ *     credentials?: Array<{ name: string, id: string }>, [field: string]: any },
  *     command: string, entry: object, skipped?: undefined }
  *   | { skipped: { program: string, reason: string }, allowance?: undefined, command?: undefined, entry?: undefined }} ProgramAllowanceMatch
  * @typedef {(request: { command: string, cwd: string, workspaceRoot: string }) => Promise<ProgramAllowanceMatch | null>} ProgramAllowanceMatcher
@@ -755,6 +756,8 @@ function createToolCallPlanner({
           path: granted.path,
           writePaths: granted.writePaths,
           trustd: granted.trustd === true,
+          // The variables the run gets (#1262) — their names, for the card.
+          credentials: (Array.isArray(granted.credentials) ? granted.credentials : []).map((credential) => credential.name),
         };
       } else if (allowance?.skipped) {
         isolation.allowanceSkipped = allowance.skipped;
