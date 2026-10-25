@@ -2,7 +2,7 @@
 
 /**
  * The window follows a turn it did not start (#1194, step 2b of
- * `docs/remote-interface.md` §10): a phone's turn reaches the window on the
+ * `docs/remote/remote-interface.md` §10): a phone's turn reaches the window on the
  * channels its own turns use — `chat:delta`, `chat:tool-line`,
  * `chat:progress` — with `chat:turn-started` ahead of them, once the
  * question is saved, so that the window knows the run and can show the

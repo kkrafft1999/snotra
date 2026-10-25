@@ -8,7 +8,7 @@
  * only the fields below cross to the window, each checked for its shape. The
  * pairing code is the one secret that does cross, on purpose and only while
  * it is shown: the QR code and the typed key are how it reaches the phone
- * (docs/remote-protocol.md §4).
+ * (docs/remote/remote-protocol.md §4).
  */
 'use strict';
 

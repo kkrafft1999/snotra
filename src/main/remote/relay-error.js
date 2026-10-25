@@ -10,7 +10,7 @@
 
 const { REMOTE_PAIRING_REASONS } = require('../../shared/contracts/remote/pairing-state');
 
-/** The relay's own reasons (docs/remote-protocol.md §5.1) and the adapter's. */
+/** The relay's own reasons (docs/remote/remote-protocol.md §5.1) and the adapter's. */
 const RELAY_REASONS = Object.freeze({
   ...REMOTE_PAIRING_REASONS,
   INVALID_REQUEST: 'invalid-request',

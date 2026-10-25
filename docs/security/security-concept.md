@@ -34,18 +34,18 @@ piece of tool text is therefore not an approval.
 
 The verified starting point: v1.3.1, commit `1e2b50d`:
 
-- The [registry](../src/application/tools/workspace-tool-registry.js) holds eight read
+- The [registry](../../src/application/tools/workspace-tool-registry.js) holds eight read
   tools, `debug_wait` and three write tools. So far, `requiresWrite` and
   `allowWorkspaceWrite` control visibility and execution wholesale.
-- The [chat engine](../src/application/chat/chat-engine.js) runs tool calls one
+- The [chat engine](../../src/application/chat/chat-engine.js) runs tool calls one
   after another; an approval port and a check for sensitive content are missing.
-- The [filesystem service](../src/main/services/fs-service.js) checks relative
+- The [filesystem service](../../src/main/services/fs-service.js) checks relative
   paths and real paths including symlinks. Active `skill:` roots are additional,
   read-only areas (#61).
 - `search_in_files` no longer runs model-supplied regular expressions on the
   main thread: known ReDoS patterns are rejected up front, everything else runs
   in a `worker_threads` worker with a hard time budget (#69,
-  [`regex-search-worker.js`](../src/main/services/regex-search-worker.js)).
+  [`regex-search-worker.js`](../../src/main/services/regex-search-worker.js)).
 - Deleting from the UI uses the trash (#59); a delete tool or an MCP tool does
   not exist in this registry yet. Web search and page fetching (#63/#95),
   `run_python` (#86) and `shell_execute` (#102) have been added since — see the
@@ -380,7 +380,7 @@ history without encrypted storage" in section 9 records that.
   (#560). Local processes running with the user's rights are outside the
   protection goal; they could modify the app itself. Two exceptions hold once
   Snotra listens on localhost for other front ends
-  ([`remote-interface.md`](./remote-interface.md), #989). Other users of the
+  ([`remote-interface.md`](../remote/remote-interface.md), #989). Other users of the
   machine and web pages in the user's browser can reach a loopback port, so
   they are inside the goal, kept out by the interface's own checks — loopback
   only, a credential only the user can read, `Host` and `Origin` checked. And
@@ -808,7 +808,7 @@ The residual risk above still describes Windows. On macOS and Linux it has been
 replaced by an operating system boundary:
 
 - **The mechanism.** Both tools run through the sandbox service
-  ([`sandbox-service.js`](../src/main/services/sandbox-service.js)) on top of
+  ([`sandbox-service.js`](../../src/main/services/sandbox-service.js)) on top of
   `@anthropic-ai/sandbox-runtime`, pinned to an exact version: a generated
   Seatbelt profile (`sandbox-exec`) on macOS, `bubblewrap` with a removed network
   namespace on Linux, and a domain filter as a proxy in the main process. The
@@ -834,7 +834,7 @@ replaced by an operating system boundary:
   IP literals and a bare `*` are dropped — the card shows names, and the
   sandbox allows nothing else. Planner and handler derive the list from the
   same arguments through one function
-  ([`sandbox-domains.js`](../src/shared/runtime/sandbox-domains.js)), and the
+  ([`sandbox-domains.js`](../../src/shared/runtime/sandbox-domains.js)), and the
   approval is bound to those arguments by the plan key.
 - **What the runtime adds.** Inside the writable paths it keeps `.git/hooks`,
   `.git/config`, shell profiles and editor settings closed. Snotra closes two of
@@ -1060,7 +1060,7 @@ as a workspace default, whose entry survived but whose mode did not.
 
 Hard deletes, recursive forced deletion (`rm -rf` and its equivalents), volume
 operations and Git history rewrites are blocked even in auto
-([`shell-command-guard.js`](../src/shared/runtime/shell-command-guard.js), in
+([`shell-command-guard.js`](../../src/shared/runtime/shell-command-guard.js), in
 the planner before the card and in the tool handler). That block is a **second
 line of defence, not a promise of protection**: a list of forbidden strings is
 no match for interpreters, wrappers or composed commands — `bash script.sh` and
@@ -1581,7 +1581,7 @@ work. #62 and #63 were blocked by the finished, tested results of #66 **and**
 ### Plan: local MCP servers in the sandbox (#992)
 
 The state on 2026-10-25: a local MCP server is started by
-[`mcp-stdio-transport.js`](../src/main/services/mcp-stdio-transport.js) as a
+[`mcp-stdio-transport.js`](../../src/main/services/mcp-stdio-transport.js) as a
 child process with the user's full rights, on every platform. *Settings › Tools
 › Setup* and the manual say so (#1249). A remote server starts no process and
 is not part of this plan. Nothing below is built yet; it is the design the
@@ -1617,12 +1617,12 @@ follow-ups work from.
   list gets no endpoint at all. The runtime starts one proxy per process and
   takes its ports at `initialize()`, so a per-wrap endpoint needs a change to
   the runtime — upstream if possible, otherwise a further patch in
-  [`patch-sandbox-runtime.js`](../scripts/patch-sandbox-runtime.js). Whether it
+  [`patch-sandbox-runtime.js`](../../scripts/patch-sandbox-runtime.js). Whether it
   can be done cleanly on both systems, and whether `npx -y` and `uvx` servers
   start under it, is the first step (**#1271**), before anything else is built.
 - **What a server may reach.** The registry its launcher needs (`npx` → npm,
   `uvx` → PyPI), derived by
-  [`sandbox-domains.js`](../src/shared/runtime/sandbox-domains.js) as for a
+  [`sandbox-domains.js`](../../src/shared/runtime/sandbox-domains.js) as for a
   detected package install — it knows `npx` today, `uvx` is to be added — plus the hosts the user enters in the server's
   dialog — `api.github.com` for the GitHub server, say. There are no live asks:
   a server runs without a card, so a host not on its list is refused and named

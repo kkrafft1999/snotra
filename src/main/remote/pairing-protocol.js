@@ -1,12 +1,12 @@
 'use strict';
 
 /**
- * The bytes of docs/remote-protocol.md part 1 as the desktop computes them
+ * The bytes of docs/remote/remote-protocol.md part 1 as the desktop computes them
  * (#1114): the pairing code (§4), the proofs for the relay (§5), `MAC_P` and
  * `MAC_D` (§6) and the safety phrase (§7).
  *
  * Written from the specification, not from scripts/remote-protocol-vectors.js:
- * the two implementations meet only in docs/remote-protocol/pairing-v1.json
+ * the two implementations meet only in docs/remote/remote-protocol/pairing-v1.json
  * (test/remote-pairing-protocol.test.js), and that is what makes the vectors a
  * check of this file. The iPhone app proves its own against the same file.
  *

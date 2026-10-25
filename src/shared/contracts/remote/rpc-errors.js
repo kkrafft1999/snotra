@@ -1,6 +1,6 @@
 /**
  * The errors of the remote protocol's message layer (#1192): one shape for
- * everything that goes wrong after dispatch, `docs/remote-interface.md` §6.3.
+ * everything that goes wrong after dispatch, `docs/remote/remote-interface.md` §6.3.
  *
  * ```
  * error: { code, message, data: { reason, message: { key, params } } }

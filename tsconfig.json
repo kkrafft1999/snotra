@@ -1,6 +1,6 @@
 // Type checking over the existing JSDoc (#1004). The app stays plain
 // JavaScript without a build step: `tsc` only reads, `noEmit` writes nothing.
-// What is checked and why is described in docs/architecture.md, "Plain JS,
+// What is checked and why is described in docs/architecture/architecture.md, "Plain JS,
 // checked by JSDoc".
 {
   "compilerOptions": {

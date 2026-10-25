@@ -1,7 +1,7 @@
 'use strict';
 
 // The remote bridge's pairing crypto (#1114) against the test vectors of
-// docs/remote-protocol.md part 1. src/main/remote/pairing-protocol.js is
+// docs/remote/remote-protocol.md part 1. src/main/remote/pairing-protocol.js is
 // written on its own; these vectors — which the reference script and the
 // iPhone app are held to as well — are the only place the implementations
 // meet.
@@ -12,7 +12,7 @@ const nodeCrypto = require('node:crypto');
 
 const protocol = require('../src/main/remote/pairing-protocol');
 const { createRemotePairingCryptoAdapter } = protocol;
-const vectors = require('../docs/remote-protocol/pairing-v1.json');
+const vectors = require('../docs/remote/remote-protocol/pairing-v1.json');
 
 const fromB64u = (text) => Buffer.from(text, 'base64url');
 const desktopKeys = vectors.desktop.keys;

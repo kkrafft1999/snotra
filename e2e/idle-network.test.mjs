@@ -1,6 +1,6 @@
 // PRI-1: an idle session contacts nothing (#988, AR-13).
 //
-// docs/quality-requirements.md says the app runs without the user sending
+// docs/architecture/quality-requirements.md says the app runs without the user sending
 // anything, and that with the update check switched off it contacts nothing at
 // all. Until this test nothing measured that. It starts the real app with the
 // update check off (launchApp sets SNOTRA_NO_UPDATE_CHECK), lets it sit with a

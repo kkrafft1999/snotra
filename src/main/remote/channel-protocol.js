@@ -1,14 +1,14 @@
 'use strict';
 
 /**
- * The desktop's computations for docs/remote-protocol.md part 2 (#1192): the
+ * The desktop's computations for docs/remote/remote-protocol.md part 2 (#1192): the
  * answer to a handshake (§13), the session keys (§14), the envelopes (§15).
  *
  * X25519, P-256 ECDH and HKDF-SHA256 come from Node's built-in `crypto`;
  * ChaCha20-Poly1305 from `@noble/ciphers`, because Electron's BoringSSL has no
  * `chacha20-poly1305` cipher and the envelopes would neither seal nor open in
  * the app (#1237). Proven byte for byte against
- * docs/remote-protocol/channel-v1.json, which the reference implementation
+ * docs/remote/remote-protocol/channel-v1.json, which the reference implementation
  * in scripts/remote-protocol-channel-vectors.js writes; the two are written
  * apart on purpose, as the iPhone app will be a third.
  *

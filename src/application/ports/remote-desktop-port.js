@@ -1,6 +1,6 @@
 /**
  * RemoteDesktop port (#1194): what the remote dispatcher reads of the
- * desktop for step 1 of `docs/remote-interface.md` §10 — the known
+ * desktop for step 1 of `docs/remote/remote-interface.md` §10 — the known
  * workspaces, the one that is open, the stored chats, which of them run, and
  * the events of a running turn by chat — and, for step 2, what it asks the
  * desktop to do: run a turn, stop one, describe a chat's configuration.

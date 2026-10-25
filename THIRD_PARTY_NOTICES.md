@@ -16,7 +16,7 @@ dependencies, whose licences come with them in `node_modules`.
 ## EFF short word list 2.0
 
 - **What:** `src/shared/contracts/remote/safety-words-v1.json`, the 1,296 words
-  of the mobile remote's safety phrase (docs/remote-protocol.md §7, #1116).
+  of the mobile remote's safety phrase (docs/remote/remote-protocol.md §7, #1116).
   The dice numbers were dropped; order and spelling are as published.
 - **Source:** https://www.eff.org/dice
 - **Licence:** CC BY 3.0 US, Electronic Frontier Foundation. Attribution and

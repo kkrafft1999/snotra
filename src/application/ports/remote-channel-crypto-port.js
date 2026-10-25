@@ -1,12 +1,12 @@
 /**
  * RemoteChannelCrypto port (#1192): the computations of
- * docs/remote-protocol.md part 2 the desktop makes for every connection — the
+ * docs/remote/remote-protocol.md part 2 the desktop makes for every connection — the
  * answer to a handshake (§13), the session keys (§14) and the envelopes
  * sealed and opened under them (§15).
  *
  * The core decides when a handshake is answered, which version is chosen and
  * what happens to an envelope; the adapter only computes, proven against
- * docs/remote-protocol/channel-v1.json. Key bytes never reach the core: the
+ * docs/remote/remote-protocol/channel-v1.json. Key bytes never reach the core: the
  * ephemeral private key is drawn and forgotten inside `answerHandshake`, the
  * session keys live inside the session it returns, and `forget()` drops them.
  */

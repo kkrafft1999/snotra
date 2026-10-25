@@ -37,7 +37,7 @@ const WINDOW_BACKGROUND = '#FFFCF5';
 // (e2e/idle-network.test.mjs) saw it on the Linux runner. macOS and Windows use
 // the OS spell checker and fetch nothing. So Linux runs without spell checking;
 // a local dictionary or a consent step would bring it back
-// (docs/quality-requirements.md, PRI-1).
+// (docs/architecture/quality-requirements.md, PRI-1).
 const SPELLCHECK_FETCHES_DICTIONARIES = process.platform === 'linux';
 
 // Per session, as the session is created: the download starts with the session,

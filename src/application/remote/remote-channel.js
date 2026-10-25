@@ -2,7 +2,7 @@
 
 /**
  * The channel to the paired phone (#1192): the decisions of the desktop's
- * half of docs/remote-protocol.md part 2.
+ * half of docs/remote/remote-protocol.md part 2.
  *
  * - **Connecting** (§12): for a paired phone, on start and again after every
  *   failure, with a growing pause. The relay port fetches and renews the

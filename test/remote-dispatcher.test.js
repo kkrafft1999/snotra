@@ -1,6 +1,6 @@
 'use strict';
 
-// The remote dispatcher (#1194), steps 1 and 2 of docs/remote-interface.md
+// The remote dispatcher (#1194), steps 1 and 2 of docs/remote/remote-interface.md
 // §10: the methods of §8.1 and the events of §8.2 against a fake desktop and
 // release list — what a connection may see (§7.5), how a method is refused
 // (§6.3), that nothing it is told carries a path, a tool argument or a chat

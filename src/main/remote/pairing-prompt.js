@@ -5,7 +5,7 @@
  * in the interface language. It goes through the user-confirmation port
  * (#980), so only a click in the operating system's dialog counts.
  *
- * The six words themselves are never translated (docs/remote-protocol.md §7):
+ * The six words themselves are never translated (docs/remote/remote-protocol.md §7):
  * a German desktop and an English phone show the same ones, numbered 1 to 6,
  * three to a line.
  */

@@ -5,7 +5,7 @@
  * contains text that looks like a prompt injection. That is all it can do. The
  * engine puts what the sources found on the tool row the user sees; it does
  * not change the result the model receives, and nothing that decides about a
- * tool call ever reads it (docs/quality-requirements.md §3, SEC-4: a flag
+ * tool call ever reads it (docs/architecture/quality-requirements.md §3, SEC-4: a flag
  * never loosens a boundary, and a missing flag never opens one).
  *
  * Detection is best effort. A source that throws, or answers with something

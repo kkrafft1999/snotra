@@ -1,7 +1,7 @@
 {
   "protocol": 1,
   "part": "pairing",
-  "spec": "docs/remote-protocol.md",
+  "spec": "docs/remote/remote-protocol.md",
   "generatedBy": "node scripts/remote-protocol-vectors.js",
   "note": "Hex for byte strings that are only hashed or signed; base64url without padding where the value travels in JSON. Signatures are randomised: verify them, do not compare them.",
   "labels": {

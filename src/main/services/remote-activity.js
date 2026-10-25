@@ -4,7 +4,7 @@
  * What happens on the desktop that the remote front ends follow (#1194): the
  * events of every running turn by chat, and switches of the open workspace.
  *
- * In step 1 of `docs/remote-interface.md` §10 a turn's events are published
+ * In step 1 of `docs/remote/remote-interface.md` §10 a turn's events are published
  * from where `chat-handlers.js` forwards them to the window (§8.2); the
  * workspace switch from `workspace-activation.js`'s hook. The remote bridge
  * listens through the desktop port. A listener that throws is logged and

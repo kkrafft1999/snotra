@@ -2,7 +2,7 @@
 
 /**
  * What a remote front end is shown of a chat (#1194;
- * docs/remote-interface.md §8.1 `DisplayMessage`, §8.2): what the desktop
+ * docs/remote/remote-interface.md §8.1 `DisplayMessage`, §8.2): what the desktop
  * shows, not what it stores — the text, the tool lines as the desktop worded
  * them (decided 2026-10-20: in the desktop's language, since the history
  * keeps no arguments to word them again), images as placeholders. No tool

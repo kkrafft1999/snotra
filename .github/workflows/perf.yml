@@ -1,7 +1,7 @@
 name: Performance
 
 # Measures the performance budgets PERF-1 to PERF-4 of
-# docs/quality-requirements.md in the real app (#984) and writes them to the
+# docs/architecture/quality-requirements.md in the real app (#984) and writes them to the
 # job summary, plus report.json as an artifact.
 #
 # Reporting only: a missed budget does not fail the run, only a measurement

@@ -179,7 +179,7 @@ function registerFsHandlers({
   // Der Renderer stößt nur an; geprüft, bestätigt und kopiert wird hier.
   // Dasselbe Muster wie bei den schutzlockernden Aktionen aus #66: Main
   // bestätigt nativ, weil der Renderer keine Sicherheitsgrenze ist
-  // (docs/security-concept.md §5) — through the user-confirmation port since
+  // (docs/security/security-concept.md §5) — through the user-confirmation port since
   // #980, so a front end without a person at the machine cannot confirm it.
   ipcMain.handle(REQ.FS_IMPORT_ITEMS, async (_event, sourcePaths, destDir) => {
     const t = createTranslator(getLocale());

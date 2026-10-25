@@ -1,4 +1,4 @@
-// The pairing test vectors of docs/remote-protocol.md (#1112): the file the
+// The pairing test vectors of docs/remote/remote-protocol.md (#1112): the file the
 // iPhone app runs with CryptoKit is recomputed here with Node's crypto, so
 // that the spec, the reference implementation and the vectors cannot drift.
 
@@ -107,7 +107,7 @@ test('the phrase in words, and the checksum that pins the list to version 1', ()
   assert.deepEqual(phrase.words, phrase.indices.map((i) => ref.SAFETY_WORDS[i]));
   assert.equal(phrase.shown, phrase.words.join(' · '));
   assert.equal(phrase.listSha256, ref.wordListSha256());
-  const spec = fs.readFileSync(path.join(__dirname, '..', 'docs', 'remote-protocol.md'), 'utf8');
+  const spec = fs.readFileSync(path.join(__dirname, '..', 'docs', 'remote', 'remote-protocol.md'), 'utf8');
   assert.ok(spec.includes(phrase.listSha256), 'the spec names the list checksum');
 });
 
@@ -142,7 +142,7 @@ test('every proof verifies against its signer\'s key, over exactly the bytes the
 });
 
 test('the spec names every label the vectors use', () => {
-  const spec = fs.readFileSync(path.join(__dirname, '..', 'docs', 'remote-protocol.md'), 'utf8');
-  for (const label of Object.values(ref.LABEL)) assert.ok(spec.includes(`"${label}"`), `docs/remote-protocol.md names "${label}"`);
+  const spec = fs.readFileSync(path.join(__dirname, '..', 'docs', 'remote', 'remote-protocol.md'), 'utf8');
+  for (const label of Object.values(ref.LABEL)) assert.ok(spec.includes(`"${label}"`), `docs/remote/remote-protocol.md names "${label}"`);
   assert.ok(spec.includes('remote-protocol/pairing-v1.json'), 'the spec points to the vector file');
 });

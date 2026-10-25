@@ -14,7 +14,7 @@ review can be spread over several weeks and never turns into one large change.
 - **Size:** about 68k lines in `src/`, of which roughly 8k are CSS and 3.4k the
   i18n catalogue, plus 227 test files.
 - **Architecture:** the layering described in
-  [`architecture.md`](./architecture.md) has been stable since July 2026 —
+  [`architecture.md`](../architecture/architecture.md) has been stable since July 2026 —
   renderer / preload / IPC → main adapters and composition → `application/` →
   `shared/contracts` and `shared/runtime`. The blocks below follow it.
 - **Precedent:** the previous review (SNO-01 … SNO-16, #68–#83) filed one issue
@@ -70,7 +70,7 @@ blocks after it moved up by one.
 
 B15 is not read line by line. It is checked with targeted searches: raw
 colour and spacing values instead of tokens (against
-[`ui-design-tokens.md`](../.claude/rules/ui-design-tokens.md)), key parity
+[`ui-design-tokens.md`](../../.claude/rules/ui-design-tokens.md)), key parity
 between `en` and `de`, and orphaned selectors. Its few code files —
 `shared/i18n/index.js`, `shared/i18n/ui-quotes.js`, `renderer/i18n.js` — are
 read as usual, and the Content-Security-Policy in `index.html` is reviewed in
@@ -85,13 +85,13 @@ Decided on 2026-09-30 in [#482](https://github.com/kkrafft1999/snotra/issues/482
 The project's own documents are binding. The general references come second
 and are used as a checklist, not as the standard.
 
-- **Binding:** [`architecture.md`](./architecture.md) (layers, ports, boundary
-  guards), [`security-concept.md`](./security-concept.md) (risk classes,
+- **Binding:** [`architecture.md`](../architecture/architecture.md) (layers, ports, boundary
+  guards), [`security-concept.md`](../security/security-concept.md) (risk classes,
   approval flow, workspace as trust boundary, sandbox),
-  [`CONTRIBUTING.md`](../CONTRIBUTING.md) (code conventions),
-  [`ux-ui-standards.md`](../.claude/rules/ux-ui-standards.md) and
-  [`ui-design-tokens.md`](../.claude/rules/ui-design-tokens.md),
-  [`language.md`](../.claude/rules/language.md), and the coverage ratchet in
+  [`CONTRIBUTING.md`](../../CONTRIBUTING.md) (code conventions),
+  [`ux-ui-standards.md`](../../.claude/rules/ux-ui-standards.md) and
+  [`ui-design-tokens.md`](../../.claude/rules/ui-design-tokens.md),
+  [`language.md`](../../.claude/rules/language.md), and the coverage ratchet in
   `scripts/coverage.js`.
 - **Checklist:** the Electron security checklist, OWASP, and common Node.js
   practice.

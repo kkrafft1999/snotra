@@ -2,7 +2,7 @@
 
 /**
  * The reference phone of the mobile remote (#1135, phase 3 of #1081): the
- * phone's half of docs/remote-protocol.md over the relay's real interface —
+ * phone's half of docs/remote/remote-protocol.md over the relay's real interface —
  * HTTP to the relay's endpoints, the Identity Toolkit for an ID token, the
  * Realtime Database's REST interface for what the phone reads and writes.
  * Part 1 pairs; part 2 connects (§12), shakes hands (§13, §14) and exchanges

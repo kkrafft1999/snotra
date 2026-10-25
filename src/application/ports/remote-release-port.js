@@ -1,5 +1,5 @@
 /**
- * RemoteRelease port (#1194): the release list of `docs/remote-interface.md`
+ * RemoteRelease port (#1194): the release list of `docs/remote/remote-interface.md`
  * §7.5 — which workspaces a remote front end may see, each under a
  * `workspaceId` that is stable for a known folder and gives nothing of its
  * path away.

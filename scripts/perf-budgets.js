@@ -1,6 +1,6 @@
 'use strict';
 /**
- * The performance budgets PERF-1 to PERF-4 of docs/quality-requirements.md and
+ * The performance budgets PERF-1 to PERF-4 of docs/architecture/quality-requirements.md and
  * how one measured run is held against them (#984). Kept apart from the
  * measurement in e2e/perf-report.mjs, which needs a running app, so that the
  * arithmetic — which machine gets which allowance, what counts as missed —

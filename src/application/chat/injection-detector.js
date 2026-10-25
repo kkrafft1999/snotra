@@ -3,7 +3,7 @@
  * patterns that prompt injections use and ordinary pages, files and command
  * output do not.
  *
- * It is a warning, not a protection (docs/quality-requirements.md §3): it
+ * It is a warning, not a protection (docs/architecture/quality-requirements.md §3): it
  * misses what it does not know, and isolation and approvals hold either way.
  * What it must not do is cry wolf — a warning on every other web page teaches
  * the user to skip it. So a *strong* signal flags on its own, a *weak* one

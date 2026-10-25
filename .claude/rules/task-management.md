@@ -23,7 +23,7 @@ In this project **everything runs through GitHub issues**.
   lists in the repository — everything stays in GitHub, since this is a solo
   hobby project that is already fully GitHub-based. The **current state** of the
   app is described in `README.md` (the user's view) and in
-  `docs/architecture.md` (the structure), not in a status list.
+  `docs/architecture/architecture.md` (the structure), not in a status list.
 
 ## What to do when asked "What's next?", "Where do we stand?", "Backlog?"
 

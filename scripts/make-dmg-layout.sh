@@ -1,6 +1,6 @@
 #!/bin/sh
 # Regenerates assets/macos/dmg-layout.DS_Store, the window layout of the DMG
-# (see scripts/make-dmg.js and docs/release.md). Local only: it drives Finder,
+# (see scripts/make-dmg.js and docs/release/release.md). Local only: it drives Finder,
 # which CI never does.
 #
 # The view holds an alias to .background/dmg-background.tiff. Finder writes the

@@ -331,6 +331,6 @@
   <text class="arrlbl" x="1108" y="400" fill="#8a5a12">Shared → main &amp; core (depending on the module)</text>
 
   <!-- ============ FOOTER / STAMP ============ -->
-  <text x="30" y="1525" font-size="11" fill="#8a97a6">docs/architecture-layers.svg</text>
+  <text x="30" y="1525" font-size="11" fill="#8a97a6">docs/architecture/architecture-layers.svg</text>
   <text x="1410" y="1525" text-anchor="end" font-size="11" fill="#8a97a6">Revised 2026-10-17 against main (#1009) · Claude Sonnet 5.5 · Reasoning effort: low</text>
 </svg>

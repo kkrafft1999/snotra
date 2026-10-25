@@ -248,16 +248,16 @@ copies nothing into it.
 └── package.json
 ```
 
-Details on the layered architecture: [`docs/architecture.md`](./docs/architecture.md).
+Details on the layered architecture: [`docs/architecture/architecture.md`](./docs/architecture/architecture.md).
 
 ## Security notes
 
 Which action asks for your approval in which mode, and what the sandbox
 changes:
 
-![Who may do what: the three permission modes against the kinds of action, the sandbox on and off, and what loosening protection takes](docs/permissions-infographic.png)
+![Who may do what: the three permission modes against the kinds of action, the sandbox on and off, and what loosening protection takes](docs/security/permissions-infographic.png)
 
-The details are in the [security concept](docs/security-concept.md).
+The details are in the [security concept](docs/security/security-concept.md).
 
 - API keys are stored **locally** and are not passed on to third parties.
 - The workspace access of the file tools is limited to the currently opened

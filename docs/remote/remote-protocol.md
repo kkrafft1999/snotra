@@ -26,11 +26,11 @@ messages after `session.hello` are answered by a stand-in until the
 dispatcher exists (#1194); the relay is built in snotra-promotion
 ([snotra-promotion#165](https://github.com/kkrafft1999/snotra-promotion/issues/165));
 the app is not yet. A relay is held to parts 1 and 2 by the conformance
-runner in [`e2e/remote/`](../e2e/remote/README.md) (#1135) — here against a
+runner in [`e2e/remote/`](../../e2e/remote/README.md) (#1135) — here against a
 stand-in, in snotra-promotion's CI against the emulator — and the desktop's
 channel to the reference phone by `test/remote-channel-end-to-end.test.js`. The
 reference implementation that pins the bytes is
-[`scripts/remote-protocol-vectors.js`](../scripts/remote-protocol-vectors.js);
+[`scripts/remote-protocol-vectors.js`](../../scripts/remote-protocol-vectors.js);
 the bridge and the app implement the same functions on their own and prove
 them against the vectors ([§9](#9-test-vectors)) — the bridge in
 `test/remote-pairing-protocol.test.js`.
@@ -347,7 +347,7 @@ H0 = SHA-256(lp("snotra/v1 phrase") ‖ KB_D ‖ KB_P),   H(i+1) = SHA-256(H(i))
   German and a phone in English show the same six words. The list is the
   **EFF short word list 2.0** — 1,296 words of 3 to 10 letters, each with a
   unique three-letter prefix — in
-  [`src/shared/contracts/remote/safety-words-v1.json`](../src/shared/contracts/remote/safety-words-v1.json),
+  [`src/shared/contracts/remote/safety-words-v1.json`](../../src/shared/contracts/remote/safety-words-v1.json),
   index = position in its `words` array (`N = 1296`). It is part of protocol
   version 1: SHA-256 of the words joined by `\n`, with a final `\n`, is
   `7aa57a4d3ecf6581729992bad9575bacdebf7c28378af2aec6a50f11aec326f5`; another list is version 2.
@@ -644,7 +644,7 @@ first envelope. What it gives up is resistance to **key-compromise
 impersonation**: whoever holds the desktop's long-term agree key could pose as
 the phone *towards that desktop*. Holding it means having read the desktop's
 `safeStorage`, which is a compromised desktop — outside the protection goal
-([`security-concept.md`](./security-concept.md) §5). The phone's key cannot
+([`security-concept.md`](../security/security-concept.md) §5). The phone's key cannot
 leave the Secure Enclave.
 
 If that changes, P-256 ephemeral keys would allow all four results — a `KK`
@@ -656,7 +656,7 @@ over P-256, outside Noise's named curves. It is noted here, not proposed.
   specifies (#989).
 - [`remote-pairing-sequence.svg`](./remote-pairing-sequence.svg) — the flow
   (#1107).
-- [`ui-design/remote-access-mockup.html`](./ui-design/remote-access-mockup.html)
+- [`ui-design/remote-access-mockup.html`](../ui-design/remote-access-mockup.html)
   — the panel (#1109, #1110).
 - [Mobile remote concept](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md),
   epic [#1081](https://github.com/kkrafft1999/snotra/issues/1081).

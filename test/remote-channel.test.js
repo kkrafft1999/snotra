@@ -3,7 +3,7 @@
 // The channel to the paired phone (#1192): the core of
 // src/application/remote/remote-channel.js against the in-memory relay, with
 // a phone that computes its half with the reference implementation. Every row
-// of the receive rules of docs/remote-protocol.md §16, the handshake of §13,
+// of the receive rules of docs/remote/remote-protocol.md §16, the handshake of §13,
 // `session.hello` of §17, presence (§12.3) and a vanishing `meta` (§12.2).
 
 const test = require('node:test');

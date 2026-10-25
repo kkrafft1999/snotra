@@ -16,8 +16,8 @@ description: >-
 This skill publishes a new version by pushing a `v*` tag. Building and uploading
 the artifacts is the pipeline's job
 (`.github/workflows/release.yml`). The background and the manual procedure are
-in [docs/release.md](../../../docs/release.md), the flow as a diagram in
-[docs/release-flow.svg](../../../docs/release-flow.svg).
+in [docs/release/release.md](../../../docs/release/release.md), the flow as a diagram in
+[docs/release/release-flow.svg](../../../docs/release/release-flow.svg).
 
 **Important:** a pushed tag triggers a **public** GitHub release — that is
 outward-facing and not trivial to undo. So get **one** explicit confirmation of
@@ -77,7 +77,7 @@ the release. The rule behind it:
 
 The update dialog shows only a section written for the user, not GitHub's
 generated list (#1072, background in
-[docs/release.md](../../../docs/release.md#notes-for-the-user)). Draft it now,
+[docs/release/release.md](../../../docs/release/release.md#notes-for-the-user)). Draft it now,
 so it is confirmed together with the version:
 
 1. Go through the pull requests since the last tag

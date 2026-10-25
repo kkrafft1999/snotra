@@ -1,8 +1,8 @@
 'use strict';
 /**
  * Reference implementation of the pairing computations in
- * docs/remote-protocol.md, part 1 (#1112), and the generator of its test
- * vectors, docs/remote-protocol/pairing-v1.json.
+ * docs/remote/remote-protocol.md, part 1 (#1112), and the generator of its test
+ * vectors, docs/remote/remote-protocol/pairing-v1.json.
  *
  * It exists to pin down bytes, not to run in the app: the remote bridge
  * (#1114) and the iPhone app implement the same functions on their own and
@@ -19,7 +19,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const VECTOR_FILE = path.join(__dirname, '..', 'docs', 'remote-protocol', 'pairing-v1.json');
+const VECTOR_FILE = path.join(__dirname, '..', 'docs', 'remote', 'remote-protocol', 'pairing-v1.json');
 const WORD_LIST_FILE = 'src/shared/contracts/remote/safety-words-v1.json';
 const SAFETY_WORDS = require(`../${WORD_LIST_FILE}`).words;
 
@@ -285,7 +285,7 @@ function buildVectors(previous = null) {
   return {
     protocol: 1,
     part: 'pairing',
-    spec: 'docs/remote-protocol.md',
+    spec: 'docs/remote/remote-protocol.md',
     generatedBy: 'node scripts/remote-protocol-vectors.js',
     note: 'Hex for byte strings that are only hashed or signed; base64url without padding where the value travels in JSON. Signatures are randomised: verify them, do not compare them.',
     labels: LABEL,

@@ -82,7 +82,7 @@ that.
 ## Notes
 
 - The build is **unsigned**. Gatekeeper may complain on first launch. That is
-  expected (stage 1, see `docs/release.md`).
+  expected (stage 1, see `docs/release/release.md`).
 - For a published release there is the separate `release` skill. This skill does
   not replace it.
 - A Windows build (`npm run package:win`) is not part of this skill.

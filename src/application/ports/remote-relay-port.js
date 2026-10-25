@@ -1,6 +1,6 @@
 /**
  * RemoteRelay port (#1114, #1192): the blind relay of the mobile remote
- * (#1081), as the desktop sees it — for pairing (docs/remote-protocol.md §5)
+ * (#1081), as the desktop sees it — for pairing (docs/remote/remote-protocol.md §5)
  * and for the channel to the paired phone (§12–§16).
  *
  * The core names channels and pairings by their ids and nothing else. Tokens,

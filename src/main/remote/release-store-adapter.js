@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * The release list of the remote front ends (#1194; docs/remote-interface.md
+ * The release list of the remote front ends (#1194; docs/remote/remote-interface.md
  * §7.5): which workspaces the paired phone may see, and the id each known
  * folder goes by there.
  *

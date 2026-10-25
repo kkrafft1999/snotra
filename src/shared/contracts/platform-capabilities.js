@@ -12,7 +12,7 @@
  * Every capability is declared for every platform, and every gap carries a
  * reason key the UI can show and either the issue that is to close it or
  * `permanent: true` with the rationale for keeping it (parity rule,
- * `docs/quality-requirements.md` §3, USE-4 / POR-1).
+ * `docs/architecture/quality-requirements.md` §3, USE-4 / POR-1).
  * `test/platform-capabilities.test.js` fails on an undeclared capability and
  * on a gap with neither.
  *

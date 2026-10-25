@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { BUDGETS, timeFactor, median, max, evaluate, markdownTable } = require('../scripts/perf-budgets');
 
-test('the budgets are the ones docs/quality-requirements.md agrees on (#984)', () => {
+test('the budgets are the ones docs/architecture/quality-requirements.md agrees on (#984)', () => {
   assert.deepEqual(
     Object.fromEntries(Object.entries(BUDGETS).map(([id, b]) => [id, `${b.limit} ${b.unit}`])),
     { 'PERF-1': '3000 ms', 'PERF-2': '200 ms', 'PERF-3': '500 ms', 'PERF-4': '1024 MB' },
