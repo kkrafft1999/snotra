@@ -209,6 +209,28 @@ async function switchToAuto(app, page) {
     { what: 'chat on Auto' });
 }
 
+/**
+ * The time under an answer (#1254) is the one thing that differs between two
+ * runs of the same motif, and the fake model answers in no time at all. A
+ * fixed one keeps the images from changing on every regeneration; only the
+ * time is replaced, the words around it stay the app's. An observer, because
+ * the chat draws itself again after a run — a chat name, a switch.
+ */
+async function pinTurnDurations(page, locale) {
+  await page.evaluate((time) => {
+    const pin = () => {
+      for (const span of document.querySelectorAll('.chat-turn-duration > span')) {
+        const pinned = span.textContent.replace(/\d[\d.,:]*\s+\S+$/, time);
+        if (pinned !== span.textContent) span.textContent = pinned;
+      }
+    };
+    pin();
+    if (window.__pinnedTurnDurations) return;
+    window.__pinnedTurnDurations = new MutationObserver(pin);
+    window.__pinnedTurnDurations.observe(document.body, { childList: true, subtree: true, characterData: true });
+  }, locale === 'de' ? '4,2 Sek.' : '4.2 sec');
+}
+
 /** Marks the last answer in the chat, so that clipAround() can find it. */
 async function markLastAnswer(page) {
   await page.evaluate(() => {
@@ -1595,7 +1617,10 @@ async function shootMotif(name, motif, locale, model) {
 
     const text = motif.text?.[locale] ?? {};
     if (text.title) model.setTitle(text.title);
+    await pinTurnDurations(page, locale);
     const clip = await motif.setUp({ app, page, model, text, locale, config, workspace });
+    // Again, for a motif that loaded the page anew.
+    await pinTurnDurations(page, locale);
 
     for (const theme of THEMES) {
       await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);

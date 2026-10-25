@@ -32,6 +32,7 @@ const { createTurnAnswer, applyTurnEvent, answerForCheckpoint, settleTurn } = re
  * @typedef {Object} RunningTurn
  * @property {boolean} stopped    the user stopped it: it settles as far as it had come
  * @property {boolean} abandoned  its front end went away (#979): nothing more is written
+ * @property {number} startedAt   when the question arrived, by the service's clock (#1254)
  */
 
 /**
@@ -64,8 +65,9 @@ function progressEvent(type, fields) {
  * @param {ConversationEngine} deps.engine
  * @param {ChatHistoryPort} deps.history
  * @param {(error: unknown) => string} [deps.describeError]  an engine error as the chat shows it, in the interface's language
+ * @param {() => number} [deps.now]  the clock a turn's duration is taken with (#1254)
  */
-function createConversationService({ engine, history, describeError = (error) => String(error ?? '') }) {
+function createConversationService({ engine, history, describeError = (error) => String(error ?? ''), now = () => Date.now() }) {
   if (!engine || !history) throw new Error('createConversationService requires an engine and a chat-history port.');
 
   /** @type {Set<Promise<void>>} names still being made */
@@ -148,8 +150,10 @@ function createConversationService({ engine, history, describeError = (error) =>
    */
   async function runTurn(input) {
     const { sessionId, chatId } = input;
+    // The clock starts when the question arrives (#1254): waiting for the
+    // turn before it to stop is part of what the user waits for.
     /** @type {RunningTurn} */
-    const turn = { stopped: false, abandoned: false };
+    const turn = { stopped: false, abandoned: false, startedAt: now() };
     const key = runKey(sessionId, chatId);
     // Known from the first moment: a stop pressed while the chat is still
     // being loaded must not be lost.
@@ -267,10 +271,13 @@ function createConversationService({ engine, history, describeError = (error) =>
     } finally {
       if (running.get(key) === turn) running.delete(key);
     }
+    // Wall-clock time until the run ended (#1254), approval waits included;
+    // the saves after it are not part of the answer.
+    const durationMs = Math.max(0, now() - turn.startedAt);
     await writing;
     const chatCost = await addTurnCost(chatId, result);
     if (!turn.abandoned) {
-      const settled = settleTurn(asked, answer, result, { describeError, stopped: turn.stopped });
+      const settled = settleTurn(asked, answer, result, { describeError, stopped: turn.stopped, durationMs });
       const usage = result && typeof result === 'object' ? ('contextUsage' in result && result.contextUsage) || result.usage : null;
       await save(settled, { tokenUsage: usage || stored?.tokenUsage });
       // In the background: the name must not hold up the answer, and its
@@ -282,7 +289,7 @@ function createConversationService({ engine, history, describeError = (error) =>
       void naming.finally(() => background.delete(naming));
     }
     if (thrown) throw thrown;
-    return chatCost === undefined ? result : { ...result, chatCost };
+    return { ...result, durationMs, ...(chatCost === undefined ? {} : { chatCost }) };
   }
 
   /**

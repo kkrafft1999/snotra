@@ -17,7 +17,7 @@ While Snotra works, the steps appear above the answer one by one: *File src/cale
 
 Once the answer is complete, the steps fold into one line that counts them, such as *2 files written · 2 files read*. Click it to unfold them again.
 
-![An answer with its tool log unfolded: "2 files written · 2 files read", below it the four steps — src/calendar.js and plants.csv read, src/calendar.js and notes/spring-2026.md changed, each change with its count of added and removed lines — then the line "Changed:" with calendar.js and spring-2026.md, and the answer text.](screenshots/tool-log.webp)
+![An answer with its tool log unfolded: "2 files written · 2 files read", below it the four steps — src/calendar.js and plants.csv read, src/calendar.js and notes/spring-2026.md changed, each change with its count of added and removed lines — then the line "Changed:" with calendar.js and spring-2026.md, the answer text, and under it "Answered in 4.2 sec".](screenshots/tool-log.webp)
 
 - A change carries its count of added and removed lines, for example `+2 −1`.
 - A step that did not run says why: *denied* when you said no on the card, *blocked* when a rule stopped it, *expired* when the request lapsed. Hover over it for the details.
@@ -36,6 +36,10 @@ If a command or a Python run on macOS or Linux tried to reach something the sand
 
 Nothing about what Snotra may do has changed: the next tool call is checked like every other one, and cards and the sandbox apply as before. Look closely at what it proposes next — a command you did not expect, a file that has nothing to do with the task, an address you don't know. If something seems off, deny the card or stop the run. Why the box can be wrong both ways: [Why Snotra asks before it acts](../../safety/why-snotra-asks/#when-a-tool-result-looks-like-instructions).
 
+## How long an answer took
+
+[since 1.28] Under each finished answer, a small line says how long it took: *Answered in 4.2 sec*, *Answered in 3:05 min*. The time runs from the moment you send the message until the answer is complete — thinking, tool steps and the text all count, and so does the time a card waited for your decision. A turn you stopped reads *Stopped after …*; one that ended with an error carries *Failed after …* under the error. Hover over the line for what it measures. The duration is kept with the answer, so it is still there when you open the chat again.
+
 ## What happens
 
 The tool log stays with the answer, also in the chat history. Files Snotra read or changed are marked in the file tree as well, and the line *Changed:* under the log leads to each change: [See what Snotra changed](../review-changes/).
@@ -43,4 +47,5 @@ The tool log stays with the answer, also in the chat history. Files Snotra read 
 ## If it doesn't work
 
 - **An answer has no tool log.** The model answered from what it already knew, without using a tool.
+- **An answer shows no time under it.** It was written with a version before 1.28, or Snotra was closed or reloaded before it finished — then only the completed steps were kept, and no time.
 - **You want to report a problem with a run.** `Cmd+Shift+D` / `Ctrl+Shift+D` copies the diagnostics of the tool log to the clipboard, ready to paste into a bug report.

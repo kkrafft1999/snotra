@@ -108,6 +108,7 @@ const PAIRS = [
   ['--ds-text-primary', [['--ds-chat-user-bg', '--ds-chat-bg'], ['--ds-diff-added-bg', '--ds-surface']], TEXT,
     'the user bubble and an added line'],
   ['--ds-grey-strong', [['--ds-diff-added-bg', '--ds-surface']], TEXT, 'line numbers of an added line (#348)'],
+  ['--ds-grey-strong', [['--ds-error-bg', '--ds-chat-bg']], TEXT, 'the duration under an error (#1254)'],
   ['--ds-blue-strong', [['--ds-diff-added-bg', '--ds-surface']], TEXT, 'the sign of an added line (#348)'],
   ['--ds-blue-strong', [['--ds-warning-bg', '--ds-surface']], TEXT, '"Saved" on the sandbox tile while it is off (#1119)'],
   ['--ds-blue-strong', [['--ds-blue-soft', '--ds-bg-header']], TEXT, 'the phone indicator in the title bar (#1196)'],
