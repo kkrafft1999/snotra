@@ -13591,9 +13591,9 @@ select.modal-input {
 }
 
 /* ── Settings › Remote access (#1110) ─────────────────────────────────────
- * From docs/ui-design/remote-access-mockup.html, decided 2026-10-18: the
- * pairing runs inside the panel. Status by shape and word, never by colour
- * alone; red only for the one security event (a wrong MAC). */
+ * Design decided 2026-10-18 in #1109: the pairing runs inside the panel.
+ * Status by shape and word, never by colour alone; red only for the one
+ * security event (a wrong MAC). */
 .ra-relay-note { margin-bottom: 14px; }
 .ra-card { border: 1px solid var(--ds-grey-divider); border-radius: var(--ds-radius-md); padding: 18px 20px; background: var(--bg-primary); margin-bottom: 14px; }
 .ra-empty { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 34px 24px 30px; }

@@ -656,7 +656,7 @@ over P-256, outside Noise's named curves. It is noted here, not proposed.
   specifies (#989).
 - [`remote-pairing-sequence.svg`](./remote-pairing-sequence.svg) — the flow
   (#1107).
-- [`ui-design/remote-access-mockup.html`](../ui-design/remote-access-mockup.html)
-  — the panel (#1109, #1110).
+- [#1109](https://github.com/kkrafft1999/snotra/issues/1109) — the panel's
+  design; built in #1110.
 - [Mobile remote concept](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md),
   epic [#1081](https://github.com/kkrafft1999/snotra/issues/1081).
