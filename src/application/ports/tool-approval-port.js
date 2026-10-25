@@ -55,7 +55,8 @@
 
 /**
  * @typedef {Object} ToolApprovalPort
- * @property {(sessionId: string|number) => boolean} isAvailable
+ * @property {(sessionId: string|number, chatId?: string|null) => boolean} isAvailable
+ *   a window can show the card — or, for a phone's turn, a phone that takes cards follows the chat (#1251)
  * @property {(params: { sessionId: string|number, request: ToolApprovalRequest, abortSignal?: AbortSignal })
  *   => Promise<ToolApprovalOutcome>} requestApproval
  * @property {(sessionId: string|number, reason?: string) => void} [invalidateSession]

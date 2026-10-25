@@ -1733,7 +1733,7 @@ module.exports = {
   'chat.error.cutOff.incomplete': 'Die Verbindung endete, bevor die Antwort vollständig war. Sende die Nachricht noch einmal, um weiterzumachen.',
   'chat.error.internal': 'Snotra Agent ist auf einen eigenen Fehler gestoßen und hat die Antwort abgebrochen ({detail}). Frag noch einmal, um weiterzumachen.',
   'chat.error.ownSecretsUnreadable': 'Snotra Agent konnte die eigenen Schlüssel nicht lesen und deshalb deine Anweisungen, Skills und dein Gedächtnis nicht auf sie prüfen. An den Anbieter wurde nichts gesendet. Frag noch einmal; passiert das wieder, starte Snotra Agent neu.',
-  'chat.error.runEnded.noApprovalUi': 'Der Tool-Aufruf braucht eine Freigabe, aber es ist keine Freigabe-Oberfläche verfügbar. Der Lauf wurde beendet.',
+  'chat.error.runEnded.noApprovalUi': 'Der Tool-Aufruf braucht eine Freigabe, aber es war kein Snotra-Fenster offen, um zu fragen. Öffne Snotra am Computer und schick die Nachricht noch einmal. Der Lauf wurde beendet.',
   'chat.error.runEnded.requestInvalidated': 'Die Freigabe-Anfrage ist verfallen (Datei, Kontext oder Regeln haben sich geändert). Der Lauf wurde beendet; stelle die Frage bei Bedarf erneut.',
   'chat.error.runEnded.repeatedDenial': 'Das Modell hat einen bereits abgelehnten Tool-Aufruf unverändert erneut angefordert. Der Lauf wurde beendet; die Ablehnung bleibt bestehen.',
 

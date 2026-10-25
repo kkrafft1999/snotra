@@ -1929,7 +1929,7 @@ function createChatEngine({
         if (deniedPlanKeys.has(plan.planKey)) {
           return { response: APPROVAL_RESPONSES.DENY, reason: PERMISSION_DENIAL_REASONS.REPEATED_DENIAL };
         }
-        if (!approvals || typeof approvals.requestApproval !== 'function' || !approvals.isAvailable?.(sessionId)) {
+        if (!approvals || typeof approvals.requestApproval !== 'function' || !approvals.isAvailable?.(sessionId, chatId)) {
           return { invalidated: true, reason: PERMISSION_DENIAL_REASONS.NO_APPROVAL_UI };
         }
         const request = buildApprovalRequest({
@@ -2107,7 +2107,7 @@ function createChatEngine({
           };
         }
         if (!prepared?.card) return refuse(prepared?.error || 'The proposal could not be checked.');
-        if (!chatId || !approvals || typeof approvals.requestApproval !== 'function' || !approvals.isAvailable?.(sessionId)) {
+        if (!chatId || !approvals || typeof approvals.requestApproval !== 'function' || !approvals.isAvailable?.(sessionId, chatId)) {
           return refuse('There is no window to ask the user in. Point them to the settings page instead.');
         }
         const { card } = prepared;

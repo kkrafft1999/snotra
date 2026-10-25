@@ -1726,7 +1726,7 @@ module.exports = {
   'chat.error.cutOff.incomplete': 'The connection ended before the answer was complete. Send the message again to carry on.',
   'chat.error.internal': 'Snotra Agent ran into an error of its own and stopped the answer ({detail}). Ask again to carry on.',
   'chat.error.ownSecretsUnreadable': 'Snotra Agent could not read the keys it keeps for itself, so it could not check your instructions, skills and memory for them. Nothing was sent to the provider. Ask again; if this keeps happening, restart Snotra Agent.',
-  'chat.error.runEnded.noApprovalUi': 'The tool call needs an approval, but no approval interface is available. The run has ended.',
+  'chat.error.runEnded.noApprovalUi': 'The tool call needs an approval, but no Snotra window was open to ask in. Open Snotra on your computer and send the message again. The run has ended.',
   'chat.error.runEnded.requestInvalidated': 'The approval request expired (the file, the context or the rules have changed). The run has ended; ask again if you still need it.',
   'chat.error.runEnded.repeatedDenial': 'The model asked for a tool call that had already been denied, unchanged. The run has ended; the denial stands.',
 

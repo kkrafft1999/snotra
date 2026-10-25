@@ -147,6 +147,8 @@ function createRemoteBridge({
     channel,
     presence,
     releases,
+    /** A phone that takes cards follows the chat (#1251). */
+    answersCards: (/** @type {string|null} */ chatId) => !messages && dispatcher?.answersCards(chatId) === true,
     /** Connects the channel when a phone is paired. */
     start() {
       if (started.value) return Promise.resolve();

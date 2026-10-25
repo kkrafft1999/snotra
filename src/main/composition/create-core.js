@@ -228,11 +228,16 @@ function createCore({
     uiPrefsPath: storage.getUIPrefsPath(),
     confirmationReceipts: { redeem: confirmationReceipts.redeem },
   });
+  // Nobody answers a card remotely before the remote bridge is built (#1251).
+  /** @type {(chatId: string|null) => boolean} */
+  let remoteAnswersCards = () => false;
   const approvals = createToolApprovalAdapter({
     randomUUID: () => crypto.randomUUID(),
     PUSH,
     // A phone's turn shows its cards in the window until the phone can answer them (#1194).
     answeredByWindow: isRemoteSessionId,
+    // And a phone that takes cards answers them when no window is open (#1251).
+    answeredRemotely: (chatId) => remoteAnswersCards(chatId),
   });
   const sessionGrants = createSessionGrants({ nextId: () => crypto.randomUUID() });
 
@@ -862,6 +867,7 @@ function createCore({
     powerSave,
   });
   onRunsChanged = () => remote.presence.setRunningChats(runningChatIds());
+  remoteAnswersCards = remote.answersCards;
 
   // A card granted for the session, a chat left, a rule changed: the settings
   // list of session approvals follows at once (#447).

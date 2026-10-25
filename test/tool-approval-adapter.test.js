@@ -153,6 +153,92 @@ test('a front end without cards has its requests answered in the window, and onl
   assert.equal((await later).invalidated, true);
 });
 
+function makeRemoteAdapter({ follows = () => true } = {}) {
+  let counter = 0;
+  const events = [];
+  const adapter = createToolApprovalAdapter({
+    randomUUID: () => `req-${(counter += 1)}`,
+    PUSH,
+    log: { warn() {} },
+    answeredByWindow: (sessionId) => String(sessionId).startsWith('remote:'),
+    answeredRemotely: (chatId) => follows(chatId),
+  });
+  adapter.observe((event) => events.push(event));
+  return { adapter, events };
+}
+
+const PHONE = { kind: 'relay', client: 'Snotra for iPhone' };
+
+test('without a window, a phone that takes cards answers its own turn\'s card (#1251)', async () => {
+  const { adapter, events } = makeRemoteAdapter({ follows: (chatId) => chatId === 'chat-phone' });
+  assert.equal(adapter.isAvailable('remote:conn-1', 'chat-phone'), true);
+  assert.equal(adapter.isAvailable('remote:conn-1', 'chat-other'), false, 'only a chat the phone follows');
+  assert.equal(adapter.isAvailable('remote:conn-1'), false, 'and only with a chat');
+  assert.equal(adapter.isAvailable(1, 'chat-phone'), false, 'a window\'s own turn still needs the window');
+
+  const pending = adapter.requestApproval({ sessionId: 'remote:conn-1', request: { ...REQUEST, chatId: 'chat-phone' } });
+  assert.deepEqual(events.map((e) => [e.type, e.chatId, e.dto?.requestId]), [['request', 'chat-phone', 'req-1']], 'offered to the phone');
+  assert.deepEqual(adapter.listPending().map((dto) => dto.requestId), ['req-1']);
+  assert.deepEqual(adapter.respondFromRemote('req-1', { response: 'allow-once' }, PHONE), { ok: true, response: 'allow-once' });
+  assert.deepEqual(await pending, { response: 'allow-once', requestId: 'req-1', by: PHONE });
+
+  // A chat no phone follows has nobody to ask, as before.
+  const elsewhere = await adapter.requestApproval({ sessionId: 'remote:conn-1', request: { ...REQUEST, chatId: 'chat-other' } });
+  assert.deepEqual(elsewhere, { invalidated: true, reason: 'no_approval_ui', requestId: '' });
+});
+
+test('a window that opens later takes over the card a phone\'s turn left without one (#1251)', async () => {
+  const { adapter } = makeRemoteAdapter();
+  const pending = adapter.requestApproval({ sessionId: 'remote:conn-1', request: { ...REQUEST, chatId: 'chat-phone' } });
+  const wc = makeWebContents();
+  adapter.subscribe(1, wc);
+  assert.deepEqual(adapter.listPending(1).map((dto) => dto.requestId), ['req-1'], 'the renderer lists it after subscribing');
+  assert.deepEqual(adapter.respond(1, { requestId: 'req-1', response: 'deny' }), { ok: true, response: 'deny' });
+  assert.equal((await pending).response, 'deny');
+  assert.deepEqual(wc.sent.at(-1), {
+    channel: PUSH.TOOL_APPROVAL_RESOLVED,
+    payload: { requestId: 'req-1', response: 'deny', invalidated: false, reason: null },
+  });
+});
+
+test('a closed window leaves a phone\'s card to the phone, and only that card (#1251)', async () => {
+  let follows = true;
+  const { adapter } = makeRemoteAdapter({ follows: () => follows });
+  const wc = makeWebContents();
+  adapter.subscribe(1, wc);
+  const phone = adapter.requestApproval({ sessionId: 'remote:conn-1', request: { ...REQUEST, chatId: 'chat-phone' } });
+  const own = adapter.requestApproval({ sessionId: 1, request: { ...REQUEST, chatId: 'chat-desk' } });
+  assert.equal(wc.sent.length, 2, 'both shown in the window');
+
+  wc.destroy();
+  assert.equal((await own).invalidated, true, 'the window\'s own card goes with it');
+  assert.deepEqual(adapter.listPending().map((dto) => dto.requestId), ['req-1'], 'the phone\'s stays open');
+  assert.deepEqual(adapter.respondFromRemote('req-1', { response: 'allow-once' }, PHONE), { ok: true, response: 'allow-once' });
+  assert.equal((await phone).response, 'allow-once');
+
+  // No phone that takes cards: the card goes with the window, as before.
+  follows = false;
+  const wc2 = makeWebContents();
+  adapter.subscribe(2, wc2);
+  const unfollowed = adapter.requestApproval({ sessionId: 'remote:conn-1', request: { ...REQUEST, chatId: 'chat-phone' } });
+  adapter.unsubscribe(2);
+  assert.deepEqual(await unfollowed, { invalidated: true, reason: 'no_approval_ui', requestId: 'req-3' });
+});
+
+test('a closed window hands a phone\'s card to the window still open (#1251)', async () => {
+  const { adapter } = makeRemoteAdapter({ follows: () => false });
+  const first = makeWebContents();
+  const second = makeWebContents();
+  adapter.subscribe(1, first);
+  adapter.subscribe(2, second);
+  const pending = adapter.requestApproval({ sessionId: 'remote:conn-1', request: { ...REQUEST, chatId: 'chat-phone' } });
+  assert.equal(second.sent[0].channel, PUSH.TOOL_APPROVAL_REQUEST, 'shown in the window that subscribed last');
+  second.destroy();
+  assert.equal(first.sent.at(-1).payload.requestId, 'req-1', 'pushed to the other window');
+  assert.deepEqual(adapter.respond(1, { requestId: 'req-1', response: 'allow-once' }), { ok: true, response: 'allow-once' });
+  assert.equal((await pending).response, 'allow-once');
+});
+
 test('a remote answers allow once or deny; the first valid answer wins and everyone hears who gave it (#1194)', async () => {
   const adapter = makeAdapter();
   const events = [];
