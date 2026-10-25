@@ -152,7 +152,20 @@ function createApplicationMenuTemplate({
   };
 
   /** @type {MenuItem[]} */
-  const settingsInView = isMac ? [] : [settingsItem, { type: 'separator' }];
+  // Usage & Cost (#1258) sits next to the settings; on the Mac, where they
+  // live in the app menu, it keeps the same place in "View". Cmd/Ctrl+Shift+K
+  // rather than +U: on Linux Ctrl+Shift+U starts the Unicode input of GTK and
+  // IBus, and a text field with the focus would never let it through.
+  /** @type {MenuItem} */
+  const usageItem = {
+    label: t('usage.menu'),
+    accelerator: 'CmdOrCtrl+Shift+K',
+    click: () => send(PUSH.UI_OPEN_USAGE_REPORT),
+  };
+  /** @type {MenuItem[]} */
+  const settingsInView = isMac
+    ? [usageItem, { type: 'separator' }]
+    : [settingsItem, usageItem, { type: 'separator' }];
 
   /** @type {MenuItem} */
   const viewMenu = {

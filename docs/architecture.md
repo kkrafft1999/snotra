@@ -134,8 +134,11 @@ imports.
   [Business rules outside the core](#business-rules-outside-the-core-982).
 - The conversation is the core's since
   [#981](https://github.com/kkrafft1999/snotra/issues/981): the conversation
-  service keeps a chat's history, saves its turns and sums its cost; the
-  renderer sends a question and draws what it is told, see
+  service keeps a chat's history, saves its turns and sums its cost — by
+  model and, since [#1258](https://github.com/kkrafft1999/snotra/issues/1258),
+  by the day it was spent, which the usage report adds up from the history's
+  index without opening a chat file; the renderer sends a question and draws
+  what it is told, see
   [Renderer](#renderer-what-was-moved-what-stays).
 - A second front end (a CLI, say) would therefore have to take most of
   `src/main/` with it, not only add adapters and a composition root. That is
@@ -175,7 +178,7 @@ code is.
 
 | Layer | Path | Role |
 | ------- | ---- | ----- |
-| **Contracts** | `src/shared/contracts/` | 32 modules (~8k lines): DTOs, events, enums and validators for the IPC boundary and persistence, plus the pure arithmetic of a feature (`cost.js`, `chat-configuration.js`). Used by core, main and — as a generated ESM bundle — the renderer |
+| **Contracts** | `src/shared/contracts/` | 32 modules (~8k lines): DTOs, events, enums and validators for the IPC boundary and persistence, plus the pure arithmetic of a feature (`cost.js`, `usage-report.js`, `chat-configuration.js`). Used by core, main and — as a generated ESM bundle — the renderer |
 | **Shared runtime** | `src/shared/runtime/` | 18 small modules (~2k lines) without Electron: path and pattern checks, sensitive paths and content, URL safety, the shell command guard, partial JSON, hidden entries |
 | **Shared i18n** | `src/shared/i18n/` | The English and German catalogues and the translator, one copy for all three sides, see [Interface language](#interface-language) |
 | **Shared manual** | `src/shared/manual/` | Addressing and searching the pages of the user manual, for main and the manual window |

@@ -223,6 +223,14 @@
                 <path d="M8 13h5"/>
               </svg>
             </button>
+            <button type="button" id="btn-sidebar-usage" title="Usage &amp; cost…" aria-label="Usage &amp; cost…" aria-haspopup="dialog" data-i18n-attr="title:usage.open;aria-label:usage.open">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.875" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 3v16a2 2 0 0 0 2 2h16"/>
+                <path d="M8 17v-4"/>
+                <path d="M13 17V8"/>
+                <path d="M18 17v-7"/>
+              </svg>
+            </button>
             <button type="button" id="btn-sidebar-settings" title="Settings" aria-label="Settings" aria-haspopup="dialog" data-i18n-attr="title:sidebar.settings;aria-label:sidebar.settings">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.875" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
@@ -1870,6 +1878,92 @@
       </div>
       <footer class="modal-dialog__footer" id="modal-update-footer">
         <div class="modal-actions" id="modal-update-actions"></div>
+      </footer>
+    </div>
+  </div>
+
+  <!-- The usage report (#1258). UsageReportDialog draws it; main adds up. -->
+  <div id="modal-usage" class="modal modal-usage hidden" aria-hidden="true">
+    <div class="modal-backdrop" id="modal-usage-backdrop"></div>
+    <div
+      class="modal-dialog usage-dialog"
+      tabindex="-1"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-usage-title">
+      <header class="modal-dialog__header">
+        <h2 id="modal-usage-title" class="modal-dialog__title" data-i18n="usage.title">Usage &amp; cost</h2>
+        <button type="button" id="modal-usage-close" class="modal-dialog__close" aria-label="Close dialog" data-i18n-attr="aria-label:usage.close">
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <path fill="currentColor" d="M3.47 3.47a.75.75 0 0 1 1.06 0L8 6.94l3.47-3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 0-1.06z"/>
+          </svg>
+        </button>
+      </header>
+      <div class="modal-dialog__body usage-dialog__body">
+        <div class="usage-dialog__period">
+          <span id="usage-period-label" class="visually-hidden" data-i18n="usage.period.label">Period</span>
+          <div class="ds-segmented ds-segmented--compact usage-dialog__periods" role="radiogroup" aria-labelledby="usage-period-label">
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="usage-period" value="last7">
+              <span data-i18n="usage.period.last7">7 days</span>
+            </label>
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="usage-period" value="last30" checked>
+              <span data-i18n="usage.period.last30">30 days</span>
+            </label>
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="usage-period" value="thisMonth">
+              <span data-i18n="usage.period.thisMonth">This month</span>
+            </label>
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="usage-period" value="lastMonth">
+              <span data-i18n="usage.period.lastMonth">Last month</span>
+            </label>
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="usage-period" value="all">
+              <span data-i18n="usage.period.all">All time</span>
+            </label>
+            <label class="ds-segmented__option">
+              <input type="radio" class="ds-segmented__input" name="usage-period" value="custom">
+              <span data-i18n="usage.period.custom">Custom</span>
+            </label>
+          </div>
+          <p id="usage-range" class="usage-dialog__range"></p>
+          <div id="usage-custom" class="usage-dialog__custom" hidden>
+            <label class="usage-dialog__date-field">
+              <span data-i18n="usage.period.from">From</span>
+              <input type="date" id="usage-from" class="modal-input usage-dialog__date">
+            </label>
+            <label class="usage-dialog__date-field">
+              <span data-i18n="usage.period.to">to</span>
+              <input type="date" id="usage-to" class="modal-input usage-dialog__date">
+            </label>
+          </div>
+        </div>
+        <p id="usage-alert" class="modal-hint error usage-dialog__alert" role="alert" hidden></p>
+        <div id="usage-state" class="usage-dialog__state"></div>
+        <div id="usage-report" class="usage-dialog__report" hidden>
+          <div id="usage-summary" class="usage-dialog__summary"></div>
+          <div id="usage-chart" class="usage-chart"></div>
+          <div class="usage-dialog__group">
+            <span id="usage-group-label" class="usage-dialog__group-label" data-i18n="usage.group.label">Group by</span>
+            <div class="ds-segmented ds-segmented--compact" role="radiogroup" aria-labelledby="usage-group-label">
+              <label class="ds-segmented__option">
+                <input type="radio" class="ds-segmented__input" name="usage-group" value="models" checked>
+                <span data-i18n="usage.group.models">Model</span>
+              </label>
+              <label class="ds-segmented__option">
+                <input type="radio" class="ds-segmented__input" name="usage-group" value="workspaces">
+                <span data-i18n="usage.group.workspaces">Workspace</span>
+              </label>
+            </div>
+          </div>
+          <div id="usage-table" class="usage-dialog__table"></div>
+        </div>
+      </div>
+      <footer class="modal-dialog__footer usage-dialog__footer">
+        <p id="usage-footnote" class="usage-dialog__footnote"></p>
+        <button type="button" id="usage-done" class="btn-primary" data-i18n="usage.done">Close</button>
       </footer>
     </div>
   </div>

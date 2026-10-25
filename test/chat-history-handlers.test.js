@@ -725,7 +725,10 @@ test('the chat cost is main\'s sum: added per turn, kept by every save, never ta
   assert.equal((await chatHistory.addCost('priced', turn)).models[0].rounds, 2);
   await ipcMain.invoke(SAVE_CHAT, sessionRow('priced'));
   let session = (await getHistory(ipcMain)).sessions.find((s) => s.id === 'priced');
-  assert.deepEqual(session.cost, { version: 1, ...turn });
+  // Since #1258 the sum carries the day it was spent on, for the usage report.
+  const { days, ...sum } = session.cost;
+  assert.deepEqual(sum, { version: 1, ...turn });
+  assert.deepEqual(days.map((day) => [day.model, day.rounds]), [['gpt-x', 2]]);
 
   // The next turn adds to it; a save from the renderer keeps it and cannot set it.
   assert.equal((await chatHistory.addCost('priced', turn)).models[0].rounds, 4);

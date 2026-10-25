@@ -25,6 +25,7 @@ const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
 const { registerVoiceHandlers } = require('../ipc/voice-handlers');
 const { registerSettingsHandlers } = require('../ipc/settings-handlers');
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
+const { registerUsageReportHandlers } = require('../ipc/usage-report-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
 const { registerFeedbackHandlers } = require('../ipc/feedback-handlers');
 const { registerNoticeHandlers } = require('../ipc/notice-handlers');
@@ -228,6 +229,7 @@ function createApplication({
   });
   registerModelPriceHandlers({ ipcMain, modelPrices: core.modelPrices, REQ });
   registerChatHistoryHandlers({ ipcMain, chatHistory: core.chatHistory, REQ });
+  registerUsageReportHandlers({ ipcMain, usageReport: core.usageReport, REQ });
   registerUpdateHandlers({ ipcMain, updates, REQ, PUSH, getMainWindow });
   registerFeedbackHandlers({ ipcMain, feedback: core.feedback, REQ });
   registerNoticeHandlers({ ipcMain, notices: core.notices, REQ, PUSH, getMainWindow, shell });

@@ -19,6 +19,7 @@ import { initUpdateDialog } from './components/UpdateDialog.js';
 import { initAppNotices } from './components/AppNotices.js';
 import { initFileInfoDialog } from './components/FileInfoDialog.js';
 import { initFeedbackDialog } from './components/FeedbackDialog.js';
+import { initUsageReportDialog } from './components/UsageReportDialog.js';
 import { initToolPermissionState } from './state/tool-permissions.js';
 import { initToolModePicker } from './components/ToolModePicker.js';
 import { initChatConfigIndicator } from './components/ChatConfigIndicator.js';
@@ -611,6 +612,17 @@ const fileTree = initFileTree({
   workspacePaths,
 });
 syncPreviewEditingLock = () => fileTree.setPreviewEditingBlocked(chatStream.runs.anyRunning());
+
+// The usage report (#1258): the sidebar's foot, View > Usage & Cost… and
+// Cmd/Ctrl+Shift+K open it. A chat it lists opens in its own folder, which is
+// switched to first when another one is open.
+const usageReport = initUsageReportDialog({
+  api,
+  getActiveRoot: () => appStore.rootPath || null,
+  openFolder: (root) => fileTree.openProject(root),
+  openChat: (chatId) => chatHistory.openChatSession(chatId),
+});
+document.getElementById('btn-sidebar-usage')?.addEventListener('click', () => usageReport.open());
 
 // Menu "View > Preview or Source" or Cmd/Ctrl+Shift+M (#344). The file view
 // decides; for anything but a Markdown file or an SVG (#345) it is a no-op.

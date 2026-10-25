@@ -12721,6 +12721,632 @@ select.modal-input {
   visibility: hidden;
 }
 
+/* ── The usage report (#1258) ──────────────────────────────────────────────
+ * Variant C of the mockup of 2026-10-25: the period, the totals, a bar per
+ * day (week, month) and one table per dimension whose rows unfold in place.
+ * Wider than a form dialog: the table carries five columns. */
+.modal-usage .modal-dialog.usage-dialog {
+  max-width: 880px;
+  height: min(92vh, 880px);
+  max-height: min(92vh, 880px);
+}
+
+.usage-dialog [hidden] {
+  display: none !important;
+}
+
+.usage-dialog[tabindex='-1']:focus-visible {
+  outline: none;
+}
+
+.usage-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 16px;
+  padding-bottom: 20px;
+}
+
+.usage-dialog__period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.usage-dialog__periods .ds-segmented__option {
+  min-width: 0;
+}
+
+.usage-dialog__range {
+  margin: 0;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-dialog__custom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.usage-dialog__date-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-secondary);
+}
+
+.usage-dialog__date.modal-input {
+  width: auto;
+  min-height: var(--ds-touch-min);
+  padding: 4px 8px;
+  font-variant-numeric: tabular-nums;
+  color-scheme: light;
+}
+
+[data-theme='dark'] .usage-dialog__date.modal-input {
+  color-scheme: dark;
+}
+
+.usage-dialog__alert {
+  margin: 0;
+}
+
+.usage-dialog__state:empty {
+  display: none;
+}
+
+/* Empty, loading and failed: centred, the one place this dialog does it. */
+.usage-dialog__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 56px 16px;
+  text-align: center;
+}
+
+.usage-dialog__state-title {
+  margin: 0;
+  font-size: var(--ds-font-size-lg);
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--text-primary);
+}
+
+.usage-dialog__state-hint {
+  margin: 0;
+  font-size: var(--ds-font-size-base);
+  color: var(--text-secondary);
+}
+
+.usage-dialog__retry {
+  margin-top: 10px;
+}
+
+.usage-dialog__report {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.usage-dialog__totals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 44px;
+  margin: 0;
+}
+
+.usage-dialog__total {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.usage-dialog__total-label {
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-bold);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.usage-dialog__total-value {
+  margin: 2px 0 0;
+  font-size: var(--ds-font-size-h2);
+  font-weight: var(--ds-font-weight-bold);
+  line-height: var(--ds-line-height-tight);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-dialog__total-sub {
+  margin: 4px 0 0;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-dialog__estimate {
+  margin: 10px 0 0;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-muted);
+}
+
+/* A text button: blue like a link, with a 32 px target around the words. */
+.usage-dialog__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ds-touch-min);
+  margin: -4px -6px;
+  padding: 0 6px;
+  border: none;
+  border-radius: var(--ds-radius-sm);
+  background: transparent;
+  color: var(--accent-text);
+  font: inherit;
+  font-size: var(--ds-font-size-md);
+  font-weight: var(--ds-font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.usage-dialog__link:hover {
+  text-decoration: underline;
+}
+
+/* The chart. */
+.usage-chart:empty {
+  display: none;
+}
+
+.usage-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.usage-chart__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.usage-chart__title {
+  margin: 0;
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-bold);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.usage-chart__plot {
+  height: 104px;
+  padding: 0 1px;
+  border-bottom: 1px solid var(--border);
+}
+
+.usage-chart__bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 100%;
+}
+
+.usage-chart__slot {
+  display: flex;
+  flex: 1 1 0;
+  align-items: flex-end;
+  justify-content: center;
+  min-width: 1px;
+  height: 100%;
+}
+
+/* A week of days must not turn into slabs: the bar stays slim and sits in
+ * the middle of its slot, where the label under it is. */
+.usage-chart__bar {
+  width: 100%;
+  max-width: 40px;
+  border-radius: 2px 2px 0 0;
+  background: var(--ds-blue);
+}
+
+.usage-chart__slot:hover .usage-chart__bar:not(.usage-chart__bar--empty) {
+  background: var(--ds-btn-primary-bg-hover);
+}
+
+.usage-chart__bar--empty {
+  height: 2px;
+  max-width: none;
+  border-radius: 0;
+  background: var(--border);
+}
+
+.usage-chart__axis {
+  position: relative;
+  height: 18px;
+}
+
+.usage-chart__tick {
+  position: absolute;
+  top: 0;
+  left: var(--usage-tick-x);
+  transform: translateX(-50%);
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-chart__tick--first {
+  left: 0;
+  transform: none;
+}
+
+.usage-chart__tick--last {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+
+.usage-chart__table-wrap {
+  max-height: 260px;
+  overflow-y: auto;
+  border: var(--ds-card-border);
+  border-radius: var(--ds-radius-md);
+}
+
+.usage-chart__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ds-font-size-md);
+}
+
+.usage-chart__table th,
+.usage-chart__table td {
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+  text-align: left;
+  font-weight: var(--ds-font-weight-regular);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-chart__table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-primary);
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--text-muted);
+}
+
+.usage-chart__table tbody tr:last-child > * {
+  border-bottom: none;
+}
+
+/* Group by. */
+.usage-dialog__group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.usage-dialog__group-label {
+  font-size: var(--ds-font-size-md);
+  color: var(--text-secondary);
+}
+
+/* The table. Fixed layout, so a long model name or path ellipsises instead
+ * of pushing the figures out of line. */
+.usage-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-size: var(--ds-font-size-base);
+}
+
+.usage-table th,
+.usage-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+  text-align: left;
+  vertical-align: middle;
+  font-weight: var(--ds-font-weight-regular);
+}
+
+.usage-table thead th {
+  /* The column heads stay in sight while a long table scrolls. Sticky
+   * offsets count from the content edge of the scrolling body: -16px cancels
+   * its padding-top, so the heads sit flush under the dialog's header and no
+   * row shows through above them. */
+  position: sticky;
+  top: -16px;
+  z-index: 1;
+  padding-top: 4px;
+  padding-bottom: 4px;
+  background: var(--bg-primary);
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-bold);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.usage-table thead th:nth-child(1) { width: 36%; }
+.usage-table thead th:nth-child(2) { width: 22%; }
+.usage-table thead th:nth-child(3) { width: 12%; }
+.usage-table thead th:nth-child(4) { width: 13%; }
+.usage-table thead th:nth-child(5) { width: 17%; }
+
+.usage-table__num {
+  text-align: right !important;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-table__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  margin: 0 -4px;
+  padding: 0 4px;
+  border: none;
+  border-radius: var(--ds-radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+
+.usage-table__sort:hover,
+.usage-table th[aria-sort] .usage-table__sort {
+  color: var(--text-primary);
+}
+
+.usage-table__sort-arrow {
+  display: inline-block;
+  min-width: 0.7em;
+}
+
+.usage-table__name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.usage-table__disclosure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  margin-left: -8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+}
+
+.usage-table__disclosure:hover {
+  background: var(--ds-grey-bg);
+  color: var(--text-primary);
+}
+
+.usage-table__disclosure:focus-visible {
+  border-radius: 50%;
+}
+
+.usage-table__disclosure svg {
+  transition: transform var(--ds-motion-fast);
+}
+
+.usage-table__disclosure[aria-expanded='true'] svg {
+  transform: rotate(90deg);
+}
+
+.usage-table__name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.usage-table__name-main,
+.usage-table__name-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-table__name-main {
+  font-weight: var(--ds-font-weight-medium);
+  color: var(--text-primary);
+}
+
+.usage-table__name-sub {
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted);
+}
+
+.usage-table__mono {
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-font-size-md);
+}
+
+.usage-table__name-sub.usage-table__mono {
+  font-size: var(--ds-font-size-sm);
+}
+
+.usage-table__tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 7px;
+  border: 1px solid var(--ds-grey-control-border);
+  border-radius: var(--ds-radius-pill);
+  font-size: var(--ds-font-size-xs);
+  font-weight: var(--ds-font-weight-bold);
+  line-height: 16px;
+  color: var(--text-muted-strong);
+  vertical-align: 1px;
+}
+
+.usage-share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.usage-share__track {
+  flex: 1 1 auto;
+  min-width: 32px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--ds-radius-pill);
+  background: var(--bg-tertiary);
+}
+
+.usage-share__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--ds-radius-pill);
+  background: var(--ds-blue);
+}
+
+.usage-share__value {
+  min-width: 3.4em;
+  text-align: right;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* What unfolds under a row sits on the panel ground, indented under its name. */
+.usage-table__child > *,
+.usage-table__detail > td,
+.usage-table__chats-row > td {
+  background: var(--ds-grey-bg);
+}
+
+.usage-table__child-name {
+  padding-left: 56px !important;
+}
+
+.usage-table__detail > td {
+  padding: 6px 10px 10px 56px;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-table__chats-row > td {
+  padding: 6px 10px 12px 56px;
+}
+
+.usage-chats__note {
+  margin: 2px 0 8px;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-secondary);
+}
+
+.usage-chats__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: var(--ds-card-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--bg-primary);
+}
+
+.usage-chats__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+}
+
+.usage-chats__item:last-child {
+  border-bottom: none;
+}
+
+.usage-chats__item:only-child,
+.usage-chats__item:has(> :nth-child(2):last-child) {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.usage-chats__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.usage-chats__title,
+.usage-chats__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-chats__title {
+  font-weight: var(--ds-font-weight-medium);
+  color: var(--text-primary);
+}
+
+.usage-chats__meta {
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted);
+}
+
+.usage-chats__cost {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-chats__open.btn-secondary {
+  padding: 4px 14px;
+  font-size: var(--ds-font-size-md);
+}
+
+.usage-dialog__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.usage-dialog__footnote {
+  margin: 0;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-muted);
+}
+
+/* A narrow window — or a zoomed one — drops the share column, the cost
+ * carries the order, and the periods wrap onto two lines. */
+@media (max-width: 720px) {
+  .usage-dialog__periods {
+    display: flex;
+    flex-wrap: wrap;
+    border-radius: var(--ds-radius-md);
+  }
+
+  .usage-table thead th:nth-child(1) { width: 46%; }
+  .usage-table th:nth-child(2),
+  .usage-table td:nth-child(2) {
+    display: none;
+  }
+}
+
 /* ── Settings › Remote access (#1110) ─────────────────────────────────────
  * From docs/ui-design/remote-access-mockup.html, decided 2026-10-18: the
  * pairing runs inside the panel. Status by shape and word, never by colour

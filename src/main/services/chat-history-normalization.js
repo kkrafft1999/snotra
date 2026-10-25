@@ -771,8 +771,12 @@ function normalizeSessionMetaForList(meta) {
     updatedAt: meta.updatedAt,
     messageCount: Number.isInteger(meta.messageCount) ? meta.messageCount : 0,
   };
+  // The row shows the sum; the days are for the usage report alone (#1258).
   const cost = normalizeSessionCost(meta.cost);
-  if (cost) out.cost = cost;
+  if (cost) {
+    const { days: _days, ...sum } = cost;
+    out.cost = sum;
+  }
   return out;
 }
 
