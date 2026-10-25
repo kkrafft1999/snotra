@@ -38,7 +38,7 @@ An dem, was Snotra darf, hat sich nichts geändert: Der nächste Tool-Aufruf wir
 
 ## Wie lange eine Antwort gedauert hat
 
-[seit 1.28] Unter jeder fertigen Antwort steht in einer kleinen Zeile, wie lange sie gedauert hat: *Antwort in 4,2 Sek.*, *Antwort in 3:05 Min.* Die Zeit läuft ab dem Absenden deiner Nachricht, bis die Antwort fertig ist — Nachdenken, Tool-Schritte und der Text zählen mit, ebenso die Zeit, in der eine Karte auf deine Entscheidung gewartet hat. Ein Lauf, den du gestoppt hast, zeigt *Abgebrochen nach …*; einer, der mit einem Fehler endete, trägt *Fehlgeschlagen nach …* unter dem Fehler. Fährst du mit der Maus über die Zeile, steht dort, was sie misst. Die Dauer bleibt bei der Antwort und ist auch da, wenn du den Chat wieder öffnest.
+[seit 1.27.5] Unter jeder fertigen Antwort steht in einer kleinen Zeile, wie lange sie gedauert hat: *Antwort in 4,2 Sek.*, *Antwort in 3:05 Min.* Die Zeit läuft ab dem Absenden deiner Nachricht, bis die Antwort fertig ist — Nachdenken, Tool-Schritte und der Text zählen mit, ebenso die Zeit, in der eine Karte auf deine Entscheidung gewartet hat. Ein Lauf, den du gestoppt hast, zeigt *Abgebrochen nach …*; einer, der mit einem Fehler endete, trägt *Fehlgeschlagen nach …* unter dem Fehler. Fährst du mit der Maus über die Zeile, steht dort, was sie misst. Die Dauer bleibt bei der Antwort und ist auch da, wenn du den Chat wieder öffnest.
 
 ## Was dann passiert
 

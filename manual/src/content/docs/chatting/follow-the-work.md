@@ -38,7 +38,7 @@ Nothing about what Snotra may do has changed: the next tool call is checked like
 
 ## How long an answer took
 
-[since 1.28] Under each finished answer, a small line says how long it took: *Answered in 4.2 sec*, *Answered in 3:05 min*. The time runs from the moment you send the message until the answer is complete — thinking, tool steps and the text all count, and so does the time a card waited for your decision. A turn you stopped reads *Stopped after …*; one that ended with an error carries *Failed after …* under the error. Hover over the line for what it measures. The duration is kept with the answer, so it is still there when you open the chat again.
+[since 1.27.5] Under each finished answer, a small line says how long it took: *Answered in 4.2 sec*, *Answered in 3:05 min*. The time runs from the moment you send the message until the answer is complete — thinking, tool steps and the text all count, and so does the time a card waited for your decision. A turn you stopped reads *Stopped after …*; one that ended with an error carries *Failed after …* under the error. Hover over the line for what it measures. The duration is kept with the answer, so it is still there when you open the chat again.
 
 ## What happens
 
