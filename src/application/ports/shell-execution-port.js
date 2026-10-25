@@ -27,6 +27,8 @@
  * @property {{isolated: boolean, domains?: string[], reason?: string, missing?: string[]}} [isolation]
  *   whether the run was isolated (#329); absent when no sandbox is wired
  * @property {Object} [sandboxBlocked]  what the sandbox refused (#792), for the chat's tool row
+ * @property {{set: string[], unavailable: string[]}} [credentials]  the variables of a program
+ *   allowance the run got, and those whose value could not be read (#1262) — names only
  *
  * @typedef {Object} ShellExecutionRefusal  a run that never started
  * @property {string} error   an English sentence for the model
@@ -39,8 +41,11 @@
  * @property {string} [cwd]
  * @property {string} [workspaceRoot]
  * @property {string[]} [networkDomains]
- * @property {{writePaths?: string[], trustd?: boolean}|null} [programAllowance]  a program
- *   allowance's folders and trustd (#408); its domains are part of `networkDomains`
+ * @property {{writePaths?: string[], trustd?: boolean, path?: string, root?: string|null,
+ *   credentials?: Array<{name: string, id: string}>}|null} [programAllowance]  a program
+ *   allowance's folders and trustd (#408); its domains are part of `networkDomains`. Its
+ *   credentials (#1262) come as names and ids — the runner reads the values itself, for
+ *   the allowance of `path` in workspace `root`, and masks them in what it returns.
  * @property {Object|null} [sandboxGrants]  what the user allowed on a sandbox card (#792)
  * @property {((request: { target: string, allow: string[] }, options?: { signal?: AbortSignal }) => Promise<{ outcome: string, pattern?: string }>)|null} [onSandboxNetworkAsk]  asks about a connection while the command waits (#792)
  * @property {boolean} [sandboxDisabled]  the sandbox is switched off for this workspace (#357)

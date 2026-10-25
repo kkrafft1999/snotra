@@ -428,6 +428,8 @@ function createCore({
     fs,
     path,
     sandbox: sandboxService,
+    // A program allowance's credentials (#1262), decrypted for the run.
+    readAllowanceCredentials: (programPath, options) => toolPolicyStore.readAllowanceCredentials(programPath, options),
   });
   // Shell execution (#102): the same two conditions as for Python, with a
   // wider reach — a command can do whatever the signed-in user can.
@@ -542,7 +544,13 @@ function createCore({
 
   // Provider keys, gateway headers, MCP secrets and the web search key, in
   // every form they can turn up in (concept §5, #505).
-  const ownSecrets = createOwnSecrets({ llmConfigStore, providerSecrets, mcpSecrets, webSearchStore });
+  const ownSecrets = createOwnSecrets({
+    llmConfigStore,
+    providerSecrets,
+    mcpSecrets,
+    webSearchStore,
+    allowanceSecrets: { getAllowanceSecretValues: () => toolPolicyStore.readAllowanceSecretValues() },
+  });
 
   // What Settings › MCP reads and does, and the take-over of the saved
   // servers (#108); statuses go out masked (CR-B14-01).

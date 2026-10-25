@@ -790,6 +790,19 @@ allowance to the runner; `planSpawn` passes folders and trustd to
 `renderer/components/ProgramAllowanceDialog.js`; widening goes through a
 native confirmation in `main/services/tool-permission-service.js`.
 
+An allowance can carry **credentials**
+([#1262](https://github.com/kkrafft1999/snotra/issues/1262)): variable names
+with an id each. The values sit encrypted in the policy file's
+`allowanceSecrets`, by id, pruned with the allowances in
+`normalizePolicyPayload`; `prepareEntry` gives a new value a new id and hands
+it to `toolPolicyStore.setProgramAllowance` apart from the entry, which
+encrypts it. The plan carries names and ids; the shell runner reads the values
+through `toolPolicyStore.readAllowanceCredentials` for an isolated run only,
+adds them to the run's environment (plus an empty `GH_CONFIG_DIR` /
+`GLAB_CONFIG_DIR`, `lockedConfigDirVariable`) and masks them in what it
+returns with `redactOwnSecrets`. `readAllowanceSecretValues` adds them to the
+own secrets (`services/own-secrets.js`).
+
 **Scopes of the sandbox grants**
 ([#1119](https://github.com/kkrafft1999/snotra/issues/1119)). The policy file
 holds the sandbox switch, the hosts kept open and the program allowances per

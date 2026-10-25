@@ -55,6 +55,8 @@ const MAX_AUTO_CHATS = 500;
  * @property {string[]} unsandboxedWorkspaces
  * @property {ProgramAllowance[]} programAllowances
  * @property {Record<string, ProgramAllowance[]>} workspaceProgramAllowances
+ * @property {Record<string, string>} allowanceSecrets  credential id → `safeStorage`
+ *   ciphertext in base64 (#1262); only ids an allowance references
  * @property {Record<string, ToolPermissionMode>} workspaceModes
  * @property {Record<string, string[]>} workspaceHosts
  * @property {string[]} globalHosts
@@ -78,6 +80,8 @@ function defaultPayload() {
     // workspace: root → entries.
     programAllowances: [],
     workspaceProgramAllowances: {},
+    // The values of the allowances' credentials (#1262), encrypted, by id.
+    allowanceSecrets: {},
     workspaceModes: {},
     workspaceHosts: {},
     globalHosts: [],
@@ -163,6 +167,42 @@ function normalizeWorkspaceProgramAllowances(value) {
   return out;
 }
 
+/** A ciphertext is never near this long; a value that is was not written here. */
+const MAX_ALLOWANCE_SECRET_CHARS = 16384;
+
+/**
+ * The encrypted credential values (#1262), kept only where an allowance
+ * still references them — so whatever takes an allowance away, its secrets
+ * go with it on the next write — and a credential whose value is missing is
+ * taken off its allowance, so that no run is promised a variable it will not
+ * get. Changes the allowances in `payload` in place.
+ *
+ * @param {PolicyPayload} payload  allowances already normalized
+ * @param {unknown} value
+ * @returns {Record<string, string>}
+ */
+function normalizeAllowanceSecrets(payload, value) {
+  /** @type {Record<string, string>} */
+  const out = {};
+  const stored = isRecord(value) ? value : {};
+  /** @param {ProgramAllowance} entry */
+  const keep = (entry) => {
+    const credentials = entry.credentials.filter((credential) => {
+      const cipher = Object.hasOwn(stored, credential.id) ? stored[credential.id] : null;
+      if (typeof cipher !== 'string' || !cipher || cipher.length > MAX_ALLOWANCE_SECRET_CHARS) return false;
+      if (!/^[A-Za-z0-9+/]+={0,2}$/.test(cipher)) return false;
+      out[credential.id] = cipher;
+      return true;
+    });
+    return credentials.length === entry.credentials.length ? entry : { ...entry, credentials };
+  };
+  payload.programAllowances = payload.programAllowances.map(keep);
+  for (const root of Object.keys(payload.workspaceProgramAllowances)) {
+    payload.workspaceProgramAllowances[root] = payload.workspaceProgramAllowances[root].map(keep);
+  }
+  return out;
+}
+
 /**
  * Root → `ask-all` | `auto`; `smart` and unknown values are no entry (#413).
  *
@@ -242,6 +282,7 @@ function normalizePolicyPayload(raw) {
   out.unsandboxedWorkspaces = normalizeWorkspaceRoots(data.unsandboxedWorkspaces);
   out.programAllowances = normalizeProgramAllowances(data.programAllowances);
   out.workspaceProgramAllowances = normalizeWorkspaceProgramAllowances(data.workspaceProgramAllowances);
+  out.allowanceSecrets = normalizeAllowanceSecrets(out, data.allowanceSecrets);
   out.workspaceModes = normalizeWorkspaceModes(data.workspaceModes);
   out.workspaceHosts = normalizeWorkspaceHosts(data.workspaceHosts);
   out.globalHosts = grantedHosts(data.globalHosts).slice(0, MAX_GLOBAL_HOSTS);
@@ -275,6 +316,8 @@ function failSafePayload(payload) {
   out.unsandboxedWorkspaces = [];
   out.programAllowances = [];
   out.workspaceProgramAllowances = {};
+  // Their credentials go with them (#1262).
+  out.allowanceSecrets = {};
   // So is a host kept open for a workspace (#946) or for every one, the
   // sandbox off for new workspaces (#1119), and a chat's confirmed "Auto"
   // (#980).

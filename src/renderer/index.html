@@ -1563,6 +1563,19 @@
               </div>
               <p id="allowance-trustd-warning" class="allowance-warning" data-i18n-html="allowanceDialog.trustd.warning"><strong>Weaker isolation:</strong> programs written in Go need this to reach the network. It opens a macOS service that runs outside the sandbox and can make connections of its own.</p>
             </div>
+            <!-- Credentials (#1262): a variable and a secret value, never shown again once saved. -->
+            <div class="modal-field-group" id="allowance-credentials-group">
+              <span class="modal-field-label" id="heading-allowance-credentials" data-i18n="allowanceDialog.credentials.label">Credentials</span>
+              <p id="allowance-credentials-hint" class="modal-hint allowance-credentials__hint" data-i18n-html="allowanceDialog.credentials.hint">A token the program reads from an environment variable, such as <code>GH_TOKEN</code> for <code>gh</code>. Only runs of this program get it.</p>
+              <div id="allowance-credentials-head" class="allowance-credentials__head" aria-hidden="true" hidden>
+                <span data-i18n="allowanceDialog.credentials.name">Variable</span>
+                <span data-i18n="allowanceDialog.credentials.value">Token</span>
+              </div>
+              <ul id="allowance-credential-list" class="allowance-credentials" aria-labelledby="heading-allowance-credentials"></ul>
+              <p id="allowance-credentials-error" class="modal-hint error allowance-credentials__error hidden" role="alert"></p>
+              <button type="button" id="btn-allowance-credential-add" class="btn-secondary" data-i18n="allowanceDialog.credentials.add">Add credential</button>
+              <p id="allowance-credentials-warning" class="allowance-warning" hidden data-i18n-html="allowanceDialog.credentials.warning"><strong>The run can read it:</strong> the program, and whatever it starts, sees the token. Snotra masks it in the output, but only where it appears as it is. Use a dedicated token with as few rights as possible — a GitHub fine-grained token limited to the repositories it needs, a GitLab project token with minimal scopes — not your everyday one.</p>
+            </div>
           </div>
           <footer class="add-model-dialog__bottom">
             <div class="modal-actions">

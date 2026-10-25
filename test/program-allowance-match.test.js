@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
 const { createProgramAllowanceMatcher } = require('../src/application/permissions/program-allowance-match');
 const { PROGRAM_ALLOWANCE_SKIP_REASONS } = require('../src/shared/contracts/program-allowances');
 
-const ENTRY = { path: '/opt/bin/gh', domains: ['api.github.com'], writePaths: [], trustd: true };
+const ENTRY = { path: '/opt/bin/gh', domains: ['api.github.com'], writePaths: [], trustd: true, credentials: [] };
 
 function make({ sandboxSupported = true, trustdApplies = true, located = '/opt/bin/gh' } = {}) {
   return createProgramAllowanceMatcher({
@@ -25,7 +25,7 @@ function make({ sandboxSupported = true, trustdApplies = true, located = '/opt/b
 test('a simple command running the allowed file gets the allowance, with the file\'s absolute path', async () => {
   const result = await make().match({ command: 'gh pr list', cwd: '/ws' });
   assert.equal(result.command, '/opt/bin/gh pr list');
-  assert.deepEqual(result.allowance, { path: '/opt/bin/gh', program: 'gh', domains: ['api.github.com'], writePaths: [], trustd: true });
+  assert.deepEqual(result.allowance, { path: '/opt/bin/gh', program: 'gh', domains: ['api.github.com'], writePaths: [], trustd: true, credentials: [] });
 });
 
 test('without a sandbox there is nothing to widen; trustd only where it applies', async () => {

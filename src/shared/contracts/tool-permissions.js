@@ -1046,7 +1046,7 @@ const ALLOWANCE_SKIP_REASONS = new Set(['compound', 'expansion', 'otherFile']);
  * the program allowance that applies; or why it is not isolated.
  *
  * @typedef {{ isolated: true, domains: string[],
- *   allowance?: { program: string, path: string, writePaths: string[], trustd: boolean },
+ *   allowance?: { program: string, path: string, writePaths: string[], trustd: boolean, credentials: string[] },
  *   allowanceSkipped?: { program: string, reason: string } }
  *   | { isolated: false, reason: string, missing: string[] }} ApprovalIsolation
  */
@@ -1067,6 +1067,8 @@ function sanitizeIsolation(isolation) {
         path: typeof allowance.path === 'string' ? allowance.path.slice(0, 1024) : '',
         writePaths: stringList(allowance.writePaths, 10, 1024),
         trustd: allowance.trustd === true,
+        // The variables the run gets, by name (#1262); never a value.
+        credentials: stringList(allowance.credentials, 5, 64),
       };
     }
     const skipped = isolation.allowanceSkipped;

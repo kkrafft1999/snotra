@@ -356,6 +356,10 @@ function programAllowanceDialog(entry, t, homeDir = '', root = null) {
     }));
   }
   if (entry.trustd) lines.push(t('permissionDialog.allowance.trustd'));
+  const credentials = Array.isArray(entry.credentials) ? entry.credentials : [];
+  if (credentials.length > 0) {
+    lines.push(t('permissionDialog.allowance.credentials', { names: credentials.map((credential) => credential.name).join(', ') }));
+  }
   const program = entry.path.split('/').pop();
   return {
     type: 'warning',

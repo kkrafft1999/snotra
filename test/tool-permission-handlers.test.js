@@ -470,6 +470,7 @@ test('a confirmed allowance is stored, voids open cards and shows up in the stat
     domains: ['graph.microsoft.com', 'login.microsoftonline.com'],
     writePaths: [TODO_CACHE],
     trustd: true,
+    credentials: [],
   }]);
   assert.equal(state.platform, 'darwin');
   assert.equal(state.homeDir, '/Users/u');

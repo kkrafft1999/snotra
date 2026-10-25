@@ -12,7 +12,9 @@
  *   of its own (#202),
  * - the values of the extra headers of a gateway (#193),
  * - the secrets stored for the MCP servers (#108),
- * - the web search key (#63).
+ * - the web search key (#63),
+ * - the credentials of the program allowances (#1262). A run that gets one
+ *   has it masked in its output already; anywhere else it is withheld.
  *
  * Both checks compare plain substrings. A value therefore has to be in the
  * list in each form it can turn up in: `Bearer abcdefgh12345678` in a header
@@ -151,8 +153,9 @@ function expandSecrets(values) {
  * @param {import('../ports/provider-secrets-port').ProviderSecretsPort} deps.providerSecrets
  * @param {{ getMcpSecretValues: () => Promise<string[]> }} deps.mcpSecrets
  * @param {{ getWebSearchApiKey: () => Promise<string|null> }} deps.webSearchStore
+ * @param {{ getAllowanceSecretValues: () => Promise<string[]> } | null} [deps.allowanceSecrets]
  */
-function createOwnSecrets({ llmConfigStore, providerSecrets, mcpSecrets, webSearchStore }) {
+function createOwnSecrets({ llmConfigStore, providerSecrets, mcpSecrets, webSearchStore, allowanceSecrets = null }) {
   /** The MCP secrets alone, in all their forms — for masking a server's status. */
   async function readMcpSecrets() {
     return expandSecrets(await mcpSecrets.getMcpSecretValues());
@@ -184,6 +187,8 @@ function createOwnSecrets({ llmConfigStore, providerSecrets, mcpSecrets, webSear
     // The web search key is a provider key like the others (#505).
     const webSearchKey = await webSearchStore.getWebSearchApiKey();
     if (webSearchKey) values.push(webSearchKey);
+    // A token handed to a program through its allowance (#1262).
+    if (allowanceSecrets) values.push(...(await allowanceSecrets.getAllowanceSecretValues()));
     return expandSecrets(values);
   }
 

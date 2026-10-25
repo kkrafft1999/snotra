@@ -12,6 +12,8 @@
 //     back marked as interrupted (#979).
 //   * A streaming answer renders only its open block on each frame, and a
 //     finished answer is rendered once and copied on the next redraw (#998).
+//   * A settled turn says how long it took (#1254).
+//   * Every message offers Copy, which puts its source on the clipboard (#1255).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -43,6 +45,7 @@ async function mount({
   readWorkspaceImage,
   imageLimit = null,
   upsertChatSession = null,
+  writeClipboardText = null,
 } = {}) {
   const dom = setupRendererDom();
   // The image intake reads files as data URLs; the helper does not hand it out.
@@ -75,6 +78,7 @@ async function mount({
     },
     nameChat: async () => ({ title: null }),
     abortChat: () => {},
+    ...(writeClipboardText ? { writeClipboardText } : {}),
     readWorkspaceImage: async (src) => {
       imageReads.push(src);
       return readWorkspaceImage
@@ -775,7 +779,9 @@ test('a settled answer shows how long it took, in the interface language (#1254)
   const answer = list.querySelector('.chat-msg.assistant:last-of-type');
   assert.equal(durationLine(answer), 'Answered in 4.2 sec');
   const line = answer.querySelector('.chat-turn-duration');
-  assert.equal(line, answer.lastElementChild, 'the line is the last thing in the message');
+  // In the message's action row (#1255), which is the last thing in it.
+  assert.ok(line.parentElement === answer.lastElementChild, 'the line is in the last row of the message');
+  assert.ok(answer.lastElementChild.classList.contains('chat-msg-actions'));
   assert.match(line.title, /including any wait for your approval/);
   assert.equal(line.querySelector('svg').getAttribute('aria-hidden'), 'true');
 
@@ -838,4 +844,148 @@ test('a chat opened again shows the stored durations; one from before shows none
   await chat.loadChatForWorkspace('/ws');
   const lines = [...list.querySelectorAll('.chat-msg.assistant')].map(durationLine);
   assert.deepEqual(lines, [null, 'Answered in 3:05 min', 'Answered in 1:02:10 h', 'Failed after 1:00 min']);
+});
+
+// --- #1255 ---------------------------------------------------------------------
+
+/** A clipboard behind main: records what it was given, answers like the preload. */
+function fakeClipboard({ ok = true } = {}) {
+  const written = [];
+  const write = async (text) => {
+    written.push(text);
+    return ok ? { ok: true } : { ok: false, error: 'denied' };
+  };
+  return { written, write };
+}
+
+const copyButton = (li) => li?.querySelector(':scope > .chat-msg-actions > .chat-msg-copy') ?? null;
+
+test('Copy puts an answer\'s Markdown on the clipboard, not its rendered text (#1255)', async (t) => {
+  const clipboard = fakeClipboard();
+  const env = await mount({ writeClipboardText: clipboard.write });
+  t.after(env.cleanup);
+  const { list, sends, ask } = env;
+  ask('Plan it.');
+  await flush();
+  const markdown = '## Plan\n\n- **one**\n- `two`\n\n| a | b |\n| - | - |\n| 1 | 2 |';
+  sends[0].resolve({ content: markdown, toolTrace: [], durationMs: 1_500 });
+  await until(() => !list.querySelector('.chat-md-streaming'), 'the settled answer');
+
+  const answer = list.querySelector('.chat-msg.assistant:last-of-type');
+  const button = copyButton(answer);
+  assert.ok(button, 'the answer offers Copy');
+  assert.equal(button.getAttribute('type'), 'button');
+  assert.equal(button.getAttribute('aria-label'), 'Copy message');
+  assert.equal(button.title, 'Copy message');
+  assert.ok(button.querySelectorAll('svg[aria-hidden="true"]').length === 2, 'the glyphs are decorative');
+  const row = [...answer.querySelector('.chat-msg-actions').children].map((el) => el.className);
+  assert.deepEqual(row, ['chat-msg-copy', 'chat-turn-duration'], 'Copy first, then the duration');
+
+  button.click();
+  await until(() => button.classList.contains('chat-msg-copy--done'), 'the check mark');
+  assert.deepEqual(clipboard.written, [markdown]);
+  assert.equal(button.getAttribute('aria-label'), 'Copied');
+  assert.equal(document.getElementById('chat-announcer').textContent, 'Copied');
+});
+
+test('Copy puts a question on the clipboard as it was typed (#1255)', async (t) => {
+  const clipboard = fakeClipboard();
+  const env = await mount({ writeClipboardText: clipboard.write });
+  t.after(env.cleanup);
+  const { list, chat, appStore } = env;
+  const typed = 'Rename *all* files\n  in src/ — keep `index.js`';
+  appStore.chatMessages = [
+    { role: 'user', content: typed },
+    { role: 'assistant', content: 'Done.' },
+  ];
+  chat.renderChatMessages();
+  const question = list.querySelector('.chat-msg.user');
+  const button = copyButton(question);
+  assert.ok(button, 'the question offers Copy');
+  button.click();
+  await until(() => clipboard.written.length === 1, 'the write');
+  assert.equal(clipboard.written[0], typed);
+});
+
+test('an answer still being written offers no Copy until it settles (#1255)', async (t) => {
+  const clipboard = fakeClipboard();
+  const env = await mount({ writeClipboardText: clipboard.write });
+  t.after(env.cleanup);
+  const { list, sends, ask, emit } = env;
+  ask('Explain.');
+  await flush();
+  emit('delta', sends[0], { text: 'Half of' });
+  await nextFrame();
+  const answer = () => list.querySelector('.chat-msg.assistant:last-of-type');
+  assert.ok(copyButton(answer()) === null, 'no Copy while streaming');
+  assert.ok(copyButton(list.querySelector('.chat-msg.user')), 'the question has it already');
+
+  sends[0].resolve({ content: 'Half of it, and the rest.', toolTrace: [] });
+  await until(() => copyButton(answer()), 'Copy after the settle');
+  copyButton(answer()).click();
+  await until(() => clipboard.written.length === 1, 'the write');
+  assert.equal(clipboard.written[0], 'Half of it, and the rest.');
+  assert.equal(answer().querySelectorAll('.chat-msg-copy').length, 1, 'one button, not one per frame');
+});
+
+test('the greeting, an empty answer and a message of images alone offer no Copy (#1255)', async (t) => {
+  const clipboard = fakeClipboard();
+  const env = await mount({ writeClipboardText: clipboard.write });
+  t.after(env.cleanup);
+  const { list, chat, appStore } = env;
+  appStore.chatMessages = [
+    { role: 'assistant', content: 'Hello, ws.', greeting: true },
+    { role: 'user', content: '', attachments: [{ kind: 'image', name: 'a.png', mime: 'image/png' }] },
+    { role: 'assistant', content: '', toolTrace: [] },
+  ];
+  chat.renderChatMessages();
+  assert.equal(list.querySelectorAll('.chat-msg-copy').length, 0);
+  assert.equal(list.querySelectorAll('.chat-msg-actions').length, 0, 'no empty rows either');
+});
+
+test('a failed copy says so, on the button and to a screen reader (#1255)', async (t) => {
+  const clipboard = fakeClipboard({ ok: false });
+  const env = await mount({ writeClipboardText: clipboard.write });
+  t.after(env.cleanup);
+  const { list, chat, appStore } = env;
+  appStore.chatMessages = [{ role: 'user', content: 'Hi' }];
+  chat.renderChatMessages();
+  const button = copyButton(list.querySelector('.chat-msg.user'));
+  button.click();
+  await until(() => button.classList.contains('chat-msg-copy--failed'), 'the failure');
+  assert.ok(!button.classList.contains('chat-msg-copy--done'));
+  assert.equal(button.getAttribute('aria-label'), 'The message could not be copied.');
+  assert.equal(button.querySelector('.chat-msg-copy__note').textContent, 'Not copied');
+  assert.equal(document.getElementById('chat-announcer').textContent, 'The message could not be copied.');
+});
+
+test('an error message offers its text; the label follows the interface language (#1255)', async (t) => {
+  const clipboard = fakeClipboard();
+  const env = await mount({ writeClipboardText: clipboard.write });
+  t.after(env.cleanup);
+  const { list, sends, ask, setLocale } = env;
+  ask('Again');
+  await flush();
+  sends[0].resolve({ error: 'Out of tokens.', durationMs: 3_100 });
+  await until(() => list.querySelector('.chat-msg.error'), 'the error');
+  copyButton(list.querySelector('.chat-msg.error')).click();
+  await until(() => clipboard.written.length === 1, 'the write');
+  assert.equal(clipboard.written[0], 'Out of tokens.');
+
+  setLocale('de', { force: true });
+  const labels = [...list.querySelectorAll('.chat-msg-copy')].map((b) => b.getAttribute('aria-label'));
+  assert.deepEqual(labels, ['Nachricht kopieren', 'Nachricht kopieren']);
+});
+
+test('without a clipboard channel there is no Copy, and the duration stays (#1255)', async (t) => {
+  const env = await mount();
+  t.after(env.cleanup);
+  const { list, chat, appStore } = env;
+  appStore.chatMessages = [
+    { role: 'user', content: 'Hi' },
+    { role: 'assistant', content: 'Hello.', durationMs: 900 },
+  ];
+  chat.renderChatMessages();
+  assert.equal(list.querySelectorAll('.chat-msg-copy').length, 0);
+  assert.match(list.querySelector('.chat-msg-actions .chat-turn-duration').textContent, /Answered in/);
 });

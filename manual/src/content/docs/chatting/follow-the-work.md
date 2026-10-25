@@ -40,6 +40,14 @@ Nothing about what Snotra may do has changed: the next tool call is checked like
 
 [since 1.27.5] Under each finished answer, a small line says how long it took: *Answered in 4.2 sec*, *Answered in 3:05 min*. The time runs from the moment you send the message until the answer is complete — thinking, tool steps and the text all count, and so does the time a card waited for your decision. A turn you stopped reads *Stopped after …*; one that ended with an error carries *Failed after …* under the error. Hover over the line for what it measures. The duration is kept with the answer, so it is still there when you open the chat again.
 
+## Copy a message
+
+[since 1.28] Rest the pointer on a message — your own question or one of Snotra's answers — and a copy button appears under it: on the right under a question, on the left under an answer, before its time. Click it and the whole message is on the clipboard; the button shows a check mark for a moment. With the keyboard, *Tab* reaches the button as well, and it shows as soon as it has the focus.
+
+What you get is the message as it was written, not as it looks on screen: an answer in Markdown, with its headings, lists, tables and code blocks intact; a question exactly as you typed it. The tool log, the time and a line such as *Sent from iPhone* are left out. An answer that is still being written has no button yet — it appears once the answer is finished.
+
+![The question "When can I sow the beans outside?" and the answer below it, a short list of three sowing dates. The pointer rests on the answer, and under it the copy button stands before "Answered in 4.2 sec".](screenshots/copy-message.webp)
+
 ## What happens
 
 The tool log stays with the answer, also in the chat history. Files Snotra read or changed are marked in the file tree as well, and the line *Changed:* under the log leads to each change: [See what Snotra changed](../review-changes/).
@@ -48,4 +56,5 @@ The tool log stays with the answer, also in the chat history. Files Snotra read 
 
 - **An answer has no tool log.** The model answered from what it already knew, without using a tool.
 - **An answer shows no time under it.** It was written with a version before 1.28, or Snotra was closed or reloaded before it finished — then only the completed steps were kept, and no time.
+- **The copy button says *Not copied*.** Snotra could not write to the clipboard. Click it again; if it keeps failing, select the text and copy it with `Cmd+C` / `Ctrl+C`.
 - **You want to report a problem with a run.** `Cmd+Shift+D` / `Ctrl+Shift+D` copies the diagnostics of the tool log to the clipboard, ready to paste into a bug report.

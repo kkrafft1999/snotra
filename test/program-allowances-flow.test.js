@@ -22,8 +22,8 @@ const loadRenderer = (file) =>
 const WORKSPACE = nodePath.resolve('/tmp/projekt');
 const TOOL = '/Users/u/.ai-workplace/bin/ms-todo-cli';
 const CACHE = '/Users/u/Library/Application Support/ms-todo';
-const ENTRY = { path: TOOL, domains: ['graph.microsoft.com', 'login.microsoftonline.com'], writePaths: [CACHE], trustd: true };
-const GRANTED = { path: TOOL, program: 'ms-todo-cli', domains: ENTRY.domains, writePaths: [CACHE], trustd: true };
+const ENTRY = { path: TOOL, domains: ['graph.microsoft.com', 'login.microsoftonline.com'], writePaths: [CACHE], trustd: true, credentials: [] };
+const GRANTED = { path: TOOL, program: 'ms-todo-cli', domains: ENTRY.domains, writePaths: [CACHE], trustd: true, credentials: [] };
 
 function makeFsServiceStub() {
   return {
@@ -98,7 +98,7 @@ test('planner: the allowance goes into the plan, its key and the card, with its 
   assert.deepEqual(plan.preview.isolation, {
     isolated: true,
     domains: ['graph.microsoft.com', 'login.microsoftonline.com', 'example.com'],
-    allowance: { program: 'ms-todo-cli', path: TOOL, writePaths: [CACHE], trustd: true },
+    allowance: { program: 'ms-todo-cli', path: TOOL, writePaths: [CACHE], trustd: true, credentials: [] },
   });
 
   // Same call without the allowance: a different key, so an approval cannot carry over.
@@ -163,7 +163,7 @@ test('handler: an approved allowance runs the allowed file with its domains, fol
   });
   assert.equal(calls[0].command, `${TOOL} lists`);
   assert.deepEqual(calls[0].networkDomains, ['graph.microsoft.com', 'login.microsoftonline.com', 'example.com']);
-  assert.deepEqual(calls[0].programAllowance, { writePaths: [CACHE], trustd: true });
+  assert.deepEqual(calls[0].programAllowance, { writePaths: [CACHE], trustd: true, path: TOOL, root: WORKSPACE, credentials: [] });
 
   // Without a plan there is no allowance, whatever the arguments say.
   await registry.execute('shell_execute', { command: 'ms-todo-cli lists' }, { approved: true, workspaceRoot: WORKSPACE });
@@ -241,7 +241,7 @@ test('card: the contract carries the allowance or the reason, nothing else', () 
   });
   assert.deepEqual(dto.preview.isolation, {
     isolated: true, domains: ENTRY.domains,
-    allowance: { program: 'ms-todo-cli', path: TOOL, writePaths: [CACHE], trustd: true },
+    allowance: { program: 'ms-todo-cli', path: TOOL, writePaths: [CACHE], trustd: true, credentials: [] },
   });
   const odd = cardDto({ isolated: true, domains: [], allowanceSkipped: { program: 'x', reason: 'because' } });
   assert.deepEqual(odd.preview.isolation, { isolated: true, domains: [] });
