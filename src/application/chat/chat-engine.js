@@ -1163,8 +1163,9 @@ function createChatEngine({
     return createCancelledChatResult({ content, toolTrace, usage, contextUsage, contextBreakdown });
   }
 
-  // Argumente, die in der Tool-Zeile erscheinen (Pfad, Suchbegriff, Muster).
-  const PENDING_LABEL_ARGUMENT_KEYS = ['relative_path', 'query', 'pattern'];
+  // Argumente, die in der Tool-Zeile erscheinen (Pfad, Suchbegriff, Muster,
+  // Shell-Befehl — sonst stehen wartende Befehle ohne Inhalt da, #1252).
+  const PENDING_LABEL_ARGUMENT_KEYS = ['relative_path', 'query', 'pattern', 'command'];
   // Nur der Anfang der Argumente wird nach Label-Werten durchsucht — der
   // Dateiinhalt von write_file_text kann bis zu 2 MB groß werden.
   const PENDING_ARGUMENT_SCAN_LIMIT = 8192;
