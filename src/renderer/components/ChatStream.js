@@ -37,6 +37,7 @@ import {
 } from '../chat/toolLogView.js';
 import { buildSentFromLine, messageOriginOf } from '../chat/messageOrigin.js';
 import { buildTurnDurationLine, turnDurationOf } from '../chat/turnDuration.js';
+import { buildCopyButton, buildMessageActions, copyTextOf } from '../chat/messageActions.js';
 // What a writing call changed (#348): summaries from main, diffs on demand.
 import { changedFilesOf, changesAreLive, markChangesLive, normalizeChanges } from '../chat/fileChanges.js';
 import { syncSandboxBlocked } from '../chat/sandboxBlocked.js';
@@ -466,14 +467,30 @@ export function initChatStream({
     textEl.className = 'chat-msg-text';
     textEl.textContent = text || '';
     li.appendChild(textEl);
-    appendTurnDuration(li, message);
+    appendMessageActions(li, message, text ? text : null);
     return li;
   }
 
-  /** How long the turn took, under its last message (#1254). */
-  function appendTurnDuration(li, message) {
-    const line = message ? buildTurnDurationLine(message) : null;
-    if (line) li.appendChild(line);
+  /**
+   * The row under a message (#1255): Copy, and what stands under it besides —
+   * how long the turn took under an answer (#1254), the phone a question was
+   * sent from (#1197). A message still being written gets it once it settles.
+   */
+  function appendMessageActions(li, message, copyText = copyTextOf(message)) {
+    const copy = copyText !== null && typeof api.writeClipboardText === 'function'
+      ? buildCopyButton(copyText, { writeClipboardText: (text) => api.writeClipboardText(text), announce })
+      : null;
+    let items;
+    if (message?.role === 'user') {
+      // Written on the phone (#1197): a quiet line under the bubble says so.
+      const origin = messageOriginOf(message.origin);
+      if (origin) li.classList.add('chat-msg--remote');
+      items = [origin ? buildSentFromLine(origin) : null, copy];
+    } else {
+      items = [copy, message ? buildTurnDurationLine(message) : null];
+    }
+    const row = buildMessageActions(items);
+    if (row) li.appendChild(row);
   }
 
   /**
@@ -852,7 +869,7 @@ export function initChatStream({
           // Karten des abgeschlossenen Zuges (Entscheidung, Verfall, Abbruch)
           // bleiben an ihrer Nachricht, bis der Chat gewechselt wird.
           approvalCards?.mount(li, m);
-          appendTurnDuration(li, m);
+          appendMessageActions(li, m);
         }
       } else {
         if (Array.isArray(m.attachments) && m.attachments.length > 0) {
@@ -864,12 +881,7 @@ export function initChatStream({
           textEl.textContent = m.content;
           li.appendChild(textEl);
         }
-        // Written on the phone (#1197): a quiet line under the bubble says so.
-        const origin = messageOriginOf(m.origin);
-        if (origin) {
-          li.classList.add('chat-msg--remote');
-          li.appendChild(buildSentFromLine(origin));
-        }
+        appendMessageActions(li, m);
       }
       chatMessagesEl.appendChild(li);
     }
@@ -1852,7 +1864,7 @@ export function initChatStream({
     const bubble = chatMessagesEl.querySelector('.chat-msg.assistant:last-of-type');
     if (outcome.kind === 'finalize' && bubble) {
       finalizeStreamingAssistantBubble(bubble, run.assistantMessage);
-      appendTurnDuration(bubble, run.assistantMessage);
+      appendMessageActions(bubble, run.assistantMessage);
       syncChatBusyState();
       followNewOutput();
       announce(bubble.querySelector('.chat-md')?.textContent);
@@ -1860,6 +1872,7 @@ export function initChatStream({
     }
     if (outcome.kind === 'finalize-with-error' && bubble) {
       finalizeStreamingAssistantBubble(bubble, run.assistantMessage);
+      appendMessageActions(bubble, run.assistantMessage);
       chatMessagesEl.appendChild(buildErrorMessage(outcome.errorText, outcome.errorMessage));
       syncChatBusyState();
       followNewOutput();
