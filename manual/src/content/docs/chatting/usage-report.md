@@ -38,7 +38,8 @@ Chats that used a model. Nothing has to be set up: the report reads the same est
 - **The report is your history as it is.** A chat you delete no longer counts, and neither does one the history let go: it keeps the 200 most recent chats.
 - **Chats from before 1.28** have a total but no days. They count in full on the day they were last used. Once you continue such a chat, its new requests count on their own days.
 - **Prices:** the note under the totals names the date of the price table the chats were priced with. Prices are list prices in US dollars, as for a single chat.
-- **Not included:** the generated chat title, skill suggestions, image generation and voice input — the same gaps as in the cost of a single chat.
+- **Helper requests count.** [since 1.28] The requests that name a chat and, with *Ask the model*, suggest a skill are part of the chat's cost, so they are part of the report too, on the day they were made.
+- **Not included:** image generation and voice input — the same gaps as in the cost of a single chat.
 
 ## If it doesn't work
 

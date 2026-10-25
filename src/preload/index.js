@@ -162,7 +162,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // der Main-Prozess selbst — er wird hier bewusst nicht mitgeschickt (#68).
   getSkillCatalog: () => ipcRenderer.invoke(REQ.SETTINGS_GET_SKILL_CATALOG),
   reloadSkills: () => ipcRenderer.invoke(REQ.SETTINGS_RELOAD_SKILLS),
-  suggestSkills: (text) => ipcRenderer.invoke(REQ.SKILLS_SUGGEST, text),
+  suggestSkills: (text, chatId) => ipcRenderer.invoke(REQ.SKILLS_SUGGEST, text, chatId),
   // Only the name: the folder, the target and the confirmation are main's (#764).
   makeSkillGlobal: (name) => ipcRenderer.invoke(REQ.SKILLS_MAKE_GLOBAL, name),
   getChatConfiguration: (request) => ipcRenderer.invoke(REQ.CHAT_GET_CONFIGURATION, request),

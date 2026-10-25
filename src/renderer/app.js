@@ -416,6 +416,8 @@ const skillSuggestion = initSkillSuggestion({
   api,
   onInputChanged: syncChatInputHeight,
   onApplied: () => skillAutocomplete.close(),
+  // The chat the round is booked on (#1266).
+  getChatId: () => appStore.currentChatId,
 });
 
 // Der Datei-Watcher im Main meldet neue, geaenderte und entfernte Skills

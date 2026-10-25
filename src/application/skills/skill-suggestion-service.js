@@ -20,6 +20,8 @@
  * (Issue #18, Prompt-Injection durch Ordner-Skills).
  */
 
+const { roundCost } = require('../round-cost');
+
 /** Mehr Skills als das passen nicht sinnvoll in eine kurze Anfrage. */
 const MAX_SKILLS_IN_PROMPT = 40;
 /** Beschreibungen werden für die Anfrage gekürzt — der Kern steht vorn. */
@@ -77,8 +79,10 @@ function buildPrompt(skills) {
  * @param {import('./skill-catalog').SkillCatalog} deps.skillCatalog
  * @param {() => string|null} [deps.getActiveWorkspaceRoot]
  * @param {{ readUIPrefs: () => Promise<import('../../shared/contracts/settings').UiPrefs> }|null} [deps.uiPrefsStore]
+ * @param {(chatId: string, result: { cost: unknown }) => Promise<unknown>|unknown} [deps.bookCost]
+ *   adds what a suggestion round cost to the chat it was asked in (#1266)
  */
-function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoot, uiPrefsStore }) {
+function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoot, uiPrefsStore, bookCost }) {
   if (!llm || !skillCatalog) {
     throw new TypeError('createSkillSuggestionService benötigt llm und skillCatalog.');
   }
@@ -101,10 +105,10 @@ function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoo
 
   /**
    * @param {string} text Die bisherige Chat-Eingabe des Nutzers.
-   * @param {{ abortSignal?: AbortSignal }} [options]
+   * @param {{ abortSignal?: AbortSignal, chatId?: string }} [options]  `chatId`: the chat the round is paid in (#1266)
    * @returns {Promise<{ name: string } | null>}
    */
-  async function suggest(text, { abortSignal = new AbortController().signal } = {}) {
+  async function suggest(text, { abortSignal = new AbortController().signal, chatId } = {}) {
     // The request sits right before the "/", so a long draft keeps its end
     // rather than its beginning (#586).
     const frage = String(text || '').trim().slice(-MAX_QUERY_CHARS);
@@ -128,6 +132,17 @@ function createSkillSuggestionService({ llm, skillCatalog, getActiveWorkspaceRoo
       callbacks: stilleCallbacks(),
       abortSignal,
     });
+
+    // Paid whatever came of it, like a failed turn (#1266); a chat that cannot
+    // take it must not cost the suggestion.
+    const cost = roundCost(result);
+    if (cost && chatId && typeof bookCost === 'function') {
+      try {
+        await bookCost(chatId, { cost });
+      } catch (error) {
+        console.error('[skill-suggestion] the round\'s cost was not added:', error);
+      }
+    }
 
     if (!result || result.cancelled || result.error) return null;
     const antwort = String(result.message?.content || '')

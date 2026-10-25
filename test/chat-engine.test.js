@@ -902,6 +902,35 @@ test('generateTitle works before the first answer and reports failures instead o
   assert.ok(blankResult.error);
 });
 
+test('generateTitle carries the cost of its round, billed failures included (#1266)', async () => {
+  const { createCostEntry } = require('../src/shared/contracts/cost');
+  const priced = (prompt, completion) => ({
+    usage: { prompt, completion, total: prompt + completion },
+    cost: { entry: createCostEntry({ providerId: 'openai', model: 'gpt-x', usage: { prompt, completion } }), priceTable: null },
+  });
+  const messages = [{ role: 'user', content: 'Frage' }, { role: 'assistant', content: 'Antwort' }];
+
+  const named = makeEngine([assistantText('Eine Überschrift', priced(40, 5))]);
+  const result = await named.engine.generateTitle({ messages });
+  assert.equal(result.title, 'Eine Überschrift');
+  assert.equal(result.cost.models[0].tokens.input, 40);
+  assert.equal(result.cost.models[0].rounds, 1);
+
+  // An answer that gives no name, and an error the provider still billed.
+  const blank = makeEngine([assistantText('   ', priced(40, 5))]);
+  const blankResult = await blank.engine.generateTitle({ messages });
+  assert.ok(blankResult.error);
+  assert.equal(blankResult.cost.models[0].tokens.output, 5);
+  const failing = makeEngine([{ error: 'cut off', code: 'NETWORK', ...priced(40, 0) }]);
+  const failed = await failing.engine.generateTitle({ messages });
+  assert.equal(failed.error, 'cut off');
+  assert.equal(failed.cost.models[0].tokens.input, 40);
+
+  // No usage reported: no cost key.
+  const free = makeEngine([assistantText('Eine Überschrift')]);
+  assert.equal('cost' in (await free.engine.generateTitle({ messages })), false);
+});
+
 test('engine turns provider failures into the existing error DTO', async () => {
   const { engine } = makeEngine([{ error: 'Kontingent erschöpft', code: 'RATE_LIMIT' }]);
 

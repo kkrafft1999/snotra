@@ -1570,7 +1570,7 @@ export function initChatStream({
       return;
     }
     if (p?.type === CHAT_PROGRESS_TYPES.CHAT_NAMED) {
-      showChatName(p.chatId, p.title);
+      showChatName(p.chatId, p.title, p.chatCost);
       return;
     }
     const run = runForEvent(p);
@@ -1931,15 +1931,24 @@ export function initChatStream({
    * the chat to where it is shown: the header while it is on screen, its run
    * while that carries it in the background, the history column always.
    */
-  function showChatName(chatId, rawTitle) {
+  function showChatName(chatId, rawTitle, rawCost) {
     const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
     if (!title || typeof chatId !== 'string' || deletedChats.has(chatId)) return;
+    // The naming round is paid too (#1266): main sends the chat's new sum along.
+    const cost = rawCost ? normalizeSessionCost(rawCost) : null;
     if (appStore.currentChatId === chatId && !canAttachChat(chatId)) {
       appStore.currentChatTitle = title;
       syncChatTitle?.();
+      if (cost) {
+        appStore.chatCost = cost;
+        costPanel.refresh();
+      }
     } else {
       const run = appStore.chatRuns.get(chatId);
-      if (run?.chat) run.chat.title = title;
+      if (run?.chat) {
+        run.chat.title = title;
+        if (cost) run.chat.cost = cost;
+      }
     }
     onChatPersisted();
   }

@@ -120,12 +120,12 @@ test('a slow path load that outlives a blur does not open the @ list', async (t)
   assert.equal(mention.isOpen(), false);
 });
 
-async function mountSuggestion({ suggestSkills }) {
+async function mountSuggestion({ suggestSkills, getChatId }) {
   const dom = setupRendererDom();
   const { initSkillSuggestion } = await importRenderer('components', 'SkillSuggestion.js');
   const { setLocale } = await importRenderer('i18n.js');
   setLocale('en');
-  const suggestion = initSkillSuggestion({ catalog: fakeCatalog(), api: { suggestSkills }, onInputChanged() {} });
+  const suggestion = initSkillSuggestion({ catalog: fakeCatalog(), api: { suggestSkills }, onInputChanged() {}, getChatId });
   const input = dom.document.getElementById('chat-input');
   const row = dom.document.getElementById('chat-skill-suggestion');
   return { dom, suggestion, input, row };
@@ -173,4 +173,20 @@ test('switching the suggestions off discards a model answer still on its way', a
   answer.resolve({ name: 'minutes' });
   await settle();
   assert.equal(row.classList.contains('hidden'), true);
+});
+
+test('the model suggestion names the chat that pays for its round (#1266)', async (t) => {
+  const asked = [];
+  const { dom, suggestion, input } = await mountSuggestion({
+    suggestSkills: async (text, chatId) => { asked.push([text, chatId]); return { name: 'minutes' }; },
+    getChatId: () => 'chat-1',
+  });
+  t.after(dom.cleanup);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  suggestion.setMode('model');
+  input.focus();
+  type(input, 'write the meeting minutes /');
+  t.mock.timers.tick(1000);
+  await flush();
+  assert.deepEqual(asked, [['write the meeting minutes ', 'chat-1']]);
 });

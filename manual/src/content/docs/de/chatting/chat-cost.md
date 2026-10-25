@@ -25,7 +25,8 @@ Der Verlauf zeigt dieselbe Schätzung neben der Uhrzeit jedes Chats, siehe [Eine
 - **Jede Token-Art hat ihren eigenen Preis.** Aus dem Prompt-Cache zu lesen ist günstiger als normale Eingabe, in ihn zu schreiben kann mehr kosten. Reasoning wird als Ausgabe abgerechnet.
 - **Ein Modell auf deinem Rechner kostet nichts.** Ollama, LM Studio und andere Server unter einer lokalen Adresse zeigen *0,00 $*: Es gibt keine API-Rechnung.
 - **Ein unbekanntes Modell zeigt einen Strich.** Kennt die Tabelle keinen Preis für ein Modell, steht bei seinen Kosten *–*, nie *0,00 $*. Eine Summe, die solche Anfragen auslässt, endet auf *+*, zum Beispiel *~0,42 $+*.
-- **Nicht enthalten** sind Bildgenerierung, Spracheingabe und der erzeugte Chat-Titel. Batch-, Priority- und Long-Context-Aufschläge sowie regionale Preise werden nicht abgebildet; es gilt der Listenpreis der Tabelle.
+- **Die Hilfsanfragen des Chats zählen mit.** [seit 1.28] Die kurze Anfrage, die dem Chat seinen Titel gibt, und die, die einen Skill vorschlägt, solange *Vorschläge im Chat* auf *Das Modell fragen* steht, werden wie jede andere Anfrage bepreist und dem Chat zugerechnet, zu dem sie gehören, mit dem Modell, das sie beantwortet hat. Eine Anfrage, die der Anbieter berechnet hat, die aber keinen Titel und keinen Vorschlag ergab, zählt ebenfalls.
+- **Nicht enthalten** sind Bildgenerierung und Spracheingabe. Batch-, Priority- und Long-Context-Aufschläge sowie regionale Preise werden nicht abgebildet; es gilt der Listenpreis der Tabelle.
 
 Die Kosten ersetzen nicht die Rechnung deines Anbieters. Rundung, Rabatte und Preisänderungen können den tatsächlichen Betrag abweichen lassen.
 
