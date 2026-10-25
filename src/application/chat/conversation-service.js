@@ -310,7 +310,7 @@ function createConversationService({ engine, history, describeError = (error) =>
   /**
    * Stops the turn of a chat, whichever front end started it (#1194): a
    * phone stops a turn begun at the desktop as well as its own
-   * (`docs/remote-interface.md` §7.3). It settles as far as it had come.
+   * (`docs/remote/remote-interface.md` §7.3). It settles as far as it had come.
    *
    * @param {string} chatId
    * @returns {boolean} whether a turn was under way

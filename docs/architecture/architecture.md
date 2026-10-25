@@ -39,7 +39,7 @@ component level *inside* the main process.
 | **Renderer** (app window) | Chromium; `marked` + DOMPurify, pdf.js, Prism; served from `snotra-app://app/` (`src/main/app-protocol.js`, [#1012](https://github.com/kkrafft1999/snotra/issues/1012)); the `GrantFileProtocolExtraPrivileges` fuse is off ([#1086](https://github.com/kkrafft1999/snotra/issues/1086)) | Chat, file tree, file views, settings — and what a running turn looks like on screen. The conversation itself — history, saves, cost, title — is the core's since [#981](https://github.com/kkrafft1999/snotra/issues/981); the renderer sends a question and a chat id. Sees nothing but `window.electronAPI` from the preload and the contracts. |
 | **HTML preview** | `WebContentsView` with its own session (`snotra-html-preview`), the `snotra-html:` scheme and `sandbox: true` | Shows HTML pages from the workspace apart from the app's own UI ([#479](https://github.com/kkrafft1999/snotra/issues/479), see [HTML pages](#html-pages-479)). |
 | **Manual window** | `BrowserWindow` with its own preload and channels | The user manual that ships with the app (#790): the page is `src/renderer/manual.html`, from the same `snotra-app:` origin, the content a bundle that `scripts/bundle-manual.js` builds into `src/manual/` from `manual/`. The app window's channels refuse it as a sender. |
-| **Execution sandbox** | Child processes through `@anthropic-ai/sandbox-runtime`: Seatbelt on macOS, bubblewrap on Linux; unisolated on Windows | `shell_execute` and `run_python` (#329): write only inside the workspace, network only through the proxy in main and only to approved domains. See [`security-concept.md`](./security-concept.md), section 9. |
+| **Execution sandbox** | Child processes through `@anthropic-ai/sandbox-runtime`: Seatbelt on macOS, bubblewrap on Linux; unisolated on Windows | `shell_execute` and `run_python` (#329): write only inside the workspace, network only through the proxy in main and only to approved domains. See [`security-concept.md`](../security/security-concept.md), section 9. |
 | **Local store** | JSON files in the userData folder; secrets encrypted with `safeStorage` | `llm-config.json`, `chat-history/` (an index and one file per chat), `ui-preferences.json`, `mcp-servers.json`, `tool-policy.json`, `web-search-config.json`, chat attachments, `memory.md`. |
 
 Two things look like containers and are not:
@@ -77,7 +77,7 @@ they count as an external system rather than a container.
 
 **Front ends other than the window** — a CLI, a headless mode, the phone of
 the mobile remote — do not exist yet. How they will reach the main process is
-decided in [`remote-interface.md`](./remote-interface.md)
+decided in [`remote-interface.md`](../remote/remote-interface.md)
 ([#989](https://github.com/kkrafft1999/snotra/issues/989)): one protocol over
 two transports, a listener on loopback and the blind relay; a small catalogue
 of methods instead of the IPC channels; and a *connection* with a kind in
@@ -188,7 +188,7 @@ code is.
 | **Remote decisions** | `src/application/remote/` | Pairing a phone as the mobile remote (#1114): when the relay is asked, what a wrong `MAC_P`, expiry, cancel or *Deny* lead to, which phone is kept. The channel to it (#1192): when to connect, which handshake to answer, what happens to an envelope, when a connection stands. The dispatcher (#1194): which method a kind may call, what a connection may see, which events it hears. Only through injected ports, see [The remote bridge](#the-remote-bridge-pairing-a-phone) |
 | **Application tools** | `src/application/tools/` | The tools (#982): the registry (definitions, handlers, risk classes; ~2k lines) — each definition is the tool's descriptor, see [One descriptor per tool](#one-descriptor-per-tool) —, `generate_image`, the call planner (arguments, targets, plan key, sandbox plan, preview), argument conformance and the roots a grant opens. Called through the tool adapter. Only through injected services, see [Business rules outside the core](#business-rules-outside-the-core-982) |
 | **Application skills** | `src/application/skills/` | Which skills are switched on and where a switch is bound (#576, #982), and the model's skill suggestion (#125, #1172); the scan that finds them is `services/skills-service.js` |
-| **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content, the policy's own rules (`tool-policy-rules.js`, #1172), whether a program allowance covers a command (`program-allowance-match.js`, #1172), the overview the Security page reads and what it reads from (`security-page-data.js`, #1172). No Electron, no file system of its own; the heart of [`security-concept.md`](./security-concept.md) |
+| **Permissions** | `src/application/permissions/` | The decision a call needs (`tool-policy.js`), building an approval request, session grants, redaction of sensitive content, the policy's own rules (`tool-policy-rules.js`, #1172), whether a program allowance covers a command (`program-allowance-match.js`, #1172), the overview the Security page reads and what it reads from (`security-page-data.js`, #1172). No Electron, no file system of its own; the heart of [`security-concept.md`](../security/security-concept.md) |
 | **Application ports** | `src/application/ports/` | 23 typedef files, the contracts between the core and main — see [Ports](#ports) |
 | **Main adapters** | `src/main/adapters/` | 21 modules (~3k lines): port implementations (LLM, tools, storage, speech, updates, …) and the narrow store surfaces |
 | **Electron adapters** | `src/main/electron/` | What talks to Electron's APIs below the shell (#983): the secret store over `safeStorage`, system notifications, the push to the window, the native confirmation, the application and file context menus, the HTML preview's views, diagnostics and the crash dialog. `test/electron-free-main.test.js` keeps these names out of `services/` and `adapters/` |
@@ -340,7 +340,7 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
 - `remote-channel-crypto-port` — the answer to a handshake, the session keys
   and the envelopes of `remote-protocol.md` part 2 (#1192), computed by
   `main/remote/channel-protocol.js` and proven against
-  `remote-protocol/channel-v1.json`. The session keys stay inside the session
+  `docs/remote/remote-protocol/channel-v1.json`. The session keys stay inside the session
   object it hands out
 - `remote-message-layer-port` — where the channel hands every request after
   `session.hello`: `application/remote/remote-dispatcher.js`, the methods of
@@ -601,7 +601,7 @@ the Python service, because the latter draws its PATH from it.
 Both execution ports are deliberately cut equally narrow — one program or one
 command in, output and exit code out, no state between two calls — and carry the
 class `execute` in the registry: an approval before every run and switched off
-as shipped (see `docs/security-concept.md`, section 9).
+as shipped (see `docs/security/security-concept.md`, section 9).
 
 **Isolation** ([#329](https://github.com/kkrafft1999/snotra/issues/329)) lives
 below the ports, in `main/services/sandbox-service.js`, and neither the core nor
@@ -1215,7 +1215,7 @@ again — never what was there before. The limits (`MAX_IMPORT_ENTRIES`,
 `MAX_IMPORT_TOTAL_BYTES`) live in `shared/limits.js`; exceeding one rejects the
 whole drop instead of copying half of it. Confirmation happens natively in
 `ipc/fs-handlers.js` via `dialog.showMessageBox`, with the skipped entries named
-in it — the renderer only triggers it, see `docs/security-concept.md` §5.
+in it — the renderer only triggers it, see `docs/security/security-concept.md` §5.
 
 ### Context menu of the file tree
 
@@ -1430,7 +1430,7 @@ Two deliberately different rules for a new chat:
 - **Permission mode**: `smart` again every time. `auto` comes back only on an
   explicit switch in the history; on an automatic restore (app start, folder
   change) it falls back to `smart` — details in
-  [`security-concept.md`](./security-concept.md) §8. Even then the store's
+  [`security-concept.md`](../security/security-concept.md) §8. Even then the store's
   `restoreMode` gives `auto` only to a chat it holds, signed, as confirmed for
   `auto`, or whose workspace has `auto` as its confirmed default (#980); the
   history file alone is not enough.
@@ -1556,7 +1556,7 @@ threw a run's result away as soon as another chat was opened.
 - **Approvals:** cards and session approvals live as long as their chat is on
   screen or running (`pruneChatScopedPermissions` in the composition root); a
   mode change only affects its own chat. Details in
-  [`security-concept.md`](./security-concept.md) §7.
+  [`security-concept.md`](../security/security-concept.md) §7.
 - **History:** a running row shows "Working…" or "Needs your approval" in place
   of its time (`ChatHistoryPanel.syncRunMarkers`).
 
@@ -1820,7 +1820,7 @@ Two kinds of entry:
   `{ supported: true }`, `{ supported: false, reason, issue }` or
   `{ supported: 'per-connection', setting, reason }`. A gap carries the message
   key the UI can show and the issue that tracks it — the parity rule of
-  `docs/quality-requirements.md` §3. `images` may name `mediaTypes` where a
+  `docs/architecture/quality-requirements.md` §3. `images` may name `mediaTypes` where a
   provider takes fewer than all formats (Gemini: no GIF, #91).
   `per-connection` follows a boolean setting of the entry's own connection
   (*Allow image attachments* and *Offer reasoning levels* on an
@@ -2923,7 +2923,7 @@ test of about three seconds; since then every feature that needs the real
 window has added a file of its own — 24 on 2026-10-11, 30–40 s locally and up to
 a minute in CI. The Electron level stays the most expensive per bug found, so a
 check belongs here only when the DOM stand-in cannot make it. How the levels
-divide the work, and what runs when, is in [`test-concept.md`](./test-concept.md).
+divide the work, and what runs when, is in [`test-concept.md`](../development/test-concept.md).
 
 - **Driver:** `playwright-core` (`_electron.launch`) as a devDependency. No
   browser download, no second test runner: `node --test` stays.
@@ -2986,7 +2986,7 @@ and element, with the issue that carries it. Contrast that can be computed
 without a window — every ink of `tokens.css` on the grounds it is meant for —
 is `test/token-contrast.test.js`. How the app sounds stays a hand check, once
 per platform with VoiceOver, NVDA and Orca, in the release checklist
-([`release.md`](./release.md)).
+([`release.md`](../release/release.md)).
 
 Since [#237](https://github.com/kkrafft1999/snotra/issues/237) the smoke test
 also runs in `ci.yml`, in the same job as `npm test`, on all three platforms. On
@@ -2994,7 +2994,7 @@ Linux the runner has no display — the step runs there via
 `xvfb-run --auto-servernum`, while macOS and Windows need no addition. CI
 therefore checks both test levels, not just the DOM stand-in, and the required
 gate in the ruleset on `main` actually covers what the project rule
-[`git-workflow.md`](../.claude/rules/git-workflow.md) demands before a push.
+[`git-workflow.md`](../../.claude/rules/git-workflow.md) demands before a push.
 
 ## Coverage: an honest denominator, separate thresholds
 
@@ -3209,7 +3209,7 @@ Anyone who writes a translation and turns that test red has edited the wrong
 half.
 
 Per the project language rule
-([`.claude/rules/language.md`](../.claude/rules/language.md)), **English is the
+([`.claude/rules/language.md`](../../.claude/rules/language.md)), **English is the
 source version and German is derived from it** — and both are held to the same
 standard. A German string that lags behind its English original is a defect.
 
@@ -3539,8 +3539,8 @@ its item, so it works with the focus in the input.
 The desktop's half of pairing the phone of the mobile remote
 ([#1114](https://github.com/kkrafft1999/snotra/issues/1114), phase 1 of
 [#1081](https://github.com/kkrafft1999/snotra/issues/1081)): phases 1, 3 and
-5 of [`remote-pairing-sequence.svg`](./remote-pairing-sequence.svg), with the
-bytes of [`remote-protocol.md`](./remote-protocol.md) part 1 — and the
+5 of [`remote-pairing-sequence.svg`](../remote/remote-pairing-sequence.svg), with the
+bytes of [`remote-protocol.md`](../remote/remote-protocol.md) part 1 — and the
 channel to the paired phone of part 2
 ([#1192](https://github.com/kkrafft1999/snotra/issues/1192)), see
 [The channel](#the-channel) below. The panel
@@ -3555,7 +3555,7 @@ channel ([#1194](https://github.com/kkrafft1999/snotra/issues/1194)).
 | Decisions | `application/remote/remote-pairing.js` | The state machine: open, check the claim, ask, confirm, keep; expiry, cancel, *Deny*, remove. No Electron, no `crypto`, no network |
 | Relay | `remote-relay-port`; `main/remote/firebase-relay-adapter.js`, `main/remote/in-memory-relay-adapter.js` | The relay's endpoints over HTTPS, the Identity Toolkit for the ID token, the Realtime Database's REST streaming (`main/remote/event-stream.js`) — no Firebase SDK. The in-memory relay keeps the same rules for the tests, and its `phone` side is what the reference client of phase 3 will build on |
 | Keys | `remote-identity-port`; `main/remote/identity-store-adapter.js` | `remote-pairing.json` in the user data folder: one `safeStorage` ciphertext holding the two private keys and the paired phone. In memory the keys are `KeyObject`s inside a closure; the core gets public points and a signer |
-| Computations | `remote-pairing-crypto-port`; `main/remote/pairing-protocol.js` | Code, MACs, phrase and proofs, written from the spec and held to `remote-protocol/pairing-v1.json` by `test/remote-pairing-protocol.test.js` |
+| Computations | `remote-pairing-crypto-port`; `main/remote/pairing-protocol.js` | Code, MACs, phrase and proofs, written from the spec and held to `docs/remote/remote-protocol/pairing-v1.json` by `test/remote-pairing-protocol.test.js` |
 | *Allow* | `user-confirmation-port`, action `remote-pairing` | The native sheet (`main/remote/pairing-prompt.js` words it), redeemed against the receipt registry like every other loosening |
 | Window | `main/ipc/remote-handlers.js`, `remote:*` channels | Start, cancel, remove, read the state; every change pushed. Normalized by `contracts/remote/pairing-state.js` on the way out; the QR code is drawn in main (`main/remote/pairing-qr.js`, `qrcode-generator`) and goes along as modules |
 | Panel | `renderer/components/RemoteAccessSettings.js` | *Settings › Remote access* (#1110): the eleven states below, from main's state; *Allow* stays the system dialog's |
@@ -3660,7 +3660,7 @@ payload and diagnostics report.
 
 ## Hooks
 
-Not built yet — designed in [`hooks.md`](./hooks.md) (#926, epic
+Not built yet — designed in [`hooks.md`](../concepts/hooks.md) (#926, epic
 [#925](https://github.com/kkrafft1999/snotra/issues/925)), which is the
 contract the parts #927–#930 are built against. In short: user-defined
 commands that Snotra runs at six events of a run (`ChatStart`, `PromptSubmit`,

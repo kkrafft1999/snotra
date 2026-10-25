@@ -4,7 +4,7 @@
 // with its half computed by the reference implementation, says hello over
 // the in-memory relay, learns the methods of step 1, lists and opens a chat
 // and follows a running turn — the deltas batched into one envelope every
-// 150 ms (docs/remote-protocol.md §17).
+// 150 ms (docs/remote/remote-protocol.md §17).
 
 const test = require('node:test');
 const assert = require('node:assert/strict');

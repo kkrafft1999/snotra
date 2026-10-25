@@ -12,7 +12,7 @@
  * The same check runs again at the moment of connecting (#554): the fetch
  * adapter's dispatcher resolves the name through it, so a DNS answer that
  * changes between check and connection (DNS rebinding) never reaches a
- * blocked address. See docs/security-concept.md.
+ * blocked address. See docs/security/security-concept.md.
  */
 
 /** Nur diese Schemata; alles andere traegt nichts in den Chat. */

@@ -56,7 +56,7 @@
   </style>
   <rect class="canvas" x="0" y="0" width="1580" height="3354"/>
   <text class="page-title" x="40" y="54">Mobile remote — pairing a phone, and the channel through the relay</text>
-  <text class="page-sub" x="40" y="82">What happens behind Settings › Remote access. Agreed on 2026-10-18; bytes and endpoints: docs/remote-protocol.md.</text>
+  <text class="page-sub" x="40" y="82">What happens behind Settings › Remote access. Agreed on 2026-10-18; bytes and endpoints: docs/remote/remote-protocol.md.</text>
   <rect class="group" x="206" y="122" width="468" height="94" rx="8"/>
   <text class="group-l" x="216" y="137">SNOTRA AGENT — DESKTOP</text>
   <rect class="group" x="686" y="122" width="468" height="94" rx="8"/>

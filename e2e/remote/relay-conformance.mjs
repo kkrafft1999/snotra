@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Holds a relay of the mobile remote to docs/remote-protocol.md parts 1 and 2
+ * Holds a relay of the mobile remote to docs/remote/remote-protocol.md parts 1 and 2
  * (#1135): the desktop through the bridge's own Firebase adapter
  * (src/main/remote/firebase-relay-adapter.js) and channel crypto
  * (src/main/remote/channel-protocol.js), the phone through the reference
@@ -659,7 +659,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const started = Date.now();
   try {
     const passed = await runConformance(/** @type {Record<string, string>} */ (config), { log: (line) => console.log(line) });
-    console.log(`\nThe relay conforms to docs/remote-protocol.md parts 1 and 2: ${passed.length} steps in ${Date.now() - started} ms.`);
+    console.log(`\nThe relay conforms to docs/remote/remote-protocol.md parts 1 and 2: ${passed.length} steps in ${Date.now() - started} ms.`);
     return EXIT.PASSED;
   } catch (error) {
     console.error(`FAIL  ${error instanceof Error ? error.message : String(error)}`);

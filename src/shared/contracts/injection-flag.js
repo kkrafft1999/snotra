@@ -3,7 +3,7 @@
  *
  * The flag is a warning for the user and nothing else: it travels with the
  * tool row to the chat and into the stored history, and it is never read by
- * anything that decides what a tool may do (docs/quality-requirements.md §3,
+ * anything that decides what a tool may do (docs/architecture/quality-requirements.md §3,
  * scenario SEC-4). What the model receives does not depend on it either.
  *
  * Each signal names what kind of text was found and quotes a short, cleaned

@@ -1,10 +1,10 @@
 /**
  * RemotePairingCrypto port (#1114): the computations of
- * docs/remote-protocol.md part 1 the desktop makes while it pairs — the
+ * docs/remote/remote-protocol.md part 1 the desktop makes while it pairs — the
  * pairing code (§4), `MAC_P` and `MAC_D` (§6), the safety phrase (§7).
  *
  * The core decides when each is needed and what follows from it; the adapter
- * only computes, proven against docs/remote-protocol/pairing-v1.json. The
+ * only computes, proven against docs/remote/remote-protocol/pairing-v1.json. The
  * pairing secret is drawn inside `createCode` from a CSPRNG and travels only
  * inside the code: it goes to the window as QR code and typed key, and to the
  * MAC functions — never to the relay.

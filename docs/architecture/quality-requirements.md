@@ -156,7 +156,7 @@ already replaced the refusal by a card ([`architecture-review.md`](./architectur
 | ID | Stimulus | Response | Measure |
 | --- | --- | --- | --- |
 | CHG-1 | The owner or an AI agent makes a change. | Unit and e2e tests on all three platforms catch a regression before it reaches `main`. | Required checks, no bypass. Local gate ≤ 3 min, CI median ≤ 5 min, < 5 % red or re-run over two weeks (the revisit triggers in `test-concept.md`). |
-| CHG-2 | An agent new to the code reads `docs/architecture.md` to find where a change belongs. | The document describes the code as it is. | No drift between document and code (checked in phase 2). |
+| CHG-2 | An agent new to the code reads `docs/architecture/architecture.md` to find where a change belongs. | The document describes the code as it is. | No drift between document and code (checked in phase 2). |
 | POR-1 | A feature is released. | It works on macOS, Windows and Linux and with every offered provider — or the gap is handled by the parity rule. | No undocumented gap; CI on all three platforms is mandatory. |
 | I18N-1 | A UI text is added or changed. | It exists in English and German. | Tests and the manual build fail on a text or page in one language only. |
 | I18N-2 | A third interface language is added. | It needs a new catalogue and an entry in the language selector, nothing else. | No language-specific branch in the code. |
@@ -169,7 +169,7 @@ The performance budgets apply to a current Apple Silicon Mac. On Windows, Linux
 and the CI runners twice the time is allowed. `npm run perf`
 measures all four on every push to `main` and reports them without gating
 (#984); what it measures is described in
-[`test-concept.md`](./test-concept.md#performance-report).
+[`test-concept.md`](../development/test-concept.md#performance-report).
 
 ## 5. Non-goals
 

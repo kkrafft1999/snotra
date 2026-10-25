@@ -192,7 +192,7 @@ estimate never replaces a model answer. In short: `user` > `model` >
   get fuller, and six icons that are told apart at a glance are hard to find.
 - The exact look of the header element and the report rows is decided in
   their implementation issues, from a mockup, as
-  [`ux-ui-standards.md`](../.claude/rules/ux-ui-standards.md) asks.
+  [`ux-ui-standards.md`](../../.claude/rules/ux-ui-standards.md) asks.
 
 ## Out of scope
 

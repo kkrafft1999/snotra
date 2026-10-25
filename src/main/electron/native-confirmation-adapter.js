@@ -7,7 +7,7 @@
  * It is the only adapter with `presence: 'desktop'`. The dialog is drawn by
  * the operating system in the main process, so neither the renderer nor any
  * other front end can answer it — that is what the presence guarantee rests
- * on (docs/security-concept.md §5). Without a dialog to show it confirms
+ * on (docs/security/security-concept.md §5). Without a dialog to show it confirms
  * nothing (`no-presence`), like the refusing implementation of the core.
  */
 

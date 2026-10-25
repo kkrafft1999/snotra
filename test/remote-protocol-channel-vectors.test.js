@@ -1,4 +1,4 @@
-// The channel test vectors of docs/remote-protocol.md, part 2 (#1113):
+// The channel test vectors of docs/remote/remote-protocol.md, part 2 (#1113):
 // handshake, session keys and envelopes, recomputed with Node's crypto from
 // the pairing vectors' long-term keys. The iPhone app runs the same file
 // with CryptoKit.
@@ -133,7 +133,7 @@ test('one envelope carries at most 256 KiB of plaintext', () => {
 });
 
 test('the spec names every channel label and points to the vector file', () => {
-  const spec = fs.readFileSync(path.join(__dirname, '..', 'docs', 'remote-protocol.md'), 'utf8');
-  for (const label of Object.values(ref.LABEL)) assert.ok(spec.includes(`"${label}"`), `docs/remote-protocol.md names "${label}"`);
+  const spec = fs.readFileSync(path.join(__dirname, '..', 'docs', 'remote', 'remote-protocol.md'), 'utf8');
+  for (const label of Object.values(ref.LABEL)) assert.ok(spec.includes(`"${label}"`), `docs/remote/remote-protocol.md names "${label}"`);
   assert.ok(spec.includes('remote-protocol/channel-v1.json'), 'the spec points to the channel vectors');
 });

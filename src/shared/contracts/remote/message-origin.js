@@ -1,6 +1,6 @@
 /**
  * Where a message or a card's answer came from, when it was not the window
- * (#1197, `docs/remote-interface.md` §7.4, §8.1): the front end's kind and
+ * (#1197, `docs/remote/remote-interface.md` §7.4, §8.1): the front end's kind and
  * the name it gave in `session.hello`.
  *
  * ```

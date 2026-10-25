@@ -2,7 +2,7 @@
 
 The mobile remote's relay (epic [#1081](https://github.com/kkrafft1999/snotra/issues/1081))
 is built and deployed in [snotra-promotion#165](https://github.com/kkrafft1999/snotra-promotion/issues/165).
-This folder holds what holds it to [`docs/remote-protocol.md`](../../docs/remote-protocol.md)
+This folder holds what holds it to [`docs/remote/remote-protocol.md`](../../docs/remote/remote-protocol.md)
 part 1 (pairing) and part 2 (the channel), from this repository's side
 ([#1135](https://github.com/kkrafft1999/snotra/issues/1135)):
 

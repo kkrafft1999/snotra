@@ -1,6 +1,6 @@
 'use strict';
 
-// docs/architecture.md describes the code, and a description nobody checks
+// docs/architecture/architecture.md describes the code, and a description nobody checks
 // drifts (#1009): by the time of the architecture review its header said
 // July while the content ran to October, the layer table missed half of
 // `src/main/`, and the port list covered 14 of 18 ports. This keeps the
@@ -15,7 +15,7 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const SRC = path.join(ROOT, 'src');
-const DOC = fs.readFileSync(path.join(ROOT, 'docs', 'architecture.md'), 'utf8').replace(/\r\n/g, '\n');
+const DOC = fs.readFileSync(path.join(ROOT, 'docs', 'architecture', 'architecture.md'), 'utf8').replace(/\r\n/g, '\n');
 
 // Code fences hold diagrams and example JSON, not claims about files.
 const PROSE = DOC.replace(/```[\s\S]*?```/g, '');

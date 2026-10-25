@@ -153,7 +153,7 @@ test('the vendored pdf.js has what the reader serves, and no scripting sandbox',
 
 test('the vendored pdf.js compiles no code from strings: in the worker nothing else would stop it', async (t) => {
   // The worker comes from a file: URL and gets no CSP; `isEvalSupported` is
-  // gone from pdf.js 6 (#641, docs/architecture.md *PDFs*).
+  // gone from pdf.js 6 (#641, docs/architecture/architecture.md *PDFs*).
   const vendor = path.join(__dirname, '..', 'src', 'renderer', 'vendor', 'pdfjs');
   let scripts;
   try {

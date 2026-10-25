@@ -15,7 +15,7 @@ const ERROR_KEYS = /** @type {Readonly<Record<string, string>>} */ (Object.freez
  * skill; which folder that is, where it goes and whether the user agrees are
  * decided here, with a native confirmation — the same pattern as taking files
  * over (#101): the renderer is not a security boundary
- * (docs/security-concept.md §5). No tool reaches this, so the model still
+ * (docs/security/security-concept.md §5). No tool reaches this, so the model still
  * never writes outside the open folder (#160, #548).
  *
  * The confirmation goes through the user-confirmation port (#980); `dialog`

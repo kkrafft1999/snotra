@@ -2,8 +2,8 @@
 
 /**
  * Pairing a phone with this desktop (#1114): the decisions of the desktop's
- * half of docs/remote-protocol.md part 1 — phases 1, 3 and 5 of
- * docs/remote-pairing-sequence.svg.
+ * half of docs/remote/remote-protocol.md part 1 — phases 1, 3 and 5 of
+ * docs/remote/remote-pairing-sequence.svg.
  *
  * - **Open** (steps 3–11): the identity keys, created on first use; a fresh
  *   pairing at the relay; the code to the window; five minutes.

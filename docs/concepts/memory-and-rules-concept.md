@@ -32,7 +32,7 @@ files that load on demand — and defines how the agent writes to each.
 - **No rules files.**
 
 The order of the system prompt is described in
-[`architecture.md` › *System prompt*](./architecture.md#system-prompt).
+[`architecture.md` › *System prompt*](../architecture/architecture.md#system-prompt).
 
 ## Decisions
 
@@ -357,7 +357,7 @@ with three sections in this order:
 3. **Memory** — as today, plus the hints and their actions.
 
 The visual layout is worked out as a mockup in the follow-up issue, as
-[`ux-ui-standards.md`](../.claude/rules/ux-ui-standards.md) asks; the
+[`ux-ui-standards.md`](../../.claude/rules/ux-ui-standards.md) asks; the
 structure above is what is decided. Renaming the page touches every place that
 quotes the menu path: the manual, the catalogue placeholder that `snotra-memory`
 uses for it, and the context breakdown labels. Both interface languages, as
@@ -383,7 +383,7 @@ Open for the security concept, and filed as
 [#1280](https://github.com/kkrafft1999/snotra/issues/1280): whether `add_rule`
 should be refused outright in a run in which the injection detector has flagged
 a tool result, and how rules files enter the threat model and the quality
-requirements. `docs/security-concept.md` and `docs/quality-requirements.md` are
+requirements. `docs/security/security-concept.md` and `docs/architecture/quality-requirements.md` are
 not changed in this concept.
 
 Workspace rules files are foreign instructions in the same way a workspace

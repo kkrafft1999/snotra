@@ -241,15 +241,15 @@ unter [Ein Tastenkürzel finden](https://docs.snotra-ai.dev/de/reference/keyboar
 └── package.json
 ```
 
-Details zur Schichtenarchitektur: [`docs/architecture.md`](./docs/architecture.md).
+Details zur Schichtenarchitektur: [`docs/architecture/architecture.md`](./docs/architecture/architecture.md).
 
 ## Sicherheitshinweise
 
 Welche Aktion in welchem Modus deine Freigabe braucht und was die Sandbox daran ändert:
 
-![Wer darf was: die drei Berechtigungsmodi und die Arten von Aktionen, die Sandbox an und aus, und was es braucht, um den Schutz zu lockern](docs/permissions-infographic.de.png)
+![Wer darf was: die drei Berechtigungsmodi und die Arten von Aktionen, die Sandbox an und aus, und was es braucht, um den Schutz zu lockern](docs/security/permissions-infographic.de.png)
 
-Die Einzelheiten stehen im [Sicherheitskonzept](docs/security-concept.md) (englisch).
+Die Einzelheiten stehen im [Sicherheitskonzept](docs/security/security-concept.md) (englisch).
 
 - API-Keys werden **lokal** gespeichert und nicht an Dritte weitergegeben.
 - Der Workspace-Zugriff der Datei-Tools ist auf den jeweils geöffneten Projektordner beschränkt. Ausnahmen: die **Lese**-Tools erreichen zusätzlich die Verzeichnisse der eingeschalteten Skills über `skill:<name>/…` (siehe [Skills nutzen](https://docs.snotra-ai.dev/de/customising/skills/), geschrieben wird dort nie) — und die beiden **Ausführungs**-Tools `run_python` und `shell_execute` kennen diese Grenze grundsätzlich nicht: nicht Snotra greift dort auf Dateien zu, sondern der Interpreter bzw. die Shell. Beide sind deshalb im Lieferzustand abgeschaltet und brauchen außerhalb von *Auto* vor jedem Lauf eine Freigabe. Unter macOS und Linux laufen sie in einer Sandbox, die das Schreiben auf den Projektordner begrenzt und das Netzwerk auf die freigegebenen Domains (siehe [Befehle in der Sandbox ausführen](https://docs.snotra-ai.dev/de/safety/sandbox/)); unter Windows nicht.

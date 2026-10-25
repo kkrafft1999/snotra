@@ -8,7 +8,7 @@
  *
  * It serves, on one local port:
  *
- * - the relay's endpoints of docs/remote-protocol.md §5 under `/v1`;
+ * - the relay's endpoints of docs/remote/remote-protocol.md §5 under `/v1`;
  * - the Identity Toolkit's `accounts:signInWithCustomToken` under `/identitytoolkit/v1`;
  * - the Realtime Database's REST interface under `/db`: reads, writes and
  *   deletes under a channel with the rules of §5.10, §12, §13 and §15 — the

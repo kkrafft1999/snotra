@@ -1,6 +1,6 @@
 {
   "protocol": 1,
-  "use": "The safety phrase of the mobile remote's pairing, docs/remote-protocol.md §7. Index = position in this array. Never translated; another list is protocol version 2.",
+  "use": "The safety phrase of the mobile remote's pairing, docs/remote/remote-protocol.md §7. Index = position in this array. Never translated; another list is protocol version 2.",
   "name": "EFF short word list 2.0",
   "source": "https://www.eff.org/files/2016/09/08/eff_short_wordlist_2_0.txt",
   "sourceSha256": "22b45c52e0bd0bbf03aa522240b111eb4c7c0c1d86c4e518e1be2a7eb2a625e4",

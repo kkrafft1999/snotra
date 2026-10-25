@@ -227,6 +227,6 @@
 
   <!-- ============ BOTTOM NOTE + STAMP ============ -->
   <text x="870" y="1100" text-anchor="middle" font-size="11.5" font-weight="600" fill="#8a5a12">Application ports (src/application/ports) · infrastructure ports (src/main/ports) · contracts (src/shared/contracts) — three separate kinds of contract. The core knows only application ports plus src/shared.</text>
-  <text x="30" y="1256" font-size="11" fill="#8a97a6">docs/architecture-hexagonal.svg</text>
+  <text x="30" y="1256" font-size="11" fill="#8a97a6">docs/architecture/architecture-hexagonal.svg</text>
   <text x="1710" y="1256" text-anchor="end" font-size="11" fill="#8a97a6">Revised 2026-10-17 against main (#1009) · Claude Sonnet 5.5 · Reasoning effort: low</text>
 </svg>

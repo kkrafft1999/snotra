@@ -1,8 +1,8 @@
 // Measures the performance budgets PERF-1 to PERF-4 of
-// docs/quality-requirements.md in the real app (#984). Not a test: it reports
+// docs/architecture/quality-requirements.md in the real app (#984). Not a test: it reports
 // numbers and never fails on a missed budget unless asked to — only a
 // measurement that breaks fails the run. `.github/workflows/perf.yml` runs it
-// on every push to main; docs/test-concept.md describes what it covers.
+// on every push to main; docs/development/test-concept.md describes what it covers.
 //
 //   npm run perf -- [--runs=5] [--strict] [--out=out/perf]
 //

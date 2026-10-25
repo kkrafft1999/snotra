@@ -19,7 +19,7 @@
  * the reason `not-configured`.
  *
  * Not configurable from outside on purpose: the phone accepts only the relay
- * hosts it ships with (docs/remote-protocol.md §4), so a desktop pointed
+ * hosts it ships with (docs/remote/remote-protocol.md §4), so a desktop pointed
  * elsewhere could pair with nothing.
  */
 

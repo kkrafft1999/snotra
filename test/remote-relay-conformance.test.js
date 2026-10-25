@@ -133,7 +133,7 @@ test('the command line takes flags or the environment, prints each step and exit
   assert.equal(stderr, '');
   assert.equal(code, 0);
   assert.match(stdout, /^ok {4}pair: the desktop opens a pairing/m);
-  assert.match(stdout, /conforms to docs\/remote-protocol\.md parts 1 and 2: \d+ steps/);
+  assert.match(stdout, /conforms to docs\/remote\/remote-protocol\.md parts 1 and 2: \d+ steps/);
   // Tokens never reach the output, not even inside a URL.
   assert.doesNotMatch(stdout, /auth=|Bearer|idToken/);
 });

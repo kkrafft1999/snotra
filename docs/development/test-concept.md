@@ -17,13 +17,13 @@ before a merge — and about the rule that keeps any speed-up honest:
 
 | Level | Where | What it is responsible for | What it leaves to another level |
 | --- | --- | --- | --- |
-| **Type check** | `npm run typecheck` (`tsc --checkJs --noEmit`), run by `npm test` before the suite | Core, ports, contracts and adapters against their JSDoc — see [`architecture.md`](./architecture.md#plain-js-checked-by-jsdoc) | Behaviour: it reads the code, it runs nothing |
-| **Unit and wiring** | `test/*.test.js`, `node --test` | Application core, adapters, IPC contracts, the boundary guards in [`architecture.md`](./architecture.md#automated-boundary-guards), renderer components against a `happy-dom` DOM | Real Chromium — layout, focus, sanitizing — and the process model of the running app |
+| **Type check** | `npm run typecheck` (`tsc --checkJs --noEmit`), run by `npm test` before the suite | Core, ports, contracts and adapters against their JSDoc — see [`architecture.md`](../architecture/architecture.md#plain-js-checked-by-jsdoc) | Behaviour: it reads the code, it runs nothing |
+| **Unit and wiring** | `test/*.test.js`, `node --test` | Application core, adapters, IPC contracts, the boundary guards in [`architecture.md`](../architecture/architecture.md#automated-boundary-guards), renderer components against a `happy-dom` DOM | Real Chromium — layout, focus, sanitizing — and the process model of the running app |
 | **Real-system tests** (inside the unit suite) | e.g. `sandbox-isolation`, `sandbox-runners`, `shell-runner-service`, `workspace-watcher-real-fs`, `mcp-settings-handlers` | What only means something against the real thing: the Seatbelt/bubblewrap sandbox, file-system events, child processes, a real MCP server | Nothing — they guard security and data, so they stay in the gate |
 | **Electron E2E** | `e2e/*.test.mjs`, `node --test` + `playwright-core` | The running app against a fake model server: sanitizing with the real DOMPurify, layout and focus, restarts, approval flows | Look and feel |
 | **Look scripts** | `e2e/manual-*.mjs` | Screenshots of a state, for a person to look at | Everything automated — no gate |
 | **Manual screenshots** | `manual/`, `npm run screenshots` | The generated motifs of the user manual, four variants each | — |
-| **Release hand checks** | [`release.md`](./release.md) › *Manual checks before tagging* | What only a person can judge in the packaged app | — |
+| **Release hand checks** | [`release.md`](../release/release.md) › *Manual checks before tagging* | What only a person can judge in the packaged app | — |
 | **Performance report** | `e2e/perf-report.mjs`, `npm run perf` | The budgets PERF-1 to PERF-4 measured in the running app — see [*Performance report*](#performance-report) | Reports, does not gate |
 | **Benchmark** | `bench/tool-accuracy/` | Whether the model still picks the right tool; real model, costs tokens | Never part of CI |
 | **Coverage** | `npm run coverage` | A local ratchet, not a merge condition | — |
@@ -44,7 +44,7 @@ and the flaky files were largely the same. The rules for them are in
 | Moment | What runs | Who |
 | --- | --- | --- |
 | While working | Single files: `node --test test/<file>.test.js` | Developer or agent |
-| Before every push | `npm test` and `npm run test:e2e`, in full | Developer or agent ([`git-workflow.md`](../.claude/rules/git-workflow.md)) |
+| Before every push | `npm test` and `npm run test:e2e`, in full | Developer or agent ([`git-workflow.md`](../../.claude/rules/git-workflow.md)) |
 | Pull request, push to `main` | `ci.yml`: both suites on three platforms — the three required checks | GitHub |
 | Push to `main` | `perf.yml`: the performance report on three platforms — not a required check | GitHub |
 | Release tag | The same `ci.yml`, as the gate before any build | GitHub |
@@ -172,7 +172,7 @@ next one starts:
    experiment on the runners after step 1.
 3. **E** — [#887](https://github.com/kkrafft1999/snotra/issues/887), decided
    with the numbers step 2 leaves behind; the ruleset change gets the owner's
-   go first, as [`git-workflow.md`](../.claude/rules/git-workflow.md) asks.
+   go first, as [`git-workflow.md`](../../.claude/rules/git-workflow.md) asks.
 
 Not pursued: F (its gain shrinks once step 1 is done), G (it weakens the local
 gate to save less than a minute), H beyond naming the levels here, I (nothing
@@ -199,7 +199,7 @@ measured to prune).
 ## Performance report
 
 Since [#984](https://github.com/kkrafft1999/snotra/issues/984) the budgets of
-[`quality-requirements.md`](./quality-requirements.md) (PERF-1 to PERF-4) are
+[`quality-requirements.md`](../architecture/quality-requirements.md) (PERF-1 to PERF-4) are
 measured, not read off the code. `e2e/perf-report.mjs` starts the real app the
 way the E2E tests do — `launchApp`, the fake model server — against one fixture
 from `e2e/helpers/perf-fixture.mjs`: a history of 200 chats, one of them 200

@@ -1,9 +1,9 @@
 'use strict';
 /**
- * Reference implementation of the channel in docs/remote-protocol.md, part 2
+ * Reference implementation of the channel in docs/remote/remote-protocol.md, part 2
  * (#1113) — handshake, session keys, encrypted envelopes, the receiver's
  * order rule — and the generator of its test vectors,
- * docs/remote-protocol/channel-v1.json.
+ * docs/remote/remote-protocol/channel-v1.json.
  *
  * Builds on part 1 (scripts/remote-protocol-vectors.js): the long-term keys
  * and the channel id of the pairing vectors are the input here. Like part 1
@@ -23,7 +23,7 @@ const path = require('node:path');
 const pairing = require('./remote-protocol-vectors');
 
 const { lp, keyBundle } = pairing;
-const VECTOR_FILE = path.join(__dirname, '..', 'docs', 'remote-protocol', 'channel-v1.json');
+const VECTOR_FILE = path.join(__dirname, '..', 'docs', 'remote', 'remote-protocol', 'channel-v1.json');
 
 const LABEL = Object.freeze({
   handshake: 'snotra/v1 handshake',
@@ -286,9 +286,9 @@ function buildVectors() {
   return {
     protocol: 1,
     part: 'channel',
-    spec: 'docs/remote-protocol.md',
+    spec: 'docs/remote/remote-protocol.md',
     generatedBy: 'node scripts/remote-protocol-channel-vectors.js',
-    uses: 'docs/remote-protocol/pairing-v1.json — the long-term keys and the channel id',
+    uses: 'docs/remote/remote-protocol/pairing-v1.json — the long-term keys and the channel id',
     note: 'Deterministic: the file is compared as a whole. Hex for bytes that are only hashed or authenticated, base64url where the value travels in JSON.',
     labels: LABEL,
     ephemeral: {

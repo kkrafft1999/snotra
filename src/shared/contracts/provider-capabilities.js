@@ -11,7 +11,7 @@
  * Two kinds of entry:
  *
  * - **Capabilities** are features a user can miss. Under the parity rule
- *   (`docs/quality-requirements.md` §3) every one of them is declared for
+ *   (`docs/architecture/quality-requirements.md` §3) every one of them is declared for
  *   every provider, and every gap carries a reason key the UI can show and the
  *   issue that tracks it. `test/provider-capabilities.test.js` fails on an
  *   undeclared capability and on a gap without reason or issue.

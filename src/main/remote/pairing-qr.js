@@ -4,7 +4,7 @@
  * The pairing code as a QR code (#1110): main draws it, the window only
  * paints its modules. Byte mode, error correction M — the payload is about
  * fifty characters (`snotra-pair:v1/<relay host>/<twenty symbols>`,
- * docs/remote-protocol.md §4), which makes version 3 or 4: large modules a
+ * docs/remote/remote-protocol.md §4), which makes version 3 or 4: large modules a
  * phone's camera reads from a distance.
  */
 

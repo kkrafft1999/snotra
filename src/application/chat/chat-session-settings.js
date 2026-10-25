@@ -423,7 +423,7 @@ function createChatSessionSettings({
   /**
    * The mode a run of this chat works under, also for a chat that has not
    * been on screen since the app started — one a phone writes in (#1194,
-   * `docs/remote-interface.md` §7.3). `null` for the chat on screen and for
+   * `docs/remote/remote-interface.md` §7.3). `null` for the chat on screen and for
    * one reset to the store, as in `modeFor`. Any other chat runs with its
    * stored mode as an automatic restore would give it: a stored "Auto"
    * counts only after an explicit switch at the desktop (#567), so it falls

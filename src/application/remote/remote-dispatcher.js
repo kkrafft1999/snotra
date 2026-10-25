@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * The remote dispatcher (#1194): steps 1 and 2 of `docs/remote-interface.md`
+ * The remote dispatcher (#1194): steps 1 and 2 of `docs/remote/remote-interface.md`
  * §10 — watching and writing. It stands behind the channel's message-layer
  * port, so that a request a connection sends after `session.hello` becomes a
  * call on the desktop, and what happens there becomes an event for the

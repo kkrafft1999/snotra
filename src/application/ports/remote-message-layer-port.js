@@ -1,9 +1,9 @@
 /**
  * RemoteMessageLayer port (#1192): where the channel hands over what it has
  * opened. The channel owns `session.hello` and `session.bye` — the first is
- * the key confirmation of docs/remote-protocol.md §14 and mints the
+ * the key confirmation of docs/remote/remote-protocol.md §14 and mints the
  * connection — and passes every other request of a standing connection here,
- * as `docs/remote-interface.md` §10 answers it: `remote-dispatcher.js` with
+ * as `docs/remote/remote-interface.md` §10 answers it: `remote-dispatcher.js` with
  * the release list and the methods of §8.1 (#1194), step 1 so far.
  *
  * `remote-message-stand-in.js` answers every request with `unavailable`
@@ -12,7 +12,7 @@
  */
 
 /**
- * A connection as `docs/remote-interface.md` §7.1 defines it. `kind` is fixed
+ * A connection as `docs/remote/remote-interface.md` §7.1 defines it. `kind` is fixed
  * by the channel; `client` is what the phone said and is never trusted.
  *
  * @typedef {Object} RemoteConnection

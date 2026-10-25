@@ -14,7 +14,7 @@
  * held to the same standard. When a key is missing, the lookup falls back to
  * `DEFAULT_LOCALE` and finally to the key itself — a raw key in the English
  * interface is noticed, a German sentence in it would not be (see
- * `docs/architecture.md`, "One catalogue for all three layers"). A key missing
+ * `docs/architecture/architecture.md`, "One catalogue for all three layers"). A key missing
  * only from `de.js` therefore reads as English, which is why it never gets that
  * far: `test/i18n-keys.test.js` keeps both catalogues on the same keys.
  */

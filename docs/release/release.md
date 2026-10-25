@@ -24,7 +24,7 @@ procedure that creates them.
   `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `APPLE_API_KEY_P8_BASE64`,
   `APPLE_API_KEY_ID`, `APPLE_API_ISSUER` and `APPLE_TEAM_ID`. How they were made
   and when they expire is in
-  [`release/macos-signing-plan.md`](release/macos-signing-plan.md).
+  [`release/macos-signing-plan.md`](macos-signing-plan.md).
 - The secret **`SNOTRA_RELAY_API_KEY`** holds the web API key of the mobile
   remote's relay (#1193). Every platform's build writes it into the package
   (`node scripts/write-relay-key.js --require`) and fails without it. It is
@@ -45,7 +45,7 @@ pipeline. `main` is never written to directly.
 ## The version as the single source of truth
 
 The version that is displayed and compared comes from `version` in
-[`package.json`](../package.json) (→ `app.getVersion()`). Exactly that value
+[`package.json`](../../package.json) (→ `app.getVersion()`). Exactly that value
 decides whether a running installation recognises itself as out of date, so it
 has to match the release tag.
 
@@ -97,10 +97,10 @@ maker) does work from macOS.
 Every AppImage starts with the **type-2 runtime**, a binary from
 `AppImage/type2-runtime`. Left alone, the maker would download it at build time
 from the rolling `continuous` tag, unchecked. Instead `npm run make:linux` first
-runs [`scripts/fetch-appimage-runtime.js`](../scripts/fetch-appimage-runtime.js),
+runs [`scripts/fetch-appimage-runtime.js`](../../scripts/fetch-appimage-runtime.js),
 which downloads a **dated release** and writes it to
 `out/appimage-runtime/runtime-x86_64` only if its SHA-256 matches the pinned one
-(#573). The maker's `runtime` in [`package.json`](../package.json) points at
+(#573). The maker's `runtime` in [`package.json`](../../package.json) points at
 that file. A test guards both. To raise it, change URL and SHA-256 in the script
 together — GitHub lists the digest next to each release asset.
 
@@ -111,7 +111,7 @@ carry the version and the platform, e.g. `Snotra-Agent-1.1.0-mac-arm64.dmg`.
 ### The macOS DMG
 
 Since #685 the DMG is not built by Forge but by
-[`scripts/make-dmg.js`](../scripts/make-dmg.js), which `npm run make` runs after
+[`scripts/make-dmg.js`](../../scripts/make-dmg.js), which `npm run make` runs after
 packaging. It uses only system tools (`hdiutil`, `ditto`, `xattr`); the former
 chain `maker-dmg` → `electron-installer-dmg` → `appdmg` showed the Electron logo
 as the volume icon, failed now and then on `hdiutil detach`, and kept an
@@ -119,9 +119,9 @@ unmaintained `image-size` in the lock file.
 
 The image holds the signed `Snotra Agent.app`, an `/Applications` symlink, Snotra's
 `icon.icns` as the volume icon, the window background
-[`assets/macos/dmg-background.tiff`](../assets/macos/dmg-background.tiff) in
+[`assets/macos/dmg-background.tiff`](../../assets/macos/dmg-background.tiff) in
 `.background/` and the window layout from
-[`assets/macos/dmg-layout.DS_Store`](../assets/macos/dmg-layout.DS_Store): icon
+[`assets/macos/dmg-layout.DS_Store`](../../assets/macos/dmg-layout.DS_Store): icon
 view without toolbar, status bar or sidebar, the app on the left, Applications
 on the right and a grey arrow between them.
 
@@ -141,7 +141,7 @@ notarising and stapling the DMG stay in `release.yml`.
 
 **Changing the layout.** The `.DS_Store` is generated with Finder and checked
 in; CI never scripts Finder. The arrow's source is
-[`assets/macos/dmg-background.svg`](../assets/macos/dmg-background.svg), drawn in
+[`assets/macos/dmg-background.svg`](../../assets/macos/dmg-background.svg), drawn in
 Finder points on the icons' line. After changing it, rebuild the TIFF with both
 resolutions (needs `rsvg-convert`, see below):
 
@@ -182,7 +182,7 @@ The `app.asar` contains **runtime files only**: `src/`, `system-skills/`,
 Everything else — `.claude/` (including a local `settings.local.json`),
 `.github/`, `docs/`, `test/`, `scripts/`, the icon sources, the README, the lock
 file, `.env*` — stays out (issue #72). The source of truth is the negative regex
-in [`package.json`](../package.json) → `config.forge.packagerConfig.ignore`; new
+in [`package.json`](../../package.json) → `config.forge.packagerConfig.ignore`; new
 runtime folders have to be added to the allowlist there.
 
 The pipeline checks the contents automatically after every build job
@@ -195,12 +195,12 @@ npm run check-package
 
 ## Pipeline and test gate
 
-Two GitHub Actions workflows under [`.github/workflows/`](../.github/workflows/):
+Two GitHub Actions workflows under [`.github/workflows/`](../../.github/workflows/):
 
-- [`ci.yml`](../.github/workflows/ci.yml) runs the test suite (`npm test`, Node
+- [`ci.yml`](../../.github/workflows/ci.yml) runs the test suite (`npm test`, Node
   24) on **macOS, Windows and Linux** for every **pull request** and every
   **push to `main`**. A red run is visible on the pull request or on the commit.
-- [`release.yml`](../.github/workflows/release.yml) starts on a tag push
+- [`release.yml`](../../.github/workflows/release.yml) starts on a tag push
   `vX.Y.Z`. Its first job checks the **tag**: `X.Y.Z` has to be exactly the
   `version` in `package.json` at the tagged commit, and that commit has to be on
   `main` (#570). A tag that fails either check stops the run before anything is
@@ -459,7 +459,7 @@ a suffix, a regular release is created as before.
 > (#662) — the job `Build macOS` fails if Gatekeeper would not accept it. A
 > prerelease is signed the same way, so a `-rc` tag is the test run for a change
 > to the signing. Windows signs `Snotra Agent.exe` through SSL.com eSigner
-> (#911, see [release/windows-signing.md](release/windows-signing.md)); the job
+> (#911, see [release/windows-signing.md](windows-signing.md)); the job
 > `Build Windows (x64)` fails if the signature does not verify. Linux needs no signature; the only relevant point there is the sandbox
 > note about the tarball (see the README).
 
@@ -476,5 +476,5 @@ a suffix, a regular release is created as before.
   manual check shows them again.
 
 Implementation:
-[`src/main/services/update-service.js`](../src/main/services/update-service.js),
-tests: [`test/update-service.test.js`](../test/update-service.test.js).
+[`src/main/services/update-service.js`](../../src/main/services/update-service.js),
+tests: [`test/update-service.test.js`](../../test/update-service.test.js).

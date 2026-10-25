@@ -1,7 +1,7 @@
 /**
  * RemoteIdentity port (#1114): the desktop's long-term keys for the mobile
- * remote, and the one phone it is paired with (R1) — docs/remote-protocol.md
- * §3, steps 3–4 and 33 of docs/remote-pairing-sequence.svg.
+ * remote, and the one phone it is paired with (R1) — docs/remote/remote-protocol.md
+ * §3, steps 3–4 and 33 of docs/remote/remote-pairing-sequence.svg.
  *
  * The private keys never leave the adapter. The core gets the public bundle,
  * a function that signs and one that agrees (#1192); it cannot read, copy or

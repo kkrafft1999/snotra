@@ -2,7 +2,7 @@
 
 /**
  * The phone opens another folder through the window (#1194, step 2c of
- * `docs/remote-interface.md` §10). The window switches folders itself
+ * `docs/remote/remote-interface.md` §10). The window switches folders itself
  * (`FileTree.openProject`): it settles the file on show first, and draws the
  * tree and the chat of the new folder. So main asks it on
  * `workspace:switch-requested` and waits for its answer on

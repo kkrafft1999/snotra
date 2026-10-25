@@ -2,7 +2,7 @@
 
 /**
  * The relay of the mobile remote over Firebase (#1114), without the Firebase
- * SDK in main (docs/remote-protocol.md §5.1):
+ * SDK in main (docs/remote/remote-protocol.md §5.1):
  *
  * - the relay's endpoints (Cloud Functions) over HTTPS, `/v1/…`;
  * - the Identity Toolkit's `accounts:signInWithCustomToken` to turn the

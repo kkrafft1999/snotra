@@ -2,7 +2,7 @@
 
 /**
  * The desktop's keys for the mobile remote, and the phone it is paired with
- * (#1114; docs/remote-protocol.md §3, steps 3–4 and 33 of the sequence).
+ * (#1114; docs/remote/remote-protocol.md §3, steps 3–4 and 33 of the sequence).
  *
  * One file in the user data folder, `remote-pairing.json`, holds a single
  * `safeStorage` ciphertext; in it the two long-term P-256 private keys (sign

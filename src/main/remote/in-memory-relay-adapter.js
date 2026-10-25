@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * A relay in memory (#1114): the relay's rules of docs/remote-protocol.md §5
+ * A relay in memory (#1114): the relay's rules of docs/remote/remote-protocol.md §5
  * without a network. Challenges are good once and for 60 seconds, a pairing
  * lives five minutes and takes one claim, every proof must verify against
  * the key it claims, a channel runs `open → pending → paired` and vanishes

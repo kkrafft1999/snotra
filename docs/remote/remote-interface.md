@@ -2,7 +2,7 @@
 
 Architecture decision record for
 [#989](https://github.com/kkrafft1999/snotra/issues/989) (AR-14 of the
-[architecture review](./architecture-review.md)), written on 2026-10-17 against
+[architecture review](../architecture/architecture-review.md)), written on 2026-10-17 against
 `main` at `b320911`. **Status:** accepted for everything marked as decided;
 the points in [§11](#11-open-decisions) are the owner's and stay open until
 the owner decides them. Nothing of it is built yet.
@@ -26,9 +26,9 @@ specification must not contradict.
 
 **What exists.**
 
-- **One API, and it is Electron IPC.** [`src/shared/ipc-channels.js`](../src/shared/ipc-channels.js)
+- **One API, and it is Electron IPC.** [`src/shared/ipc-channels.js`](../../src/shared/ipc-channels.js)
   defines 114 request and 32 push channels (105 and 29 when the review counted
-  at `c66b3c5`), [`manual-channels.js`](../src/shared/manual-channels.js)
+  at `c66b3c5`), [`manual-channels.js`](../../src/shared/manual-channels.js)
   another 6 and 4 for the manual window. They are string constants; what a
   channel carries is a comment and, where one exists, a normalizer in
   `src/shared/contracts/`. There is no schema per channel and no version —
@@ -36,22 +36,22 @@ specification must not contradict.
   in at least five shapes: thrown errors, `createSettingsError`, `{ error }`
   without `ok`, reason codes, and sentences worded in main.
 - **Trust means "the sender is the app window".** `guardIpcMain` in
-  [`trusted-sender.js`](../src/main/ipc/trusted-sender.js) refuses every
+  [`trusted-sender.js`](../../src/main/ipc/trusted-sender.js) refuses every
   message whose sender is not the top frame of the app's own page (#509). For
   a socket that check has no meaning.
-- **A session is a `webContents` id.** [`chat-handlers.js`](../src/main/ipc/chat-handlers.js)
+- **A session is a `webContents` id.** [`chat-handlers.js`](../../src/main/ipc/chat-handlers.js)
   keys runs by `event.sender.id` and stops them when the window navigates,
-  crashes or closes (#979). [`tool-approval-adapter.js`](../src/main/adapters/tool-approval-adapter.js)
+  crashes or closes (#979). [`tool-approval-adapter.js`](../../src/main/adapters/tool-approval-adapter.js)
   keeps one subscriber per `webContents` and accepts an answer only from the
   window the card went to (`approval.error.otherWindow`).
-  [`request-lifecycle.js`](../src/main/ipc/request-lifecycle.js), voice input
+  [`request-lifecycle.js`](../../src/main/ipc/request-lifecycle.js), voice input
   and the update download key their state by the sender object.
 - **Some state is process-wide, not per window:** the active workspace, main's
   "chat on screen" (`chatSessionSettings.getCurrentChatId`) and the model
   preset and permission mode that `chatHistory:activate` switches with it. Two
   front ends would fight over them.
 - **Loosening is confirmed by native dialogs inside IPC handlers**
-  ([security concept §5](./security-concept.md#5-hard-boundaries-and-prompt-injection);
+  ([security concept §5](../security/security-concept.md#5-hard-boundaries-and-prompt-injection);
   AR-05, [#980](https://github.com/kkrafft1999/snotra/issues/980)). A remote
   front end cannot see that dialog and must never be the one to answer it.
   Some loosening had no dialog at all: `settings:setUIPrefs` switched shell
@@ -73,7 +73,7 @@ specification must not contradict.
 
 **What has to be served.**
 
-- [`quality-requirements.md`](./quality-requirements.md): **CORE-1** — a new
+- [`quality-requirements.md`](../architecture/quality-requirements.md): **CORE-1** — a new
   front end adds driving adapters and its own composition root, nothing else;
   **SEC-5** — only loopback connections, only with a credential the app
   issued, no listening socket on any other interface; **SEC-6** — the relay
@@ -235,7 +235,7 @@ programs that drive an app that is already running.
 - **How the token is handled.** Compared in constant time
   (`crypto.timingSafeEqual`). Never logged, never in an error, never in a URL,
   never in the environment of a process Snotra starts. It is added to Snotra's
-  own secrets ([`own-secrets.js`](../src/main/services/own-secrets.js)), so a
+  own secrets ([`own-secrets.js`](../../src/main/services/own-secrets.js)), so a
   tool result that prints it is held back from the model like an API key.
 - **A client reads the file at every connect** and sends the token only to
   the URL the file names — never to a port it found some other way, which
@@ -337,7 +337,7 @@ error: { code: int, message: string, data: { reason: string, message: { key, par
 ```
 
 - `data.message` is the descriptor of
-  [`message.js`](../src/shared/contracts/message.js), keyed into the
+  [`message.js`](../../src/shared/contracts/message.js), keyed into the
   catalogue (#293). A client with a catalogue of its own — the phone —
   translates the key.
 - `message` is the same sentence already worded in the connection's language
@@ -487,7 +487,7 @@ answer every request with *no* — the measure of SEC-6.
 
 The catalogue below found loosening that needed no native dialog at all
 (the shell and Python switches, MCP servers, insecure TLS). #1104 decided
-each ([security concept §5](./security-concept.md#5-hard-boundaries-and-prompt-injection)):
+each ([security concept §5](../security/security-concept.md#5-hard-boundaries-and-prompt-injection)):
 switching `shell_execute` or `run_python` on and storing a local MCP command
 that is new or changed now go through the same port, and the stores refuse
 both without a receipt — so even a remote kind that reached a settings write
@@ -533,7 +533,7 @@ concept §7): `{ messageId, role: 'user'|'assistant', text: Markdown,
 toolLines?: [{ line, tool, status }], attachments?: [{ kind: 'image',
 placeholder: true, name? }], origin?: { kind, client }, interrupted?: bool,
 createdAt? }`. Tool lines are the lines the desktop shows, worded by
-[`tool-display.js`](../src/shared/presentation/tool-display.js) in the
+[`tool-display.js`](../../src/shared/presentation/tool-display.js) in the
 desktop's language — the history keeps no arguments to word a stored line
 again, and a chat should not mix two languages (decided 2026-10-20, #1194);
 no tool arguments, no schemas, no tool results. `messageId` is `m<index>`,
@@ -542,7 +542,7 @@ The history keeps no time per message, so `createdAt` is left out for now.
 `origin` is stored with the question since #1197 —
 `{ kind: 'relay', client }`, the name from `session.hello`, cleaned and cut
 to 64 characters by
-[`message-origin.js`](../src/shared/contracts/remote/message-origin.js) —
+[`message-origin.js`](../../src/shared/contracts/remote/message-origin.js) —
 so a question from the phone carries it in `chat.open` and `chat.more` as
 well as in `chat.message`. A question asked at the desktop has none.
 
@@ -563,7 +563,7 @@ answers this connection may give. `sessionAllowed`, `alwaysAllowed`,
 | `state` | `{ activeWorkspaceId, running: [{ chatId, workspaceId, state }], busy: bool }` — at `session.hello` and on every change | 1 | — |
 | `chat.delta` | `{ chatId, runId, text }` | 1 | `chat:delta` |
 | `chat.tool-line` | `{ chatId, runId, callIndex, phase: 'pending'\|'start'\|'done', tool, line, permission?, changes?: [{ relativePath, status, added, removed }] }` — no `args`, no `schema` | 1 | `chat:tool-line` |
-| `chat.progress` | `{ chatId, runId, type: 'phase'\|'reasoning'\|'workspace'\|'permission'\|'run-end', … }` — the fields of each type as in [`chat.js`](../src/shared/contracts/chat.js) | 1 | `chat:progress` |
+| `chat.progress` | `{ chatId, runId, type: 'phase'\|'reasoning'\|'workspace'\|'permission'\|'run-end', … }` — the fields of each type as in [`chat.js`](../../src/shared/contracts/chat.js) | 1 | `chat:progress` |
 | `chat.message` | `{ chatId, message: DisplayMessage }` — a message another front end wrote: a turn's question once it is saved, to every follower but the connection that asked, with `origin` when a remote asked | 2 | — |
 | `chat.updated` | `{ chatId, title?, cost?, configurationChanged?: true }` — so far `title`, when a chat got its name | 2 | `toolPermissions:changed`, `skills:changed`, in part |
 | `approval.request` | `ApprovalRequest` | 3 | `toolApproval:request` |
@@ -683,7 +683,7 @@ the user's attention, which a flood of cards would wear down.
 
 ### 9.4 What changes in the security concept
 
-Section 5 of [`security-concept.md`](./security-concept.md) keeps its rule
+Section 5 of [`security-concept.md`](../security/security-concept.md) keeps its rule
 that local processes with the user's rights are outside the goal, and names
 two exceptions once a listener exists: other users of the machine and web
 pages in the browser are inside it — they are defended by the checks above —
@@ -755,10 +755,10 @@ the attacker model.
 - The catalogue is complete: every IPC channel is classified (§8.3).
 - The reference client of #1081 phase 3 drives both transports.
 
-**Documents.** `docs/remote-protocol.md` with examples and test vectors
+**Documents.** `docs/remote/remote-protocol.md` with examples and test vectors
 (phase 1 of #1081); a manual chapter once there is something to switch on
 (`.claude/rules/user-manual.md`); section 5 of the security concept and the
-container view of [`architecture.md`](./architecture.md) point here.
+container view of [`architecture.md`](../architecture/architecture.md) point here.
 
 **What it costs.**
 
@@ -787,12 +787,12 @@ by this record.
 
 ## Related
 
-- [`quality-requirements.md`](./quality-requirements.md) — SEC-5, SEC-6,
+- [`quality-requirements.md`](../architecture/quality-requirements.md) — SEC-5, SEC-6,
   CORE-1 and the rules on remote control.
-- [`security-concept.md`](./security-concept.md) — section 5 for the trust
+- [`security-concept.md`](../security/security-concept.md) — section 5 for the trust
   model, section 6 for approvals.
-- [`architecture.md`](./architecture.md) — containers, and *Runs per chat*.
-- [`architecture-review.md`](./architecture-review.md) — AR-05, AR-06, AR-08,
+- [`architecture.md`](../architecture/architecture.md) — containers, and *Runs per chat*.
+- [`architecture-review.md`](../architecture/architecture-review.md) — AR-05, AR-06, AR-08,
   AR-14.
 - Mobile remote: [concept](https://github.com/kkrafft1999/snotra-mobile/blob/main/docs/mobile-remote-concept.md),
   epic [#1081](https://github.com/kkrafft1999/snotra/issues/1081).
@@ -802,5 +802,5 @@ by this record.
 - [`remote-pairing-sequence.svg`](./remote-pairing-sequence.svg) — pairing a
   phone and the relay channel step by step, from *Settings › Remote access* to
   *Remove phone* (agreed 2026-10-18).
-- [`ui-design/remote-access-mockup.html`](./ui-design/remote-access-mockup.html) —
+- [`ui-design/remote-access-mockup.html`](../ui-design/remote-access-mockup.html) —
   the settings panel for it, every state, with the variant decided on 2026-10-18.

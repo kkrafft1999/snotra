@@ -5,7 +5,7 @@
 // in the dark theme: the welcome page of a fresh profile, the workspace with a
 // file in the preview and a finished chat turn, and each section of the
 // settings. It does not replace the screen-reader pass of the release
-// checklist (docs/release.md); axe finds what can be computed, not what is
+// checklist (docs/release/release.md); axe finds what can be computed, not what is
 // confusing to hear.
 //
 // A finding that needs more than a small fix gets an issue of its own and an

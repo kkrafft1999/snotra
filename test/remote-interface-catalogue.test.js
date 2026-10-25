@@ -1,6 +1,6 @@
 'use strict';
 
-// The catalogue is complete (#1194, docs/remote-interface.md §10): every IPC
+// The catalogue is complete (#1194, docs/remote/remote-interface.md §10): every IPC
 // channel the window uses is classified in §8.3 — mapped onto the remote
 // protocol, waiting for a prerequisite, or staying on the desktop with a
 // reason. A new channel is a decision about the remote surface, not
@@ -13,7 +13,7 @@ const path = require('node:path');
 
 const { REQUEST_CHANNELS, PUSH_CHANNELS } = require('../src/shared/ipc-channels');
 
-const DOC = path.join(__dirname, '..', 'docs', 'remote-interface.md');
+const DOC = path.join(__dirname, '..', 'docs', 'remote', 'remote-interface.md');
 
 /**
  * The channel names §8.3 classifies. A row lists names in backticks; a name

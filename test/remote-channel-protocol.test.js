@@ -1,7 +1,7 @@
 'use strict';
 
 // The bridge's own computations for part 2 of the remote protocol (#1192),
-// src/main/remote/channel-protocol.js, against docs/remote-protocol/channel-v1.json:
+// src/main/remote/channel-protocol.js, against docs/remote/remote-protocol/channel-v1.json:
 // handshake 2, `th`, `sid`, both keys (through the envelopes they seal), the
 // four envelopes byte for byte, the flipped bit. The long-term agreement goes
 // through the identity store's `agree`, as in the app.
@@ -15,8 +15,8 @@ const path = require('node:path');
 const channel = require('../src/main/remote/channel-protocol');
 const { createRemoteIdentityStore } = require('../src/main/remote/identity-store-adapter');
 const { writeFileAtomic } = require('../src/main/services/atomic-write');
-const vectors = require('../docs/remote-protocol/channel-v1.json');
-const pairingVectors = require('../docs/remote-protocol/pairing-v1.json');
+const vectors = require('../docs/remote/remote-protocol/channel-v1.json');
+const pairingVectors = require('../docs/remote/remote-protocol/pairing-v1.json');
 const { createFakeSafeStorage, createLog, tempDir } = require('./helpers/remote-pairing');
 
 /** The desktop's agreement as the vectors fix it: P-256 ECDH with the pairing vectors' scalar. */

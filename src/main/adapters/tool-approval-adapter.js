@@ -48,7 +48,7 @@ const { isRecord } = require('../../shared/runtime/is-record');
  */
 
 /**
- * Who answered a card (`docs/remote-interface.md` §7.4): the window, or a
+ * Who answered a card (`docs/remote/remote-interface.md` §7.4): the window, or a
  * remote front end by its kind and the name it gave.
  * @typedef {{ kind: string, client?: string }} ApprovalAnswerer
  *
@@ -134,7 +134,7 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
    * The session whose window answers a request of `sessionId`: its own, or —
    * for a front end without cards (#1194) — the window that subscribed
    * last. In the desktop app the window counts as subscribed to every chat
-   * of its workspace (`docs/remote-interface.md` §7.4). The request is then
+   * of its workspace (`docs/remote/remote-interface.md` §7.4). The request is then
    * kept under the window's session, so that only it can answer.
    *
    * @param {string|number} sessionId

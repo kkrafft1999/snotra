@@ -86,7 +86,7 @@ of the core, the ports, the contracts and the adapters, without emitting
 anything — the app stays plain JavaScript. An adapter names the port it
 implements (`@returns {import('…-port').XPort}`), and the check fails when the
 two disagree; see *Plain JS, checked by JSDoc* in
-[`docs/architecture.md`](./docs/architecture.md#plain-js-checked-by-jsdoc).
+[`docs/architecture/architecture.md`](./docs/architecture/architecture.md#plain-js-checked-by-jsdoc).
 
 `npm test` covers the wiring: the application core, the main-process adapters
 and the renderer components against a `happy-dom` DOM. `npm run test:e2e`
@@ -94,7 +94,7 @@ launches the real Electron app against a fake OpenAI-compatible model server and
 checks what a DOM stand-in cannot — sanitizing with the real DOMPurify, layout
 and focus in the running window. It is **not** part of `npm test`. Which level
 is responsible for what, and what runs when, is described in
-[`docs/test-concept.md`](./docs/test-concept.md).
+[`docs/development/test-concept.md`](./docs/development/test-concept.md).
 
 The e2e test opens a real window and therefore needs a display. On a headless
 Linux machine or in a container, run it under Xvfb the way CI does:
@@ -203,9 +203,10 @@ surrounding code.
   provider implementations, no file system.
   `test/application-layer-imports.test.js` and
   `test/infrastructure-boundaries.test.js` fail if that slips.
-  [`docs/architecture.md`](./docs/architecture.md) explains the layers, the
-  ports and why they are cut the way they are — it is the entry point for
-  contributors.
+  [`docs/architecture/architecture.md`](./docs/architecture/architecture.md)
+  explains the layers, the ports and why they are cut the way they are — it is
+  the entry point for contributors. [`docs/README.md`](./docs/README.md) lists
+  the rest of the developer documentation.
 - **The renderer is presentation only.** DOM construction, Markdown rendering,
   local formatting. Anything that can be *decided* without touching a node
   belongs next to the component, where it can be tested on its own.
@@ -215,8 +216,8 @@ surrounding code.
 - **Security boundaries are not conveniences.** The workspace is the trust
   boundary of the file system; tool risk classes, the approval flow and the
   sensitive-path detection are described in
-  [`docs/security-concept.md`](./docs/security-concept.md). If a
-  change touches any of them, say so in the pull request.
+  [`docs/security/security-concept.md`](./docs/security/security-concept.md).
+  If a change touches any of them, say so in the pull request.
 
 ## UI work
 

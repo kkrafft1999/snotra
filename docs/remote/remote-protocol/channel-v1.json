@@ -1,9 +1,9 @@
 {
   "protocol": 1,
   "part": "channel",
-  "spec": "docs/remote-protocol.md",
+  "spec": "docs/remote/remote-protocol.md",
   "generatedBy": "node scripts/remote-protocol-channel-vectors.js",
-  "uses": "docs/remote-protocol/pairing-v1.json — the long-term keys and the channel id",
+  "uses": "docs/remote/remote-protocol/pairing-v1.json — the long-term keys and the channel id",
   "note": "Deterministic: the file is compared as a whole. Hex for bytes that are only hashed or authenticated, base64url where the value travels in JSON.",
   "labels": {
     "handshake": "snotra/v1 handshake",

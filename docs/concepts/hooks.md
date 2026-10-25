@@ -400,7 +400,7 @@ Limits and masking:
 ## 5. Precedence
 
 A hook adds a check on top of the existing decision; it never takes one away.
-The binding order of `docs/security-concept.md` §3 (hard boundaries → deny
+The binding order of `docs/security/security-concept.md` §3 (hard boundaries → deny
 rules → `ask-all` → `auto` → `smart`) stays as it is, and the hook verdict is
 combined with its result:
 
@@ -637,7 +637,7 @@ If users ask for an importer later, it gets an issue of its own.
   re-check before each run, the write protection of `.agents/hooks.json` and
   `.agents/hooks/**` (always ask, sandbox write-deny), the sandbox for hooks
   without the chat's grants. It also writes the section **Hooks** into
-  `docs/security-concept.md`, which this design does not touch: §6 of this
+  `docs/security/security-concept.md`, which this design does not touch: §6 of this
   document as the content, plus `hook_denied` among the denial reasons and the
   hook files among the protected paths.
 - **#929** — `ChatStart` cache per chat, `PromptSubmit` context for one run,
