@@ -490,9 +490,15 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // --- Markdown in the preview (#344): sanitized, nothing from the web -------
   // A CSP violation is the proof that something tried to load: the policy
   // blocks every remote image, so the event fires for any attempt at all.
+  // Since Chromium 156 (Electron 45) an inline handler is reported as
+  // `script-src-attr inline` as soon as it is parsed — in DOMPurify's inert
+  // DOMParser document too, and for an `onclick` that could never fire. That
+  // report says nothing about a load; whether a handler ran is checked on its
+  // own (`onerror` attributes, `__pwnedMd`).
   await page.evaluate(() => {
     globalThis.__cspViolations = [];
     document.addEventListener('securitypolicyviolation', (e) => {
+      if (e.violatedDirective === 'script-src-attr' && e.blockedURI === 'inline') return;
       globalThis.__cspViolations.push(`${e.violatedDirective} ${e.blockedURI}`);
     });
   });
