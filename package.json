@@ -146,7 +146,8 @@
   "overrides": {
     "@reforged/maker-appimage": {
       "@electron-forge/maker-base": "^8.0.1"
-    }
+    },
+    "zod": "^4.6.6"
   },
   "allowScripts": {
     "electron": true,
