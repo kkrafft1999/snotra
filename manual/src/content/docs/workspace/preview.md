@@ -55,6 +55,10 @@ PNG, JPEG, GIF, WebP and SVG open as images, fitted to the column.
 
 A PDF opens page after page, fitted to the column width. The header shows the page you are on — type a number to jump there — and zooms with `−`, `+` and *Width*. A password-protected PDF asks for its password right there; it is not stored. Scripts inside a PDF never run, and its links do nothing.
 
+[since 1.29] **Comments.** Highlights and notes that someone left in a PDF carry their comment along: click the marking — or reach it with `Tab` and press `Enter` — and the comment opens next to it, with its author, its date and any replies underneath. `Esc` or `×` closes it. Comments are shown as plain text, without their formatting, and they can be read here, not written.
+
+![The middle column with review.pdf: a yellow highlight on the line "Bed 1 gets the tomatoes again", and below it the opened comment by Ada Lovelace with two replies, by Grace Hopper and by Ada Lovelace.](screenshots/pdf-comments.webp)
+
 ## HTML pages
 
 An `.html` file opens as the page it is. Scripts run, so an interactive mockup or a report works as in a browser. *Preview | Source* switches to the text.
@@ -73,6 +77,7 @@ A link to an HTML file in a chat answer opens it here as well.
 - ***Too large to preview.*** The preview shows images up to 10 MB, PDFs up to 50 MB and HTML files up to 1 MB. *Open in browser* still works for an HTML file; any file opens in its own app from the tree's context menu.
 - **The file points out of the open folder through a link,** so it is not shown. The preview shows nothing from outside the folder.
 - ***Not a readable image* or *Not a PDF*.** The content does not match the file name. The view checks what is inside, not the extension.
+- **A highlight in a PDF opens nothing.** It carries no comment — the marking alone was saved — or the comment sits in a text box, which shows its text on the page anyway.
 - ***The page is not responding.*** A script in the page keeps it busy. Snotra stays usable; *Reload* starts the page again.
 - **`‹` skips a file, or the list shows it greyed out.** The file was deleted, or moved outside Snotra, since you looked at it. A file you rename or move in the tree stays in the list under its new name.
 - **`Cmd` / `Ctrl` and `+` makes the whole window larger, not the document.** The keys zoom the document only while the preview has the focus — click into the text first. *View › Actual Size* puts the window back.

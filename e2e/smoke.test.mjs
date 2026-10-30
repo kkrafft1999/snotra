@@ -17,7 +17,7 @@ import { deflateSync } from 'node:zlib';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll as pollState, makeTempDir, rendererToolEvents, composerState, sendChat } from './helpers/app.mjs';
-import { HOSTILE_HOST, makeEncryptedPdf, makeTextPdf } from './helpers/pdf-fixtures.mjs';
+import { HOSTILE_HOST, lineRect, makeEncryptedPdf, makeTextPdf } from './helpers/pdf-fixtures.mjs';
 
 // This test waits some fifty times, and the helper's default looks every 150 ms:
 // a state that arrives right after a look costs nearly the whole interval, which
@@ -354,7 +354,19 @@ async function createWorkspace() {
   await writeFile(path.join(dir, 'notizen', 'bild.png'), makePng(40, 20));
   await writeFile(path.join(dir, 'notizen', 'fluss.svg'), FLOW_SVG, 'utf8');
   // #346: JavaScript on open, a link to the web and a link running JavaScript.
-  await writeFile(path.join(dir, 'notizen', 'spezifikation.pdf'), makeTextPdf({ pages: 3, hostile: true }));
+  await writeFile(path.join(dir, 'notizen', 'spezifikation.pdf'), makeTextPdf({
+    pages: 3,
+    hostile: true,
+    // A comment whose text looks like markup: it must be shown, not parsed
+    // (#1299). Clear of the link areas the clicks below aim at.
+    comments: [{
+      rect: lineRect(2),
+      author: 'Ada',
+      text: `Check this <img src="https://${HOSTILE_HOST}/comment.png">`,
+      date: new Date('2026-10-29T10:00:00Z'),
+      replies: [{ author: 'Grace', text: 'Checked.', date: new Date('2026-10-30T10:00:00Z') }],
+    }],
+  }));
   // #634: left at its password prompt, it must not hold up the tree.
   await writeFile(path.join(dir, 'notizen', 'geschuetzt.pdf'), makeEncryptedPdf({ password: 'secret' }));
   // #479: a page whose script runs, isolated, and whose image from the web is refused.
@@ -710,6 +722,28 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const pageBox = await page.locator('.pdf-page').first().boundingBox();
   await page.mouse.click(pageBox.x + pageBox.width * 0.3, pageBox.y + pageBox.height * 0.22);
   await page.mouse.click(pageBox.x + pageBox.width * 0.5, pageBox.y + pageBox.height * 0.45);
+  // The comment behind the highlight opens by a click on it (#1299), as text.
+  await page.locator('.pdf-comment-target').first().click();
+  const comment = await poll(() => page.evaluate(() => {
+    const popover = document.querySelector('.pdf-comment');
+    if (!popover) return null;
+    return {
+      targets: document.querySelectorAll('.pdf-comment-target').length,
+      label: popover.getAttribute('aria-label'),
+      texts: [...popover.querySelectorAll('.pdf-comment__text')].map((el) => el.textContent),
+      authors: [...popover.querySelectorAll('.pdf-comment__author')].map((el) => el.textContent),
+      markup: popover.querySelectorAll('img, a, [href], [src]').length,
+      focused: popover.contains(document.activeElement),
+    };
+  }), { what: 'PDF-Kommentar' });
+  assert.equal(comment.targets, 1);
+  assert.equal(comment.label, 'Kommentar von Ada');
+  assert.deepEqual(comment.authors, ['Ada', 'Grace']);
+  assert.deepEqual(comment.texts, [`Check this <img src="https://${HOSTILE_HOST}/comment.png">`, 'Checked.']);
+  assert.equal(comment.markup, 0, 'the comment text is never parsed as HTML');
+  assert.ok(comment.focused);
+  await page.keyboard.press('Escape');
+  assert.equal(await page.evaluate(() => document.querySelector('.pdf-comment')), null);
   // What the clicks and the rest of the markdown could have set going is read
   // after the next step, the HTML page below, not after a fixed pause.
   step('PDF-Vorschau geprueft');

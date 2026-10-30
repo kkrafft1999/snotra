@@ -21,12 +21,16 @@
 // printing). A 300-page manual therefore costs a handful of pages, not three
 // hundred.
 //
+// **Comments** behind highlights and notes open by a click on the marking
+// (#1299), through a layer of our own — `pdf-comments.js`.
+//
 // The interface it implements is documented in the header of `registry.js`.
 
 import contracts from '../generated/contracts.js';
 import { t, tPlural, onLocaleChange } from '../i18n.js';
 import { formatSize } from '../utils/helpers.js';
 import { openPdfDocument } from './pdf-engine.js';
+import { commentsFromAnnotations, createCommentLayer } from './pdf-comments.js';
 import { ZOOM_STEPS, nextZoom, iconButton, ZOOM_IN_ICON, ZOOM_OUT_ICON } from './zoom-tools.js';
 
 export { ZOOM_STEPS, nextZoom };
@@ -141,6 +145,8 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
       announcerEl.setAttribute('role', 'status');
 
       hostEl.append(viewEl, messageEl, announcerEl);
+
+      const comments = createCommentLayer({ viewEl });
 
       // ── Header tools: page and zoom ─────────────────────────────────────
 
@@ -499,7 +505,8 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
           const pageEl = document.createElement('div');
           pageEl.className = 'pdf-page';
           pageEl.dataset.page = String(n);
-          pageEl.setAttribute('role', 'img');
+          // A group, not an image: the buttons over its comments are inside.
+          pageEl.setAttribute('role', 'group');
           placeholders.push(pageEl);
         }
         pagesEl.replaceChildren(...placeholders);
@@ -610,13 +617,25 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
           canvas.height = Math.max(1, Math.floor(viewport.height));
           canvas.setAttribute('aria-hidden', 'true');
           entry.task = page.render({ canvas, viewport });
+          // Asked alongside the drawing; a page whose comments cannot be
+          // read is still shown, without them.
+          const annotations = typeof page.getAnnotations === 'function'
+            ? Promise.resolve().then(() => page.getAnnotations({ intent: 'display' })).catch(() => {
+              // Unreadable annotations cost the comments, not the page.
+              return [];
+            })
+            : Promise.resolve([]);
           await entry.task.promise;
+          const found = commentsFromAnnotations(await annotations);
           if (disposed || generation !== layoutGeneration || rendering.get(n) !== entry) return;
+          comments.detach(n);
           pageEl.replaceChildren(canvas);
           pageEl.classList.remove('pdf-page--failed');
+          if (found.length) comments.attach(pageEl, n, found, page.getViewport({ scale: cssScale }));
         } catch (err) {
           if (err?.name === 'RenderingCancelledException') return;
           if (disposed || generation !== layoutGeneration || rendering.get(n) !== entry) return;
+          comments.detach(n);
           const note = document.createElement('span');
           note.className = 'pdf-page__error';
           note.textContent = t('fileView.pdf.page.error');
@@ -629,6 +648,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         const entry = rendering.get(n);
         if (!entry) return;
         rendering.delete(n);
+        comments.detach(n);
         try {
           entry.task?.cancel();
         } catch {
@@ -649,6 +669,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
 
       function cancelAllRenders() {
         for (const n of [...rendering.keys()]) releasePage(n);
+        comments.clear();
         // A page drawn at the old zoom would be blurry or clipped; the next
         // pass draws it again.
         for (const pageEl of pagesEl.children) pageEl.replaceChildren();
@@ -738,6 +759,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         applyToolLabels();
         if (doc) {
           applyPageLabels();
+          comments.relabel();
           renderTools();
           context.setMeta({ size: loaded.size, detail: tPlural('fileView.pdf.pages', pageCount, { count: pageCount }) });
         } else if (shownError) {
@@ -770,10 +792,11 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
           // an open() or update() still waiting for it settles (#634).
           stopPending();
           closeDocument();
+          comments.dispose();
         },
         /** For tests: where the view stands. */
         get state() {
-          return { page: currentPage, pages: pageCount, zoom, zoomMode, rendered: [...rendering.keys()] };
+          return { page: currentPage, pages: pageCount, zoom, zoomMode, rendered: [...rendering.keys()], openComment: comments.openComment };
         },
       };
     },

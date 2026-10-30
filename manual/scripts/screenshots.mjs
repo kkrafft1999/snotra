@@ -1282,6 +1282,70 @@ const MOTIFS = {
     },
   },
 
+  /** A PDF in the preview with a comment opened from its highlight (#1299). */
+  'pdf-comments': {
+    text: {
+      en: {
+        file: 'review.pdf',
+        title: 'Garden plan 2027',
+        lines: [
+          'Bed 1 gets the tomatoes again, bed 2 the beans.',
+          'The herb spiral stays where it is; it needs no water.',
+          'Sowing starts in the second week of March, indoors.',
+        ],
+        comment: 'Tomatoes in the same bed three years running? That invites blight.',
+        replies: ['Agreed, swap them with bed 2.', 'Done in the next draft.'],
+        note: 'Check the date of the last frost.',
+      },
+      de: {
+        file: 'pruefung.pdf',
+        title: 'Gartenplan 2027',
+        lines: [
+          'Beet 1 bekommt wieder die Tomaten, Beet 2 die Bohnen.',
+          'Die Kräuterspirale bleibt, wo sie ist; sie braucht kein Wasser.',
+          'Ausgesät wird ab der zweiten Märzwoche, drinnen.',
+        ],
+        comment: 'Drei Jahre in Folge Tomaten im selben Beet? Das lädt die Braunfäule ein.',
+        replies: ['Stimmt, tauschen wir mit Beet 2.', 'Ist im nächsten Entwurf geändert.'],
+        note: 'Datum des letzten Frosts prüfen.',
+      },
+    },
+    async setUp({ page, text, workspace }) {
+      const { makeTextPdf, lineRect } = await import('../../e2e/helpers/pdf-fixtures.mjs');
+      await writeFile(path.join(workspace, text.file), makeTextPdf({
+        pages: 2,
+        title: text.title,
+        lines: text.lines,
+        comments: [
+          {
+            rect: lineRect(0, 360),
+            author: 'Ada Lovelace',
+            text: text.comment,
+            date: new Date('2026-10-28T09:12:00Z'),
+            replies: [
+              { author: 'Grace Hopper', text: text.replies[0], date: new Date('2026-10-28T14:40:00Z') },
+              { author: 'Ada Lovelace', text: text.replies[1], date: new Date('2026-10-29T08:05:00Z') },
+            ],
+          },
+          { kind: 'note', rect: [520, 770, 540, 790], author: 'Grace Hopper', text: text.note, date: new Date('2026-10-29T16:30:00Z') },
+        ],
+      }));
+      await clickTreeRow(page, text.file);
+      await poll(() => page.evaluate(() => document.querySelectorAll('.pdf-page canvas').length > 0
+        && document.querySelectorAll('.pdf-comment-target').length === 2), { what: 'PDF with its comments' });
+      await page.locator('.pdf-comment-target').first().click();
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.pdf-comment'))), { what: 'opened comment' });
+      await page.mouse.move(0, 0);
+      await pause(300);
+      // Down to a little below the opened comment.
+      return page.evaluate(() => {
+        const column = document.getElementById('file-preview').getBoundingClientRect();
+        const popover = document.querySelector('.pdf-comment').getBoundingClientRect();
+        return { x: column.left, y: column.top, width: column.width, height: Math.min(column.height, popover.bottom + 40 - column.top) };
+      });
+    },
+  },
+
   /** An HTML page in the preview, offline, with the notice of what it blocked. */
   'html-preview': {
     htmlView: true,

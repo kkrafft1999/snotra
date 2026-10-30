@@ -55,6 +55,10 @@ PNG, JPEG, GIF, WebP und SVG öffnen sich als Bild, eingepasst in die Spalte.
 
 Eine PDF öffnet sich Seite für Seite, eingepasst in die Spaltenbreite. Der Kopf zeigt die Seite, auf der du bist — tipp eine Zahl, um dorthin zu springen —, und zoomt mit `−`, `+` und *Breite*. Eine passwortgeschützte PDF fragt direkt dort nach ihrem Passwort; es wird nicht gespeichert. Skripte in einer PDF laufen nie, und ihre Links tun nichts.
 
+[seit 1.29] **Kommentare.** Markierungen und Notizen, die jemand in einer PDF hinterlassen hat, bringen ihren Kommentar mit: Klick auf die Markierung — oder erreich sie mit `Tab` und drück `Enter` —, und der Kommentar öffnet sich daneben, mit Autor, Datum und den Antworten darunter. `Esc` oder `×` schließt ihn. Kommentare erscheinen als reiner Text, ohne ihre Formatierung, und du kannst sie hier lesen, aber nicht schreiben.
+
+![Die mittlere Spalte mit pruefung.pdf: eine gelbe Markierung auf der Zeile „Beet 1 bekommt wieder die Tomaten“, darunter der geöffnete Kommentar von Ada Lovelace mit zwei Antworten, von Grace Hopper und von Ada Lovelace.](screenshots/pdf-comments.webp)
+
 ## HTML-Seiten
 
 Eine `.html`-Datei öffnet sich als die Seite, die sie ist. Skripte laufen, ein interaktiver Entwurf oder ein Bericht funktioniert also wie im Browser. *Preview | Quelltext* wechselt zum Text.
@@ -73,6 +77,7 @@ Ein Link auf eine HTML-Datei in einer Chat-Antwort öffnet sie ebenfalls hier.
 - ***Zu groß für die Vorschau.*** Die Vorschau zeigt Bilder bis 10 MB, PDFs bis 50 MB und HTML-Dateien bis 1 MB. *Im Browser öffnen* geht bei einer HTML-Datei trotzdem; jede Datei öffnet sich über das Kontextmenü des Baums in ihrer eigenen App.
 - **Die Datei zeigt über einen Link aus dem geöffneten Ordner hinaus** und wird deshalb nicht gezeigt. Die Vorschau zeigt nichts von außerhalb des Ordners.
 - ***Kein lesbares Bild* oder *Keine PDF*.** Der Inhalt passt nicht zum Dateinamen. Die Ansicht prüft, was drinsteht, nicht die Endung.
+- **Eine Markierung in einer PDF öffnet nichts.** Sie trägt keinen Kommentar — gespeichert wurde nur die Markierung —, oder der Kommentar steht in einem Textfeld, das seinen Text ohnehin auf der Seite zeigt.
 - ***Die Seite reagiert nicht.*** Ein Skript der Seite hält sie beschäftigt. Snotra bleibt bedienbar; *Neu laden* startet die Seite neu.
 - **`‹` überspringt eine Datei, oder die Liste zeigt sie ausgegraut.** Die Datei wurde gelöscht oder außerhalb von Snotra verschoben, seit du sie angesehen hast. Eine Datei, die du im Baum umbenennst oder verschiebst, bleibt unter ihrem neuen Namen in der Liste.
 - **`Cmd` / `Strg` und `+` vergrößert das ganze Fenster statt des Dokuments.** Die Tasten zoomen das Dokument nur, während die Vorschau den Fokus hat — klick zuerst in den Text. *Ansicht › Zoom zurücksetzen* stellt das Fenster wieder her.
