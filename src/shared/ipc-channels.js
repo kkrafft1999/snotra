@@ -318,6 +318,8 @@ const PUSH_CHANNELS = Object.freeze({
    * channels above, under that `runId`, up to its `run-end`.
    */
   CHAT_TURN_STARTED: 'chat:turn-started',
+  /** A phone set a chat's reasoning level (#1304): `{ chatId }`. The window reads its state again. */
+  CHAT_REASONING_CHANGED: 'chat:reasoning-changed',
   /** Developer mode was switched (#1213): `{ on }`. */
   DEVELOPER_MODE_CHANGED: 'developerMode:changed',
   /**

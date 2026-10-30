@@ -90,6 +90,8 @@
  * @property {(params?: { chatId?: string }) => Promise<ChatModelTarget|ChatErrorResult>} resolveChatTarget
  *   With `chatId`, the target carries that chat's reasoning level (#725);
  *   without, the level of the chat on screen.
+ * @property {(params?: { chatId?: string }) => Promise<string[]>} [reasoningLevelsFor]
+ *   The levels the chat's model takes (#1304); empty when it takes none.
  * @property {(target: ChatModelTarget, options?: LlmValidateOptions) => Promise<ChatErrorResult|null>} validateTarget
  * @property {(target: ChatModelTarget) => Promise<LlmSendBundle>} prepareSendBundle
  * @property {(params: {

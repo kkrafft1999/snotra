@@ -520,7 +520,8 @@ release list, **2** #981, **3** #980.
 | `chat.new` | `{ workspaceId? }` → `{ chatId }` — nothing is written until the first `message.send`; without `workspaceId`, the open workspace | `not-found`, `refused` (a workspace other than the one open at the desktop) | L R | 2 | — (today the renderer makes chats and upserts them) |
 | `message.send` | `{ chatId, text ≤maxTextChars, clientMessageId ≤64 }` → `{ runId, messageId }` — a repeated `clientMessageId` answers again and starts nothing, also on a new connection; `messageId` names the question; subscribes the sender to the chat before the turn starts, as `chat.open` does, so that it hears the turn from its first event — also in a chat from `chat.new`, which `chat.open` cannot find before its question is saved (#1228) | `not-found`, `refused` (the chat's workspace is not the one open at the desktop: its tools would work there — `workspace.activate` first), `busy` (the chat is running or waits for a card, or the connection already follows as many chats as it may and not this one), `too-large`, `unavailable` (no provider set up for the chat's model) | L R | 2 | `chat:send` — the text and the chat id, not the history |
 | `run.abort` | `{ chatId }` → `{ aborted: bool }` | `not-found` | L R | 2 | `chat:abort` |
-| `chat.configuration` | `{ chatId }` → `{ model: { label }, mode: 'smart'\|'ask-all'\|'auto', reasoning?: string, skills: [{ name, state }], tools: [{ name, on }] }` — read only; also for a chat from `chat.new` before its first question is saved, describing what it would start with (#1256) | `not-found` | L R | 2 | `chat:getConfiguration`, per chat instead of "the chat on screen" |
+| `chat.configuration` | `{ chatId }` → `{ model: { label }, mode: 'smart'\|'ask-all'\|'auto', reasoning?: string, reasoningLevels?: string[], skills: [{ name, state }], tools: [{ name, on }] }` — `reasoning` is the level the chat runs with, as the model button shows it, and `reasoningLevels` the levels its model takes; both left out when it takes none (#1304). Read only but for the level; also for a chat from `chat.new` before its first question is saved, describing what it would start with (#1256) | `not-found` | L R | 2 | `chat:getConfiguration`, per chat instead of "the chat on screen" |
+| `chat.setReasoning` | `{ chatId, level }` → `{ reasoning }` — keeps `level` as the chat's own reasoning level, also for a chat from `chat.new`; the next turn runs with it. The one setting a front end may change: a level grants nothing, it changes a turn's depth and cost (#1304). Never changes the chat on the desktop's screen; when it is the one on show, its model button follows | `not-found`, `invalid-params` (a level the chat's model does not take) | L R | 2 | `settings:setReasoningEffort`, per chat instead of "the chat on screen" |
 | `approval.list` | `{ chatId? }` → `{ requests: ApprovalRequest[] }` — the open cards of the chats the connection may see | `not-found`, `refused` (the connection did not declare `approvals`) | L R | 3 | `toolApproval:listPending` |
 | `approval.respond` | `{ requestId, response: 'allow-once'\|'deny', sandboxPaths?: (string\|null)[] }` → `{ response }` — `sandboxPaths` only as a choice among the card's offers, named as the card showed them | `not-found` (not open, or not a chat this connection follows), `refused` (an option or a path beyond the kind's, or no `approvals` capability), `invalid-params` | L R | 3 | `toolApproval:respond` |
 
@@ -587,6 +588,7 @@ listed together where they share their class.
 | `chatHistory:get`, `chatHistory:getSession` | mapped: `chats.list`, `chat.open`, `chat.more` | Read only; display DTOs instead of stored rows |
 | `chat:delta`, `chat:tool-line`, `chat:progress` (push) | mapped: `chat.delta`, `chat.tool-line`, `chat.progress` | Published by chat to subscribers, without raw tool arguments |
 | `chat:turn-started` (push) | desktop | The window following a turn another front end started (#1194, step 2b); the remote side hears of it as `chat.message` |
+| `chat:reasoning-changed` (push) | desktop | The window's model button following a level a front end set with `chat.setReasoning` (#1304) |
 | `workspace:switch-requested` (push), `workspace:switch-answer` | desktop | The window opening the folder `workspace.activate` asked for, and its outcome (#1194, step 2c) |
 | `settings:getFolderHistory`, `settings:getLastFolder` | mapped: `workspaces.list` | Names and ids, never paths |
 | `update:getVersion` | mapped: `session.hello` | — |
@@ -594,6 +596,7 @@ listed together where they share their class.
 | `chat:send` | after #981: `message.send` | The client sends a message, not the history, and the core keeps the turn |
 | `chat:abort` | after #981: `run.abort` | Runs are keyed by window today; a remote client could not reach a run the window started |
 | `chat:getConfiguration` | after #981: `chat.configuration` | Answers for main's chat on screen today, not for a given chat |
+| `settings:setReasoningEffort` | mapped: `chat.setReasoning` (#1304) | For the chat on screen at the desktop; the method names its chat |
 | `toolApproval:subscribe`, `toolApproval:listPending`, `toolApproval:respond` | after #980: `session.hello` capability with `chat.open`, `approval.list`, `approval.respond` | Answers only *allow once* and *deny*; loosening stays with the confirmation port |
 | `toolApproval:request`, `toolApproval:resolved` (push) | after #980: `approval.request`, `approval.resolved` | — |
 | `toolPermissions:changed`, `skills:changed` (push) | after #981: folded into `chat.updated` | A remote client cares about its chat's configuration, not the settings page |
@@ -606,7 +609,7 @@ listed together where they share their class.
 | `toolPermissions:clearSessionGrants`, `revokeSessionGrant`, `removeWorkspaceHost`, `removeGlobalHost`, `removeProgramAllowance` | desktop | They only tighten and could be offered later; nothing needs them first |
 | `toolPermissions:getState`, `getSecurityOverview`, `getSandboxOverview`, `resolveProgram`, `chooseAllowanceFolder` | desktop | The settings page's view; a folder dialog |
 | `settings:setUIPrefs`, `settings:commitSettings`, `settings:saveMcpServer`, `settings:deleteMcpServer`, `settings:reloadMcpServers`, `settings:testMcpServer`, `settings:setWebSearchApiKey` | desktop, **never** remote | Secrets come in here; the execution switches and a local MCP command are confirmed through the port (§7.6, #1104) |
-| `settings:getLLMState`, `setActivePreset`, `setReasoningEffort`, `listModels`, `cancelModels`, `getUIPrefs`, `getToolCatalog`, `getMcpCatalog`, `getWebSearchState`, `getImageGenerationState`, `listImageModels`, `cancelImageModels`, `getPythonState`, `getShellState`, `getSkillCatalog`, `reloadSkills`, `getMemory`, `forgetMemory`, `removeFolderFromHistory` | desktop | The settings window. Choosing a chat's model from a phone is [O6](#11-open-decisions); it needs the per-chat model of #981 first |
+| `settings:getLLMState`, `setActivePreset`, `listModels`, `cancelModels`, `getUIPrefs`, `getToolCatalog`, `getMcpCatalog`, `getWebSearchState`, `getImageGenerationState`, `listImageModels`, `cancelImageModels`, `getPythonState`, `getShellState`, `getSkillCatalog`, `reloadSkills`, `getMemory`, `forgetMemory`, `removeFolderFromHistory` | desktop | The settings window. Choosing a chat's model from a phone is [O6](#11-open-decisions); it needs the per-chat model of #981 first |
 | `skills:suggest` | desktop | A helper of the window's composer |
 | `skills:makeGlobal` | desktop | Native confirmation; writes a global skill folder (#980) |
 | `dialog:openFolder` | desktop | A new folder comes in only through the native dialog (#68) |
@@ -706,7 +709,7 @@ the attacker model.
    `session.resync` follows an event the channel could not carry. The local
    transport is not built.
 2. **Write.** `message.send`, `chat.new`, `run.abort`, `workspace.activate`,
-   `chat.configuration` — after #981, which also has to answer a turn with its
+   `chat.configuration`, `chat.setReasoning` (#1304) — after #981, which also has to answer a turn with its
    own chat's model and mode instead of the screen's (§7.3). *Built for the
    relay so far* (#1194, step 2a): every method but `workspace.activate`,
    writing only in the workspace open at the desktop. A turn goes through

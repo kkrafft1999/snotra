@@ -287,6 +287,12 @@ onLocaleChange(() => {
 // Parts further down that follow the active model (#1013); set once they exist.
 let afterLlmStateChange = () => {};
 const modelPicker = initChatModelPicker({ api, appStore, onLlmStateChanged: () => afterLlmStateChange() });
+// A phone set the level of the chat on screen (#1304): the model button shows it.
+api.onChatReasoningChanged?.((payload) => {
+  if (payload?.chatId && payload.chatId === appStore.currentChatId) void modelPicker.refreshLLMState().catch(() => {
+    // The button keeps the old level until the next read; the phone was answered already.
+  });
+});
 
 /**
  * Chat switches still on their way (#564): the start-up, a folder's chat being

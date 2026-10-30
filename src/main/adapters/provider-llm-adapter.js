@@ -152,6 +152,22 @@ function createProviderLlmAdapter({
     return toTarget(raw, await readOwnLevel(chatId), storedConnectionFor(config, raw, provider));
   }
 
+  /**
+   * The levels the chat's model takes over its entry's connection (#1304);
+   * empty when it takes none or no provider is set up for it.
+   *
+   * @type {NonNullable<LlmPort['reasoningLevelsFor']>}
+   */
+  async function reasoningLevelsForChat({ chatId } = {}) {
+    const config = await llmConfigStore.readLLMConfig();
+    const own = await readOwnPreset(chatId);
+    const raw = llmConfigStore.resolveChatModelTarget(own ? { ...config, activePresetId: own } : config);
+    const provider = providerRuntime.getProvider(raw.providerId);
+    if (!provider) return [];
+    const model = (typeof raw.model === 'string' ? raw.model.trim() : '') || provider.defaultModel || '';
+    return reasoningLevelsFor(provider, model, storedConnectionFor(config, raw, provider));
+  }
+
   /** @param {string} [chatId] */
   async function readOwnPreset(chatId) {
     if (!chatId) return null;
@@ -308,6 +324,7 @@ function createProviderLlmAdapter({
 
   return {
     resolveChatTarget,
+    reasoningLevelsFor: reasoningLevelsForChat,
     validateTarget,
     prepareSendBundle,
     streamRound,
