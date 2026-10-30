@@ -3,7 +3,8 @@
 // Checked is the wiring: what opens it and where the focus goes, what the
 // totals and the rows say for a priced, an unpriced and a local model, the
 // switch of dimension, a row unfolded and its chats, opening a chat in
-// another folder — and the states without a report: empty, failed, a custom
+// another folder, the grouping by kind of task and changing a chat's kind
+// there (#1283) — and the states without a report: empty, failed, a custom
 // range without both days. The figures themselves come from the contract and
 // are tested there (usage-report.test.js).
 
@@ -46,7 +47,7 @@ const CHATS = [
   chat('d', null, 'Meeting notes', spend('ollama', 'qwen3', 0)),
 ];
 
-async function mount(t, { locale = 'en', getUsageReport, activeRoot = '/work/garden', openFolder = async () => true } = {}) {
+async function mount(t, { locale = 'en', getUsageReport, setChatTaskKind, activeRoot = '/work/garden', openFolder = async () => true } = {}) {
   const dom = setupRendererDom();
   t.after(() => dom.cleanup());
   const i18n = await importRenderer('i18n.js');
@@ -60,6 +61,7 @@ async function mount(t, { locale = 'en', getUsageReport, activeRoot = '/work/gar
       return buildUsageReport(CHATS, period, { maxChats: 200 });
     }),
     onOpenUsageReport: (fn) => { openFromMenu = fn; },
+    setChatTaskKind,
   };
   const dialog = initUsageReportDialog({
     api,
@@ -235,4 +237,111 @@ test('empty, failed and an incomplete custom range each say what is going on', a
   await ui.settle();
   assert.equal(ui.$('#usage-report').hidden, false);
   assert.match(ui.$('#usage-footnote').textContent, /A deleted chat no longer counts/);
+});
+
+test('by kind of task: rows with what each kind means, unclassified last, a chip that changes a chat\'s kind', async (t) => {
+  const kinds = { a: 'planning', b: 'coding', c: 'coding', d: null };
+  const stored = [];
+  let refuse = false;
+  const ui = await mount(t, {
+    getUsageReport: async (period) => buildUsageReport(
+      CHATS.map((c) => (kinds[c.id] ? { ...c, taskKind: { id: kinds[c.id], source: 'model', at: '2026-10-25T10:00:00.000Z' } } : c)),
+      period,
+    ),
+    setChatTaskKind: async (chatId, kindId) => {
+      if (refuse) return { taskKind: null };
+      stored.push([chatId, kindId]);
+      kinds[chatId] = kindId;
+      return { taskKind: { id: kindId, source: 'user', at: new Date().toISOString() } };
+    },
+  });
+  ui.dialog.open();
+  await ui.settle();
+  await ui.choose('usage-group', 'taskKinds');
+  assert.equal(ui.$('#usage-table thead th').textContent.trim(), 'Task kind');
+  assert.equal(ui.$('#usage-table caption').textContent, 'Cost and tokens by kind of task');
+  assert.deepEqual(rowNames(ui.$$), ['Planning & concepts', 'Coding', 'Unclassified']);
+  assert.match(ui.$('#usage-table .usage-table__name-sub').textContent, /^Working out a concept/);
+
+  // Sorted the other way round, the unclassified row stays at the bottom.
+  const costHead = ui.$$('#usage-table thead .usage-table__sort').at(-1);
+  ui.click(costHead);
+  assert.deepEqual(rowNames(ui.$$), ['Coding', 'Planning & concepts', 'Unclassified']);
+
+  // A kind unfolds into the models used for it.
+  const coding = () => ui.$$('#usage-table .usage-table__group').find((g) => /Coding/.test(g.querySelector('.usage-table__name-main').textContent));
+  ui.click(coding().querySelector('.usage-table__disclosure'));
+  assert.deepEqual([...coding().querySelectorAll('.usage-table__child .usage-table__name-main')].map((n) => n.textContent),
+    ['claude-sonnet', 'gpt-5', 'mystery']);
+  assert.equal(coding().querySelector('.usage-table__disclosure').getAttribute('aria-label'), 'Models in Coding');
+
+  // Its chats carry their kind as a chip.
+  ui.click(coding().querySelector('.usage-table__chats'));
+  const chip = () => coding().querySelector('.usage-chats__item .usage-kind__chip');
+  assert.equal(chip().textContent, 'Coding');
+  assert.equal(chip().getAttribute('aria-haspopup'), 'listbox');
+  assert.equal(chip().getAttribute('aria-label'), 'Kind of task of “Navigation”: Coding');
+
+  // Opened, the six kinds with their meaning; the current one is selected and has the focus.
+  chip().focus();
+  ui.click(chip());
+  const menu = ui.$('.usage-kind__menu');
+  assert.equal(menu.getAttribute('role'), 'listbox');
+  assert.equal(chip().getAttribute('aria-expanded'), 'true');
+  const options = [...menu.querySelectorAll('[role="option"]')];
+  assert.deepEqual(options.map((o) => o.querySelector('.usage-kind__option-name').textContent),
+    ['Coding', 'Writing & editing', 'Research & questions', 'Data & analysis', 'Planning & concepts', 'Other']);
+  assert.equal(ui.document.activeElement, options[0]);
+  assert.equal(options[0].getAttribute('aria-selected'), 'true');
+  const key = (name) => ui.document.activeElement.dispatchEvent(new ui.dom.window.KeyboardEvent('keydown', { key: name, bubbles: true }));
+  key('ArrowDown');
+  assert.equal(ui.document.activeElement, options[1]);
+  key('End');
+  assert.equal(ui.document.activeElement, options[5]);
+  // Escape closes the menu, not the dialog, and gives the focus back to the chip.
+  key('Escape');
+  assert.equal(ui.$('.usage-kind__menu'), null);
+  assert.equal(ui.dialog.isOpen(), true);
+  assert.equal(ui.document.activeElement, chip());
+
+  // Choosing stores the user's kind; the figures follow at once.
+  ui.click(chip());
+  ui.click(ui.$$('.usage-kind__menu [role="option"]')[1]);
+  await ui.settle();
+  await ui.settle();
+  assert.deepEqual(stored, [['b', 'writing']]);
+  // Cheapest first, as sorted above; Coding keeps only the chat without a price.
+  assert.deepEqual(rowNames(ui.$$), ['Coding', 'Writing & editing', 'Planning & concepts', 'Unclassified']);
+  assert.equal(ui.$('#usage-status').textContent, '“Navigation” now counts as Writing & editing.');
+  assert.equal(ui.document.activeElement.dataset.focus, 'chats:taskKinds:coding', 'the focus stays in the row the chat left');
+
+  // An unclassified chat invites a choice.
+  const unclassified = () => ui.$$('#usage-table .usage-table__group').at(-1);
+  ui.click(unclassified().querySelector('.usage-table__chats'));
+  const none = unclassified().querySelector('.usage-kind__chip');
+  assert.equal(none.textContent, 'Choose a kind');
+  assert.equal(none.classList.contains('usage-kind__chip--none'), true);
+  assert.equal(none.getAttribute('aria-label'), 'Kind of task of “Meeting notes”: not chosen yet');
+
+  // A kind that is not stored says so and changes nothing.
+  refuse = true;
+  ui.click(none);
+  ui.click(ui.$$('.usage-kind__menu [role="option"]')[3]);
+  await ui.settle();
+  assert.equal(ui.$('#usage-alert').textContent, 'The kind could not be stored. Try again.');
+  assert.equal(rowNames(ui.$$).at(-1), 'Unclassified');
+});
+
+test('the kind chip shows in the other groupings too, and in German', async (t) => {
+  const ui = await mount(t, {
+    locale: 'de',
+    getUsageReport: async (period) => buildUsageReport(CHATS.map((c) => ({ ...c, taskKind: { id: 'research', source: 'estimate', at: '2026-10-25T10:00:00.000Z' } })), period),
+  });
+  ui.dialog.open();
+  await ui.settle();
+  assert.deepEqual(ui.$$('input[name="usage-group"]').map((input) => input.closest('label').textContent.trim()), ['Modell', 'Workspace', 'Aufgabenart']);
+  ui.click(ui.$('#usage-table .usage-table__chats'));
+  assert.deepEqual(ui.$$('.usage-kind__chip').map((node) => node.textContent), ['Recherche & Fragen', 'Recherche & Fragen']);
+  await ui.choose('usage-group', 'taskKinds');
+  assert.deepEqual(rowNames(ui.$$), ['Recherche & Fragen']);
 });

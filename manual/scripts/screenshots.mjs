@@ -1470,6 +1470,26 @@ const MOTIFS = {
     },
   },
 
+  /** The report by kind of task (#1283): Coding unfolded, its chats, the choice of kinds open on the first. */
+  'usage-report-kinds': {
+    prepare: seedUsageHistory,
+    async setUp({ page }) {
+      await openUsageReport(page);
+      await page.click('input[name="usage-group"][value="taskKinds"]', { force: true });
+      await poll(() => page.evaluate(() => document.querySelector('#usage-table .usage-table__name-main')?.textContent !== 'gpt-5'),
+        { what: 'rows by kind' });
+      await page.click('#usage-table .usage-table__row .usage-table__disclosure');
+      await page.click('#usage-table .usage-table__row .usage-table__chats');
+      await poll(() => page.evaluate(() => document.querySelectorAll('#usage-table .usage-chats__item').length > 0), { what: 'the kind\'s chats' });
+      await page.click('#usage-table .usage-chats__item .usage-kind__chip');
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.usage-kind__menu'))), { what: 'the choice of kinds' });
+      await page.evaluate(() => document.querySelector('.usage-table__detail:not([hidden])').scrollIntoView({ block: 'start' }));
+      await page.mouse.move(0, 0);
+      await pause(200);
+      return clipAround(page, '#modal-usage .usage-dialog', 24);
+    },
+  },
+
   /** Settings › Skills: the system skills and a skill of the folder, not yet ticked. */
   'skills-settings': {
     async prepare({ workspace, locale }) {

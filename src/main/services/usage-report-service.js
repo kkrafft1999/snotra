@@ -32,6 +32,7 @@ function createUsageReportService({ chatHistoryStore, providerName = () => null 
     const result = buildUsageReport(chats, period, { maxChats: chatHistoryStore.MAX_CHAT_SESSIONS });
     for (const model of result.models) name(model);
     for (const workspace of result.workspaces) workspace.models.forEach(name);
+    for (const kind of result.taskKinds) kind.models.forEach(name);
     for (const chat of result.chats) chat.models.forEach(name);
     return result;
   }

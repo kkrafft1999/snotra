@@ -1954,6 +1954,7 @@
           </div>
         </div>
         <p id="usage-alert" class="modal-hint error usage-dialog__alert" role="alert" hidden></p>
+        <p id="usage-status" class="visually-hidden" role="status"></p>
         <div id="usage-state" class="usage-dialog__state"></div>
         <div id="usage-report" class="usage-dialog__report" hidden>
           <div id="usage-summary" class="usage-dialog__summary"></div>
@@ -1968,6 +1969,10 @@
               <label class="ds-segmented__option">
                 <input type="radio" class="ds-segmented__input" name="usage-group" value="workspaces">
                 <span data-i18n="usage.group.workspaces">Workspace</span>
+              </label>
+              <label class="ds-segmented__option">
+                <input type="radio" class="ds-segmented__input" name="usage-group" value="taskKinds">
+                <span data-i18n="usage.group.taskKinds">Task kind</span>
               </label>
             </div>
           </div>
