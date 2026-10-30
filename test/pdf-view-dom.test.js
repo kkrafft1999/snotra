@@ -18,7 +18,7 @@ const item = (name, extra = {}) => ({ path: `/ws/${name}`, name, size: 4096, mod
 const pdfBytes = (extra = {}) => ({ ok: true, bytes: new Uint8Array([37, 80, 68, 70, 45]), size: 13312, mtimeMs: 1, ...extra });
 
 /** A pdf.js document stand-in: A4 pages that "render" at once. */
-function fakeDocument({ pages = 3, failPage = null, unreadablePage = null, sizes = {} } = {}) {
+function fakeDocument({ pages = 3, failPage = null, unreadablePage = null, sizes = {}, annotations = {} } = {}) {
   const renders = [];
   const cleanups = [];
   return {
@@ -33,7 +33,16 @@ function fakeDocument({ pages = 3, failPage = null, unreadablePage = null, sizes
           cleanups.push(n);
           return true;
         },
-        getViewport: ({ scale }) => ({ width: size.width * scale, height: size.height * scale }),
+        getViewport: ({ scale }) => ({
+          width: size.width * scale,
+          height: size.height * scale,
+          convertToViewportPoint: (x, y) => [x * scale, (size.height - y) * scale],
+        }),
+        getAnnotations: async () => {
+          const found = annotations[n];
+          if (found instanceof Error) throw found;
+          return found ?? [];
+        },
         render: ({ canvas, viewport }) => {
           renders.push({ page: n, width: canvas.width, scale: viewport.width / size.width });
           return {
@@ -599,4 +608,174 @@ test('nextZoom walks the steps from anywhere; fitWidthZoom has no answer without
   assert.equal(Math.round(fitWidthZoom(595, 800) * 1000) / 1000, 1.008);
   assert.equal(fitWidthZoom(595, 0), null);
   assert.equal(fitWidthZoom(0, 800), null);
+});
+
+// ── Comments behind highlights and notes (#1299) ──────────────────────────
+
+const highlight = (extra = {}) => ({
+  id: '12R',
+  subtype: 'Highlight',
+  annotationFlags: 4,
+  rect: [100, 700, 300, 720],
+  titleObj: { str: 'Ada', dir: 'ltr' },
+  contentsObj: { str: 'Is this still right?', dir: 'ltr' },
+  modificationDate: "D:20261029143000+01'00'",
+  ...extra,
+});
+
+const commentAnnotations = () => ({
+  1: [
+    highlight(),
+    { id: '13R', subtype: 'Text', annotationFlags: 4, inReplyTo: '12R', rect: [100, 700, 120, 720], titleObj: { str: 'Grace' }, contentsObj: { str: 'Yes, checked on <b>Monday</b>.' }, modificationDate: 'D:20261030090000Z' },
+    { id: '14R', subtype: 'Popup', rect: [300, 600, 500, 700], contentsObj: { str: 'Is this still right?' } },
+    { id: '15R', subtype: 'Link', rect: [56, 640, 400, 670], url: 'https://example.invalid' },
+    { id: '16R', subtype: 'Text', annotationFlags: 4, rect: [500, 800, 510, 810], titleObj: { str: '' }, contentsObj: { str: 'A note' } },
+    { id: '17R', subtype: 'Square', annotationFlags: 2, rect: [10, 10, 50, 50], contentsObj: { str: 'hidden' } },
+    { id: '18R', subtype: 'Underline', annotationFlags: 4, rect: [10, 100, 50, 110], contentsObj: { str: '   ' } },
+  ],
+});
+
+test('a marking with a comment gets a button; links, popups, hidden and empty ones do not (#1299)', async (t) => {
+  const { host } = await mountPane(t, {
+    pdfs: { '/ws/spec.pdf': pdfBytes() },
+    open: () => Promise.resolve(fakeDocument({ annotations: commentAnnotations() })),
+  });
+  await host.open(item('spec.pdf'));
+  await settle();
+  const page = $('.pdf-page[data-page="1"]');
+  assert.equal(page.getAttribute('role'), 'group', 'a page with buttons inside is not an image');
+  const targets = [...page.querySelectorAll('.pdf-comment-target')];
+  assert.deepEqual(targets.map((b) => b.getAttribute('aria-label')), [
+    'Comment by Ada, 1 reply',
+    'Comment by Unknown author',
+  ]);
+  assert.equal(targets[0].tagName, 'BUTTON');
+  assert.equal(targets[0].getAttribute('aria-expanded'), 'false');
+  // No `<a>`, no element for the link at all.
+  assert.equal(page.querySelector('a'), null);
+  // A sticky note is a small icon; its button is the touch target at least.
+  assert.ok(Number.parseFloat(targets[1].style.width) >= 32);
+  assert.ok(Number.parseFloat(targets[1].style.height) >= 32);
+});
+
+test('clicking a marking opens its comment with author, date and replies, as text only (#1299)', async (t) => {
+  const { host } = await mountPane(t, {
+    pdfs: { '/ws/spec.pdf': pdfBytes() },
+    open: () => Promise.resolve(fakeDocument({ annotations: commentAnnotations() })),
+  });
+  await host.open(item('spec.pdf'));
+  await settle();
+  const target = $('.pdf-comment-target');
+  target.click();
+  const popover = $('.pdf-comment');
+  assert.ok(popover);
+  assert.equal(popover.getAttribute('role'), 'dialog');
+  assert.equal(popover.getAttribute('aria-label'), 'Comment by Ada');
+  assert.equal(target.getAttribute('aria-expanded'), 'true');
+  assert.equal(document.activeElement, popover);
+  const entries = [...popover.querySelectorAll('.pdf-comment__entry')];
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0].querySelector('.pdf-comment__author').textContent, 'Ada');
+  assert.equal(entries[0].querySelector('.pdf-comment__text').textContent, 'Is this still right?');
+  assert.equal(entries[0].querySelector('time').getAttribute('datetime'), '2026-10-29T13:30:00.000Z');
+  assert.equal(entries[1].querySelector('.pdf-comment__author').textContent, 'Grace');
+  // Markup in a comment is shown, never parsed.
+  assert.equal(entries[1].querySelector('.pdf-comment__text').textContent, 'Yes, checked on <b>Monday</b>.');
+  assert.equal(popover.querySelector('b'), null);
+
+  // A second click on the same marking closes it.
+  target.click();
+  assert.equal($('.pdf-comment'), null);
+  assert.equal(target.getAttribute('aria-expanded'), 'false');
+});
+
+test('Esc and the close button close the comment and give the focus back to the marking (#1299)', async (t) => {
+  const { host } = await mountPane(t, {
+    pdfs: { '/ws/spec.pdf': pdfBytes() },
+    open: () => Promise.resolve(fakeDocument({ annotations: commentAnnotations() })),
+  });
+  await host.open(item('spec.pdf'));
+  await settle();
+  const [first, second] = $$('.pdf-comment-target');
+  first.click();
+  press($('.pdf-comment'), 'Escape');
+  assert.equal($('.pdf-comment'), null);
+  assert.equal(document.activeElement, first);
+
+  first.click();
+  $('.pdf-comment__close').click();
+  assert.equal($('.pdf-comment'), null);
+  assert.equal(document.activeElement, first);
+
+  // Only one is open at a time.
+  first.click();
+  second.click();
+  assert.equal($$('.pdf-comment').length, 1);
+  assert.equal($('.pdf-comment').getAttribute('aria-label'), 'Comment by Unknown author');
+  assert.equal(first.getAttribute('aria-expanded'), 'false');
+});
+
+test('a zoom draws the buttons again at the new size and closes an open comment (#1299)', async (t) => {
+  const { host } = await mountPane(t, {
+    pdfs: { '/ws/spec.pdf': pdfBytes() },
+    open: () => Promise.resolve(fakeDocument({ annotations: commentAnnotations() })),
+  });
+  await host.open(item('spec.pdf'));
+  await settle();
+  const before = Number.parseFloat($('.pdf-comment-target').style.width);
+  $('.pdf-comment-target').click();
+  $('.pdf-tools__zoom-in').click();
+  await settle();
+  assert.equal($('.pdf-comment'), null);
+  assert.equal($$('.pdf-page[data-page="1"] .pdf-comment-target').length, 2, 'drawn once, not twice');
+  assert.ok(Number.parseFloat($('.pdf-comment-target').style.width) > before);
+});
+
+test('a page whose comments cannot be read is still drawn (#1299)', async (t) => {
+  const { host } = await mountPane(t, {
+    pdfs: { '/ws/spec.pdf': pdfBytes() },
+    open: () => Promise.resolve(fakeDocument({ annotations: { 1: new Error('bad annots') } })),
+  });
+  await host.open(item('spec.pdf'));
+  await settle();
+  assert.ok($('.pdf-page[data-page="1"] canvas'));
+  assert.equal($('.pdf-comment-target'), null);
+});
+
+test('the comment buttons and an open comment follow the interface language (#1299)', async (t) => {
+  const { host } = await mountPane(t, {
+    pdfs: { '/ws/spec.pdf': pdfBytes() },
+    open: () => Promise.resolve(fakeDocument({ annotations: commentAnnotations() })),
+  });
+  const { setLocale } = await importRenderer('i18n.js');
+  t.after(() => setLocale('en', { force: true }));
+  await host.open(item('spec.pdf'));
+  await settle();
+  $('.pdf-comment-target').click();
+  setLocale('de', { force: true });
+  assert.equal($('.pdf-comment-target').getAttribute('aria-label'), 'Kommentar von Ada, 1 Antwort');
+  assert.equal($('.pdf-comment').getAttribute('aria-label'), 'Kommentar von Ada');
+  assert.equal($('.pdf-comment__close').getAttribute('aria-label'), 'Kommentar schließen');
+  assert.equal(document.activeElement, $('.pdf-comment'), 'redrawn with the focus where it was');
+});
+
+test('commentsFromAnnotations threads replies and parsePdfDate reads PDF dates (#1299)', async () => {
+  const { commentsFromAnnotations, parsePdfDate } = await importRenderer('file-views', 'pdf-comments.js');
+  assert.equal(parsePdfDate('D:2026').toISOString(), '2026-01-01T00:00:00.000Z');
+  assert.equal(parsePdfDate("D:20261029143000-02'30'").toISOString(), '2026-10-29T17:00:00.000Z');
+  assert.equal(parsePdfDate('yesterday'), null);
+  assert.equal(parsePdfDate(undefined), null);
+
+  const found = commentsFromAnnotations([
+    highlight(),
+    { id: '20R', subtype: 'Text', inReplyTo: '12R', contentsObj: { str: 'second' }, modificationDate: 'D:20261031' },
+    { id: '21R', subtype: 'Text', inReplyTo: '12R', contentsObj: { str: 'first' }, modificationDate: 'D:20261030' },
+    { id: '22R', subtype: 'Highlight', inReplyTo: '12R', replyType: 'Group', contentsObj: { str: 'group member' } },
+    { id: '23R', subtype: 'Text', inReplyTo: '99R', contentsObj: { str: 'orphan' } },
+    { id: '24R', subtype: 'FreeText', rect: [0, 0, 10, 10], contentsObj: { str: 'on the page already' } },
+    { id: '25R', subtype: 'Highlight', rect: [0, 0, 10, 10], contentsObj: { str: '' } },
+  ]);
+  assert.equal(found.length, 1);
+  assert.deepEqual(found[0].replies.map((r) => r.text), ['first', 'second']);
+  assert.deepEqual(commentsFromAnnotations(null), []);
 });

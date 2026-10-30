@@ -22,7 +22,9 @@
 //   * No scripting. PDF JavaScript only runs through pdf.js's scripting
 //     sandbox, which is not vendored and never created here.
 //   * No annotation layer. Links are drawn as part of the page, but there is
-//     no element to click: a link in a PDF does nothing.
+//     no element to click: a link in a PDF does nothing. Comments are the
+//     one kind of annotation that gets a button, from `pdf-comments.js`,
+//     and their text only ever goes in as text (#1299).
 
 const BASE = new URL('../vendor/pdfjs/', import.meta.url);
 

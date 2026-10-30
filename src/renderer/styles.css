@@ -7882,6 +7882,146 @@ select.modal-input {
   text-align: center;
 }
 
+/* Comments behind highlights and notes (#1299): a transparent button over
+ * each marking, and one popover. The markings are pdf.js's drawing; the
+ * button only shows itself on hover, on focus and while its comment is open.
+ * The popover is app interface on the paper, so it takes the surface of an
+ * overlay, light or dark. */
+.pdf-comments {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.pdf-comment-target {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background var(--ds-motion-fast), outline-color var(--ds-motion-fast);
+}
+
+.pdf-comment-target:hover,
+.pdf-comment-target--open {
+  background: var(--ds-blue-soft);
+  outline: 1px solid var(--ds-blue-border);
+}
+
+/* Above :hover, which outweighs a single class. */
+.pdf-comment-target.pdf-comment-target--open {
+  outline: 2px solid var(--ds-blue);
+}
+
+.pdf-comment-target:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.pdf-comment {
+  position: absolute;
+  z-index: 2;
+  box-sizing: border-box;
+  width: 320px;
+  max-width: 100%;
+  max-height: 320px;
+  overflow: auto;
+  padding: 12px 44px 14px 16px;
+  border: 1px solid var(--ds-overlay-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  box-shadow: var(--ds-overlay-shadow);
+  color: var(--text-primary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+  text-align: start;
+  pointer-events: auto;
+}
+
+.pdf-comment:focus {
+  outline: none;
+}
+
+.pdf-comment:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.pdf-comment__close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.pdf-comment__close:hover {
+  background: var(--ds-grey-bg);
+  color: var(--text-primary);
+}
+
+.pdf-comment__close:active {
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+.pdf-comment__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.pdf-comment__author {
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.pdf-comment__date {
+  color: var(--text-muted);
+  font-size: var(--ds-font-size-xs);
+  font-variant-numeric: var(--ds-font-numeric-tabular);
+}
+
+.pdf-comment__text {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.pdf-comment__replies {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--ds-grey-divider);
+  list-style: none;
+}
+
+.pdf-comment__entry--reply {
+  padding-left: 10px;
+  border-left: 2px solid var(--ds-grey-divider);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pdf-comment-target {
+    transition: none;
+  }
+}
+
 /* Page and zoom in the header: the shape of the segmented control, with
  * round buttons inside. */
 .pdf-tools {
