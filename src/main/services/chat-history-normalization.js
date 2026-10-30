@@ -20,6 +20,7 @@ const {
 } = require('../../shared/contracts/chat');
 const { normalizeInjectionFlag } = require('../../shared/contracts/injection-flag');
 const { normalizeSessionCost } = require('../../shared/contracts/cost');
+const { normalizeTaskKind } = require('../../shared/contracts/task-kind');
 const { createMessage, isMessage } = require('../../shared/contracts/message');
 const { normalizeChatConfigOverrides } = require('../../shared/contracts/chat-configuration');
 const { normalizeStoredAttachments } = require('../../shared/contracts/attachments');
@@ -115,7 +116,7 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  */
 
 /**
- * What a chat carries beyond its messages, each optional (#211, #725, #774, #949).
+ * What a chat carries beyond its messages, each optional (#211, #725, #774, #949, #1281).
  *
  * @typedef {Object} ChatSettings
  * @property {string} [modelPresetId]
@@ -123,6 +124,7 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  * @property {string} [reasoningEffort]
  * @property {import('../../shared/contracts/chat-configuration').ChatConfigOverrides} [configOverrides]
  * @property {import('../../shared/contracts/cost').SessionCost} [cost]
+ * @property {import('../../shared/contracts/task-kind').TaskKind} [taskKind]
  */
 
 /**
@@ -189,6 +191,7 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  * @property {unknown} [reasoningEffort]
  * @property {unknown} [configOverrides]
  * @property {unknown} [cost]
+ * @property {unknown} [taskKind]
  */
 
 /**
@@ -638,7 +641,7 @@ function resolveSessionTitle(sessionRow, messages, existingTitle) {
 /**
  * The settings a chat carries beyond its messages, each optional: model and
  * permission mode (#211), reasoning level (#725), what it switched for itself
- * (#774) and its estimated cost (#949). Copied in this order, so that every
+ * (#774), its estimated cost (#949) and its kind of task (#1281). Copied in this order, so that every
  * form of a session lists its fields alike.
  *
  * @template {object} T
@@ -657,6 +660,8 @@ function copyChatSettings(from, out) {
   if (configOverrides) out.configOverrides = configOverrides;
   const cost = normalizeSessionCost(from.cost);
   if (cost) out.cost = cost;
+  const taskKind = normalizeTaskKind(from.taskKind);
+  if (taskKind) out.taskKind = taskKind;
   return out;
 }
 

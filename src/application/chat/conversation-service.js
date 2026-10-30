@@ -2,6 +2,8 @@ const { isDerivedChatTitle } = require('../../shared/contracts/chat');
 const { CHAT_PROGRESS_TYPES } = require('../../shared/contracts/enums');
 const { createMessage } = require('../../shared/contracts/message');
 const { normalizeMessageOrigin } = require('../../shared/contracts/remote/message-origin');
+const { classifiedTaskKindId, isTaskKindId, wantsModelTaskKind } = require('../../shared/contracts/task-kind');
+const { estimateTaskKind } = require('./task-kind-estimate');
 const { createTurnAnswer, applyTurnEvent, answerForCheckpoint, settleTurn } = require('./turn-messages');
 
 /**
@@ -9,13 +11,15 @@ const { createTurnAnswer, applyTurnEvent, answerForCheckpoint, settleTurn } = re
  * belongs to is kept here, through the chat-history port, so that no front end
  * has to repeat it: the question and the answer appended and saved — after
  * every finished step as well (#979) —, the turn's cost added to the chat's
- * sum (#949), the chat named after its first answer.
+ * sum (#949), the chat named after its first answer and given its kind of
+ * task (#1281).
  *
  * @typedef {import('../ports/chat-history-port').ChatHistoryPort} ChatHistoryPort
  * @typedef {import('../ports/chat-history-port').StoredChatMessage} StoredChatMessage
  * @typedef {import('../ports/chat-history-port').StoredChat} StoredChat
  * @typedef {import('../../shared/contracts/cost').SessionCost} SessionCost
- * @typedef {Pick<ReturnType<typeof import('./chat-engine').createChatEngine>, 'send' | 'generateTitle' | 'abort'>} ConversationEngine
+ * @typedef {import('../../shared/contracts/task-kind').TaskKind} TaskKind
+ * @typedef {Pick<ReturnType<typeof import('./chat-engine').createChatEngine>, 'send' | 'generateTitle' | 'classifyTaskKind' | 'abort'>} ConversationEngine
  * @typedef {import('./turn-messages').EngineEvent} EngineEvent
  * @typedef {import('./turn-messages').ChatMessage} ChatMessage
  *
@@ -145,7 +149,7 @@ function createConversationService({ engine, history, describeError = (error) =>
    *
    * Events go to `onEvent` as the engine sends them, plus `chat-saved` after
    * every save (whether it went through, #977) and `chat-named` when the chat
-   * got its name.
+   * got its name or its kind of task (#1281).
    *
    * @param {TurnInput} input
    */
@@ -283,8 +287,13 @@ function createConversationService({ engine, history, describeError = (error) =>
       await save(settled, { tokenUsage: usage || stored?.tokenUsage });
       // In the background: the name must not hold up the answer, and its
       // failure must not disturb the chat.
-      const naming = nameChat(chatId).then(({ title, chatCost: namedCost }) => {
-        if (title) onEvent(progressEvent(CHAT_PROGRESS_TYPES.CHAT_NAMED, { title, ...(namedCost ? { chatCost: namedCost } : {}) }));
+      const naming = nameChat(chatId).then(({ title, taskKind, chatCost: namedCost }) => {
+        if (!title && !taskKind && !namedCost) return;
+        onEvent(progressEvent(CHAT_PROGRESS_TYPES.CHAT_NAMED, {
+          ...(title ? { title } : {}),
+          ...(taskKind ? { taskKind } : {}),
+          ...(namedCost ? { chatCost: namedCost } : {}),
+        }));
       }, (error) => console.error('[conversation] the chat was not named:', error));
       background.add(naming);
       void naming.finally(() => background.delete(naming));
@@ -342,8 +351,15 @@ function createConversationService({ engine, history, describeError = (error) =>
    * once per chat: afterwards the title is no longer the one derived from the
    * question. Older chats with a derived title are named on their next turn.
    *
+   * The same round asks for the chat's kind of task (#1281). A chat that has a
+   * title of its own but no kind — renamed early, or from before the kinds —
+   * is asked for the kind alone; one whose kind is only Snotra's estimate is
+   * asked again, since a model answer replaces it. When the model gives none,
+   * the estimate from the chat's tools applies. A kind the user chose is
+   * never asked for.
+   *
    * @param {string} chatId
-   * @returns {Promise<{ title: string|null, chatCost?: SessionCost }>}  the chat's new sum when the naming round cost something (#1266)
+   * @returns {Promise<{ title: string|null, taskKind?: TaskKind, chatCost?: SessionCost }>}  the chat's new sum when the round cost something (#1266)
    */
   async function nameChat(chatId) {
     const chat = typeof chatId === 'string' && chatId ? await history.load(chatId) : null;
@@ -351,20 +367,48 @@ function createConversationService({ engine, history, describeError = (error) =>
     const source = titleSource(chat.messages);
     if (!source) return { title: null };
     // A German fallback stored before #359 still counts as "not named yet".
-    if (!isDerivedChatTitle(chat.title, chat.messages.filter((m) => m && !m.isError))) return { title: null };
-    const generated = await engine.generateTitle({
-      messages: [
-        { role: 'user', content: String(source.firstUser.content ?? '') },
-        { role: 'assistant', content: String(source.firstAnswer.content ?? '') },
-      ],
-    });
+    const needsTitle = isDerivedChatTitle(chat.title, chat.messages.filter((m) => m && !m.isError));
+    const needsKind = wantsModelTaskKind(chat.taskKind);
+    if (!needsTitle && !needsKind) return { title: null };
+    const messages = [
+      { role: 'user', content: String(source.firstUser.content ?? '') },
+      { role: 'assistant', content: String(source.firstAnswer.content ?? '') },
+    ];
+    /** @type {any} */
+    const answer = needsTitle
+      ? await engine.generateTitle({ messages, withTaskKind: needsKind })
+      : await engine.classifyTaskKind({ messages });
     // The round is paid whether or not it gave a name (#1266).
-    const chatCost = await addTurnCost(chatId, generated);
-    const withCost = (/** @type {{ title: string|null }} */ named) => (chatCost ? { ...named, chatCost } : named);
-    const title = 'title' in generated && typeof generated.title === 'string' ? generated.title.trim() : '';
-    if (!title) return withCost({ title: null });
+    const chatCost = await addTurnCost(chatId, answer);
+    const taskKind = needsKind ? await settleTaskKind(chat, answer?.taskKind) : null;
+    const extras = { ...(taskKind ? { taskKind } : {}), ...(chatCost ? { chatCost } : {}) };
+    const title = needsTitle && typeof answer?.title === 'string' ? answer.title.trim() : '';
+    if (!title) return { title: null, ...extras };
     // Deleted in the meantime: nothing is brought back.
-    return withCost({ title: (await history.setTitle(chatId, title)) ? title : null });
+    return { title: (await history.setTitle(chatId, title)) ? title : null, ...extras };
+  }
+
+  /**
+   * Gives the chat the kind its model named, or else Snotra's estimate from
+   * its tools (#1281). The history keeps the precedence: a kind the user set
+   * in the meantime stays.
+   *
+   * @param {StoredChat} chat
+   * @param {unknown} modelKind  what the model answered
+   * @returns {Promise<TaskKind|null>}  the kind written, or null
+   */
+  async function settleTaskKind(chat, modelKind) {
+    try {
+      if (isTaskKindId(modelKind)) return await history.setTaskKind(chat.id, { id: modelKind, source: 'model' });
+      const estimate = estimateTaskKind(chat.messages);
+      // The same estimate again changes nothing.
+      if (!estimate || estimate === classifiedTaskKindId(chat.taskKind)) return null;
+      return await history.setTaskKind(chat.id, { id: estimate, source: 'estimate' });
+    } catch (error) {
+      // The chat stays as it was; the error goes to main's log.
+      console.error('[conversation] the chat\'s kind of task was not stored:', error);
+      return null;
+    }
   }
 
   /** Resolves once no chat is being named any more — for a quit, and for tests. */

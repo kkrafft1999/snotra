@@ -14,6 +14,7 @@
 const { DEFAULT_REASONING_LEVEL } = require('../../shared/contracts/reasoning');
 const { CHAT_ACTIVATION, sanitizeChatId } = require('../../shared/contracts/chat');
 const { datedSessionCost, dayKeyOf, mergeSessionCost, normalizeSessionCost, withCostDays } = require('../../shared/contracts/cost');
+const { isTaskKindId, mayReplaceTaskKind } = require('../../shared/contracts/task-kind');
 const { CHAT_HISTORY_UNREADABLE } = require('./chat-history-store');
 
 /**
@@ -243,6 +244,8 @@ function createChatHistoryService({
           // The cost is main's word as well (#981): summed per turn by the
           // conversation service, never taken from the renderer.
           cost: mergeSessionCost(existing?.cost, pendingCost.get(sessionId)),
+          // The kind of task likewise (#1281): set by `setTaskKind` alone.
+          taskKind: existing?.taskKind,
           // A time the renderer sends does not count (#245): it writes the chat
           // also when nothing was said — on leaving, on a model switch, for a
           // title that came later. Main sets the stamp just below, and only for
@@ -359,6 +362,7 @@ function createChatHistoryService({
       title: session.title,
       messages: Array.isArray(session.messages) ? session.messages : [],
       cost: normalizeSessionCost(session.cost),
+      ...(session.taskKind ? { taskKind: session.taskKind } : {}),
       workspaceRoot: chatHistoryStore.normalizeWorkspaceRoot(session.workspaceRoot),
       ...(session.tokenUsage ? { tokenUsage: session.tokenUsage } : {}),
     };
@@ -419,6 +423,28 @@ function createChatHistoryService({
     }));
   }
 
+  /**
+   * Gives a stored chat its kind of task (#1281), unless the kind it has
+   * outranks the source: `user` > `model` > `estimate`. The user's choice
+   * always goes through. Null when nothing was written — no such chat, an
+   * unknown id, or a kind that stays.
+   *
+   * @param {string} chatId
+   * @param {{ id: unknown, source: import('../../shared/contracts/task-kind').TaskKindSource }} kind
+   * @returns {Promise<import('../../shared/contracts/task-kind').TaskKind|null>}
+   */
+  function setTaskKind(chatId, { id: kindId, source }) {
+    return /** @type {Promise<import('../../shared/contracts/task-kind').TaskKind|null>} */ (chatHistoryStore.withChatHistoryLock(async () => {
+      const id = sanitizeChatId(chatId);
+      if (!id || !isTaskKindId(kindId)) return null;
+      const meta = await chatHistoryStore.getSessionMeta(id);
+      if (!meta) return null;
+      if (source !== 'user' && !mayReplaceTaskKind(meta.taskKind, source)) return null;
+      const taskKind = { id: kindId, source, at: new Date(now()).toISOString() };
+      return (await chatHistoryStore.patchSession(id, { taskKind })) ? taskKind : null;
+    }));
+  }
+
   return {
     listForActiveFolder,
     getSession,
@@ -433,6 +459,7 @@ function createChatHistoryService({
     save,
     addCost,
     setTitle,
+    setTaskKind,
   };
 }
 

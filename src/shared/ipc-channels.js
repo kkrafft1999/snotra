@@ -282,6 +282,11 @@ const REQUEST_CHANNELS = Object.freeze({
    * die Datei-Referenz; der Renderer holt das Bild erst beim Anzeigen nach.
    */
   CHAT_ATTACHMENT_READ: 'chatHistory:readAttachment',
+  /**
+   * The user sets a chat's kind of task (#1281): the renderer names the chat
+   * and one of the six ids, main stores it as the user's choice.
+   */
+  CHAT_HISTORY_SET_TASK_KIND: 'chatHistory:setTaskKind',
 
   /** A question for a chat (#981): main keeps the history, saves the turn and names the chat. */
   CHAT_SEND: 'chat:send',

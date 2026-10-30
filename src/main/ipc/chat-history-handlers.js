@@ -23,6 +23,11 @@ function registerChatHistoryHandlers({ ipcMain, chatHistory, REQ }) {
   ipcMain.handle(REQ.CHAT_HISTORY_ACTIVATE, async (_event, id, activation) => chatHistory.activate(id, activation));
 
   ipcMain.handle(REQ.CHAT_ATTACHMENT_READ, async (_event, chatId, file) => chatHistory.readAttachment(chatId, file));
+
+  // The user's choice of a chat's kind (#1281): always the source `user`, whatever is sent along.
+  ipcMain.handle(REQ.CHAT_HISTORY_SET_TASK_KIND, async (_event, chatId, kindId) => ({
+    taskKind: await chatHistory.setTaskKind(chatId, { id: kindId, source: 'user' }),
+  }));
 }
 
 module.exports = { registerChatHistoryHandlers };

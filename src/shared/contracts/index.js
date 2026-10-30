@@ -76,6 +76,7 @@ const {
 const { toUsageNumber, createEmptyUsage, normalizeUsage, coerceUsage, mergeUsage } = require('./usage');
 const cost = require('./cost');
 const usageReport = require('./usage-report');
+const taskKind = require('./task-kind');
 const {
   CONTEXT_BREAKDOWN_VERSION,
   CONTEXT_PART_GROUPS,
@@ -442,6 +443,11 @@ module.exports = {
   formatUsd: cost.formatUsd,
   dayKeyOf: cost.dayKeyOf,
   isDayKey: cost.isDayKey,
+  TASK_KIND_IDS: taskKind.TASK_KIND_IDS,
+  TASK_KIND_SOURCES: taskKind.TASK_KIND_SOURCES,
+  isTaskKindId: taskKind.isTaskKindId,
+  normalizeTaskKind: taskKind.normalizeTaskKind,
+  classifiedTaskKindId: taskKind.classifiedTaskKindId,
   USAGE_PERIODS: usageReport.USAGE_PERIODS,
   USAGE_CHART_STEPS: usageReport.USAGE_CHART_STEPS,
   resolveUsagePeriod: usageReport.resolveUsagePeriod,

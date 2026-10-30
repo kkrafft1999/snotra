@@ -931,6 +931,61 @@ test('generateTitle carries the cost of its round, billed failures included (#12
   assert.equal('cost' in (await free.engine.generateTitle({ messages })), false);
 });
 
+test('generateTitle asks for the kind of task on a second line when told to (#1281)', async () => {
+  const { TITLE_PROMPT_MARKER } = await import('../e2e/helpers/fake-model.mjs');
+  const messages = [{ role: 'user', content: 'Why does the test fail?' }, { role: 'assistant', content: 'A missing await.' }];
+
+  const both = makeEngine([assistantText('Fix the failing test\nKind: coding')]);
+  assert.deepEqual(await both.engine.generateTitle({ messages, withTaskKind: true }), { title: 'Fix the failing test', taskKind: 'coding' });
+  const prompt = both.calls[0].messages[0].content;
+  assert.ok(prompt.includes(TITLE_PROMPT_MARKER), 'the e2e fake model still tells it by its marker');
+  for (const id of ['coding', 'writing', 'research', 'data', 'planning', 'other']) assert.match(prompt, new RegExp(`- ${id}: `));
+
+  // A second line that is no kind is left out; the title stands.
+  const unknown = makeEngine([assistantText('Fix the failing test\ndebugging')]);
+  assert.deepEqual(await unknown.engine.generateTitle({ messages, withTaskKind: true }), { title: 'Fix the failing test' });
+  // A kind on the first line is the title, not a kind.
+  const oneLine = makeEngine([assistantText('Coding')]);
+  assert.deepEqual(await oneLine.engine.generateTitle({ messages, withTaskKind: true }), { title: 'Coding' });
+
+  // Without the flag the prompt and the answer are as before.
+  const plain = makeEngine([assistantText('Fix the failing test\ncoding')]);
+  assert.deepEqual(await plain.engine.generateTitle({ messages }), { title: 'Fix the failing test' });
+  assert.equal(plain.calls[0].messages[0].content.includes('- coding: '), false);
+});
+
+test('classifyTaskKind asks for the kind alone, with the title\'s input, limits and cost (#1281)', async () => {
+  const { createCostEntry } = require('../src/shared/contracts/cost');
+  const { TITLE_PROMPT_MARKER } = await import('../e2e/helpers/fake-model.mjs');
+  const priced = { usage: { prompt: 30, completion: 2, total: 32 }, cost: { entry: createCostEntry({ providerId: 'openai', model: 'gpt-x', usage: { prompt: 30, completion: 2 } }), priceTable: null } };
+  const messages = [
+    { role: 'assistant', content: 'Hello!', greeting: true },
+    { role: 'user', content: 'Plan the migration' },
+    { role: 'assistant', content: 'Three steps.' },
+  ];
+
+  const asked = makeEngine([assistantText('planning', priced)]);
+  const result = await asked.engine.classifyTaskKind({ messages });
+  assert.equal(result.taskKind, 'planning');
+  assert.equal(result.cost.models[0].tokens.input, 30);
+  assert.deepEqual(asked.calls[0].tools, []);
+  assert.ok(asked.calls[0].messages[0].content.includes(TITLE_PROMPT_MARKER));
+  assert.match(asked.calls[0].messages[1].content, /Plan the migration[\s\S]*Three steps\./);
+  assert.equal(asked.calls[0].messages[1].content.includes('Hello!'), false);
+
+  // No valid id, a provider error, no question: reported, the cost kept.
+  const vague = makeEngine([assistantText('Hard to say.', priced)]);
+  const vagueResult = await vague.engine.classifyTaskKind({ messages });
+  assert.ok(vagueResult.error);
+  assert.equal(vagueResult.taskKind, undefined);
+  assert.equal(vagueResult.cost.models[0].rounds, 1);
+  const failing = makeEngine([{ error: 'down', code: 'NETWORK' }]);
+  assert.equal((await failing.engine.classifyTaskKind({ messages })).error, 'down');
+  const empty = makeEngine([assistantText('coding')]);
+  assert.ok((await empty.engine.classifyTaskKind({ messages: [] })).error);
+  assert.equal(empty.calls.length, 0);
+});
+
 test('engine turns provider failures into the existing error DTO', async () => {
   const { engine } = makeEngine([{ error: 'Kontingent erschöpft', code: 'RATE_LIMIT' }]);
 
