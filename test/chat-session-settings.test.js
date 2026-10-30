@@ -440,6 +440,24 @@ test('a level without a chat on screen, or not a level at all, is not kept (#725
   assert.equal('reasoningEffort' in history.store.sessions[0], false);
 });
 
+test('a phone keeps a level for a named chat, never changing the one on screen (#1304)', async () => {
+  const { settings, history } = setup({ sessions: [{ id: 'chat-alt' }, { id: 'chat-other' }] });
+  await settings.activate('chat-alt');
+
+  assert.equal(await settings.rememberReasoningEffortFor('chat-other', 'high'), true);
+  assert.equal(await settings.reasoningEffortFor('chat-other'), 'high');
+  assert.equal(history.store.sessions.find((row) => row.id === 'chat-other').reasoningEffort, 'high');
+  assert.equal(await settings.reasoningEffortFor(), null);
+  assert.equal(settings.getCurrentChatId(), 'chat-alt');
+
+  // A chat not saved yet keeps it for its first save.
+  assert.equal(await settings.rememberReasoningEffortFor('chat-new', 'low'), true);
+  assert.equal(settings.valuesFor('chat-new').reasoningEffort, 'low');
+
+  assert.equal(await settings.rememberReasoningEffortFor('', 'low'), false);
+  assert.equal(await settings.rememberReasoningEffortFor('chat-other', 'HIGH'), false);
+});
+
 test('a chat in the background answers with its own level (#725)', async () => {
   const { settings } = setup({
     sessions: [

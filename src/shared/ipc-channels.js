@@ -382,6 +382,8 @@ const PUSH_CHANNELS = Object.freeze({
   APPROVAL_NOTIFICATION_OPEN: 'approvalNotification:open',
   /** Modus, Regeln oder Muster haben sich geaendert; Anzeige aktualisieren. */
   TOOL_PERMISSIONS_CHANGED: 'toolPermissions:changed',
+  /** A phone changed the reasoning level of the chat on screen (#1304); payload `{ chatId }`. */
+  CHAT_REASONING_CHANGED: 'chat:reasoning-changed',
   /** Ein Skill-Verzeichnis hat sich geaendert (Issue #126); Katalog neu holen. */
   SKILLS_CHANGED: 'skills:changed',
   /** Menue "Ansicht > Seitenleiste ein-/ausblenden" bzw. Cmd/Ctrl+B (Issue #167). */

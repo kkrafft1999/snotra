@@ -29,7 +29,7 @@ const chat = (chatId, root, updatedAt, messages = [], title = `Chat ${chatId}`) 
 
 function fakeDesktop({ known = [ALPHA, BETA, HIDDEN], active = ALPHA, chats = [] } = {}) {
   const listeners = new Set();
-  const state = { known, active, chats, running: new Set(), awaiting: new Set(), loads: [], turns: [], stops: [], available: true, switches: [], switchOutcome: 'switched', cards: [], answers: [] };
+  const state = { known, active, chats, running: new Set(), awaiting: new Set(), loads: [], turns: [], stops: [], available: true, switches: [], switchOutcome: 'switched', cards: [], answers: [], levels: new Map() };
   return {
     state,
     port: {
@@ -76,10 +76,18 @@ function fakeDesktop({ known = [ALPHA, BETA, HIDDEN], active = ALPHA, chats = []
       chatConfiguration: async (chatId, root) => ({
         model: { label: `model of ${chatId}` },
         mode: 'smart',
-        reasoning: root === ALPHA ? 'high' : null,
+        reasoning: root === ALPHA ? state.levels.get(chatId) || 'high' : null,
+        reasoningLevels: root === ALPHA ? ['low', 'medium', 'high'] : [],
         skills: [{ name: 'docs', state: 'on' }],
         tools: [{ name: 'shell_execute', on: false }],
       }),
+      // Alpha's model takes three levels, beta's none.
+      setReasoning: async (chatId, level) => {
+        const root = state.chats.find((c) => c.chatId === chatId)?.root ?? ALPHA;
+        if (root !== ALPHA || !['low', 'medium', 'high'].includes(level)) return { ok: false, reason: 'invalid' };
+        state.levels.set(chatId, level);
+        return { ok: true, reasoning: level };
+      },
     },
     emit: (activity) => { for (const listener of listeners) listener(activity); },
     listeners,
@@ -173,7 +181,7 @@ test('session.hello learns the methods to watch, write and decide, the answers t
     methods: [
       'workspaces.list', 'chats.list', 'chat.open', 'chat.more', 'chat.close',
       'approval.list', 'approval.respond',
-      'workspace.activate', 'chat.new', 'message.send', 'run.abort', 'chat.configuration',
+      'workspace.activate', 'chat.new', 'message.send', 'run.abort', 'chat.configuration', 'chat.setReasoning',
     ],
     approvalResponses: ['allow-once', 'deny'],
     limits: { ...DISPATCHER_LIMITS },
@@ -629,10 +637,13 @@ test('chat.configuration describes a visible chat, read only and without paths',
     model: { label: 'model of a1' },
     mode: 'smart',
     reasoning: 'high',
+    reasoningLevels: ['low', 'medium', 'high'],
     skills: [{ name: 'docs', state: 'on' }],
     tools: [{ name: 'shell_execute', on: false }],
   });
-  assert.equal('reasoning' in (await call('chat.configuration', { chatId: 'b1' })).result, false);
+  const none = (await call('chat.configuration', { chatId: 'b1' })).result;
+  assert.equal('reasoning' in none, false);
+  assert.equal('reasoningLevels' in none, false);
   assertError(await call('chat.configuration', { chatId: 'h1' }), 'not-found');
   noPaths(answer);
 });
@@ -647,12 +658,37 @@ test('chat.configuration describes a chat from chat.new before its first questio
     model: { label: `model of ${chatId}` },
     mode: 'smart',
     reasoning: 'high',
+    reasoningLevels: ['low', 'medium', 'high'],
     skills: [{ name: 'docs', state: 'on' }],
     tools: [{ name: 'shell_execute', on: false }],
   });
   assertError(await call('chat.configuration', { chatId: 'uuid-unknown' }), 'not-found');
   await releases.port.withdraw(ALPHA);
   assertError(await call('chat.configuration', { chatId }), 'not-found');
+});
+
+test('chat.setReasoning keeps a level the chat\'s model takes, and refuses any other (#1304)', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  assert.deepEqual((await call('chat.setReasoning', { chatId: 'a1', level: 'low' })).result, { reasoning: 'low' });
+  assert.equal((await call('chat.configuration', { chatId: 'a1' })).result.reasoning, 'low');
+  // Also in a released workspace not open at the desktop: a level writes nothing there.
+  assertError(await call('chat.setReasoning', { chatId: 'b1', level: 'low' }), 'invalid-params');
+  assertError(await call('chat.setReasoning', { chatId: 'a1', level: 'turbo' }), 'invalid-params');
+  for (const level of [undefined, 3, '', 'LOW', 'x'.repeat(17), '../high']) {
+    assertError(await call('chat.setReasoning', { chatId: 'a1', level }), 'invalid-params');
+  }
+  assertError(await call('chat.setReasoning', { chatId: 'h1', level: 'low' }), 'not-found');
+  assertError(await call('chat.setReasoning', { chatId: 'uuid-unknown', level: 'low' }), 'not-found');
+  assert.deepEqual([...desktop.state.levels], [['a1', 'low']]);
+});
+
+test('chat.setReasoning reaches a chat from chat.new before its first question', async () => {
+  const desktop = fakeDesktop({ chats: turnChats() });
+  const { call } = await setup({ desktop });
+  const { chatId } = (await call('chat.new')).result;
+  assert.deepEqual((await call('chat.setReasoning', { chatId, level: 'medium' })).result, { reasoning: 'medium' });
+  assert.equal((await call('chat.configuration', { chatId })).result.reasoning, 'medium');
 });
 
 test('a saved question goes to the other followers as chat.message, marked when a remote asked', async () => {

@@ -479,11 +479,24 @@ function createChatSessionSettings({
    * @param {unknown} rawLevel
    */
   async function rememberReasoningEffort(rawLevel) {
+    return rememberReasoningEffortFor(currentChatId, rawLevel);
+  }
+
+  /**
+   * The level chosen for a named chat, on screen or not — a phone's choice
+   * (#1304). A chat not saved yet keeps it until its first save takes it
+   * over through `valuesFor`. The caller has checked it against the model.
+   *
+   * @param {unknown} rawChatId
+   * @param {unknown} rawLevel
+   */
+  async function rememberReasoningEffortFor(rawChatId, rawLevel) {
+    const chatId = normalizeChatId(rawChatId);
     const level = chatReasoningEffortForStore(rawLevel);
-    if (!currentChatId || !level) return false;
-    rememberLocal(currentChatId, { reasoningEffort: level });
-    rememberStoredLevel(currentChatId, level);
-    await persist(currentChatId, { reasoningEffort: level });
+    if (!chatId || !level) return false;
+    rememberLocal(chatId, { reasoningEffort: level });
+    rememberStoredLevel(chatId, level);
+    await persist(chatId, { reasoningEffort: level });
     return true;
   }
 
@@ -640,6 +653,7 @@ function createChatSessionSettings({
     rememberPreset,
     rememberMode,
     rememberReasoningEffort,
+    rememberReasoningEffortFor,
     reasoningEffortFor,
     configOverridesFor,
     acceptConfigProposal,

@@ -431,6 +431,12 @@ skillCatalog.onInvalidated(() => {
   void chatConfig.refresh();
 });
 api.onSkillsChanged?.(() => skillCatalog.invalidate());
+// The phone changed the level of the chat on screen (#1304).
+api.onChatReasoningChanged?.(() => {
+  modelPicker.refreshLLMState().catch(() => {
+    // The button keeps its level until the next read; nothing to tell the user.
+  });
+});
 
 const chatStream = initChatStream({
   api,

@@ -396,6 +396,17 @@ test('a provider without levels gets none (#725)', async () => {
   assert.equal((await llm.resolveChatTarget({ chatId: 'chat-1' })).reasoningEffort, undefined);
 });
 
+test('reasoningLevels names the levels the chat\'s model takes, none for a model or provider without (#1304)', async () => {
+  const { llm } = levelAdapter({ own: null });
+  assert.deepEqual(await llm.reasoningLevels({ chatId: 'chat-1' }), OPENAI_REASONING.levels);
+  const without = levelAdapter({ model: 'gpt-4o-mini', appliesTo: (model) => model.startsWith('gpt-5') });
+  assert.deepEqual(await without.llm.reasoningLevels({ chatId: 'chat-1' }), []);
+  const ollama = createProviderLlmAdapter(makeAdapterDeps({
+    llmConfigStore: { resolveChatModelTarget: () => ({ providerId: 'ollama', model: 'llama3' }) },
+  }));
+  assert.deepEqual(await ollama.reasoningLevels({ chatId: 'chat-1' }), []);
+});
+
 test('adapter validateTarget returns NO_API_KEY with send-specific suffix', async () => {
   const llm = createProviderLlmAdapter(makeAdapterDeps({
     providerSecrets: {

@@ -9,7 +9,8 @@
  *
  * - **Methods** (§8.1): `workspaces.list`, `chats.list`, `chat.open`,
  *   `chat.more`, `chat.close` to watch; `chat.new`, `message.send`,
- *   `run.abort`, `chat.configuration` to write — in a table per kind;
+ *   `run.abort`, `chat.configuration`, `chat.setReasoning` to write — in a
+ *   table per kind;
  *   anything else is `unknown-method`, a method the kind may not call
  *   `refused`. The channel answers `session.hello` and `session.bye` itself.
  * - **Writing** happens only in the workspace open at the desktop: a turn's
@@ -62,6 +63,8 @@ const MESSAGES_MAX = 100;
 /** How many chats one connection may follow at once. */
 const SUBSCRIPTIONS_MAX = 32;
 const CHAT_ID_MAX = 128;
+/** The shape of a reasoning level, as `contracts/reasoning.js` normalizes one (#1304). */
+const REASONING_LEVEL = /^[a-z]{1,16}$/;
 const CURSOR_MAX = 256;
 const CLIENT_MESSAGE_ID_MAX = 64;
 /** How many `clientMessageId`s are remembered, and chats made by `chat.new` not written yet. */
@@ -774,10 +777,26 @@ function createRemoteDispatcher({
         return {
           model: { label: configuration.model.label },
           mode: configuration.mode,
-          ...(configuration.reasoning ? { reasoning: configuration.reasoning } : {}),
+          // Both left out when the chat's model takes no level (#1304).
+          ...(configuration.reasoning ? { reasoning: configuration.reasoning, reasoningLevels: [...configuration.reasoningLevels] } : {}),
           skills: configuration.skills,
           tools: configuration.tools,
         };
+      },
+    },
+
+    // The one setting a phone may change (#1304): a level grants no access,
+    // it only changes the cost and depth of a turn. Model, mode, skills and
+    // tools stay read only.
+    'chat.setReasoning': {
+      kinds: ['local', 'relay'],
+      async run(_entry, params) {
+        const { level } = params;
+        if (typeof level !== 'string' || !REASONING_LEVEL.test(level)) throw new Refusal('invalid-params');
+        const chat = await describableChat(params.chatId);
+        const result = await desktop.setReasoning(chat.chatId, level);
+        if (!result.ok) throw new Refusal('invalid-params');
+        return { reasoning: result.reasoning };
       },
     },
   };

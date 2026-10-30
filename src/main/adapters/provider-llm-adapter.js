@@ -138,11 +138,7 @@ function createProviderLlmAdapter({
    * @type {LlmPort['resolveChatTarget']}
    */
   async function resolveChatTarget({ chatId } = {}) {
-    const config = await llmConfigStore.readLLMConfig();
-    // A chat off screen keeps its own model rather than the screen's (§7.3).
-    const own = await readOwnPreset(chatId);
-    const raw = llmConfigStore.resolveChatModelTarget(own ? { ...config, activePresetId: own } : config);
-    const provider = providerRuntime.getProvider(raw.providerId);
+    const { config, raw, provider } = await rawTargetOf(chatId);
     if (!provider) {
       return createChatErrorResult({
         error: createMessage('provider.error.unknown', { id: raw.providerId }),
@@ -150,6 +146,27 @@ function createProviderLlmAdapter({
       });
     }
     return toTarget(raw, await readOwnLevel(chatId), storedConnectionFor(config, raw, provider));
+  }
+
+  /**
+   * The levels the chat's model takes over its entry's connection (#1304);
+   * empty when it takes none.
+   * @type {NonNullable<LlmPort['reasoningLevels']>}
+   */
+  async function reasoningLevels({ chatId } = {}) {
+    const { config, raw, provider } = await rawTargetOf(chatId);
+    if (!provider) return [];
+    const model = typeof raw.model === 'string' && raw.model.trim() ? raw.model.trim() : provider.defaultModel || '';
+    return reasoningLevelsFor(provider, model, storedConnectionFor(config, raw, provider));
+  }
+
+  /** @param {string} [chatId] */
+  async function rawTargetOf(chatId) {
+    const config = await llmConfigStore.readLLMConfig();
+    // A chat off screen keeps its own model rather than the screen's (§7.3).
+    const own = await readOwnPreset(chatId);
+    const raw = llmConfigStore.resolveChatModelTarget(own ? { ...config, activePresetId: own } : config);
+    return { config, raw, provider: providerRuntime.getProvider(raw.providerId) };
   }
 
   /** @param {string} [chatId] */
@@ -308,6 +325,7 @@ function createProviderLlmAdapter({
 
   return {
     resolveChatTarget,
+    reasoningLevels,
     validateTarget,
     prepareSendBundle,
     streamRound,

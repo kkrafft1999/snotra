@@ -522,6 +522,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // A phone changed the level of the chat on screen (#1304): the model button reads it again.
+  onChatReasoningChanged: (callback) => {
+    const channel = PUSH.CHAT_REASONING_CHANGED;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // Freigabe-Karten: erst nach subscribeToolApprovals() schickt der Main
   // Anfragen; ohne Anmeldung werden Rueckfragen sicher abgelehnt.
   subscribeToolApprovals: () => ipcRenderer.invoke(REQ.TOOL_APPROVAL_SUBSCRIBE),

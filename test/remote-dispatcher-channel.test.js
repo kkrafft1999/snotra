@@ -77,7 +77,7 @@ test('over the channel, the phone learns the methods of steps 1 to 3 and the sta
   assert.deepEqual(hello.result.methods, [
     'session.hello', 'session.bye', 'workspaces.list', 'chats.list', 'chat.open', 'chat.more', 'chat.close',
     'approval.list', 'approval.respond',
-    'workspace.activate', 'chat.new', 'message.send', 'run.abort', 'chat.configuration',
+    'workspace.activate', 'chat.new', 'message.send', 'run.abort', 'chat.configuration', 'chat.setReasoning',
   ]);
   assert.deepEqual(hello.result.approvalResponses, ['allow-once', 'deny']);
 

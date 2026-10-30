@@ -5,7 +5,7 @@
  * knows, the one that is open, the stored chats, which of them run or wait
  * for a card, and the activity the window's handlers publish — and what it
  * asks of it in step 2: a turn through the conversation service (#981), a
- * stop, a chat's configuration.
+ * stop, a chat's configuration, and a chat's reasoning level (#1304).
  *
  * Nothing here goes through `chatHistory:activate`: a remote that opens or
  * writes in a chat never changes the one on the desktop's screen, and its
@@ -56,9 +56,11 @@ const isChatId = (chatId) => typeof chatId === 'string' && chatId.length > 0;
  *     publishRun: (event: { chatId: string, runId: string, type: string, payload: unknown }) => void,
  *   },
  *   conversation?: Pick<ReturnType<typeof import('../../application/chat/conversation-service').createConversationService>, 'runTurn' | 'stopChat'>,
- *   llm?: Pick<import('../../application/ports/llm-port').LlmPort, 'resolveChatTarget' | 'validateTarget'>,
+ *   llm?: Pick<import('../../application/ports/llm-port').LlmPort, 'resolveChatTarget' | 'validateTarget' | 'reasoningLevels'>,
  *   chatMode?: (chatId: string) => Promise<string>,
- *   reasoningFor?: (chatId: string) => Promise<string|null>,
+ *   chatSettings?: Pick<ReturnType<typeof import('../../application/chat/chat-session-settings').createChatSessionSettings>,
+ *     'rememberReasoningEffortFor' | 'getCurrentChatId'>,
+ *   onReasoningChanged?: (chatId: string) => void,
  *   describeConfiguration?: (input: { chatId: string, workspaceRoot: string }) => Promise<{ skills?: any[], tools?: any[] }>,
  *   followInWindow?: (event: { chatId: string, runId: string, type: string, payload: Record<string, unknown> }) => void,
  *   switchInWindow?: (root: string) => Promise<import('./window-workspace-switch').WindowSwitchOutcome>,
@@ -66,8 +68,9 @@ const isChatId = (chatId) => typeof chatId === 'string' && chatId.length > 0;
  *   onSwitched?: (root: string) => void,
  *   log?: { warn: (...args: unknown[]) => void },
  * }} deps  `normalizeRoot` the chat history's, so that folders compare alike everywhere;
- *   `conversation` and `llm` for the turns of step 2, `chatMode`, `reasoningFor` and
- *   `describeConfiguration` for a chat's configuration; `followInWindow` hands a remote turn's
+ *   `conversation` and `llm` for the turns of step 2, `chatMode` and
+ *   `describeConfiguration` for a chat's configuration; `chatSettings` keeps a chat's level
+ *   and `onReasoningChanged` tells the window when that chat is the one on screen (#1304); `followInWindow` hands a remote turn's
  *   events to the window, which did not start it (step 2b), `turn-started` first;
  *   `switchInWindow` asks the window to open a folder, `activateKnownFolder` opens it when there
  *   is no window, `onSwitched` tells the desktop it happened (step 2c)
@@ -85,7 +88,8 @@ function createRemoteDesktopAdapter({
   conversation,
   llm,
   chatMode = async () => 'smart',
-  reasoningFor = async () => null,
+  chatSettings = { rememberReasoningEffortFor: async () => false, getCurrentChatId: () => null },
+  onReasoningChanged = () => {},
   describeConfiguration = async () => ({ skills: [], tools: [] }),
   followInWindow = () => {},
   switchInWindow = async () => 'no-window',
@@ -192,17 +196,21 @@ function createRemoteDesktopAdapter({
     },
 
     async chatConfiguration(chatId, root) {
-      const [target, mode, reasoning, described] = await Promise.all([
+      const [target, mode, levels, described] = await Promise.all([
         llm ? llm.resolveChatTarget({ chatId }) : null,
         chatMode(chatId),
-        reasoningFor(chatId),
+        reasoningLevelsOf(chatId),
         describeConfiguration({ chatId, workspaceRoot: root }),
       ]);
       const model = !isError(target) && typeof /** @type {any} */ (target).model === 'string' ? /** @type {any} */ (target).model : '';
+      // The level the chat runs with, as the model button shows it — not only one it stored.
+      const reasoning = !isError(target) ? /** @type {any} */ (target).reasoningEffort : null;
+      const runsWith = levels.length > 0 && typeof reasoning === 'string' && levels.includes(reasoning);
       return {
         model: { label: model },
         mode,
-        reasoning: typeof reasoning === 'string' && reasoning ? reasoning : null,
+        reasoning: runsWith ? reasoning : null,
+        reasoningLevels: runsWith ? levels : [],
         skills: (Array.isArray(described?.skills) ? described.skills : [])
           .filter((skill) => typeof skill?.name === 'string')
           .map((skill) => ({ name: skill.name, state: String(skill.state || '') })),
@@ -211,7 +219,34 @@ function createRemoteDesktopAdapter({
           .map((tool) => ({ name: tool.name, on: tool.on === true })),
       };
     },
+
+    async setReasoning(chatId, level) {
+      // Only a level the chat's model takes, as the desktop's picker offers.
+      if (!(await reasoningLevelsOf(chatId)).includes(level)) return { ok: false, reason: 'invalid' };
+      if (!(await chatSettings.rememberReasoningEffortFor(chatId, level))) return { ok: false, reason: 'invalid' };
+      // The chat on the desktop's screen stays the same; only its model button follows.
+      if (chatId !== chatSettings.getCurrentChatId()) return { ok: true, reasoning: level };
+      try {
+        onReasoningChanged(chatId);
+      } catch (error) {
+        // The window not following never undoes the change.
+        log.warn(`[remote] the desktop missed a chat's new level (${error?.name || 'error'})`);
+      }
+      return { ok: true, reasoning: level };
+    },
   };
+
+  /** @param {string} chatId */
+  async function reasoningLevelsOf(chatId) {
+    if (!llm?.reasoningLevels) return [];
+    try {
+      const levels = await llm.reasoningLevels({ chatId });
+      return Array.isArray(levels) ? levels.filter((level) => typeof level === 'string') : [];
+    } catch {
+      // A config that cannot be read offers no level, as the desktop's picker shows none then.
+      return [];
+    }
+  }
 }
 
 module.exports = { createRemoteDesktopAdapter, remoteSessionId, isRemoteSessionId };

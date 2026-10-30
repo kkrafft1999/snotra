@@ -75,7 +75,7 @@ test('the activity the handlers publish reaches a subscriber, and a broken one s
 
 const { remoteSessionId, isRemoteSessionId } = require('../src/main/remote/desktop-adapter');
 
-function writer({ target = { providerId: 'p', model: 'gpt-x' }, invalid = null, turn, windowSeen = [] } = {}) {
+function writer({ target = { providerId: 'p', model: 'gpt-x', reasoningEffort: 'low' }, invalid = null, turn, windowSeen = [], levels = ['low', 'medium', 'high'], kept = [], told = [], onScreen = null } = {}) {
   const activity = createRemoteActivity({ log: { warn: () => {} } });
   const runs = [];
   const stops = [];
@@ -100,9 +100,14 @@ function writer({ target = { providerId: 'p', model: 'gpt-x' }, invalid = null, 
     llm: {
       resolveChatTarget: async () => target,
       validateTarget: async () => invalid,
+      reasoningLevels: async () => levels,
     },
     chatMode: async (chatId) => (chatId === 'c-ask' ? 'ask-all' : 'smart'),
-    reasoningFor: async () => 'low',
+    chatSettings: {
+      rememberReasoningEffortFor: async (chatId, level) => { kept.push([chatId, level]); return true; },
+      getCurrentChatId: () => onScreen,
+    },
+    onReasoningChanged: (chatId) => told.push(chatId),
     describeConfiguration: async ({ workspaceRoot }) => ({
       skills: [{ name: 'docs', state: 'on', description: 'secret text' }, { nope: true }],
       tools: [{ name: 'read_file', on: true, schema: { a: 1 } }, { name: 'shell_execute', on: false }],
@@ -161,9 +166,35 @@ test('stopChat and the configuration go through, the configuration without descr
     model: { label: 'gpt-x' },
     mode: 'ask-all',
     reasoning: 'low',
+    reasoningLevels: ['low', 'medium', 'high'],
     skills: [{ name: 'docs', state: 'on' }],
     tools: [{ name: 'read_file', on: true }, { name: 'shell_execute', on: false }],
   });
+});
+
+test('the configuration reports the level the chat runs with, and none when its model takes none (#1304)', async () => {
+  // A chat without a level of its own runs with the resolved default, as the model button shows.
+  const resolved = writer({ target: { providerId: 'p', model: 'gpt-x', reasoningEffort: 'medium' } });
+  const answer = await resolved.adapter.chatConfiguration('c1', A);
+  assert.equal(answer.reasoning, 'medium');
+  assert.deepEqual(answer.reasoningLevels, ['low', 'medium', 'high']);
+  const none = await writer({ target: { providerId: 'p', model: 'm' }, levels: [] }).adapter.chatConfiguration('c1', A);
+  assert.equal(none.reasoning, null);
+  assert.deepEqual(none.reasoningLevels, []);
+});
+
+test('setReasoning keeps a level the chat\'s model takes, any other is invalid, and tells the window only of its chat (#1304)', async () => {
+  const kept = [];
+  const told = [];
+  const { adapter } = writer({ kept, told, onScreen: 'c1' });
+  assert.deepEqual(await adapter.setReasoning('c1', 'high'), { ok: true, reasoning: 'high' });
+  assert.deepEqual(await adapter.setReasoning('c1', 'xhigh'), { ok: false, reason: 'invalid' });
+  // A chat off screen is kept as well, and the window has nothing to show of it.
+  assert.deepEqual(await adapter.setReasoning('c2', 'low'), { ok: true, reasoning: 'low' });
+  assert.deepEqual(kept, [['c1', 'high'], ['c2', 'low']]);
+  assert.deepEqual(told, ['c1']);
+  const levelless = writer({ levels: [], kept: [] });
+  assert.deepEqual(await levelless.adapter.setReasoning('c1', 'low'), { ok: false, reason: 'invalid' });
 });
 
 test('remote sessions are told apart from every window', () => {

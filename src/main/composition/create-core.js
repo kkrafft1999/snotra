@@ -864,7 +864,7 @@ function createCore({
       llm: chatLlm,
       // The mode a run of the chat would read, through the same adapter.
       chatMode: async (chatId) => (await /** @type {NonNullable<typeof chatToolPolicy>} */ (chatToolPolicy).read({ chatId })).mode,
-      reasoningFor: (chatId) => chatSessionSettings.reasoningEffortFor(chatId),
+      chatSettings: chatSessionSettings, onReasoningChanged: (chatId) => pushToWindow(PUSH.CHAT_REASONING_CHANGED, { chatId }),
       describeConfiguration: async ({ chatId, workspaceRoot }) => chatConfiguration.describe({
         workspaceRoot,
         // The skills a chat called with "/name" only its window knows.
