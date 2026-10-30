@@ -55,7 +55,7 @@ PNG, JPEG, GIF, WebP und SVG öffnen sich als Bild, eingepasst in die Spalte.
 
 Eine PDF öffnet sich Seite für Seite, eingepasst in die Spaltenbreite. Der Kopf zeigt die Seite, auf der du bist — tipp eine Zahl, um dorthin zu springen —, und zoomt mit `−`, `+` und *Breite*. Eine passwortgeschützte PDF fragt direkt dort nach ihrem Passwort; es wird nicht gespeichert. Skripte in einer PDF laufen nie, und ihre Links tun nichts.
 
-[seit 1.29] **Kommentare.** Markierungen und Notizen, die jemand in einer PDF hinterlassen hat, bringen ihren Kommentar mit: Klick auf die Markierung — oder erreich sie mit `Tab` und drück `Enter` —, und der Kommentar öffnet sich daneben, mit Autor, Datum und den Antworten darunter. `Esc` oder `×` schließt ihn. Kommentare erscheinen als reiner Text, ohne ihre Formatierung, und du kannst sie hier lesen, aber nicht schreiben.
+[seit 1.28.1] **Kommentare.** Markierungen und Notizen, die jemand in einer PDF hinterlassen hat, bringen ihren Kommentar mit: Klick auf die Markierung — oder erreich sie mit `Tab` und drück `Enter` —, und der Kommentar öffnet sich daneben, mit Autor, Datum und den Antworten darunter. `Esc` oder `×` schließt ihn. Kommentare erscheinen als reiner Text, ohne ihre Formatierung, und du kannst sie hier lesen, aber nicht schreiben.
 
 ![Die mittlere Spalte mit pruefung.pdf: eine gelbe Markierung auf der Zeile „Beet 1 bekommt wieder die Tomaten“, darunter der geöffnete Kommentar von Ada Lovelace mit zwei Antworten, von Grace Hopper und von Ada Lovelace.](screenshots/pdf-comments.webp)
 
