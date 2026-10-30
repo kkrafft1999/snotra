@@ -25,3 +25,10 @@ test('each event goes on its channel, with its chat and run', () => {
   ]);
   assert.equal(PUSH.CHAT_TURN_STARTED, 'chat:turn-started');
 });
+
+test('a reasoning level a phone set reaches the window without a run (#1304)', () => {
+  const sent = [];
+  const follow = createWindowFollower({ push: (channel, payload) => { sent.push([channel, payload]); return true; }, PUSH });
+  follow({ chatId: 'c1', runId: null, type: 'reasoning-changed', payload: {} });
+  assert.deepEqual(sent, [[PUSH.CHAT_REASONING_CHANGED, { chatId: 'c1', runId: null }]]);
+});

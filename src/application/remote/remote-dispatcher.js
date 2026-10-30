@@ -9,7 +9,7 @@
  *
  * - **Methods** (§8.1): `workspaces.list`, `chats.list`, `chat.open`,
  *   `chat.more`, `chat.close` to watch; `chat.new`, `message.send`,
- *   `run.abort`, `chat.configuration` to write — in a table per kind;
+ *   `run.abort`, `chat.configuration`, `chat.setReasoning` to write — in a table per kind;
  *   anything else is `unknown-method`, a method the kind may not call
  *   `refused`. The channel answers `session.hello` and `session.bye` itself.
  * - **Writing** happens only in the workspace open at the desktop: a turn's
@@ -42,6 +42,7 @@
 const { remoteRpcError } = require('../../shared/contracts/remote/rpc-errors');
 const { isMessage } = require('../../shared/contracts/message');
 const { isRecord } = require('../../shared/runtime/is-record');
+const { normalizeReasoningLevel } = require('../../shared/contracts/reasoning');
 const display = require('./remote-display');
 
 /** What `session.hello` names as this message layer's limits (§8.1). */
@@ -775,9 +776,26 @@ function createRemoteDispatcher({
           model: { label: configuration.model.label },
           mode: configuration.mode,
           ...(configuration.reasoning ? { reasoning: configuration.reasoning } : {}),
+          ...(configuration.reasoning && configuration.reasoningLevels.length > 0
+            ? { reasoningLevels: [...configuration.reasoningLevels] }
+            : {}),
           skills: configuration.skills,
           tools: configuration.tools,
         };
+      },
+    },
+
+    // The one setting a connection may change (#1304): a reasoning level
+    // grants nothing, it only changes a turn's depth and cost.
+    'chat.setReasoning': {
+      kinds: ['local', 'relay'],
+      async run(_entry, params) {
+        const chat = await describableChat(params.chatId);
+        const level = normalizeReasoningLevel(params.level);
+        if (!level || level !== params.level) throw new Refusal('invalid-params');
+        const changed = await desktop.setReasoning(chat.chatId, level);
+        if (!changed.ok) throw new Refusal('invalid-params');
+        return { reasoning: changed.reasoning };
       },
     },
   };

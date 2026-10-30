@@ -259,6 +259,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },
+  // A phone set a chat's reasoning level (#1304): the model button follows.
+  onChatReasoningChanged: (callback) => {
+    const channel = PUSH.CHAT_REASONING_CHANGED;
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on(channel, listener);
+    return () => ipcRenderer.removeListener(channel, listener);
+  },
   // Live voice input (#859). The renderer numbers its recordings; main opens
   // the connection and holds the key.
   startVoice: (id) => ipcRenderer.invoke(REQ.VOICE_START, { id }),

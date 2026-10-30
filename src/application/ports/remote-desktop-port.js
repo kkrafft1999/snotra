@@ -62,6 +62,9 @@
  *   `run-end` after its last one, arrive through `subscribe` under `turn.runId`
  * @property {(chatId: string) => boolean} stopChat  stops the chat's turn, whoever started it; false when none ran
  * @property {(chatId: string, root: string) => Promise<RemoteChatConfiguration>} chatConfiguration
+ * @property {(chatId: string, level: string) => Promise<{ ok: true, reasoning: string } | { ok: false, reason: 'invalid' }>} setReasoning
+ *   keeps `level` as the chat's own reasoning level (#1304), when its model takes it; never
+ *   changes the chat on the desktop's screen, only follows it there
  * @property {(root: string) => Promise<{ ok: true } | { ok: false, reason: 'unsaved' | 'refused' | 'no-answer' }>} activateWorkspace
  *   opens a known folder at the desktop, through the window when there is one, and tells
  *   whoever sits there (step 2c); `unsaved` when the file on show has unsaved changes
@@ -79,11 +82,13 @@
  */
 
 /**
- * What a chat runs with (§8.1 `chat.configuration`), read only.
+ * What a chat runs with (§8.1 `chat.configuration`); of it only the reasoning
+ * level can be changed, by `setReasoning`.
  * @typedef {Object} RemoteChatConfiguration
  * @property {{ label: string }} model
  * @property {string} mode
- * @property {string|null} reasoning
+ * @property {string|null} reasoning  the level the chat runs with; null when its model takes none
+ * @property {string[]} reasoningLevels  the levels its model takes; empty when it takes none
  * @property {Array<{ name: string, state: string }>} skills
  * @property {Array<{ name: string, on: boolean }>} tools
  */

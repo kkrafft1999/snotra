@@ -56,18 +56,19 @@ const isChatId = (chatId) => typeof chatId === 'string' && chatId.length > 0;
  *     publishRun: (event: { chatId: string, runId: string, type: string, payload: unknown }) => void,
  *   },
  *   conversation?: Pick<ReturnType<typeof import('../../application/chat/conversation-service').createConversationService>, 'runTurn' | 'stopChat'>,
- *   llm?: Pick<import('../../application/ports/llm-port').LlmPort, 'resolveChatTarget' | 'validateTarget'>,
+ *   llm?: Pick<import('../../application/ports/llm-port').LlmPort, 'resolveChatTarget' | 'validateTarget' | 'reasoningLevelsFor'>,
  *   chatMode?: (chatId: string) => Promise<string>,
- *   reasoningFor?: (chatId: string) => Promise<string|null>,
+ *   rememberReasoning?: (chatId: string, level: string) => Promise<boolean>,
  *   describeConfiguration?: (input: { chatId: string, workspaceRoot: string }) => Promise<{ skills?: any[], tools?: any[] }>,
- *   followInWindow?: (event: { chatId: string, runId: string, type: string, payload: Record<string, unknown> }) => void,
+ *   followInWindow?: (event: { chatId: string, runId: string|null, type: string, payload: Record<string, unknown> }) => void,
  *   switchInWindow?: (root: string) => Promise<import('./window-workspace-switch').WindowSwitchOutcome>,
  *   activateKnownFolder?: (root: string) => Promise<string|null>,
  *   onSwitched?: (root: string) => void,
  *   log?: { warn: (...args: unknown[]) => void },
  * }} deps  `normalizeRoot` the chat history's, so that folders compare alike everywhere;
- *   `conversation` and `llm` for the turns of step 2, `chatMode`, `reasoningFor` and
- *   `describeConfiguration` for a chat's configuration; `followInWindow` hands a remote turn's
+ *   `conversation` and `llm` for the turns of step 2, `chatMode` and
+ *   `describeConfiguration` for a chat's configuration, `rememberReasoning` keeps the level a
+ *   phone chose, and `followInWindow` tells the window of it (#1304); `followInWindow` hands a remote turn's
  *   events to the window, which did not start it (step 2b), `turn-started` first;
  *   `switchInWindow` asks the window to open a folder, `activateKnownFolder` opens it when there
  *   is no window, `onSwitched` tells the desktop it happened (step 2c)
@@ -85,7 +86,7 @@ function createRemoteDesktopAdapter({
   conversation,
   llm,
   chatMode = async () => 'smart',
-  reasoningFor = async () => null,
+  rememberReasoning = async () => false,
   describeConfiguration = async () => ({ skills: [], tools: [] }),
   followInWindow = () => {},
   switchInWindow = async () => 'no-window',
@@ -93,6 +94,13 @@ function createRemoteDesktopAdapter({
   onSwitched = () => {},
   log = console,
 }) {
+  /** @param {string} chatId */
+  async function reasoningLevelsOf(chatId) {
+    if (typeof llm?.reasoningLevelsFor !== 'function') return [];
+    const levels = await llm.reasoningLevelsFor({ chatId });
+    return Array.isArray(levels) ? levels.filter((level) => typeof level === 'string') : [];
+  }
+
   return {
     async knownWorkspaces() {
       const roots = new Set();
@@ -191,18 +199,35 @@ function createRemoteDesktopAdapter({
       return { ok: true };
     },
 
+    async setReasoning(chatId, level) {
+      // Only a level the chat's model takes, checked here as the window's picker is in main.
+      if (!(await reasoningLevelsOf(chatId)).includes(level)) return { ok: false, reason: 'invalid' };
+      if (!(await rememberReasoning(chatId, level))) return { ok: false, reason: 'invalid' };
+      try {
+        followInWindow({ chatId, runId: null, type: 'reasoning-changed', payload: {} });
+      } catch (error) {
+        // The window not following never undoes the change.
+        log.warn(`[remote] the window could not follow a reasoning level (${error?.name || 'error'})`);
+      }
+      return { ok: true, reasoning: level };
+    },
+
     async chatConfiguration(chatId, root) {
-      const [target, mode, reasoning, described] = await Promise.all([
+      const [target, mode, levels, described] = await Promise.all([
         llm ? llm.resolveChatTarget({ chatId }) : null,
         chatMode(chatId),
-        reasoningFor(chatId),
+        reasoningLevelsOf(chatId),
         describeConfiguration({ chatId, workspaceRoot: root }),
       ]);
-      const model = !isError(target) && typeof /** @type {any} */ (target).model === 'string' ? /** @type {any} */ (target).model : '';
+      const resolved = target && !isError(target) ? /** @type {any} */ (target) : null;
+      const model = typeof resolved?.model === 'string' ? resolved.model : '';
+      // The level the chat runs with, as the model button shows it (#1304).
+      const reasoning = typeof resolved?.reasoningEffort === 'string' && resolved.reasoningEffort ? resolved.reasoningEffort : null;
       return {
         model: { label: model },
         mode,
-        reasoning: typeof reasoning === 'string' && reasoning ? reasoning : null,
+        reasoning,
+        reasoningLevels: reasoning ? levels : [],
         skills: (Array.isArray(described?.skills) ? described.skills : [])
           .filter((skill) => typeof skill?.name === 'string')
           .map((skill) => ({ name: skill.name, state: String(skill.state || '') })),
