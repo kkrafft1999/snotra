@@ -77,6 +77,14 @@ function createConversationService({ engine, history, describeError = (error) =>
   /** @type {Set<Promise<void>>} names still being made */
   const background = new Set();
   /**
+   * Chats whose model was asked for a kind of task in this run of the app
+   * (#1281): once each. A model that gives no valid id would otherwise cost
+   * a round on every turn; after a restart the chat is asked once more.
+   *
+   * @type {Set<string>}
+   */
+  const kindAsked = new Set();
+  /**
    * Chats whose last save did not go through (#977): what they hold since, by
    * chat id. The next turn goes on from here rather than from the older copy
    * on disk, and its first save that goes through takes all of it along — as
@@ -354,9 +362,9 @@ function createConversationService({ engine, history, describeError = (error) =>
    * The same round asks for the chat's kind of task (#1281). A chat that has a
    * title of its own but no kind — renamed early, or from before the kinds —
    * is asked for the kind alone; one whose kind is only Snotra's estimate is
-   * asked again, since a model answer replaces it. When the model gives none,
-   * the estimate from the chat's tools applies. A kind the user chose is
-   * never asked for.
+   * asked again, since a model answer replaces it — but each chat only once
+   * per run of the app. When the model gives none, the estimate from the
+   * chat's tools applies. A kind the user chose is never asked for.
    *
    * @param {string} chatId
    * @returns {Promise<{ title: string|null, taskKind?: TaskKind, chatCost?: SessionCost }>}  the chat's new sum when the round cost something (#1266)
@@ -368,8 +376,14 @@ function createConversationService({ engine, history, describeError = (error) =>
     if (!source) return { title: null };
     // A German fallback stored before #359 still counts as "not named yet".
     const needsTitle = isDerivedChatTitle(chat.title, chat.messages.filter((m) => m && !m.isError));
-    const needsKind = wantsModelTaskKind(chat.taskKind);
-    if (!needsTitle && !needsKind) return { title: null };
+    const wantsKind = wantsModelTaskKind(chat.taskKind);
+    const needsKind = wantsKind && !kindAsked.has(chatId);
+    if (!needsTitle && !needsKind) {
+      // Asked already in this run: the estimate still follows the chat's tools, without a request.
+      const estimated = wantsKind ? await settleTaskKind(chat, null) : null;
+      return estimated ? { title: null, taskKind: estimated } : { title: null };
+    }
+    if (needsKind) kindAsked.add(chatId);
     const messages = [
       { role: 'user', content: String(source.firstUser.content ?? '') },
       { role: 'assistant', content: String(source.firstAnswer.content ?? '') },

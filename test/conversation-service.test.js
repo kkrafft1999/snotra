@@ -211,6 +211,21 @@ test('without a kind from the model, the estimate from the tools applies, and a 
   assert.equal(engine.calls.length, 0);
 });
 
+test('the model is asked for a kind once per chat in a run of the app; the estimate keeps following (#1281)', async () => {
+  const history = memoryHistory({ c1: { id: 'c1', title: '', messages: structuredClone(TURN) } });
+  const engine = fakeEngine({ title: 'Simple sums', titleCost: round(1) });
+  const conversation = createConversationService({ engine, history });
+  assert.equal((await conversation.nameChat('c1')).title, 'Simple sums');
+  assert.equal(history.store.get('c1').taskKind, undefined);
+
+  // The next turn sends nothing, but the tools it used now point somewhere.
+  history.store.get('c1').messages.push(...CODING_TURN);
+  const later = await conversation.nameChat('c1');
+  assert.deepEqual([later.title, later.taskKind.id, later.taskKind.source], [null, 'coding', 'estimate']);
+  assert.deepEqual(engine.calls.map(([kind]) => kind), ['title+kind']);
+  assert.equal(history.store.get('c1').cost.models[0].rounds, 1, 'no further round is booked');
+});
+
 test('a kind the user chose is never asked for or replaced (#1281)', async () => {
   const userKind = { id: 'writing', source: 'user', at: '2026-10-29T08:00:00.000Z' };
   const history = memoryHistory({ c1: { id: 'c1', title: '', messages: CODING_TURN, taskKind: userKind } });
