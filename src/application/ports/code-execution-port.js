@@ -10,7 +10,7 @@
  * @typedef {Object} CodeExecutionResult
  * @property {string} stdout
  * @property {string} stderr
- * @property {number|null} exitCode  null, wenn der Prozess per Signal endete
+ * @property {number|null} exitCode  null after a signal, the time limit or "Stop"
  * @property {boolean} timedOut
  * @property {boolean} aborted       durch „Stop" im Chat beendet
  * @property {boolean} truncated     Ausgabe wurde gekappt
