@@ -11,6 +11,7 @@ export function initChatModelPicker({
   api,
   appStore,
   onLlmStateChanged,
+  onChatTitleShown = () => {},
 }) {
   const chatTitleEl = document.getElementById('chat-title');
   const chatHint = document.getElementById('chat-hint');
@@ -325,6 +326,8 @@ export function initChatModelPicker({
     chatTitleEl.textContent = title;
     chatTitleEl.title = title;
     chatTitleEl.removeAttribute('lang');
+    // The kind of task next to the title follows the same chat (#1282).
+    onChatTitleShown();
   }
 
   /**

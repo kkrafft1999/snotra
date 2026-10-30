@@ -1916,6 +1916,16 @@ module.exports = {
   'cost.note.estimate': 'An estimate in US dollars: list prices, without batch, priority or long-context surcharges. Your provider’s bill is what counts.',
   'cost.note.notCounted': 'Not included: image generation, voice input and the chat title.',
 
+  // ── Kind of task in the chat header (#1282) ──────────────────────────────
+  'chat.taskKind.heading': 'Kind of task',
+  'chat.taskKind.source.model': 'Suggested by the model',
+  'chat.taskKind.source.estimate': 'Estimated by Snotra',
+  'chat.taskKind.source.user': 'Set by you',
+  'chat.taskKind.source.none': 'Not classified yet — pick the kind that fits.',
+  'chat.taskKind.button.label': 'Kind of task: {kind}. {source}. Change kind',
+  'chat.taskKind.button.labelUnclassified': 'Kind of task: unclassified. Choose a kind',
+  'chat.taskKind.error': 'The kind could not be saved. Try again.',
+
   // ── Kinds of task (#1281) ────────────────────────────────────────────────
   'taskKind.coding': 'Coding',
   'taskKind.coding.definition': 'Writing, changing, reviewing or debugging code, scripts and configuration.',

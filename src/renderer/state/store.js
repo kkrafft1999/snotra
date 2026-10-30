@@ -44,5 +44,8 @@ export const appStore = {
   // Titel der geladenen Konversation. Leer bei einem neuen Chat — dann leitet
   // die Kopfzeile den Titel aus der ersten Nutzerfrage ab.
   currentChatTitle: '',
+  // The kind of task of the chat on screen as stored (#1282), or null while
+  // it has none. Shown and changed in the header.
+  currentChatTaskKind: null,
   lastFocusBeforeModal: null,
 };

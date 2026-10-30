@@ -5,6 +5,7 @@ import { initSidebarResizer } from './components/SidebarResizer.js';
 import { initFileTree } from './components/FileTree.js';
 import { initVoiceRecorder } from './voice/VoiceRecorder.js';
 import { initChatModelPicker } from './components/ChatModelPicker.js';
+import { initChatTaskKind } from './components/ChatTaskKind.js';
 import { initChatStream } from './components/ChatStream.js';
 import { initMentionAutocomplete } from './components/MentionAutocomplete.js';
 import { createWorkspacePathSource } from './tree/workspacePaths.js';
@@ -286,7 +287,14 @@ onLocaleChange(() => {
 
 // Parts further down that follow the active model (#1013); set once they exist.
 let afterLlmStateChange = () => {};
-const modelPicker = initChatModelPicker({ api, appStore, onLlmStateChanged: () => afterLlmStateChange() });
+// The kind of task in the chat header (#1282) is drawn with the title.
+const chatTaskKind = initChatTaskKind({ api, appStore });
+const modelPicker = initChatModelPicker({
+  api,
+  appStore,
+  onLlmStateChanged: () => afterLlmStateChange(),
+  onChatTitleShown: () => chatTaskKind.sync(),
+});
 // A phone set the level of the chat on screen (#1304): the model button shows it.
 api.onChatReasoningChanged?.((payload) => {
   if (payload?.chatId && payload.chatId === appStore.currentChatId) void modelPicker.refreshLLMState().catch(() => {

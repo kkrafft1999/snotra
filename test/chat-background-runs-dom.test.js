@@ -553,3 +553,16 @@ test('a name main gives the chat shows in the header, and not for a chat deleted
   env.emitProgress({ type: 'chat-named', chatId: 'chat-b', title: 'Gone' });
   assert.equal(appStore.currentChatTitle, 'Dead links in the docs');
 });
+
+test('a kind of task main sends with the name reaches the header, or the chat in the background (#1282)', async (t) => {
+  const env = await mount();
+  t.after(env.dom.cleanup);
+  const { appStore } = env;
+  const coding = { id: 'coding', source: 'model', at: '2026-10-30T09:00:00.000Z' };
+  // A round that only classified the chat brings no title.
+  env.emitProgress({ type: 'chat-named', chatId: 'chat-a', taskKind: coding });
+  assert.deepEqual(appStore.currentChatTaskKind, coding);
+
+  env.emitProgress({ type: 'chat-named', chatId: 'chat-a', taskKind: { id: 'nonsense here' } });
+  assert.deepEqual(appStore.currentChatTaskKind, coding, 'a kind that is none changes nothing');
+});

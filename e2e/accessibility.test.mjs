@@ -172,6 +172,11 @@ test('the workspace and every settings section pass axe, light and dark; System 
   await waitForSettledWindow(page);
   await page.mouse.move(0, 0);
   await checkScreen(page, 'workspace', findings);
+  // The kind of task in the chat header, opened (#1282).
+  await page.click('#btn-chat-kind');
+  await poll(() => shown(page, 'chat-kind-menu'), { what: 'the kind menu' });
+  await checkScreen(page, 'workspace › kind of task', findings, { context: '#chat-header' });
+  await page.keyboard.press('Escape');
   // The phone in the title bar, connected and keeping awake (#1196).
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents
     .send('remote:presence', { connected: true, keepingAwake: true }));
