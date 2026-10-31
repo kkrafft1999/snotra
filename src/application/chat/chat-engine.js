@@ -73,7 +73,7 @@ const { markCovertSignals, hasCovertSignal } = require('./embedded-text-signals'
 const { scanSensitiveContent, maskSensitiveContent } = require('../../shared/runtime/sensitive-content');
 const { findCovertSignals } = require('./injection-detector');
 const { planRules, applyKnowledgeBudget, buildRulesSystemPrompt } = require('./rules-prompt');
-const { RULE_SOURCES, RULE_LEVELS, LOAD_RULE_TOOL, ruleSwitchKey } = require('../../shared/contracts/rules');
+const { RULE_SOURCES, RULE_LEVELS, RULE_LIMITS, LOAD_RULE_TOOL, ruleSwitchKey } = require('../../shared/contracts/rules');
 const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
 const { PROJECT_INSTRUCTION_SOURCES } = require('../../shared/contracts/project-instructions');
 const { MAX_TOOL_ROUNDS_MIN, clampMaxToolRounds } = require('../../shared/contracts/settings');
@@ -132,7 +132,7 @@ const {
  *
  * What a card's answer comes to (`askUser`): an answer, or a lapse.
  * @typedef {{ response?: string, reason?: string, invalidated?: boolean, ruleId?: string,
- *   sandboxPaths?: string[] }} CardAnswer
+ *   sandboxPaths?: string[], knowledgeChoice?: { kind: string, scope: string } }} CardAnswer
  *
  * Why a call was refused, for the audit entry and the message to the model.
  * @typedef {{ reason?: string, ruleId?: string, riskClasses?: string[]|null, mode?: string,
@@ -705,6 +705,15 @@ function buildHistoryContextParts(messages) {
     );
   }
   return parts;
+}
+
+/**
+ * The arguments of a `remember` call as a key: what a re-sorted card approved (#1276).
+ *
+ * @param {Record<string, unknown>} args
+ */
+function stableKnowledgeKey(args) {
+  return JSON.stringify(Object.keys(args).sort().map((key) => [key, args[key]]));
 }
 
 /**
@@ -2036,6 +2045,33 @@ function createChatEngine({
       }
 
       /**
+       * The facts about a `remember` card only this run knows (#1276): a
+       * switched-off target — the entry is written all the same, but does not
+       * apply until it is switched on — and a new `always` rule that no longer
+       * fits its level's 8,000 characters and will be offered on demand.
+       *
+       * @param {{ kind?: string, scope?: string, topic?: string, always?: boolean, entry?: string, ruleFile?: unknown }} card
+       */
+      function knowledgeCardRunFacts(card) {
+        const facts = {};
+        const user = card.scope === 'user';
+        let off = false;
+        if (card.scope === 'team') off = uiPrefs.projectInstructionsEnabled === false;
+        else if (card.kind === 'rule') {
+          off = (user ? uiPrefs.rulesUserEnabled : uiPrefs.rulesWorkspaceEnabled) === false
+            || (Array.isArray(uiPrefs.disabledRules) && typeof card.topic === 'string'
+              && uiPrefs.disabledRules.includes(ruleSwitchKey({ source: user ? RULE_SOURCES.USER_SNOTRA : RULE_SOURCES.WORKSPACE, name: card.topic }, workspaceRoot)));
+        } else off = (user ? uiPrefs.memoryUserEnabled : uiPrefs.memoryWorkspaceEnabled) === false;
+        if (off) facts.switchedOff = true;
+        if (card.kind === 'rule' && card.scope !== 'team' && card.always === true && !card.ruleFile) {
+          const level = user ? RULE_LEVELS.USER : RULE_LEVELS.WORKSPACE;
+          const used = ruleFiles.filter((file) => file.always && file.level === level).reduce((sum, file) => sum + file.body.length, 0);
+          if (used + (card.entry || '').length + 40 > RULE_LIMITS.ALWAYS_CHARS_PER_LEVEL) facts.alwaysOverBudget = true;
+        }
+        return facts;
+      }
+
+      /**
        * Whether a knowledge card warns (#1280, decision 11): a tool result
        * anywhere in this chat was flagged — in an earlier turn, which the
        * stored history tells, or in this run — or the folder's embedded text
@@ -2165,6 +2201,9 @@ function createChatEngine({
         // earlier or in this run — or the folder's own text showed a covert
         // signal (#1280, decision 11). A warning, never a block.
         if (request.knowledge === true && knowledgeWarningApplies()) request.knowledgeWarning = true;
+        // What only the run knows about a `remember` card (#1276): whether the
+        // target is switched off, and whether a new `always` rule still fits.
+        if (request.knowledgeCard) Object.assign(request.knowledgeCard, knowledgeCardRunFacts(request.knowledgeCard));
         // What the sandbox refused and what the card may offer (#792). Its
         // "for this session" opens a resource for the chat's runs, not a tool
         // call, so the call's risk classes do not decide whether it is offered
@@ -2266,6 +2305,10 @@ function createChatEngine({
         // the user's click, the next identical one on the rule.
         if (outcome.response === APPROVAL_RESPONSES.ALLOW_ALWAYS && request.alwaysAllowed) {
           return { response: APPROVAL_RESPONSES.ALLOW_ALWAYS, ruleId: outcome.ruleId };
+        }
+        // A `remember` card the user re-sorted (#1276): the choice goes with the answer.
+        if (outcome.response === APPROVAL_RESPONSES.ALLOW_ONCE && request.knowledgeCard && outcome.knowledgeChoice) {
+          return { response: APPROVAL_RESPONSES.ALLOW_ONCE, knowledgeChoice: outcome.knowledgeChoice };
         }
         // A wider answer than the card offered counts as once; an answer that
         // is none of the four allows nothing (#532) — fail-safe, as the port says.
@@ -2864,6 +2907,9 @@ function createChatEngine({
         const callOutsideGrants = [];
         /** @type {{ key: string, source: string | undefined } | null} */
         let outsideApproval = null;
+        /** The arguments a `remember` card re-sorted and so approved (#1276). */
+        /** @type {string | null} */
+        let knowledgeApproved = null;
         const outsideGrants = () => [...sessionOutsideGrants(scopeKey), ...callOutsideGrants];
 
         for (let attempt = 0; attempt < MAX_PLAN_ATTEMPTS; attempt += 1) {
@@ -2967,10 +3013,44 @@ function createChatEngine({
             }
             source = outsideApproval.source;
             ruleId = undefined;
+          } else if (verdict.decision === POLICY_DECISIONS.ASK && knowledgeApproved !== null && knowledgeApproved === stableKnowledgeKey(args)) {
+            // Re-sorted on the card a moment ago: that card was the approval.
+            source = PERMISSION_DECISION_SOURCES.ALLOW_ONCE;
+            ruleId = undefined;
           } else if (verdict.decision === POLICY_DECISIONS.ASK) {
             const answer = await askUser({ entry, callIndex, toolName, plan, verdict, policy, checkpoint: 'access' });
             const refusal = refusalFromAnswer(answer, entry, { riskClasses, mode: policy.mode, targets: plan.targets });
             if (refusal) return refusal;
+            // A `remember` card the user re-sorted (#1276). Another reader, or
+            // a fact instead of a rule, the card can do itself: the call goes on
+            // with that, and the card counts as its approval. A rule or a
+            // procedure needs wording the card cannot invent — back to the model.
+            const choice = answer.knowledgeChoice;
+            if (choice && plan.knowledgeCard && (choice.kind !== plan.knowledgeCard.kind || choice.scope !== plan.knowledgeCard.scope)) {
+              if (choice.kind !== plan.knowledgeCard.kind && choice.kind !== 'fact') {
+                return permissionDenied(entry, {
+                  reason: PERMISSION_DENIAL_REASONS.USER_DENIED,
+                  riskClasses,
+                  mode: policy.mode,
+                  targets: plan.targets,
+                  message: choice.kind === 'rule'
+                    ? `The user wants this stored as a rule for the reader "${choice.scope}", not as a ${plan.knowledgeCard.kind}. `
+                      + 'Phrase it as a condition ("When …, …"), pick a topic and a description, and call remember again with kind "rule".'
+                    : `The user wants this stored as a procedure for the reader "${choice.scope}". Procedures are skills: `
+                      + 'write down its steps and call remember with kind "instruction", or tell the user that this is not possible yet.',
+                });
+              }
+              if (choice.kind !== plan.knowledgeCard.kind) {
+                delete args.topic;
+                delete args.description;
+                delete args.always;
+                args.kind = choice.kind;
+              }
+              args.scope = choice.scope;
+              knowledgeApproved = stableKnowledgeKey(args);
+              lastPlanKey = plan.planKey;
+              continue;
+            }
             source =
               answer.response === APPROVAL_RESPONSES.ALLOW_SESSION
                 ? PERMISSION_DECISION_SOURCES.ALLOW_SESSION

@@ -425,6 +425,16 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   without a watcher**: these are three files that are read afresh per request —
   unlike the skill catalogue, which scans entire directories and parses front
   matter, and therefore needs both
+- `knowledge-writer-port` — where `remember` writes (#1276):
+  `main/adapters/knowledge-writer-adapter.js` puts a fact into the level's
+  `memory.md` (through the memory port), a rule into
+  `<workspace>/.agents/rules/<topic>.md` or `~/.snotra/rules/<topic>.md`, and the
+  reader `team` into Snotra's own section at the end of the folder's
+  `AGENTS.md` — never `~/.agents/` and never the global `AGENTS.md`. Its
+  `describe` tells the card beforehand what will happen: the target, the rules
+  file as it is, the entry `replaces` would remove, the targets the pills
+  switch to, and what the open folder brings; a request it cannot write is
+  refused there, before anyone is asked
 - `knowledge-files-port` — snapshots of the knowledge files around a shell or
   Python command (#1319): `main/adapters/knowledge-files-adapter.js` reads
   `AGENTS.md`, `.agents/memory.md`, `.agents/rules/**`, `.agents/skills/**` and

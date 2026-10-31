@@ -555,6 +555,8 @@ export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
     invisibleWarning: '',
     // The chat met a likely injection, or the folder's text a covert signal (#1280).
     knowledgeWarning: dto.knowledge === true && dto.knowledgeWarning === true ? t('approval.warning.knowledge') : '',
+    // A remember card: kind and reader as pills (#1276).
+    remember: buildRememberView(dto),
     preview: null,
     actions: {
       once: { response: APPROVAL_RESPONSES.ALLOW_ONCE, label: t('approval.action.once'), enabled: true },
@@ -640,6 +642,18 @@ export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
     }
   }
   if (invisible > 0) view.invisibleWarning = tPlural('approval.warning.invisible', invisible);
+  // A remember card (#1276) says what is remembered in its own rows; the
+  // entry is one of them, so the preview would only repeat it.
+  if (view.remember) {
+    const headline = t(`approval.remember.headline.${view.remember.card.kind}`);
+    view.title = t('approval.remember.title');
+    view.headline = { targetLabel: '', verb: '', tool: view.headline.tool, template: headline, text: headline };
+    view.preview = null;
+    view.memoryScopeLabel = '';
+    view.actions.once = { ...view.actions.once, label: t('approval.remember.action') };
+    // Remembering is approved one entry at a time: two buttons, no session.
+    view.actionOrder = ['once', 'deny'];
+  }
   return view;
 }
 
@@ -975,4 +989,83 @@ export function describeKnowledgeChangeOutcome({ response, invalidated, aborted 
     return { status: 'denied', label: t('approval.knowledgeChange.outcome.reset.label'), detail: t('approval.knowledgeChange.outcome.reset.detail') };
   }
   return { status: 'allowed', label: t('approval.knowledgeChange.outcome.kept.label'), detail: t('approval.knowledgeChange.outcome.kept.detail') };
+}
+
+const REMEMBER_KINDS = ['fact', 'rule', 'instruction'];
+const REMEMBER_READERS = ['user', 'workspace', 'team'];
+
+/**
+ * A remember card (#1276), variant A of the mockup: kind and reader as pill
+ * groups in the card's rows, the proposal selected. `rememberState` works out
+ * what follows from a choice — the target, the rows, the button — so that the
+ * card can redraw them when a pill changes, without asking main again.
+ *
+ * @param {any} dto
+ */
+export function buildRememberView(dto) {
+  const card = dto?.knowledgeCard;
+  if (!card || typeof card !== 'object') return null;
+  return {
+    card,
+    kinds: REMEMBER_KINDS.map((value) => ({ value, label: t(`approval.remember.kind.${value}`) })),
+    readers: REMEMBER_READERS.map((value) => ({ value, label: t(`approval.remember.reader.${value}`) })),
+  };
+}
+
+/**
+ * What a remember card shows for a kind and a reader.
+ *
+ * @param {any} card  the DTO's `knowledgeCard`
+ * @param {string} kind
+ * @param {string} scope
+ */
+export function rememberState(card, kind, scope) {
+  const proposal = kind === card.kind && scope === card.scope;
+  // A rule or a procedure the model did not propose needs its wording: the
+  // card sends it back instead of writing it (#1276).
+  const sendBack = kind !== card.kind && kind !== 'fact';
+  const alternative = proposal ? card.target : card.alternatives?.[kind]?.[scope] ?? null;
+  // A reader is there when the folder allows it — a fact has a place for every
+  // reader that exists; a procedure has no `team` reader.
+  /** @type {(value: string) => boolean} */
+  const readerEnabled = (value) => (value === card.scope && kind === card.kind)
+    || (Boolean(card.alternatives?.fact?.[value]) && !(kind === 'instruction' && value === 'team'));
+  const notes = [];
+  if (sendBack) notes.push(t(kind === 'rule' ? 'approval.remember.sendBack.rule' : 'approval.remember.sendBack.instruction'));
+  if (!sendBack && card.switchedOff === true && proposal) notes.push(t('approval.remember.switchedOff'));
+  if (!sendBack && scope === 'user' && (card.folderInstructions?.agentsMd || card.folderInstructions?.rulesFiles > 0)) {
+    const parts = [];
+    if (card.folderInstructions.agentsMd) parts.push('AGENTS.md');
+    if (card.folderInstructions.rulesFiles > 0) parts.push(t('approval.remember.rulesFiles', { count: card.folderInstructions.rulesFiles }));
+    notes.push(t('approval.remember.folderBrings', { what: parts.join(', ') }));
+  }
+  const rows = [];
+  if (!sendBack && kind === 'rule' && proposal && card.kind === 'rule') {
+    const old = card.ruleFile?.description || '';
+    const next = card.description || '';
+    if (next && old && next !== old) rows.push({ term: t('approval.remember.appliesWhen'), value: t('approval.remember.oldNew', { old, next }) });
+    else if (next || old) rows.push({ term: t('approval.remember.appliesWhen'), value: next || old });
+    const always = card.ruleFile ? card.ruleFile.always === true : card.always === true;
+    if (always) {
+      rows.push({
+        term: t('approval.remember.always'),
+        value: scope === 'user' ? t('approval.remember.always.user') : t('approval.remember.always.folder'),
+      });
+      if (card.alwaysOverBudget === true) notes.push(t('approval.remember.alwaysOverBudget'));
+    }
+  }
+  return {
+    kind,
+    scope,
+    proposal,
+    sendBack,
+    target: sendBack ? null : alternative,
+    readerNote: t(`approval.remember.readerNote.${scope}`),
+    readerEnabled,
+    rows,
+    notes,
+    replaced: proposal && card.replaced ? card.replaced.text : '',
+    primaryLabel: sendBack ? t('approval.remember.sendBackAction') : t('approval.remember.action'),
+    headline: t(`approval.remember.headline.${card.kind}`),
+  };
 }

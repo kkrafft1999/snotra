@@ -100,6 +100,7 @@ const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
 const { createProjectInstructionsAdapter } = require('../adapters/project-instructions-adapter');
 const { createRulesAdapter } = require('../adapters/rules-adapter');
 const { createKnowledgeFilesAdapter } = require('../adapters/knowledge-files-adapter');
+const { createKnowledgeWriterAdapter } = require('../adapters/knowledge-writer-adapter');
 const { globalKnowledgePaths } = require('../../shared/contracts/knowledge-files');
 const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
@@ -504,8 +505,7 @@ function createCore({
   const manualLookup = manual
     ? createManualLookup({ manual, loadLexer: () => loadVendoredMarkedLexer(MARKED_VENDOR_FILE, { readFileSync }) })
     : null;
-  // Which skills and tools a chat has (#773); assigned once the skills exist.
-  /** @type {ReturnType<typeof createChatConfigurationService>} */
+  /** @type {ReturnType<typeof createChatConfigurationService>} Which skills and tools a chat has (#773); assigned below. */
   let chatConfiguration;
   const toolRegistry = createWorkspaceToolRegistry({
     rules,
@@ -515,13 +515,13 @@ function createCore({
     urlFetch,
     shellRunner,
     memory,
+    knowledgeWriter: createKnowledgeWriterAdapter({ fs, path, os, memory, getLocale: getAppLocale, isSelfMemoryAllowed: defaultOnSwitch(uiPrefsStore, 'memorySelfEnabled') }),
     documentText,
     imageGeneration: imageGenerationSettings.adapter,
     // Built further down: it needs the skills and the MCP servers (#773).
     configuration: { describeForModel: (input) => chatConfiguration.describeForModel(input) },
     manual: manualLookup,
-    // What the releases changed for the user (#1191): the public list on GitHub.
-    releaseNotes: createReleaseNotesService({
+    releaseNotes: createReleaseNotesService({ // what the releases changed for the user (#1191)
       fetchImpl: fetchImpl || globalThis.fetch,
       getCurrentVersion: getAppVersion,
       getLocale: getAppLocale,

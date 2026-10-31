@@ -42,6 +42,8 @@
  * @property {object} [config]  `config` checkpoint: the proposal the card shows (#774)
  * @property {boolean} [knowledge]  a write to a knowledge file: asked in every mode, once at a time (#1319)
  * @property {boolean} [knowledgeWarning]  the chat met a likely injection, or the folder's text a covert signal (#1280)
+ * @property {import('../../shared/contracts/knowledge-write').KnowledgeCard} [knowledgeCard]  a `remember` card: what it
+ *   proposes and what the writer found (#1276)
  * @property {{ files: Array<{ path: string, status: string }> }} [knowledgeChange]  `knowledge` checkpoint: what a
  *   command changed in the folder's knowledge files — keep or reset (#1319)
  */
@@ -55,6 +57,8 @@
  * @property {string} [requestId]
  * @property {string} [ruleId]  the command rule stored for `allow-always` (#121)
  * @property {string[]} [sandboxPaths]  on a sandbox card: the path chosen for each entry (#792)
+ * @property {{ kind: string, scope: string }} [knowledgeChoice]  on a `remember` card: the kind and reader
+ *   the user chose, when they re-sorted it (#1276)
  * @property {{ kind: string, client?: string }} [by]  who answered, when it was not the window (#1197)
  */
 

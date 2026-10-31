@@ -33,6 +33,8 @@ A text editor. For rules of one project, an open folder.
 
 From the next message on, the rule applies.
 
+You don't have to write the file yourself: ask Snotra to remember a rule — *remember: when you write a commit message, write it in English* — and it proposes the rules file, its description and whether it applies always, on a card you approve. See [Let Snotra remember](../memory/).
+
 ## What happens
 
 - A rule with `always: true` goes along with every message in full.

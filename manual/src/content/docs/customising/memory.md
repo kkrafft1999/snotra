@@ -14,8 +14,11 @@ Nothing for the global memory. For the project memory, an open folder.
 ## Steps
 
 1. Say it in the chat: *Please remember that the beds are measured in centimetres.*
-2. Snotra asks whether it should keep it **for this project** or **globally**, for every folder — unless you already said so (*remember globally …*), or no folder is open.
-3. Approve the card. Remembering is a change to a file, so it asks like any other.
+2. Snotra asks who should read it — unless you already said so (*remember globally …*), or no folder is open:
+   - **Only you** — globally, in every folder.
+   - **Snotra in this folder** — in the project memory.
+   - **Every tool here** — in the folder's `AGENTS.md`, which other coding tools read too and which is usually shared with the team. [since 1.30]
+3. Check the card. [since 1.30] It shows what Snotra proposes as two rows of choices: *Kind* — a fact, a [rule](../rules/) or a procedure — and *Who reads it*. If Snotra sorted it wrongly, pick another one: another reader, or *Fact*, is written as you chose; *Rule* or *Procedure* goes back to Snotra, which words it and asks again. Then click *Remember*. The card asks in every mode, *Auto* included, one entry at a time.
 
 From the next message on, the sentence is part of what the model knows.
 
@@ -25,6 +28,7 @@ From the next message on, the sentence is part of what the model knows.
 | --- | --- | --- |
 | Project | `.agents/memory.md` in the open folder | this folder only |
 | Global | `~/.snotra/memory.md` in your home folder | every folder |
+| Every tool here | the section *Added by Snotra* at the end of `AGENTS.md` | this folder, and every tool that reads `AGENTS.md` |
 
 Both are ordinary Markdown files: you can read and edit them in any editor. The project memory moves with the folder — and it lives **inside your project**, so it can end up in a repository. What concerns only you belongs in the global memory.
 
