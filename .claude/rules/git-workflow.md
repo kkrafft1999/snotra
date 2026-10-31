@@ -8,9 +8,12 @@ protects — and what it is supposed to protect, a machine checks more reliably
 anyway:
 
 **Ruleset `23177645` on `main`** requires a pull request, forbids force-pushing
-and deleting the branch, and makes the three contexts `Tests (macos-14)`,
+and deleting the branch, and makes the three contexts `Tests (macos-15)`,
 `Tests (windows-latest)` and `Tests (ubuntu-latest)` mandatory. A red state does
-not get through, not even by accident.
+not get through, not even by accident. Until 2026-10-31 the macOS context was
+`Tests (macos-14)`; GitHub retires that runner on 2026-11-02 and failed it in
+scheduled brownouts before, so CI, the release build and the perf run moved to
+`macos-15` and the ruleset with them.
 
 Since 2026-09-20 `bypass_actors` is **empty** (#240). The rules therefore apply
 to the owner as well: a direct push to `main` fails hard instead of slipping

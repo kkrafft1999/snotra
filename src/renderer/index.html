@@ -1718,8 +1718,15 @@
                 <div class="popup-form__field">
                   <div class="modal-row popup-model-row">
                     <select id="select-model" class="modal-input modal-input--grow" aria-describedby="model-status popup-model-catalog-hint"></select>
-                    <input type="text" id="input-model" class="modal-input modal-input--grow hidden" list="model-name-options" autocomplete="off" spellcheck="false" aria-labelledby="label-model" aria-describedby="model-status popup-model-catalog-hint" />
-                    <datalist id="model-name-options"></datalist>
+                    <!-- A combobox of our own, not a datalist: Chromium filters a
+                         datalist by the text in the field (#1325). -->
+                    <div id="model-combobox" class="model-combobox hidden">
+                      <input type="text" id="input-model" class="modal-input" role="combobox" aria-autocomplete="none" aria-expanded="false" aria-controls="model-name-options" autocomplete="off" spellcheck="false" aria-labelledby="label-model" aria-describedby="model-status popup-model-catalog-hint" />
+                      <button type="button" id="btn-model-options" class="model-combobox__toggle hidden" tabindex="-1" aria-label="Show loaded models" data-i18n-attr="aria-label:addModel.model.showList" aria-controls="model-name-options" aria-expanded="false">
+                        <svg viewBox="0 0 10 6" width="10" height="6" aria-hidden="true"><path d="M0 0l5 6 5-6z" /></svg>
+                      </button>
+                      <ul id="model-name-options" class="model-combobox__menu hidden" role="listbox" aria-labelledby="label-model"></ul>
+                    </div>
                     <button type="button" id="btn-load-models" class="btn-secondary" data-i18n="addModel.model.load">Load models</button>
                   </div>
                   <p id="model-status" class="modal-hint" role="status"></p>
