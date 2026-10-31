@@ -425,6 +425,12 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   without a watcher**: these are three files that are read afresh per request —
   unlike the skill catalogue, which scans entire directories and parses front
   matter, and therefore needs both
+- `knowledge-files-port` — snapshots of the knowledge files around a shell or
+  Python command (#1319): `main/adapters/knowledge-files-adapter.js` reads
+  `AGENTS.md`, `.agents/memory.md`, `.agents/rules/**`, `.agents/skills/**` and
+  the global ones under `~/.snotra` and `~/.agents` within limits, compares two
+  snapshots into changes and a diff for the card, and puts a snapshot back on
+  *Reset*. A folder that links out of the open folder is not followed
 - `rules-port` — the rules files of the three sources, for the rules block and
   `load_rule` (#1275). `main/adapters/rules-adapter.js` lists the flat
   `*.md` files of `<workspace>/.agents/rules/`, `~/.snotra/rules/` and

@@ -18,6 +18,8 @@
  * @property {string} [recovery]  z. B. 'trash', wenn eine Wiederherstellungskopie angelegt wird
  * @property {string|null} [skillName]  the skill the path belongs to, also when given absolutely (#427)
  * @property {string} [skillPath]  the path inside that skill's folder
+ * @property {import('../../shared/contracts/knowledge-files').KnowledgeFileKind} [knowledge]  a knowledge file of the open folder is written (#1319)
+ * @property {boolean} [knowledgeAlways]  the rules file written says `always: true` (#1319)
  * @property {string} [absPath]  the resolved absolute path
  * @property {string|null} [root]  the folder the path resolved in: the open folder or a skill's; `null` for a target outside both
  * @property {string[]} [rulePaths]  the spellings a permission rule is matched against, lexical and real
@@ -61,6 +63,7 @@
  * @property {string} [error]  Plan nicht möglich (ungültige Argumente, Ausbruch, …)
  * @property {string} [reason]  PERMISSION_DENIAL_REASONS-Wert zu `error`
  * @property {boolean} [outside]  a target lies outside the open folder and no card has opened it (#792)
+ * @property {boolean} [knowledge]  a target is a knowledge file: a card in every mode, no stored allowance (#1319)
  * @property {string[]} [sensitivePathPatterns]  the user's patterns the plan was made with
  */
 
@@ -151,6 +154,8 @@
  * @property {import('../../shared/contracts/chat').SandboxLiveEntry[]|null} [sandboxLive]  connections decided while the command waited (#792)
  * @property {import('../../shared/contracts/chat').SandboxOutsideEntry[]|null} [sandboxOutside]  paths outside the open folder decided on a card (#792)
  * @property {{ originalChars: number, keptChars: number }} [shortened]  output cut to the budget (#169)
+ * @property {{ files: Array<{ path: string, status: string }>, kept: boolean }} [knowledgeChange]  what a command changed in
+ *   the folder's knowledge files, and whether the user kept it (#1319)
  * @property {import('../../shared/contracts/injection-flag').InjectionFlag} [injectionFlag]  the result looks like
  *   a prompt injection (#1011) — a warning for the user, read by nothing that decides
  * @property {string} [skillPath]  a skill file reached by its absolute path, in the skill's own spelling (#427)

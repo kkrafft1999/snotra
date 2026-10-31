@@ -17,10 +17,11 @@
  * @property {string} tool
  * @property {string[]} riskClasses
  * @property {Array<{ path: string, kind: string, exists: boolean, sensitive: boolean, version?: string|null,
- *   sensitiveReason?: string, recovery?: string, skillName?: string, skillPath?: string }>} targets
+ *   sensitiveReason?: string, recovery?: string, skillName?: string, skillPath?: string,
+ *   knowledge?: string, knowledgeAlways?: boolean }>} targets
  * @property {Array<object>} [reasonParts]  the card's explanation as catalogue keys, worded in the renderer (#306)
  * @property {string} mode
- * @property {'access'|'output'|'sandbox'|'config'} checkpoint  before the call runs, or before its sensitive
+ * @property {'access'|'output'|'sandbox'|'config'|'knowledge'} checkpoint  before the call runs, or before its sensitive
  *   output goes out (§4); after a run the sandbox refused something in (#792); a proposal to switch a skill
  *   or tool for the chat (#774)
  * @property {boolean} [sessionAllowed]  ob „Für diese Sitzung erlauben“ angeboten wird
@@ -39,6 +40,10 @@
  * @property {boolean} [workspaceAllowed]  `sandbox` checkpoint: whether "for this workspace" is offered (#946)
  * @property {string} [workspaceRoot]  `sandbox` checkpoint with `workspaceAllowed`: the folder the hosts are kept open for (#946)
  * @property {object} [config]  `config` checkpoint: the proposal the card shows (#774)
+ * @property {boolean} [knowledge]  a write to a knowledge file: asked in every mode, once at a time (#1319)
+ * @property {boolean} [knowledgeWarning]  the chat met a likely injection, or the folder's text a covert signal (#1280)
+ * @property {{ files: Array<{ path: string, status: string }> }} [knowledgeChange]  `knowledge` checkpoint: what a
+ *   command changed in the folder's knowledge files — keep or reset (#1319)
  */
 
 /**

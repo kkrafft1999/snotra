@@ -264,6 +264,9 @@ function createConversationService({ engine, history, describeError = (error) =>
         sessionId,
         payload: {
           messages: await messagesForModel(chatId, asked),
+          // A likely injection earlier in this chat (#1280): knowledge cards warn about it.
+          injectionFlagged: asked.some((message) => Array.isArray(message?.toolTrace)
+            && message.toolTrace.some((step) => step && typeof step === 'object' && step.injectionFlag)),
           workspaceRoot,
           selectedPath,
           selectedIsDirectory,

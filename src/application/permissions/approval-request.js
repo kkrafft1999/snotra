@@ -183,7 +183,10 @@ function buildApprovalRequest({
   encryptionAvailable,
 }) {
   const classes = normalizeRiskClasses(askClasses) || normalizeRiskClasses(plan?.riskClasses) || [];
+  // A knowledge file is approved one call at a time (#1319).
+  const knowledge = plan?.knowledge === true;
   const sessionAllowed =
+    !knowledge &&
     mode !== TOOL_PERMISSION_MODES.ASK_ALL &&
     classes.length > 0 &&
     classes.every((cls) => SESSION_GRANTABLE_CLASSES.includes(cls));
@@ -202,6 +205,8 @@ function buildApprovalRequest({
       recovery: target.recovery,
       // A target in a skill folder (#427/#429): the card names the skill.
       ...(target.skillName ? { skillName: target.skillName, skillPath: target.skillPath } : {}),
+      // A knowledge file (#1319): the card says what it is, and an `always` rule.
+      ...(target.knowledge ? { knowledge: target.knowledge, ...(target.knowledgeAlways ? { knowledgeAlways: true } : {}) } : {}),
     })),
     reasonParts: describeApprovalReason({
       mode,
@@ -229,6 +234,13 @@ function buildApprovalRequest({
   // Headline verb and warning, from the tool's descriptor (#1008).
   if (plan?.presentation && typeof plan.presentation === 'object') request.presentation = plan.presentation;
   if (typeof chatId === 'string' && chatId) request.chatId = chatId;
+  if (knowledge) {
+    // The reason is the file, not the mode: it asks in every mode (#1319).
+    request.reasonParts = [createMessage('approval.reason.knowledge')];
+    request.knowledge = true;
+    request.alwaysAllowed = false;
+    return request;
+  }
   const offer = describeCommandRuleOffer({ tool, plan, classes, mode, checkpoint, workspaceRoot, encryptionAvailable });
   if (offer?.rule) {
     request.alwaysAllowed = true;

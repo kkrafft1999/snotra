@@ -1574,6 +1574,27 @@ can be committed by anyone who works in it.
   *Keep* or *Reset* (#1319). No persistent allow rule covers such a write, and
   every global knowledge path is a protected write path of the sandbox, so a
   shell command cannot reach it at all.
+
+  Built in #1319: `shared/contracts/knowledge-files.js` names the knowledge
+  files — `AGENTS.md`, `.agents/memory.md`, `.agents/rules/**`,
+  `.agents/skills/**` in the open folder, and `~/.snotra/{memory.md,AGENTS.md,
+  rules,skills}`, `~/.agents/{AGENTS.md,rules,skills}` at home. The planner
+  marks a file-tool write to one (`plan.knowledge`); `decideToolPolicy` asks
+  for it in every mode, past session grants and allow rules — only a deny rule
+  wins — and the card offers neither *for this session* nor *always*. Around a
+  shell or Python command the engine takes a snapshot of the knowledge files
+  (`main/adapters/knowledge-files-adapter.js`, within limits; a folder that
+  links out of the open folder is not followed) and compares after it; a change
+  brings a `knowledge` card with the diff, and **the run waits** for it
+  (decided 2026-10-31). *Keep* lets the change stand, *Reset* puts back the
+  snapshot — in the open folder replacing whatever the command left there, a
+  symlink included, at home writing through a dotfiles link. A card nobody can
+  answer resets. The global files are in that snapshot too: on a platform or
+  in a folder without a sandbox, nothing else keeps a command out of them. The
+  file tools refuse a write into a global knowledge path (`fs-service.js`,
+  `outside-access.js`), and the sandbox lists them as protected write paths.
+  The remote channel carries the card in full and lets only a client that
+  declared `knowledge-cards` allow it; any other may only deny.
 - **The card warns.** When the injection detector has flagged a tool result
   **anywhere in the chat** — not only in the current run — or the folder's
   embedded text has shown a covert signal, every knowledge card shows a plain

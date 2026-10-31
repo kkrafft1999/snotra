@@ -3,6 +3,11 @@ const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { parseSkillDocument } = require('../../shared/runtime/skill-frontmatter');
 const { MAX_SKILL_BODY_CHARS, SKILL_DATA_DIR, SKILL_FOLDER_READ_ONLY, isValidSkillName } = require('../../shared/contracts/skills');
 
+/** The answer to a file-tool write into a global knowledge file (#1319). */
+const GLOBAL_KNOWLEDGE_READ_ONLY =
+  'The global memory, AGENTS.md and rules files under ~/.snotra and ~/.agents are not written with the file tools. '
+  + 'Use the tool "remember"; the user approves every entry on a card.';
+
 /** Dateiname der Skill-Anleitung — gespiegelt aus `skills-service.js`. */
 const SKILL_FILE = 'SKILL.md';
 const {
@@ -1519,6 +1524,7 @@ function applyHunksToLines(source, hunks, relativePath, eol) {
  * @param {() => Date} [deps.now]
  * @param {() => string} [deps.randomSuffix]
  * @param {string[]} [deps.globalSkillRoots]
+ * @param {string[]} [deps.globalKnowledgePaths]  global knowledge files and folders, written only by `remember` (#1319)
  * @param {() => string | undefined} [deps.getLocale]
  * @param {string} [deps.homeDir]
  */
@@ -1541,6 +1547,7 @@ function createFsService({
    * contains them (#650).
    */
   globalSkillRoots = [],
+  globalKnowledgePaths = [],
   /**
    * Sprache der Oberfläche (#292). Sie gilt nur für die Wege, die beim Nutzer
    * enden — Baum, Vorschau, Drag & Drop. Was ein Tool dem Modell zurückgibt,
@@ -1864,8 +1871,29 @@ function createFsService({
    * @param {string} absPath
    */
   async function isInGlobalSkillRoot(absPath) {
-    const roots = Array.isArray(globalSkillRoots)
-      ? globalSkillRoots.filter((dir) => typeof dir === 'string' && dir)
+    return isInAnyOf(globalSkillRoots, absPath);
+  }
+
+  /**
+   * A global knowledge file or folder (#1319) — `~/.snotra/memory.md`, its
+   * `AGENTS.md`, the rules folders: only `remember` writes there, with a card.
+   *
+   * @param {string} absPath
+   */
+  async function isGlobalKnowledgePath(absPath) {
+    return isInAnyOf(globalKnowledgePaths, absPath);
+  }
+
+  /**
+   * Whether a path is one of the given ones or lies inside one, compared as
+   * given and by real path.
+   *
+   * @param {unknown} list
+   * @param {string} absPath
+   */
+  async function isInAnyOf(list, absPath) {
+    const roots = Array.isArray(list)
+      ? list.filter((dir) => typeof dir === 'string' && dir)
       : [];
     if (roots.length === 0) return false;
     const target = path.resolve(absPath);
@@ -1982,6 +2010,10 @@ function createFsService({
     // global skill folder and the path reaches it as a workspace path (#650).
     if (access === 'write' && (await isInGlobalSkillRoot(checked.absPath))) {
       return { error: SKILL_FOLDER_READ_ONLY };
+    }
+    // The same for the global knowledge files (#1319).
+    if (access === 'write' && (await isGlobalKnowledgePath(checked.absPath))) {
+      return { error: GLOBAL_KNOWLEDGE_READ_ONLY };
     }
     return {
       absPath: checked.absPath,

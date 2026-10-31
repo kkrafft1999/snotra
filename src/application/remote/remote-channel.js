@@ -61,7 +61,9 @@ const CLIENT_NAME_MAX = 64;
 const CLIENT_VERSION_MAX = 32;
 const REQUEST_ID_MAX = 64;
 const KNOWN_LOCALES = new Set(LOCALES);
-const CAPABILITIES = new Set(['approvals']);
+// `knowledge-cards` (#1319, kkrafft1999/snotra-mobile#92): the client shows a
+// card about a knowledge file in full. Without it, such a card may only be denied.
+const CAPABILITIES = new Set(['approvals', 'knowledge-cards']);
 
 const encoder = new TextEncoder();
 

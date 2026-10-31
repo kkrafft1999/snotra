@@ -424,3 +424,40 @@ test('card: the image tool generates or redraws, unless replacing has no way bac
     'send to an external service',
   );
 });
+
+test('card: a knowledge file names what it is, offers no session and warns after a flag (#1319)', async () => {
+  const { buildApprovalCardView } = await load();
+  const view = buildApprovalCardView(dto({
+    knowledge: true,
+    knowledgeWarning: true,
+    sessionAllowed: false,
+    targets: [{ path: '.agents/rules/deploy.md', kind: 'file', exists: false, sensitive: false, knowledge: 'rules', knowledgeAlways: true }],
+  }));
+  assert.deepEqual(view.targets[0].notes, ['new', 'rules file — Snotra reads it in every chat in this folder', 'always: goes along with every message']);
+  assert.equal(view.actions.session.enabled, false);
+  assert.match(view.actions.session.hint, /one at a time, in every mode/);
+  assert.match(view.knowledgeWarning, /read like hidden instructions/);
+  assert.equal(buildApprovalCardView(dto({ knowledgeWarning: true })).knowledgeWarning, '', 'the warning belongs to knowledge cards');
+});
+
+test('card: after a command changed AGENTS.md, Keep and Reset, in both languages (#1319)', async () => {
+  const { buildKnowledgeChangeCardView, describeKnowledgeChangeOutcome } = await load();
+  const change = dto({
+    tool: 'shell_execute',
+    checkpoint: 'knowledge',
+    knowledge: true,
+    sessionAllowed: false,
+    targets: [{ path: 'AGENTS.md', kind: 'file', exists: true, sensitive: false, knowledge: 'agents' }],
+    preview: { kind: 'diff', text: '-a\n+b', truncated: false, masked: false },
+  });
+  const view = buildKnowledgeChangeCardView(change);
+  assert.equal(view.title, 'A command changed a knowledge file');
+  assert.equal(view.headline.text, 'The command changed AGENTS.md (shell_execute). Keep the change?');
+  assert.deepEqual(view.actionOrder.map((key) => view.actions[key].label), ['Keep', 'Reset']);
+  assert.equal(describeKnowledgeChangeOutcome({ response: 'deny' }).label, 'Reset');
+  await inGerman(async () => {
+    const german = buildKnowledgeChangeCardView(change);
+    assert.deepEqual(german.actionOrder.map((key) => german.actions[key].label), ['Behalten', 'Zurücksetzen']);
+    assert.equal(german.headline.text, 'Der Befehl hat AGENTS.md geändert (shell_execute). Änderung behalten?');
+  });
+});

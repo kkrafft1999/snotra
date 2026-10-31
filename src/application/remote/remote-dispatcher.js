@@ -148,6 +148,7 @@ const newestFirst = (/** @type {{ updatedAt: number, chatId: string }} */ a, /**
  * @property {string|null} lastState  what `state` said last, to say it again only when it changed
  * @property {boolean} resyncing
  * @property {boolean} approvals  it declared the `approvals` capability: it is offered the cards of its chats
+ * @property {boolean} knowledgeCards  it declared `knowledge-cards`: it shows a knowledge card in full (#1319)
  */
 
 /**
@@ -495,7 +496,9 @@ function createRemoteDispatcher({
   const cardFor = (entry, dto, root) => display.approvalRequest(dto, {
     root,
     word: (message) => word(entry.connection.locale, message),
-    options: entry.approvals ? [...APPROVAL_RESPONSES] : [],
+    // A card about a knowledge file (#1319) is answered as proposed, and only
+    // by a client that shows all of it; any other may only deny it.
+    options: !entry.approvals ? [] : dto.knowledge === true && !entry.knowledgeCards ? ['deny'] : [...APPROVAL_RESPONSES],
   });
 
   /**
@@ -651,6 +654,7 @@ function createRemoteDispatcher({
         const card = desktop.pendingApprovals().find((dto) => dto.requestId === requestId);
         const root = card && typeof card.chatId === 'string' ? entry.subscriptions.get(card.chatId) : undefined;
         if (!card || root === undefined) throw new Refusal('not-found');
+        if (card.knowledge === true && !entry.knowledgeCards && response !== 'deny') throw new Refusal('refused');
         // A sandbox card's offers are named as the connection saw them: relative inside the workspace.
         const chosen = Array.isArray(sandboxPaths) ? sandboxPaths.map((p, i) => fromShown(card, i, p, root)) : undefined;
         const answered = desktop.respondToApproval(requestId, { response, sandboxPaths: chosen }, {
@@ -846,6 +850,7 @@ function createRemoteDispatcher({
         lastState: null,
         resyncing: false,
         approvals: Array.isArray(connection.capabilities) && connection.capabilities.includes('approvals'),
+        knowledgeCards: Array.isArray(connection.capabilities) && connection.capabilities.includes('knowledge-cards'),
       };
       open.set(connection.id, entry);
       listen();
