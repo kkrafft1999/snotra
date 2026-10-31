@@ -4,6 +4,7 @@ const { SANDBOX_REASONS } = require('../../shared/contracts/sandbox-reasons');
 const { LIST_DIRECTORY_MAX_ENTRIES } = require('../../shared/contracts/list-directory');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
+const { LOAD_RULE_TOOL, RULE_LEVELS, RULE_LEVEL_PROMPT_LABELS } = require('../../shared/contracts/rules');
 const {
   LOAD_MCP_TOOLS_TOOL,
   LAZY_MCP_TOOLS_THRESHOLD,
@@ -98,7 +99,8 @@ function toDisabledNameSet(disabledNames) {
  * Which tools the model is offered, and with what (#773). `revealedNames`
  * are the MCP tools whose schema the run has loaded with `load_tools` (#188).
  * @typedef {{ allowedNames?: string[] | null, disabledNames?: string[] | null, workspaceOpen?: boolean,
- *   skillNames?: string[] | null, revealedNames?: string[] | null }} OfferOptions
+ *   skillNames?: string[] | null, ruleNames?: Array<{ name: string, level: string }> | null,
+ *   revealedNames?: string[] | null }} OfferOptions
  */
 
 /** Longest catalog line text for a deferred MCP tool, in characters (#188). */
@@ -199,6 +201,8 @@ function createToolRegistry(initialDefinitions = []) {
       // Standard false: nur `load_skill` haengt daran, dass ueberhaupt ein
       // Skill eingeschaltet ist (Issue #173).
       requiresSkills: definition.requiresSkills === true,
+      // Standard false: `load_rule` has nothing to load without a rules file (#1275).
+      requiresRules: definition.requiresRules === true,
       // Standard false: a read tool that also takes `skill:<name>/…` paths
       // (#429). Without an open folder it is still offered while a skill is
       // switched on — it then reaches the skill folders and nothing else. No
@@ -332,6 +336,7 @@ function createToolRegistry(initialDefinitions = []) {
     disabledNames,
     workspaceOpen = true,
     skillNames = null,
+    ruleNames = null,
   } = {}) {
     // Kein `skillNames` heisst „nicht gesagt" und nicht „keine" — sonst waeren
     // alle Aufrufer ohne Skill-Kontext (Tests, Katalog) ploetzlich skilllos.
@@ -358,6 +363,10 @@ function createToolRegistry(initialDefinitions = []) {
     // Ohne eingeschalteten Skill hat `load_skill` nichts zu laden und
     // kostet nur ein Schema in jeder Anfrage (Issue #173).
     if (!skillsAvailable && definition.requiresSkills === true) return TOOL_OFFER_REASONS.NO_SKILL;
+    // The same for `load_rule` (#1275): no `ruleNames` means "not said".
+    if (Array.isArray(ruleNames) && ruleNames.length === 0 && definition.requiresRules === true) {
+      return TOOL_OFFER_REASONS.NO_RULE;
+    }
     return null;
   }
 
@@ -900,6 +909,7 @@ function sandboxDisabledByPlan(plan) {
  *   shellRunner?: (import('../ports/shell-execution-port').ShellExecutionPort
  *     & { setupNeeded?: () => string | undefined }) | null,
  *   memory?: import('../ports/memory-port').MemoryPort | null,
+ *   rules?: import('../ports/rules-port').RulesPort | null,
  *   documentText?: { runExtractDocumentTextTool: (args: import('../ports/tool-port').ToolArguments,
  *     workspaceRoot: string | null | undefined, options: object) => Promise<string> } | null,
  *   imageGeneration?: import('../ports/image-generation-port').ImageGenerationPort | null,
@@ -917,6 +927,8 @@ function createWorkspaceToolRegistry({
   urlFetch = null,
   shellRunner = null,
   memory = null,
+  /** Reads the rules files for `load_rule` (#1275), see rules-adapter.js. */
+  rules = null,
   documentText = null,
   imageGeneration = null,
   /** Reads the chat's skills and tools for `get_configuration` (#773). */
@@ -962,6 +974,87 @@ function createWorkspaceToolRegistry({
       },
       handler: (args, { workspaceRoot, skillRoots, outsideRoots, sensitivity }) =>
         fsService.runListDirectoryTool(args, workspaceRoot, { skillRoots, outsideRoots, sensitivity }),
+    },
+    {
+      name: LOAD_RULE_TOOL,
+      // Descriptor (#1008): see tool-descriptor.js.
+      category: TOOL_CATEGORIES.RULE,
+      configGroup: CONFIG_TOOL_GROUPS.OTHER,
+      display: { key: 'tools.line.loadRule', target: TOOL_LINE_TARGETS.RULE_NAME },
+      riskClass: TOOL_RISK_CLASSES.READ,
+      // The global rules need no open folder, and the model names no path: the
+      // rules port decides where a rule lies, so there is nothing for a card.
+      requiresWorkspace: false,
+      requiresRules: true,
+      // The only way to the body of a rule from the catalogue — like
+      // `load_skill`, not something the user can untick (#195).
+      essential: true,
+      targets: () => [],
+      isAvailable: () => rules !== null,
+      descriptionKey: 'tools.desc.load_rule',
+      modelDescription:
+        'Loads a rule from the rules files. The prompt lists each rule with the situation it applies '
+        + 'to — before each step that matches one, not only before you start, fetch it with this tool '
+        + 'and follow it. Do not guess what a rule says.',
+      shortDescriptionKey: 'tools.short.load_rule',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Name of the rule, exactly as in the list of rules.' },
+          scope: {
+            type: 'string',
+            enum: [RULE_LEVELS.WORKSPACE, RULE_LEVELS.USER],
+            description: '"workspace" for a rule marked "project", "user" for one marked "global".',
+          },
+        },
+        required: ['name', 'scope'],
+      },
+      // The rules of this request as an enum, as with `load_skill` (#173).
+      /** @param {{ ruleNames?: unknown }} [context] */
+      parametersFor: ({ ruleNames } = {}) => {
+        const names = Array.isArray(ruleNames)
+          ? [...new Set(ruleNames.map((entry) => entry?.name).filter((name) => typeof name === 'string' && name))]
+          : [];
+        return {
+          type: 'object',
+          properties: {
+            name: {
+              type: 'string',
+              description: 'Name of the rule, exactly as in the list of rules.',
+              ...(names.length > 0 ? { enum: names } : {}),
+            },
+            scope: {
+              type: 'string',
+              enum: [RULE_LEVELS.WORKSPACE, RULE_LEVELS.USER],
+              description: '"workspace" for a rule marked "project", "user" for one marked "global".',
+            },
+          },
+          required: ['name', 'scope'],
+        };
+      },
+      handler: async (args, { workspaceRoot, ruleNames } = {}) => {
+        if (!rules) return JSON.stringify({ error: 'Rules files are not available in this installation.' });
+        const name = typeof args?.name === 'string' ? args.name.trim() : '';
+        const level = args?.scope === RULE_LEVELS.USER ? RULE_LEVELS.USER : RULE_LEVELS.WORKSPACE;
+        // Only what the prompt listed: a rule switched off or shadowed is not there to load.
+        const listed = Array.isArray(ruleNames) ? ruleNames : [];
+        if (!listed.some((entry) => entry?.name === name && entry?.level === level)) {
+          const known = listed.map((entry) => `${entry.name} (${entry.level})`).join(', ');
+          return JSON.stringify({ error: `There is no rule "${name}" at the level "${level}". Rules: ${known || 'none'}.` });
+        }
+        try {
+          const rule = await rules.loadRule({ workspaceRoot, name, level });
+          if (!rule) return JSON.stringify({ error: `The rule "${name}" could not be read; it may have been removed.` });
+          return JSON.stringify({
+            rule: rule.name,
+            level: RULE_LEVEL_PROMPT_LABELS[rule.level],
+            applies_when: rule.description,
+            body: rule.truncated ? `${rule.body}\n… [truncated]` : rule.body,
+          });
+        } catch (error) {
+          return JSON.stringify({ error: error?.message || 'The rule could not be read.' });
+        }
+      },
     },
     {
       name: LOAD_SKILL_TOOL,

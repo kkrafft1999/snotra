@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 1340" width="1440" height="1340" role="img" aria-labelledby="title desc" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
   <title id="title">Snotra Agent — where the agent's text comes from</title>
-  <desc id="desc">Map of every source of text that reaches the model request. The colour of a box shows the kind of information — fact, rule, procedure, project instruction, conversation, data from tools, app text and settings; the column shows when it is loaded. Left: what is read from disk at every send and becomes the system message — base prompt from the settings, global memory (facts), skills (procedures), environment, AGENTS.md (project instructions), the planned rules files, project memory, the workspace and tools block — and what each message brings: the windowed chat history and the composer input. Middle: the request to the model provider with the system message in its fixed order, the tool schemas and the messages. Right: tools the model calls on demand during a run — local reads, documents, load_skill, the planned load_rule and search_chats, shell and Python, web search and URL fetch, MCP servers, and writes whose results are only confirmations. Dashed boxes are planned. Below: guards on the way in, the provider endpoint, and two separate smaller model calls for titles and skill suggestions.</desc>
+  <desc id="desc">Map of every source of text that reaches the model request. The colour of a box shows the kind of information — fact, rule, procedure, project instruction, conversation, data from tools, app text and settings; the column shows when it is loaded. Left: what is read from disk at every send and becomes the system message — base prompt from the settings, global memory (facts), skills (procedures), environment, AGENTS.md (project instructions), the rules files, project memory, the workspace and tools block — and what each message brings: the windowed chat history and the composer input. Middle: the request to the model provider with the system message in its fixed order, the tool schemas and the messages. Right: tools the model calls on demand during a run — local reads, documents, load_skill and load_rule, the planned search_chats, shell and Python, web search and URL fetch, MCP servers, and writes whose results are only confirmations. Dashed boxes are planned. Below: guards on the way in, the provider endpoint, and two separate smaller model calls for titles and skill suggestions.</desc>
   <defs>
     <marker id="m-app" viewBox="0 0 8 6" markerWidth="9" markerHeight="7" refX="7" refY="3" orient="auto-start-reverse"><path d="M0,0 L8,3 L0,6 Z" fill="#5a6a78"/></marker>
     <marker id="m-fact" viewBox="0 0 8 6" markerWidth="9" markerHeight="7" refX="7" refY="3" orient="auto-start-reverse"><path d="M0,0 L8,3 L0,6 Z" fill="#2a5db0"/></marker>
@@ -49,7 +49,7 @@
       rect.prov{fill:#1b2733;stroke:#1b2733}
       .a-app{stroke:#5a6a78;stroke-width:1.6;fill:none}
       .a-fact{stroke:#2a5db0;stroke-width:1.6;fill:none}
-      .a-rule{stroke:#b0306f;stroke-width:1.6;fill:none;stroke-dasharray:6 4}
+      .a-rule{stroke:#b0306f;stroke-width:1.6;fill:none}
       .a-proc{stroke:#b7791f;stroke-width:1.6;fill:none}
       .a-instr{stroke:#6b4fa0;stroke-width:1.6;fill:none}
       .a-conv{stroke:#4a8f2a;stroke-width:1.6;fill:none}
@@ -109,7 +109,7 @@
   <text class="bt" x="44" y="262">Global memory</text>
   <text class="mono" x="160" y="262">~/.snotra/memory.md</text>
   <text class="bs" x="44" y="280">≤ 8,000 · can be switched off · written by the remember tool</text>
-  <text class="bs" x="44" y="293">Facts — and, until rules files exist, rules too</text>
+  <text class="bs" x="44" y="293">Facts — rules go into rules files</text>
 
   <!-- L3 skills -->
   <rect class="k-proc" x="30" y="310" width="400" height="120" rx="8"/>
@@ -141,10 +141,10 @@
   <text class="mono" x="44" y="586">~/.agents/AGENTS.md</text>
   <text class="bs" x="250" y="586">can be switched off</text>
 
-  <!-- L5a rules files (planned) -->
-  <rect class="k-rule planned" x="30" y="614" width="400" height="58" rx="8"/>
+  <!-- L5a rules files (#1275) -->
+  <rect class="k-rule" x="30" y="614" width="400" height="58" rx="8"/>
   <text class="bt" x="44" y="636">Rules files</text>
-  <text class="tag" x="416" y="636" text-anchor="end" style="fill:#b0306f">PLANNED · #1275</text>
+  <text class="tag" x="416" y="636" text-anchor="end" style="fill:#b0306f">#1275</text>
   <text class="mono" x="44" y="653">&lt;workspace&gt;/.agents/rules/*.md</text>
   <text class="mono" x="262" y="653">~/.snotra/rules/*.md</text>
   <text class="bs" x="44" y="667">always: true → whole body · otherwise one catalogue line</text>
@@ -154,7 +154,7 @@
   <text class="bt" x="44" y="706">Project memory</text>
   <text class="mono" x="160" y="706">&lt;workspace&gt;/.agents/memory.md</text>
   <text class="bs" x="44" y="724">≤ 8,000 · can be switched off · written by the remember tool</text>
-  <text class="bs" x="44" y="737">Facts — and, until rules files exist, rules too</text>
+  <text class="bs" x="44" y="737">Facts — rules go into rules files</text>
 
   <!-- L7 workspace state -->
   <rect class="k-app" x="30" y="754" width="400" height="72" rx="8"/>
@@ -217,10 +217,10 @@
     <text class="rowsub" x="694" y="561">deduplicated, in the order on the left</text>
   </g>
   <g>
-    <rect class="r-rule planned" x="510" y="626" width="420" height="34" rx="6"/>
+    <rect class="r-rule" x="510" y="626" width="420" height="34" rx="6"/>
     <circle cx="530" cy="643" r="10" style="fill:#b0306f"/><text class="num" x="530" y="647" font-size="10">5a</text>
     <text class="row" x="548" y="647">Rules block</text>
-    <text class="rowsub" x="634" y="647">always bodies + catalogue · planned, #1275</text>
+    <text class="rowsub" x="634" y="647">always bodies + catalogue, in the knowledge budget</text>
   </g>
   <g>
     <rect class="r-fact" x="510" y="696" width="420" height="34" rx="6"/>
@@ -295,10 +295,10 @@
   <text class="bs" x="1024" y="432">The full SKILL.md body (≤ 20,000) + its folder path;</text>
   <text class="bs" x="1024" y="445">skill files then via list_directory / read_file_text</text>
 
-  <!-- R3a load_rule (planned) -->
-  <rect class="k-rule planned" x="1010" y="462" width="400" height="44" rx="8"/>
+  <!-- R3a load_rule (#1275) -->
+  <rect class="k-rule" x="1010" y="462" width="400" height="44" rx="8"/>
   <text class="monob" x="1024" y="482">load_rule</text>
-  <text class="tag" x="1396" y="482" text-anchor="end" style="fill:#b0306f">PLANNED · #1275</text>
+  <text class="tag" x="1396" y="482" text-anchor="end" style="fill:#b0306f">#1275</text>
   <text class="bs" x="1024" y="498">The body of an on-demand rules file, by name and level</text>
 
   <!-- R3b search_chats (planned) -->
@@ -402,6 +402,6 @@
   <line x1="30" y1="1250" x2="1410" y2="1250" stroke="#dde3e9"/>
   <text class="src" x="30" y="1274">Sources: chat-engine.js · memory-adapter.js · skills-service.js · environment-adapter.js · project-instructions-adapter.js · workspace-tool-registry.js ·</text>
   <text class="src" x="30" y="1290">fs-service.js · document-text-service.js · tavily-web-search-adapter.js · http-url-fetch-adapter.js · mcp-adapter.js · chat-history-trim.js · tool-policy.js</text>
-  <text class="src" x="30" y="1306">Planned (dashed): rules files, the rules block and load_rule (#1275), search_chats (#1315) — docs/concepts/memory-and-rules-concept.md</text>
-  <text class="stamp" x="1410" y="1326">Created 2026-10-06 · colour by kind 2026-10-31 · Claude Opus 5.5 · Reasoning effort: xhigh</text>
+  <text class="src" x="30" y="1306">Planned (dashed): search_chats (#1315) — docs/concepts/memory-and-rules-concept.md</text>
+  <text class="stamp" x="1410" y="1326">Created 2026-10-06 · colour by kind 2026-10-31 · rules files 2026-10-31 · Claude Opus 5.5 · Reasoning effort: xhigh</text>
 </svg>

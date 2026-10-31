@@ -44,6 +44,8 @@ const TOOL_CATEGORY_ICON_PATHS = {
   skill: '<path d="M4.2 2.2h7.6v11.6L8 11.1l-3.8 2.7z"/>',
   // The same bookmark: a skill file written (#160) is still about the skill.
   'skill-write': '<path d="M4.2 2.2h7.6v11.6L8 11.1l-3.8 2.7z"/>',
+  // Ruled lines with a tick: a rule fetched to be followed (#1275).
+  rule: '<path d="M2.6 4h10.8M2.6 8h10.8M2.6 12h5.2"/><path d="M10.2 11.6l1.4 1.4 2.4-2.6"/>',
   read: '<path d="M4 1.8h4.6L12 5.2v9H4z"/><path d="M8.4 1.9v3.4h3.4"/><path d="M6 9h4M6 11.4h4"/>',
   search: '<circle cx="7.2" cy="7.2" r="4.2"/><path d="M10.4 10.4 13.6 13.6"/>',
   // An open book: a look into Snotra's own manual (#947).

@@ -86,7 +86,7 @@ function buildRowBody(part) {
   const head = el('span', 'token-breakdown__row-head');
   // A part whose heading comes from a contract carries the catalogue key; the
   // producers that still hand over finished text keep working (issue #293).
-  const heading = part.labelKey ? t(part.labelKey) : part.label;
+  const heading = part.labelKey ? t(part.labelKey, part.params) : part.label;
   const label = el('span', 'token-breakdown__row-label', heading);
   label.title = heading;
   // Zahl und Anteil bleiben zusammen: Bei schmalem Chat-Panel rutscht das Paar
