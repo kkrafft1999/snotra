@@ -6750,8 +6750,147 @@ select.modal-input {
   flex-wrap: wrap;
 }
 
-.popup-model-row > .modal-input {
+.popup-model-row > .modal-input,
+.popup-model-row > .model-combobox {
   flex: 1 1 200px;
+}
+
+/* Model name with the loaded models (#1325): a text field that keeps its
+ * free name, a chevron that opens the whole list, and the list as an overlay
+ * below — the overlay look of .chat-mention-menu. */
+.model-combobox {
+  position: relative;
+  display: flex;
+  min-width: 0;
+}
+
+.model-combobox.hidden {
+  display: none;
+}
+
+.model-combobox > .modal-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Room for the chevron, as on select.modal-input. */
+.model-combobox:has(.model-combobox__toggle:not(.hidden)) > .modal-input {
+  padding-right: 40px;
+}
+
+.model-combobox__toggle {
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  padding: 0;
+  transform: translateY(-50%);
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  color: var(--ds-grey-muted);
+  cursor: pointer;
+}
+
+.model-combobox__toggle.hidden {
+  display: none;
+}
+
+.model-combobox__toggle:hover {
+  background: var(--bg-hover);
+  color: var(--text-muted-strong);
+}
+
+.model-combobox__toggle svg {
+  fill: currentColor;
+  transition: transform 0.15s;
+}
+
+.model-combobox__toggle[aria-expanded='true'] svg {
+  transform: rotate(180deg);
+}
+
+.model-combobox__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 50;
+  max-height: 264px;
+  overflow: auto;
+  margin: 0;
+  padding: 6px 0;
+  list-style: none;
+  background: var(--bg-primary);
+  border: 1px solid var(--ds-overlay-border);
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-overlay-shadow);
+}
+
+.model-combobox__menu.hidden {
+  display: none;
+}
+
+.model-combobox__option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--ds-touch-min);
+  padding: 6px 12px 6px 8px;
+  cursor: pointer;
+  font-size: var(--ds-font-size-md);
+  line-height: 1.4;
+  color: var(--text-primary);
+}
+
+.model-combobox__option:hover,
+.model-combobox__option[aria-selected='true'] {
+  background: var(--ds-blue-soft);
+}
+
+.model-combobox__check {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: var(--ds-blue);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  visibility: hidden;
+}
+
+.model-combobox__option--current .model-combobox__check {
+  visibility: visible;
+}
+
+.model-combobox__option--current .model-combobox__name {
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.model-combobox__name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.model-combobox__label {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-combobox__toggle svg {
+    transition: none;
+  }
 }
 
 /* Empty until models are loaded — then it takes no line. */
