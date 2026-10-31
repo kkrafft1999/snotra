@@ -54,6 +54,16 @@ function createChatPreferencesAdapter({ uiPrefsStore }) {
       if (prefs.memoryUserEnabled === false) {
         out.memoryUserEnabled = false;
       }
+      // The rules files (#1275): per level, and file by file.
+      if (prefs.rulesWorkspaceEnabled === false) {
+        out.rulesWorkspaceEnabled = false;
+      }
+      if (prefs.rulesUserEnabled === false) {
+        out.rulesUserEnabled = false;
+      }
+      if (Array.isArray(prefs.disabledRules) && prefs.disabledRules.length > 0) {
+        out.disabledRules = prefs.disabledRules;
+      }
       return out;
     },
   };

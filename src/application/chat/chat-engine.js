@@ -70,6 +70,9 @@ const { buildProjectInstructionsSystemPrompt } = require('./project-instructions
 const { buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt } = require('./memory-prompt');
 const { guardEmbeddedFiles, guardEmbeddedSkills } = require('./embedded-text-guard');
 const { markCovertSignals } = require('./embedded-text-signals');
+const { findCovertSignals } = require('./injection-detector');
+const { planRules, applyKnowledgeBudget, buildRulesSystemPrompt } = require('./rules-prompt');
+const { RULE_SOURCES, RULE_LEVELS, LOAD_RULE_TOOL, ruleSwitchKey } = require('../../shared/contracts/rules');
 const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
 const { PROJECT_INSTRUCTION_SOURCES } = require('../../shared/contracts/project-instructions');
 const { MAX_TOOL_ROUNDS_MIN, clampMaxToolRounds } = require('../../shared/contracts/settings');
@@ -703,6 +706,30 @@ function buildHistoryContextParts(messages) {
 }
 
 /**
+ * The AGENTS.md files cut to the room the knowledge budget leaves them
+ * (#1275), in reading order: the first files keep their text, the one that
+ * crosses the line is shortened visibly, and so is every one after it.
+ *
+ * @template {{ text?: unknown }} F
+ * @param {F[]} files
+ * @param {number} room
+ * @returns {Array<F & { budgetCut?: boolean }>}
+ */
+function shortenForBudget(files, room) {
+  let left = Math.max(0, room);
+  return files.map((file) => {
+    const text = typeof file.text === 'string' ? file.text : '';
+    if (text.length <= left) {
+      left -= text.length;
+      return file;
+    }
+    const kept = text.slice(0, left);
+    left = 0;
+    return { ...file, text: kept, truncated: true, budgetCut: true };
+  });
+}
+
+/**
  * Die Teile des Prompts, die fuer den ganzen Lauf feststehen: eigener Prompt,
  * Skills, Umgebung, Ordnerkontext und die Tool-Schemas. Die Tool-Liste im
  * Prompttext zaehlt zu den Tools, nicht zum Ordnerkontext — sie verschwindet
@@ -726,6 +753,7 @@ function buildStaticContextParts({
   skillParts,
   environmentSystem,
   projectInstructionParts,
+  rulesParts,
   folderMemoryParts,
   workspaceSystem,
   toolsPrompt,
@@ -764,6 +792,7 @@ function buildStaticContextParts({
   // Je geladene AGENTS.md eine eigene Zeile (Issue #212) — sie stehen im
   // Prompt zwischen Umgebung und Ordnerkontext und hier an derselben Stelle.
   parts.push(...(Array.isArray(projectInstructionParts) ? projectInstructionParts : []));
+  parts.push(...(Array.isArray(rulesParts) ? rulesParts : []));
   // The folder's memory follows them, as in the prompt (#529).
   parts.push(...(Array.isArray(folderMemoryParts) ? folderMemoryParts : []));
   const promptListChars = typeof toolsPrompt === 'string' ? toolsPrompt.length : 0;
@@ -1097,6 +1126,7 @@ function mergeSandboxGrants(session, chosen) {
  * @property {import('../ports/environment-port').EnvironmentPort|null} [environment]
  * @property {import('../ports/project-instructions-port').ProjectInstructionsPort|null} [projectInstructions]
  * @property {import('../ports/memory-port').MemoryPort|null} [memory]
+ * @property {import('../ports/rules-port').RulesPort|null} [rules]
  * @property {import('../ports/tool-policy-port').ToolPolicyPort|null} [toolPolicy]
  * @property {import('../ports/tool-approval-port').ToolApprovalPort|null} [approvals]
  * @property {import('../ports/own-secrets-port').OwnSecretsPort|null} [ownSecrets]
@@ -1120,6 +1150,8 @@ function createChatEngine({
   environment = null,
   projectInstructions = null,
   memory = null,
+  // Rules files (#1275): a block after AGENTS.md, and `load_rule`.
+  rules = null,
   toolPolicy = null,
   approvals = null,
   // The app's own secrets, for the text the prompt embeds by itself (#528).
@@ -1530,6 +1562,33 @@ function createChatEngine({
         && typeof tools.supportsSkillPaths === 'function'
         && tools.supportsSkillPaths(toolName) === true;
 
+      // Rules files (#1275), read once per run: switched on, not shadowed,
+      // through the secret protection of #528 and — the folder's — the
+      // covert-signal check of #1280.
+      /** @type {import('../../shared/contracts/rules').RuleFile[]} */
+      let ruleFiles = [];
+      const rulesOn = (/** @type {string} */ level) => (level === RULE_LEVELS.WORKSPACE
+        ? uiPrefs.rulesWorkspaceEnabled !== false
+        : uiPrefs.rulesUserEnabled !== false);
+      if (rules) {
+        try {
+          const listing = await rules.load({ workspaceRoot });
+          const switchedOff = new Set(Array.isArray(uiPrefs.disabledRules) ? uiPrefs.disabledRules : []);
+          const usable = (Array.isArray(listing?.files) ? listing.files : []).filter((file) =>
+            !file.shadowed && rulesOn(file.level) && !switchedOff.has(ruleSwitchKey(file, workspaceRoot)));
+          ruleFiles = guardEmbeddedSkills(usable, await readOwnSecretList()).map((file) => {
+            if (file.source !== RULE_SOURCES.WORKSPACE || file.guard === 'withheld') return file;
+            // An on-demand rule reaches the prompt by its description only.
+            const signals = findCovertSignals(file.always ? `${file.description}\n${file.body}` : file.description);
+            return signals ? { ...file, covertSignals: signals } : file;
+          });
+        } catch {
+          // An unreadable rules folder must not block the chat.
+          ruleFiles = [];
+        }
+      }
+      const ruleNames = ruleFiles.map((file) => ({ name: file.name, level: file.level }));
+
       /**
        * The run's skills and tools, and the prompt parts that name them.
        * Worked out when the run starts and again when a card in it switched
@@ -1582,6 +1641,8 @@ function createChatEngine({
           // und wird gar nicht erst angeboten, mit ihnen stehen sie als enum in
           // seinem Schema (Issue #173).
           skillNames: skillRoots.map((entry) => entry.name),
+          // The same for `load_rule` and the rules files (#1275).
+          ruleNames,
           ...(revealedToolNames.size > 0 ? { revealedNames: [...revealedToolNames] } : {}),
         };
         // Tools, die erst zur Laufzeit feststehen, einmal je Lauf auffrischen
@@ -1644,21 +1705,24 @@ function createChatEngine({
       let projectInstructionsSystem = '';
       /** @type {ContextPart[]} */
       let projectInstructionParts = [];
+      /** The files as they go in, for the knowledge budget (#1275). */
+      /** @type {Array<{ source: string, text: string, truncated?: boolean }>} */
+      let instructionFiles = [];
       if (projectInstructions && uiPrefs.projectInstructionsEnabled !== false) {
         try {
           const files = await projectInstructions.load({ workspaceRoot });
-          const built = buildProjectInstructionsSystemPrompt(
-            markCovertSignals(
-              guardEmbeddedFiles(files, await readOwnSecretList()),
-              (file) => file.source === PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS
-            )
+          instructionFiles = markCovertSignals(
+            guardEmbeddedFiles(files, await readOwnSecretList()),
+            (file) => file.source === PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS
           );
+          const built = buildProjectInstructionsSystemPrompt(instructionFiles);
           projectInstructionsSystem = built.text;
           projectInstructionParts = built.parts;
         } catch {
           // Eine unlesbare AGENTS.md darf den Chat nicht blockieren.
           projectInstructionsSystem = '';
           projectInstructionParts = [];
+          instructionFiles = [];
         }
       }
 
@@ -1694,6 +1758,30 @@ function createChatEngine({
         }
       }
 
+      // The rules block (#1275) and the knowledge budget it shares with memory
+      // and AGENTS.md: at most a quarter of the context window, for which the
+      // history budget stands in — it is what this engine knows of the window.
+      let rulesSystem = '';
+      /** @type {ContextPart[]} */
+      let rulesParts = [];
+      if (ruleFiles.length > 0 || instructionFiles.length > 0) {
+        const budgeted = applyKnowledgeBudget({
+          plan: planRules(ruleFiles),
+          files: ruleFiles,
+          budgetChars: Math.floor(resolveHistoryCharLimit(uiPrefs, sendBundle?.traits?.runsLocally === true) / 4),
+          memoryChars: memorySystem.length + folderMemorySystem.length,
+          agentsMdChars: instructionFiles.reduce((sum, file) => sum + (typeof file.text === 'string' ? file.text.length : 0), 0),
+        });
+        if (budgeted.agentsMdRoom !== null) {
+          const built = buildProjectInstructionsSystemPrompt(shortenForBudget(instructionFiles, budgeted.agentsMdRoom));
+          projectInstructionsSystem = built.text;
+          projectInstructionParts = built.parts;
+        }
+        ({ text: rulesSystem, parts: rulesParts } = buildRulesSystemPrompt(budgeted.plan, {
+          canLoad: availableToolDefs.some((definition) => definition?.function?.name === LOAD_RULE_TOOL),
+        }));
+      }
+
       // Der Prompt des Nutzers steht vorn und behält damit den Vorrang. Das
       // Gedächtnis des Nutzers steht direkt dahinter, weil es dasselbe ist: was
       // der Nutzer selbst gesagt hat, nur über mehrere Unterhaltungen hinweg.
@@ -1715,6 +1803,7 @@ function createChatEngine({
           skillsSystem,
           environmentSystem,
           projectInstructionsSystem,
+          rulesSystem,
           folderMemorySystem,
           workspaceSystem,
           // Nur wenn die App selbst englisches Geruest beisteuert (Ordner-/Tool-
@@ -1734,6 +1823,7 @@ function createChatEngine({
           skillParts: skillContextParts,
           environmentSystem,
           projectInstructionParts,
+          rulesParts,
           folderMemoryParts,
           workspaceSystem,
           toolsPrompt,
@@ -2826,6 +2916,8 @@ function createChatEngine({
           const executeWith = (sandboxGrants) => tools.execute(toolName, args, {
             workspaceRoot,
             skillRoots,
+            // What `load_rule` may load: switched on and not shadowed (#1275).
+            ruleNames,
             // The broad tools leave out hits under these patterns (#525); a
             // targeted call has been planned against them already.
             sensitivePathPatterns: policy.sensitivePathPatterns,

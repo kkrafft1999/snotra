@@ -15,6 +15,9 @@
  * @property {boolean} [projectInstructionsEnabled]  false leaves AGENTS.md out (#212)
  * @property {boolean} [memoryWorkspaceEnabled]  false leaves the folder's memory out (#166)
  * @property {boolean} [memoryUserEnabled]  false leaves the user's memory out (#166)
+ * @property {boolean} [rulesWorkspaceEnabled]  false leaves the folder's rules files out (#1275)
+ * @property {boolean} [rulesUserEnabled]  false leaves the user's rules files out (#1275)
+ * @property {string[]} [disabledRules]  rules files switched off one by one, by `ruleSwitchKey` (#1275)
  */
 
 /**

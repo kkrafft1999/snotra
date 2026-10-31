@@ -762,6 +762,22 @@ function normalizeImageModel(raw) {
  * @typedef {Partial<UiPrefs>} UiPrefsPatch
  */
 
+/** Rules switched off one by one (#1275): at most this many keys are kept. */
+const MAX_DISABLED_RULES = 500;
+
+/**
+ * The keys of the rules files switched off one by one — `ruleSwitchKey` in
+ * contracts/rules.js. Strings only, each once.
+ *
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function normalizeDisabledRules(value) {
+  if (!Array.isArray(value)) return [];
+  const keys = value.filter((key) => typeof key === 'string' && key.trim() && key.length <= 1024);
+  return [...new Set(keys)].slice(0, MAX_DISABLED_RULES);
+}
+
 /**
  * @param {unknown} raw
  */
@@ -827,6 +843,11 @@ function normalizeUiPrefs(raw) {
   // auf Zuruf waechst, bleibt leer, weil niemand im Arbeitsfluss daran denkt.
   // Wer das nicht will, schaltet es ab und behaelt „bitte merke dir …".
   const memorySelfEnabled = data.memorySelfEnabled !== false;
+  // Rules files (#1275): a switch per level, on unless switched off like the
+  // memory's, and the files switched off one by one. Their page comes with #1278.
+  const rulesWorkspaceEnabled = data.rulesWorkspaceEnabled !== false;
+  const rulesUserEnabled = data.rulesUserEnabled !== false;
+  const disabledRules = normalizeDisabledRules(data.disabledRules);
   // Skill-Vorschlaege (Issue #125): voreingestellt das lexikalische Verfahren,
   // weil es nichts kostet und nichts verlaesst den Rechner.
   const skillSuggestionMode = isSkillSuggestionMode(data.skillSuggestionMode)
@@ -888,6 +909,9 @@ function normalizeUiPrefs(raw) {
     memoryWorkspaceEnabled,
     memoryUserEnabled,
     memorySelfEnabled,
+    rulesWorkspaceEnabled,
+    rulesUserEnabled,
+    disabledRules,
   };
 }
 
@@ -992,6 +1016,15 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.memorySelfEnabled === 'boolean') {
     out.memorySelfEnabled = patch.memorySelfEnabled;
+  }
+  if (typeof patch.rulesWorkspaceEnabled === 'boolean') {
+    out.rulesWorkspaceEnabled = patch.rulesWorkspaceEnabled;
+  }
+  if (typeof patch.rulesUserEnabled === 'boolean') {
+    out.rulesUserEnabled = patch.rulesUserEnabled;
+  }
+  if (Array.isArray(patch.disabledRules)) {
+    out.disabledRules = normalizeDisabledRules(patch.disabledRules);
   }
   return out;
 }

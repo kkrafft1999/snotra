@@ -260,13 +260,15 @@ function text(value) {
  *
  * @param {string} shortPath  `.agents/memory.md` for a file in the folder,
  *   `~/.snotra/memory.md` for one outside it.
- * @param {{ inFolder?: boolean, truncated?: boolean, guard?: string|null }} [options]
+ * @param {{ inFolder?: boolean, truncated?: boolean, guard?: string|null, budgetCut?: boolean }} [options]
  */
-function shortPathDetail(shortPath, { inFolder = false, truncated = false, guard = null } = {}) {
+function shortPathDetail(shortPath, { inFolder = false, truncated = false, guard = null, budgetCut = false } = {}) {
   let detailKey;
   // What the secret protection did to an embedded file outweighs a shortening (#528).
   if (guard === 'withheld') detailKey = inFolder ? 'context.detail.folderPathWithheld' : 'context.detail.pathWithheld';
   else if (guard === 'masked') detailKey = inFolder ? 'context.detail.folderPathMasked' : 'context.detail.pathMasked';
+  // Shortened for the knowledge budget, not at the file limit (#1275).
+  else if (budgetCut) detailKey = inFolder ? 'context.detail.folderPathBudgetCut' : 'context.detail.pathBudgetCut';
   else if (inFolder) detailKey = truncated ? 'context.detail.folderPathTruncated' : 'context.detail.folderPath';
   else detailKey = truncated ? 'context.detail.pathTruncated' : 'context.detail.path';
   return { detailKey, params: { path: text(shortPath) } };

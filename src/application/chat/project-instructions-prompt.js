@@ -34,6 +34,8 @@ const {
 
 /** Hinweis unter einem abgeschnittenen Text — im Prompt wie in der Anzeige. */
 const TRUNCATION_NOTE = `… [truncated to ${MAX_PROJECT_INSTRUCTION_CHARS} characters]`;
+/** Under a text shortened to fit the knowledge budget (#1275). */
+const BUDGET_NOTE = '… [shortened to fit the knowledge budget]';
 
 /**
  * @param {Array<{source: string, text: string, truncated?: boolean, covertSignals?: unknown}>} files
@@ -61,7 +63,8 @@ function buildProjectInstructionsSystemPrompt(files) {
   const sections = usable.map((file) => {
     const heading = PROJECT_INSTRUCTION_SOURCE_PROMPT_LABELS[file.source];
     // A text that was left out (#528) has nothing left to be shortened.
-    const body = file.truncated && file.guard !== 'withheld' ? `${file.text}\n${TRUNCATION_NOTE}` : file.text;
+    const note = file.budgetCut ? BUDGET_NOTE : TRUNCATION_NOTE;
+    const body = file.truncated && file.guard !== 'withheld' ? `${file.text}\n${note}` : file.text;
     return `## ${heading}\n\n${body}`;
   });
 
@@ -77,6 +80,7 @@ function buildProjectInstructionsSystemPrompt(files) {
         inFolder: file.source === PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS,
         truncated: file.truncated,
         guard: file.guard,
+        budgetCut: file.budgetCut,
       }),
       chars: file.text.length,
       contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
@@ -90,4 +94,5 @@ function buildProjectInstructionsSystemPrompt(files) {
 module.exports = {
   buildProjectInstructionsSystemPrompt,
   TRUNCATION_NOTE,
+  BUDGET_NOTE,
 };
