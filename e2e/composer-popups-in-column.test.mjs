@@ -146,7 +146,10 @@ test('both composer popups stay inside the chat column at every width', { timeou
       assert.ok(m.box.left >= m.column.left - 0.5, `${at} — left edge inside the column`);
       assert.ok(m.box.right <= m.column.right + 0.5, `${at} — right edge inside the column`);
       assert.deepEqual(m.spill, [], `${at} — nothing reaches out of the menu`);
-      if (layout.name === 'widest' && spec.name === 'mode menu') {
+      // A 1024 px runner screen leaves the widest column too narrow for the
+      // menu at its pill; it then only has to stay inside, checked above.
+      const room = m.anchorLeft + m.box.width + 16 <= m.column.right;
+      if (layout.name === 'widest' && spec.name === 'mode menu' && room) {
         assert.ok(Math.abs(m.box.left - m.anchorLeft) < 1, `${at} — flush with its pill where there is room`);
       }
     }
