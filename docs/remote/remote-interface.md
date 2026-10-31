@@ -563,7 +563,10 @@ on its targets, and — after a shell command changed one — `checkpoint:
 'knowledge'` with `knowledgeChange` and a diff as `preview`. A client shows all
 of it and answers only `allow-once` (keep) or `deny` (reset); a client that did
 not declare the capability `knowledge-cards` in `session.hello` gets
-`options: ['deny']` for such a card, and any other answer is `refused`.
+`options: ['deny']` for such a card, and any other answer is `refused`. A
+`remember` card (#1276) carries `knowledgeCard` — kind, reader, target, entry,
+rule details, what `replaces` removes, what the folder brings — and is answered
+as proposed: re-sorting kind or reader stays on the desktop.
 
 ### 8.2 Events
 

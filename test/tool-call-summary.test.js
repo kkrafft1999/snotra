@@ -168,7 +168,13 @@ test('summarizeToolCall makes skill paths recognisable as skills (issue #61)', (
 test('remember says where the entry went (#555)', () => {
   assert.equal(summarizeToolCall('remember', { scope: 'workspace', text: 'x' }, 'done'), 'Remembered in the project memory');
   assert.equal(summarizeToolCall('remember', { scope: 'user', text: 'x' }, 'start'), 'Remembering in the global memory …');
-  assert.equal(summarizeToolCall('remember', { scope: 'user', text: 'x' }, 'done', 'de'), 'Im globalen Gedächtnis gemerkt');
-  assert.equal(summarizeToolCall('remember', { scope: 'workspace' }, 'start', 'de'), 'Wird im Projektgedächtnis gemerkt …');
+  assert.equal(summarizeToolCall('remember', { scope: 'user', text: 'x' }, 'done', 'de'), 'Gemerkt: globales Gedächtnis');
+  assert.equal(summarizeToolCall('remember', { scope: 'workspace' }, 'start', 'de'), 'Wird gemerkt: Projektgedächtnis …');
   assert.equal(summarizeToolCall('remember', {}, 'done'), 'Remembered');
+});
+
+test('remember names the rules files and AGENTS.md as well (#1276)', () => {
+  assert.equal(summarizeToolCall('remember', { kind: 'rule', scope: 'workspace' }, 'done'), 'Remembered in the project rules');
+  assert.equal(summarizeToolCall('remember', { kind: 'fact', scope: 'team' }, 'done'), 'Remembered in AGENTS.md');
+  assert.equal(summarizeToolCall('remember', { kind: 'rule', scope: 'user' }, 'done', 'de'), 'Gemerkt: globale Regeln');
 });

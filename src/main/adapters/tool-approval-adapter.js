@@ -84,6 +84,24 @@ function abortReason(signal) {
 }
 
 /**
+ * The kind and reader a `remember` card was re-sorted to (#1276), when the
+ * card offered them: a fact or a rule needs a place for that reader, a
+ * procedure goes back to the model and needs none. Anything else is no choice.
+ *
+ * @param {any} request
+ * @param {unknown} choice
+ * @returns {{ kind: string, scope: string }|null}
+ */
+function offeredKnowledgeChoice(request, choice) {
+  const card = request?.knowledgeCard;
+  if (!card || !choice || typeof choice !== 'object') return null;
+  const { kind, scope } = /** @type {{ kind?: unknown, scope?: unknown }} */ (choice);
+  if (typeof kind !== 'string' || typeof scope !== 'string') return null;
+  if (kind === 'instruction') return scope === 'team' ? null : { kind, scope };
+  return card.alternatives?.[kind]?.[scope] ? { kind, scope } : null;
+}
+
+/**
  * The port, plus the side the IPC layer talks to: windows subscribe, the
  * renderer answers, and main lists what is still open.
  *
@@ -361,9 +379,10 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
      * eigene, offene Anfrage; alles andere ist ein Fehler ohne Wirkung.
      *
      * @param {string|number} sessionId
-     * @param {{ requestId?: string, response?: string, ruleId?: string, sandboxPaths?: string[], workspaceStored?: boolean }} [answer]
+     * @param {{ requestId?: string, response?: string, ruleId?: string, sandboxPaths?: string[], workspaceStored?: boolean,
+     *   knowledgeChoice?: { kind: string, scope: string } }} [answer]
      */
-    respond(sessionId, { requestId, response, ruleId, sandboxPaths, workspaceStored } = {}) {
+    respond(sessionId, { requestId, response, ruleId, sandboxPaths, workspaceStored, knowledgeChoice } = {}) {
       const entry = typeof requestId === 'string' ? pending.get(requestId) : undefined;
       if (!entry || requestId === undefined) return { ok: false, error: createMessage('approval.error.noPending') };
       if (entry.sessionId !== sessionId) return { ok: false, error: createMessage('approval.error.otherWindow') };
@@ -393,7 +412,11 @@ function createToolApprovalAdapter({ randomUUID, PUSH, log = console, answeredBy
         settle(requestId, { response: APPROVAL_RESPONSES.ALLOW_ONCE, ...paths });
         return { ok: true, response: APPROVAL_RESPONSES.ALLOW_ONCE };
       }
-      settle(requestId, response === APPROVAL_RESPONSES.ALLOW_ALWAYS ? { response, ruleId } : { response, ...paths });
+      // A `remember` card re-sorted (#1276): only to a kind and reader it offered.
+      const choice = response === APPROVAL_RESPONSES.ALLOW_ONCE ? offeredKnowledgeChoice(entry.request, knowledgeChoice) : null;
+      settle(requestId, response === APPROVAL_RESPONSES.ALLOW_ALWAYS
+        ? { response, ruleId }
+        : { response, ...paths, ...(choice ? { knowledgeChoice: choice } : {}) });
       return { ok: true, response };
     },
     /**

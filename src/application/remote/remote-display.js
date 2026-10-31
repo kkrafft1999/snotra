@@ -242,6 +242,9 @@ function approvalRequest(dto, { root, word, options }) {
     if (dto.knowledgeWarning === true) out.knowledgeWarning = true;
   }
   if (isRecord(dto.knowledgeChange)) out.knowledgeChange = dto.knowledgeChange;
+  // A `remember` card (#1276): kind, reader, target, entry — the phone shows
+  // it in full and answers it only as proposed.
+  if (isRecord(dto.knowledgeCard)) out.knowledgeCard = dto.knowledgeCard;
   return out;
 }
 

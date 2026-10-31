@@ -64,6 +64,7 @@
  * @property {string} [reason]  PERMISSION_DENIAL_REASONS-Wert zu `error`
  * @property {boolean} [outside]  a target lies outside the open folder and no card has opened it (#792)
  * @property {boolean} [knowledge]  a target is a knowledge file: a card in every mode, no stored allowance (#1319)
+ * @property {import('../../shared/contracts/knowledge-write').KnowledgeCard} [knowledgeCard]  what a `remember` card shows (#1276)
  * @property {string[]} [sensitivePathPatterns]  the user's patterns the plan was made with
  */
 

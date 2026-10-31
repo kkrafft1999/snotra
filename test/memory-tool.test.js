@@ -55,11 +55,12 @@ test('mit Memory-Port steht remember als Schreib-Tool im Katalog', () => {
   assert.equal(descriptorOf('remember').category, TOOL_CATEGORIES.WRITE);
 });
 
-test('das Tool nimmt keinen Pfad entgegen — nur Ebene, Text und Herkunft', () => {
+test('das Tool nimmt keinen Pfad entgegen — nur Art, Leser, Text und Herkunft (#1276)', () => {
   const registry = registryWith(makeMemoryStub());
   const def = registry.getDefinition('remember');
-  assert.deepEqual(Object.keys(def.parameters.properties).sort(), ['origin', 'scope', 'text']);
-  assert.deepEqual(def.parameters.required.sort(), ['origin', 'scope', 'text']);
+  assert.deepEqual(Object.keys(def.parameters.properties).sort(),
+    ['always', 'description', 'kind', 'origin', 'replaces', 'replaces_in', 'scope', 'text', 'topic']);
+  assert.deepEqual(def.parameters.required.sort(), ['kind', 'origin', 'scope', 'text']);
   // Kein Pfad heisst auch: nichts, was der Pfad-Freigabe vorzulegen waere.
   assert.deepEqual(def.targets({ scope: 'workspace', text: 'x' }), []);
   // Ohne geoeffneten Ordner bleibt die globale Ebene nutzbar.
@@ -96,12 +97,12 @@ test('gemerkt wird mit Ebene, Text und dem Ordner aus dem Aufrufkontext', async 
 test('an unknown origin is refused, and the handler never reads it as requested (#553)', async () => {
   const definition = registryWith(makeMemoryStub()).getDefinition('remember');
   assert.equal(
-    validateArguments(definition, { scope: 'user', text: 'x', origin: 'quatsch' }),
+    validateArguments(definition, { kind: 'fact', scope: 'user', text: 'x', origin: 'quatsch' }),
     'Argument "origin" must be one of "requested", "self".'
   );
   assert.equal(
-    validateArguments(definition, { scope: 'global', text: 'x', origin: 'requested' }),
-    'Argument "scope" must be one of "workspace", "user".'
+    validateArguments(definition, { kind: 'fact', scope: 'global', text: 'x', origin: 'requested' }),
+    'Argument "scope" must be one of "user", "workspace", "team".'
   );
 
   const memory = makeMemoryStub();
@@ -140,8 +141,8 @@ test('the model asks the user for the scope before remembering (#416)', () => {
   // In the description and not only in the skill: the description goes along
   // with every request, the skill may never be loaded.
   assert.match(def.modelDescription, /ask the user/i);
-  assert.match(def.modelDescription, /project or global/i);
-  assert.match(def.parameters.properties.scope.description, /chosen by the user/i);
+  assert.match(def.modelDescription, /who should read it/i);
+  assert.match(def.parameters.properties.scope.description, /as the user chose/i);
   // The old default that let the model decide on its own is gone.
   assert.doesNotMatch(def.parameters.properties.scope.description, /in doubt/i);
 });

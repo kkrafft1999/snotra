@@ -296,6 +296,33 @@ function stableStringify(value) {
  */
 
 /**
+ * What the card of a `remember` call shows (#1276): the proposal — kind,
+ * reader, entry, rule details — and what the writer found — the target, the
+ * rules file as it is, the entry `replaces` would remove, the alternatives the
+ * pills switch between, what the open folder brings.
+ *
+ * @param {any} args
+ * @param {import('../ports/knowledge-writer-port').KnowledgeDescription} described
+ */
+function knowledgeCardOf(args, described) {
+  const text = (/** @type {unknown} */ value) => (typeof value === 'string' ? value.trim() : '');
+  return {
+    kind: text(args?.kind) || 'fact',
+    scope: text(args?.scope),
+    entry: text(args?.text).replace(/\s+/g, ' '),
+    origin: args?.origin === 'requested' ? 'requested' : 'self',
+    ...(text(args?.topic) ? { topic: text(args.topic) } : {}),
+    ...(text(args?.description) ? { description: text(args.description) } : {}),
+    ...(args?.always === true ? { always: true } : {}),
+    target: described.target,
+    ...(described.ruleFile ? { ruleFile: described.ruleFile } : {}),
+    ...(described.replaced ? { replaced: described.replaced } : {}),
+    alternatives: described.alternatives,
+    folderInstructions: described.folderInstructions,
+  };
+}
+
+/**
  * @param {object} deps
  * @param {FsService} deps.fsService  liefert resolveToolPath und resolveExistingRealPath
  * @param {typeof import('fs/promises')} deps.fs
@@ -697,6 +724,24 @@ function createToolCallPlanner({
     if (targets.some((target) => target.outside)) result.outside = true;
     // A write to a knowledge file: a card in every mode, no stored allowance (#1319).
     if (targets.some((target) => target.knowledge)) result.knowledge = true;
+    // A tool that writes knowledge without a path (`remember`, #1276): the
+    // same, and the card shows what its writer will do — or the call is
+    // refused before anyone is asked, when there is nothing it could write.
+    if (definition.knowledgeWrite === true) {
+      result.knowledge = true;
+      if (typeof definition.describeKnowledge === 'function') {
+        let described;
+        try {
+          described = await definition.describeKnowledge(args || {}, { workspaceRoot });
+        } catch (error) {
+          return { tool: toolName, error: error?.message || 'Could not prepare the entry.', reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses, targets: [] };
+        }
+        if (described?.refusal) {
+          return { tool: toolName, error: described.refusal, reason: PERMISSION_DENIAL_REASONS.INVALID_ARGUMENTS, riskClasses, targets: [] };
+        }
+        if (described) result.knowledgeCard = knowledgeCardOf(args, described);
+      }
+    }
     if (recovery) result.recovery = recovery;
     if (hardLimit) result.hardLimit = hardLimit;
     if (definition.execution) {

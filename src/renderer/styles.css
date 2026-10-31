@@ -9774,6 +9774,82 @@ select.modal-input {
   color: var(--text-muted-strong);
 }
 
+/* ── A `remember` card: kind and reader as pills (#1276, mockup variant A) ──
+ * Radio buttons underneath, so keyboard and screen reader know the groups;
+ * the chip pattern of ui-design-tokens.md for the chosen one. */
+.chat-approval-card__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+/* The label of a pill row sits on the line of the pills' text. */
+.chat-approval-card__fact:has(.chat-approval-card__pills) dt {
+  padding-top: 4px;
+}
+
+.chat-approval-card__remember-notes:empty {
+  display: none;
+}
+
+.chat-approval-card__pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 3px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: 999px;
+  font-size: var(--ds-font-size-sm);
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.chat-approval-card__pill input {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.chat-approval-card__pill:hover:not(.is-disabled),
+.chat-approval-card__pill:has(input:checked) {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.chat-approval-card__pill:has(input:checked) {
+  color: var(--ds-blue-strong);
+}
+
+.chat-approval-card__pill:has(input:focus-visible) {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.chat-approval-card__pill.is-disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.chat-approval-card__remember-entry {
+  font-family: var(--ds-font-tool);
+}
+
+.chat-approval-card__remember-old {
+  font-family: var(--ds-font-tool);
+  color: var(--text-muted-strong);
+  text-decoration: line-through;
+}
+
 .chat-approval-card__choice {
   margin: 10px 0 0;
   padding: 0;

@@ -1508,7 +1508,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     match: MEMORY_QUESTION,
     toolCalls: [{
       name: 'remember',
-      arguments: { scope: 'workspace', text: MEMORY_NEW_ENTRY, origin: 'requested' },
+      arguments: { kind: 'fact', scope: 'workspace', text: MEMORY_NEW_ENTRY, origin: 'requested' },
     }],
   });
   model.queueAnswer({ match: 'remember', text: 'Hab ich mir gemerkt.' });
@@ -1527,10 +1527,10 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     // and answered without the tool call, or the card was never drawn (#819).
     explain: chatEvidence,
   });
-  // Die Karte nennt die Reichweite und den Merksatz — einen Pfad gibt es
-  // nicht, weil das Tool keinen bildet.
-  assert.match(approval.text, /Reichweite/);
-  assert.match(approval.text, /gilt nur im geöffneten Ordner/);
+  // Die Karte nennt Art, Leser, Ziel und den Merksatz (#1276).
+  assert.match(approval.text, /Wer liest es/);
+  assert.match(approval.text, /\.agents\/memory\.md/);
+  assert.ok(approval.text.includes(MEMORY_NEW_ENTRY), 'der Merksatz steht auf der Karte');
   assert.equal(approval.text.includes('ohne Dateiziel'), false, 'kein "ohne Dateiziel" auf der Karte');
   assert.ok(approval.antworten.includes('allow-once'), approval.antworten.join(','));
 

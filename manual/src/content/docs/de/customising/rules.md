@@ -33,6 +33,8 @@ Einen Texteditor. Für Regeln eines Projekts einen geöffneten Ordner.
 
 Ab der nächsten Nachricht gilt die Regel.
 
+Du musst die Datei nicht selbst schreiben: Bitte Snotra, sich eine Regel zu merken — *merk dir: wenn du eine Commit-Nachricht schreibst, schreib sie auf Englisch* —, und es schlägt die Regeldatei, ihre Beschreibung und ob sie immer gilt auf einer Karte vor, die du freigibst. Siehe [Snotra etwas merken lassen](../memory/).
+
 ## Was dann passiert
 
 - Eine Regel mit `always: true` geht mit jeder Nachricht vollständig mit.
