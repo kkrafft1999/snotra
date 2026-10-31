@@ -108,20 +108,21 @@ export function usageFolderNames(locale = 'en') {
 
 /**
  * The chats: `[title index, folder, turns]`, each turn `[days ago, ...spending]`.
- * `legacy` keeps a total without days, last used `legacy` days ago.
+ * `legacy` keeps a total without days, last used `legacy` days ago. `kind` is
+ * the chat's kind of task (#1283) as `[id, source]`; two chats have none.
  */
 function plan() {
   return [
-    { group: 'garden', title: 0, turns: [[1, spend('gpt-5', 260, 6)], [3, spend('gpt-5', 180, 4)]] },
-    { group: 'garden', title: 1, turns: [[6, spend('gpt-5', 220, 5), spend('claude-sonnet-4-5', 90, 2)], [9, spend('claude-sonnet-4-5', 120, 3)]] },
-    { group: 'garden', title: 2, turns: [[12, spend('gpt-5-mini', 150, 3)]] },
+    { group: 'garden', title: 0, kind: ['planning', 'model'], turns: [[1, spend('gpt-5', 260, 6)], [3, spend('gpt-5', 180, 4)]] },
+    { group: 'garden', title: 1, kind: ['coding', 'model'], turns: [[6, spend('gpt-5', 220, 5), spend('claude-sonnet-4-5', 90, 2)], [9, spend('claude-sonnet-4-5', 120, 3)]] },
+    { group: 'garden', title: 2, kind: ['research', 'estimate'], turns: [[12, spend('gpt-5-mini', 150, 3)]] },
     { group: 'garden', title: 3, legacy: 20, turns: [[0, spend('gpt-5', 140, 3)]] },
-    { group: 'website', title: 0, turns: [[2, spend('claude-sonnet-4-5', 160, 4)], [4, spend('claude-sonnet-4-5', 110, 3)], [5, spend('gpt-5-mini', 60, 2)]] },
-    { group: 'website', title: 1, turns: [[8, spend('gpt-5', 190, 4)]] },
-    { group: 'website', title: 2, turns: [[3, spend('acme/reviewer-large', 70, 2)]] },
-    { group: 'thesis', title: 0, turns: [[15, spend('gpt-5-mini', 210, 5)], [16, spend('gpt-5-mini', 90, 2)]] },
-    { group: 'thesis', title: 1, turns: [[3, spend('qwen3:14b', 120, 4)], [10, spend('qwen3:14b', 80, 3)]] },
-    { group: 'loose', title: 0, turns: [[11, spend('gpt-5-mini', 40, 1)]] },
+    { group: 'website', title: 0, kind: ['coding', 'model'], turns: [[2, spend('claude-sonnet-4-5', 160, 4)], [4, spend('claude-sonnet-4-5', 110, 3)], [5, spend('gpt-5-mini', 60, 2)]] },
+    { group: 'website', title: 1, kind: ['coding', 'user'], turns: [[8, spend('gpt-5', 190, 4)]] },
+    { group: 'website', title: 2, kind: ['coding', 'model'], turns: [[3, spend('acme/reviewer-large', 70, 2)]] },
+    { group: 'thesis', title: 0, kind: ['writing', 'model'], turns: [[15, spend('gpt-5-mini', 210, 5)], [16, spend('gpt-5-mini', 90, 2)]] },
+    { group: 'thesis', title: 1, kind: ['research', 'model'], turns: [[3, spend('qwen3:14b', 120, 4)], [10, spend('qwen3:14b', 80, 3)]] },
+    { group: 'loose', title: 0, kind: ['writing', 'model'], turns: [[11, spend('gpt-5-mini', 40, 1)]] },
     // Outside 30 days: only "All time" and "Last month" may find it.
     { group: 'garden', title: 2, id: 'usage-old-spacing', turns: [[38, spend('gpt-5', 120, 3)]] },
   ];
@@ -163,6 +164,7 @@ export async function writeUsageHistory(userDataDir, { folders, locale = 'en', n
       updatedAt,
       messages: [message('user', title), message('assistant', '…')],
       cost,
+      ...(chat.kind ? { taskKind: { id: chat.kind[0], source: chat.kind[1], at: new Date(updatedAt).toISOString() } } : {}),
     });
   });
   const store = { version: 2, activeByWorkspace: {}, sessions };

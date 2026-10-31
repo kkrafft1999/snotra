@@ -13835,7 +13835,7 @@ select.modal-input {
 
 .usage-chats__item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: 4px 14px;
   padding: 6px 8px 6px 12px;
@@ -13846,9 +13846,9 @@ select.modal-input {
   border-bottom: none;
 }
 
-.usage-chats__item:only-child,
-.usage-chats__item:has(> :nth-child(2):last-child) {
-  grid-template-columns: minmax(0, 1fr) auto;
+/* A chat that cannot be opened from here has no button. */
+.usage-chats__item:not(:has(> .usage-chats__open)) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .usage-chats__text {
@@ -13875,6 +13875,9 @@ select.modal-input {
 }
 
 .usage-chats__cost {
+  /* Wide enough for ~$12.34+, so the amounts of a list line up. */
+  min-width: 5.2em;
+  text-align: right;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
@@ -13882,6 +13885,118 @@ select.modal-input {
 .usage-chats__open.btn-secondary {
   padding: 4px 14px;
   font-size: var(--ds-font-size-md);
+}
+
+/* A chat's kind of task (#1283): a chip that invites a choice and opens the
+ * six kinds with what each one means. Decided 2026-10-30 from a mockup of
+ * three variants (a select, this chip, an inline row of pills). */
+.usage-kind {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.usage-kind__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 15em;
+  min-height: 32px;
+  padding: 3px 10px 3px 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-pill);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--ds-font-size-md);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.usage-kind__chip:hover,
+.usage-kind__chip[aria-expanded='true'] {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+/* No kind yet: the dashed edge and the words ask for one, not the colour. */
+.usage-kind__chip--none {
+  border-style: dashed;
+  color: var(--text-muted-strong);
+}
+
+.usage-kind__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-kind__caret {
+  flex-shrink: 0;
+  color: var(--text-muted-strong);
+}
+
+.usage-kind__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  width: min(330px, 80vw);
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  background: var(--bg-primary);
+  border: 1px solid var(--ds-overlay-border);
+  border-radius: var(--ds-radius-md);
+  box-shadow: var(--ds-overlay-shadow);
+}
+
+.usage-kind__option {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.usage-kind__option:hover,
+.usage-kind__option[aria-selected='true'] {
+  background: var(--ds-blue-soft);
+}
+
+/* Inside the menu, so its edge does not cut the ring off. */
+.usage-kind__option:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: calc(-1 * var(--ds-focus-offset));
+}
+
+.usage-kind__check {
+  color: var(--ds-blue-strong);
+  font-weight: var(--ds-font-weight-bold);
+}
+
+.usage-kind__option-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.usage-kind__option-name {
+  font-size: var(--ds-font-size-md);
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.usage-kind__option-def {
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.4;
+  color: var(--text-muted-strong);
 }
 
 .usage-dialog__footer {
@@ -13907,6 +14022,7 @@ select.modal-input {
   }
 
   .usage-table thead th:nth-child(1) { width: 46%; }
+  .usage-kind__chip { max-width: 9em; }
   .usage-table th:nth-child(2),
   .usage-table td:nth-child(2) {
     display: none;

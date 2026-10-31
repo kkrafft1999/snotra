@@ -1,14 +1,15 @@
 /**
- * The usage report (#1258): estimated cost and tokens across chats, per model
- * and per workspace, over a period the user picks. Opened from the button at
+ * The usage report (#1258): estimated cost and tokens across chats, per model,
+ * per workspace and per kind of task (#1283), over a period the user picks. Opened from the button at
  * the foot of the sidebar, from *View › Usage & Cost…* and with
  * Cmd/Ctrl+Shift+K.
  *
  * Main adds the figures up from the history's index (usage-report.js); this
  * file picks the period and draws: the totals, a bar per day (week, month)
  * over the period, and one table per dimension whose rows unfold in place —
- * a workspace into its models, a model into its workspaces, and "n chats"
- * into the chats behind the row, each of which opens.
+ * a workspace or a kind of task into its models, a model into its
+ * workspaces, and "n chats" into the chats behind the row, each of which
+ * opens and shows its kind of task as a chip the user can change it with.
  *
  * Everything is an estimate and says so: `~` in front, `+` where requests
  * without a known price are left out, `–` — never $0.00 — for a model
@@ -21,7 +22,9 @@ import { formatCostAmount } from './CostPanel.js';
 import { formatTokensCompact } from '../utils/token-format.js';
 import { svgChevron } from '../utils/helpers.js';
 
-const { USAGE_PERIODS, USAGE_CHART_STEPS, dayKeyOf, formatUsd, isDayKey, resolveUsagePeriod, usageChartBars } = contracts;
+const {
+  USAGE_PERIODS, USAGE_CHART_STEPS, TASK_KIND_IDS, dayKeyOf, formatUsd, isDayKey, resolveUsagePeriod, usageChartBars,
+} = contracts;
 
 const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
 /** A report that takes longer than this says it is loading. */
@@ -30,8 +33,11 @@ const LOADING_DELAY_MS = 200;
 const AXIS_LABELS = 5;
 const LABEL_EVERY_BAR_UP_TO = 8;
 
-const DIMENSIONS = Object.freeze({ MODELS: 'models', WORKSPACES: 'workspaces' });
+const DIMENSIONS = Object.freeze({ MODELS: 'models', WORKSPACES: 'workspaces', TASK_KINDS: 'taskKinds' });
 const SORT_KEYS = Object.freeze({ NAME: 'name', TOKENS: 'tokens', CHATS: 'chats', COST: 'cost' });
+
+/** The caret of the kind chip, in the colour of its text. */
+const CARET_SVG = '<svg class="usage-kind__caret" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path fill="currentColor" d="M0 0l5 6 5-6z"/></svg>';
 
 function el(tag, className, text) {
   const node = document.createElement(tag);
@@ -51,6 +57,10 @@ function modelKey(part) {
 
 function workspaceKey(part) {
   return part.workspaceRoot ?? '';
+}
+
+function taskKindKey(part) {
+  return part.taskKind ?? '';
 }
 
 /** The last segment of a folder path, on either platform. */
@@ -94,6 +104,7 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
   const fromInput = $('usage-from');
   const toInput = $('usage-to');
   const alertEl = $('usage-alert');
+  const statusEl = $('usage-status');
   const stateEl = $('usage-state');
   const reportEl = $('usage-report');
   const summaryEl = $('usage-summary');
@@ -107,13 +118,10 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
   let custom = { from: null, to: null };
   let dimension = DIMENSIONS.MODELS;
   /** Per dimension: which column sorts, which way. */
-  const sorting = {
-    [DIMENSIONS.MODELS]: { key: SORT_KEYS.COST, descending: true },
-    [DIMENSIONS.WORKSPACES]: { key: SORT_KEYS.COST, descending: true },
-  };
+  const sorting = Object.fromEntries(Object.values(DIMENSIONS).map((dim) => [dim, { key: SORT_KEYS.COST, descending: true }]));
   /** Per dimension: rows unfolded, rows with their chats shown. */
-  const expanded = { [DIMENSIONS.MODELS]: new Set(), [DIMENSIONS.WORKSPACES]: new Set() };
-  const chatsShown = { [DIMENSIONS.MODELS]: new Set(), [DIMENSIONS.WORKSPACES]: new Set() };
+  const expanded = Object.fromEntries(Object.values(DIMENSIONS).map((dim) => [dim, new Set()]));
+  const chatsShown = Object.fromEntries(Object.values(DIMENSIONS).map((dim) => [dim, new Set()]));
   let chartAsTable = false;
   /** 'idle' | 'loading' | 'ready' | 'error' */
   let phase = 'idle';
@@ -121,8 +129,10 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
   let request = 0;
   let loadingTimer = null;
   let lastFocused = null;
-  /** A chat that could not be opened: the key of the alert, and its folder. */
+  /** A chat that could not be opened, or a kind not stored: the key of the alert, and a folder. */
   let alert = null;
+  /** The open kind menu (#1283): the chip it belongs to and the list. */
+  let kindMenu = null;
 
   function isOpen() {
     return !root.classList.contains('hidden');
@@ -193,6 +203,10 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
   /** What a row is called, and the line under its name. */
   function rowName(part, dim) {
     if (dim === DIMENSIONS.MODELS) return { name: part.model || part.providerId, sub: providerLabel(part), mono: true };
+    if (dim === DIMENSIONS.TASK_KINDS) {
+      if (part.taskKind === null) return { name: t('taskKind.unclassified'), sub: t('usage.taskKind.unclassified.hint'), mono: false };
+      return { name: t(`taskKind.${part.taskKind}`), sub: t(`taskKind.${part.taskKind}.definition`), mono: false };
+    }
     if (part.workspaceRoot === null) return { name: t('usage.noFolder'), sub: t('usage.noFolder.hint'), mono: false };
     return { name: folderName(part.workspaceRoot), sub: part.workspaceRoot, mono: false, path: true };
   }
@@ -251,6 +265,7 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
    * found again by its `data-focus` key.
    */
   function rebuild(container, build) {
+    if (kindMenu && container.contains(kindMenu.list)) closeKindMenu({ restoreFocus: false });
     const active = document.activeElement;
     const key = active && container.contains(active) ? active.dataset?.focus : null;
     container.textContent = '';
@@ -497,12 +512,21 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
   // ── The table ───────────────────────────────────────────────────────────
 
   function rowsOf(dim) {
+    if (dim === DIMENSIONS.TASK_KINDS) return report.taskKinds ?? [];
     return dim === DIMENSIONS.MODELS ? report.models : report.workspaces;
   }
 
   function keyOf(part, dim) {
+    if (dim === DIMENSIONS.TASK_KINDS) return taskKindKey(part);
     return dim === DIMENSIONS.MODELS ? modelKey(part) : workspaceKey(part);
   }
+
+  /** What a table is called, and the head of its first column. */
+  const TABLE_TEXT = {
+    [DIMENSIONS.MODELS]: { caption: 'usage.table.caption.models', column: 'usage.column.model', expand: 'usage.row.expand.workspaces' },
+    [DIMENSIONS.WORKSPACES]: { caption: 'usage.table.caption.workspaces', column: 'usage.column.workspace', expand: 'usage.row.expand.models' },
+    [DIMENSIONS.TASK_KINDS]: { caption: 'usage.table.caption.taskKinds', column: 'usage.column.taskKind', expand: 'usage.row.expand.models' },
+  };
 
   function sortRows(rows, dim) {
     const { key, descending } = sorting[dim];
@@ -515,7 +539,11 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
       [SORT_KEYS.CHATS]: (a, b) => a.chats - b.chats,
       [SORT_KEYS.COST]: (a, b) => costOf(a) - costOf(b) || totalTokens(a.tokens) - totalTokens(b.tokens),
     }[key];
-    return [...rows].sort((a, b) => direction * compare(a, b) || collator.compare(rowName(a, dim).name, rowName(b, dim).name));
+    // *Unclassified* is what is left over, whichever way the kinds sort (#1283).
+    const last = (row) => (dim === DIMENSIONS.TASK_KINDS && row.taskKind === null ? 1 : 0);
+    return [...rows].sort((a, b) => last(a) - last(b)
+      || direction * compare(a, b)
+      || collator.compare(rowName(a, dim).name, rowName(b, dim).name));
   }
 
   /** A row's share of the period: of the cost, or of the tokens when nothing had a price. */
@@ -587,14 +615,14 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
   function buildTable(container) {
     const dim = dimension;
     const table = el('table', 'usage-table');
-    const caption = el('caption', 'visually-hidden', t(dim === DIMENSIONS.MODELS ? 'usage.table.caption.models' : 'usage.table.caption.workspaces'));
+    const caption = el('caption', 'visually-hidden', t(TABLE_TEXT[dim].caption));
     table.append(caption);
     const head = el('thead');
     const headRow = el('tr');
     const shareTh = el('th', 'usage-table__share', t('usage.column.share'));
     shareTh.scope = 'col';
     headRow.append(
-      sortHeader(t(dim === DIMENSIONS.MODELS ? 'usage.column.model' : 'usage.column.workspace'), SORT_KEYS.NAME, false),
+      sortHeader(t(TABLE_TEXT[dim].column), SORT_KEYS.NAME, false),
       shareTh,
       sortHeader(t('usage.column.tokens'), SORT_KEYS.TOKENS, true),
       sortHeader(t('usage.column.chats'), SORT_KEYS.CHATS, true),
@@ -635,7 +663,7 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
     disclosure.querySelector('svg')?.setAttribute('aria-hidden', 'true');
     disclosure.setAttribute('aria-expanded', String(isExpanded));
     disclosure.setAttribute('aria-controls', partIds.join(' '));
-    disclosure.setAttribute('aria-label', t(dim === DIMENSIONS.MODELS ? 'usage.row.expand.workspaces' : 'usage.row.expand.models', { name }));
+    disclosure.setAttribute('aria-label', t(TABLE_TEXT[dim].expand, { name }));
     disclosure.dataset.focus = `expand:${dim}:${key}`;
     disclosure.addEventListener('click', () => {
       if (expanded[dim].has(key)) expanded[dim].delete(key);
@@ -706,7 +734,7 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
         .map((chat) => ({ chat, figures: chat.models.find((part) => modelKey(part) === key) }))
         .filter((entry) => entry.figures)
       : report.chats
-        .filter((chat) => workspaceKey(chat) === key)
+        .filter((chat) => (dim === DIMENSIONS.TASK_KINDS ? taskKindKey(chat) : workspaceKey(chat)) === key)
         .map((chat) => ({ chat, figures: chat }));
     entries.sort((a, b) => (b.figures.usd ?? -1) - (a.figures.usd ?? -1) || totalTokens(b.figures.tokens) - totalTokens(a.figures.tokens));
     const wrap = el('div', 'usage-chats');
@@ -725,12 +753,12 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
       const titleEl = el('span', 'usage-chats__title', title);
       titleEl.title = title;
       const meta = [];
-      if (dim === DIMENSIONS.MODELS) meta.push(chat.workspaceRoot === null ? t('usage.noFolder') : folderName(chat.workspaceRoot));
-      else meta.push(chat.models.map((part) => part.model || part.providerId).join(', '));
+      if (dim !== DIMENSIONS.WORKSPACES) meta.push(chat.workspaceRoot === null ? t('usage.noFolder') : folderName(chat.workspaceRoot));
+      if (dim !== DIMENSIONS.MODELS) meta.push(chat.models.map((part) => part.model || part.providerId).join(', '));
       meta.push(t('usage.chats.lastUsed', { date: dayLabel(chat.lastDate) }));
       text.append(titleEl, el('span', 'usage-chats__meta', meta.join(' · ')));
       const amount = el('span', 'usage-chats__cost', cost(figures));
-      item.append(text, amount);
+      item.append(text, kindControl(chat, `kind:${dim}:${key}:${chat.id}`), amount);
       if (!unreachable(chat)) {
         const open = el('button', 'btn-secondary usage-chats__open', t('usage.chats.open'));
         open.type = 'button';
@@ -743,6 +771,120 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
     }
     wrap.append(list);
     return wrap;
+  }
+
+  // ── The kind of a chat (#1283) ──────────────────────────────────────────
+
+  function kindName(taskKind) {
+    return taskKind ? t(`taskKind.${taskKind}`) : t('usage.taskKind.choose');
+  }
+
+  /** The chip that shows a chat's kind and opens the choice of the six. */
+  function kindControl(chat, focusKey) {
+    const wrap = el('span', 'usage-kind');
+    const chip = el('button', `usage-kind__chip${chat.taskKind ? '' : ' usage-kind__chip--none'}`);
+    chip.type = 'button';
+    chip.setAttribute('aria-haspopup', 'listbox');
+    chip.setAttribute('aria-expanded', 'false');
+    chip.setAttribute('aria-label', chat.taskKind
+      ? t('usage.taskKind.label', { title: chatTitle(chat), kind: kindName(chat.taskKind) })
+      : t('usage.taskKind.label.none', { title: chatTitle(chat) }));
+    chip.dataset.focus = focusKey;
+    chip.append(el('span', 'usage-kind__text', kindName(chat.taskKind)));
+    chip.insertAdjacentHTML('beforeend', CARET_SVG);
+    chip.addEventListener('click', () => {
+      if (kindMenu?.chip === chip) closeKindMenu();
+      else openKindMenu(chat, chip, wrap);
+    });
+    wrap.append(chip);
+    return wrap;
+  }
+
+  function openKindMenu(chat, chip, wrap) {
+    closeKindMenu({ restoreFocus: false });
+    const list = el('ul', 'usage-kind__menu');
+    list.setAttribute('role', 'listbox');
+    list.setAttribute('aria-label', t('usage.taskKind.menu', { title: chatTitle(chat) }));
+    for (const id of TASK_KIND_IDS) {
+      const li = el('li');
+      li.setAttribute('role', 'none');
+      const option = el('button', 'usage-kind__option');
+      option.type = 'button';
+      option.setAttribute('role', 'option');
+      option.setAttribute('aria-selected', String(id === chat.taskKind));
+      const check = el('span', 'usage-kind__check', id === chat.taskKind ? '✓' : '');
+      check.setAttribute('aria-hidden', 'true');
+      const main = el('span', 'usage-kind__option-main');
+      main.append(el('span', 'usage-kind__option-name', t(`taskKind.${id}`)), el('span', 'usage-kind__option-def', t(`taskKind.${id}.definition`)));
+      option.append(check, main);
+      option.addEventListener('click', () => chooseKind(chat, id).catch(logFailure));
+      li.append(option);
+      list.append(li);
+    }
+    list.addEventListener('keydown', (event) => {
+      const options = Array.from(list.querySelectorAll('.usage-kind__option'));
+      const index = options.indexOf(document.activeElement);
+      let next = null;
+      if (event.key === 'ArrowDown') next = options[(index + 1) % options.length];
+      else if (event.key === 'ArrowUp') next = options[(index - 1 + options.length) % options.length];
+      else if (event.key === 'Home') next = options[0];
+      else if (event.key === 'End') next = options[options.length - 1];
+      else if (event.key === 'Escape' || event.key === 'Tab') {
+        // Escape closes the menu, not the dialog; Tab leaves it at its chip.
+        event.preventDefault();
+        event.stopPropagation();
+        closeKindMenu();
+        return;
+      }
+      if (!next) return;
+      event.preventDefault();
+      next.focus();
+    });
+    wrap.append(list);
+    chip.setAttribute('aria-expanded', 'true');
+    kindMenu = { chip, list };
+    list.scrollIntoView?.({ block: 'nearest' });
+    (list.querySelector('[aria-selected="true"]') || list.querySelector('.usage-kind__option'))?.focus();
+  }
+
+  function closeKindMenu({ restoreFocus = true } = {}) {
+    if (!kindMenu) return;
+    const { chip, list } = kindMenu;
+    kindMenu = null;
+    const hadFocus = list.contains(document.activeElement);
+    list.remove();
+    chip.setAttribute('aria-expanded', 'false');
+    if (restoreFocus && hadFocus && chip.isConnected) chip.focus();
+  }
+
+  /**
+   * Stores the user's choice and loads the report again, so every figure
+   * follows at once. Grouped by kind, the chat moves to another row: the
+   * focus goes to the chats of the row it left, or of the row it joined.
+   */
+  async function chooseKind(chat, id) {
+    closeKindMenu();
+    if (id === chat.taskKind) return;
+    alert = null;
+    drawAlert();
+    let stored = null;
+    try {
+      stored = (await api.setChatTaskKind(chat.id, id))?.taskKind ?? null;
+    } catch (error) {
+      console.error('[usage] the kind could not be stored:', error);
+      stored = null;
+    }
+    if (!stored) {
+      alert = { key: 'usage.taskKind.failed' };
+      drawAlert();
+      return;
+    }
+    statusEl.textContent = t('usage.taskKind.changed', { title: chatTitle(chat), kind: t(`taskKind.${id}`) });
+    const left = taskKindKey(chat);
+    await load();
+    if (!isOpen() || dialog.contains(document.activeElement)) return;
+    const focusable = (focusKey) => tableEl.querySelector(`[data-focus="${CSS.escape(focusKey)}"]`);
+    (focusable(`chats:${DIMENSIONS.TASK_KINDS}:${left}`) || focusable(`chats:${DIMENSIONS.TASK_KINDS}:${id}`) || dialog)?.focus();
   }
 
   // ── Opening a chat ──────────────────────────────────────────────────────
@@ -778,6 +920,7 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
       root.setAttribute('aria-hidden', 'false');
     }
     alert = null;
+    statusEl.textContent = '';
     draw();
     reload();
     (periodInputs.find((input) => input.checked) || periodInputs[0])?.focus();
@@ -785,6 +928,7 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
 
   function close({ restoreFocus = true } = {}) {
     if (!isOpen()) return;
+    closeKindMenu({ restoreFocus: false });
     request += 1;
     clearTimeout(loadingTimer);
     root.classList.add('hidden');
@@ -826,6 +970,10 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
   doneBtn.addEventListener('click', () => close());
   closeBtn.addEventListener('click', () => close());
   backdrop?.addEventListener('click', () => close());
+  // A click beside the open kind menu closes it, and lands where it was aimed.
+  root.addEventListener('mousedown', (event) => {
+    if (kindMenu && !kindMenu.chip.parentElement?.contains(event.target)) closeKindMenu({ restoreFocus: false });
+  });
 
   // Focus cage: Tab runs in a circle inside the dialog, Escape closes it.
   root.addEventListener('keydown', (event) => {

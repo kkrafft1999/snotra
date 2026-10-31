@@ -2013,7 +2013,7 @@ module.exports = {
   'usage.row.expand.models': 'Models in {name}',
   'usage.row.chats.one': '{count} chat',
   'usage.row.chats.other': '{count} chats',
-  'usage.row.chats.label.one': 'The chat of {name}',
+  'usage.row.chats.label.one': '{count} chat of {name}',
   'usage.row.chats.label.other': 'The {count} chats of {name}',
   'usage.tokens.input': 'Input {count}',
   'usage.tokens.cacheRead': 'Read from the cache {count}',
@@ -2026,6 +2026,18 @@ module.exports = {
   'usage.chats.open.label': 'Open the chat “{title}”',
   'usage.chats.noFolder': 'A chat without a folder opens only while no folder is open.',
   'usage.chats.openFailed': 'The folder {path} could not be opened.',
+
+  // ── Usage report by kind of task (#1283) ─────────────────────────────────
+  'usage.group.taskKinds': 'Task kind',
+  'usage.table.caption.taskKinds': 'Cost and tokens by kind of task',
+  'usage.column.taskKind': 'Task kind',
+  'usage.taskKind.unclassified.hint': 'Chats without a kind yet',
+  'usage.taskKind.choose': 'Choose a kind',
+  'usage.taskKind.label': 'Kind of task of “{title}”: {kind}',
+  'usage.taskKind.label.none': 'Kind of task of “{title}”: not chosen yet',
+  'usage.taskKind.menu': 'Kind of task of “{title}”',
+  'usage.taskKind.changed': '“{title}” now counts as {kind}.',
+  'usage.taskKind.failed': 'The kind could not be stored. Try again.',
 
   // ── Context breakdown (token panel) ──────────────────────────────────────
   'context.title': 'Context window of the last request',

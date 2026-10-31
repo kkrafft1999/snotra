@@ -1,6 +1,6 @@
 /**
- * The usage report (#1258): estimated cost and tokens across chats, per model
- * and per workspace, over a period.
+ * The usage report (#1258): estimated cost and tokens across chats, per model,
+ * per workspace and per kind of task (#1283), over a period.
  *
  * Pure functions only. Main builds the report from the history's index — each
  * entry carries its chat's `SessionCost` with day entries (cost.js), so no
@@ -9,14 +9,16 @@
  * A period filters by the day the tokens were spent, not by when a chat was
  * made or last opened. Spending without a day — chats from before #1258 —
  * counts on the chat's last save (`costDaysOf`). Every day entry lands in
- * exactly one model row and one workspace row, so both views add up to the
- * same total.
+ * exactly one model row, one workspace row and one kind row — a chat without
+ * a kind this version knows in the *Unclassified* one —, so all three views
+ * add up to the same total.
  */
 'use strict';
 
 const { isRecord } = require('../runtime/is-record');
 const { isMessage } = require('./message');
 const { PRICE_SOURCES, costDaysOf, dayKeyOf, isDayKey } = require('./cost');
+const { classifiedTaskKindId } = require('./task-kind');
 
 /** @typedef {import('./cost').CostTokens} CostTokens */
 /** @typedef {import('./cost').CostDay} CostDay */
@@ -62,10 +64,15 @@ const WEEKLY_BARS_MAX_DAYS = 371;
  * @typedef {UsageModelPart & { chats: number, workspaces: UsageWorkspacePart[] }} UsageModelRow
  * @typedef {UsageWorkspacePart & { chats: number, models: UsageModelPart[] }} UsageWorkspaceRow
  *
+ * A kind of task, `null` for the chats without one (#1283).
+ * @typedef {UsageFigures & { taskKind: import('./task-kind').TaskKindId|null, chats: number, models: UsageModelPart[] }} UsageTaskKindRow
+ *
  * A chat with what it spent inside the period. `title` is its own title or
  * '', `untitled` the descriptor its row shows instead (#359). `lastDate` is
- * the last day inside the period it spent anything on.
+ * the last day inside the period it spent anything on; `taskKind` its kind,
+ * null while it has none this version knows.
  * @typedef {UsageFigures & { id: string, workspaceRoot: string|null, title: string,
+ *   taskKind: import('./task-kind').TaskKindId|null,
  *   untitled?: import('./message').Message, lastDate: string,
  *   models: UsageModelPart[] }} UsageChatRow
  *
@@ -81,6 +88,7 @@ const WEEKLY_BARS_MAX_DAYS = 371;
  * @property {UsageFigures & { chats: number }} totals
  * @property {UsageModelRow[]} models          by cost, highest first
  * @property {UsageWorkspaceRow[]} workspaces  by cost, highest first
+ * @property {UsageTaskKindRow[]} taskKinds   by cost, highest first; only kinds with spending
  * @property {UsageChatRow[]} chats            by cost, highest first
  * @property {UsageDay[]} days                 only days with spending, oldest first
  * @property {{ from: string, to: string }|null} priceTables  the oldest and newest price table the chats in it were priced with
@@ -98,6 +106,7 @@ const WEEKLY_BARS_MAX_DAYS = 371;
  * @property {unknown} [untitled]
  * @property {number} [updatedAt]
  * @property {unknown} [cost]
+ * @property {unknown} [taskKind]
  */
 
 /** @returns {CostTokens} */
@@ -266,6 +275,8 @@ function buildUsageReport(chats, rawPeriod, { maxChats = Infinity } = {}) {
   const models = new Map();
   /** @type {Map<string, UsageWorkspaceRow & { chatIds: Set<string>, byModel: Map<string, UsageModelPart> }>} */
   const workspaces = new Map();
+  /** @type {Map<string, UsageTaskKindRow & { chatIds: Set<string>, byModel: Map<string, UsageModelPart> }>} */
+  const taskKinds = new Map();
   /** @type {UsageChatRow[]} */
   const chatRows = [];
   /** @type {Map<string, UsageDay>} */
@@ -287,6 +298,7 @@ function buildUsageReport(chats, rawPeriod, { maxChats = Infinity } = {}) {
       id: chat.id,
       workspaceRoot,
       title: typeof chat.title === 'string' ? chat.title : '',
+      taskKind: classifiedTaskKindId(chat.taskKind),
       lastDate: inside[0].date,
       models: [],
       byModel: new Map(),
@@ -295,6 +307,9 @@ function buildUsageReport(chats, rawPeriod, { maxChats = Infinity } = {}) {
 
     const ws = upsert(workspaces, wsKey, () => ({ ...emptyFigures(), workspaceRoot, chats: 0, models: [], chatIds: new Set(), byModel: new Map() }));
     ws.chatIds.add(chat.id);
+    const taskKind = row.taskKind;
+    const kind = upsert(taskKinds, taskKind ?? '', () => ({ ...emptyFigures(), taskKind, chats: 0, models: [], chatIds: new Set(), byModel: new Map() }));
+    kind.chatIds.add(chat.id);
 
     for (const day of inside) {
       const modelKey = `${day.providerId}\u0000${day.model}`;
@@ -306,6 +321,8 @@ function buildUsageReport(chats, rawPeriod, { maxChats = Infinity } = {}) {
       addDay(upsert(model.byWorkspace, wsKey, () => ({ ...emptyFigures(), workspaceRoot })), day);
       addDay(ws, day);
       addDay(upsert(ws.byModel, modelKey, () => ({ ...emptyFigures(), providerId: day.providerId, model: day.model })), day);
+      addDay(kind, day);
+      addDay(upsert(kind.byModel, modelKey, () => ({ ...emptyFigures(), providerId: day.providerId, model: day.model })), day);
       addDay(row, day);
       addDay(upsert(row.byModel, modelKey, () => ({ ...emptyFigures(), providerId: day.providerId, model: day.model })), day);
       addDay(totals, day);
@@ -332,6 +349,11 @@ function buildUsageReport(chats, rawPeriod, { maxChats = Infinity } = {}) {
     chats: chatIds.size,
     models: [...byModel.values()].sort(byCost),
   })).sort(byCost);
+  const taskKindRows = [...taskKinds.values()].map(({ chatIds, byModel, ...kind }) => ({
+    ...kind,
+    chats: chatIds.size,
+    models: [...byModel.values()].sort(byCost),
+  })).sort(byCost);
   const dayRows = [...days.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
   priceTableDates.sort();
   const historyChats = list.length;
@@ -343,6 +365,7 @@ function buildUsageReport(chats, rawPeriod, { maxChats = Infinity } = {}) {
     totals,
     models: modelRows,
     workspaces: workspaceRows,
+    taskKinds: taskKindRows,
     chats: chatRows.sort(byCost),
     days: dayRows,
     priceTables: priceTableDates.length > 0

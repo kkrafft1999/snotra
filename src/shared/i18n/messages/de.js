@@ -2020,7 +2020,7 @@ module.exports = {
   'usage.row.expand.models': 'Modelle in {name}',
   'usage.row.chats.one': '{count} Chat',
   'usage.row.chats.other': '{count} Chats',
-  'usage.row.chats.label.one': 'Der Chat von {name}',
+  'usage.row.chats.label.one': '{count} Chat von {name}',
   'usage.row.chats.label.other': 'Die {count} Chats von {name}',
   'usage.tokens.input': 'Eingabe {count}',
   'usage.tokens.cacheRead': 'Aus dem Cache gelesen {count}',
@@ -2033,6 +2033,18 @@ module.exports = {
   'usage.chats.open.label': 'Den Chat „{title}“ öffnen',
   'usage.chats.noFolder': 'Ein Chat ohne Ordner öffnet sich nur, solange kein Ordner offen ist.',
   'usage.chats.openFailed': 'Der Ordner {path} ließ sich nicht öffnen.',
+
+  // ── Usage report by kind of task (#1283) ─────────────────────────────────
+  'usage.group.taskKinds': 'Aufgabenart',
+  'usage.table.caption.taskKinds': 'Kosten und Tokens nach Aufgabenart',
+  'usage.column.taskKind': 'Aufgabenart',
+  'usage.taskKind.unclassified.hint': 'Chats, die noch keine Art haben',
+  'usage.taskKind.choose': 'Art wählen',
+  'usage.taskKind.label': 'Aufgabenart von „{title}“: {kind}',
+  'usage.taskKind.label.none': 'Aufgabenart von „{title}“: noch nicht gewählt',
+  'usage.taskKind.menu': 'Aufgabenart von „{title}“',
+  'usage.taskKind.changed': '„{title}“ zählt jetzt als {kind}.',
+  'usage.taskKind.failed': 'Die Art ließ sich nicht speichern. Versuch es noch einmal.',
 
   // ── Context breakdown (token panel) ────────────────────────────────────────
   'context.title': 'Kontextfenster der letzten Anfrage',

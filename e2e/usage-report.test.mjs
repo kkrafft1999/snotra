@@ -1,6 +1,7 @@
 // The usage report in the real app (#1258): its three ways in, the periods,
 // both dimensions with their rows unfolded, a chat opened from it in another
 // folder, a real turn booked on today — and axe over the dialog, light and dark.
+// And the grouping by kind of task, with a chat's kind changed in it (#1283).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -169,4 +170,78 @@ test('the usage report: three ways in, periods, both dimensions, a chat opened f
   assert.equal(turn.workspaceRoot, folders[1]);
   assert.equal(turn.lastDate, dayBefore(Date.now(), 0));
   assert.ok(turn.usd > 0, 'priced with the price of its own');
+});
+
+test('the usage report by kind of task: equal totals, a kind changed from the chat list', { timeout: 240000 }, async (t) => {
+  const model = await startFakeModel();
+  const parent = await realpath(await makeTempDir('snotra-usage-kind-'));
+  const folders = ['garden-planner', 'website-relaunch', 'thesis'].map((name) => path.join(parent, name));
+  for (const folder of folders) await mkdir(folder, { recursive: true });
+  await writeFile(path.join(folders[0], 'README.md'), '# Garden Planner\n', 'utf8');
+  const userDataDir = await makeTempDir('snotra-usage-kind-userdata-');
+  await prepareUserData(userDataDir, { workspace: folders[0], modelBaseUrl: model.baseUrl });
+  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en' }), 'utf8');
+  const { chats } = await writeUsageHistory(userDataDir, { folders, locale: 'en' });
+
+  const snotra = await launchApp({ userDataDir });
+  t.after(async () => {
+    await snotra.stop().catch(() => {});
+    await model.close();
+  });
+  const { page } = snotra;
+  await poll(() => page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length > 0), { what: 'tree' });
+
+  // ── Main's figures: the kinds from the index, all three views the same total ──
+  const all = await report(page, { from: null, to: null });
+  const byKind = Object.fromEntries(all.taskKinds.map((row) => [row.taskKind ?? 'none', row.chats]));
+  assert.deepEqual(byKind, { coding: 4, planning: 1, writing: 2, research: 2, none: 2 });
+  const sum = (rows) => Math.round(rows.reduce((acc, row) => acc + (row.usd ?? 0), 0) * 1e6);
+  assert.equal(sum(all.taskKinds), sum(all.models));
+  assert.equal(sum(all.taskKinds), sum(all.workspaces));
+  assert.equal(all.taskKinds.reduce((acc, row) => acc + row.rounds, 0), all.totals.rounds);
+  assert.ok(all.taskKinds.every((row) => row.models.every((part) => part.providerName)), 'the models are named');
+
+  // ── The grouping in the dialog ──
+  await page.click('#btn-sidebar-usage');
+  await poll(async () => (await rowNames(page)).length > 0, { what: 'report rows' });
+  await pick(page, 'usage-group', 'taskKinds');
+  await poll(async () => (await rowNames(page)).includes('Coding'), { what: 'kind rows' });
+  assert.equal((await rowNames(page)).at(-1), 'Unclassified', 'what is left over comes last');
+  const coding = page.locator('#usage-table .usage-table__group', { hasText: 'Coding' });
+  await coding.locator('.usage-table__disclosure').click();
+  await poll(() => coding.evaluate((group) => [...group.querySelectorAll('.usage-table__child')].every((row) => !row.hidden)), { what: 'models of the kind' });
+  assert.deepEqual(await coding.evaluate((group) => [...group.querySelectorAll('.usage-table__child .usage-table__name-main')].map((el) => el.textContent)),
+    ['claude-sonnet-4-5', 'gpt-5', 'gpt-5-mini', 'acme/reviewer-large']);
+  await coding.locator('.usage-table__chats').click();
+  await poll(() => coding.evaluate((group) => group.querySelectorAll('.usage-chats__item').length === 4), { what: 'the kind\'s chats' });
+
+  // ── The menu by keyboard, and axe with it open ──
+  const sowing = chats.find((c) => c.title === 'Sowing calendar as JSON');
+  const chip = coding.locator('.usage-chats__item', { hasText: sowing.title }).locator('.usage-kind__chip');
+  assert.equal(await chip.textContent(), 'Coding');
+  await chip.focus();
+  await page.keyboard.press('Enter');
+  await poll(() => page.evaluate(() => document.activeElement?.getAttribute('role') === 'option'), { what: 'the menu has the focus' });
+  const findings = [];
+  for (const theme of ['light', 'dark']) {
+    await useTheme(page, theme);
+    for (const violation of await axeViolations(page, { context: '#modal-usage' })) findings.push({ theme, ...violation });
+  }
+  await useTheme(page, 'light');
+  assert.equal(findings.length, 0, describeViolations(findings));
+
+  // Data & analysis is three down from Coding.
+  for (let i = 0; i < 3; i += 1) await page.keyboard.press('ArrowDown');
+  assert.equal(await page.evaluate(() => document.activeElement.textContent.startsWith('Data & analysis')), true);
+  await page.keyboard.press('Enter');
+  await poll(async () => (await rowNames(page)).includes('Data & analysis'), { what: 'the new kind row' });
+  assert.match(await page.evaluate(() => document.getElementById('usage-status').textContent), /“Sowing calendar as JSON” now counts as Data & analysis\./);
+  assert.equal(await page.evaluate(() => document.activeElement?.dataset.focus), 'chats:taskKinds:coding', 'the focus stays in the row it left');
+  assert.equal(await shown(page), true);
+
+  // Stored as the user's choice: main counts it there, and the totals still agree.
+  const after = await report(page, { from: null, to: null });
+  assert.equal(after.chats.find((c) => c.id === sowing.id).taskKind, 'data');
+  assert.equal(after.taskKinds.find((row) => row.taskKind === 'coding').chats, 3);
+  assert.equal(sum(after.taskKinds), sum(after.models));
 });

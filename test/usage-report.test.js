@@ -39,11 +39,13 @@ function entry({ providerId = 'openai', model = 'gpt-x', input = 1000, output = 
 const turnCost = (...models) => ({ models, priceTable: { date: '2026-10-15', origin: 'bundled' } });
 
 /** A chat as the index holds it, with its turns booked on the days given. */
-function chat(id, turns, { workspaceRoot = '/work/a', updatedAt = NOON(2026, 10, 25), title = id } = {}) {
+function chat(id, turns, { workspaceRoot = '/work/a', updatedAt = NOON(2026, 10, 25), title = id, taskKind } = {}) {
   let cost = null;
   for (const [date, ...models] of turns) cost = mergeSessionCost(cost, datedSessionCost(turnCost(...models), date));
-  return { id, workspaceRoot, title, updatedAt, cost };
+  return { id, workspaceRoot, title, updatedAt, cost, ...(taskKind ? { taskKind } : {}) };
 }
+
+const kind = (id, source = 'model') => ({ id, source, at: '2026-10-25T10:00:00.000Z' });
 
 const usd = (figures) => Math.round((figures.usd ?? NaN) * 1e6) / 1e6;
 
@@ -185,6 +187,52 @@ test('every dimension adds up to the same total', () => {
   // Each row unfolds into the other dimension, adding up to the row.
   for (const ws of report.workspaces) assert.equal(sum(ws.models, (m) => m.usd ?? 0), usd({ usd: ws.usd ?? 0 }));
   for (const model of report.models) assert.equal(sum(model.workspaces, (w) => w.rounds), model.rounds);
+});
+
+test('all three groupings add up to the same total, unclassified chats included (#1283)', () => {
+  const chats = [
+    chat('a', [['2026-10-02', entry({ usd: 1.25 }), entry({ model: 'gpt-y', usd: 0.5 })]], { taskKind: kind('coding') }),
+    chat('b', [['2026-10-04', entry({ usd: 2 })], ['2026-10-05', entry({ model: 'local-z', providerId: 'ollama', usd: 0, priceSource: 'local' })]],
+      { workspaceRoot: '/work/b', taskKind: kind('writing', 'user') }),
+    chat('c', [['2026-10-06', entry({ model: 'mystery', usd: null })]], { workspaceRoot: null, taskKind: kind('coding', 'estimate') }),
+    chat('none', [['2026-10-07', entry({ usd: 0.75 })]]),
+    // Written by a newer version: kept on disk, counted as unclassified here.
+    chat('newer', [['2026-10-08', entry({ model: 'gpt-y', usd: 0.25 })]], { taskKind: kind('gardening') }),
+  ];
+  const report = buildUsageReport(chats, { from: null, to: null });
+  const sum = (rows, pick) => Math.round(rows.reduce((acc, row) => acc + pick(row), 0) * 1e6) / 1e6;
+  for (const rows of [report.models, report.workspaces, report.taskKinds]) {
+    assert.equal(sum(rows, (row) => row.usd ?? 0), usd(report.totals));
+    assert.equal(sum(rows, (row) => row.rounds), report.totals.rounds);
+    assert.equal(sum(rows, (row) => row.tokens.input + row.tokens.output), report.totals.tokens.input + report.totals.tokens.output);
+  }
+  assert.deepEqual(report.taskKinds.map((row) => [row.taskKind, usd(row), row.chats]), [
+    ['writing', 2, 1],
+    ['coding', 1.75, 2],
+    [null, 1, 2],
+  ]);
+  // A kind unfolds into the models used for it, adding up to the row.
+  for (const row of report.taskKinds) {
+    assert.equal(sum(row.models, (m) => m.rounds), row.rounds);
+    assert.equal(sum(row.models, (m) => m.usd ?? 0), usd({ usd: row.usd ?? 0 }));
+  }
+  const coding = report.taskKinds.find((row) => row.taskKind === 'coding');
+  assert.deepEqual(coding.models.map((m) => m.model), ['gpt-x', 'gpt-y', 'mystery']);
+  assert.equal(coding.unpricedRounds, 1, 'an unpriced model keeps its row partial');
+  const byId = Object.fromEntries(report.chats.map((c) => [c.id, c.taskKind]));
+  assert.deepEqual(byId, { a: 'coding', b: 'writing', c: 'coding', none: null, newer: null });
+});
+
+test('the kinds count only what was spent inside the period, and only kinds that spent anything', () => {
+  const chats = [
+    chat('a', [['2026-10-02', entry({ usd: 1 })], ['2026-10-20', entry({ usd: 3 })]], { taskKind: kind('data') }),
+    chat('b', [['2026-09-02', entry({ usd: 5 })]], { taskKind: kind('planning') }),
+  ];
+  const report = buildUsageReport(chats, { from: '2026-10-10', to: '2026-10-31' });
+  assert.deepEqual(report.taskKinds.map((row) => [row.taskKind, usd(row)]), [['data', 3]]);
+  assert.deepEqual(buildUsageReport(chats, { from: '2020-01-01', to: '2020-01-31' }).taskKinds, [], 'an empty period has no rows');
+  const onlyUnclassified = buildUsageReport([chat('x', [['2026-10-02', entry({ usd: 1 })]])], { from: null, to: null });
+  assert.deepEqual(onlyUnclassified.taskKinds.map((row) => [row.taskKind, row.chats]), [[null, 1]]);
 });
 
 test('an unknown price is null, never 0; a local model is 0 and local; the total says it is partial', () => {
