@@ -906,3 +906,27 @@ test('a chat has someone to answer its cards only while a connection that takes 
   await watching.call('chat.open', { chatId: 'a1' });
   assert.equal(watching.dispatcher.answersCards('a1'), false, 'a connection without the capability only watches');
 });
+
+test('a knowledge card goes to the phone in full, and only a client that shows it may allow it (#1319)', async () => {
+  const knowledgeCard = card('r1', 'a1', ALPHA, {
+    knowledge: true,
+    knowledgeWarning: true,
+    targets: [{ path: `${ALPHA}/AGENTS.md`, kind: 'file', exists: true, sensitive: false, knowledge: 'agents' }],
+  });
+  const desktop = fakeDesktop({ chats: turnChats() });
+  desktop.state.cards = [knowledgeCard];
+  const plain = await setup({ desktop, capabilities: ['approvals'] });
+  const [shown] = (await plain.call('chat.open', { chatId: 'a1' })).result.pendingApprovals;
+  assert.deepEqual(shown.options, ['deny']);
+  assert.equal(shown.knowledge, true);
+  assert.equal(shown.knowledgeWarning, true);
+  assert.equal(shown.targets[0].knowledge, 'agents');
+  assertError(await plain.call('approval.respond', { requestId: 'r1', response: 'allow-once' }), 'refused');
+
+  const able = fakeDesktop({ chats: turnChats() });
+  able.state.cards = [knowledgeCard];
+  const full = await setup({ desktop: able, capabilities: ['approvals', 'knowledge-cards'] });
+  const [offered] = (await full.call('chat.open', { chatId: 'a1' })).result.pendingApprovals;
+  assert.deepEqual(offered.options, ['allow-once', 'deny']);
+  assert.equal((await full.call('approval.respond', { requestId: 'r1', response: 'allow-once' })).result.response, 'allow-once');
+});

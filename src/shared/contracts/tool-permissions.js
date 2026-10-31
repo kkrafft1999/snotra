@@ -20,7 +20,7 @@ const { isRecord } = require('../runtime/is-record');
  * @typedef {(typeof APPROVAL_RESPONSES)[keyof typeof APPROVAL_RESPONSES]} ApprovalResponse
  * @typedef {(typeof PERMISSION_DENIAL_REASONS)[keyof typeof PERMISSION_DENIAL_REASONS]} PermissionDenialReason
  * @typedef {(typeof COMMAND_RULE_UNAVAILABLE_REASONS)[keyof typeof COMMAND_RULE_UNAVAILABLE_REASONS]} CommandRuleUnavailableReason
- * @typedef {'access'|'output'|'sandbox'|'config'} ApprovalCheckpoint
+ * @typedef {'access'|'output'|'sandbox'|'config'|'knowledge'} ApprovalCheckpoint
  */
 
 /**
@@ -672,6 +672,8 @@ function parsePermissionDeniedToolResult(output) {
  * @property {string} [version]  the file version the approval binds to
  * @property {string} [skillName]
  * @property {string} [skillPath]
+ * @property {string} [knowledge]  a knowledge file of the open folder (#1319)
+ * @property {boolean} [knowledgeAlways]
  *
  * @param {unknown} raw
  * @returns {ApprovalTarget|null}
@@ -700,7 +702,31 @@ function normalizeApprovalTarget(raw) {
     out.skillName = raw.skillName.slice(0, 64);
     if (typeof raw.skillPath === 'string' && raw.skillPath) out.skillPath = raw.skillPath.slice(0, 1024);
   }
+  // A knowledge file (#1319): what it is, and whether the rule written says `always`.
+  if (KNOWLEDGE_TARGET_KINDS.has(/** @type {string} */ (raw.knowledge))) {
+    out.knowledge = /** @type {string} */ (raw.knowledge);
+    if (raw.knowledgeAlways === true) out.knowledgeAlways = true;
+  }
   return out;
+}
+
+/** The kinds of knowledge file a card may name (#1319), see contracts/knowledge-files.js. */
+const KNOWLEDGE_TARGET_KINDS = new Set(['agents', 'memory', 'rules', 'skills']);
+
+/**
+ * What a command changed in the folder's knowledge files (#1319): paths and
+ * how, nothing else. Null when there is nothing usable.
+ *
+ * @param {unknown} raw
+ * @returns {{ files: Array<{ path: string, status: string }> }|null}
+ */
+function sanitizeKnowledgeChange(raw) {
+  if (!isRecord(raw) || !Array.isArray(raw.files)) return null;
+  const files = raw.files.filter(isRecord)
+    .filter((file) => typeof file.path === 'string' && file.path && ['added', 'changed', 'removed'].includes(/** @type {string} */ (file.status)))
+    .slice(0, 300)
+    .map((file) => ({ path: /** @type {string} */ (file.path).slice(0, 1024), status: /** @type {string} */ (file.status) }));
+  return files.length > 0 ? { files } : null;
 }
 
 /**
@@ -740,6 +766,9 @@ function normalizeApprovalTarget(raw) {
  * @property {SandboxApproval} [sandbox]
  * @property {true} [workspaceAllowed]
  * @property {ConfigProposal} [config]
+ * @property {boolean} [knowledge]  a card about a knowledge file (#1319)
+ * @property {boolean} [knowledgeWarning]
+ * @property {{ files: Array<{ path: string, status: string }> }} [knowledgeChange]
  * @property {true} [alwaysAllowed]
  * @property {CommandRuleUnavailableReason} [alwaysUnavailableReason]
  * @property {string} [sessionScopeLabel]
@@ -767,6 +796,9 @@ function normalizeApprovalTarget(raw) {
  * @param {string} [request.checkpoint]
  * @param {unknown} [request.sandbox]
  * @param {unknown} [request.config]
+ * @param {boolean} [request.knowledge]  a card about a knowledge file (#1319)
+ * @param {boolean} [request.knowledgeWarning]  with the warning of #1280
+ * @param {unknown} [request.knowledgeChange]  `knowledge` checkpoint: what a command changed
  * @returns {ToolApprovalRequestDto}
  */
 function createToolApprovalRequestDto({
@@ -790,6 +822,9 @@ function createToolApprovalRequestDto({
   checkpoint,
   sandbox,
   config,
+  knowledge,
+  knowledgeWarning,
+  knowledgeChange,
 } = {}) {
   const classes = normalizeRiskClasses(riskClasses) || [];
   /** @type {ToolApprovalRequestDto} */
@@ -828,6 +863,13 @@ function createToolApprovalRequestDto({
   // A proposal to switch a skill or tool for the chat (#774).
   const configView = checkpoint === 'config' ? sanitizeConfigProposal(config) : null;
   if (configView) dto.config = configView;
+  // A knowledge file (#1319), the warning of #1280, and after a command what it changed.
+  if (knowledge === true) {
+    dto.knowledge = true;
+    if (knowledgeWarning === true) dto.knowledgeWarning = true;
+  }
+  const changeView = checkpoint === 'knowledge' ? sanitizeKnowledgeChange(knowledgeChange) : null;
+  if (changeView) dto.knowledgeChange = changeView;
   // "Always allow this command in this workspace" (#121): whether the card
   // offers it, and if not, why. The rule itself stays in main.
   if (alwaysAllowed === true) dto.alwaysAllowed = true;
@@ -878,7 +920,7 @@ function createToolApprovalRequestDto({
   return dto;
 }
 
-const APPROVAL_CHECKPOINTS = Object.freeze(['access', 'output', 'sandbox', 'config']);
+const APPROVAL_CHECKPOINTS = Object.freeze(['access', 'output', 'sandbox', 'config', 'knowledge']);
 
 /**
  * @param {unknown} value

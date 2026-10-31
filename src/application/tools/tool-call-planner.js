@@ -27,6 +27,7 @@ const { maskSensitiveContent } = require('../../shared/runtime/sensitive-content
 const { checkShellCommand } = require('../../shared/runtime/shell-command-guard');
 const { resolveRunDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../../shared/contracts/sandbox-reasons');
+const { KNOWLEDGE_FILE_KINDS, workspaceKnowledgeKind, writtenRuleIsAlways } = require('../../shared/contracts/knowledge-files');
 const { normalizeProgramAllowances } = require('../../shared/contracts/program-allowances');
 const { APP_LOCALES, createTranslator } = require('../../shared/i18n');
 const { isPathInside } = require('../../shared/runtime/path-inside');
@@ -651,6 +652,16 @@ function createToolCallPlanner({
         target.sensitiveReason = (logicalHit.sensitive ? logicalHit : realHit).pattern;
         classes.add(TOOL_RISK_CLASSES.READ_SENSITIVE);
       }
+      // A knowledge file of the open folder (#1319): Snotra embeds it into
+      // every later conversation, so a write asks in every mode. Judged by
+      // where the call lands, lexically and by its real path.
+      if (access === 'write' && !resolved.prefix) {
+        const knowledge = workspaceKnowledgeKind(lexicalRel) || workspaceKnowledgeKind(realRuleRel);
+        if (knowledge) {
+          target.knowledge = knowledge;
+          if (knowledge === KNOWLEDGE_FILE_KINDS.RULES && writtenRuleIsAlways(args?.content)) target.knowledgeAlways = true;
+        }
+      }
       applyOverwrite(target, descriptor);
       targets.push(target);
     }
@@ -684,6 +695,8 @@ function createToolCallPlanner({
     result.presentation = normalizeToolPresentation(definition);
     // Targets outside the open folder no card has opened yet (#792, step 4).
     if (targets.some((target) => target.outside)) result.outside = true;
+    // A write to a knowledge file: a card in every mode, no stored allowance (#1319).
+    if (targets.some((target) => target.knowledge)) result.knowledge = true;
     if (recovery) result.recovery = recovery;
     if (hardLimit) result.hardLimit = hardLimit;
     if (definition.execution) {

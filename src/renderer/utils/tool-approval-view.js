@@ -271,12 +271,20 @@ function describeTarget(target) {
     out.skillName = target.skillName;
     out.notes.push(t('approval.note.skill', { name: target.skillName }));
   }
+  // A knowledge file (#1319): what it is, and that Snotra reads it in every
+  // chat in this folder. Two literal keys per kind, so the key scan sees them.
+  if (target?.knowledge === 'agents') out.notes.push(t('approval.note.knowledge.agents'));
+  else if (target?.knowledge === 'memory') out.notes.push(t('approval.note.knowledge.memory'));
+  else if (target?.knowledge === 'rules') out.notes.push(t('approval.note.knowledge.rules'));
+  else if (target?.knowledge === 'skills') out.notes.push(t('approval.note.knowledge.skills'));
+  if (target?.knowledgeAlways === true) out.notes.push(t('approval.note.knowledge.always'));
   return out;
 }
 
 /** Why "allow for this session" is (not) offered (concept §6). */
 export function sessionActionHint(dto) {
   if (dto?.sessionAllowed === true) return '';
+  if (dto?.knowledge === true) return t('approval.sessionHint.knowledge');
   if (dto?.mode === TOOL_PERMISSION_MODES.ASK_ALL) return t('approval.sessionHint.askAll');
   const classes = Array.isArray(dto?.riskClasses) ? dto.riskClasses : [];
   const single = classes.filter((cls) => SINGLE_DECISION_CLASSES.includes(cls));
@@ -545,6 +553,8 @@ export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
     cwdLabel: '',
     isolation: describeIsolation(dto.preview?.isolation, { homeDir }),
     invisibleWarning: '',
+    // The chat met a likely injection, or the folder's text a covert signal (#1280).
+    knowledgeWarning: dto.knowledge === true && dto.knowledgeWarning === true ? t('approval.warning.knowledge') : '',
     preview: null,
     actions: {
       once: { response: APPROVAL_RESPONSES.ALLOW_ONCE, label: t('approval.action.once'), enabled: true },
@@ -924,4 +934,45 @@ export function integrityWarning(integrity) {
 
 export function legacyWriteMigrationHint() {
   return t('permissions.legacyWriteHint');
+}
+
+/**
+ * The card after a shell or Python command changed a knowledge file (#1319):
+ * the run waits for it. *Keep* lets the change stand, *Reset* puts back what
+ * the files held before the command — the two answers of an access card,
+ * worded for what they do here.
+ */
+export function buildKnowledgeChangeCardView(dto, { homeDir = '' } = {}) {
+  const view = buildApprovalCardView({ ...dto, riskClasses: ['write'], sessionAllowed: false, alwaysAllowed: false }, { homeDir });
+  if (!view) return null;
+  const targets = Array.isArray(dto?.targets) ? dto.targets : [];
+  const targetLabel = targets.length === 1 ? revealed(targets[0]?.path || '') : t('approval.targets.count', { count: targets.length });
+  view.title = t('approval.knowledgeChange.title');
+  view.headline = {
+    targetLabel,
+    verb: '',
+    tool: view.headline.tool,
+    template: t('approval.knowledgeChange.headline'),
+    text: t('approval.knowledgeChange.headline', { target: targetLabel, tool: view.headline.tool }),
+  };
+  view.reason = t('approval.knowledgeChange.reason');
+  view.warning = '';
+  view.actions.once = { ...view.actions.once, label: t('approval.knowledgeChange.keep') };
+  view.actions.deny = { ...view.actions.deny, label: t('approval.knowledgeChange.reset') };
+  view.actionOrder = ['once', 'deny'];
+  // Escape answers like the second button: here that resets.
+  view.waitingStatus = t('approval.knowledgeChange.waiting');
+  return view;
+}
+
+/**
+ * How a knowledge-change card ended (#1319): kept or reset. A card that was
+ * not answered says so like any other.
+ */
+export function describeKnowledgeChangeOutcome({ response, invalidated, aborted } = {}) {
+  if (aborted === true || invalidated === true) return null;
+  if (response === APPROVAL_RESPONSES.DENY) {
+    return { status: 'denied', label: t('approval.knowledgeChange.outcome.reset.label'), detail: t('approval.knowledgeChange.outcome.reset.detail') };
+  }
+  return { status: 'allowed', label: t('approval.knowledgeChange.outcome.kept.label'), detail: t('approval.knowledgeChange.outcome.kept.detail') };
 }

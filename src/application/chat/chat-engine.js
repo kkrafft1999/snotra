@@ -69,7 +69,8 @@ const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
 const { buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt } = require('./memory-prompt');
 const { guardEmbeddedFiles, guardEmbeddedSkills } = require('./embedded-text-guard');
-const { markCovertSignals } = require('./embedded-text-signals');
+const { markCovertSignals, hasCovertSignal } = require('./embedded-text-signals');
+const { scanSensitiveContent, maskSensitiveContent } = require('../../shared/runtime/sensitive-content');
 const { findCovertSignals } = require('./injection-detector');
 const { planRules, applyKnowledgeBudget, buildRulesSystemPrompt } = require('./rules-prompt');
 const { RULE_SOURCES, RULE_LEVELS, LOAD_RULE_TOOL, ruleSwitchKey } = require('../../shared/contracts/rules');
@@ -123,6 +124,7 @@ const {
  * is unchecked input: the engine sanitizes what it uses.
  * @typedef {Object} ChatSendPayload
  * @property {unknown} [chatId]
+ * @property {boolean} [injectionFlagged]  a tool result earlier in the chat was flagged (#1280); main sets it from the stored history
  * @property {Array<{ role: string, content?: unknown, attachments?: unknown }>} [messages]
  * @property {string|null} [workspaceRoot]
  * @property {string|null} [selectedPath]
@@ -1128,6 +1130,7 @@ function mergeSandboxGrants(session, chosen) {
  * @property {import('../ports/project-instructions-port').ProjectInstructionsPort|null} [projectInstructions]
  * @property {import('../ports/memory-port').MemoryPort|null} [memory]
  * @property {import('../ports/rules-port').RulesPort|null} [rules]
+ * @property {import('../ports/knowledge-files-port').KnowledgeFilesPort|null} [knowledgeFiles]
  * @property {import('../ports/tool-policy-port').ToolPolicyPort|null} [toolPolicy]
  * @property {import('../ports/tool-approval-port').ToolApprovalPort|null} [approvals]
  * @property {import('../ports/own-secrets-port').OwnSecretsPort|null} [ownSecrets]
@@ -1153,6 +1156,8 @@ function createChatEngine({
   memory = null,
   // Rules files (#1275): a block after AGENTS.md, and `load_rule`.
   rules = null,
+  // Snapshots of the folder's knowledge files around a command (#1319).
+  knowledgeFiles = null,
   toolPolicy = null,
   approvals = null,
   // The app's own secrets, for the text the prompt embeds by itself (#528).
@@ -2031,6 +2036,95 @@ function createChatEngine({
       }
 
       /**
+       * Whether a knowledge card warns (#1280, decision 11): a tool result
+       * anywhere in this chat was flagged — in an earlier turn, which the
+       * stored history tells, or in this run — or the folder's embedded text
+       * showed a covert signal.
+       */
+      function knowledgeWarningApplies() {
+        return payload?.injectionFlagged === true
+          || toolTrace.some((step) => step && typeof step === 'object' && step.injectionFlag)
+          || hasCovertSignal(staticContextParts);
+      }
+
+      /**
+       * After a shell or Python command (#1319): when it changed a knowledge
+       * file of the folder, the run waits for a card — *Keep* or *Reset*. Not
+       * a block: `git pull` and `git checkout` change `AGENTS.md` on purpose.
+       * Without anyone to answer, the change is reset — a knowledge file does
+       * not change unseen. Returns the note for the model, or '' when nothing
+       * changed.
+       *
+       * @param {{ entry: ToolTraceEntry, callIndex: number, toolName: string, plan: ToolPlan, policy: PolicyState,
+       *   before: import('../ports/knowledge-files-port').KnowledgeSnapshot }} input
+       * @returns {Promise<string>}
+       */
+      async function reviewKnowledgeChanges({ entry, callIndex, toolName, plan, policy, before }) {
+        if (!knowledgeFiles || !workspaceRoot) return '';
+        let after;
+        try {
+          after = await knowledgeFiles.snapshot({ workspaceRoot });
+        } catch (error) {
+          return `Snotra could not check whether the command changed AGENTS.md or .agents/ (${error?.message || 'unreadable'}).`;
+        }
+        const { changes, diff, truncated } = knowledgeFiles.compare(before, after);
+        if (changes.length === 0) return '';
+        const scan = scanSensitiveContent(diff);
+        /** @type {import('../ports/tool-approval-port').ToolApprovalRequest} */
+        const request = {
+          tool: toolName,
+          riskClasses: [TOOL_RISK_CLASSES.WRITE],
+          targets: changes.map((change) => ({
+            path: change.path, kind: 'file', exists: change.status !== 'added', sensitive: false, knowledge: change.kind,
+          })),
+          mode: policy.mode,
+          checkpoint: 'knowledge',
+          sessionAllowed: false,
+          alwaysAllowed: false,
+          planKey: `${plan.planKey}#knowledge`,
+          policyVersion: typeof policy.policyVersion === 'string' ? policy.policyVersion : '',
+          knowledge: true,
+          knowledgeChange: { files: changes.map((change) => ({ path: change.path, status: change.status })) },
+          preview: {
+            kind: 'diff',
+            text: scan.sensitive ? maskSensitiveContent(diff) : diff,
+            truncated,
+            masked: scan.sensitive === true,
+          },
+        };
+        if (typeof chatId === 'string' && chatId) request.chatId = chatId;
+        if (knowledgeWarningApplies()) request.knowledgeWarning = true;
+        /** @type {import('../ports/tool-approval-port').ToolApprovalOutcome|null} */
+        let outcome = null;
+        if (approvals && typeof approvals.requestApproval === 'function' && approvals.isAvailable?.(sessionId, chatId)) {
+          emit(onEvent, CHAT_ENGINE_EVENTS.PROGRESS, createPermissionProgressEvent(PERMISSION_PROGRESS_EVENTS.AWAITING, { callIndex, tool: toolName }));
+          try {
+            outcome = await approvals.requestApproval({ sessionId, request, abortSignal });
+          } catch (error) {
+            if (isAbortError(error)) throw error;
+            outcome = { invalidated: true, reason: PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED };
+          }
+          if (abortSignal.aborted) throw createChatAbortError();
+          markAnsweredBy(entry, outcome);
+          emit(onEvent, CHAT_ENGINE_EVENTS.PROGRESS, createPermissionProgressEvent(PERMISSION_PROGRESS_EVENTS.RESOLVED, {
+            callIndex,
+            tool: toolName,
+            response: outcome?.invalidated ? undefined : outcome?.response,
+            reason: outcome?.invalidated ? outcome.reason || PERMISSION_DENIAL_REASONS.REQUEST_INVALIDATED : undefined,
+          }));
+        }
+        const files = changes.map((change) => change.path).join(', ');
+        const kept = outcome && !outcome.invalidated && outcome.response !== APPROVAL_RESPONSES.DENY;
+        entry.knowledgeChange = { files: changes.map((change) => ({ path: change.path, status: change.status })), kept: kept === true };
+        if (kept) return `The command changed ${files}. The user kept the change; it applies from the next message on.`;
+        const reset = await knowledgeFiles.restore({ workspaceRoot, before, changes });
+        const how = outcome && !outcome.invalidated ? 'The user reset it' : 'Nobody could be asked, so Snotra reset it';
+        return reset.ok
+          ? `The command changed ${files}. ${how}: the files hold what they held before the command. Do not change them again without asking.`
+          : `The command changed ${files}. ${how}, but not all of it could be put back: ${reset.failed.join('; ')}.`;
+      }
+
+      /**
        * Freigabe-Karte anzeigen und auf die Entscheidung warten. Ohne
        * erreichbare Oberfläche verfällt die Anfrage sofort (fail-safe).
        *
@@ -2067,6 +2161,10 @@ function createChatEngine({
           workspaceRoot,
           encryptionAvailable: policy.encryptionAvailable,
         });
+        // A knowledge card warns when this chat has met a likely injection —
+        // earlier or in this run — or the folder's own text showed a covert
+        // signal (#1280, decision 11). A warning, never a block.
+        if (request.knowledge === true && knowledgeWarningApplies()) request.knowledgeWarning = true;
         // What the sandbox refused and what the card may offer (#792). Its
         // "for this session" opens a resource for the chat's runs, not a tool
         // call, so the call's risk classes do not decide whether it is offered
@@ -2823,6 +2921,7 @@ function createChatEngine({
             toolDisabled,
             unknownTool: plan.unknownTool === true,
             hardLimit: plan.hardLimit || null,
+            knowledgeWrite: plan.knowledge === true,
           });
 
           if (verdict.decision === POLICY_DECISIONS.DENY) {
@@ -2942,6 +3041,18 @@ function createChatEngine({
             // What this chat switched on a card, for get_configuration (#774).
             configOverrides,
           });
+          // A command may change a knowledge file of the folder (#1319): what
+          // they held before it, to compare once it has run.
+          /** @type {import('../ports/knowledge-files-port').KnowledgeSnapshot|null} */
+          let knowledgeBefore = null;
+          if (plan.sandbox && knowledgeFiles && workspaceRoot) {
+            try {
+              knowledgeBefore = await knowledgeFiles.snapshot({ workspaceRoot });
+            } catch {
+              // Nothing to compare against: the command runs, unchecked as before #1319.
+              knowledgeBefore = null;
+            }
+          }
           const firstRun = await executeWith(sessionSandboxGrants(scopeKey, policy));
           if (live.repeated) {
             // A connection of a command whose sandbox card the user denied.
@@ -2970,6 +3081,10 @@ function createChatEngine({
           if (liveDecisions) {
             entry.sandboxLive = liveDecisions;
             execution = { ...execution, output: withSandboxNote(execution?.output, describeLiveDecisions(liveDecisions), 'sandbox_connections') };
+          }
+          if (knowledgeBefore) {
+            const note = await reviewKnowledgeChanges({ entry, callIndex, toolName, plan, policy, before: knowledgeBefore });
+            if (note) execution = { ...execution, output: withSandboxNote(execution?.output, note, 'knowledge_files') };
           }
 
           if (execution?.invalidated) {
