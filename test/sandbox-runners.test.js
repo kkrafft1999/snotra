@@ -52,6 +52,23 @@ async function shellWith(sandbox) {
 
 const exists = (p) => fs.stat(p).then(() => true, () => false);
 
+/** Polls until no process matches `pattern` any more, as sandbox-isolation.test.js does (#907). */
+async function treeGone(pattern) {
+  const alive = () => {
+    try {
+      return childProcess.execFileSync('pgrep', ['-f', pattern], { encoding: 'utf8' }).trim().length > 0;
+    } catch {
+      return false;
+    }
+  };
+  const deadline = Date.now() + 10_000;
+  while (alive()) {
+    if (Date.now() > deadline) return false;
+    await new Promise((r) => setTimeout(r, 50));
+  }
+  return true;
+}
+
 test('shell: the sandboxed command runs with its environment and is released', posixOnly, async (t) => {
   const sandbox = fakeSandbox();
   const shell = await shellWith(sandbox);
@@ -93,13 +110,17 @@ test('shell: the time limit still ends the sandboxed process tree', posixOnly, a
   const shell = await shellWith(sandbox);
   if (!shell) return t.skip('no shell');
 
-  const result = await shell.run({ command: 'sleep 30 & sleep 30; wait', timeoutMs: 600, cwd: os.tmpdir() });
+  // A duration no other process on the machine sleeps for, to find the tree by.
+  const marker = 30_000 + Math.floor(Math.random() * 9_000);
+  const result = await shell.run({ command: `sleep ${marker} & sleep ${marker}; wait`, timeoutMs: 600, cwd: os.tmpdir() });
 
   assert.equal(result.timedOut, true);
-  // The limit ended the command: one that ran to its own end after 30 s would
-  // report 0, one that a signal ended has no exit code. Asserted instead of a
-  // wall-clock bound near those 30 s (#883).
-  assert.notEqual(result.exitCode, 0);
+  // A cut run has no exit code of its own (#1297). The exit code used to stand
+  // in for "the tree was ended" and once read 0 on macOS CI — most likely the
+  // shell outlived its children for a moment and reported what `wait` saw.
+  // What the test promises is checked directly instead.
+  assert.equal(result.exitCode, null);
+  assert.equal(await treeGone(`sleep ${marker}`), true, 'no sleep of the tree survives the time limit');
   assert.equal(sandbox.calls.released, 1);
 });
 

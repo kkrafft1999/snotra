@@ -158,10 +158,16 @@ function createChildRunner({ spawn, platform = process.platform }) {
       // `exit` comes when the leader is gone, `close` only once every holder
       // of its output has let go — a background process keeps that open.
       child.on('exit', () => killLeftovers(child));
+      // A run the time limit or "Stop" ended has no exit code of its own.
+      // What the leader reports then depends on who the kill reached first:
+      // null after the signal, 1 after `taskkill` — and once on macOS CI 0,
+      // most likely from a shell whose `wait` saw its children go before the
+      // signal reached the shell itself (#1297). Next to `timedOut` a 0 reads
+      // as success.
       child.on('close', (exitCode) => finish({
         stdout: stdout.text(),
         stderr: stderr.text(),
-        exitCode: typeof exitCode === 'number' ? exitCode : null,
+        exitCode: typeof exitCode === 'number' && !timedOut && !aborted ? exitCode : null,
         timedOut,
         aborted,
         truncated: stdout.truncated || stderr.truncated,
