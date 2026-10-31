@@ -1923,6 +1923,16 @@ module.exports = {
   'cost.note.estimate': 'Eine Schätzung in US-Dollar: Listenpreise, ohne Batch-, Priority- oder Long-Context-Aufschläge. Maßgeblich ist die Rechnung deines Anbieters.',
   'cost.note.notCounted': 'Nicht enthalten: Bildgenerierung, Spracheingabe und der Chat-Titel.',
 
+  // ── Kind of task in the chat header (#1282) ──────────────────────────────
+  'chat.taskKind.heading': 'Aufgabenart',
+  'chat.taskKind.source.model': 'Vom Modell vorgeschlagen',
+  'chat.taskKind.source.estimate': 'Von Snotra geschätzt',
+  'chat.taskKind.source.user': 'Von dir gesetzt',
+  'chat.taskKind.source.none': 'Noch nicht eingeordnet — wähle die passende Art.',
+  'chat.taskKind.button.label': 'Aufgabenart: {kind}. {source}. Art ändern',
+  'chat.taskKind.button.labelUnclassified': 'Aufgabenart: nicht eingeordnet. Art wählen',
+  'chat.taskKind.error': 'Die Art konnte nicht gespeichert werden. Versuch es noch einmal.',
+
   // ── Kinds of task (#1281) ────────────────────────────────────────────────
   'taskKind.coding': 'Programmieren',
   'taskKind.coding.definition': 'Code, Skripte und Konfiguration schreiben, ändern, prüfen oder Fehler darin suchen.',

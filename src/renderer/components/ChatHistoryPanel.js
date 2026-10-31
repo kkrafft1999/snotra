@@ -335,6 +335,7 @@ export function initChatHistoryPanel({
       appStore.currentChatWorkspace = s.workspaceRoot || null;
       appStore.chatMessages = s.messages;
       appStore.currentChatTitle = s.title || '';
+      appStore.currentChatTaskKind = s.taskKind || null;
       setChatTokenUsage?.(s.tokenUsage, { cost: s.cost });
     }
     onInputChanged();
@@ -383,6 +384,7 @@ export function initChatHistoryPanel({
       appStore.currentChatWorkspace = appStore.rootPath || null;
       appStore.chatMessages = [];
       appStore.currentChatTitle = '';
+      appStore.currentChatTaskKind = null;
       seedGreetingIfWorkspace?.(appStore.currentChatWorkspace);
       resetChatTokenUsage?.();
       onInputChanged();

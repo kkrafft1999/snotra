@@ -59,7 +59,7 @@ import { resolveNative } from '../utils/nativePath.js';
 import { getLocale, onLocaleChange, t, tMessage } from '../i18n.js';
 import { settingsHelpTarget } from '../manual/settings-help-links.js';
 
-const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, normalizeSessionCost, PROPOSE_CONFIG_CHANGE_TOOL } = contracts;
+const { CHAT_ACTIVATION, CHAT_PROGRESS_TYPES, coerceUsage, createEmptyUsage, normalizeSessionCost, normalizeTaskKind, PROPOSE_CONFIG_CHANGE_TOOL } = contracts;
 
 /** Why a save did not go through (#977), and what the banner says about it. */
 const SAVE_PROBLEMS = Object.freeze({ UNREADABLE: 'unreadable', FAILED: 'failed' });
@@ -967,6 +967,7 @@ export function initChatStream({
         appStore.currentChatWorkspace = workspaceRoot || null;
         appStore.chatMessages = restore.messages;
         appStore.currentChatTitle = restore.title || '';
+        appStore.currentChatTaskKind = restore.taskKind || null;
         setChatTokenUsage(restore.tokenUsage, { cost: restore.cost });
       }
       syncChatInFlight(); // before the round trips, see startNewChat (#411)
@@ -990,6 +991,7 @@ export function initChatStream({
     appStore.currentChatWorkspace = workspaceRoot || null;
     appStore.chatMessages = [];
     appStore.currentChatTitle = '';
+    appStore.currentChatTaskKind = null;
     seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
     syncChatInFlight(); // before the round trip, see startNewChat (#411)
@@ -1018,6 +1020,7 @@ export function initChatStream({
     appStore.currentChatWorkspace = appStore.rootPath || null;
     appStore.chatMessages = [];
     appStore.currentChatTitle = '';
+    appStore.currentChatTaskKind = null;
     seedGreetingIfWorkspace(appStore.currentChatWorkspace);
     resetChatTokenUsage();
     clearComposer();
@@ -1136,6 +1139,7 @@ export function initChatStream({
       workspaceRoot: appStore.currentChatWorkspace,
       messages: appStore.chatMessages,
       title: appStore.currentChatTitle,
+      taskKind: appStore.currentChatTaskKind,
       tokenUsage: appStore.chatTokenUsage,
       contextBreakdown: appStore.chatContextBreakdown,
       cost: appStore.chatCost,
@@ -1165,6 +1169,7 @@ export function initChatStream({
     appStore.currentChatWorkspace = chat.workspaceRoot;
     appStore.chatMessages = chat.messages;
     appStore.currentChatTitle = chat.title;
+    appStore.currentChatTaskKind = chat.taskKind || null;
     setChatTokenUsage(chat.tokenUsage, { breakdown: chat.contextBreakdown, cost: chat.cost });
     return true;
   }
@@ -1332,6 +1337,7 @@ export function initChatStream({
     // Switched away meanwhile, or a new turn began: that one shows.
     if (!session || !Array.isArray(session.messages) || appStore.currentChatId !== run.chatId || appStore.chatRuns.has(run.chatId)) return;
     appStore.chatMessages = session.messages;
+    appStore.currentChatTaskKind = session.taskKind || null;
     setChatTokenUsage(session.tokenUsage, { cost: session.cost });
     renderChatMessages({ follow: true });
     if (session.title) showChatName(run.chatId, session.title);
@@ -1570,7 +1576,7 @@ export function initChatStream({
       return;
     }
     if (p?.type === CHAT_PROGRESS_TYPES.CHAT_NAMED) {
-      showChatName(p.chatId, p.title, p.chatCost);
+      showChatName(p.chatId, p.title, p.chatCost, p.taskKind);
       return;
     }
     const run = runForEvent(p);
@@ -1929,19 +1935,21 @@ export function initChatStream({
   /**
    * Main named the chat after its first answer (#359, #981). The name follows
    * the chat to where it is shown: the header while it is on screen, its run
-   * while that carries it in the background, the history column always.
+   * while that carries it in the background, the history column always. The
+   * same round may bring the chat's kind of task (#1281), which the header
+   * shows (#1282).
    */
-  function showChatName(chatId, rawTitle, rawCost) {
+  function showChatName(chatId, rawTitle, rawCost, rawTaskKind) {
     const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
     // The naming round is paid too (#1266): main sends the chat's new sum along.
     // A round that only asked for the kind of task (#1281) brings no title.
     const cost = rawCost ? normalizeSessionCost(rawCost) : null;
-    if ((!title && !cost) || typeof chatId !== 'string' || deletedChats.has(chatId)) return;
+    const taskKind = normalizeTaskKind(rawTaskKind);
+    if ((!title && !cost && !taskKind) || typeof chatId !== 'string' || deletedChats.has(chatId)) return;
     if (appStore.currentChatId === chatId && !canAttachChat(chatId)) {
-      if (title) {
-        appStore.currentChatTitle = title;
-        syncChatTitle?.();
-      }
+      if (title) appStore.currentChatTitle = title;
+      if (taskKind) appStore.currentChatTaskKind = taskKind;
+      if (title || taskKind) syncChatTitle?.();
       if (cost) {
         appStore.chatCost = cost;
         costPanel.refresh();
@@ -1950,6 +1958,7 @@ export function initChatStream({
       const run = appStore.chatRuns.get(chatId);
       if (run?.chat) {
         if (title) run.chat.title = title;
+        if (taskKind) run.chat.taskKind = taskKind;
         if (cost) run.chat.cost = cost;
       }
     }

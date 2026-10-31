@@ -992,6 +992,29 @@ const MOTIFS = {
   },
 
   /**
+   * The kind of task in the chat header (#1282), opened: the model named it
+   * with the title, the popup says so.
+   */
+  'task-kind': {
+    prefs: { chatPanelWidth: WIDE_CHAT },
+    text: {
+      // The title request answers the title on its first line, the kind on the second (#1281).
+      en: { title: 'Summer sowings plan\nplanning', question: 'Plan which beds get the summer sowings.', answer: 'The south bed takes the beans, the north bed the lettuce.' },
+      de: { title: 'Plan für die Sommeraussaat\nplanning', question: 'Plan, welche Beete die Sommeraussaat bekommen.', answer: 'Ins Südbeet kommen die Bohnen, ins Nordbeet der Salat.' },
+    },
+    async setUp({ page, model, text }) {
+      model.queueAnswer({ match: text.question, text: text.answer });
+      await send(page, text.question);
+      await waitForRunEnd(page);
+      await poll(() => page.evaluate(() => !document.getElementById('btn-chat-kind').classList.contains('chat-kind-pill--unclassified')),
+        { what: 'the kind the model named' });
+      await page.click('#btn-chat-kind');
+      await poll(() => shown(page, 'chat-kind-menu'), { what: 'kind menu' });
+      return clipAround(page, ['#chat-header', '#chat-kind-menu'], 16);
+    },
+  },
+
+  /**
    * The same menu on a Claude model (#994): every provider shows the levels
    * its chosen model takes.
    */

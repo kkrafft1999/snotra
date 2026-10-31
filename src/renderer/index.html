@@ -349,6 +349,24 @@
           <div class="chat-header-meta">
             <span id="chat-live-dot" class="chat-live-dot" role="img" aria-label="Connection active" data-i18n-attr="aria-label:chat.connectionActive"></span>
             <span id="chat-title" data-i18n="chat.title">Chat</span>
+            <!-- The chat's kind of task (#1282): a pill after the title that
+                 opens the six kinds and says where the current one came from.
+                 Hidden until the chat has a question in it. -->
+            <span class="chat-kind-wrap hidden" id="chat-kind-wrap">
+              <button type="button" id="btn-chat-kind" class="chat-kind-pill"
+                      aria-haspopup="listbox" aria-expanded="false" aria-controls="chat-kind-menu">
+                <span id="chat-kind-label" class="chat-kind-pill-label"></span>
+                <svg class="chat-model-pill-chevron" width="10" height="6" viewBox="0 0 10 6" aria-hidden="true">
+                  <path fill="currentColor" d="M0 0l5 6 5-6z"/>
+                </svg>
+              </button>
+              <div id="chat-kind-menu" class="chat-kind-menu hidden">
+                <p id="chat-kind-heading" class="chat-model-menu-head" data-i18n="chat.taskKind.heading">Kind of task</p>
+                <ul id="chat-kind-list" class="chat-kind-list" role="listbox" aria-labelledby="chat-kind-heading"></ul>
+                <p id="chat-kind-source" class="chat-kind-source"></p>
+                <p id="chat-kind-status" class="chat-kind-status" role="alert" hidden></p>
+              </div>
+            </span>
           </div>
         </div>
         <!-- While the history does not take this session's chats (#977). Said once
