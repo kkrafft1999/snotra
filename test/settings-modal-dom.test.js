@@ -762,12 +762,127 @@ test('typing a header keeps the loaded name suggestions (CR-B14-05)', async (t) 
   type('input-extra-headers', 'X-Tenant: a');
   await flush();
 
-  assert.deepEqual(
-    [...document.querySelectorAll('#model-name-options option')].map((o) => o.value),
-    ['gpt-4o', 'gpt-4.1', 'o3'],
-  );
+  assert.deepEqual(listedModels(), ['gpt-4o', 'gpt-4.1', 'o3']);
   assert.equal(document.getElementById('input-model').value, 'o3');
   assert.equal(document.getElementById('model-status').textContent, '3 Modelle gefunden.');
+});
+
+/** What the model name list offers once the toggle opens it from closed. */
+function listedModels() {
+  const input = document.getElementById('input-model');
+  input.dispatchEvent(new Event('blur'));
+  document.getElementById('btn-model-options').click();
+  return [...document.querySelectorAll('#model-name-options [role="option"]')]
+    .map((o) => o.dataset.value);
+}
+
+const keyOn = (el, key, init = {}) => {
+  el.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...init }));
+};
+
+test('the toggle lists every loaded model, whatever name is in the field (#1325)', async (t) => {
+  const models = ['apertus-70b', 'llama-3.3-70b', 'qwen3-coder', 'mistral-small'];
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    listModels: async () => ({ models: models.map((id) => ({ id })) }),
+  });
+  t.after(dom.cleanup);
+
+  await openCompatPopup();
+  const input = document.getElementById('input-model');
+  const toggle = document.getElementById('btn-model-options');
+  const listbox = document.getElementById('model-name-options');
+  assert.ok(toggle.classList.contains('hidden'), 'nothing to open before the list is loaded');
+
+  type('input-model', 'apertus-70b');
+  document.getElementById('btn-load-models').click();
+  await until(() => !toggle.classList.contains('hidden'), 'the toggle after loading');
+
+  // A datalist showed only 'apertus-70b' here: it filters by the field.
+  assert.deepEqual(listedModels(), models);
+  assert.equal(input.getAttribute('aria-expanded'), 'true');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  const current = listbox.querySelector('.model-combobox__option--current');
+  assert.equal(current?.dataset.value, 'apertus-70b');
+  assert.equal(input.getAttribute('aria-activedescendant'), current.id);
+
+  // Picking writes the field and closes the list.
+  listbox.querySelectorAll('[role="option"]')[2].click();
+  assert.equal(input.value, 'qwen3-coder');
+  assert.ok(listbox.classList.contains('hidden'));
+  assert.equal(input.getAttribute('aria-expanded'), 'false');
+});
+
+test('typing filters the model list and Enter keeps a typed name (#1325)', async (t) => {
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    listModels: async () => ({ models: [{ id: 'llama-3.3-70b' }, { id: 'apertus-70b' }, { id: 'qwen3-coder' }] }),
+  });
+  t.after(dom.cleanup);
+
+  await openCompatPopup();
+  document.getElementById('btn-load-models').click();
+  const toggle = document.getElementById('btn-model-options');
+  await until(() => !toggle.classList.contains('hidden'), 'the toggle after loading');
+  const input = document.getElementById('input-model');
+  const listbox = document.getElementById('model-name-options');
+  const shown = () => [...listbox.querySelectorAll('[role="option"]')].map((o) => o.dataset.value);
+
+  type('input-model', '70B');
+  assert.deepEqual(shown(), ['llama-3.3-70b', 'apertus-70b']);
+  assert.equal(input.getAttribute('aria-activedescendant'), null, 'nothing is picked by typing');
+
+  // Enter with nothing active keeps the typed text.
+  keyOn(input, 'Enter');
+  assert.equal(input.value, '70B');
+  assert.ok(listbox.classList.contains('hidden'));
+
+  // A name no model matches closes the list; the field stays free.
+  type('input-model', 'my-own-model');
+  assert.ok(listbox.classList.contains('hidden'));
+  assert.equal(input.value, 'my-own-model');
+});
+
+test('the model list works from the keyboard and Escape closes only the list (#1325)', async (t) => {
+  const { dom } = await mountSettings({
+    providers: [COMPAT_VIEW],
+    listModels: async () => ({ models: [{ id: 'a-model' }, { id: 'b-model' }, { id: 'c-model' }] }),
+  });
+  t.after(dom.cleanup);
+
+  await openCompatPopup();
+  document.getElementById('btn-load-models').click();
+  const toggle = document.getElementById('btn-model-options');
+  await until(() => !toggle.classList.contains('hidden'), 'the toggle after loading');
+  const input = document.getElementById('input-model');
+  const listbox = document.getElementById('model-name-options');
+  const overlay = document.getElementById('add-model-overlay');
+  const active = () => document.getElementById(input.getAttribute('aria-activedescendant'))?.dataset.value;
+  input.value = '';
+
+  keyOn(input, 'ArrowDown');
+  assert.equal(active(), 'a-model');
+  keyOn(input, 'ArrowDown');
+  keyOn(input, 'ArrowDown');
+  assert.equal(active(), 'c-model');
+  keyOn(input, 'ArrowDown');
+  assert.equal(active(), 'a-model', 'the list wraps around');
+  keyOn(input, 'ArrowUp');
+  assert.equal(active(), 'c-model');
+
+  keyOn(input, 'Escape');
+  assert.ok(listbox.classList.contains('hidden'));
+  assert.ok(!overlay.classList.contains('hidden'), 'Escape closed the dialog with the list');
+
+  keyOn(input, 'ArrowUp');
+  assert.equal(active(), 'c-model', '↑ opens on the last model');
+  keyOn(input, 'Enter');
+  assert.equal(input.value, 'c-model');
+  assert.ok(listbox.classList.contains('hidden'));
+
+  // Opened again, it starts on the model in the field.
+  keyOn(input, 'ArrowDown');
+  assert.equal(active(), 'c-model');
 });
 
 /**

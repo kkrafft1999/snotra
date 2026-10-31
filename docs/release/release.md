@@ -223,7 +223,7 @@ gh run watch
 
 `main` is protected by ruleset `23177645`: changes need a pull request,
 force-push and deletion are blocked, and the three contexts
-`Tests (macos-14)` / `Tests (windows-latest)` / `Tests (ubuntu-latest)` are
+`Tests (macos-15)` / `Tests (windows-latest)` / `Tests (ubuntu-latest)` are
 mandatory. Since 2026-09-20 nobody is left in `bypass_actors` (#240) — the rules
 apply to the owner as well. The ruleset has `target: branch` and therefore
 covers **branches only** — tags can be pushed without a pull request, which is
