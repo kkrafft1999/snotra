@@ -25,7 +25,8 @@ every one of them started as an issue.
 - [`hooks.md`](./concepts/hooks.md) — user-defined commands at fixed events of
   a run.
 - [`memory-and-rules-concept.md`](./concepts/memory-and-rules-concept.md) — what
-  goes into memory, `AGENTS.md` and rules files.
+  goes into memory, rules files, skills and `AGENTS.md`, and how the agent
+  writes them.
 - [`task-kinds-concept.md`](./concepts/task-kinds-concept.md) — a kind of task
   per chat, for the usage report.
 - [`web-search-concept.md`](./concepts/web-search-concept.md) — web search as a
