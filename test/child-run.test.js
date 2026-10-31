@@ -119,3 +119,32 @@ test('on POSIX the group of the exited leader is addressed, and a missing group 
   assert.equal(result.exitCode, 0);
   assert.deepEqual(kill.mock.calls.map((c) => c.arguments), [[-4242, 'SIGKILL']]);
 });
+
+for (const [ending, end] of [
+  ['the time limit', { timeoutMs: 1 }],
+  ['"Stop"', { abortSignal: AbortSignal.abort() }],
+]) {
+  test(`a run ${ending} ended has no exit code, even when the leader reports 0 (#1297)`, async (t) => {
+    const child = new EventEmitter();
+    child.pid = 4242;
+    child.stdout = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.stdin = { end() {} };
+    // The kill reaches the group; the shell, as once on macOS CI, still
+    // reports the 0 its `wait` saw.
+    t.mock.method(process, 'kill', () => {
+      queueMicrotask(() => {
+        child.emit('exit', 0);
+        child.emit('close', 0);
+      });
+      return true;
+    });
+    const runner = createChildRunner({ spawn: () => child, platform: 'linux' });
+
+    const result = await runner.run({ command: '/bin/sh', args: [], cwd: '.', env: {}, timeoutMs: 10_000, ...LIMITS, ...end });
+
+    assert.equal(result.exitCode, null);
+    assert.equal(result.timedOut, 'timeoutMs' in end);
+    assert.equal(result.aborted, 'abortSignal' in end);
+  });
+}

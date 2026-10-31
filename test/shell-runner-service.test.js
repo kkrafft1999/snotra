@@ -97,6 +97,11 @@ const COMMANDS = {
     cmd: null,
   },
   sleep: { posix: 'sleep 30', powershell: 'Start-Sleep -Seconds 30', cmd: 'timeout /t 30 /nobreak' },
+  sleepThenFinish: {
+    posix: 'sleep 30; echo finished',
+    powershell: "Start-Sleep -Seconds 30; 'finished'",
+    cmd: 'timeout /t 30 /nobreak >nul & echo finished',
+  },
   much: {
     posix: 'awk \'BEGIN { while (i++ < 40000) printf "xxxxxxxxxx" }\'',
     powershell: "Write-Output ('x' * 400000)",
@@ -467,16 +472,17 @@ test('run beendet einen hängenden Befehl nach dem Zeitlimit', async (t) => {
 
   // The shortest limit there is (clampTimeout floors it at MIN_TIMEOUT_MS).
   const result = await service.run({
-    command: commandFor(service, 'sleep'),
+    command: commandFor(service, 'sleepThenFinish'),
     timeoutMs: SHELL_EXECUTION_LIMITS.MIN_TIMEOUT_MS,
   });
 
   assert.equal(result.timedOut, true);
-  // The mechanism, not the clock: a command that was ended by the limit has
-  // no regular exit (null after a signal, 1 after taskkill), one that ran to
-  // its own end after 30 s would report 0. A wall-clock bound near those 30 s
-  // failed once on a stalled CI runner (#883).
-  assert.notEqual(result.exitCode, 0, 'the limit must end the command, not wait for it');
+  // The mechanism, not the clock: a command that ran to its own end after
+  // 30 s would have printed its last line. A wall-clock bound near those 30 s
+  // failed once on a stalled CI runner (#883), and the exit code is no longer
+  // a sign either — a cut run has none (#1297).
+  assert.doesNotMatch(result.stdout, /finished/, 'the limit must end the command, not wait for it');
+  assert.equal(result.exitCode, null);
 });
 
 test('run bricht bei AbortSignal ab — „Stop" im Chat beendet auch den Befehl', async (t) => {
