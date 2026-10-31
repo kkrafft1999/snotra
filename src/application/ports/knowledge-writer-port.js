@@ -9,7 +9,8 @@
  * @property {string} kind  `fact` | `rule` | `instruction`
  * @property {string} scope  `user` | `workspace` | `team`
  * @property {string|null} [workspaceRoot]
- * @property {string} text  the entry, one thought
+ * @property {string} text  the entry, one thought (fact, rule)
+ * @property {string} [body]  procedure: the whole skill, as it should read (#1314)
  * @property {string} [topic]  rule: the rules file's name
  * @property {string} [description]  rule: required for a new file, optional new one for an existing file
  * @property {boolean} [always]  rule, new file only
@@ -22,7 +23,7 @@
  * @typedef {Object} KnowledgeTarget
  * @property {string} path  as the card shows it: `<folder>/…` relative, `~/…` at home
  * @property {boolean} exists
- * @property {'memory'|'rules'|'agents'} file
+ * @property {'memory'|'rules'|'agents'|'skills'} file
  */
 
 /**
@@ -31,6 +32,8 @@
  * @property {string} [refusal]  why nothing would be written
  * @property {{ description: string, always: boolean }} [ruleFile]  the existing rules file
  * @property {{ text: string, where: string, count: number }} [replaced]  the entry `replaces` would remove
+ * @property {{ description: string, kind: string, text: string, truncated: boolean }} [skill]  a procedure: the
+ *   current description, and the new body (`text`) or the diff against the current version (`diff`)
  * @property {Record<string, Record<string, KnowledgeTarget|null>>} alternatives  the target per kind and reader
  * @property {{ agentsMd: boolean, rulesFiles: number }} folderInstructions  what the open folder brings
  */

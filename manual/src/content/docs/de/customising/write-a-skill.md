@@ -26,9 +26,9 @@ Hast du eine Arbeitsweise einmal erklärt — wie du Protokolle geschrieben habe
 
 ## Ihn in jedem Ordner nutzen
 
-Snotra schreibt Skills **nur in den geöffneten Ordner**. Deine eigenen Skills in `~/.snotra/skills/` und die System-Skills sind für jedes Tool schreibgeschützt — so kann keine Anweisung, die in irgendeinem Projekt versteckt ist, einen Skill anlegen, der dann überall auftaucht.
+[seit 1.30] Bitte Snotra, sich den Ablauf *für dich, in jedem Ordner* zu merken. Es schreibt einen Skill aus einer `SKILL.md` nach `~/.snotra/skills/` — auf einer Karte, die den ganzen Skill zeigt oder, bei einem Skill, den es schon gibt, die Änderungen gegenüber der Fassung, die er ersetzt. Sonst schreibt dort nichts: Datei-Tools und Befehle erreichen deine eigenen Skills und die System-Skills nicht, damit keine in einem Projekt versteckte Anweisung einen Skill unterbringen kann, der dann überall auftaucht.
 
-Um einen Skill in jedem Ordner zu nutzen, verschieb seinen Ordner selbst, in deinem Dateimanager, von `.agents/skills/` nach `~/.snotra/skills/`. Hak ihn dann unter *Einstellungen › Skills* noch einmal an.
+Ein Skill aus mehreren Dateien — mit `references/` oder `scripts/` — bleibt im geöffneten Ordner. Um ihn in jedem Ordner zu nutzen, verschieb seinen Ordner selbst, in deinem Dateimanager, von `.agents/skills/` nach `~/.snotra/skills/`. So oder so: Hak den Skill unter *Einstellungen › Skills* an, bevor er gilt.
 
 ## Wenn es nicht klappt
 

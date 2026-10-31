@@ -15,31 +15,39 @@ with `load_skill` once the description matches the task.
 
 ## Where a skill goes
 
-**You write skills only into the open folder**, under
-`.agents/skills/<name>/`. Use the ordinary file tools with that relative path:
-`write_file_text` for a new file (missing folders are created), `edit_file` or
-`apply_patch` for changes.
+**Two ways to write a skill.**
 
-Everything else is read-only for you, with no way around it:
+- **A skill of one `SKILL.md`** — a procedure in steps — goes through the tool
+  `remember` with `kind: "instruction"`: `topic` is the skill's name,
+  `description` says what it is for and when to use it, and `body` is the whole
+  skill as it should read. `scope: "workspace"` writes
+  `.agents/skills/<name>/SKILL.md` in the open folder, `scope: "user"` writes
+  `~/.snotra/skills/<name>/SKILL.md` for every folder. It is always a **whole
+  version**: to change a skill, send the complete new text — it replaces the
+  old one, and the user sees the diff on the card. There is no `team` reader
+  for a skill. Ask the user which folder it is for before the call.
+- **A skill of several files** — `references/`, `scripts/`, `assets/` — only
+  in the open folder, under `.agents/skills/<name>/`, with the ordinary file
+  tools: `write_file_text` for a new file (missing folders are created),
+  `edit_file` or `apply_patch` for changes. Every such write asks the user on a
+  card.
 
-- the global skills in `~/.snotra/skills/` and `~/.agents/skills/`,
-- the system skills built into Snotra, this one included.
+Read-only for the file tools, with no way around it:
+
+- the global skills in `~/.snotra/skills/` and `~/.agents/skills/` — `remember`
+  is the one way to write `~/.snotra/skills/`, and `~/.agents/skills/` is never
+  written,
+- the system skills built into Snotra, this one included; names beginning with
+  `snotra-` are theirs.
 
 Do not try to reach them with `shell_execute` or `run_python` either — that is
 going around a line the user drew, not a workaround.
 
-**No folder open:** you cannot write a skill. Say so and offer the complete
-`SKILL.md` in the chat instead.
+**No folder open:** only a global one-file skill through `remember`; for
+anything else offer the complete `SKILL.md` in the chat.
 
-**Global skills.** A skill in the open folder applies to that folder only. If
-the user wants it everywhere, tell them to move the folder
-`.agents/skills/<name>` to `~/.snotra/skills/<name>` themselves — then it is
-available in every folder. You do not move it.
-
-**Changing a global skill.** You cannot edit it in place. Offer to write the
-changed version into the open folder under the same name: there it takes
-precedence over the global one, the user can try it, and moves it back over the
-global folder when it is right. Say that this is what will happen.
+A new skill applies once the user switches it on under **{menu:settings.skills}**;
+say so after writing one.
 
 ## Folder layout
 
