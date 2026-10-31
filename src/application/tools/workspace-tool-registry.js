@@ -6,6 +6,7 @@ const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL, MAX_SKILL_BODY_CHARS } = require('../../shared/contracts/skills');
 const { LOAD_RULE_TOOL, RULE_LEVELS, RULE_LEVEL_PROMPT_LABELS, RULE_LIMITS } = require('../../shared/contracts/rules');
 const { KNOWLEDGE_KINDS, KNOWLEDGE_READERS } = require('../../shared/contracts/knowledge-write');
+const { knowledgeHints, KNOWLEDGE_HINT_SENTENCES } = require('../../shared/contracts/knowledge-hints');
 const {
   LOAD_MCP_TOOLS_TOOL,
   LAZY_MCP_TOOLS_THRESHOLD,
@@ -2201,7 +2202,11 @@ function createWorkspaceToolRegistry({
       parameters: {
         type: 'object',
         properties: {
-          kind: { type: 'string', enum: [KNOWLEDGE_KINDS.FACT, KNOWLEDGE_KINDS.RULE, KNOWLEDGE_KINDS.INSTRUCTION], description: '"fact", "rule" or "instruction".' },
+          kind: {
+            type: 'string',
+            enum: [KNOWLEDGE_KINDS.FACT, KNOWLEDGE_KINDS.RULE, KNOWLEDGE_KINDS.INSTRUCTION],
+            description: 'What it is: steps, followed-or-broken, true-or-false. Store nothing only true now.',
+          },
           scope: {
             type: 'string',
             enum: [KNOWLEDGE_READERS.USER, KNOWLEDGE_READERS.WORKSPACE, KNOWLEDGE_READERS.TEAM],
@@ -2241,6 +2246,7 @@ function createWorkspaceToolRegistry({
         }
         try {
           const saved = await writer.write(request);
+          const hints = knowledgeHints({ kind: request.kind, text: request.text }).map((id) => KNOWLEDGE_HINT_SENTENCES[id]);
           // The file goes back with the result, so that the chat says *where*
           // it went — that is the difference between this folder and all.
           return JSON.stringify({
@@ -2250,6 +2256,8 @@ function createWorkspaceToolRegistry({
             file: saved.file,
             remembered: saved.text,
             ...(saved.replaced ? { replaced: saved.replaced } : {}),
+            // Hints, never refusals (#1277): the model may re-sort with replaces.
+            ...(hints.length > 0 ? { hints } : {}),
           });
         } catch (error) {
           return JSON.stringify({ error: error?.message || 'The entry could not be saved.' });

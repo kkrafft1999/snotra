@@ -9,6 +9,7 @@
 'use strict';
 
 const { isMessage } = require('./message');
+const { KNOWLEDGE_HINTS } = require('./knowledge-hints');
 const { normalizeToolPresentation } = require('./tool-presentation');
 const { isRecord } = require('../runtime/is-record');
 
@@ -773,6 +774,10 @@ function sanitizeKnowledgeCard(raw) {
       text: raw.skill.text.slice(0, 40_000),
       truncated: raw.skill.truncated === true,
     };
+  }
+  if (Array.isArray(raw.hints)) {
+    const hints = raw.hints.filter((hint) => Object.values(KNOWLEDGE_HINTS).includes(hint));
+    if (hints.length > 0) out.hints = [...new Set(hints)];
   }
   if (raw.switchedOff === true) out.switchedOff = true;
   if (raw.alwaysOverBudget === true) out.alwaysOverBudget = true;

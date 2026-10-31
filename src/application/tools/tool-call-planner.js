@@ -28,6 +28,7 @@ const { checkShellCommand } = require('../../shared/runtime/shell-command-guard'
 const { resolveRunDomains, normalizeDomains } = require('../../shared/runtime/sandbox-domains');
 const { SANDBOX_REASONS } = require('../../shared/contracts/sandbox-reasons');
 const { KNOWLEDGE_FILE_KINDS, workspaceKnowledgeKind, writtenRuleIsAlways } = require('../../shared/contracts/knowledge-files');
+const { knowledgeHints } = require('../../shared/contracts/knowledge-hints');
 const { normalizeProgramAllowances } = require('../../shared/contracts/program-allowances');
 const { APP_LOCALES, createTranslator } = require('../../shared/i18n');
 const { isPathInside } = require('../../shared/runtime/path-inside');
@@ -318,6 +319,8 @@ function knowledgeCardOf(args, described) {
     ...(described.ruleFile ? { ruleFile: described.ruleFile } : {}),
     ...(described.replaced ? { replaced: described.replaced } : {}),
     ...(described.skill ? { skill: described.skill } : {}),
+    // Hints, never refusals (#1277): the card points them out.
+    hints: knowledgeHints({ kind: text(args?.kind) || 'fact', text: args?.text }),
     alternatives: described.alternatives,
     folderInstructions: described.folderInstructions,
   };

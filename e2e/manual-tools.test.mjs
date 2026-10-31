@@ -19,7 +19,10 @@ test('a question about Snotra is answered from the bundled manual', { timeout: 1
   const home = await makeTempDir('snotra-manual-tools-home-');
   await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
-  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'de' }), 'utf8');
+  // A history budget of its own: the test is about the manual tools, and a
+  // local model's default budget sits so close to two manual results that any
+  // longer tool schema pushes the first one out.
+  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'de', historyCharLimit: 200000 }), 'utf8');
 
   const snotra = await launchApp({ userDataDir, home });
   t.after(async () => {
