@@ -39,6 +39,8 @@ Für Anweisungen, die in **jedem** Ordner gelten, leg eine `AGENTS.md` in `~/.sn
 
 Eine `AGENTS.md` soll das Verhalten des Modells ändern — wer einen fremden Ordner öffnet, übernimmt also auch dessen Anweisungen. Um in einem Ordner ohne sie zu arbeiten, schalte *AGENTS.md mitschicken* unter *Einstellungen › Allgemein* aus. Der Schalter gilt für alle drei Orte.
 
+[seit 1.30] Snotra prüft die `AGENTS.md` des Projekts außerdem auf Anzeichen, dass sie dir etwas verschweigt: dass der Agent dir etwas verheimlichen oder ohne dich handeln soll, Schlüssel oder das Gespräch nach außen schicken soll, oder Text, den du nicht sehen kannst. Die Datei geht trotzdem so mit, wie sie ist — die Prüfung ist ein Hinweis, kein Filter. Eine Datei mit einem solchen Anzeichen ist in der Aufschlüsselung hinter der Token-Anzeige markiert: *Prüf diese Datei: Sie könnte Anweisungen vor dir verbergen*, mit dem, was gefunden wurde. Öffne die Datei und lies sie, bevor du weitermachst.
+
 ## Wenn es nicht klappt
 
 - **Snotra beachtet die Datei nicht.** Sie muss genau `AGENTS.md` heißen und ganz oben im Ordner liegen. Snotra liest weder `CLAUDE.md` noch `.cursorrules` noch eine `AGENTS.md` unter `.agents/`; schieb eine solche Datei nach oben in den Ordner.

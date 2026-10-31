@@ -122,6 +122,20 @@ function normalizeInjectionFlag(value) {
 }
 
 /**
+ * The covert signals found in a text the prompt embeds from the folder
+ * (#1280), as they ride on a context-breakdown row: kinds and excerpts, no
+ * sources — the built-in detector is the only one that looks there. Null when
+ * none is left.
+ *
+ * @param {unknown} value
+ * @returns {InjectionSignal[]|null}
+ */
+function normalizeCovertSignals(value) {
+  const flag = normalizeInjectionFlag({ signals: value, sources: [INJECTION_FLAG_SOURCES.BUILTIN] });
+  return flag ? flag.signals : null;
+}
+
+/**
  * Several flags on the same result — from the built-in detector and from
  * hooks — as one. Null when none of them holds anything.
  *
@@ -145,5 +159,6 @@ module.exports = {
   isInjectionSignalKind,
   cleanInjectionExcerpt,
   normalizeInjectionFlag,
+  normalizeCovertSignals,
   mergeInjectionFlags,
 };

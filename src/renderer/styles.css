@@ -5114,6 +5114,28 @@ button.chat-msg-attachment:hover {
   color: var(--text-muted-strong);
 }
 
+.token-breakdown__row-signal {
+  display: block;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--ds-warning-border);
+  border-radius: 6px;
+  background: var(--ds-warning-bg);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ds-warning);
+  white-space: normal;
+}
+
+.token-breakdown__row-signal-title {
+  display: block;
+  font-weight: 600;
+}
+
+.token-breakdown__row-signal-kinds {
+  display: block;
+}
+
 .token-breakdown__row-action {
   flex: 0 0 auto;
   font-size: 11px;

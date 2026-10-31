@@ -100,7 +100,22 @@ function buildRowBody(part) {
   body.appendChild(buildBar(part.share));
   const detail = part.detailKey ? t(part.detailKey, part.params) : part.detail;
   if (detail) body.appendChild(el('span', 'token-breakdown__row-detail', detail));
+  if (Array.isArray(part.covertSignals) && part.covertSignals.length > 0) body.appendChild(buildCovertWarning(part.covertSignals));
   return body;
+}
+
+/**
+ * A file from the folder that reads like it hides something from the user
+ * (#1280). It went to the model as it is — the line says what was found, so
+ * the user can look at the file. The kinds have their own words: "gives the
+ * agent orders" is what every AGENTS.md does.
+ */
+function buildCovertWarning(signals) {
+  const box = el('span', 'token-breakdown__row-signal');
+  box.appendChild(el('span', 'token-breakdown__row-signal-title', t('context.covert.title')));
+  const kinds = [...new Set(signals.map((signal) => signal.kind))].map((kind) => t(`context.covert.kind.${kind}`));
+  box.appendChild(el('span', 'token-breakdown__row-signal-kinds', kinds.join(' · ')));
+  return box;
 }
 
 export function initTokenBreakdownPanel({

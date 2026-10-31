@@ -60,7 +60,7 @@ const STALE_ENTRIES_RULE =
 
 /**
  * The block of one level.
- * @param {Array<{scope: string, text: string, truncated?: boolean, guard?: string}>} files
+ * @param {Array<{scope: string, text: string, truncated?: boolean, guard?: string, covertSignals?: unknown}>} files
  * @param {string} scope  one of `MEMORY_SCOPES`
  * @returns {{ text: string, parts: Array<import('../../shared/contracts/context-breakdown').ContextPart> }}
  */
@@ -88,6 +88,7 @@ function buildMemoryBlock(files, scope) {
       }),
       chars: file.text.length,
       contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
+      covertSignals: file.covertSignals,
     }),
   ];
   return { text, parts };
@@ -96,7 +97,7 @@ function buildMemoryBlock(files, scope) {
 /**
  * The user's memory (`~/.snotra/memory.md`) — right behind the base prompt.
  *
- * @param {Array<{scope: string, text: string, truncated?: boolean, guard?: string}>} files
+ * @param {Array<{scope: string, text: string, truncated?: boolean, guard?: string, covertSignals?: unknown}>} files
  */
 function buildUserMemorySystemPrompt(files) {
   return buildMemoryBlock(files, MEMORY_SCOPES.USER);
@@ -105,7 +106,7 @@ function buildUserMemorySystemPrompt(files) {
 /**
  * The folder's memory (`<folder>/.agents/memory.md`) — with the folder's instructions (#529).
  *
- * @param {Array<{scope: string, text: string, truncated?: boolean, guard?: string}>} files
+ * @param {Array<{scope: string, text: string, truncated?: boolean, guard?: string, covertSignals?: unknown}>} files
  */
 function buildFolderMemorySystemPrompt(files) {
   return buildMemoryBlock(files, MEMORY_SCOPES.WORKSPACE);

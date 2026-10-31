@@ -19,6 +19,7 @@
 'use strict';
 
 const { isRecord } = require('../runtime/is-record');
+const { normalizeCovertSignals } = require('./injection-flag');
 
 /** @typedef {'system'|'skills'|'tools'|'history'} ContextPartGroup */
 /** @typedef {'prose'|'markdown'|'json'} ContextContentKind */
@@ -40,6 +41,7 @@ const { isRecord } = require('../runtime/is-record');
  * @property {Object<string, unknown>} [params]
  * @property {string} [skillName]
  * @property {number} [count]
+ * @property {Array<{kind: string, excerpt: string}>} [covertSignals]  what the folder's text showed (#1280)
  */
 
 /**
@@ -286,6 +288,7 @@ function shortPathDetail(shortPath, { inFolder = false, truncated = false, guard
  * @property {string} [contentKind]  a CONTEXT_CONTENT_KINDS value
  * @property {string} [skillName]
  * @property {number} [count]
+ * @property {unknown} [covertSignals]
  *
  * @param {ContextPartInput} [input]
  * @returns {ContextPart}
@@ -302,6 +305,7 @@ function createContextPart({
   contentKind = CONTEXT_CONTENT_KINDS.PROSE,
   skillName = '',
   count,
+  covertSignals,
 } = {}) {
   /** @type {ContextPart} */
   const part = {
@@ -322,6 +326,9 @@ function createContextPart({
   if (params && typeof params === 'object' && Object.keys(params).length > 0) part.params = { ...params };
   if (skillName) part.skillName = text(skillName);
   if (Number.isFinite(count)) part.count = toCount(count);
+  // A covert signal in the folder's own text (#1280): the row warns, nothing else changes.
+  const signals = normalizeCovertSignals(covertSignals);
+  if (signals) part.covertSignals = signals;
   return part;
 }
 

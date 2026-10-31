@@ -36,7 +36,7 @@ const {
 const TRUNCATION_NOTE = `… [truncated to ${MAX_PROJECT_INSTRUCTION_CHARS} characters]`;
 
 /**
- * @param {Array<{source: string, text: string, truncated?: boolean}>} files
+ * @param {Array<{source: string, text: string, truncated?: boolean, covertSignals?: unknown}>} files
  * @returns {{ text: string, parts: Array<import('../../shared/contracts/context-breakdown').ContextPart> }}
  */
 function buildProjectInstructionsSystemPrompt(files) {
@@ -80,6 +80,7 @@ function buildProjectInstructionsSystemPrompt(files) {
       }),
       chars: file.text.length,
       contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
+      covertSignals: file.covertSignals,
     })
   );
 
