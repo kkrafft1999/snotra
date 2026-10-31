@@ -654,13 +654,9 @@
             <span data-i18n="settings.nav.tools">Setup</span>
             <span class="settings-nav-item__desc" data-i18n="settings.nav.tools.desc">Interpreter, keys, MCP servers</span>
           </button>
-          <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-skills" id="tab-settings-skills" data-settings-panel="skills">
-            <span data-i18n="settings.nav.skills">Skills</span>
-            <span class="settings-nav-item__desc" data-i18n="settings.nav.skills.desc">Ways of working for the model</span>
-          </button>
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-memory" id="tab-settings-memory" data-settings-panel="memory">
-            <span data-i18n="settings.nav.memory">Memory</span>
-            <span class="settings-nav-item__desc" data-i18n="settings.nav.memory.desc">What Snotra keeps across chats</span>
+            <span data-i18n="settings.nav.memory">Knowledge</span>
+            <span class="settings-nav-item__desc" data-i18n="settings.nav.memory.desc">Skills, rules, memory, AGENTS.md</span>
           </button>
           <!-- Hidden until developer mode is on or a phone is paired (#1213). -->
           <button type="button" class="settings-nav-item" role="tab" aria-selected="false" aria-controls="panel-settings-remote" id="tab-settings-remote" data-settings-panel="remote" hidden>
@@ -1046,7 +1042,10 @@
             </div>
           </section>
 
-          <section class="settings-panel" id="panel-settings-skills" role="tabpanel" aria-labelledby="tab-settings-skills" hidden>
+          <section class="settings-panel" id="panel-settings-memory" role="tabpanel" aria-labelledby="tab-settings-memory" hidden>
+            <p class="knowledge-lead" data-i18n="settings.knowledge.lead">What Snotra reads in every chat: procedures it fetches when they fit, rules in their situation, facts and AGENTS.md always.</p>
+            <section class="knowledge-section" id="knowledge-section-skills" aria-labelledby="knowledge-heading-skills">
+              <h3 class="knowledge-section__title" id="knowledge-heading-skills"><span data-i18n="settings.knowledge.skills.title">Procedures</span> <span class="knowledge-section__sub" data-i18n="settings.knowledge.skills.sub">Skills · step by step</span></h3>
             <details class="settings-note">
               <summary class="settings-note__summary">
                 <span data-i18n-html="settings.skills.note.summary">A skill is a <code lang="en">SKILL.md</code> with instructions on how the model
@@ -1101,9 +1100,13 @@
                 No skills found.
               </p>
             </div>
-          </section>
-
-          <section class="settings-panel" id="panel-settings-memory" role="tabpanel" aria-labelledby="tab-settings-memory" hidden>
+            </section>
+            <section class="knowledge-section" id="knowledge-section-rules" aria-labelledby="knowledge-heading-rules">
+              <h3 class="knowledge-section__title" id="knowledge-heading-rules"><span data-i18n="settings.knowledge.rules.title">Rules</span> <span class="knowledge-section__sub" data-i18n="settings.knowledge.rules.sub">“when …, then …”</span></h3>
+              <div id="settings-knowledge-rules"></div>
+            </section>
+            <section class="knowledge-section" id="knowledge-section-facts" aria-labelledby="knowledge-heading-facts">
+              <h3 class="knowledge-section__title" id="knowledge-heading-facts"><span data-i18n="settings.knowledge.facts.title">Facts</span> <span class="knowledge-section__sub" data-i18n="settings.knowledge.facts.sub">Memory</span></h3>
             <details class="settings-note">
               <summary class="settings-note__summary">
                 <span data-i18n-html="settings.memory.note.summary">What Snotra remembers lives in a <code lang="en">memory.md</code> and goes to
@@ -1131,6 +1134,49 @@
               </p>
             </div>
             <div id="settings-memory-scopes"></div>
+            </section>
+            <section class="knowledge-section" id="knowledge-section-agents" aria-labelledby="knowledge-heading-agents">
+              <h3 class="knowledge-section__title" id="knowledge-heading-agents"><span data-i18n="settings.knowledge.agents.title">AGENTS.md</span> <span class="knowledge-section__sub" data-i18n="settings.knowledge.agents.sub">Project instructions</span></h3>
+            <div class="modal-field-group">
+              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.projectInstructions.label">Project instructions</div>
+              <div class="settings-switch-row">
+                <label for="input-project-instructions" class="settings-switch-row__label" data-i18n-html="settings.general.projectInstructions.toggle">Send <code lang="en">AGENTS.md</code></label>
+                <span id="status-project-instructions" class="settings-instant-status" role="status"></span>
+                <input type="checkbox" role="switch" class="ds-switch" id="input-project-instructions" aria-describedby="hint-project-instructions">
+              </div>
+              <details id="hint-project-instructions" class="settings-note settings-note--tight">
+                <summary class="settings-note__summary">
+                  <span data-i18n-html="settings.general.projectInstructions.note.summary">Puts the project instructions from <code lang="en">AGENTS.md</code> into the system prompt.</span>
+                </summary>
+                <div class="settings-note__body" data-i18n-html="settings.general.projectInstructions.note.body">
+                  <p>
+                    Up to three files are read:
+                    <code>&lt;folder&gt;/AGENTS.md</code> from the open project,
+                    <code>~/.snotra/AGENTS.md</code> (applies everywhere) and
+                    <code>~/.agents/AGENTS.md</code> (applies everywhere, the older place, still read).
+                    All that exist <strong>add to each other</strong> and apply together &mdash; none
+                    replaces another. Each file contributes at most 20,000 characters; anything longer
+                    is visibly truncated.
+                  </p>
+                  <p>
+                    Inside the project the file sits directly in the folder root, where most repositories
+                    keep it. An <code lang="en">AGENTS.md</code> under <code>.agents/</code> is
+                    <strong>not</strong> read &mdash; that folder only holds <code>memory.md</code> and the skills.
+                  </p>
+                  <p>
+                    The content is <strong>instruction, not data</strong> &mdash; unlike tool results it
+                    changes how the model behaves. Open somebody else&rsquo;s folder and you take on their
+                    instructions too; this switch is the emergency brake for that.
+                  </p>
+                </div>
+              </details>
+            </div>
+              <div id="settings-knowledge-agents"></div>
+            </section>
+            <section class="knowledge-section" id="knowledge-section-journal" aria-labelledby="knowledge-heading-journal">
+              <h3 class="knowledge-section__title" id="knowledge-heading-journal"><span data-i18n="settings.knowledge.journal.title">Last changed by Snotra</span> <span class="knowledge-section__sub" data-i18n="settings.knowledge.journal.sub">the last 50</span></h3>
+              <div id="settings-knowledge-journal"></div>
+            </section>
           </section>
 
           <!-- Settings › Remote access (#1110): drawn by RemoteAccessSettings.js from main's pairing state. -->
@@ -1176,40 +1222,6 @@
                     &mdash; it contains your user name &mdash;, whether there is a Git repository in it, platform and
                     system version, the shell used by <code lang="en">shell_execute</code> (only when that is on),
                     today&rsquo;s date and the Snotra version. All of it goes to the provider with every request.
-                  </p>
-                </div>
-              </details>
-            </div>
-            <div class="modal-field-group">
-              <div class="modal-field-label eyebrow-row" data-i18n="settings.general.projectInstructions.label">Project instructions</div>
-              <div class="settings-switch-row">
-                <label for="input-project-instructions" class="settings-switch-row__label" data-i18n-html="settings.general.projectInstructions.toggle">Send <code lang="en">AGENTS.md</code></label>
-                <span id="status-project-instructions" class="settings-instant-status" role="status"></span>
-                <input type="checkbox" role="switch" class="ds-switch" id="input-project-instructions" aria-describedby="hint-project-instructions">
-              </div>
-              <details id="hint-project-instructions" class="settings-note settings-note--tight">
-                <summary class="settings-note__summary">
-                  <span data-i18n-html="settings.general.projectInstructions.note.summary">Puts the project instructions from <code lang="en">AGENTS.md</code> into the system prompt.</span>
-                </summary>
-                <div class="settings-note__body" data-i18n-html="settings.general.projectInstructions.note.body">
-                  <p>
-                    Up to three files are read:
-                    <code>&lt;folder&gt;/AGENTS.md</code> from the open project,
-                    <code>~/.snotra/AGENTS.md</code> (applies everywhere) and
-                    <code>~/.agents/AGENTS.md</code> (applies everywhere, the older place, still read).
-                    All that exist <strong>add to each other</strong> and apply together &mdash; none
-                    replaces another. Each file contributes at most 20,000 characters; anything longer
-                    is visibly truncated.
-                  </p>
-                  <p>
-                    Inside the project the file sits directly in the folder root, where most repositories
-                    keep it. An <code lang="en">AGENTS.md</code> under <code>.agents/</code> is
-                    <strong>not</strong> read &mdash; that folder only holds <code>memory.md</code> and the skills.
-                  </p>
-                  <p>
-                    The content is <strong>instruction, not data</strong> &mdash; unlike tool results it
-                    changes how the model behaves. Open somebody else&rsquo;s folder and you take on their
-                    instructions too; this switch is the emergency brake for that.
                   </p>
                 </div>
               </details>

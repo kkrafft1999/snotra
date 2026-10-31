@@ -97,10 +97,7 @@ const { createChatConfigurationService } = require('../../application/chat/chat-
 const { createChatApplication } = require('./create-chat-application');
 const { startToolRuntimes } = require('./start-tool-runtimes');
 const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
-const { createProjectInstructionsAdapter } = require('../adapters/project-instructions-adapter');
-const { createRulesAdapter } = require('../adapters/rules-adapter');
-const { createKnowledgeFilesAdapter } = require('../adapters/knowledge-files-adapter');
-const { createKnowledgeWriterAdapter } = require('../adapters/knowledge-writer-adapter');
+const { createKnowledge } = require('./create-knowledge');
 const { globalKnowledgePaths } = require('../../shared/contracts/knowledge-files');
 const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
@@ -481,9 +478,8 @@ function createCore({
     // heissen, wie der Nutzer sie sieht (#294).
     getLocale: getAppLocale,
   });
-  // AGENTS.md (#212) and rules files (#1275): no cache, no watcher — a change applies with the next message.
-  const projectInstructions = createProjectInstructionsAdapter({ fs, path, os });
-  const rules = createRulesAdapter({ fs, path, os });
+  const knowledge = createKnowledge({ fs, path, os, userDataPath, memory, getLocale: getAppLocale, isSelfMemoryAllowed: defaultOnSwitch(uiPrefsStore, 'memorySelfEnabled') });
+  const { projectInstructions, rules } = knowledge;
 
   // The vendored pdf.js (#346), read by the preview and by extract_document_text (#42).
   const PDFJS_VENDOR_DIR = path.join(__dirname, '..', '..', 'renderer', 'vendor', 'pdfjs');
@@ -515,7 +511,7 @@ function createCore({
     urlFetch,
     shellRunner,
     memory,
-    knowledgeWriter: createKnowledgeWriterAdapter({ fs, path, os, memory, getLocale: getAppLocale, isSelfMemoryAllowed: defaultOnSwitch(uiPrefsStore, 'memorySelfEnabled') }),
+    knowledgeWriter: knowledge.knowledgeWriter,
     documentText,
     imageGeneration: imageGenerationSettings.adapter,
     // Built further down: it needs the skills and the MCP servers (#773).
@@ -654,7 +650,8 @@ function createCore({
     projectInstructions,
     memory,
     rules,
-    knowledgeFiles: createKnowledgeFilesAdapter({ fs, path, homeDir: os.homedir() }),
+    knowledgeFiles: knowledge.knowledgeFiles,
+    knowledgeJournal: knowledge.journal,
     path,
     maxToolRounds: LIMITS.MAX_TOOL_ROUNDS,
     toolPolicyStore,
@@ -918,6 +915,7 @@ function createCore({
   return {
     // What the IPC handlers of a front end are registered on.
     os,
+    knowledge,
     remoteActivity,
     notices,
     secretStore,

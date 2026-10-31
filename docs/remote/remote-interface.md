@@ -623,6 +623,7 @@ listed together where they share their class.
 | `toolPermissions:getState`, `getSecurityOverview`, `getSandboxOverview`, `resolveProgram`, `chooseAllowanceFolder` | desktop | The settings page's view; a folder dialog |
 | `settings:setUIPrefs`, `settings:commitSettings`, `settings:saveMcpServer`, `settings:deleteMcpServer`, `settings:reloadMcpServers`, `settings:testMcpServer`, `settings:setWebSearchApiKey` | desktop, **never** remote | Secrets come in here; the execution switches and a local MCP command are confirmed through the port (§7.6, #1104) |
 | `settings:getLLMState`, `setActivePreset`, `listModels`, `cancelModels`, `getUIPrefs`, `getToolCatalog`, `getMcpCatalog`, `getWebSearchState`, `getImageGenerationState`, `listImageModels`, `cancelImageModels`, `getPythonState`, `getShellState`, `getSkillCatalog`, `reloadSkills`, `getMemory`, `forgetMemory`, `removeFolderFromHistory` | desktop | The settings window. Choosing a chat's model from a phone is [O6](#11-open-decisions); it needs the per-chat model of #981 first |
+| `knowledge:getState`, `knowledge:setRuleSwitch`, `knowledge:openFile`, `knowledge:newRuleFile`, `knowledge:undo` | desktop | *Settings › Knowledge* (#1278): it opens files in the desktop's editor and undoes changes to knowledge files the phone never sees |
 | `skills:suggest` | desktop | A helper of the window's composer |
 | `skills:makeGlobal` | desktop | Native confirmation; writes a global skill folder (#980) |
 | `dialog:openFolder` | desktop | A new folder comes in only through the native dialog (#68) |

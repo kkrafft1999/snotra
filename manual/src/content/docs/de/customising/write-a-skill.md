@@ -16,21 +16,21 @@ Hast du eine Arbeitsweise einmal erklärt — wie du Protokolle geschrieben habe
 
 1. Bitte im Chat darum: *Mach daraus einen Skill: wie man rät, was als Nächstes gesät wird.* Oder für einen bestehenden: *Nimm die Kräuterspirale in den Skill aussaat-tipps auf.*
 2. Snotra schreibt `.agents/skills/<name>/SKILL.md` im geöffneten Ordner und weitere Dateien daneben, wenn der Skill sie braucht. Gib die Änderungen auf den Karten frei.
-3. Öffne *Einstellungen › Skills*, hak den neuen Skill an und klick auf *Übernehmen*.
+3. Öffne *Einstellungen › Wissen*, hak den neuen Skill an und klick auf *Übernehmen*.
 
 ## Was dann passiert
 
 - Snotra prüft jede `SKILL.md`, die es schreibt, sofort so, wie es die Skill-Liste tut: Front Matter, `name` und `description`, der Name gleich dem Ordner. Eine kaputte geht zum Reparieren an das Modell zurück.
 - Das Tool-Protokoll zeigt das Schreiben als Teil des Skills: *1 Skill-Datei geschrieben*.
-- Der neue Skill erscheint von selbst unter *Einstellungen › Skills* und bleibt, wie jeder Skill aus einem Ordner, aus, bis du ihn anhakst.
+- Der neue Skill erscheint von selbst unter *Einstellungen › Wissen* und bleibt, wie jeder Skill aus einem Ordner, aus, bis du ihn anhakst.
 
 ## Ihn in jedem Ordner nutzen
 
 [seit 1.30] Bitte Snotra, sich den Ablauf *für dich, in jedem Ordner* zu merken. Es schreibt einen Skill aus einer `SKILL.md` nach `~/.snotra/skills/` — auf einer Karte, die den ganzen Skill zeigt oder, bei einem Skill, den es schon gibt, die Änderungen gegenüber der Fassung, die er ersetzt. Sonst schreibt dort nichts: Datei-Tools und Befehle erreichen deine eigenen Skills und die System-Skills nicht, damit keine in einem Projekt versteckte Anweisung einen Skill unterbringen kann, der dann überall auftaucht.
 
-Ein Skill aus mehreren Dateien — mit `references/` oder `scripts/` — bleibt im geöffneten Ordner. Um ihn in jedem Ordner zu nutzen, verschieb seinen Ordner selbst, in deinem Dateimanager, von `.agents/skills/` nach `~/.snotra/skills/`. So oder so: Hak den Skill unter *Einstellungen › Skills* an, bevor er gilt.
+Ein Skill aus mehreren Dateien — mit `references/` oder `scripts/` — bleibt im geöffneten Ordner. Um ihn in jedem Ordner zu nutzen, verschieb seinen Ordner selbst, in deinem Dateimanager, von `.agents/skills/` nach `~/.snotra/skills/`. So oder so: Hak den Skill unter *Einstellungen › Wissen* an, bevor er gilt.
 
 ## Wenn es nicht klappt
 
 - **Es ist kein Ordner geöffnet.** Snotra zeigt die `SKILL.md` dann im Chat, statt sie zu schreiben; speichere sie selbst.
-- **Snotra schreibt den Skill nicht so, wie du es erwartest.** `snotra-skill-authoring` ist vielleicht unter *Einstellungen › Skills* ausgeschaltet.
+- **Snotra schreibt den Skill nicht so, wie du es erwartest.** `snotra-skill-authoring` ist vielleicht unter *Einstellungen › Wissen* ausgeschaltet.

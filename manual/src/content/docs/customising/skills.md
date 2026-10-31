@@ -24,11 +24,11 @@ The three system skills let Snotra answer questions about itself (`snotra-capabi
 
 ## Switch a skill on
 
-1. Open *Settings › Skills*.
+1. Open *Settings › Knowledge*.
 2. Tick the skills you want. They are grouped by where they come from.
 3. Click *Apply*.
 
-![Settings › Skills: the choice "Suggestions in the chat", the button "Reload skills", the three system skills ticked, and below them the skill sowing-advice from the folder's .agents/skills, not ticked.](screenshots/skills-settings.webp)
+![Settings › Knowledge › Procedures: the button "Reload skills", the three system skills ticked, and below them the skill sowing-advice from the folder's .agents/skills, not ticked.](screenshots/skills-settings.webp)
 
 A skill from a folder is never on by itself: it is someone else's content, so switching it on is your decision — and it applies to that folder only. Ticking a `review` skill in one project does not switch on a `review` skill in the next.
 
@@ -36,7 +36,7 @@ A skill from a folder is never on by itself: it is someone else's content, so sw
 
 [since 1.22] A skill you wrote in one project, and now want in every folder, does not have to be moved by hand.
 
-1. Open [*Settings › Skills*](#switch-a-skill-on) and click the skill under *Folder · .agents/skills* to unfold it.
+1. Open [*Settings › Knowledge*](#switch-a-skill-on) and click the skill under *Folder · .agents/skills* to unfold it.
 2. Click *Make global…* below its path.
 3. Snotra asks first and names both folders: where the skill is now, in `.agents/skills/` of the open folder, and where it goes, `~/.snotra/skills/`. Click *Make global* — or *Cancel*, which is also what `Enter` and `Esc` do.
 
@@ -47,11 +47,11 @@ Only you can do this. The model writes skills into the open folder only and neve
 
 Type `/` in the input field: a list of every available skill opens, also those that are off. Type to narrow it down — it searches names and descriptions — and take one with `Enter` or `Tab`.
 
-The text `/name` stays in your message and the skill applies for the rest of this chat. Your selection under *Settings › Skills* stays as it was. Only what you type counts: a `/name` in an answer or in a file switches nothing on.
+The text `/name` stays in your message and the skill applies for the rest of this chat. Your selection under *Settings › Knowledge* stays as it was. Only what you type counts: a `/name` in an answer or in a file switches nothing on.
 
 ## Let Snotra suggest a skill
 
-Write your request, then type `/`. Below the input field Snotra suggests a fitting skill, for example *Fits here: /sowing-advice*. Click it to take it; `×` hides it. How it finds one is set under *Settings › Skills › Suggestions in the chat*:
+Write your request, then type `/`. Below the input field Snotra suggests a fitting skill, for example *Fits here: /sowing-advice*. Click it to take it; `×` hides it. How it finds one is set under *Settings › Knowledge › Suggestions in the chat*:
 
 - ***From the descriptions (no model)*** — compares your line with the skill descriptions, on your computer and at no cost. The default.
 - ***Ask the model*** — also understands jargon, but sends your line and the skill names to the provider and takes a moment.
@@ -63,11 +63,11 @@ A suggestion is never switched on by itself.
 
 [since 1.20] In the chat bar, next to the model and the mode, a pill counts the skills that are on in this chat: *3 skills*, or *No skills*. Click it to see the whole picture:
 
-![The popover of the pill "3 skills": under Skills the three system skills on and sowing-advice from the folder off; under Tools run_python and shell_execute switched off with a "Switch on" button each, web_search and generate_image with "Set up", and "15 switched on" folded; below, links to Settings › Skills and Settings › Tools › Autonomy.](screenshots/chat-config.webp)
+![The popover of the pill "3 skills": under Skills the three system skills on and sowing-advice from the folder off; under Tools run_python and shell_execute switched off with a "Switch on" button each, web_search and generate_image with "Set up", and "15 switched on" folded; below, links to Settings › Knowledge and Settings › Tools › Autonomy.](screenshots/chat-config.webp)
 
 - **Skills** — every skill, those that are on first, each with where it comes from. A skill you called with `/name`, or switched on a card for this chat, is marked *this chat only*.
 - **Tools** — what is missing comes first, with the reason, such as *switched off* or *no search service key*. *Switch on* or *Set up* opens the setting that changes it. The tools that are on are summed up in one line; click it to see them by group.
-- The two links at the bottom open *Settings › Skills* and *Settings › Tools › Autonomy*.
+- The two links at the bottom open *Settings › Knowledge* and *Settings › Tools › Autonomy*.
 
 The pill only shows. What you switch on or off for good stays a choice in the settings.
 
@@ -94,7 +94,7 @@ The model can also suggest switching something off for a chat — when you asked
 
 ### What happens
 
-The change applies to this chat only. It stays when you open another chat and come back, and after a restart; a new chat starts with your settings again. The skills pill marks the change *this chat only*. To switch something on for good, use [*Settings › Tools › Autonomy*](../../safety/tools-and-security/) or [*Settings › Skills*](#switch-a-skill-on).
+The change applies to this chat only. It stays when you open another chat and come back, and after a restart; a new chat starts with your settings again. The skills pill marks the change *this chat only*. To switch something on for good, use [*Settings › Tools › Autonomy*](../../safety/tools-and-security/) or [*Settings › Knowledge*](#switch-a-skill-on).
 
 A tool switched on this way works like one switched on in the settings: in *Smart* mode it still asks before each call that needs it.
 

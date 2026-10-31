@@ -12,6 +12,7 @@
  * @typedef {Object} KnowledgeSnapshot
  * @property {Map<string, string>} files  path relative to the folder → its text
  * @property {boolean} complete  false when a limit kept files out; those are not compared
+ * @property {string} [root]  the folder the snapshot was taken of
  */
 
 /**
@@ -27,6 +28,8 @@
  * @property {(before: KnowledgeSnapshot, after: KnowledgeSnapshot) => { changes: KnowledgeChange[], diff: string, truncated: boolean }} compare
  * @property {(options: { workspaceRoot: string, before: KnowledgeSnapshot, changes: KnowledgeChange[] }) => Promise<{ ok: boolean, failed: string[] }>} restore
  *   writes back what a file held before, and removes one the command added
+ * @property {(options: { before: KnowledgeSnapshot, after: KnowledgeSnapshot, changes: KnowledgeChange[] }) => Promise<void>} [keep]
+ *   records a change the user kept, for *Undo* in the settings (#1278)
  */
 
 module.exports = {};

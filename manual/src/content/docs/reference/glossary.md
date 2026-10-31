@@ -101,7 +101,7 @@ A yes from an approval card that holds for the rest of one chat — exactly this
 
 ### Skill
 
-A folder with a `SKILL.md` that tells the model how to do a kind of task. You switch skills on under *Settings › Skills*. See [Use skills](../../customising/skills/).
+A folder with a `SKILL.md` that tells the model how to do a kind of task. You switch skills on under *Settings › Knowledge*. See [Use skills](../../customising/skills/).
 
 ### Smart
 

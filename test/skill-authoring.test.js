@@ -110,7 +110,7 @@ test('a valid SKILL.md written into the open folder comes back with valid: true 
     assert.equal(parsed.skill_check.skill, 'release-notes');
     assert.equal(parsed.skill_check.valid, true);
     // The menu path is quoted the way the user sees it, so the model can pass it on.
-    assert.match(parsed.skill_check.note, /Einstellungen › Skills/);
+    assert.match(parsed.skill_check.note, /Einstellungen › Wissen/);
   });
 });
 

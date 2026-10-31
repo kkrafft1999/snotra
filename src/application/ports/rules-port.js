@@ -14,6 +14,7 @@
  *   `.md` files in subfolders, which are not read — reported in the settings
  * @property {Partial<Record<import('../../shared/contracts/rules').RuleSource, number>>} overLimit
  *   files past the limit of a source, not read either
+ * @property {Array<{ source: string, file: string }>} [invalid]  `.md` files whose name is no rule name (#1278)
  */
 
 /**
@@ -22,6 +23,7 @@
  * @property {(options: { workspaceRoot?: string|null, name: string, level: string }) =>
  *   Promise<import('../../shared/contracts/rules').RuleFile|null>} loadRule
  *   the rule of that name at that level, the first hit of the level's sources
+ * @property {(options: { workspaceRoot?: string|null, source: string }) => string|null} [dirOf]  the folder of a source (#1278)
  */
 
 module.exports = {};

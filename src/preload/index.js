@@ -170,6 +170,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // aktiven Ordner selbst — der Renderer schickt ihn bewusst nicht mit.
   getMemory: () => ipcRenderer.invoke(REQ.SETTINGS_GET_MEMORY),
   forgetMemoryEntry: (scope, line, text) => ipcRenderer.invoke(REQ.SETTINGS_FORGET_MEMORY, { scope, line, text }),
+  // Settings › Knowledge (#1278): rules files, AGENTS.md, the agent's last changes.
+  getKnowledgeState: () => ipcRenderer.invoke(REQ.KNOWLEDGE_GET_STATE),
+  setRuleSwitch: (change) => ipcRenderer.invoke(REQ.KNOWLEDGE_SET_RULE_SWITCH, {
+    level: typeof change?.level === 'string' ? change.level : undefined,
+    key: typeof change?.key === 'string' ? change.key : undefined,
+    enabled: change?.enabled === true,
+  }),
+  openKnowledgeFile: (file) => ipcRenderer.invoke(REQ.KNOWLEDGE_OPEN_FILE, {
+    kind: String(file?.kind || ''), source: String(file?.source || ''), name: String(file?.name || ''),
+  }),
+  newRuleFile: (file) => ipcRenderer.invoke(REQ.KNOWLEDGE_NEW_RULE_FILE, {
+    level: String(file?.level || ''), name: String(file?.name || ''), description: String(file?.description || ''), always: file?.always === true,
+  }),
+  undoKnowledgeChange: (id) => ipcRenderer.invoke(REQ.KNOWLEDGE_UNDO, { id: String(id || '') }),
   onSkillsChanged: (callback) => {
     const channel = PUSH.SKILLS_CHANGED;
     const listener = (_event, payload) => callback(payload);

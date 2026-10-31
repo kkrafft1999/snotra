@@ -46,10 +46,10 @@ test('every path reads in both languages, and the two differ', () => {
   }
   assert.equal(menuPath('en', 'settings.tools'), 'Settings › Tools › Setup');
   assert.equal(menuPath('de', 'settings.tools'), 'Einstellungen › Tools › Einrichtung');
-  assert.equal(menuPath('en', 'settings.memory'), 'Settings › Memory');
-  assert.equal(menuPath('de', 'settings.memory'), 'Einstellungen › Gedächtnis');
+  assert.equal(menuPath('en', 'settings.memory'), 'Settings › Knowledge');
+  assert.equal(menuPath('de', 'settings.memory'), 'Einstellungen › Wissen');
   // Three levels deep, and the last step is a control rather than a page.
-  assert.equal(menuPath('de', 'settings.skills.suggestions'), 'Einstellungen › Skills › Vorschläge im Chat');
+  assert.equal(menuPath('de', 'settings.skills.suggestions'), 'Einstellungen › Wissen › Vorschläge im Chat');
 });
 
 test('the sentence stays English, only the quotation follows the language', () => {

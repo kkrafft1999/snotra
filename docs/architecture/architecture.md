@@ -441,6 +441,12 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   the global ones under `~/.snotra` and `~/.agents` within limits, compares two
   snapshots into changes and a diff for the card, and puts a snapshot back on
   *Reset*. A folder that links out of the open folder is not followed
+- `knowledge-journal-port` — the list *Last changed by Snotra* (#1278):
+  `main/services/knowledge-journal.js` records every change Snotra made to a
+  knowledge file — through `remember`, a file tool, or a shell or Python
+  command the user kept — with the text before and after, keeps the last 50 in
+  `<userData>/knowledge-journal.json`, and undoes one only while the file still
+  holds what the change left
 - `rules-port` — the rules files of the three sources, for the rules block and
   `load_rule` (#1275). `main/adapters/rules-adapter.js` lists the flat
   `*.md` files of `<workspace>/.agents/rules/`, `~/.snotra/rules/` and

@@ -32,8 +32,9 @@ const MENU_PATHS = Object.freeze({
   'settings.security': ['settings.title', 'settings.nav.group.tools', 'settings.nav.security'],
   // The sandbox, the program allowances and the hosts kept open (#1119).
   'settings.sandbox': ['settings.title', 'settings.nav.group.tools', 'settings.nav.sandbox'],
-  'settings.skills': ['settings.title', 'settings.nav.skills'],
-  'settings.skills.suggestions': ['settings.title', 'settings.nav.skills', 'settings.skills.suggestion.label'],
+  // Skills live on the knowledge page since #1278.
+  'settings.skills': ['settings.title', 'settings.nav.memory'],
+  'settings.skills.suggestions': ['settings.title', 'settings.nav.memory', 'settings.skills.suggestion.label'],
   'settings.memory': ['settings.title', 'settings.nav.memory'],
   // Since #767 the servers are part of Tool setup; the name stays for the texts that quote it.
   'settings.mcp': ['settings.title', 'settings.nav.group.tools', 'settings.nav.tools'],

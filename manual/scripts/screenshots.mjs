@@ -1513,7 +1513,7 @@ const MOTIFS = {
     },
   },
 
-  /** Settings › Skills: the system skills and a skill of the folder, not yet ticked. */
+  /** Settings › Knowledge › Procedures: the system skills and a skill of the folder, not yet ticked. */
   'skills-settings': {
     async prepare({ workspace, locale }) {
       const skill = DEMO_SKILL[locale];
@@ -1521,11 +1521,11 @@ const MOTIFS = {
       await writeFile(path.join(workspace, '.agents', 'skills', skill.name, 'SKILL.md'), skill.file, 'utf8');
     },
     async setUp({ app, page, locale }) {
-      await openSettingsPanel(app, page, 'skills');
-      await poll(() => page.evaluate((name) => document.getElementById('panel-settings-skills')?.textContent.includes(name),
+      await openSettingsPanel(app, page, 'memory');
+      await poll(() => page.evaluate((name) => document.getElementById('knowledge-section-skills')?.textContent.includes(name),
         DEMO_SKILL[locale].name), { what: 'the folder skill in the list' });
       await page.evaluate(() => {
-        const heading = [...document.querySelectorAll('#panel-settings-skills h3, #panel-settings-skills h4, #panel-settings-skills [class*="heading"]')]
+        const heading = [...document.querySelectorAll('#knowledge-section-skills h3, #knowledge-section-skills h4, #knowledge-section-skills [class*="heading"]')]
           .find((node) => /Available skills|Verfügbare Skills/.test(node.textContent));
         heading?.scrollIntoView({ block: 'start' });
       });
@@ -1535,7 +1535,7 @@ const MOTIFS = {
     },
   },
 
-  /** Settings › Memory with three entries in the project memory. */
+  /** Settings › Knowledge › Facts with three entries in the project memory. */
   'memory-settings': {
     async prepare({ workspace, locale }) {
       await mkdir(path.join(workspace, '.agents'), { recursive: true });
@@ -1545,7 +1545,9 @@ const MOTIFS = {
       await openSettingsPanel(app, page, 'memory');
       await poll(() => page.evaluate((text) => document.getElementById('panel-settings-memory')?.textContent.includes(text),
         locale === 'de' ? 'Südbeet' : 'south bed'), { what: 'the entries of the project memory' });
+      await page.evaluate(() => document.getElementById('knowledge-section-facts').scrollIntoView({ block: 'start' }));
       await page.mouse.move(0, 0);
+      await pause(200);
       return clipAround(page, SETTINGS_PANEL, 0);
     },
   },

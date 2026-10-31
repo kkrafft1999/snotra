@@ -1452,7 +1452,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     }));
     return found.eintraege.length > 0 ? found : null;
   }, { what: 'gerendertes Gedaechtnis' });
-  assert.equal(memory.heading, 'Gedächtnis');
+  assert.equal(memory.heading, 'Wissen');
   // Beide Ebenen stehen da, auch die leere globale.
   assert.deepEqual(memory.karten, ['.agents/memory.md', '~/.snotra/memory.md']);
   assert.ok(memory.eintraege.some((t) => t.includes('Gemerkt-fuer-dieses-Projekt.')), memory.eintraege.join(' | '));

@@ -16,21 +16,21 @@ When you have explained a way of working once — how you want protocols written
 
 1. Ask for it in the chat: *Make a skill out of this: how to advise on what to sow next.* Or, for an existing one: *Add the herb spiral to the sowing-advice skill.*
 2. Snotra writes `.agents/skills/<name>/SKILL.md` in the open folder, and further files next to it if the skill needs them. Approve the changes on the cards.
-3. Open *Settings › Skills*, tick the new skill and click *Apply*.
+3. Open *Settings › Knowledge*, tick the new skill and click *Apply*.
 
 ## What happens
 
 - Snotra checks every `SKILL.md` it writes right away, the way the skill list does: front matter, `name` and `description`, the name equal to the folder. A broken one goes back to the model to be fixed.
 - The tool log shows the write as part of the skill: *1 skill file written*.
-- The new skill appears under *Settings › Skills* by itself, and like every skill from a folder it stays off until you tick it.
+- The new skill appears under *Settings › Knowledge* by itself, and like every skill from a folder it stays off until you tick it.
 
 ## Use it in every folder
 
 [since 1.30] Ask Snotra to remember the procedure *for you, in every folder*. It writes a skill of one `SKILL.md` to `~/.snotra/skills/` — on a card that shows the whole skill, or for a skill that already exists, the changes against the version it replaces. Nothing else writes there: the file tools and commands cannot reach your own skills or the system skills, so no instruction hidden in some project can plant a skill that turns up everywhere.
 
-A skill of several files — with `references/` or `scripts/` — stays in the open folder. To use one in every folder, move its folder from `.agents/skills/` to `~/.snotra/skills/` yourself, in your file manager. Either way, tick the skill under *Settings › Skills* before it applies.
+A skill of several files — with `references/` or `scripts/` — stays in the open folder. To use one in every folder, move its folder from `.agents/skills/` to `~/.snotra/skills/` yourself, in your file manager. Either way, tick the skill under *Settings › Knowledge* before it applies.
 
 ## If it doesn't work
 
 - **No folder is open.** Snotra then shows the `SKILL.md` in the chat instead of writing it; save it yourself.
-- **Snotra does not write the skill the way you expect.** `snotra-skill-authoring` may be switched off under *Settings › Skills*.
+- **Snotra does not write the skill the way you expect.** `snotra-skill-authoring` may be switched off under *Settings › Knowledge*.

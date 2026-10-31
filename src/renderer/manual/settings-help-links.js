@@ -34,10 +34,6 @@ export const SETTINGS_HELP = Object.freeze({
     slug: 'customising/built-in-tools',
     title: { en: 'Set up the built-in tools', de: 'Die eingebauten Tools einrichten' },
   },
-  'panel.skills': {
-    slug: 'customising/skills',
-    title: { en: 'Use skills', de: 'Skills nutzen' },
-  },
   'panel.memory': {
     slug: 'customising/memory',
     title: { en: 'Let Snotra remember', de: 'Snotra etwas merken lassen' },

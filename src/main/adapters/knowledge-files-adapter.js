@@ -33,9 +33,11 @@ const LIMITS = Object.freeze({
  * @param {typeof import('fs/promises')} deps.fs
  * @param {typeof import('path')} deps.path
  * @param {string|null} [deps.homeDir]  for the global knowledge files
+ * @param {import('../../application/ports/knowledge-journal-port').KnowledgeJournalPort|null} [deps.journal]
+ *   where a kept change is recorded, for *Undo* (#1278)
  * @returns {import('../../application/ports/knowledge-files-port').KnowledgeFilesPort}
  */
-function createKnowledgeFilesAdapter({ fs, path, homeDir = null }) {
+function createKnowledgeFilesAdapter({ fs, path, homeDir = null, journal = null }) {
   if (!fs || !path) throw new TypeError('createKnowledgeFilesAdapter needs fs and path.');
   const home = typeof homeDir === 'string' && homeDir ? path.resolve(homeDir) : null;
 
@@ -199,7 +201,7 @@ function createKnowledgeFilesAdapter({ fs, path, homeDir = null }) {
         realRoot = await fs.realpath(workspaceRoot);
       } catch {
         // No folder to look at: an empty snapshot, compared with an empty one.
-        return { files, complete: false };
+        return { files, complete: false, root: workspaceRoot };
       }
       const listed = await listFiles(workspaceRoot, realRoot);
       if (listed.length > LIMITS.FILES) complete = false;
@@ -217,7 +219,21 @@ function createKnowledgeFilesAdapter({ fs, path, homeDir = null }) {
         }
         files.set(rel, text);
       }
-      return { files, complete };
+      return { files, complete, root: workspaceRoot };
+    },
+
+    async keep({ before, after, changes }) {
+      if (!journal) return;
+      for (const change of changes) {
+        await journal.record({
+          file: abs(before.root || '', change.path),
+          path: change.path,
+          kind: change.kind,
+          source: 'command',
+          before: before.files.get(change.path) ?? null,
+          after: after.files.get(change.path) ?? null,
+        });
+      }
     },
 
     compare(before, after) {

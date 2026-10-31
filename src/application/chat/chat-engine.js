@@ -1140,6 +1140,7 @@ function mergeSandboxGrants(session, chosen) {
  * @property {import('../ports/memory-port').MemoryPort|null} [memory]
  * @property {import('../ports/rules-port').RulesPort|null} [rules]
  * @property {import('../ports/knowledge-files-port').KnowledgeFilesPort|null} [knowledgeFiles]
+ * @property {import('../ports/knowledge-journal-port').KnowledgeJournalPort|null} [knowledgeJournal]
  * @property {import('../ports/tool-policy-port').ToolPolicyPort|null} [toolPolicy]
  * @property {import('../ports/tool-approval-port').ToolApprovalPort|null} [approvals]
  * @property {import('../ports/own-secrets-port').OwnSecretsPort|null} [ownSecrets]
@@ -1167,6 +1168,8 @@ function createChatEngine({
   rules = null,
   // Snapshots of the folder's knowledge files around a command (#1319).
   knowledgeFiles = null,
+  // The agent's changes to knowledge files, for Undo in the settings (#1278).
+  knowledgeJournal = null,
   toolPolicy = null,
   approvals = null,
   // The app's own secrets, for the text the prompt embeds by itself (#528).
@@ -2152,7 +2155,15 @@ function createChatEngine({
         const files = changes.map((change) => change.path).join(', ');
         const kept = outcome && !outcome.invalidated && outcome.response !== APPROVAL_RESPONSES.DENY;
         entry.knowledgeChange = { files: changes.map((change) => ({ path: change.path, status: change.status })), kept: kept === true };
-        if (kept) return `The command changed ${files}. The user kept the change; it applies from the next message on.`;
+        if (kept) {
+          // Kept: listed under Settings › Knowledge, where it can be undone (#1278).
+          try {
+            await knowledgeFiles.keep?.({ before, after, changes });
+          } catch {
+            // The journal is a convenience: a change it could not note still stands.
+          }
+          return `The command changed ${files}. The user kept the change; it applies from the next message on.`;
+        }
         const reset = await knowledgeFiles.restore({ workspaceRoot, before, changes });
         const how = outcome && !outcome.invalidated ? 'The user reset it' : 'Nobody could be asked, so Snotra reset it';
         return reset.ok
@@ -3134,7 +3145,27 @@ function createChatEngine({
               knowledgeBefore = null;
             }
           }
+          // A file-tool write to a knowledge file (#1319) goes into the journal
+          // behind Settings › Knowledge, with the version before it (#1278).
+          /** @type {Map<string, string|null>|null} */
+          let journalBefore = null;
+          if (plan.knowledge && knowledgeJournal && !plan.knowledgeCard) {
+            const files = plan.targets.filter((target) => target.knowledge && target.absPath).map((target) => /** @type {string} */ (target.absPath));
+            try {
+              journalBefore = files.length > 0 ? await knowledgeJournal.capture(files) : null;
+            } catch {
+              // Without the version before there is nothing to undo to; the write goes on.
+              journalBefore = null;
+            }
+          }
           const firstRun = await executeWith(sessionSandboxGrants(scopeKey, policy));
+          if (journalBefore && knowledgeJournal) {
+            try {
+              await knowledgeJournal.commit(journalBefore, { source: 'file-tool', workspaceRoot: workspaceRoot ?? null });
+            } catch {
+              // The journal is a convenience: a write it could not note still stands.
+            }
+          }
           if (live.repeated) {
             // A connection of a command whose sandbox card the user denied.
             entry.sandboxBlocked = normalizeSandboxBlocked(firstRun?.sandboxBlocked);

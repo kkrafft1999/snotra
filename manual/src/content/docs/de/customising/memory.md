@@ -38,9 +38,9 @@ Beide sind gewöhnliche Markdown-Dateien: Du kannst sie in jedem Editor lesen un
 
 ## Sehen und ändern, was es behält
 
-*Einstellungen › Gedächtnis* zeigt beide Ebenen mit jedem Eintrag, seinem Datum und ob Snotra ihn sich selbst gemerkt hat.
+*Einstellungen › Wissen* zeigt beide Ebenen mit jedem Eintrag, seinem Datum und ob Snotra ihn sich selbst gemerkt hat.
 
-![Einstellungen › Gedächtnis: der Schalter „Snotra darf sich von selbst etwas merken“, das Projektgedächtnis des Ordners gartenplaner in .agents/memory.md mit drei Einträgen — einer als „selbst gemerkt“ markiert —, jeder mit Papierkorb, und die Zahl der genutzten Zeichen.](screenshots/memory-settings.webp)
+![Einstellungen › Wissen › Fakten: der Schalter „Snotra darf sich von selbst etwas merken“, das Projektgedächtnis des Ordners gartenplaner in .agents/memory.md mit drei Einträgen — einer als „selbst gemerkt“ markiert —, jeder mit Papierkorb, und die Zahl der genutzten Zeichen.](screenshots/memory-settings.webp)
 
 - Der Papierkorb neben einem Eintrag löscht ihn.
 - *Mitschicken* schaltet eine Ebene ab, ohne sie zu löschen.
@@ -50,11 +50,11 @@ Beide sind gewöhnliche Markdown-Dateien: Du kannst sie in jedem Editor lesen un
 
 ## Was dann passiert
 
-Das Gedächtnis geht mit jeder Anfrage an den Anbieter, bis zu 8.000 Zeichen pro Ebene; *Einstellungen › Gedächtnis* zeigt, wie viel genutzt ist. Weil ein Repository ein Projektgedächtnis mitbringen kann, liest das Modell es als Notizen, die im Ordner geführt werden, nicht als etwas, das du gesagt hast.
+Das Gedächtnis geht mit jeder Anfrage an den Anbieter, bis zu 8.000 Zeichen pro Ebene; *Einstellungen › Wissen* zeigt, wie viel genutzt ist. Weil ein Repository ein Projektgedächtnis mitbringen kann, liest das Modell es als Notizen, die im Ordner geführt werden, nicht als etwas, das du gesagt hast.
 
 [seit 1.30] Das Projektgedächtnis wird wie die `AGENTS.md` des Projekts geprüft: Ein Gedächtnis, das so klingt, als verschweige es dir etwas, ist in der Aufschlüsselung hinter der Token-Anzeige markiert — siehe [Projektanweisungen](../project-instructions/#anweisungen-aus-einem-ordner-den-du-nicht-geschrieben-hast). Dein persönliches Gedächtnis wird nicht geprüft; es enthält, was du gesagt hast.
 
-Löschen kannst nur du: Das Modell kann dem Gedächtnis etwas hinzufügen, aber nichts daraus entfernen — dafür ist der Papierkorb unter *Einstellungen › Gedächtnis* da.
+Löschen kannst nur du: Das Modell kann dem Gedächtnis etwas hinzufügen, aber nichts daraus entfernen — dafür ist der Papierkorb unter *Einstellungen › Wissen* da.
 
 ## Wenn es nicht klappt
 

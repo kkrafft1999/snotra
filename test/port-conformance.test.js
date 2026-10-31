@@ -25,6 +25,7 @@ const ADAPTER_DIRS = ['src/main/adapters', 'src/main/remote'];
 const IMPLEMENTING_SERVICES = [
   'src/main/services/shell-runner-service.js',
   'src/main/services/python-runner-service.js',
+  'src/main/services/knowledge-journal.js',
   'src/main/electron/native-confirmation-adapter.js',
   'src/main/electron/power-save-adapter.js',
   'src/main/electron/safe-storage-backend.js',
