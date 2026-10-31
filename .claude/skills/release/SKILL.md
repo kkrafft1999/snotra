@@ -136,7 +136,7 @@ gh pr create --title "Release vX.Y.Z" --body "…"
 ```
 
 The release pull request closes no issue, so it needs no `Closes #N`. Wait until
-the three required checks `Tests (macos-14)`, `Tests (windows-latest)` and
+the three required checks `Tests (macos-15)`, `Tests (windows-latest)` and
 `Tests (ubuntu-latest)` are green:
 
 ```sh
