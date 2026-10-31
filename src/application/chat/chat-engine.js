@@ -69,7 +69,9 @@ const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { buildProjectInstructionsSystemPrompt } = require('./project-instructions-prompt');
 const { buildUserMemorySystemPrompt, buildFolderMemorySystemPrompt } = require('./memory-prompt');
 const { guardEmbeddedFiles, guardEmbeddedSkills } = require('./embedded-text-guard');
+const { markCovertSignals } = require('./embedded-text-signals');
 const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
+const { PROJECT_INSTRUCTION_SOURCES } = require('../../shared/contracts/project-instructions');
 const { MAX_TOOL_ROUNDS_MIN, clampMaxToolRounds } = require('../../shared/contracts/settings');
 const {
   resolveHistoryCharLimit,
@@ -1646,7 +1648,10 @@ function createChatEngine({
         try {
           const files = await projectInstructions.load({ workspaceRoot });
           const built = buildProjectInstructionsSystemPrompt(
-            guardEmbeddedFiles(files, await readOwnSecretList())
+            markCovertSignals(
+              guardEmbeddedFiles(files, await readOwnSecretList()),
+              (file) => file.source === PROJECT_INSTRUCTION_SOURCES.WORKSPACE_AGENTS
+            )
           );
           projectInstructionsSystem = built.text;
           projectInstructionParts = built.parts;
@@ -1674,7 +1679,10 @@ function createChatEngine({
               ? uiPrefs.memoryWorkspaceEnabled !== false
               : uiPrefs.memoryUserEnabled !== false
           );
-          const guarded = guardEmbeddedFiles(files, await readOwnSecretList());
+          const guarded = markCovertSignals(
+            guardEmbeddedFiles(files, await readOwnSecretList()),
+            (file) => file.scope === MEMORY_SCOPES.WORKSPACE
+          );
           ({ text: memorySystem, parts: memoryParts } = buildUserMemorySystemPrompt(guarded));
           ({ text: folderMemorySystem, parts: folderMemoryParts } = buildFolderMemorySystemPrompt(guarded));
         } catch {

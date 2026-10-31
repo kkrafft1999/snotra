@@ -44,6 +44,7 @@ const { isRecord } = require('../runtime/is-record');
  * @property {string} text
  * @property {boolean} truncated
  * @property {'masked'|'withheld'} [guard]  what the secret protection did to it (#528)
+ * @property {Array<{kind: string, excerpt: string}>} [covertSignals]  what the covert-signal check found (#1280)
  */
 
 const PROJECT_INSTRUCTIONS_FILE = 'AGENTS.md';
@@ -139,6 +140,8 @@ function normalizeProjectInstructionFile(raw) {
   const file = { source: data.source, text, truncated: data.truncated === true };
   // What the secret protection did to it (#528), for the context breakdown.
   if (data.guard === 'masked' || data.guard === 'withheld') file.guard = data.guard;
+  // What the covert-signal check found in it (#1280), for the same.
+  if (Array.isArray(data.covertSignals) && data.covertSignals.length > 0) file.covertSignals = data.covertSignals;
   return file;
 }
 

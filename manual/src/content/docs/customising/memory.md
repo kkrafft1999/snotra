@@ -44,6 +44,8 @@ Changes in this section take effect at once.
 
 The memory goes to the provider with every request, up to 8,000 characters per level; *Settings › Memory* shows how much is used. Because a repository can bring a project memory along, the model reads it as notes kept in the folder, not as something you said.
 
+[since 1.30] The project memory is checked like the project's `AGENTS.md`: a memory that reads as if it hides something from you is marked in the breakdown behind the token count — see [Project instructions](../project-instructions/#instructions-from-a-folder-you-did-not-write). Your personal memory is not checked; it holds what you said.
+
 Only you delete: the model can add to the memory, but not remove anything from it — that is what the bin in *Settings › Memory* is for.
 
 ## If it doesn't work
