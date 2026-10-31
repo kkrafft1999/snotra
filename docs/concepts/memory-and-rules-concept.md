@@ -59,6 +59,10 @@ injection detector and the phone approvals re-checked on 2026-10-31.
 
 The order of the system prompt is described in
 [`architecture.md` › *System prompt*](../architecture/architecture.md#system-prompt).
+Its diagram, [`agent-text-sources.svg`](../architecture/agent-text-sources.svg),
+colours every source by the kind of information it carries, so it shows which
+kind is loaded from where and when; the rules files, `load_rule` and
+`search_chats` are drawn dashed as planned.
 
 ## Decisions
 
