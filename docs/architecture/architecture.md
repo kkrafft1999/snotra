@@ -3038,7 +3038,11 @@ ratchet, not a merge condition.
 
 [`agent-text-sources.svg`](./agent-text-sources.svg) maps every source of text
 that reaches the model — the system message below, the messages, and what the
-tools pull in during a run ([#747](https://github.com/kkrafft1999/snotra/issues/747)):
+tools pull in during a run ([#747](https://github.com/kkrafft1999/snotra/issues/747)).
+The colour of a box is the kind of information — fact, rule, procedure,
+project instruction, conversation, data from tools, app text — and its column
+says when it is loaded. Dashed boxes are planned in the
+[knowledge concept](../concepts/memory-and-rules-concept.md) (#1275, #1315):
 
 ![Where the agent's text comes from: system message, messages and tool results](agent-text-sources.svg)
 
