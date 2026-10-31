@@ -14,6 +14,7 @@ import { initSecurityPanel } from './SecurityPanel.js';
 import { initSettingsHelp } from './SettingsHelp.js';
 import { initModelPricesSettings } from './ModelPricesSettings.js';
 import { initRemoteAccessSettings, initRemoteSectionVisibility } from './RemoteAccessSettings.js';
+import { initModelNameCombobox } from './ModelNameCombobox.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -223,7 +224,12 @@ export function initSettingsModal(deps) {
   const selectModel = document.getElementById('select-model');
   const inputModel = document.getElementById('input-model');
   const modelOfferHint = document.getElementById('model-offer-hint');
-  const modelNameOptions = document.getElementById('model-name-options');
+  const modelCombobox = document.getElementById('model-combobox');
+  const modelNameCombobox = initModelNameCombobox({
+    input: inputModel,
+    toggle: document.getElementById('btn-model-options'),
+    listbox: document.getElementById('model-name-options'),
+  });
   const btnLoadModels = document.getElementById('btn-load-models');
   const modelLoadProviderLabel = document.getElementById('model-load-provider-label');
   const modelStatus = document.getElementById('model-status');
@@ -834,7 +840,7 @@ export function initSettingsModal(deps) {
   function renderModelSelect(currentValue, options, providerView) {
     const manual = allowsManualModel(providerView);
     selectModel.classList.toggle('hidden', manual);
-    inputModel.classList.toggle('hidden', !manual);
+    modelCombobox.classList.toggle('hidden', !manual);
 
     const seen = new Set();
     const known = [];
@@ -855,13 +861,7 @@ export function initSettingsModal(deps) {
       inputModel.placeholder = known.length
         ? known[0].id
         : t('addModel.model.manualPlaceholder');
-      modelNameOptions.innerHTML = '';
-      for (const m of known) {
-        const opt = document.createElement('option');
-        opt.value = m.id;
-        if (m.label !== m.id) opt.label = m.label;
-        modelNameOptions.appendChild(opt);
-      }
+      modelNameCombobox.setModels(known);
       syncModelOffer();
       return;
     }
@@ -922,7 +922,7 @@ export function initSettingsModal(deps) {
       modelLoadProviderLabel.textContent = draftProviderName(popupProviderId) || pv.name;
     }
     // Without loaded suggestions the name field's placeholder is a sentence.
-    if (allowsManualModel(pv) && modelNameOptions.children.length === 0) {
+    if (allowsManualModel(pv) && !modelNameCombobox.hasModels()) {
       inputModel.placeholder = t('addModel.model.manualPlaceholder');
     }
     renderProviderStatusLine(popupProviderId);
@@ -2074,6 +2074,7 @@ export function initSettingsModal(deps) {
     const wasOpen = !addModelOverlay.classList.contains('hidden');
     const editedPresetId = popupEditPresetId;
     cancelModelListing();
+    modelNameCombobox.close();
     stashPopupCredentialInputs();
     popupEditPresetId = null;
     popupConnectionDraft = null;

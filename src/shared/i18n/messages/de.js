@@ -1436,6 +1436,7 @@ module.exports = {
   'addModel.model.load': 'Modelle laden',
   'addModel.model.empty': '— noch keine Modelle geladen —',
   'addModel.model.manualPlaceholder': 'Modellname, z. B. qwen2.5-coder-7b',
+  'addModel.model.showList': 'Geladene Modelle anzeigen',
   'addModel.catalogHint.prefix': 'Modellliste bezieht sich auf',
   'addModel.catalogHint.suffix': '.',
   'addModel.close.footer': 'Schließen',
