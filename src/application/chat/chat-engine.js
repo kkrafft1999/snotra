@@ -5,6 +5,7 @@ const { extractStringFromPartialJson } = require('../../shared/runtime/partial-j
 const { mergeUsage, normalizeUsage } = require('../../shared/contracts/usage');
 const { mergeSessionCost } = require('../../shared/contracts/cost');
 const { roundCost } = require('../round-cost');
+const { parseTaskKindAnswer, taskKindPromptList } = require('../../shared/contracts/task-kind');
 const { normalizeAttachments, attachmentsCharCost, providerImageMediaTypes, imageFormatNames } = require('../../shared/contracts/attachments');
 const { extractInvokedSkillNames } = require('../../shared/contracts/skill-invocation');
 const { LOAD_SKILL_TOOL, SKILL_SOURCES } = require('../../shared/contracts/skills');
@@ -167,6 +168,26 @@ const TITLE_SYSTEM_PROMPT = [
   'No quotation marks, no trailing punctuation, no preamble.',
   'Reply with the heading and nothing else.',
 ].join(' ');
+
+/*
+ * The kind of task (#1281) is asked for with the title: a second line holding
+ * one id. A chat that already has a title of its own is asked for the kind
+ * alone. Both prompts open with the title prompt's first sentence — the e2e
+ * fake model tells title requests by it (#689).
+ */
+const TASK_KIND_LIST = `The kinds, by id:\n${taskKindPromptList()}`;
+const TITLE_WITH_KIND_SYSTEM_PROMPT = [
+  'You name conversations.',
+  'On the first line, a short heading that captures the topic and intent of the conversation:',
+  'three to six words, the same language as the conversation, no quotation marks, no trailing punctuation, no preamble.',
+  'On the second line, the kind of task the conversation is about: exactly one id from the list below, as written there.',
+  'Reply with these two lines and nothing else.',
+].join(' ') + `\n\n${TASK_KIND_LIST}`;
+const TASK_KIND_SYSTEM_PROMPT = [
+  'You name conversations.',
+  'This time name only the kind of task the conversation is about.',
+  'Reply with exactly one id from the list below, as written there, and nothing else.',
+].join(' ') + `\n\n${TASK_KIND_LIST}`;
 
 /**
  * Die Sprache der Antwort haengt am Nutzer, nicht am Prompt (Issue #276). Seit
@@ -3194,30 +3215,39 @@ function createChatEngine({
   }
 
   /**
-   * Laesst das aktive Modell eine Ueberschrift fuer die Konversation bilden.
-   * Erwartet die ersten Nachrichten des Gespraechs; nutzt daraus die erste
-   * Nutzerfrage und die erste Antwort. Liefert { title } oder { error } —
-   * der Aufrufer faellt bei einem Fehler auf den abgeleiteten Titel zurueck.
-   * A round that cost something (#1266) brings it along as `cost`, errors
-   * included; the caller books it onto the chat.
+   * The question and the answer a title or a kind is made from, as the user
+   * message of that request; null without a question.
    *
-   * @param {{ messages?: Array<{ role: string, content?: unknown, greeting?: boolean }> }} [input]
+   * @param {Array<{ role: string, content?: unknown, greeting?: boolean }>|undefined} messages
    */
-  async function generateTitle({ messages } = {}) {
+  function namingInput(messages) {
     const list = Array.isArray(messages) ? messages : [];
     const firstUser = list.find((m) => m && m.role === 'user' && String(m.content ?? '').trim());
-    if (!firstUser) return { error: 'No user message to title.', code: CHAT_ERROR_CODES.INVALID };
+    if (!firstUser) return null;
     const firstAnswer = list.find(
       (m) => m && m.role === 'assistant' && !m.greeting && String(m.content ?? '').trim()
     );
-
-    const resolved = await resolveTarget(false);
-    if (resolved.error) return resolved.error;
-    const { target } = resolved;
-
     // Model channel, so English (#276, #532); the content stays as written.
     const parts = [`Question:\n${clipForTitle(firstUser.content)}`];
     if (firstAnswer) parts.push(`Answer:\n${clipForTitle(firstAnswer.content)}`);
+    return parts.join('\n\n');
+  }
+
+  /**
+   * One small round with the chat's model about the conversation: no tools,
+   * no history, a hard time limit. Answers with what the model said, or with
+   * an error; a round that cost something (#1266) brings it along as `cost`,
+   * errors included, and the caller books it onto the chat.
+   *
+   * @param {string} systemPrompt
+   * @param {string} input
+   * @param {string} what  the request's name in an error
+   * @returns {Promise<{ text: string, cost?: unknown } | { error: unknown, code: string, cost?: unknown }>}
+   */
+  async function askAboutConversation(systemPrompt, input, what) {
+    const resolved = await resolveTarget(false);
+    if (resolved.error) return resolved.error;
+    const { target } = resolved;
 
     const abortController = new AbortController();
     const timer = setTimeout(() => abortController.abort(createChatAbortError()), TITLE_TIMEOUT_MS);
@@ -3227,31 +3257,76 @@ function createChatEngine({
         target,
         sendBundle,
         messages: [
-          { role: 'system', content: TITLE_SYSTEM_PROMPT },
-          { role: 'user', content: parts.join('\n\n') },
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: input },
         ],
         tools: [],
         callbacks: silentStreamCallbacks(),
         abortSignal: abortController.signal,
       });
-      // The round's cost goes along whatever came of it (#1266): a title the
+      // The round's cost goes along whatever came of it (#1266): an answer the
       // provider billed but could not use still counts, like a failed turn.
       const cost = roundCost(round);
-      const withCost = (/** @type {Record<string, unknown>} */ result) => (cost ? { ...result, cost } : result);
-      if (round?.cancelled) return withCost({ error: 'Title request cancelled.', code: CHAT_ERROR_CODES.INVALID });
+      const withCost = (/** @type {any} */ result) => (cost ? { ...result, cost } : result);
+      if (round?.cancelled) return withCost({ error: `${what} cancelled.`, code: CHAT_ERROR_CODES.INVALID });
       if (round?.error) return withCost({ error: round.error, code: round.code || CHAT_ERROR_CODES.API });
-      const title = sanitizeChatTitle(round?.message?.content);
-      if (!title) return withCost({ error: 'Empty answer to the title request.', code: CHAT_ERROR_CODES.INVALID });
-      return withCost({ title });
+      const text = round?.message?.content;
+      return withCost({ text: typeof text === 'string' ? text : String(text ?? '') });
     } catch (error) {
-      if (isAbortError(error)) return { error: 'Title request cancelled.', code: CHAT_ERROR_CODES.INVALID };
+      if (isAbortError(error)) return { error: `${what} cancelled.`, code: CHAT_ERROR_CODES.INVALID };
       return { error: llm.formatRoundError(error), code: CHAT_ERROR_CODES.API };
     } finally {
       clearTimeout(timer);
     }
   }
 
-  return { send, abort, runningChatIds, generateTitle, sessionGrants };
+  /**
+   * Laesst das aktive Modell eine Ueberschrift fuer die Konversation bilden.
+   * Erwartet die ersten Nachrichten des Gespraechs; nutzt daraus die erste
+   * Nutzerfrage und die erste Antwort. Liefert { title } oder { error } —
+   * der Aufrufer faellt bei einem Fehler auf den abgeleiteten Titel zurueck.
+   * A round that cost something (#1266) brings it along as `cost`, errors
+   * included; the caller books it onto the chat.
+   *
+   * With `withTaskKind` (#1281) the same round asks for the chat's kind of
+   * task on a second line; a valid one comes back as `taskKind`, anything
+   * else is left out.
+   *
+   * @param {{ messages?: Array<{ role: string, content?: unknown, greeting?: boolean }>, withTaskKind?: boolean }} [input]
+   */
+  async function generateTitle({ messages, withTaskKind = false } = {}) {
+    const input = namingInput(messages);
+    if (!input) return { error: 'No user message to title.', code: CHAT_ERROR_CODES.INVALID };
+    const answer = await askAboutConversation(withTaskKind ? TITLE_WITH_KIND_SYSTEM_PROMPT : TITLE_SYSTEM_PROMPT, input, 'Title request');
+    if (!('text' in answer)) return answer;
+    const { text, ...rest } = answer;
+    const lines = text.split('\n').filter((line) => line.trim());
+    const title = sanitizeChatTitle(lines[0]);
+    const taskKind = withTaskKind ? parseTaskKindAnswer(lines.slice(1).join('\n')) : null;
+    const kindPart = taskKind ? { taskKind } : {};
+    if (!title) return { error: 'Empty answer to the title request.', code: CHAT_ERROR_CODES.INVALID, ...kindPart, ...rest };
+    return { title, ...kindPart, ...rest };
+  }
+
+  /**
+   * Asks the chat's model for the kind of task alone (#1281), for a chat that
+   * already has a title of its own. Same input and limits as the title.
+   *
+   * @param {{ messages?: Array<{ role: string, content?: unknown, greeting?: boolean }> }} [input]
+   * @returns {Promise<{ taskKind: import('../../shared/contracts/task-kind').TaskKindId, cost?: unknown } | { error: unknown, code: string, cost?: unknown }>}
+   */
+  async function classifyTaskKind({ messages } = {}) {
+    const input = namingInput(messages);
+    if (!input) return { error: 'No user message to classify.', code: CHAT_ERROR_CODES.INVALID };
+    const answer = await askAboutConversation(TASK_KIND_SYSTEM_PROMPT, input, 'Task kind request');
+    if (!('text' in answer)) return answer;
+    const { text, ...rest } = answer;
+    const taskKind = parseTaskKindAnswer(text);
+    if (!taskKind) return { error: 'No kind of task in the answer.', code: CHAT_ERROR_CODES.INVALID, ...rest };
+    return { taskKind, ...rest };
+  }
+
+  return { send, abort, runningChatIds, generateTitle, classifyTaskKind, sessionGrants };
 }
 
 module.exports = {

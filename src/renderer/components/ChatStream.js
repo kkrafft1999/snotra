@@ -1933,12 +1933,15 @@ export function initChatStream({
    */
   function showChatName(chatId, rawTitle, rawCost) {
     const title = typeof rawTitle === 'string' ? rawTitle.trim() : '';
-    if (!title || typeof chatId !== 'string' || deletedChats.has(chatId)) return;
     // The naming round is paid too (#1266): main sends the chat's new sum along.
+    // A round that only asked for the kind of task (#1281) brings no title.
     const cost = rawCost ? normalizeSessionCost(rawCost) : null;
+    if ((!title && !cost) || typeof chatId !== 'string' || deletedChats.has(chatId)) return;
     if (appStore.currentChatId === chatId && !canAttachChat(chatId)) {
-      appStore.currentChatTitle = title;
-      syncChatTitle?.();
+      if (title) {
+        appStore.currentChatTitle = title;
+        syncChatTitle?.();
+      }
       if (cost) {
         appStore.chatCost = cost;
         costPanel.refresh();
@@ -1946,7 +1949,7 @@ export function initChatStream({
     } else {
       const run = appStore.chatRuns.get(chatId);
       if (run?.chat) {
-        run.chat.title = title;
+        if (title) run.chat.title = title;
         if (cost) run.chat.cost = cost;
       }
     }

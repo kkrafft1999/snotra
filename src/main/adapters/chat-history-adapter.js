@@ -6,7 +6,7 @@
  * on the operations the port names, typed against it.
  *
  * @param {Pick<ReturnType<typeof import('../services/chat-history-service').createChatHistoryService>,
- *   'load' | 'save' | 'addCost' | 'setTitle' | 'readAttachment'>} chatHistory
+ *   'load' | 'save' | 'addCost' | 'setTitle' | 'setTaskKind' | 'readAttachment'>} chatHistory
  * @returns {import('../../application/ports/chat-history-port').ChatHistoryPort}
  */
 function createChatHistoryAdapter(chatHistory) {
@@ -14,6 +14,7 @@ function createChatHistoryAdapter(chatHistory) {
     load: (chatId) => chatHistory.load(chatId),
     addCost: (chatId, cost) => chatHistory.addCost(chatId, cost),
     setTitle: (chatId, title) => chatHistory.setTitle(chatId, title),
+    setTaskKind: (chatId, kind) => chatHistory.setTaskKind(chatId, kind),
     save: (chat, options) => chatHistory.save(chat, options),
     readAttachment: (chatId, file) => chatHistory.readAttachment(chatId, file),
   };

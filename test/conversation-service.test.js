@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createConversationService } = require('../src/application/chat/conversation-service');
 const { mergeSessionCost } = require('../src/shared/contracts/cost');
+const { mayReplaceTaskKind } = require('../src/shared/contracts/task-kind');
 
 // The conversation around a turn (#981), in plain Node: an engine and a
 // history held in memory, no Electron, no DOM.
@@ -34,6 +35,12 @@ function memoryHistory(chats = {}) {
       store.get(id).title = title;
       return true;
     },
+    setTaskKind: async (id, { id: kindId, source }) => {
+      const chat = store.get(id);
+      if (!chat || (source !== 'user' && !mayReplaceTaskKind(chat.taskKind, source))) return null;
+      chat.taskKind = { id: kindId, source, at: '2026-10-30T10:00:00.000Z' };
+      return structuredClone(chat.taskKind);
+    },
     save: async (chat) => {
       store.set(chat.id, { ...(store.get(chat.id) || {}), ...structuredClone(chat) });
       return { ok: true };
@@ -42,7 +49,7 @@ function memoryHistory(chats = {}) {
   };
 }
 
-function fakeEngine({ result = { content: 'ok' }, title = 'A name', titleCost = null } = {}) {
+function fakeEngine({ result = { content: 'ok' }, title = 'A name', titleCost = null, kind = null } = {}) {
   const calls = [];
   return {
     calls,
@@ -51,10 +58,15 @@ function fakeEngine({ result = { content: 'ok' }, title = 'A name', titleCost = 
       return result;
     },
     abort: () => {},
-    generateTitle: async ({ messages }) => {
-      calls.push(['title', messages.map((m) => m.content)]);
-      const named = title ? { title } : { error: 'no title' };
+    generateTitle: async ({ messages, withTaskKind }) => {
+      calls.push([withTaskKind ? 'title+kind' : 'title', messages.map((m) => m.content)]);
+      const named = { ...(title ? { title } : { error: 'no title' }), ...(withTaskKind && kind ? { taskKind: kind } : {}) };
       return titleCost ? { ...named, cost: titleCost } : named;
+    },
+    classifyTaskKind: async ({ messages }) => {
+      calls.push(['kind', messages.map((m) => m.content)]);
+      const classified = kind ? { taskKind: kind } : { error: 'no kind' };
+      return titleCost ? { ...classified, cost: titleCost } : classified;
     },
   };
 }
@@ -95,11 +107,14 @@ test('a sum that cannot be written does not cost the turn its answer', async () 
 
 test('a chat is named from its first question and answer, once', async () => {
   const history = memoryHistory({ c1: { id: 'c1', title: '', messages: [...TURN, { role: 'user', content: 'And 3+3?' }] } });
-  const engine = fakeEngine({ title: 'Simple sums' });
+  const engine = fakeEngine({ title: 'Simple sums', kind: 'data' });
   const conversation = createConversationService({ engine, history });
-  assert.deepEqual(await conversation.nameChat('c1'), { title: 'Simple sums' });
-  assert.deepEqual(engine.calls.at(-1), ['title', ['What is 2+2?', 'Four.']]);
+  const named = await conversation.nameChat('c1');
+  assert.equal(named.title, 'Simple sums');
+  assert.equal(named.taskKind.id, 'data');
+  assert.deepEqual(engine.calls.at(-1), ['title+kind', ['What is 2+2?', 'Four.']]);
   assert.equal(history.store.get('c1').title, 'Simple sums');
+  assert.equal(history.store.get('c1').taskKind.source, 'model');
 
   // Named now: no second request.
   assert.deepEqual(await conversation.nameChat('c1'), { title: null });
@@ -153,6 +168,96 @@ test('no name without an answer, for an unknown chat, or when the model gives no
   assert.deepEqual(await conversation.nameChat('missing'), { title: null });
   assert.deepEqual(await conversation.nameChat('plain'), { title: null });
   assert.equal(history.store.get('plain').title, '');
+});
+
+const CODING_TURN = [
+  { role: 'user', content: 'Fix the failing test' },
+  {
+    role: 'assistant',
+    content: 'Fixed.',
+    toolTrace: [
+      { line: 'Edited src/a.js', tool: 'edit_file', changes: [{ id: 'chg-1', relativePath: 'src/a.js' }] },
+      { line: 'Ran npm test', tool: 'shell_execute' },
+    ],
+  },
+];
+
+test('a chat that has a title but no kind is asked for the kind alone (#1281)', async () => {
+  const history = memoryHistory({ c1: { id: 'c1', title: 'Renamed by me', messages: TURN } });
+  const engine = fakeEngine({ kind: 'research', titleCost: round(1) });
+  const conversation = createConversationService({ engine, history });
+  const named = await conversation.nameChat('c1');
+  assert.equal(named.title, null);
+  assert.equal(named.taskKind.id, 'research');
+  assert.equal(named.chatCost.models[0].rounds, 1, 'the kind-only round is booked like the title');
+  assert.deepEqual(engine.calls, [['kind', ['What is 2+2?', 'Four.']]]);
+  assert.equal(history.store.get('c1').title, 'Renamed by me');
+});
+
+test('without a kind from the model, the estimate from the tools applies, and a later model answer replaces it (#1281)', async () => {
+  const history = memoryHistory({ c1: { id: 'c1', title: '', messages: CODING_TURN } });
+  const conversation = createConversationService({ engine: fakeEngine({ title: 'Fix a test' }), history });
+  const named = await conversation.nameChat('c1');
+  assert.equal(named.title, 'Fix a test');
+  assert.deepEqual([named.taskKind.id, named.taskKind.source], ['coding', 'estimate']);
+
+  // The next turn asks again; the model's answer takes the estimate's place.
+  const later = createConversationService({ engine: fakeEngine({ kind: 'planning' }), history });
+  assert.deepEqual([(await later.nameChat('c1')).taskKind.id, history.store.get('c1').taskKind.source], ['planning', 'model']);
+
+  // Classified by the model now: no further request.
+  const engine = fakeEngine({ kind: 'other' });
+  assert.deepEqual(await createConversationService({ engine, history }).nameChat('c1'), { title: null });
+  assert.equal(engine.calls.length, 0);
+});
+
+test('the model is asked for a kind once per chat in a run of the app; the estimate keeps following (#1281)', async () => {
+  const history = memoryHistory({ c1: { id: 'c1', title: '', messages: structuredClone(TURN) } });
+  const engine = fakeEngine({ title: 'Simple sums', titleCost: round(1) });
+  const conversation = createConversationService({ engine, history });
+  assert.equal((await conversation.nameChat('c1')).title, 'Simple sums');
+  assert.equal(history.store.get('c1').taskKind, undefined);
+
+  // The next turn sends nothing, but the tools it used now point somewhere.
+  history.store.get('c1').messages.push(...CODING_TURN);
+  const later = await conversation.nameChat('c1');
+  assert.deepEqual([later.title, later.taskKind.id, later.taskKind.source], [null, 'coding', 'estimate']);
+  assert.deepEqual(engine.calls.map(([kind]) => kind), ['title+kind']);
+  assert.equal(history.store.get('c1').cost.models[0].rounds, 1, 'no further round is booked');
+});
+
+test('a kind the user chose is never asked for or replaced (#1281)', async () => {
+  const userKind = { id: 'writing', source: 'user', at: '2026-10-29T08:00:00.000Z' };
+  const history = memoryHistory({ c1: { id: 'c1', title: '', messages: CODING_TURN, taskKind: userKind } });
+  const engine = fakeEngine({ title: 'Fix a test', kind: 'coding' });
+  const named = await createConversationService({ engine, history }).nameChat('c1');
+  assert.deepEqual(named, { title: 'Fix a test' });
+  assert.deepEqual(engine.calls.map(([kind]) => kind), ['title'], 'the title request asks for no kind');
+  assert.deepEqual(history.store.get('c1').taskKind, userKind);
+});
+
+test('no kind at all leaves the chat unclassified, and a kind from a newer version stays (#1281)', async () => {
+  const history = memoryHistory({
+    plain: { id: 'plain', title: '', messages: TURN },
+    newer: { id: 'newer', title: 'Kept', messages: TURN, taskKind: { id: 'translation', source: 'model', at: '2026-10-29T08:00:00.000Z' } },
+  });
+  const engine = fakeEngine({ title: 'Sums' });
+  const conversation = createConversationService({ engine, history });
+  assert.deepEqual(await conversation.nameChat('plain'), { title: 'Sums' });
+  assert.equal(history.store.get('plain').taskKind, undefined);
+  assert.deepEqual(await conversation.nameChat('newer'), { title: null });
+  assert.equal(history.store.get('newer').taskKind.id, 'translation');
+});
+
+test('a finished turn tells the screen the kind along with the name (#1281)', async () => {
+  const history = memoryHistory({ c1: { id: 'c1', title: '', messages: TURN } });
+  const conversation = createConversationService({ engine: fakeEngine({ title: 'Simple sums', kind: 'data' }), history });
+  const events = [];
+  await conversation.runTurn({ sessionId: 1, chatId: 'c1', message: { content: 'More?' }, onEvent: (event) => events.push(event) });
+  await conversation.settled();
+  const named = events.find((event) => event.payload?.type === 'chat-named');
+  assert.equal(named.payload.title, 'Simple sums');
+  assert.equal(named.payload.taskKind.id, 'data');
 });
 
 test('a question from the phone is stored with its origin, and the model never sees it (#1197)', async () => {

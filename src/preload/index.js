@@ -185,6 +185,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Bild eines gespeicherten Anhangs nachladen (Issue #94).
   readChatAttachment: (chatId, file) => ipcRenderer.invoke(REQ.CHAT_ATTACHMENT_READ, chatId, file),
   setActiveChatId: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, id),
+  // The user's choice of a chat's kind of task (#1281); answers with the stored kind or null.
+  setChatTaskKind: (chatId, kindId) => ipcRenderer.invoke(REQ.CHAT_HISTORY_SET_TASK_KIND, chatId, kindId),
   // Modell und Freigabemodus des Chats herstellen (Issue #211). `activation`
   // trennt den ausdruecklichen Wechsel im Verlauf vom automatischen
   // Wiederherstellen beim Start oder Ordnerwechsel.

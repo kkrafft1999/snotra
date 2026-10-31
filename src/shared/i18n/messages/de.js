@@ -1923,6 +1923,21 @@ module.exports = {
   'cost.note.estimate': 'Eine Schätzung in US-Dollar: Listenpreise, ohne Batch-, Priority- oder Long-Context-Aufschläge. Maßgeblich ist die Rechnung deines Anbieters.',
   'cost.note.notCounted': 'Nicht enthalten: Bildgenerierung, Spracheingabe und der Chat-Titel.',
 
+  // ── Kinds of task (#1281) ────────────────────────────────────────────────
+  'taskKind.coding': 'Programmieren',
+  'taskKind.coding.definition': 'Code, Skripte und Konfiguration schreiben, ändern, prüfen oder Fehler darin suchen.',
+  'taskKind.writing': 'Schreiben & Überarbeiten',
+  'taskKind.writing.definition': 'Texte entwerfen, überarbeiten, kürzen oder übersetzen: Mails, Dokumente, Beiträge.',
+  'taskKind.research': 'Recherche & Fragen',
+  'taskKind.research.definition': 'Etwas nachschlagen, dir etwas erklären lassen, im Web oder in einem Ordner nach einer Antwort suchen.',
+  'taskKind.data': 'Daten & Analyse',
+  'taskKind.data.definition': 'Daten, Tabellen oder Logs auswerten, rechnen, Diagramme bauen.',
+  'taskKind.planning': 'Planung & Konzepte',
+  'taskKind.planning.definition': 'Ein Konzept, eine Architektur, einen Plan oder eine Entscheidung zwischen Optionen ausarbeiten.',
+  'taskKind.other': 'Sonstiges',
+  'taskKind.other.definition': 'Alles, was zu keiner der anderen Arten passt.',
+  'taskKind.unclassified': 'Nicht eingeordnet',
+
   // ── Usage report (#1258) ─────────────────────────────────────────────────
   'usage.menu': 'Nutzung & Kosten…',
   'usage.open': 'Nutzung & Kosten…',

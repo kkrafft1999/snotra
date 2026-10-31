@@ -755,3 +755,39 @@ test('a chat is named in main, and a deleted one is not brought back (#981)', as
   assert.equal(await chatHistory.setTitle('named', 'Too late'), false);
   assert.equal(await chatHistory.load('named'), null);
 });
+
+test('a chat\'s kind of task is kept in the index, by precedence, and survives saves and a restart (#1281)', async (t) => {
+  const first = await setup(t);
+  const { ipcMain, chatHistory, tmpDir, setActiveRoot } = first;
+  setActiveRoot(tmpDir);
+  await ipcMain.invoke(SAVE_CHAT, sessionRow('kind'));
+  assert.equal((await chatHistory.load('kind')).taskKind, undefined, 'a new chat is unclassified');
+
+  // An estimate, replaced by the model's answer; the model's not by an estimate.
+  assert.equal((await chatHistory.setTaskKind('kind', { id: 'research', source: 'estimate' })).id, 'research');
+  assert.equal((await chatHistory.setTaskKind('kind', { id: 'coding', source: 'model' })).id, 'coding');
+  assert.equal(await chatHistory.setTaskKind('kind', { id: 'data', source: 'estimate' }), null);
+
+  // The user's choice, over IPC: it wins, and neither the model nor a save moves it.
+  const { taskKind } = await ipcMain.invoke(REQ.CHAT_HISTORY_SET_TASK_KIND, 'kind', 'planning');
+  assert.equal(taskKind.id, 'planning');
+  assert.equal(taskKind.source, 'user');
+  assert.ok(!Number.isNaN(Date.parse(taskKind.at)));
+  assert.equal(await chatHistory.setTaskKind('kind', { id: 'coding', source: 'model' }), null);
+  await ipcMain.invoke(SAVE_CHAT, { ...sessionRow('kind'), taskKind: { id: 'other', source: 'user', at: taskKind.at } });
+  assert.deepEqual((await chatHistory.load('kind')).taskKind, taskKind);
+
+  // Unknown ids and chats are refused; nothing is written.
+  assert.deepEqual(await ipcMain.invoke(REQ.CHAT_HISTORY_SET_TASK_KIND, 'kind', 'debugging'), { taskKind: null });
+  assert.equal(await chatHistory.setTaskKind('missing', { id: 'coding', source: 'user' }), null);
+
+  // The index carries it, so the report reads it without opening the chat.
+  const index = JSON.parse(await fs.readFile(path.join(tmpDir, 'chat-history', 'index.json'), 'utf8'));
+  const entries = Array.isArray(index.sessions) ? index.sessions : Object.values(index.sessions || index.metas || {});
+  assert.deepEqual(entries.find((entry) => entry.id === 'kind')?.taskKind, taskKind);
+
+  // After a restart it is still there.
+  const again = await setup(t, { appDir: tmpDir });
+  again.setActiveRoot(tmpDir);
+  assert.deepEqual((await again.chatHistory.load('kind')).taskKind, taskKind);
+});

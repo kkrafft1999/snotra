@@ -1916,6 +1916,21 @@ module.exports = {
   'cost.note.estimate': 'An estimate in US dollars: list prices, without batch, priority or long-context surcharges. Your provider’s bill is what counts.',
   'cost.note.notCounted': 'Not included: image generation, voice input and the chat title.',
 
+  // ── Kinds of task (#1281) ────────────────────────────────────────────────
+  'taskKind.coding': 'Coding',
+  'taskKind.coding.definition': 'Writing, changing, reviewing or debugging code, scripts and configuration.',
+  'taskKind.writing': 'Writing & editing',
+  'taskKind.writing.definition': 'Drafting, revising, shortening or translating prose: mails, documents, posts.',
+  'taskKind.research': 'Research & questions',
+  'taskKind.research.definition': 'Looking something up, having something explained, searching the web or a folder for an answer.',
+  'taskKind.data': 'Data & analysis',
+  'taskKind.data.definition': 'Evaluating data, tables or logs, calculating, building charts.',
+  'taskKind.planning': 'Planning & concepts',
+  'taskKind.planning.definition': 'Working out a concept, an architecture, a plan or a decision between options.',
+  'taskKind.other': 'Other',
+  'taskKind.other.definition': 'Anything that fits none of the above.',
+  'taskKind.unclassified': 'Unclassified',
+
   // ── Usage report (#1258) ─────────────────────────────────────────────────
   'usage.menu': 'Usage & Cost…',
   'usage.open': 'Usage & cost…',

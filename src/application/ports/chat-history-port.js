@@ -29,6 +29,7 @@
  * @property {string} [title]  the chat's own title; empty or derived when it was never named
  * @property {StoredChatMessage[]} messages
  * @property {SessionCost|null} [cost]
+ * @property {import('../../shared/contracts/task-kind').TaskKind} [taskKind]  its kind of task (#1281); none while unclassified
  * @property {string|null} [workspaceRoot]  the folder the chat is kept under; null for none
  * @property {unknown} [tokenUsage]         the usage of its last round
  *
@@ -47,6 +48,9 @@
  *   adds a turn's cost to the chat's sum and answers with the new sum
  * @property {(chatId: string, title: string) => Promise<boolean>} setTitle
  *   names a stored chat; false when there is none to name
+ * @property {(chatId: string, kind: { id: string, source: import('../../shared/contracts/task-kind').TaskKindSource }) => Promise<import('../../shared/contracts/task-kind').TaskKind|null>} setTaskKind
+ *   gives a stored chat its kind of task (#1281), unless the one it has outranks the source;
+ *   the kind written, or null when nothing was
  * @property {(chat: ChatToSave, options?: { markActive?: boolean }) => Promise<{ ok: boolean, unreadable?: boolean }>} save
  *   writes the chat's messages; `markActive` makes it the one its folder opens with. A chat
  *   deleted in this run of the app is not written again
