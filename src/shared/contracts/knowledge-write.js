@@ -30,6 +30,7 @@ const { RULE_LIMITS } = require('./rules');
  * @property {{ path: string, exists: boolean, file: string }|null} target
  * @property {{ description: string, always: boolean }} [ruleFile]  the existing rules file
  * @property {{ text: string, where: string, count: number }} [replaced]
+ * @property {{ description: string, kind: string, text: string, truncated: boolean }} [skill]  a procedure (#1314)
  * @property {Record<string, Record<string, { path: string, exists: boolean, file: string }|null>>} alternatives
  * @property {{ agentsMd: boolean, rulesFiles: number }} folderInstructions
  * @property {boolean} [switchedOff]
@@ -176,6 +177,40 @@ function countEntries(currentText, entry) {
     : 0;
 }
 
+/** Names a procedure may not take: the system skills built into Snotra (#1314). */
+const SYSTEM_SKILL_PREFIX = 'snotra-';
+
+/**
+ * A value in double quotes, as the front-matter reader takes it: it unescapes
+ * nothing, so a double quote inside becomes a single one.
+ *
+ * @param {string} value
+ */
+function yamlString(value) {
+  return `"${value.replace(/"/g, "'").replace(/\s+/g, ' ').trim()}"`;
+}
+
+/**
+ * A skill as a whole version (#1314): front matter with name, description and,
+ * under `metadata`, when and how it was written; then the procedure.
+ *
+ * @param {{ name: string, description: string, date: string, origin: string, body: string }} skill
+ */
+function skillDocumentText({ name, description, date, origin, body }) {
+  return [
+    '---',
+    `name: ${name}`,
+    `description: ${yamlString(description)}`,
+    'metadata:',
+    `  remembered: '${date}'`,
+    `  origin: ${origin}`,
+    '---',
+    '',
+    body.replace(/^\n+/, '').replace(/\s+$/, ''),
+    '',
+  ].join('\n');
+}
+
 /** The line an entry is written as — the memory format, shared by rules and `AGENTS.md`. */
 const formatKnowledgeLine = formatMemoryEntryLine;
 
@@ -194,4 +229,6 @@ module.exports = {
   removeEntriesByText,
   countEntries,
   formatKnowledgeLine,
+  SYSTEM_SKILL_PREFIX,
+  skillDocumentText,
 };

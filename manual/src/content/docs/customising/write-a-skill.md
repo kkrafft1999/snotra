@@ -26,9 +26,9 @@ When you have explained a way of working once — how you want protocols written
 
 ## Use it in every folder
 
-Snotra writes skills **only into the open folder**. Your own skills in `~/.snotra/skills/` and the system skills are read-only for every tool — so no instruction hidden in some project can plant a skill that then turns up everywhere.
+[since 1.30] Ask Snotra to remember the procedure *for you, in every folder*. It writes a skill of one `SKILL.md` to `~/.snotra/skills/` — on a card that shows the whole skill, or for a skill that already exists, the changes against the version it replaces. Nothing else writes there: the file tools and commands cannot reach your own skills or the system skills, so no instruction hidden in some project can plant a skill that turns up everywhere.
 
-To use a skill in every folder, move its folder from `.agents/skills/` to `~/.snotra/skills/` yourself, in your file manager. Then tick it once more under *Settings › Skills*.
+A skill of several files — with `references/` or `scripts/` — stays in the open folder. To use one in every folder, move its folder from `.agents/skills/` to `~/.snotra/skills/` yourself, in your file manager. Either way, tick the skill under *Settings › Skills* before it applies.
 
 ## If it doesn't work
 

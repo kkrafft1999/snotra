@@ -3044,6 +3044,7 @@ function createChatEngine({
                 delete args.topic;
                 delete args.description;
                 delete args.always;
+                delete args.body;
                 args.kind = choice.kind;
               }
               args.scope = choice.scope;

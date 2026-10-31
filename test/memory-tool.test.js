@@ -59,8 +59,8 @@ test('das Tool nimmt keinen Pfad entgegen — nur Art, Leser, Text und Herkunft 
   const registry = registryWith(makeMemoryStub());
   const def = registry.getDefinition('remember');
   assert.deepEqual(Object.keys(def.parameters.properties).sort(),
-    ['always', 'description', 'kind', 'origin', 'replaces', 'replaces_in', 'scope', 'text', 'topic']);
-  assert.deepEqual(def.parameters.required.sort(), ['kind', 'origin', 'scope', 'text']);
+    ['always', 'body', 'description', 'kind', 'origin', 'replaces', 'replaces_in', 'scope', 'text', 'topic']);
+  assert.deepEqual(def.parameters.required.sort(), ['kind', 'origin', 'scope']);
   // Kein Pfad heisst auch: nichts, was der Pfad-Freigabe vorzulegen waere.
   assert.deepEqual(def.targets({ scope: 'workspace', text: 'x' }), []);
   // Ohne geoeffneten Ordner bleibt die globale Ebene nutzbar.

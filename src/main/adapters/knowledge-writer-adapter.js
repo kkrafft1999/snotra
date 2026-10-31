@@ -10,6 +10,10 @@
  *   `~/.snotra/rules/<topic>.md`, created with its front matter when new — or,
  *   for `team`, into the same section of `AGENTS.md`. Never `~/.agents/`, and
  *   never the global `AGENTS.md`.
+ * - A **procedure** is a skill, written as a whole version (#1314):
+ *   `<folder>/.agents/skills/<topic>/SKILL.md` or `~/.snotra/skills/<topic>/SKILL.md`,
+ *   text only, replacing the version before it — never appended to, never a
+ *   system skill, never `~/.agents/skills`, and never for `team`.
  * - `replaces` writes first and removes second: when the removal fails, both
  *   entries remain and the result says so — a duplicate, never a loss.
  *
@@ -27,7 +31,12 @@ const {
   removeEntriesByText,
   countEntries,
   formatKnowledgeLine,
+  SYSTEM_SKILL_PREFIX,
+  skillDocumentText,
 } = require('../../shared/contracts/knowledge-write');
+const { MAX_SKILL_BODY_CHARS, isValidSkillName } = require('../../shared/contracts/skills');
+const { parseSkillDocument } = require('../../shared/runtime/skill-frontmatter');
+const { splitLines, diffLines } = require('../services/line-diff');
 const { RULES_DIR, RULE_LIMITS, isValidRuleName, parseRuleFile, ruleNameOfFile } = require('../../shared/contracts/rules');
 const { MEMORY_FILE, MEMORY_ORIGINS, MAX_MEMORY_ENTRY_CHARS, formatMemoryDate } = require('../../shared/contracts/memory');
 const { PROJECT_INSTRUCTIONS_FILE } = require('../../shared/contracts/project-instructions');
@@ -69,11 +78,22 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
    * @param {string} scope
    * @param {unknown} workspaceRoot
    * @param {string} [topic]
-   * @returns {{ file: string, root: string|null, path: string, kind: 'memory'|'rules'|'agents' }|null}
+   * @returns {{ file: string, root: string|null, path: string, kind: 'memory'|'rules'|'agents'|'skills' }|null}
    */
   function targetOf(kind, scope, workspaceRoot, topic) {
     const folder = folderOf(workspaceRoot);
     const userHome = home();
+    if (kind === KNOWLEDGE_KINDS.INSTRUCTION) {
+      if (scope === KNOWLEDGE_READERS.TEAM || !isValidSkillName(topic) || String(topic).startsWith(SYSTEM_SKILL_PREFIX)) return null;
+      if (scope === KNOWLEDGE_READERS.WORKSPACE) {
+        return folder
+          ? { file: path.join(folder, '.agents', 'skills', /** @type {string} */ (topic), 'SKILL.md'), root: folder, path: `.agents/skills/${topic}/SKILL.md`, kind: 'skills' }
+          : null;
+      }
+      return userHome
+        ? { file: path.join(userHome, '.snotra', 'skills', /** @type {string} */ (topic), 'SKILL.md'), root: null, path: `~/.snotra/skills/${topic}/SKILL.md`, kind: 'skills' }
+        : null;
+    }
     if (scope === KNOWLEDGE_READERS.TEAM) {
       if (!folder || kind === KNOWLEDGE_KINDS.INSTRUCTION) return null;
       return { file: path.join(folder, PROJECT_INSTRUCTIONS_FILE), root: folder, path: PROJECT_INSTRUCTIONS_FILE, kind: 'agents' };
@@ -175,9 +195,16 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
     if (!isKnowledgeKind(request.kind)) return `Unknown kind: ${request.kind}.`;
     if (!isKnowledgeReader(request.scope)) return `Unknown scope: ${request.scope}.`;
     if (request.kind === KNOWLEDGE_KINDS.INSTRUCTION) {
-      return request.scope === KNOWLEDGE_READERS.TEAM
-        ? 'A procedure has no "team" reader: AGENTS.md takes facts and rules only.'
-        : 'Procedures are written as skills, which remember cannot do yet. Store the steps as a fact or a rule, or write a skill.';
+      if (request.scope === KNOWLEDGE_READERS.TEAM) return 'A procedure has no "team" reader: AGENTS.md takes facts and rules only.';
+      if (request.scope === KNOWLEDGE_READERS.WORKSPACE && !folderOf(request.workspaceRoot)) {
+        return 'Without an open folder there is no "workspace" reader; only "user" is possible.';
+      }
+      if (!isValidSkillName(request.topic)) return 'A procedure needs a topic: the skill\'s name, letters, digits, dots, dashes and underscores, at most 64 characters.';
+      if (String(request.topic).startsWith(SYSTEM_SKILL_PREFIX)) return `Names beginning with "${SYSTEM_SKILL_PREFIX}" belong to the skills built into Snotra.`;
+      const steps = typeof request.body === 'string' ? request.body.trim() : '';
+      if (!steps) return 'A procedure needs its steps in "body": the whole skill, as it should read.';
+      if (steps.length > MAX_SKILL_BODY_CHARS) return `A skill may be at most ${MAX_SKILL_BODY_CHARS} characters (here: ${steps.length}). Nothing was written.`;
+      return '';
     }
     const body = typeof request.text === 'string' ? request.text.replace(/\s+/g, ' ').trim() : '';
     if (!body) return 'An empty entry cannot be remembered.';
@@ -225,6 +252,41 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
     return { path: target.path, exists, file: /** @type {'memory'|'rules'|'agents'} */ (target.kind) };
   }
 
+  /**
+   * What the card shows of a changed skill: the diff against the current
+   * version, with a little context (#1314).
+   *
+   * @param {string} before
+   * @param {string} after
+   */
+  function previewOf(before, after) {
+    const a = splitLines(before).lines;
+    const b = splitLines(after).lines;
+    const out = [];
+    let i = 0;
+    let j = 0;
+    for (const { op, count } of diffLines(a, b).segments) {
+      if (op === 'equal') {
+        if (count <= 4) for (let k = 0; k < count; k += 1) out.push(` ${a[i + k]}`);
+        else {
+          for (let k = 0; k < 2; k += 1) out.push(` ${a[i + k]}`);
+          out.push('@@');
+          for (let k = count - 2; k < count; k += 1) out.push(` ${a[i + k]}`);
+        }
+        i += count;
+        j += count;
+      } else if (op === 'delete') {
+        for (let k = 0; k < count; k += 1) out.push(`-${a[i + k]}`);
+        i += count;
+      } else {
+        for (let k = 0; k < count; k += 1) out.push(`+${b[j + k]}`);
+        j += count;
+      }
+    }
+    const text = out.join('\n');
+    return { kind: 'diff', text: text.slice(0, 40_000), truncated: text.length > 40_000 };
+  }
+
   return {
     async describe(request) {
       /** @type {Record<string, Record<string, any>>} */
@@ -241,6 +303,19 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
       if (refusal || !target) return { ...base, target: null, refusal: refusal || 'There is no place for this entry.' };
       /** @type {import('../../application/ports/knowledge-writer-port').KnowledgeDescription} */
       const out = { ...base, target: await shown(target) };
+      if (target.kind === 'skills') {
+        const current = await read(target);
+        const parsed = current === null ? null : parseSkillDocument(current);
+        const description = typeof request.description === 'string' ? request.description.trim() : '';
+        if (!parsed && !description) {
+          return { ...base, target: null, refusal: 'A new skill needs a description: what it is for, and when to use it.' };
+        }
+        const next = (request.body || "").trim();
+        out.skill = parsed
+          ? { description: parsed.frontmatter.description ? String(parsed.frontmatter.description) : '', ...previewOf(parsed.body, next) }
+          : { description: '', kind: 'text', text: next, truncated: false };
+        return out;
+      }
       if (target.kind === 'rules') {
         const current = await read(target);
         if (current !== null) {
@@ -261,7 +336,7 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
       if (refusal) throw new Error(refusal);
       const replaced = await findReplaced(request);
       if (replaced && 'error' in replaced) throw new Error(replaced.error);
-      const body = request.text.replace(/\s+/g, ' ').trim();
+      const body = typeof request.text === 'string' ? request.text.replace(/\s+/g, ' ').trim() : '';
       const locale = getLocale();
       const origin = request.origin === MEMORY_ORIGINS.REQUESTED ? MEMORY_ORIGINS.REQUESTED : MEMORY_ORIGINS.SELF;
       if (origin === MEMORY_ORIGINS.SELF && typeof isSelfMemoryAllowed === 'function' && (await isSelfMemoryAllowed()) === false) {
@@ -269,6 +344,27 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
       }
       /** @type {string} */
       let file;
+      if (request.kind === KNOWLEDGE_KINDS.INSTRUCTION) {
+        const target = targetOf(request.kind, request.scope, request.workspaceRoot, request.topic);
+        if (!target) throw new Error('There is no place for this procedure.');
+        await serialize(target.file, async () => {
+          const current = await read(target);
+          const parsed = current === null ? null : parseSkillDocument(current);
+          const description = (typeof request.description === 'string' && request.description.trim())
+            || (parsed?.frontmatter.description ? String(parsed.frontmatter.description) : '');
+          if (!description) throw new Error('A new skill needs a description: what it is for, and when to use it.');
+          // A whole version, never an appendix: the steps stand where the procedure needs them.
+          const next = skillDocumentText({
+            name: /** @type {string} */ (request.topic),
+            description,
+            date: formatMemoryDate(new Date()),
+            origin,
+            body: /** @type {string} */ (request.body),
+          });
+          await textFiles.write({ file: target.file, root: target.root, text: next });
+        });
+        return { kind: request.kind, scope: request.scope, file: target.file, text: request.topic || '' };
+      }
       if (request.kind === KNOWLEDGE_KINDS.FACT && request.scope !== KNOWLEDGE_READERS.TEAM) {
         const saved = await memory.remember({ scope: request.scope, workspaceRoot: request.workspaceRoot ?? null, text: body, origin });
         file = saved.file;
