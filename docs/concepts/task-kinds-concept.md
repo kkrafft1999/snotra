@@ -31,7 +31,7 @@ by it.
 
 | # | Question | Decision |
 | - | -------- | -------- |
-| 1 | The set of kinds | Six kinds; *Coding* includes debugging |
+| 1 | The set of kinds | Six kinds; *Coding* includes debugging. A seventh, *Organisation*, added 2026-10-31 (#1312) |
 | 2 | Fixed or user-defined | Fixed list only, stored as a stable id |
 | 3 | Granularity | One kind per chat |
 | 4 | How a chat gets its kind | Asked for together with the title; a local estimate when that fails; the user's choice always wins |
@@ -49,7 +49,8 @@ down.
 | `writing` | Writing & editing | Schreiben & Überarbeiten | Drafting, revising, shortening or translating prose: mails, documents, posts. |
 | `research` | Research & questions | Recherche & Fragen | Looking something up, having something explained, searching the web or a folder for an answer. |
 | `data` | Data & analysis | Daten & Analyse | Evaluating data, tables or logs, calculating, building charts. |
-| `planning` | Planning & concepts | Planung & Konzepte | Working out a concept, an architecture, a plan or a decision between options. |
+| `planning` | Planning & concepts | Planung & Konzepte | Working out a concept, an architecture, a plan or a decision between options — what to build and how, not managing tasks or time. |
+| `organisation` | Organisation & admin | Organisation & Verwaltung | Managing tasks, time and files: booking hours, keeping to-dos, tickets and calendars up to date, sorting mail, restructuring folders or a workspace. |
 | `other` | Other | Sonstiges | Anything that fits none of the above. |
 
 *Unclassified* (German *Nicht eingeordnet*) is **not** a kind. It is the
@@ -66,7 +67,7 @@ choice.
 
 ## 2. A fixed list
 
-The six kinds are built in, with both names and definitions in the i18n
+The seven kinds are built in, with both names and definitions in the i18n
 catalogues and the definitions in English on the model channel. A report stays
 comparable over months, the classifier works from one fixed prompt, and no
 settings page is needed.
@@ -97,7 +98,7 @@ index entry so the report reads it without opening a chat file:
 
 ```js
 taskKind: {
-  id: 'coding',          // one of the six ids
+  id: 'coding',          // one of the seven ids
   source: 'model',       // 'model' | 'estimate' | 'user'
   at: '2026-10-25T14:20:10.000Z',
 }
@@ -109,9 +110,9 @@ a newer version, say — counts as unclassified too and is kept as it is.
 ### The three sources
 
 1. **Model** — the request that names the chat asks for the kind as well. Its
-   system prompt gains the six ids with their definitions and asks for a
+   system prompt gains the seven ids with their definitions and asks for a
    second line holding one id. The title is taken from the first line as
-   today; a second line that is not one of the six ids is ignored and the
+   today; a second line that is not one of the seven ids is ignored and the
    estimate below applies instead. When the chat already has a real title (the
    user renamed it before it was named, or an older chat is continued) but no
    kind, the same request is sent asking for the kind only.
@@ -128,7 +129,7 @@ a newer version, say — counts as unclassified too and is kept as it is.
    - only `web_search`, `fetch_url` or the reading tools, nothing written →
      `research`
 
-   *Planning* and *Other* are never estimated: no tool tells them apart.
+   *Planning*, *Organisation* and *Other* are never estimated: no tool tells them apart.
 3. **User** — the user picks a kind. That choice is **never overwritten**, not
    by a later request and not by an estimate.
 
@@ -173,7 +174,7 @@ estimate never replaces a model answer. In short: `user` > `model` >
 ## 6. Where it shows
 
 - **Chat header.** A small element next to the title shows the kind. Clicking
-  it opens a choice of the six kinds that also says where the current one
+  it opens a choice of the seven kinds that also says where the current one
   came from: *Suggested by the model* / *Vom Modell vorgeschlagen*,
   *Estimated by Snotra* / *Von Snotra geschätzt*, *Set by you* / *Von dir
   gesetzt*. An unclassified chat shows the element in a muted state that

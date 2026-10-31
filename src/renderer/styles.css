@@ -13888,7 +13888,7 @@ select.modal-input {
 }
 
 /* A chat's kind of task (#1283): a chip that invites a choice and opens the
- * six kinds with what each one means. Decided 2026-10-30 from a mockup of
+ * seven kinds with what each one means. Decided 2026-10-30 from a mockup of
  * three variants (a select, this chip, an inline row of pills). */
 .usage-kind {
   position: relative;
