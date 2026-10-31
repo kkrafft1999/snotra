@@ -14,6 +14,7 @@ import contracts from '../generated/contracts.js';
 import { dismissOnFocusLeave, dismissOnOutsideClick } from '../utils/helpers.js';
 import { getLocale, onLocaleChange, t } from '../i18n.js';
 import { formatTokensShort } from '../utils/token-format.js';
+import { INJECTION_ICON_HTML } from '../chat/injectionFlags.js';
 
 const { normalizeContextBreakdown, groupContextParts } = contracts;
 
@@ -112,7 +113,11 @@ function buildRowBody(part) {
  */
 function buildCovertWarning(signals) {
   const box = el('span', 'token-breakdown__row-signal');
-  box.appendChild(el('span', 'token-breakdown__row-signal-title', t('context.covert.title')));
+  const title = el('span', 'token-breakdown__row-signal-title');
+  // The tool log's speech bubble with an exclamation mark: text that speaks to the agent.
+  title.insertAdjacentHTML('afterbegin', INJECTION_ICON_HTML);
+  title.appendChild(el('span', '', t('context.covert.title')));
+  box.appendChild(title);
   const kinds = [...new Set(signals.map((signal) => signal.kind))].map((kind) => t(`context.covert.kind.${kind}`));
   box.appendChild(el('span', 'token-breakdown__row-signal-kinds', kinds.join(' · ')));
   return box;
