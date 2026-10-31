@@ -29,7 +29,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest, ubuntu-latest]
+        os: [macos-15, windows-latest, ubuntu-latest]
         # `ubuntu-latest` became Ubuntu 26.04 on 2026-10-20, where the Linux
         # sandbox cannot start (#1204). The runner stays on 24.04 until that is
         # fixed; the matrix value keeps its name, and with it the check name
