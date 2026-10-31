@@ -5114,6 +5114,41 @@ button.chat-msg-attachment:hover {
   color: var(--text-muted-strong);
 }
 
+.token-breakdown__row-signal {
+  display: block;
+  margin-top: 6px;
+  padding: 6px 8px;
+  /* Neutral like the injection box of the tool log (#1011): amber means
+   * "runs without isolation", red a real error, and a hint is neither. The
+   * icon and the words carry it (#1280). */
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-primary);
+  white-space: normal;
+}
+
+.token-breakdown__row-signal-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.token-breakdown__row-signal-title .chat-injection-flag-icon {
+  width: 12px;
+  height: 12px;
+  /* On the first line when the title wraps, as in German. */
+  margin-top: 2px;
+}
+
+.token-breakdown__row-signal-kinds {
+  display: block;
+  color: var(--text-muted-strong);
+}
+
 .token-breakdown__row-action {
   flex: 0 0 auto;
   font-size: 11px;
