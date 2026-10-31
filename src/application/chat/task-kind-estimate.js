@@ -4,8 +4,8 @@
  * Snotra's own guess at a chat's kind of task (#1281, concept §4), for when
  * the model gave none: from the tools the chat used and the files they wrote.
  * It answers only when one signal clearly dominates and otherwise leaves the
- * chat unclassified rather than guess. *Planning* and *Other* are never
- * estimated: no tool tells them apart.
+ * chat unclassified rather than guess. *Planning*, *Organisation* and *Other*
+ * are never estimated: no tool tells them apart.
  *
  * @typedef {import('../../shared/contracts/task-kind').TaskKindId} TaskKindId
  */

@@ -24,18 +24,18 @@ Chats that used a model. Nothing has to be set up: the report reads the same est
 4. Choose how to group the table: by *Model*, by *Workspace* or [since 1.29] by *Task kind*. Click a column heading to sort by it; click it again to reverse the order.
 5. Click the arrow in front of a row to unfold it. A workspace or a kind of task shows the models it used, a model the workspaces it was used in, and each row shows its tokens by kind.
 6. Click *n chats* in a row to list the chats behind it, with their kind of task, what each spent and when it was last used. *Open* takes you to the chat — in its own folder: when another folder is open, Snotra switches to it first.
-7. [since 1.29] To change a chat's kind of task, click the kind next to its cost — *Choose a kind* when it has none yet — and pick one of the six. Each comes with a line on what it covers. The figures follow at once: grouped by kind, the chat moves to its new row.
+7. [since 1.29] To change a chat's kind of task, click the kind next to its cost — *Choose a kind* when it has none yet — and pick one of the seven. Each comes with a line on what it covers. The figures follow at once: grouped by kind, the chat moves to its new row.
 8. Close the report with *Close*, the cross or `Esc`. The focus returns to where it was.
 
 ![The report grouped by workspace: the first folder unfolded into its models and its token breakdown, and its chats listed below, each with its kind of task, its cost and an Open button.](screenshots/usage-report-chats.webp)
 
-![The report grouped by task kind: Coding unfolded into the models used for it, its chats listed with their kind, and the choice of the six kinds open on the first chat.](screenshots/usage-report-kinds.webp)
+![The report grouped by task kind: Coding unfolded into the models used for it, its chats listed with their kind, and the choice of the seven kinds open on the first chat.](screenshots/usage-report-kinds.webp)
 
 ## What happens
 
 - **The period counts what was spent inside it.** A chat that ran over three weeks contributes to each week only what it spent in that week — not its whole cost on the day it started or was last opened. Days are your local calendar days.
 - **Every view adds up to the same total.** Each request counts once by model, once by workspace and once by kind of task, so the three tables, the chart and the totals agree.
-- **The six kinds of task** are *Coding*, *Writing & editing*, *Research & questions*, *Data & analysis*, *Planning & concepts* and *Other*. A chat gets its kind when it is named: the model suggests one together with the title, and when that fails Snotra estimates one from what the chat did. Your own choice always wins and is never replaced.
+- **The seven kinds of task** are *Coding*, *Writing & editing*, *Research & questions*, *Data & analysis*, *Planning & concepts*, *Organisation & admin* [since 1.30] and *Other*. A chat gets its kind when it is named: the model suggests one together with the title, and when that fails Snotra estimates one from what the chat did. Your own choice always wins and is never replaced.
 - **Chats without a kind are a row of their own,** *Unclassified*, always at the bottom of the table by kind, so nothing drops out of the total. Chats from before 1.29 stay there until you continue them or choose a kind for them.
 - **An unknown price shows a dash.** A model the price table does not know shows *–* and *no price*, never *$0.00*, and a total that leaves such requests out ends in *+*, for example *~$3.62+*. Set a price for it under *Settings › Models*, as described in [See what a chat costs](../chat-cost/).
 - **A model on your computer costs nothing.** Ollama, LM Studio and other servers at a local address show their tokens and *$0.00 local*.

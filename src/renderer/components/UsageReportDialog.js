@@ -779,7 +779,7 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
     return taskKind ? t(`taskKind.${taskKind}`) : t('usage.taskKind.choose');
   }
 
-  /** The chip that shows a chat's kind and opens the choice of the six. */
+  /** The chip that shows a chat's kind and opens the choice of the seven. */
   function kindControl(chat, focusKey) {
     const wrap = el('span', 'usage-kind');
     const chip = el('button', `usage-kind__chip${chat.taskKind ? '' : ' usage-kind__chip--none'}`);

@@ -290,14 +290,14 @@ test('by kind of task: rows with what each kind means, unclassified last, a chip
   assert.equal(chip().getAttribute('aria-expanded'), 'true');
   const options = [...menu.querySelectorAll('[role="option"]')];
   assert.deepEqual(options.map((o) => o.querySelector('.usage-kind__option-name').textContent),
-    ['Coding', 'Writing & editing', 'Research & questions', 'Data & analysis', 'Planning & concepts', 'Other']);
+    ['Coding', 'Writing & editing', 'Research & questions', 'Data & analysis', 'Planning & concepts', 'Organisation & admin', 'Other']);
   assert.equal(ui.document.activeElement, options[0]);
   assert.equal(options[0].getAttribute('aria-selected'), 'true');
   const key = (name) => ui.document.activeElement.dispatchEvent(new ui.dom.window.KeyboardEvent('keydown', { key: name, bubbles: true }));
   key('ArrowDown');
   assert.equal(ui.document.activeElement, options[1]);
   key('End');
-  assert.equal(ui.document.activeElement, options[5]);
+  assert.equal(ui.document.activeElement, options.at(-1));
   // Escape closes the menu, not the dialog, and gives the focus back to the chip.
   key('Escape');
   assert.equal(ui.$('.usage-kind__menu'), null);

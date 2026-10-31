@@ -1,7 +1,7 @@
 /**
  * The kind of task a chat is about (#1281, concept `docs/concepts/task-kinds-concept.md`).
  *
- * Every chat gets one of six fixed kinds, so that the usage report can say
+ * Every chat gets one of seven fixed kinds, so that the usage report can say
  * what the money was spent on. What is stored is the id, never a label:
  *
  *   taskKind: { id: 'coding', source: 'model', at: '2026-10-25T14:20:10.000Z' }
@@ -14,7 +14,7 @@
  */
 'use strict';
 
-/** @typedef {'coding' | 'writing' | 'research' | 'data' | 'planning' | 'other'} TaskKindId */
+/** @typedef {'coding' | 'writing' | 'research' | 'data' | 'planning' | 'organisation' | 'other'} TaskKindId */
 /** @typedef {'model' | 'estimate' | 'user'} TaskKindSource */
 
 /**
@@ -29,7 +29,7 @@
  */
 
 /** @type {readonly TaskKindId[]} */
-const TASK_KIND_IDS = Object.freeze(['coding', 'writing', 'research', 'data', 'planning', 'other']);
+const TASK_KIND_IDS = Object.freeze(['coding', 'writing', 'research', 'data', 'planning', 'organisation', 'other']);
 
 /** @type {readonly TaskKindSource[]} */
 const TASK_KIND_SOURCES = Object.freeze(['model', 'estimate', 'user']);
@@ -46,7 +46,9 @@ const TASK_KIND_DEFINITIONS = Object.freeze({
   writing: 'Drafting, revising, shortening or translating prose: mails, documents, posts.',
   research: 'Looking something up, having something explained, searching the web or a folder for an answer.',
   data: 'Evaluating data, tables or logs, calculating, building charts.',
-  planning: 'Working out a concept, an architecture, a plan or a decision between options.',
+  planning: 'Working out a concept, an architecture, a plan or a decision between options — what to build and how, not managing tasks or time.',
+  organisation:
+    'Managing tasks, time and files: booking hours, keeping to-dos, tickets and calendars up to date, sorting mail, restructuring folders or a workspace.',
   other: 'Anything that fits none of the above.',
 });
 

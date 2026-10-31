@@ -24,18 +24,18 @@ Chats, die ein Modell genutzt haben. Einrichten musst du nichts: Der Bericht lie
 4. Wähle, wonach die Tabelle gruppiert: nach *Modell*, nach *Workspace* oder [seit 1.29] nach *Aufgabenart*. Klick auf eine Spaltenüberschrift, um danach zu sortieren; ein zweiter Klick kehrt die Reihenfolge um.
 5. Klick auf den Pfeil vor einer Zeile, um sie aufzuklappen. Ein Workspace oder eine Aufgabenart zeigt die Modelle, die dafür genutzt wurden, ein Modell die Workspaces, in denen es lief, und jede Zeile ihre Tokens nach Art.
 6. Klick in einer Zeile auf *n Chats*, um die Chats dahinter aufzulisten, mit ihrer Aufgabenart, dem, was jeder verbraucht hat, und wann er zuletzt genutzt wurde. *Öffnen* bringt dich zum Chat – in seinem eigenen Ordner: Ist ein anderer Ordner offen, wechselt Snotra zuerst dorthin.
-7. [seit 1.29] Um die Aufgabenart eines Chats zu ändern, klick auf die Art neben seinen Kosten – *Art wählen*, wenn er noch keine hat – und wähl eine der sechs. Zu jeder steht eine Zeile, was sie umfasst. Die Zahlen ziehen sofort nach: Nach Aufgabenart gruppiert, wandert der Chat in seine neue Zeile.
+7. [seit 1.29] Um die Aufgabenart eines Chats zu ändern, klick auf die Art neben seinen Kosten – *Art wählen*, wenn er noch keine hat – und wähl eine der sieben. Zu jeder steht eine Zeile, was sie umfasst. Die Zahlen ziehen sofort nach: Nach Aufgabenart gruppiert, wandert der Chat in seine neue Zeile.
 8. Schließ den Bericht mit *Schließen*, dem Kreuz oder `Esc`. Der Fokus kehrt dorthin zurück, wo er war.
 
 ![Der Bericht nach Workspace gruppiert: der erste Ordner aufgeklappt in seine Modelle und seine Token-Aufschlüsselung, darunter seine Chats, jeder mit seiner Aufgabenart, seinen Kosten und einem Knopf Öffnen.](screenshots/usage-report-chats.webp)
 
-![Der Bericht nach Aufgabenart gruppiert: Programmieren aufgeklappt in die Modelle, die dafür liefen, darunter seine Chats mit ihrer Art, und beim ersten Chat die Auswahl der sechs Arten geöffnet.](screenshots/usage-report-kinds.webp)
+![Der Bericht nach Aufgabenart gruppiert: Programmieren aufgeklappt in die Modelle, die dafür liefen, darunter seine Chats mit ihrer Art, und beim ersten Chat die Auswahl der sieben Arten geöffnet.](screenshots/usage-report-kinds.webp)
 
 ## Was passiert
 
 - **Der Zeitraum zählt, was in ihm verbraucht wurde.** Ein Chat, der über drei Wochen lief, trägt zu jeder Woche nur bei, was er in dieser Woche verbraucht hat – nicht seine ganzen Kosten an dem Tag, an dem er begann oder zuletzt geöffnet wurde. Tage sind deine lokalen Kalendertage.
 - **Jede Ansicht ergibt dieselbe Summe.** Jede Anfrage zählt einmal beim Modell, einmal beim Workspace und einmal bei der Aufgabenart, daher stimmen die drei Tabellen, das Diagramm und die Summen überein.
-- **Die sechs Aufgabenarten** sind *Programmieren*, *Schreiben & Überarbeiten*, *Recherche & Fragen*, *Daten & Analyse*, *Planung & Konzepte* und *Sonstiges*. Ein Chat bekommt seine Art, wenn er seinen Namen bekommt: Das Modell schlägt sie zusammen mit dem Titel vor, und klappt das nicht, schätzt Snotra sie aus dem, was im Chat passiert ist. Deine eigene Wahl gilt immer und wird nie ersetzt.
+- **Die sieben Aufgabenarten** sind *Programmieren*, *Schreiben & Überarbeiten*, *Recherche & Fragen*, *Daten & Analyse*, *Planung & Konzepte*, *Organisation & Verwaltung* [seit 1.30] und *Sonstiges*. Ein Chat bekommt seine Art, wenn er seinen Namen bekommt: Das Modell schlägt sie zusammen mit dem Titel vor, und klappt das nicht, schätzt Snotra sie aus dem, was im Chat passiert ist. Deine eigene Wahl gilt immer und wird nie ersetzt.
 - **Chats ohne Art bilden eine eigene Zeile,** *Nicht eingeordnet*, in der Tabelle nach Aufgabenart immer ganz unten, damit nichts aus der Summe fällt. Chats von vor 1.29 bleiben dort, bis du sie fortsetzt oder ihnen eine Art gibst.
 - **Ein unbekannter Preis zeigt einen Strich.** Ein Modell, das die Preistabelle nicht kennt, zeigt *–* und *kein Preis*, nie *0,00 $*, und eine Summe, die solche Anfragen auslässt, endet auf *+*, zum Beispiel *~3,62 $+*. Lege unter *Einstellungen › Modelle* einen Preis dafür fest, wie in [Sehen, was ein Chat kostet](../chat-cost/) beschrieben.
 - **Ein Modell auf deinem Rechner kostet nichts.** Ollama, LM Studio und andere Server unter einer lokalen Adresse zeigen ihre Tokens und *0,00 $ lokal*.

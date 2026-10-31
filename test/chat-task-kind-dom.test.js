@@ -93,7 +93,7 @@ test('opening lists the six kinds with their definitions, the current one select
   pill.click();
   assert.equal(menu.classList.contains('hidden'), false);
   assert.equal(pill.getAttribute('aria-expanded'), 'true');
-  assert.deepEqual(options().map((o) => o.dataset.kind), ['coding', 'writing', 'research', 'data', 'planning', 'other']);
+  assert.deepEqual(options().map((o) => o.dataset.kind), ['coding', 'writing', 'research', 'data', 'planning', 'organisation', 'other']);
   assert.ok(options()[3].textContent.includes('Evaluating data, tables or logs'));
   assert.equal(document.activeElement, options()[3]);
   assert.equal(options()[3].getAttribute('aria-selected'), 'true');
@@ -112,11 +112,11 @@ test('the arrow keys move and wrap, Home and End jump, Escape closes back to the
   const { pill, menu, document, options, key } = await setup();
   pill.click();
   key(document.activeElement, 'ArrowUp');
-  assert.equal(document.activeElement, options()[5]);
+  assert.equal(document.activeElement, options().at(-1));
   key(document.activeElement, 'ArrowDown');
   assert.equal(document.activeElement, options()[0]);
   key(document.activeElement, 'End');
-  assert.equal(document.activeElement, options()[5]);
+  assert.equal(document.activeElement, options().at(-1));
   key(document.activeElement, 'Home');
   assert.equal(document.activeElement, options()[0]);
   assert.equal(options().filter((o) => o.tabIndex === 0).length, 1, 'one tab stop for the list');

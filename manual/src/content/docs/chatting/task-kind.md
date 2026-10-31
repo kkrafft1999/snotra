@@ -1,13 +1,13 @@
 ---
 title: Check and change a chat's kind of task
-description: See which of the six kinds of task a chat counts under, where that came from, and set it yourself.
+description: See which of the seven kinds of task a chat counts under, where that came from, and set it yourself.
 sidebar:
   order: 10
 ---
 
-[since 1.29] Every chat counts under one of six kinds of task: *Coding*, *Writing & editing*, *Research & questions*, *Data & analysis*, *Planning & concepts* or *Other*. The kind is there so that you can tell what kind of work your spending went into. Snotra picks it for you; you can correct it at any time.
+[since 1.29] Every chat counts under one of seven kinds of task: *Coding*, *Writing & editing*, *Research & questions*, *Data & analysis*, *Planning & concepts*, *Organisation & admin* [since 1.30] or *Other*. *Planning & concepts* is about working out what to build and how; booking hours, keeping to-dos and calendars up to date or tidying a workspace count as *Organisation & admin*. The kind is there so that you can tell what kind of work your spending went into. Snotra picks it for you; you can correct it at any time.
 
-![The chat header with the title "Summer sowings plan" and, next to it, the pill "Planning & concepts", opened: under "Kind of task" the six kinds, each with a one-line definition, "Planning & concepts" ticked, and at the bottom "Suggested by the model".](screenshots/task-kind.webp)
+![The chat header with the title "Summer sowings plan" and, next to it, the pill "Planning & concepts", opened: under "Kind of task" the seven kinds, each with a one-line definition, "Planning & concepts" ticked, and at the bottom "Suggested by the model".](screenshots/task-kind.webp)
 
 ## What you need
 
@@ -16,7 +16,7 @@ A chat with at least one question in it. A new, empty chat shows no kind yet.
 ## Steps
 
 1. Look at the chat header. Next to the chat's title, a small pill shows its kind, for example *Coding*. A chat that has no kind yet shows *Unclassified* with a dashed outline.
-2. Click the pill, or move the focus to it with `Tab` and press `Enter`. The six kinds open, each with a short definition. The current one is ticked, and the line at the bottom says where it came from.
+2. Click the pill, or move the focus to it with `Tab` and press `Enter`. The seven kinds open, each with a short definition. The current one is ticked, and the line at the bottom says where it came from.
 3. Pick the kind that fits — with the mouse, or with `↑` and `↓` and then `Enter`. The pill shows it at once. `Esc` closes the list without a change.
 
 ## What happens

@@ -18,8 +18,8 @@ const de = require('../src/shared/i18n/messages/de');
 
 const catalogue = (messages) => messages.default || messages.MESSAGES || messages;
 
-test('six fixed kinds, each with a definition and a name in both languages', () => {
-  assert.deepEqual([...TASK_KIND_IDS], ['coding', 'writing', 'research', 'data', 'planning', 'other']);
+test('seven fixed kinds, each with a definition and a name in both languages', () => {
+  assert.deepEqual([...TASK_KIND_IDS], ['coding', 'writing', 'research', 'data', 'planning', 'organisation', 'other']);
   for (const id of TASK_KIND_IDS) {
     assert.ok(TASK_KIND_DEFINITIONS[id], `${id} has a definition`);
     assert.equal(catalogue(en)[`taskKind.${id}.definition`], TASK_KIND_DEFINITIONS[id], `${id}: the English catalogue says what the model reads`);
@@ -32,6 +32,17 @@ test('six fixed kinds, each with a definition and a name in both languages', () 
   assert.equal(TASK_KIND_IDS.includes('unclassified'), false);
   assert.equal(catalogue(de)['taskKind.unclassified'], 'Nicht eingeordnet');
   assert.match(taskKindPromptList(), /^- coding: Writing, changing/);
+});
+
+test('organisation is a kind of its own, and planning says where it ends (#1312)', () => {
+  assert.equal(parseTaskKindAnswer('organisation'), 'organisation');
+  assert.match(TASK_KIND_DEFINITIONS.organisation, /booking hours/);
+  assert.match(TASK_KIND_DEFINITIONS.planning, /not managing tasks or time/);
+  // Right after planning, so the two related kinds sit next to each other.
+  assert.equal(TASK_KIND_IDS.indexOf('organisation'), TASK_KIND_IDS.indexOf('planning') + 1);
+  assert.match(taskKindPromptList(), /\n- organisation: Managing tasks, time and files/);
+  assert.equal(catalogue(en)['taskKind.organisation'], 'Organisation & admin');
+  assert.equal(catalogue(de)['taskKind.organisation'], 'Organisation & Verwaltung');
 });
 
 test('a stored kind is normalised; an unknown one is kept but counts as unclassified', () => {

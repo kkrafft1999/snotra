@@ -13,7 +13,7 @@ const SOURCE_KEYS = Object.freeze({
 
 /**
  * The chat's kind of task in the header (#1282, concept #1259 section 6): a
- * pill after the title — variant A of the mockup — that opens the six kinds
+ * pill after the title — variant A of the mockup — that opens the seven kinds
  * and says where the current one came from. A pick is stored as the user's.
  *
  * The kind on screen is `appStore.currentChatTaskKind`; whoever switches the
