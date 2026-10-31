@@ -255,13 +255,11 @@ function buildRulesSystemPrompt(plan, { canLoad = true } = {}) {
     createContextPart({
       id: `system:rules:always:${ruleFileId(file)}`,
       group: CONTEXT_PART_GROUPS.SYSTEM,
-      // The rule's own name heads the row, as a skill's does; the path below says what it is.
-      label: file.name,
-      ...shortPathDetail(`${RULE_SOURCE_PATHS[file.source]}/${file.name}.md`, {
+      ...namedRow(file, shortPathDetail(`${RULE_SOURCE_PATHS[file.source]}/${file.name}.md`, {
         inFolder: file.source === RULE_SOURCES.WORKSPACE,
         truncated: file.truncated,
         guard: file.guard,
-      }),
+      })),
       chars: alwaysBody(file).length,
       contentKind: CONTEXT_CONTENT_KINDS.MARKDOWN,
       covertSignals: file.covertSignals,
@@ -284,6 +282,17 @@ function buildRulesSystemPrompt(plan, { canLoad = true } = {}) {
     }));
   }
   return { text: [...intro(plan, canLoad), ...sections].join('\n\n'), parts };
+}
+
+/**
+ * "Rule <name>" heads the row; the path below says where it lies. The name
+ * rides in the same params as the path.
+ *
+ * @param {RuleFile} file
+ * @param {{ detailKey: string, params: Record<string, unknown> }} detail
+ */
+function namedRow(file, detail) {
+  return { labelKey: 'context.part.rules.always', label: file.name, ...detail, params: { ...detail.params, name: file.name } };
 }
 
 module.exports = {

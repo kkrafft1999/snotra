@@ -397,6 +397,12 @@ function createBuiltinInjectionDetector() {
   return {
     inspect({ category, skill, content }) {
       if (SKIPPED_CATEGORIES.has(category) || skill) return null;
+      // A rule is instructions by design, like the folder's AGENTS.md: only
+      // its covert signals count (#1275, #1280).
+      if (category === TOOL_CATEGORIES.RULE) {
+        const signals = findCovertSignals(content);
+        return signals ? { signals, sources: [INJECTION_FLAG_SOURCES.BUILTIN] } : null;
+      }
       const hits = findInjectionSignals(content);
       if (!hitsWarrantFlag(hits)) return null;
       return { signals: signalsOf(hits), sources: [INJECTION_FLAG_SOURCES.BUILTIN] };

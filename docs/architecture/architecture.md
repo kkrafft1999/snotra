@@ -425,6 +425,14 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   without a watcher**: these are three files that are read afresh per request —
   unlike the skill catalogue, which scans entire directories and parses front
   matter, and therefore needs both
+- `rules-port` — the rules files of the three sources, for the rules block and
+  `load_rule` (#1275). `main/adapters/rules-adapter.js` lists the flat
+  `*.md` files of `<workspace>/.agents/rules/`, `~/.snotra/rules/` and
+  `~/.agents/rules/`, parses their front matter, contains the folder's files
+  like `AGENTS.md` (#534), marks a `~/.agents` file that a `~/.snotra` file of
+  the same name shadows, and reports what it did not read — files in
+  subfolders, files past the limit of 50 a source. Like the `AGENTS.md` port,
+  without a cache and without a watcher
 - `file-tools-port` — the file tools as the tool registry calls them (#982):
   list, read, search, write, patch, load a skill, and writing a generated image.
   Each run answers with the JSON the model gets. `main/adapters/file-tools-adapter.js`
@@ -3042,11 +3050,11 @@ tools pull in during a run ([#747](https://github.com/kkrafft1999/snotra/issues/
 The colour of a box is the kind of information — fact, rule, procedure,
 project instruction, conversation, data from tools, app text — and its column
 says when it is loaded. Dashed boxes are planned in the
-[knowledge concept](../concepts/memory-and-rules-concept.md) (#1275, #1315):
+[knowledge concept](../concepts/memory-and-rules-concept.md) (#1315):
 
 ![Where the agent's text comes from: system message, messages and tool results](agent-text-sources.svg)
 
-The system prompt is assembled per request from seven building blocks
+The system prompt is assembled per request from eight building blocks
 (`application/chat/chat-engine.js`), in this order:
 
 1. **Base prompt** from the settings — it stands first and keeps precedence.
@@ -3089,12 +3097,25 @@ The system prompt is assembled per request from seven building blocks
    bodies), oversized content is visibly truncated rather than discarded, and each
    file gets its own line in the context breakdown (#174). Can be switched off via
    "`AGENTS.md` mitschicken" (Send `AGENTS.md`) in the settings (on by default).
-6. **The folder's memory** (`<workspace>/.agents/memory.md`, #529) — it lives in
+6. **Rules** (`application/chat/rules-prompt.js`, #1275) — the rules files of
+   `<workspace>/.agents/rules/`, `~/.snotra/rules/` and `~/.agents/rules/`. A rule
+   whose front matter says `always: true` goes in full; every other one is a
+   catalogue line with its description, and the model fetches its body with
+   `load_rule` **before each step** that matches, not only at the start. The
+   block names whose rules these are — the user's own, or the folder's, which do
+   not outweigh what the user says now — and which wins in a contradiction: the
+   current message, then the more specific condition, then the newer entry; a
+   contradiction between the user's rule and the folder's is named, not decided.
+   The `always` bodies of a level share 8,000 characters; past that the file that
+   came in last is offered on demand. Every level and every file can be switched
+   off (`rulesWorkspaceEnabled`, `rulesUserEnabled`, `disabledRules`; their page
+   comes with #1278).
+7. **The folder's memory** (`<workspace>/.agents/memory.md`, #529) — it lives in
    the opened folder like its `AGENTS.md`, where a teammate or a cloned
    repository can have put it. It is therefore introduced by its origin ("notes
    kept in this folder"), not as the user's own words, and stands with the
    project instructions rather than with the user's memory.
-7. **Folder/tool block** (`buildWorkspaceSystemPrompt`, otherwise
+8. **Folder/tool block** (`buildWorkspaceSystemPrompt`, otherwise
    `buildNoWorkspaceSystemPrompt`) — the open folder, tool descriptions, the tree
    selection and the rule that tool results are data.
 
@@ -3108,8 +3129,19 @@ for**, so they pass the secret protection of a tool result before they go out
 (`application/chat/embedded-text-guard.js`, #528): a text that contains an own
 secret is replaced by a short notice, credential patterns are masked, and a
 text too large to scan is left out. The context breakdown marks the row.
+Rules files pass the same protection, and the folder's `AGENTS.md`, memory and
+rules — `always` bodies and descriptions — the covert-signal check of #1280.
 
-The order of the project instructions, the folder's memory and the folder/tool
+**The knowledge budget** (#1275): memory, the `always` rules, `AGENTS.md` and the
+rules catalogue share at most a quarter of the context window — the history
+budget (`historyCharLimit`) stands in for it, since that is what the engine
+knows of the window. When it does not suffice they give way in a fixed order:
+the catalogue lists names only past 40 lines a level, the folder's `always`
+rules are offered on demand, `AGENTS.md` is shortened visibly, and last the
+user's own `always` rules are offered on demand. Memory always stays whole.
+Every step shows in the context breakdown.
+
+The order of the project instructions, the rules, the folder's memory and the folder/tool
 block is deliberate: the content of an `AGENTS.md` is
 **instruction, not data** — unlike tool results, for which
 `TOOL_RESULTS_ARE_DATA_RULE` applies. It is meant to change the model's

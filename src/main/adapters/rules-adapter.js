@@ -44,6 +44,7 @@ function createRulesAdapter({ fs, path, os }) {
       const home = os && typeof os.homedir === 'function' ? os.homedir() : null;
       return typeof home === 'string' && home.trim() ? path.resolve(home) : null;
     } catch {
+      // No home folder to read from: only the folder's rules, then.
       return null;
     }
   }
@@ -74,6 +75,7 @@ function createRulesAdapter({ fs, path, os }) {
     try {
       return await fs.readdir(dir, { withFileTypes: true });
     } catch {
+      // A folder that is not there is the normal case, not an error.
       return [];
     }
   }
@@ -95,6 +97,7 @@ function createRulesAdapter({ fs, path, os }) {
     try {
       mtimeMs = (await fs.stat(file)).mtimeMs;
     } catch {
+      // Without its age the file simply sorts first among the `always` rules.
       mtimeMs = undefined;
     }
     return {
@@ -157,7 +160,7 @@ function createRulesAdapter({ fs, path, os }) {
       return { files: normalizeRuleFiles(files), inSubfolders, overLimit };
     },
 
-    async loadRule({ workspaceRoot = null, name, level } = {}) {
+    async loadRule({ workspaceRoot = null, name, level }) {
       if (!isValidRuleName(name) || !isRuleLevel(level)) return null;
       for (const target of chain(workspaceRoot)) {
         if (RULE_SOURCE_LEVELS[target.source] !== level) continue;

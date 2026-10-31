@@ -26,6 +26,7 @@ const { createOwnSecretsAdapter } = require('../adapters/own-secrets-adapter');
  * @param {Parameters<typeof createSkillsAdapter>[0]|null} deps.skillsService
  * @param {import('../../application/ports/environment-port').EnvironmentPort|null} [deps.environment]
  * @param {import('../../application/ports/project-instructions-port').ProjectInstructionsPort|null} [deps.projectInstructions]
+ * @param {import('../../application/ports/rules-port').RulesPort|null} [deps.rules]
  * @param {import('../../application/ports/memory-port').MemoryPort|null} [deps.memory]
  * @param {typeof import('path')} deps.path
  * @param {number} [deps.maxToolRounds]
@@ -51,6 +52,7 @@ function createChatApplication({
   environment = null,
   projectInstructions = null,
   memory = null,
+  rules = null,
   path,
   maxToolRounds,
   toolPolicyStore = null,
@@ -95,6 +97,7 @@ function createChatApplication({
     environment,
     projectInstructions,
     memory,
+    rules,
     toolPolicy,
     approvals,
     // The same list the tool results are compared against (§5), now also for

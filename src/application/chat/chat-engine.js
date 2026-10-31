@@ -741,6 +741,7 @@ function shortenForBudget(files, room) {
  * @param {ContextPart[]} [input.skillParts]
  * @param {string} [input.environmentSystem]
  * @param {ContextPart[]} [input.projectInstructionParts]
+ * @param {ContextPart[]} [input.rulesParts]
  * @param {ContextPart[]} [input.folderMemoryParts]
  * @param {string} [input.workspaceSystem]
  * @param {string} [input.toolsPrompt]
@@ -1641,8 +1642,9 @@ function createChatEngine({
           // und wird gar nicht erst angeboten, mit ihnen stehen sie als enum in
           // seinem Schema (Issue #173).
           skillNames: skillRoots.map((entry) => entry.name),
-          // The same for `load_rule` and the rules files (#1275).
-          ruleNames,
+          // The same for `load_rule` and the rules files (#1275) — said only
+          // where there is a rules port, as `skillNames` is.
+          ...(rules ? { ruleNames } : {}),
           ...(revealedToolNames.size > 0 ? { revealedNames: [...revealedToolNames] } : {}),
         };
         // Tools, die erst zur Laufzeit feststehen, einmal je Lauf auffrischen

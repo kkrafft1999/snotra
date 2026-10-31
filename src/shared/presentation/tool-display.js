@@ -106,6 +106,8 @@ const TOOL_LINE_TARGETS = Object.freeze({
   HOST: 'host',
   /** The skill whose instructions are loaded (#173). */
   SKILL_NAME: 'skill-name',
+  /** The rule that is fetched, and its level (#1275). */
+  RULE_NAME: 'rule-name',
   /** A proposal and how it ended (#774); the entry carries the outcome. */
   CONFIG_PROPOSAL: 'config-proposal',
 });
@@ -230,6 +232,13 @@ const TARGET_PARAMS = Object.freeze({
   [TOOL_LINE_TARGETS.SKILL_NAME]: (args) => {
     const name = trimmedArg(args, 'name');
     return { name: name ? truncateToolLabel(name, 24) : '' };
+  },
+  [TOOL_LINE_TARGETS.RULE_NAME]: (args, t) => {
+    const name = trimmedArg(args, 'name');
+    if (!name) return { name: '', level: '' };
+    // Two literal keys, so the key scan sees both.
+    const level = args?.scope === 'user' ? t('tools.line.loadRule.level.user') : t('tools.line.loadRule.level.workspace');
+    return { name: truncateToolLabel(name, 24), level };
   },
 });
 

@@ -201,7 +201,7 @@ function normalizeRuleFile(raw) {
   const file = {
     source: raw.source,
     level: RULE_SOURCE_LEVELS[raw.source],
-    name: raw.name,
+    name: /** @type {string} */ (raw.name),
     description,
     descriptionDerived: raw.descriptionDerived === true,
     always: raw.always === true,

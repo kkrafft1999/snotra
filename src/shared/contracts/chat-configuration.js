@@ -69,6 +69,8 @@ const TOOL_OFFER_REASONS = Object.freeze({
   NO_FOLDER: 'noFolder',
   /** `load_skill` with no skill switched on. */
   NO_SKILL: 'noSkill',
+  /** `load_rule` with no rules file to load (#1275). */
+  NO_RULE: 'noRule',
   /** Outside a caller's allowlist — a test or a mode, never a setting. */
   NOT_ALLOWED: 'notAllowed',
 });
