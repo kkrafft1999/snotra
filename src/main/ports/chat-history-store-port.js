@@ -15,13 +15,14 @@
  * @typedef {import('../services/chat-history-normalization').LoadedSession} LoadedSession
  *
  * @typedef {Object} ChatHistoryStorePort
- * @property {number} MAX_CHAT_SESSIONS
+ * @property {number} MAX_CHAT_SESSIONS The ceiling across all folders; reported, never applied by dropping (#1320)
+ * @property {number} MAX_CHAT_SESSIONS_PER_FOLDER The chats a folder keeps, not counting those marked *Keep* (#1320)
  * @property {() => Promise<SessionMeta[]>} listSessions Every chat's index entry, newest first, without messages
  * @property {(id: string) => Promise<SessionMeta|null>} getSessionMeta One chat's index entry
  * @property {(id: string) => Promise<StoredSession|null>} getSession The whole chat in store form; `null` when it is not there or cannot be read
  * @property {(bucketKey: string) => Promise<string|null>} getActiveChatId The chat a folder opens with
- * @property {(session: StoredSession) => Promise<{ droppedIds: string[] }>} saveSession Saves a chat in store form; returns the chats dropped beyond MAX_CHAT_SESSIONS
- * @property {(id: string, patch: Record<string, unknown>) => Promise<boolean>} patchSession Changes a chat's own settings (model, mode, level, overrides)
+ * @property {(session: StoredSession) => Promise<{ droppedIds: string[] }>} saveSession Saves a chat in store form; returns the chats its folder dropped beyond MAX_CHAT_SESSIONS_PER_FOLDER
+ * @property {(id: string, patch: Record<string, unknown>) => Promise<boolean>} patchSession Changes a chat's own settings (model, mode, level, overrides, *Keep*) or its folder
  * @property {(id: string) => Promise<void>} deleteSession
  * @property {(bucketKey: string, id: string|null) => Promise<boolean>} setActiveChatId Resolves to whether anything was written
  * @property {(fn: () => Promise<unknown>) => Promise<unknown>} withChatHistoryLock
@@ -33,6 +34,7 @@
  * @property {(raw: unknown) => string|null} normalizeWorkspaceRoot
  * @property {(workspaceRoot: string|null) => string} workspaceBucketKey
  * @property {(sessionRow: { workspaceRoot?: string|null }, workspaceRoot: string|null) => boolean} sessionMatchesWorkspace
+ * @property {(workspaceRoot: unknown) => Promise<boolean>} workspaceRootExists Whether a chat's folder is still there; false only when it is certainly gone (#1320)
  */
 
 module.exports = {};

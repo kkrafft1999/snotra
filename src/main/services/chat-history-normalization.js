@@ -116,7 +116,7 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  */
 
 /**
- * What a chat carries beyond its messages, each optional (#211, #725, #774, #949, #1281).
+ * What a chat carries beyond its messages, each optional (#211, #725, #774, #949, #1281, #1320).
  *
  * @typedef {Object} ChatSettings
  * @property {string} [modelPresetId]
@@ -125,6 +125,7 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  * @property {import('../../shared/contracts/chat-configuration').ChatConfigOverrides} [configOverrides]
  * @property {import('../../shared/contracts/cost').SessionCost} [cost]
  * @property {import('../../shared/contracts/task-kind').TaskKind} [taskKind]
+ * @property {true} [keep]  marked *Keep*: exempt from every limit of the history (#1320)
  */
 
 /**
@@ -170,6 +171,7 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  * @property {number} updatedAt
  * @property {number} messageCount
  * @property {import('../../shared/contracts/cost').SessionCost} [cost]
+ * @property {true} [keep]  marked *Keep* (#1320)
  */
 
 /** @typedef {(toolName: string) => (string|null)} ToolCategoryOf  the descriptor's category (#1008) */
@@ -192,6 +194,7 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  * @property {unknown} [configOverrides]
  * @property {unknown} [cost]
  * @property {unknown} [taskKind]
+ * @property {unknown} [keep]
  */
 
 /**
@@ -641,7 +644,8 @@ function resolveSessionTitle(sessionRow, messages, existingTitle) {
 /**
  * The settings a chat carries beyond its messages, each optional: model and
  * permission mode (#211), reasoning level (#725), what it switched for itself
- * (#774), its estimated cost (#949) and its kind of task (#1281). Copied in this order, so that every
+ * (#774), its estimated cost (#949), its kind of task (#1281) and the *Keep*
+ * marker (#1320). Copied in this order, so that every
  * form of a session lists its fields alike.
  *
  * @template {object} T
@@ -662,6 +666,7 @@ function copyChatSettings(from, out) {
   if (cost) out.cost = cost;
   const taskKind = normalizeTaskKind(from.taskKind);
   if (taskKind) out.taskKind = taskKind;
+  if (from.keep === true) out.keep = true;
   return out;
 }
 
@@ -782,6 +787,7 @@ function normalizeSessionMetaForList(meta) {
     const { days: _days, ...sum } = cost;
     out.cost = sum;
   }
+  if (meta.keep === true) out.keep = true;
   return out;
 }
 

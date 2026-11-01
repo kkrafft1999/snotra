@@ -237,7 +237,7 @@ function newestFirst(a, b) {
  * @param {(type: 'set-aside' | 'not-saved' | 'saved-again', file: string, keptAs: string|null, store: string) => void} [deps.reportStoreFile]
  * @param {(raw: unknown) => string|null} deps.normalizeWorkspaceRoot
  * @param {string} deps.noWorkspaceKey the folder pointer's key for chats without a folder
- * @param {number} deps.maxChatSessions
+ * @param {number} deps.maxChatSessionsPerFolder the chats a folder keeps, not counting those marked *Keep* (#1320)
  * @param {{ warn?: (message: string) => void, info?: (message: string) => void }|null} [deps.log]
  * @param {string} [deps.platform]
  * @param {number} [deps.cachedSessions]
@@ -254,7 +254,7 @@ function createChatHistoryStore({
   reportStoreFile = () => {},
   normalizeWorkspaceRoot,
   noWorkspaceKey,
-  maxChatSessions,
+  maxChatSessionsPerFolder,
   log = console,
   platform = process.platform,
   cachedSessions = DEFAULT_CACHED_SESSIONS,
@@ -946,8 +946,9 @@ function createChatHistoryStore({
 
   /**
    * Saves a chat in store form: its file — unless it is what is there
-   * already — and its index entry. Chats beyond `maxChatSessions` go, oldest
-   * first; their ids come back so that their images can go as well.
+   * already — and its index entry. The chats of its folder beyond
+   * `maxChatSessionsPerFolder` go, oldest first (#1320); their ids come back
+   * so that their images can go as well.
    *
    * @param {StoredSession} session
    * @returns {Promise<{ droppedIds: string[] }>}
@@ -968,7 +969,7 @@ function createChatHistoryStore({
       const meta = sessionMetaFromSession(session);
       if (plain) meta.plain = true;
       s.metas.set(id, meta);
-      const droppedIds = await dropBeyondLimit(s);
+      const droppedIds = await dropBeyondLimit(s, meta.workspaceRoot);
       return { droppedIds, written: persistIndex(s) };
     }).then(async ({ droppedIds, written }) => {
       // Outside the queue: the next change goes into memory while this one's
@@ -979,12 +980,20 @@ function createChatHistoryStore({
   }
 
   /**
+   * The limit holds per folder (#1320): what happens in other folders never
+   * pushes this folder's chats out, and chats without a folder are a bucket
+   * of their own. A chat marked *Keep* is never dropped and does not count.
+   * Only the saved chat's folder is looked at — the others did not grow.
+   *
    * @param {HistoryState} s
+   * @param {string|null} workspaceRoot
    * @returns {Promise<string[]>}
    */
-  async function dropBeyondLimit(s) {
-    if (s.metas.size <= maxChatSessions) return [];
-    const dropped = sortedMetas(s).slice(maxChatSessions).map((meta) => meta.id);
+  async function dropBeyondLimit(s, workspaceRoot) {
+    const bucket = workspaceRoot || noWorkspaceKey;
+    const counted = sortedMetas(s).filter((meta) => meta.keep !== true && (meta.workspaceRoot || noWorkspaceKey) === bucket);
+    if (counted.length <= maxChatSessionsPerFolder) return [];
+    const dropped = counted.slice(maxChatSessionsPerFolder).map((meta) => meta.id);
     for (const id of dropped) {
       try {
         await removeFile(sessionPath(id));
