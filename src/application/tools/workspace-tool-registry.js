@@ -61,6 +61,7 @@ const {
 const { LOCALES, createTranslator, normalizeLocale } = require('../../shared/i18n');
 const { fillUiQuotes } = require('../../shared/i18n/ui-quotes');
 const { createGenerateImageTool } = require('./generate-image-tool');
+const { createSearchChatsTool } = require('./search-chats-tool');
 const {
   TOOL_RISK_CLASSES,
   PERMISSION_DENIAL_REASONS,
@@ -918,6 +919,7 @@ function sandboxDisabledByPlan(plan) {
  *     canPropose: boolean }) => Promise<unknown> } | null,
  *   manual?: ManualLookup | null,
  *   releaseNotes?: ReleaseNotesLookup | null,
+ *   chats?: import('../ports/chat-search-port').ChatSearchPort | null,
  * }} deps
  */
 function createWorkspaceToolRegistry({
@@ -937,6 +939,8 @@ function createWorkspaceToolRegistry({
   manual = null,
   /** Reads the notes of the releases (#1191), see release-notes-service.js. */
   releaseNotes = null,
+  /** Searches and reads the open workspace's earlier chats (#1315), see chat-search-service.js. */
+  chats = null,
 }) {
   /** @type {BuiltInTool[]} */
   const builtIn = [
@@ -2372,6 +2376,7 @@ function createWorkspaceToolRegistry({
         }
       },
     },
+    createSearchChatsTool({ chats }),
     {
       name: GET_CONFIGURATION_TOOL,
       // Descriptor (#1008): see tool-descriptor.js.

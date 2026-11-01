@@ -1,7 +1,8 @@
 import { formatHistoryTime } from '../chat/messageUtils.js';
-import { t, tMessage, onLocaleChange } from '../i18n.js';
+import { t, tMessage, tPlural, onLocaleChange } from '../i18n.js';
 import contracts from '../generated/contracts.js';
 import { formatCostAmount } from './CostPanel.js';
+import { formatCount } from '../utils/helpers.js';
 
 const { CHAT_ACTIVATION, normalizeSessionCost, summarizeSessionCost } = contracts;
 
@@ -41,6 +42,22 @@ const RUN_STATE_LABELS = Object.freeze({
 const BIN_ICON_HTML =
   '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg>';
 
+// A bookmark: outlined while a chat is not kept, filled once it is (#1320).
+const KEEP_ICON_HTML =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+
+const CHEVRON_ICON_HTML =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>';
+
+const FOLDER_GONE_ICON_HTML =
+  '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="9" y1="14" x2="15" y2="14"/></svg>';
+
+/** The last part of a folder path, on either platform's separator. */
+function folderName(root) {
+  const parts = String(root || '').split(/[\\/]+/).filter(Boolean);
+  return parts[parts.length - 1] || String(root || '');
+}
+
 export function initChatHistoryPanel({
   api,
   appStore,
@@ -71,6 +88,15 @@ export function initChatHistoryPanel({
   const btnChatHistory = document.getElementById('btn-toggle-chat-history');
   // The row that asks "Delete this chat?" right now, if any (#582).
   let pendingRemoval = null;
+  // Says what *Keep* and *Assign to this folder* did (#1320); the list is
+  // redrawn after an assignment, so the words cannot sit in a row.
+  const chatHistoryStatus = document.getElementById('chat-history-status');
+  // Whether the note about chats from missing folders is unfolded; it stays
+  // so across redraws, and folds again with the next folder (#1320).
+  let orphansOpen = false;
+  let orphansRoot = null;
+  // The chats a folder keeps, for the bookmark's tooltip.
+  let folderLimit = null;
 
   function isHistoryOpen() {
     return !appRoot.classList.contains('app--no-history');
@@ -118,15 +144,238 @@ export function initChatHistoryPanel({
     }
     const sessions = Array.isArray(hist.sessions) ? [...hist.sessions] : [];
     sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-    chatHistoryEmpty.textContent = t('history.empty');
-    if (sessions.length === 0) {
-      chatHistoryEmpty.classList.remove('hidden');
-      return;
+    folderLimit = Number.isInteger(hist.limits?.folder?.max) ? hist.limits.folder.max : null;
+    if (orphansRoot !== (hist.workspaceRoot ?? null)) {
+      orphansRoot = hist.workspaceRoot ?? null;
+      orphansOpen = false;
     }
-    chatHistoryEmpty.classList.add('hidden');
+    const orphaned = Array.isArray(hist.orphaned) ? hist.orphaned : [];
+    if (orphaned.length > 0) chatHistoryList.appendChild(buildOrphanNote(orphaned));
+    chatHistoryEmpty.textContent = t('history.empty');
+    chatHistoryEmpty.classList.toggle('hidden', sessions.length > 0);
     for (const s of sessions) {
       chatHistoryList.appendChild(buildRow(s));
     }
+    // The ceiling across all folders is never applied by dropping chats
+    // (#1320): reaching it is said here, quietly, and the user decides.
+    const overall = hist.limits?.overall;
+    if (overall?.reached) {
+      const note = document.createElement('p');
+      note.className = 'chat-history-ceiling';
+      note.textContent = t('history.ceiling', { count: formatCount(overall.count), max: formatCount(overall.max) });
+      chatHistoryList.appendChild(note);
+    }
+  }
+
+  function announce(text) {
+    if (!chatHistoryStatus) return;
+    chatHistoryStatus.textContent = '';
+    chatHistoryStatus.textContent = text;
+  }
+
+  /**
+   * Chats whose folder is gone (#1320) — renamed, moved or deleted. One quiet
+   * note above the list says how many; unfolded, it groups them by the folder
+   * they were in, each group with *Assign all* and each chat with *Assign*.
+   * They do not open from here: the open folder hands out only its own
+   * chats (#68), so a chat is assigned first.
+   */
+  function buildOrphanNote(orphaned) {
+    const box = document.createElement('section');
+    box.className = 'chat-history-orphans';
+    const regionId = 'chat-history-orphans-list';
+    const toggle = document.createElement('button');
+    toggle.type = 'button';
+    toggle.className = 'chat-history-orphans-toggle';
+    toggle.setAttribute('aria-expanded', orphansOpen ? 'true' : 'false');
+    toggle.setAttribute('aria-controls', regionId);
+    const icon = document.createElement('span');
+    icon.className = 'chat-history-orphans-icon';
+    icon.innerHTML = FOLDER_GONE_ICON_HTML;
+    const text = document.createElement('span');
+    text.className = 'chat-history-orphans-text';
+    text.textContent = tPlural('history.orphans.summary', orphaned.length, { count: formatCount(orphaned.length) });
+    const action = document.createElement('span');
+    action.className = 'chat-history-orphans-action';
+    const actionText = document.createElement('span');
+    const chevron = document.createElement('span');
+    chevron.className = 'chat-history-orphans-chevron';
+    chevron.innerHTML = CHEVRON_ICON_HTML;
+    action.append(actionText, chevron);
+    toggle.append(icon, text, action);
+    box.appendChild(toggle);
+
+    const list = document.createElement('div');
+    list.className = 'chat-history-orphans-list';
+    list.id = regionId;
+    /** @type {Map<string, any[]>} */
+    const byRoot = new Map();
+    for (const chat of orphaned) {
+      const root = chat.workspaceRoot || '';
+      if (!byRoot.has(root)) byRoot.set(root, []);
+      byRoot.get(root).push(chat);
+    }
+    for (const [root, chats] of byRoot) {
+      chats.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+      list.appendChild(buildOrphanGroup(root, chats));
+    }
+    box.appendChild(list);
+
+    const draw = () => {
+      toggle.setAttribute('aria-expanded', orphansOpen ? 'true' : 'false');
+      list.hidden = !orphansOpen;
+      actionText.textContent = t(orphansOpen ? 'history.orphans.hide' : 'history.orphans.review');
+    };
+    draw();
+    toggle.addEventListener('click', () => {
+      orphansOpen = !orphansOpen;
+      draw();
+    });
+    return box;
+  }
+
+  function buildOrphanGroup(root, chats) {
+    const group = document.createElement('div');
+    group.className = 'chat-history-orphans-group';
+    group.setAttribute('role', 'group');
+    const name = folderName(root);
+    group.setAttribute('aria-label', t('history.orphans.group', { folder: root }));
+    const head = document.createElement('div');
+    head.className = 'chat-history-orphans-path';
+    const label = document.createElement('span');
+    label.className = 'chat-history-orphans-folder';
+    label.textContent = name;
+    // The whole path on hover; the name alone fits the column.
+    label.title = root;
+    const count = document.createElement('span');
+    count.className = 'chat-history-orphans-count';
+    count.textContent = String(chats.length);
+    count.setAttribute('aria-hidden', 'true');
+    head.append(label, count);
+    if (chats.length > 1) {
+      const all = document.createElement('button');
+      all.type = 'button';
+      all.className = 'chat-history-orphans-assign-all';
+      all.textContent = t('history.orphans.assignAll');
+      all.setAttribute('aria-label', tPlural('history.orphans.assignAll.label', chats.length, { count: chats.length, folder: name }));
+      all.addEventListener('click', () => assignAll(root, all));
+      head.appendChild(all);
+    }
+    group.appendChild(head);
+    for (const chat of chats) group.appendChild(buildOrphanRow(chat));
+    return group;
+  }
+
+  function buildOrphanRow(chat) {
+    const row = document.createElement('div');
+    row.className = 'chat-history-orphan';
+    row.dataset.orphanId = chat.id;
+    const body = document.createElement('div');
+    body.className = 'chat-history-orphan-body';
+    const title = tMessage(chat.title) || t('chat.title.new');
+    const titleEl = document.createElement('span');
+    titleEl.className = 'chat-history-row-title';
+    titleEl.textContent = title;
+    titleEl.title = title;
+    const meta = document.createElement('span');
+    meta.className = 'chat-history-row-meta';
+    meta.textContent = formatHistoryTime(chat.updatedAt);
+    body.append(titleEl, meta);
+    const assign = document.createElement('button');
+    assign.type = 'button';
+    assign.className = 'chat-history-orphan-assign';
+    assign.textContent = t('history.orphans.assign');
+    assign.title = t('history.orphans.assign.hint');
+    assign.setAttribute('aria-label', t('history.orphans.assign.label', { title }));
+    assign.addEventListener('click', () => assignOne(chat.id, title, assign));
+    row.append(body, assign);
+    return row;
+  }
+
+  /** After an assignment the focus stays in the note, or goes to the list once the note is gone. */
+  function focusAfterAssign() {
+    const next = chatHistoryList.querySelector('.chat-history-orphans-assign-all, .chat-history-orphan-assign')
+      || chatHistoryList.querySelector('.chat-history-row-main');
+    if (next) {
+      next.focus();
+      return;
+    }
+    chatHistoryEmpty.tabIndex = -1;
+    chatHistoryEmpty.focus();
+  }
+
+  /**
+   * Busy rather than disabled while main answers: a disabled button would
+   * drop the focus. `undefined` while one is under way, `null` when it failed.
+   */
+  async function whileBusy(button, run) {
+    if (button.getAttribute('aria-busy') === 'true') return undefined;
+    button.setAttribute('aria-busy', 'true');
+    try {
+      return await run();
+    } catch {
+      // Not quiet: `null` makes the caller say in the status line that it failed.
+      return null;
+    } finally {
+      button.removeAttribute('aria-busy');
+    }
+  }
+
+  async function assignOne(id, title, button) {
+    const result = await whileBusy(button, () => api.assignChatToFolder(id));
+    if (result === undefined) return;
+    if (!result?.ok) {
+      announce(t('history.orphans.failed'));
+      return;
+    }
+    await renderHistoryList();
+    announce(t('history.orphans.assigned', { title }));
+    focusAfterAssign();
+  }
+
+  async function assignAll(root, button) {
+    const result = await whileBusy(button, () => api.assignFolderChatsToFolder(root));
+    if (result === undefined) return;
+    if (!result?.ok) {
+      announce(t('history.orphans.failed'));
+      return;
+    }
+    await renderHistoryList();
+    announce(tPlural('history.orphans.assignedAll', result.count, { count: result.count }));
+    focusAfterAssign();
+  }
+
+  /**
+   * *Keep* (#1320): a bookmark next to the bin. It shows on hover and focus,
+   * and stays once the chat is kept. Its name stays the same; `aria-pressed`
+   * says whether it is on.
+   */
+  function buildKeepToggle(s, title) {
+    const keep = document.createElement('button');
+    keep.type = 'button';
+    keep.className = 'chat-history-row-keep';
+    keep.setAttribute('aria-label', t('history.entry.keep'));
+    keep.innerHTML = KEEP_ICON_HTML;
+    const draw = () => {
+      keep.setAttribute('aria-pressed', s.keep === true ? 'true' : 'false');
+      keep.title = s.keep === true
+        ? t('history.entry.keep.on')
+        : (folderLimit ? t('history.entry.keep.off', { max: formatCount(folderLimit) }) : t('history.entry.keep'));
+    };
+    draw();
+    keep.addEventListener('click', async () => {
+      const wanted = s.keep !== true;
+      const result = await whileBusy(keep, () => api.setChatKeep(s.id, wanted));
+      if (result === undefined) return;
+      if (!result?.ok) {
+        announce(t('history.entry.keep.failed'));
+        return;
+      }
+      s.keep = result.keep === true;
+      draw();
+      announce(t(s.keep ? 'history.entry.keep.done' : 'history.entry.keep.undone', { title }));
+    });
+    return keep;
   }
 
   /**
@@ -178,14 +427,15 @@ export function initChatHistoryPanel({
     del.setAttribute('aria-label', t('history.entry.remove'));
     del.innerHTML = BIN_ICON_HTML;
     row.appendChild(open);
+    row.appendChild(buildKeepToggle(s, title));
     row.appendChild(del);
     row.dataset.chatId = s.id;
     applyRunState(row, runs.stateOf(s.id));
 
-    // The padding around the button opens the chat as well; the bin and the
-    // confirmation are excluded.
+    // The padding around the button opens the chat as well; the bookmark, the
+    // bin and the confirmation are excluded.
     row.addEventListener('click', (e) => {
-      if (e.target.closest('.chat-history-row-delete, .chat-history-row-confirm')) return;
+      if (e.target.closest('.chat-history-row-keep, .chat-history-row-delete, .chat-history-row-confirm')) return;
       void openChatSession(s.id);
     });
     del.addEventListener('click', () => askToRemove(row, s.id));

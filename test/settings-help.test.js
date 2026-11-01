@@ -82,7 +82,7 @@ test('the markup and the mapping name the same help links', () => {
   // section is open; every other entry has a button of its own.
   // A notice's link is built with the notice (#1001, #978), and the link of
   // a flagged tool result with its box (#1011), so they have no markup.
-  const builtByScript = new Set(['notice.store', 'notice.backgroundError', 'chat.injectionFlag']);
+  const builtByScript = new Set(['notice.store', 'notice.backgroundError', 'notice.localChat', 'chat.injectionFlag']);
   const sectionKeys = keys.filter((key) => !key.startsWith('panel.') && !builtByScript.has(key));
   for (const key of sectionKeys) assert.ok(inMarkup.has(key), `no button for "${key}" in index.html`);
   for (const key of inMarkup) assert.ok(keys.includes(key), `index.html names "${key}", the mapping does not`);
@@ -108,15 +108,15 @@ test('a ? names its target and opens the manual there, in English and in German'
   const button = document.querySelector('[data-manual-help="defaultMode"]');
   try {
     assert.equal(button.getAttribute('type'), 'button');
-    assert.equal(button.getAttribute('aria-label'), 'Help: Give a folder a default mode');
-    assert.equal(button.title, 'Help: Give a folder a default mode');
+    assert.equal(button.getAttribute('aria-label'), 'Help: The folder\'s default mode');
+    assert.equal(button.title, 'Help: The folder\'s default mode');
     button.click();
-    assert.deepEqual(calls, [{ slug: 'safety/choose-a-mode', fragment: 'give-a-folder-a-default-mode' }]);
+    assert.deepEqual(calls, [{ slug: 'safety/choose-a-mode', fragment: 'the-folders-default-mode' }]);
 
     i18n.setLocale('de', { force: true });
-    assert.equal(button.getAttribute('aria-label'), 'Hilfe: Einem Ordner einen Standardmodus geben');
+    assert.equal(button.getAttribute('aria-label'), 'Hilfe: Der Standardmodus des Ordners');
     button.click();
-    assert.deepEqual(calls[1], { slug: 'safety/choose-a-mode', fragment: 'einem-ordner-einen-standardmodus-geben' });
+    assert.deepEqual(calls[1], { slug: 'safety/choose-a-mode', fragment: 'der-standardmodus-des-ordners' });
   } finally {
     i18n.setLocale('en', { force: true });
     controller.refresh();

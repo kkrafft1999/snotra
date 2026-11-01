@@ -28,6 +28,13 @@ function registerChatHistoryHandlers({ ipcMain, chatHistory, REQ }) {
   ipcMain.handle(REQ.CHAT_HISTORY_SET_TASK_KIND, async (_event, chatId, kindId) => ({
     taskKind: await chatHistory.setTaskKind(chatId, { id: kindId, source: 'user' }),
   }));
+
+  // *Keep* and *Assign to this folder* (#1320): the chat's id, and for *Keep* a boolean.
+  ipcMain.handle(REQ.CHAT_HISTORY_SET_KEEP, async (_event, chatId, keep) => chatHistory.setKeep(chatId, keep));
+
+  ipcMain.handle(REQ.CHAT_HISTORY_ASSIGN_TO_FOLDER, async (_event, chatId) => chatHistory.assignToActiveFolder(chatId));
+
+  ipcMain.handle(REQ.CHAT_HISTORY_ASSIGN_ALL_TO_FOLDER, async (_event, oldRoot) => chatHistory.assignFolderToActiveFolder(oldRoot));
 }
 
 module.exports = { registerChatHistoryHandlers };

@@ -353,7 +353,7 @@ export function initUsageReportDialog({ api, getActiveRoot, openFolder, openChat
   function drawFootnote() {
     const full = report?.historyFull;
     footnoteEl.textContent = full
-      ? t('usage.footnote.full', { max: report.historyChats })
+      ? t('usage.footnote.full', { max: report.historyFolderLimit ?? report.historyChats })
       : t('usage.footnote');
   }
 

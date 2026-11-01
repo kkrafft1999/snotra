@@ -19,7 +19,12 @@ test('a question about Snotra is answered from the bundled manual', { timeout: 1
   const home = await makeTempDir('snotra-manual-tools-home-');
   await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
-  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'de' }), 'utf8');
+  // The fake model listens on 127.0.0.1 and so gets the narrow local budget
+  // (40,000 characters). A manual page fills most of it, and every tool
+  // schema added since takes from the rest, until the search result is
+  // shortened before the model reads it (#1315). Room as for a cloud model:
+  // this test is about the manual tools, not about the local budget.
+  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'de', historyCharLimit: 200_000 }), 'utf8');
 
   const snotra = await launchApp({ userDataDir, home });
   t.after(async () => {

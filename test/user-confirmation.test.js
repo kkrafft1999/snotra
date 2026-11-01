@@ -264,6 +264,27 @@ test('restore: a workspace whose default is "Auto" gives it to its chats, which 
     'the chat got "Auto" from a confirmed default and keeps it');
 });
 
+test('store: a pick for the chat on screen is the default of its workspace too (#1337)', async (t) => {
+  const { store, confirmed } = await wiredStore(t);
+  await store.setMode('ask-all', { chatId: 'chat-a', workspaceRoot: ROOT });
+  assert.equal(await store.readWorkspaceMode(ROOT), 'ask-all');
+  assert.equal(await store.readWorkspaceMode('/elsewhere'), 'smart', 'only the open workspace');
+
+  // "Auto" without a receipt changes neither the chat nor the default.
+  assert.equal((await store.setMode('auto', { chatId: 'chat-a', workspaceRoot: ROOT })).ok, false);
+  assert.equal(await store.readWorkspaceMode(ROOT), 'ask-all');
+
+  // One receipt for the chat covers its workspace; a new chat there gets "Auto" back.
+  await store.setMode('auto', { chatId: 'chat-a', workspaceRoot: ROOT, ...confirmed(A.MODE_AUTO, 'chat-a') });
+  assert.equal(await store.readWorkspaceMode(ROOT), 'auto');
+  assert.equal((await store.restoreMode('auto', { chatId: 'chat-new', workspaceRoot: ROOT })).ok, true);
+
+  // Back to "Smart": the workspace is back to having no default.
+  await store.setMode('smart', { chatId: 'chat-a', workspaceRoot: ROOT });
+  assert.equal(await store.readWorkspaceMode(ROOT), 'smart');
+  assert.deepEqual((await store.read()).workspaceModes, {});
+});
+
 test('restore: a failed signature and a full reset forget every confirmed chat', async (t) => {
   const { store, confirmed } = await wiredStore(t);
   await store.setMode('auto', { chatId: 'chat-a', ...confirmed(A.MODE_AUTO, 'chat-a') });

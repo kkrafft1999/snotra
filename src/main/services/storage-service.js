@@ -128,7 +128,8 @@ const EXECUTION_SWITCH_KEYS = ['shellExecutionEnabled', 'pythonExecutionEnabled'
  * @param {typeof import('fs/promises')} deps.fs
  * @param {typeof import('path')} deps.path
  * @param {import('../ports/provider-catalog-port').ProviderCatalogPort} deps.providerCatalog
- * @param {number} deps.maxChatSessions
+ * @param {number} deps.maxChatSessions  the ceiling across all folders: reported, never applied by dropping (#1320)
+ * @param {number} [deps.maxChatSessionsPerFolder]  the chats a folder keeps beyond those marked *Keep* (#1320)
  * @param {number} deps.maxFolderHistory
  * @param {string} deps.defaultProviderId
  * @param {{ warn?: (message: string) => void, info?: (message: string) => void }|null} [deps.log]
@@ -146,6 +147,8 @@ function createStorageService({
   path,
   providerCatalog,
   maxChatSessions,
+  // Without a value of its own, one folder may fill the whole ceiling.
+  maxChatSessionsPerFolder = maxChatSessions,
   maxFolderHistory,
   defaultProviderId,
   log = console,
@@ -167,6 +170,7 @@ function createStorageService({
   const MCP_CONFIG_FILENAME = 'mcp-servers.json';
 
   const MAX_CHAT_SESSIONS = maxChatSessions;
+  const MAX_CHAT_SESSIONS_PER_FOLDER = maxChatSessionsPerFolder;
   const MAX_FOLDER_HISTORY = maxFolderHistory;
   const DEFAULT_PROVIDER = defaultProviderId;
 
@@ -1637,7 +1641,7 @@ function createStorageService({
     reportStoreFile,
     normalizeWorkspaceRoot,
     noWorkspaceKey: NO_WORKSPACE_KEY,
-    maxChatSessions: MAX_CHAT_SESSIONS,
+    maxChatSessionsPerFolder: MAX_CHAT_SESSIONS_PER_FOLDER,
     log,
     platform,
   });
@@ -1792,8 +1796,27 @@ function createStorageService({
     return sessionWs === (workspaceRoot || null);
   }
 
+  /**
+   * Is a chat's folder still there (#1320)? Only a folder that is certainly
+   * gone counts as missing: a stat that fails for another reason — no
+   * permission, say — leaves the chat where it is rather than offering to
+   * move it.
+   *
+   * @param {unknown} workspaceRoot
+   */
+  async function workspaceRootExists(workspaceRoot) {
+    const root = normalizeWorkspaceRoot(workspaceRoot);
+    if (!root) return false;
+    try {
+      return (await fs.stat(root)).isDirectory();
+    } catch (error) {
+      return error?.code !== 'ENOENT' && error?.code !== 'ENOTDIR';
+    }
+  }
+
   return {
     MAX_CHAT_SESSIONS,
+    MAX_CHAT_SESSIONS_PER_FOLDER,
     whenWritesSettled,
     getUIPrefsPath,
     readLLMConfig,
@@ -1844,6 +1867,7 @@ function createStorageService({
     getValidatedFolderHistory,
     removeFolderFromHistory,
     sessionMatchesWorkspace,
+    workspaceRootExists,
   };
 }
 

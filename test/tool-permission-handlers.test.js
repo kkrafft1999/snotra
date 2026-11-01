@@ -579,6 +579,39 @@ test('workspace default: binds main\'s root, voids no card and no approval, and 
   assert.equal(dialogCalls.length, 1);
 });
 
+// #1337: the pick in the mode pill is the open workspace's default as well.
+test('workspace default: a mode picked for the chat becomes it, "Auto" with one dialog naming the folder', async (t) => {
+  const { invoke, dialogCalls, toolPolicyStore } = await setup(t, { dialogResponse: 0, locale: 'en' });
+  const sender = makeSender();
+
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'ask-all')).ok, true);
+  assert.equal(await toolPolicyStore.readWorkspaceMode('/work/projekt'), 'ask-all');
+  assert.equal(dialogCalls.length, 0);
+
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'auto')).ok, true);
+  assert.equal(dialogCalls.length, 1, 'one dialog for chat and folder');
+  assert.equal(dialogCalls[0].message, 'Switch on Auto (full access)?');
+  assert.match(dialogCalls[0].detail, /Every new chat in \/work\/projekt will start in “Auto” as well, also after an app restart\./);
+  const state = await invoke(REQ.TOOL_PERMISSIONS_GET_STATE, sender);
+  assert.equal(state.mode, 'auto');
+  assert.equal(state.workspaceMode, 'auto');
+
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'smart')).ok, true);
+  assert.equal(await toolPolicyStore.readWorkspaceMode('/work/projekt'), 'smart');
+});
+
+test('workspace default: a cancelled "Auto" leaves it alone; without a folder the dialog names none', async (t) => {
+  const cancelled = await setup(t, { dialogResponse: 1, locale: 'en' });
+  const sender = makeSender();
+  await cancelled.invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'ask-all');
+  assert.equal((await cancelled.invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'auto')).code, 'cancelled');
+  assert.equal(await cancelled.toolPolicyStore.readWorkspaceMode('/work/projekt'), 'ask-all');
+
+  const noFolder = await setup(t, { dialogResponse: 0, locale: 'en', workspaceRoot: null });
+  assert.equal((await noFolder.invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'auto')).ok, true);
+  assert.doesNotMatch(noFolder.dialogCalls[0].detail, /new chat/);
+});
+
 test('workspace default: no workspace, no change; an unknown mode is refused', async (t) => {
   const { invoke, dialogCalls } = await setup(t, { workspaceRoot: null });
   const sender = makeSender();
@@ -716,8 +749,10 @@ test('the Security overview follows the workspace default, not the chat on scree
     describeExecutionTools: async () => ({ active: ['shell_execute'], sandbox: { status: 'isolated', isolated: true } }),
   });
   const sender = makeSender();
-  // The chat on screen switches to Auto; the folder default stays Smart.
+  // The chat on screen switches to Auto, which makes it the folder default
+  // too (#1337); the settings put the default back to Smart.
   assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_MODE, sender, 'auto')).ok, true);
+  assert.equal((await invoke(REQ.TOOL_PERMISSIONS_SET_WORKSPACE_MODE, sender, 'smart')).ok, true);
   sessionGrants.grant({ scopeKey: 's', tool: 'write_file_text', targets: [{ path: 'a' }], riskClasses: ['write'], chatId: 'chat-a' });
   sessionGrants.grant({ scopeKey: 's', tool: 'write_file_text', targets: [{ path: 'b' }], riskClasses: ['write'], chatId: 'other-folder' });
 

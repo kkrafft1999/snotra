@@ -25,6 +25,8 @@ const ADAPTER_DIRS = ['src/main/adapters', 'src/main/remote'];
 const IMPLEMENTING_SERVICES = [
   'src/main/services/shell-runner-service.js',
   'src/main/services/python-runner-service.js',
+  // The earlier chats of the open workspace, for search_chats (#1315).
+  'src/main/services/chat-search-service.js',
   'src/main/electron/native-confirmation-adapter.js',
   'src/main/electron/power-save-adapter.js',
   'src/main/electron/safe-storage-backend.js',
