@@ -16,6 +16,7 @@ const { CHAT_ACTIVATION, sanitizeChatId } = require('../../shared/contracts/chat
 const { datedSessionCost, dayKeyOf, mergeSessionCost, normalizeSessionCost, withCostDays } = require('../../shared/contracts/cost');
 const { isTaskKindId, mayReplaceTaskKind } = require('../../shared/contracts/task-kind');
 const { CHAT_HISTORY_UNREADABLE } = require('./chat-history-store');
+const { CHAT_LOCALITY } = require('./chat-history-normalization');
 
 /**
  * Without an attachment store the history behaves as before #94: image data
@@ -78,6 +79,13 @@ function createChatHistoryService({
    * @type {Map<string, import('../../shared/contracts/cost').SessionCost>}
    */
   const pendingCost = new Map();
+  /**
+   * Chats with a turn on a cloud model before their first save (#1315): the
+   * first save stores them as `cloud` rather than `local`.
+   *
+   * @type {Set<string>}
+   */
+  const pendingCloud = new Set();
   /**
    * Chats deleted in this run of the app (#981): a turn still under way in one
    * of them must not write it back.
@@ -143,17 +151,56 @@ function createChatHistoryService({
   }
 
   /**
+   * The chats whose folder is gone (#1320) — renamed, moved or deleted. They
+   * are offered to the open folder; with no folder open there is nothing to
+   * assign them to. Each folder is looked at once, however many chats it has.
+   *
+   * @param {import('../ports/chat-history-store-port').SessionMeta[]} all
+   * @param {string|null} wsRoot  the open folder, normalised
+   */
+  async function orphanedChats(all, wsRoot) {
+    if (!wsRoot) return [];
+    const roots = new Set();
+    for (const s of all) {
+      const root = chatHistoryStore.normalizeWorkspaceRoot(s.workspaceRoot);
+      if (root && root !== wsRoot) roots.add(root);
+    }
+    const gone = new Set();
+    await Promise.all([...roots].map(async (root) => {
+      if (!(await chatHistoryStore.workspaceRootExists(root))) gone.add(root);
+    }));
+    return all.filter((s) => gone.has(chatHistoryStore.normalizeWorkspaceRoot(s.workspaceRoot)));
+  }
+
+  /**
+   * @param {import('../ports/chat-history-store-port').SessionMeta} meta
+   * @param {string|null} wsRoot
+   */
+  async function isOrphaned(meta, wsRoot) {
+    return (await orphanedChats([meta], wsRoot)).length === 1;
+  }
+
+  /**
    * The list carries no messages (#985): every chat of the folder with what
-   * its row shows, and which one the folder opens with.
+   * its row shows, and which one the folder opens with. Since #1320 also the
+   * chats whose folder is gone, and where the limits stand: the folder's
+   * count against its limit (chats marked *Keep* do not count), and the
+   * whole history against the ceiling, which is reported here instead of
+   * being applied by dropping chats.
    */
   async function listForActiveFolder() {
     const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
-    const sessions = (await chatHistoryStore.listSessions())
-      .filter((s) => chatHistoryStore.sessionMatchesWorkspace(s, wsRoot))
-      .map((s) => chatHistoryStore.normalizeSessionMetaForList(s))
-      .filter(Boolean);
+    const all = await chatHistoryStore.listSessions();
+    const own = all.filter((s) => chatHistoryStore.sessionMatchesWorkspace(s, wsRoot));
+    const toRow = (/** @type {import('../ports/chat-history-store-port').SessionMeta} */ s) => chatHistoryStore.normalizeSessionMetaForList(s);
+    const sessions = own.map(toRow).filter(Boolean);
+    const orphaned = (await orphanedChats(all, wsRoot)).map(toRow).filter(Boolean);
     const activeChatId = await chatHistoryStore.getActiveChatId(chatHistoryStore.workspaceBucketKey(wsRoot));
-    return { sessions, activeChatId, workspaceRoot: wsRoot };
+    const limits = {
+      folder: { count: own.filter((s) => s.keep !== true).length, max: chatHistoryStore.MAX_CHAT_SESSIONS_PER_FOLDER },
+      overall: { count: all.length, max: chatHistoryStore.MAX_CHAT_SESSIONS, reached: all.length >= chatHistoryStore.MAX_CHAT_SESSIONS },
+    };
+    return { sessions, orphaned, activeChatId, workspaceRoot: wsRoot, limits };
   }
 
   /**
@@ -202,8 +249,8 @@ function createChatHistoryService({
 
   /**
    * Saves a chat as the renderer holds it. Model, mode, level and overrides
-   * are main's word, the time stamp is set here, and the oldest chats beyond
-   * `MAX_CHAT_SESSIONS` go with their images.
+   * are main's word, the time stamp is set here, and the oldest chats of its
+   * folder beyond `MAX_CHAT_SESSIONS_PER_FOLDER` go with their images (#1320).
    *
    * @param {any} sessionRow  straight from the renderer
    */
@@ -239,13 +286,25 @@ function createChatHistoryService({
         {
           ...(sessionRow || {}),
           messages,
-          workspaceRoot: await resolveSessionWorkspaceRoot(sessionRow),
+          // A stored chat stays in its folder (#1320): only *Assign to this
+          // folder* moves it, and a save from a turn that began before the move
+          // must not carry it back.
+          workspaceRoot: existing
+            ? chatHistoryStore.normalizeWorkspaceRoot(existing.workspaceRoot)
+            : await resolveSessionWorkspaceRoot(sessionRow),
           ...sessionSettings,
           // The cost is main's word as well (#981): summed per turn by the
           // conversation service, never taken from the renderer.
           cost: mergeSessionCost(existing?.cost, pendingCost.get(sessionId)),
           // The kind of task likewise (#1281): set by `setTaskKind` alone.
           taskKind: existing?.taskKind,
+          // *Keep* likewise (#1320): set by `setKeep` alone.
+          keep: existing?.keep,
+          // Where its turns ran (#1315): `local` from the first save, `cloud`
+          // from `markCloudTurn` alone. A chat from before keeps having none.
+          locality: existing
+            ? existing.locality
+            : (pendingCloud.has(sessionId) ? CHAT_LOCALITY.CLOUD : CHAT_LOCALITY.LOCAL),
           // A time the renderer sends does not count (#245): it writes the chat
           // also when nothing was said — on leaving, on a model switch, for a
           // title that came later. Main sets the stamp just below, and only for
@@ -263,14 +322,15 @@ function createChatHistoryService({
         existing && previousUpdatedAt !== null && !chatHistoryStore.storedChatMessagesChanged(existing.messages, normalized.messages)
           ? previousUpdatedAt
           : now();
-      // The store drops the oldest chats beyond MAX_CHAT_SESSIONS, with their
-      // folder pointers.
+      // The store drops the oldest chats of the folder beyond its limit, with
+      // their folder pointers; chats marked *Keep* stay (#1320).
       const { droppedIds } = await chatHistoryStore.saveSession(normalized);
       // Under the same lock: the images of the chats this save dropped go by
       // id. Everything else without a session is swept only while no history
       // lies moved aside next to this one — the folders may belong to its
       // chats, and the copy is kept so that it can be recovered (#565).
       pendingCost.delete(sessionId);
+      pendingCloud.delete(sessionId);
       for (const id of droppedIds) await chatAttachments.deleteChat(id);
       if (!(await chatHistoryStore.hasSetAsideChatHistory())) {
         await chatAttachments.pruneChats((await chatHistoryStore.listSessions()).map((s) => s.id));
@@ -310,6 +370,84 @@ function createChatHistoryService({
         await chatHistoryStore.setActiveChatId(wsKey, id);
       }
       return { ok: true };
+    }));
+  }
+
+  /**
+   * Marks a chat of the open folder *Keep*, or takes the mark off (#1320). A
+   * kept chat is exempt from every limit; one that loses the mark counts
+   * again from the folder's next save on.
+   *
+   * @param {unknown} rawId
+   * @param {unknown} keep
+   */
+  function setKeep(rawId, keep) {
+    return skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
+      const id = sanitizeChatId(rawId);
+      if (!id || typeof keep !== 'boolean') return { ok: false };
+      const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
+      const meta = await chatHistoryStore.getSessionMeta(id);
+      // Only the open folder's chats, as the list hands them out (#68).
+      if (!meta || !chatHistoryStore.sessionMatchesWorkspace(meta, wsRoot)) return { ok: false };
+      if ((meta.keep === true) === keep) return { ok: true, keep };
+      const written = await chatHistoryStore.patchSession(id, { keep: keep ? true : undefined }, { withFile: true });
+      return written ? { ok: true, keep } : { ok: false };
+    }));
+  }
+
+  /**
+   * Moves one chat into the open folder, its file with it, and drops the old
+   * folder's pointer to it. Runs under the history lock.
+   *
+   * @param {import('../ports/chat-history-store-port').SessionMeta} meta
+   * @param {string} wsRoot
+   */
+  async function moveIntoFolder(meta, wsRoot) {
+    const previousKey = chatHistoryStore.workspaceBucketKey(chatHistoryStore.normalizeWorkspaceRoot(meta.workspaceRoot));
+    if (!(await chatHistoryStore.patchSession(meta.id, { workspaceRoot: wsRoot }, { withFile: true }))) return false;
+    if ((await chatHistoryStore.getActiveChatId(previousKey)) === meta.id) await chatHistoryStore.setActiveChatId(previousKey, null);
+    return true;
+  }
+
+  /**
+   * Moves a chat whose folder is gone into the open folder (#1320). The
+   * renderer names the chat alone: the target is always the open folder, and
+   * only a chat whose folder is certainly gone moves — a chat of a folder
+   * that is still there is not taken from it this way. The folder's limit is
+   * applied at its next save, as for every chat.
+   *
+   * @param {unknown} rawId
+   */
+  function assignToActiveFolder(rawId) {
+    return skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
+      const id = sanitizeChatId(rawId);
+      const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
+      if (!id || !wsRoot) return { ok: false };
+      const meta = await chatHistoryStore.getSessionMeta(id);
+      if (!meta || !(await isOrphaned(meta, wsRoot))) return { ok: false };
+      if (!(await moveIntoFolder(meta, wsRoot))) return { ok: false };
+      return { ok: true, workspaceRoot: wsRoot };
+    }));
+  }
+
+  /**
+   * Moves every chat of a folder that is gone into the open folder (#1320):
+   * a rename leaves all of a folder's chats behind at once. The renderer
+   * names the old folder as the list showed it; the same rules hold as for
+   * one chat. `count` is how many moved.
+   *
+   * @param {unknown} rawRoot
+   */
+  function assignFolderToActiveFolder(rawRoot) {
+    return skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
+      const from = chatHistoryStore.normalizeWorkspaceRoot(rawRoot);
+      const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
+      if (!from || !wsRoot || from === wsRoot) return { ok: false, count: 0 };
+      if (await chatHistoryStore.workspaceRootExists(from)) return { ok: false, count: 0 };
+      const chats = (await chatHistoryStore.listSessions()).filter((s) => chatHistoryStore.sessionMatchesWorkspace(s, from));
+      let count = 0;
+      for (const meta of chats) if (await moveIntoFolder(meta, wsRoot)) count += 1;
+      return count > 0 ? { ok: true, count, workspaceRoot: wsRoot } : { ok: false, count: 0 };
     }));
   }
 
@@ -410,6 +548,28 @@ function createChatHistoryService({
   }
 
   /**
+   * A turn of this chat goes to a cloud model (#1315, decision 13): from now
+   * on the chat is no longer local, for good. Called before the turn is sent;
+   * a chat not saved yet takes it along with its first save.
+   *
+   * @param {unknown} chatId
+   * @returns {Promise<boolean>} whether the chat is marked (or will be, on its first save)
+   */
+  function markCloudTurn(chatId) {
+    return /** @type {Promise<boolean>} */ (chatHistoryStore.withChatHistoryLock(async () => {
+      const id = sanitizeChatId(chatId);
+      if (!id) return false;
+      const meta = await chatHistoryStore.getSessionMeta(id);
+      if (!meta) {
+        pendingCloud.add(id);
+        return true;
+      }
+      if (meta.locality === CHAT_LOCALITY.CLOUD) return true;
+      return chatHistoryStore.patchSession(id, { locality: CHAT_LOCALITY.CLOUD });
+    }));
+  }
+
+  /**
    * Names a stored chat (#359, #981). A chat deleted meanwhile is not brought back.
    *
    * @param {string} chatId
@@ -453,11 +613,15 @@ function createChatHistoryService({
     saveSession,
     deleteSession,
     setActive,
+    setKeep,
+    assignToActiveFolder,
+    assignFolderToActiveFolder,
     activate,
     readAttachment,
     load,
     save,
     addCost,
+    markCloudTurn,
     setTitle,
     setTaskKind,
   };

@@ -287,14 +287,29 @@ test('the report names the chat, its descriptor when it has no title, and the pr
   const titled = chat('titled', [['2026-10-02', entry()]], { title: 'Plan the release' });
   const untitled = { ...chat('untitled', [['2026-10-03', entry()]], { title: '' }), untitled: { key: 'chat.title.new' } };
   untitled.cost = { ...untitled.cost, priceTable: { date: '2026-09-01', origin: 'downloaded' } };
-  const report = buildUsageReport([titled, untitled], { from: null, to: null }, { maxChats: 2 });
+  const report = buildUsageReport([titled, untitled], { from: null, to: null }, { maxChatsPerFolder: 2 });
   const byId = Object.fromEntries(report.chats.map((c) => [c.id, c]));
   assert.equal(byId.titled.title, 'Plan the release');
   assert.equal(byId.titled.untitled, undefined);
   assert.deepEqual(byId.untitled.untitled, { key: 'chat.title.new' });
   assert.deepEqual(report.priceTables, { from: '2026-09-01', to: '2026-10-15' });
-  assert.equal(report.historyFull, true, 'the history is at its limit');
-  assert.equal(buildUsageReport([titled], { from: null, to: null }, { maxChats: 200 }).historyFull, false);
+  assert.equal(report.historyFull, true, 'the folder is at its limit');
+  assert.equal(report.historyFolderLimit, 2);
+  assert.equal(buildUsageReport([titled], { from: null, to: null }, { maxChatsPerFolder: 200 }).historyFull, false);
+});
+
+test('the history is full when one folder is at its limit, not counting chats marked Keep (#1320)', () => {
+  const all = { from: null, to: null };
+  const a1 = chat('a1', [['2026-10-02', entry()]]);
+  const a2 = chat('a2', [['2026-10-02', entry()]]);
+  const b1 = chat('b1', [['2026-10-02', entry()]], { workspaceRoot: '/work/b' });
+  const none = chat('n1', [['2026-10-02', entry()]], { workspaceRoot: null });
+  assert.equal(buildUsageReport([a1, b1, none], all, { maxChatsPerFolder: 2 }).historyFull, false, 'spread over folders');
+  assert.equal(buildUsageReport([a1, a2, b1], all, { maxChatsPerFolder: 2 }).historyFull, true);
+  assert.equal(buildUsageReport([a1, { ...a2, keep: true }, b1], all, { maxChatsPerFolder: 2 }).historyFull, false, 'a kept chat does not count');
+  const report = buildUsageReport([a1], all);
+  assert.equal(report.historyFull, false);
+  assert.equal(report.historyFolderLimit, null);
 });
 
 test('a history of 1,000 chats is added up from the index in well under a second', () => {

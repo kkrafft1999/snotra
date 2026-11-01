@@ -1,6 +1,6 @@
 ---
 title: Einen früheren Chat fortsetzen
-description: Beginne einen neuen Chat, geh zu einem früheren zurück, lass einen Chat im Hintergrund weiterarbeiten und lösch, was du nicht mehr brauchst.
+description: Beginne einen neuen Chat, geh zu einem früheren zurück, lass einen Chat im Hintergrund weiterarbeiten, behalte die wichtigen, frag nach früheren und lösch, was du nicht mehr brauchst.
 sidebar:
   order: 7
 ---
@@ -22,6 +22,10 @@ Klick auf den Knopf ganz rechts in der Titelleiste, *Chat-Verlauf einblenden*. D
 - **Einen neuen Chat beginnen:** *Neuer Chat* oben im Verlauf, *Datei › Neuer Chat* oder `Cmd+N` / `Strg+N`.
 - **Zu einem Chat zurückgehen:** Klick ihn im Verlauf an. Er kommt mit seinen Nachrichten, seinem Modell, seiner Reasoning-Stufe und seinem Modus zurück.
 - **Einen Chat löschen:** Klick auf den Papierkorb daneben und bestätige *Diesen Chat löschen?* mit *Löschen*. Bilder, die du angehängt hattest, verschwinden mit ihm.
+- [seit 1.30] **Einen Chat behalten:** Zeig auf ihn und klick auf das Lesezeichen neben dem Papierkorb, *Chat behalten*. Das Lesezeichen bleibt gefüllt; ein behaltener Chat wird nie entfernt, um Platz zu schaffen. Ein weiterer Klick nimmt die Markierung wieder weg.
+- [seit 1.30] **Chats aus einem umbenannten Ordner zurückholen:** Gehören Chats zu einem Ordner, den es nicht mehr gibt, sagt ein Hinweis über der Liste, wie viele es sind, zum Beispiel *4 Chats aus Ordnern, die es nicht mehr gibt*. Klick auf *Ansehen*: Die Chats erscheinen nach dem Ordner gruppiert, in dem sie lagen. *Zuordnen* holt einen Chat in den gerade geöffneten Ordner, *Alle zuordnen* jeden Chat dieses alten Ordners.
+
+![Die Verlaufsspalte. Oben der aufgeklappte Hinweis „4 Chats aus Ordnern, die es nicht mehr gibt“ mit dem alten Ordner „garten“ und drei Chats, jeder mit „Zuordnen“, und „Alle zuordnen“ neben dem Ordner; darunter „balkonkraeuter“ mit einem Chat. Unter dem Hinweis die Chats des Ordners; „Überblick Gartenplaner“ und „Fruchtfolge fürs nächste Jahr“ tragen ein gefülltes Lesezeichen.](screenshots/history-keep.webp)
 
 ## Was dann passiert
 
@@ -30,10 +34,35 @@ Klick auf den Knopf ganz rechts in der Titelleiste, *Chat-Verlauf einblenden*. D
 - [seit 1.25] **Eine abgebrochene Antwort behält ihre fertigen Schritte.** Schließt sich Snotra oder stürzt ab, während eine Antwort läuft, oder lädst du das Fenster mit *Ansicht › Neu laden* neu, behält der Chat jeden Schritt, der schon fertig war. Die Antwort kommt mit dem Hinweis *Unterbrochen.* darunter zurück; schick deine Frage noch einmal, um weiterzumachen. Ein Neuladen hält die laufende Antwort an.
 - [seit 1.23] **Jeder Chat zeigt, was er gekostet hat.** Neben der Uhrzeit stehen im Verlauf die geschätzten API-Kosten des Chats, zum Beispiel *~0,42 $*. Mehr unter [Sehen, was ein Chat kostet](../chat-cost/).
 - **Ein neuer Chat beginnt frisch:** ohne das frühere Gespräch, ohne Markierungen im Baum, im Standardmodus des Ordners.
+- [seit 1.30] **Jeder Ordner behält seine 200 jüngsten Chats.** Darüber hinaus geht der älteste, sobald ein neuer gespeichert wird — Chats, die du mit *Behalten* markiert hast, bleiben und zählen nicht mit. Was du in anderen Ordnern tust, verdrängt nie die Chats dieses Ordners; Chats ohne Ordner zählen als eigener Ordner.
+- [seit 1.30] **Zugeordnete Chats gehören von da an zum geöffneten Ordner:** Sie stehen in seinem Verlauf und öffnen sich wie jeder andere Chat. Einen Chat aus einem fehlenden Ordner kannst du erst öffnen, wenn du ihn zugeordnet hast.
+- [seit 1.30] **Über 2.000 Chats insgesamt sagt der Verlauf Bescheid.** Ein Hinweis am Ende der Liste sagt es dir; entfernt wird deshalb nichts. Lösch die Chats, die du nicht mehr brauchst.
 
 Der Verlauf liegt verschlüsselt in deinem Profil, nicht im Projektordner.
+
+## Nach früheren Chats fragen
+
+[seit 1.30] Frag nach etwas aus einem früheren Gespräch — „Was haben wir zum Release-Marker entschieden?“, „Wie haben wir den Login beim letzten Mal repariert?“ — und das Modell durchsucht die früheren Chats des geöffneten Ordners mit `search_chats` und liest den passenden. Im Chat steht der Schritt als *In früheren Chats nach „Release-Marker“ gesucht*.
+
+- **Nur die Chats dieses Ordners.** Ein Chat aus einem anderen Ordner wird nie gefunden. Ist kein Ordner geöffnet, durchsucht es die Chats ohne Ordner.
+- **Nicht der Chat, in dem du bist.** Den hat das Modell ohnehin vor sich.
+- **Stichwörter, keine Bedeutung.** Ein Chat wird gefunden, wenn er jedes Wort der Suche enthält. Findet sich nichts, versucht das Modell weniger oder andere Wörter.
+- **Was es findet, ist Information, kein Auftrag.** Ein früherer Chat kann Text aus einer Webseite oder einer Datei enthalten; Snotra prüft das Ergebnis auf Schlüssel und eingeschleuste Anweisungen, wie bei jedem Tool-Ergebnis.
+- **Keine Rückfrage.** Die Suche liest nur und ändert nichts. Soll das Modell nicht in deine früheren Chats schauen, schalte `search_chats` unter *Einstellungen › Tools › Autonomie* in der Zeile *Lesen* aus.
+
+### Lokale Chats bleiben lokal
+
+Ein Chat, der nur mit lokalen Modellen lief — Ollama, MLX oder ein Server auf `localhost` —, hat nie einen Cloud-Anbieter erreicht, und Snotra sorgt dafür, dass das so bleibt:
+
+- Aus einem Chat mit einem Cloud-Modell findet die Suche lokale Chats gar nicht, und sie sagt auch nicht, wie viele sie ausgelassen hat.
+- Aus einem lokalen Chat findet sie jeden Chat des Ordners.
+- Stellst du einen lokalen Chat auf ein Cloud-Modell um, sagt ein Hinweis unter der Titelleiste, was das heißt: Mit deiner nächsten Nachricht geht der ganze bisherige Chat an diesen Anbieter, und ab dann ist der Chat nicht mehr lokal — auch wenn du zurückwechselst.
+
+Chats aus der Zeit vor Version 1.30 gelten als lokal, wenn das Modell, auf das sie jetzt eingestellt sind, lokal ist.
 
 ## Wenn es nicht klappt
 
 - **Die Verlaufsspalte fehlt.** Das Fenster ist zu schmal für alle Spalten; der Verlauf weicht und kommt in einem breiteren Fenster zurück. Blende die Seitenleiste oder die mittlere Spalte aus, um Platz zu machen.
+- **Nach dem Umbenennen oder Verschieben eines Ordners fehlen Chats.** Sie sind noch da, unter dem alten Namen abgelegt. Öffne den Ordner unter seinem neuen Namen und ordne sie über *Ansehen* im Hinweis über dem Verlauf zu.
+- **Ein Ordner auf einem externen Laufwerk gilt als nicht mehr vorhanden.** Solange das Laufwerk nicht angeschlossen ist, kann Snotra ihn nicht von einem gelöschten Ordner unterscheiden. Schließ das Laufwerk an, statt seine Chats anderswo zuzuordnen.
 - **Ein Bild in einer Antwort eines älteren Chats zeigt einen Platzhalter.** Das Bild liegt in einem anderen Ordner als dem gerade geöffneten, oder die Datei ist weg. In Antworten zeigt Snotra Bilder nur aus dem geöffneten Ordner.

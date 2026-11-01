@@ -726,8 +726,8 @@ const MOTIFS = {
 
   /**
    * The mode menu, opened from the pill in the composer. The chat is switched
-   * to "Always ask" first — no system dialog on that way — so that the menu
-   * also offers it as the folder's default for new chats.
+   * to "Always ask" first — no system dialog on that way — which makes it the
+   * folder's default too (#1337), so the tag sits on it.
    */
   'mode-menu': {
     prefs: { chatPanelWidth: WIDE_CHAT },
@@ -738,8 +738,8 @@ const MOTIFS = {
       await poll(() => page.evaluate(() => document.getElementById('chat-tool-mode-wrap').dataset.mode === 'ask-all'),
         { what: 'chat on "Always ask"' });
       if (!(await shown(page, 'chat-tool-mode-menu'))) await page.click('#btn-chat-tool-mode');
-      await poll(() => page.evaluate(() => !document.getElementById('chat-tool-mode-footer').hidden),
-        { what: 'default for new chats offered' });
+      await poll(() => page.evaluate(() => !!document.querySelector('#chat-tool-mode-list [data-mode="ask-all"] .chat-tool-mode-default-tag')),
+        { what: 'default tag on "Always ask"' });
       // Off the pill that was clicked last, or its hover ring shows in some variants.
       await page.mouse.move(0, 0);
       return clipAround(page, ['#chat-tool-mode-menu', '#btn-chat-tool-mode'], 16);
@@ -1745,6 +1745,75 @@ const MOTIFS = {
       return page.evaluate(() => {
         const left = document.getElementById('chat-panel').getBoundingClientRect().left;
         return { x: left, y: 0, width: window.innerWidth - left, height: window.innerHeight };
+      });
+    },
+  },
+
+  /**
+   * The history column with kept chats and the unfolded note about chats
+   * from folders that no longer exist (#1320). Seeded before the start: the
+   * folder's chats, two of them kept, and chats filed under two folders next
+   * to the demo project that are not there.
+   */
+  'history-keep': {
+    text: {
+      en: {
+        own: [
+          ['Garden Planner overview', true],
+          ['Spacing of the radishes', false],
+          ['Crop rotation for next year', true],
+          ['Sowing calendar for March', false],
+        ],
+        gone: {
+          gardening: ['Which beds get the most sun?', 'Watering schedule for the raised beds', 'Order list for spring'],
+          'balcony-herbs': ['Basil keeps wilting'],
+        },
+      },
+      de: {
+        own: [
+          ['Überblick Gartenplaner', true],
+          ['Abstand der Radieschen', false],
+          ['Fruchtfolge fürs nächste Jahr', true],
+          ['Aussaatkalender für März', false],
+        ],
+        gone: {
+          garten: ['Welche Beete bekommen am meisten Sonne?', 'Gießplan für die Hochbeete', 'Bestellliste fürs Frühjahr'],
+          balkonkraeuter: ['Das Basilikum welkt ständig'],
+        },
+      },
+    },
+    async prepare({ userDataDir, workspace, locale }) {
+      const text = this.text[locale] ?? this.text.en;
+      const now = Date.now();
+      const turn = (question) => [{ role: 'user', content: question }, { role: 'assistant', content: '…' }];
+      const sessions = text.own.map(([title, keep], index) => ({
+        id: `own-${index}`, workspaceRoot: workspace, title, updatedAt: now - (index + 1) * 3_600_000,
+        messages: turn(title), ...(keep ? { keep: true } : {}),
+      }));
+      let n = 0;
+      for (const [folder, titles] of Object.entries(text.gone)) {
+        for (const title of titles) {
+          n += 1;
+          sessions.push({
+            id: `gone-${n}`, workspaceRoot: path.join(path.dirname(workspace), folder), title,
+            updatedAt: now - (n + 20) * 86_400_000, messages: turn(title),
+          });
+        }
+      }
+      await writeFile(path.join(userDataDir, 'chat-history.json'),
+        JSON.stringify({ version: 2, activeByWorkspace: { [workspace]: 'own-0' }, sessions }), 'utf8');
+    },
+    async setUp({ page }) {
+      await page.click('#btn-toggle-chat-history');
+      await poll(() => page.evaluate(() => document.querySelectorAll('#chat-history-list .chat-history-row').length >= 4),
+        { what: 'four chats in the history' });
+      await page.click('.chat-history-orphans-toggle');
+      await page.mouse.move(0, 0);
+      await page.evaluate(() => document.activeElement?.blur());
+      return page.evaluate(() => {
+        const column = document.getElementById('chat-history').getBoundingClientRect();
+        const last = document.querySelector('#chat-history-list > :last-child').getBoundingClientRect();
+        return { x: column.left, y: column.top, width: column.width, height: Math.min(column.height, last.bottom + 16 - column.top) };
       });
     },
   },
