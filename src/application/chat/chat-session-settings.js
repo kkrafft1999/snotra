@@ -110,6 +110,7 @@ const MAX_REMEMBERED_CHATS = 500;
  * @param {(presetId: string) => Promise<{ presetId?: unknown, reasoningEffort?: unknown }|null>} [deps.getPresetAlias]
  * @param {(chatId: string) => void} [deps.onChatModeChanged]
  * @param {(chatId: string|null) => void} [deps.onActivated]
+ * @param {(change: { chatId: string, presetId: string, previousPresetId: string|null }) => unknown} [deps.onPresetChosen]
  * @param {{ warn?: (message: string) => void }|null} [deps.log]
  */
 function createChatSessionSettings({
@@ -135,6 +136,9 @@ function createChatSessionSettings({
   onChatModeChanged = () => {},
   // Another chat is on screen now; main drops what only the left chat needed.
   onActivated = () => {},
+  // The chat on screen got another model entry by an explicit choice (#1315):
+  // a local chat switched to a cloud model is told what that means.
+  onPresetChosen = () => {},
   log = console,
 }) {
   /** @type {string|null} */
@@ -468,8 +472,15 @@ function createChatSessionSettings({
   async function rememberPreset(rawPresetId) {
     const presetId = chatModelPresetIdForStore(rawPresetId);
     if (!currentChatId || !presetId) return;
-    rememberLocal(currentChatId, { modelPresetId: presetId });
-    await persist(currentChatId, { modelPresetId: presetId });
+    const chatId = currentChatId;
+    const previousPresetId = (await storedValuesFor(chatId)).modelPresetId ?? null;
+    rememberLocal(chatId, { modelPresetId: presetId });
+    await persist(chatId, { modelPresetId: presetId });
+    try {
+      await onPresetChosen({ chatId, presetId, previousPresetId });
+    } catch (error) {
+      log?.warn?.(`[chat-session-settings] Hook failed: ${error?.message || error}`);
+    }
   }
 
   /**

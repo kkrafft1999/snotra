@@ -523,6 +523,8 @@ module.exports = {
   'settings.nav.developer': 'Entwickler',
   'notice.remoteWorkspaceSwitched': 'Vom Handy gewechselt',
   'notice.remoteWorkspaceSwitched.text': 'Dein Handy hat den Ordner „{folder}“ geöffnet.',
+  'notice.localChatToCloud': 'Mit deiner nächsten Nachricht geht dieser Chat in die Cloud',
+  'notice.localChatToCloud.text': 'Bisher lief er nur auf diesem Rechner. Deine nächste Nachricht schickt den ganzen bisherigen Chat an {provider}, und ab dann ist er nicht mehr lokal — auch wenn du zurückwechselst.',
   'notice.backgroundError.copy': 'Diagnose kopieren',
   'notice.backgroundError.copied': 'Kopiert',
   'notice.backgroundError.copyFailed': 'Kopieren fehlgeschlagen',
@@ -1749,6 +1751,8 @@ module.exports = {
   'tools.desc.read_manual_page': 'Lässt das Modell eine Seite des Handbuchs lesen, das mit dieser Version von Snotra ausgeliefert wird, oder einen Abschnitt daraus — in der Sprache der App oder in der anderen. Links der Seite kommen als Adressen auf docs.snotra-ai.dev mit, damit die Antwort dich zur Seite führen kann; ein Klick darauf öffnet sie im Hilfefenster. Es liest nur das Handbuch: keine deiner Dateien, nichts aus dem Internet, und es ändert nichts.',
   'tools.short.list_release_notes': 'Lässt das Modell lesen, was die Releases von Snotra für dich geändert haben.',
   'tools.desc.list_release_notes': 'Lässt das Modell die Hinweise zu den Releases von Snotra lesen — je Version Nummer, Datum und was sich für dich geändert hat, in der Sprache der App. Es nutzt das bei Fragen wie „Was hat sich seit 1.24.0 geändert?“ oder „Was ist in meiner Version neu?“, damit die Antwort aus den Hinweisen kommt statt aus einer Vermutung. Dafür fragt es bei GitHub die öffentliche Liste der Releases ab — dieselbe Anfrage wie die Update-Prüfung; nichts aus deinen Dateien oder diesem Gespräch geht mit. Ist GitHub nicht erreichbar, sagt es das. Es ändert nichts.',
+  'tools.short.search_chats': 'Lässt das Modell in deinen früheren Chats in diesem Ordner suchen.',
+  'tools.desc.search_chats': 'Lässt das Modell in deinen früheren Chats im geöffneten Ordner nach ein paar Wörtern suchen und mehr aus einem davon lesen — für Fragen wie „Was haben wir letzte Woche zum Release entschieden?“ oder „Wie haben wir das beim letzten Mal gelöst?“. Es findet nur die Chats dieses Ordners; ist kein Ordner geöffnet, nur die Chats ohne Ordner. Der aktuelle Chat wird nicht durchsucht. Ein Chat, der nur mit lokalen Modellen lief, wird nur aus einem Chat gefunden, der selbst lokal ist, nie aus einem mit einem Cloud-Modell. Was es findet, geht wie jedes andere Tool-Ergebnis ans Modell: geprüft auf Geheimnisse und auf eingeschleuste Anweisungen. Es ändert nichts.',
   'tools.short.propose_config_change': 'Lässt das Modell vorschlagen, einen Skill oder ein Tool für diesen Chat ein- oder auszuschalten; du entscheidest auf einer Karte.',
   'tools.desc.propose_config_change': 'Lässt das Modell vorschlagen, einen Skill oder ein Tool ein- oder auszuschalten, wenn das bei deiner Anfrage hilft. Du siehst eine Karte mit dem, was der Skill oder das Tool tut, und der Begründung des Modells, und entscheidest. Angenommen, gilt die Änderung nur für diesen Chat – neue Chats behalten deine Einstellungen. Das Modell schaltet nie selbst, und einen abgelehnten Vorschlag zeigt Snotra im selben Chat nicht noch einmal.',
 
@@ -2520,6 +2524,10 @@ module.exports = {
   'tools.line.readManualPage.done.plain': 'Handbuchseite gelesen',
   'tools.line.listReleaseNotes.start': 'Die Release Notes werden gelesen …',
   'tools.line.listReleaseNotes.done': 'Release Notes gelesen',
+  'tools.line.searchChats.start': 'Suche in früheren Chats nach „{query}“ …',
+  'tools.line.searchChats.done': 'In früheren Chats nach „{query}“ gesucht',
+  'tools.line.searchChats.start.plain': 'Ein früherer Chat wird gelesen …',
+  'tools.line.searchChats.done.plain': 'Einen früheren Chat gelesen',
 
   'tools.line.fetchUrl.start': 'Seite {host} wird gelesen …',
   'tools.line.fetchUrl.done': 'Seite {host} gelesen',

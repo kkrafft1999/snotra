@@ -82,7 +82,7 @@ test('the markup and the mapping name the same help links', () => {
   // section is open; every other entry has a button of its own.
   // A notice's link is built with the notice (#1001, #978), and the link of
   // a flagged tool result with its box (#1011), so they have no markup.
-  const builtByScript = new Set(['notice.store', 'notice.backgroundError', 'chat.injectionFlag']);
+  const builtByScript = new Set(['notice.store', 'notice.backgroundError', 'notice.localChat', 'chat.injectionFlag']);
   const sectionKeys = keys.filter((key) => !key.startsWith('panel.') && !builtByScript.has(key));
   for (const key of sectionKeys) assert.ok(inMarkup.has(key), `no button for "${key}" in index.html`);
   for (const key of inMarkup) assert.ok(keys.includes(key), `index.html names "${key}", the mapping does not`);

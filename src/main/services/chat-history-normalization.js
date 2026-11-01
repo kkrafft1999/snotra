@@ -126,7 +126,18 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  * @property {import('../../shared/contracts/cost').SessionCost} [cost]
  * @property {import('../../shared/contracts/task-kind').TaskKind} [taskKind]
  * @property {true} [keep]  marked *Keep*: exempt from every limit of the history (#1320)
+ * @property {ChatLocality} [locality]  where its turns ran (#1315); absent for a chat saved before
  */
+
+/**
+ * Where a chat's turns ran (#1315, decision 13). A chat starts `local` with
+ * its first save and turns `cloud` for good with its first turn on a cloud
+ * model: the whole history went to that provider with it. A chat saved before
+ * #1315 has neither; it counts as local when its current model is local.
+ */
+const CHAT_LOCALITY = Object.freeze({ LOCAL: 'local', CLOUD: 'cloud' });
+
+/** @typedef {(typeof CHAT_LOCALITY)[keyof typeof CHAT_LOCALITY]} ChatLocality */
 
 /**
  * The fields every form of a chat has.
@@ -195,6 +206,7 @@ const { normalizeMessageOrigin } = require('../../shared/contracts/remote/messag
  * @property {unknown} [cost]
  * @property {unknown} [taskKind]
  * @property {unknown} [keep]
+ * @property {unknown} [locality]
  */
 
 /**
@@ -644,8 +656,8 @@ function resolveSessionTitle(sessionRow, messages, existingTitle) {
 /**
  * The settings a chat carries beyond its messages, each optional: model and
  * permission mode (#211), reasoning level (#725), what it switched for itself
- * (#774), its estimated cost (#949), its kind of task (#1281) and the *Keep*
- * marker (#1320). Copied in this order, so that every
+ * (#774), its estimated cost (#949), its kind of task (#1281), the *Keep*
+ * marker (#1320) and where its turns ran (#1315). Copied in this order, so that every
  * form of a session lists its fields alike.
  *
  * @template {object} T
@@ -667,6 +679,7 @@ function copyChatSettings(from, out) {
   const taskKind = normalizeTaskKind(from.taskKind);
   if (taskKind) out.taskKind = taskKind;
   if (from.keep === true) out.keep = true;
+  if (from.locality === CHAT_LOCALITY.LOCAL || from.locality === CHAT_LOCALITY.CLOUD) out.locality = from.locality;
   return out;
 }
 
@@ -812,6 +825,7 @@ function sessionFromMeta(meta, messages) {
 }
 
 module.exports = {
+  CHAT_LOCALITY,
   inferChatTitle,
   chatModelPresetIdForStore,
   chatToolPermissionModeForStore,

@@ -168,6 +168,21 @@ function createProviderLlmAdapter({
     return reasoningLevelsFor(provider, model, storedConnectionFor(config, raw, provider));
   }
 
+  /**
+   * Where a model entry runs and who serves it (#1315): a chat's model, or
+   * with `null` the active one. Null when its provider is not known.
+   *
+   * @type {LlmPort['describePreset']}
+   */
+  async function describePreset(presetId) {
+    const config = await llmConfigStore.readLLMConfig();
+    const raw = llmConfigStore.resolveChatModelTarget(presetId ? { ...config, activePresetId: presetId } : config);
+    const provider = providerRuntime.getProvider(raw.providerId);
+    if (!provider) return null;
+    const bundle = await prepareSendBundle(toTarget(raw, null, storedConnectionFor(config, raw, provider)));
+    return { runsLocally: bundle.traits?.runsLocally === true, providerName: bundle.providerName };
+  }
+
   /** @param {string} [chatId] */
   async function readOwnPreset(chatId) {
     if (!chatId) return null;
@@ -325,6 +340,7 @@ function createProviderLlmAdapter({
   return {
     resolveChatTarget,
     reasoningLevelsFor: reasoningLevelsForChat,
+    describePreset,
     validateTarget,
     prepareSendBundle,
     streamRound,

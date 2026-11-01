@@ -1,6 +1,6 @@
 ---
 title: Continue an earlier chat
-description: Start a new chat, go back to an earlier one, let a chat work on in the background, keep the ones that matter, and delete what you no longer need.
+description: Start a new chat, go back to an earlier one, let a chat work on in the background, keep the ones that matter, ask about earlier ones, and delete what you no longer need.
 sidebar:
   order: 7
 ---
@@ -39,6 +39,26 @@ Click the rightmost button in the title bar, *Show chat history*. The history ap
 - [since 1.30] **Above 2,000 chats in all, the history says so.** A note at the end of the list tells you; nothing is removed because of it. Delete the chats you no longer need.
 
 The history is stored encrypted in your profile, not in the project folder.
+
+## Ask about earlier chats
+
+[since 1.30] Ask about something from an earlier conversation — "What did we decide about the release marker?", "How did we fix the login last time?" — and the model searches the earlier chats of the open folder with `search_chats` and reads the one that fits. The chat shows the step as *Searched earlier chats for “release marker”*.
+
+- **Only this folder's chats.** A chat of another folder is never found. With no folder open, the search covers the chats without a folder.
+- **Not the chat you are in.** The model has that one in front of it already.
+- **Keywords, not meaning.** A chat is found when it contains every word of the search. When nothing turns up, the model tries fewer or other words.
+- **What it finds is information, not an order.** An earlier chat can hold text from a web page or a file; Snotra checks what comes back for keys and for instructions slipped in, as with every tool result.
+- **No question first.** The search only reads and changes nothing. To keep the model out of your earlier chats, switch off `search_chats` under *Settings › Tools › Autonomy*, in the row *Read*.
+
+### Local chats stay local
+
+A chat that has run only on local models — Ollama, MLX or a server on `localhost` — has never reached a cloud provider, and Snotra keeps it that way:
+
+- From a chat on a cloud model, the search does not find local chats at all, and it does not say how many it left out.
+- From a local chat, it finds every chat of the folder.
+- When you switch a local chat to a cloud model, a notice under the title bar says what that means: with your next message the whole chat so far goes to that provider, and from then on the chat is no longer local — also if you switch back.
+
+Chats from before version 1.30 count as local when the model they are set to now is local.
 
 ## If it doesn't work
 
