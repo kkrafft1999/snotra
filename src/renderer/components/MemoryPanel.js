@@ -37,7 +37,11 @@ function formatChars(count) {
   return new Intl.NumberFormat(getLocale()).format(count);
 }
 
-export function initMemoryPanel({ api }) {
+/**
+ * @param {{ api: any, hints?: ReturnType<typeof import('./KnowledgeHints.js').createKnowledgeHints>|null }} deps
+ *   `hints`: the hint lines of the review (#1279), shared with the rules
+ */
+export function initMemoryPanel({ api, hints = null }) {
   const host = document.getElementById('settings-memory-scopes');
   const selfToggle = document.getElementById('input-memory-self');
   if (!host) return { refresh: async () => {} };
@@ -78,6 +82,7 @@ export function initMemoryPanel({ api }) {
 
     const text = document.createElement('span');
     text.className = 'memory-item__text';
+    text.id = `memory-text-${scope.scope}-${entry.line}`;
     text.textContent = entry.text;
     if (entry.origin === MEMORY_ORIGINS.SELF) {
       const badge = document.createElement('span');
@@ -112,6 +117,8 @@ export function initMemoryPanel({ api }) {
       }
       if (result?.ok && result.state) {
         const hadFocus = document.activeElement === forget;
+        // The hints name entries by their line: read them anew before drawing.
+        await hints?.reload();
         // Main found no such line with that text — the file changed in the
         // meantime. The list shows what it holds now, and says why the entry
         // may still be there.
@@ -128,6 +135,12 @@ export function initMemoryPanel({ api }) {
       }
     });
     item.appendChild(forget);
+    // The review's hints (#1279): one line under the entry, the rest folded.
+    const hintLine = hints?.line(hints.ofMemoryEntry(scope.scope, entry), { area: 'facts', describedBy: text.id });
+    if (hintLine) {
+      hintLine.classList.add('memory-item__hints');
+      item.appendChild(hintLine);
+    }
     return item;
   }
 
@@ -236,6 +249,8 @@ export function initMemoryPanel({ api }) {
     if (scope.truncated) parts.push(t('settings.memory.truncated'));
     meta.textContent = parts.join(' · ');
     card.appendChild(meta);
+    const limitLine = hints?.line(hints.ofMemoryFile(scope.scope), { area: 'facts' });
+    if (limitLine) card.appendChild(limitLine);
 
     return card;
   }
@@ -290,6 +305,8 @@ export function initMemoryPanel({ api }) {
       return;
     }
     for (const scope of state.scopes) host.appendChild(renderScope(scope));
+    const status = hints?.status('facts');
+    if (status && !status.isConnected) host.before(status);
   }
 
   // Language change (epic #277): the cards are built here, not in the markup.

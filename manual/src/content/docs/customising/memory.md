@@ -40,13 +40,30 @@ Both are ordinary Markdown files: you can read and edit them in any editor. The 
 
 *Settings › Knowledge* shows both levels with every entry, its date, and whether Snotra remembered it on its own.
 
-![Settings › Knowledge › Facts: the switch "Snotra may remember things on its own", the project memory of the folder garden-planner in .agents/memory.md with three entries — one marked "remembered on its own" — each with a bin, and the count of characters used.](screenshots/memory-settings.webp)
+![Settings › Knowledge › Facts: the switch "Snotra may remember things on its own", the project memory of the folder garden-planner in .agents/memory.md with three entries — one marked "remembered on its own", with the hint "Reads like a rule" under it — each with a bin, and the count of characters used.](screenshots/memory-settings.webp)
 
 - The bin next to an entry deletes it.
 - *Send along* switches a level off without deleting it.
 - ***Snotra may remember things on its own*** — Snotra also keeps by itself what looks important for later, always with an approval and visible in the tool log. Switch it off, and Snotra remembers only what you ask for.
 
 Changes in this section take effect at once.
+
+### Hints on entries
+
+[since 1.30] *Settings › Knowledge* points out entries that may need a look — without asking a model, and without changing anything on its own. A hint sits under its entry, with what you can do about it:
+
+![Settings › Knowledge › Facts: under the entry "Whenever you water the beds, use the rain barrel first" the hint "Reads like a rule" with Move to rules… and Dismiss; under "Today the south bed flooded" the hint "Reads like an episode" with Remove, Dismiss and +1 more.](screenshots/memory-hints.webp)
+
+| Hint | What you can do |
+| --- | --- |
+| *Reads like a rule* — *always*, *never*, *whenever*, *must* … | *Move to rules…* asks for the level and the rules file, writes the rule there and takes the entry out of memory. See [Give Snotra rules](../rules/). |
+| *Reads like a procedure* — steps, *first … then …* | *Create a skill…* asks for the skill's name and what it is for, writes it to `.agents/skills/` (or `~/.snotra/skills/` for the global memory) and takes the entry out of memory. An existing skill of that name is never written over. |
+| *Reads like an episode* — *today*, *right now*, something that happened once | *Remove*. A reason (*because …*) or a decision does not count as an episode. |
+| *Nearly the same as another entry* — at least 80 % of the words in common, in memory or a rules file of the same level; or *also kept globally* | *Remove* or *Edit*, which opens the file in your editor. |
+| *Noted on … — still true?* — more than 180 days old | *Remove* or *Edit*. An entry without a date never gets this hint. |
+| *Close to the limit* — 80 % of a level's 8,000 characters used | Ask Snotra in the chat to *review my memory*. |
+
+The hints know every language Snotra speaks, whatever language the interface is in. When an entry has more than one hint, the first shows and *+1 more* unfolds the rest. *Dismiss* hides a hint for that entry for good; it comes back only when the entry's words change. What a hint changes appears under *Last changes*, with *Undo*.
 
 ## What happens
 

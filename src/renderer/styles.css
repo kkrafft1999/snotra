@@ -14704,3 +14704,164 @@ select.modal-input {
 .knowledge-status:empty {
   display: none;
 }
+
+/* The review's hints (#1279, mockup variant A): a line under an entry or a
+ * file — the accent's wash and a bar in its border colour, words and no other
+ * colour. Amber is reserved for runs without isolation, and there is no green. */
+.knowledge-hints {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.memory-item__hints {
+  grid-column: 2 / 4;
+}
+
+.knowledge-row__body > .knowledge-hints {
+  margin-top: 6px;
+}
+
+.memory-card > .knowledge-hints {
+  margin-top: 6px;
+}
+
+.knowledge-level > .knowledge-hints {
+  margin: 4px 0 2px;
+}
+
+.knowledge-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 5px 8px;
+  border-left: 2px solid var(--ds-blue-border);
+  border-radius: 0 var(--ds-radius-md) var(--ds-radius-md) 0;
+  background: var(--ds-blue-soft);
+  font-size: var(--ds-font-size-sm);
+  line-height: 1.4;
+}
+
+.knowledge-hint__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--ds-blue-strong);
+}
+
+.knowledge-hint__text {
+  flex: 1 1 14em;
+  min-width: 0;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.knowledge-hint__actions {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.btn-secondary.knowledge-hint__btn {
+  padding: 3px 10px;
+  font-size: var(--ds-font-size-sm);
+  background: var(--ds-surface);
+}
+
+.knowledge-hint__dismiss,
+.knowledge-hint__more,
+.knowledge-disclosure {
+  padding: 3px 4px;
+  font: inherit;
+  font-size: var(--ds-font-size-sm);
+  background: none;
+  border: 0;
+  border-radius: var(--ds-radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.knowledge-hint__dismiss {
+  color: var(--text-muted-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.knowledge-hint__dismiss:hover,
+.knowledge-hint__more:hover {
+  color: var(--text-primary);
+}
+
+.knowledge-hint__more,
+.knowledge-disclosure {
+  color: var(--ds-blue-strong);
+}
+
+.knowledge-disclosure {
+  margin-top: 6px;
+  padding-left: 0;
+}
+
+.knowledge-disclosure::before {
+  content: '›';
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform var(--ds-motion-fast) ease;
+}
+
+.knowledge-disclosure[aria-expanded='true']::before {
+  transform: rotate(90deg);
+}
+
+.knowledge-hint-entries {
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.knowledge-hint-entries__item {
+  display: grid;
+  gap: 4px;
+  padding: 6px 0;
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.knowledge-hint-entries__item:first-child {
+  border-top: 0;
+}
+
+.knowledge-hint-entries__text {
+  margin: 0;
+  font-size: var(--ds-font-size-md);
+  line-height: var(--ds-line-height-prose);
+  overflow-wrap: anywhere;
+}
+
+.knowledge-hint-form {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 2px;
+  max-width: 420px;
+}
+
+.knowledge-hint-form__note {
+  margin: 0;
+  font-size: var(--ds-font-size-sm);
+  color: var(--text-muted-strong);
+}
+
+.knowledge-hint-status {
+  margin: 0 0 10px;
+  font-size: var(--ds-font-size-md);
+  color: var(--text-primary);
+}
+
+.knowledge-hint-status:empty {
+  display: none;
+}
+
+.knowledge-hint-status.is-error {
+  color: var(--ds-error);
+}

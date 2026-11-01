@@ -44,3 +44,10 @@ test('the result of remember carries the hint, and the entry is written all the 
   assert.equal(writes.length, 1);
   assert.match(result.hints[0], /reads like a rule/);
 });
+
+test('German "immer" and "nie" mark a rule anywhere, as "always" and "never" do — not "wie immer" or "immer noch"', () => {
+  assert.deepEqual(knowledgeHints({ kind: 'fact', text: 'Tomaten kommen immer ins Südbeet.' }), [KNOWLEDGE_HINTS.FACT_LOOKS_LIKE_RULE]);
+  assert.deepEqual(knowledgeHints({ kind: 'fact', text: 'Im Nordbeet wächst nie etwas Hohes.' }), [KNOWLEDGE_HINTS.FACT_LOOKS_LIKE_RULE]);
+  assert.deepEqual(knowledgeHints({ kind: 'fact', text: 'Die Tests laufen wie immer mit npm test.' }), []);
+  assert.deepEqual(knowledgeHints({ kind: 'fact', text: 'Das Projekt läuft immer noch auf Node 22.' }), []);
+});

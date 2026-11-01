@@ -42,6 +42,7 @@ Du musst die Datei nicht selbst schreiben: Bitte Snotra, sich eine Regel zu merk
 - Eine Datei ohne Beschreibung zählt trotzdem: Snotra nimmt ihre erste Überschrift oder ihre erste Zeile als Beschreibung. Eine Beschreibung, die sagt, *wann*, wirkt besser als eine, die sagt, *was*.
 - Jeder Listenpunkt ist eine Regel. Ein Datum am Zeilenanfang — `- 2026-10-31 — …` — sagt, wie alt sie ist.
 - Regeldateien werden auch aus `~/.agents/rules/` gelesen, wo andere Werkzeuge ihre ablegen. Eine gleichnamige Datei in `~/.snotra/rules/` hat Vorrang.
+- [seit 1.30] *Einstellungen › Wissen* markiert Regeln, die sich wie eine Episode lesen, die fast gleich mit einer anderen Regel oder einem Gedächtniseintrag sind oder älter als 180 Tage, und zwei Dateien einer Ebene, deren Namen sich nur wenig unterscheiden (`commit`, `commits`). Die Regeln einer Datei mit Hinweisen stehen hinter *1 Eintrag mit Hinweis* in ihrer Zeile; *Zusammenführen…* holt die Regeln der einen Datei in die andere, ohne die, die dort schon stehen, und entfernt die geleerte Datei. Dateien in `~/.agents/rules/` gehören den anderen Werkzeugen und werden nicht geändert. Siehe [Hinweise an Einträgen](../memory/#hinweise-an-einträgen).
 
 ### Wenn sich Regeln widersprechen
 

@@ -4,7 +4,7 @@
 // changes to knowledge files with Undo. A folder file that showed a covert
 // signal (#1280) is marked with the words of the context breakdown.
 
-import { t } from '../i18n.js';
+import { t, tPlural } from '../i18n.js';
 
 /** @param {string} tag @param {string} [className] @param {string} [text] */
 function el(tag, className, text) {
@@ -33,9 +33,10 @@ function charCount(chars) {
 }
 
 /**
- * @param {{ api: any }} deps
+ * @param {{ api: any, hints?: ReturnType<typeof import('./KnowledgeHints.js').createKnowledgeHints>|null }} deps
+ *   `hints`: the hint lines of the review (#1279), shared with the facts
  */
-export function initKnowledgePanel({ api } = {}) {
+export function initKnowledgePanel({ api, hints = null } = {}) {
   const rulesRoot = document.getElementById('settings-knowledge-rules');
   const agentsRoot = document.getElementById('settings-knowledge-agents');
   const journalRoot = document.getElementById('settings-knowledge-journal');
@@ -44,6 +45,8 @@ export function initKnowledgePanel({ api } = {}) {
 
   /** @type {any} */
   let state = null;
+  /** The entries of a rules file unfolded, kept across redraws. */
+  const openDisclosures = new Set();
   const status = el('p', 'knowledge-status');
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
@@ -60,6 +63,7 @@ export function initKnowledgePanel({ api } = {}) {
     }
     if (result?.state) {
       state = result.state;
+      hints?.set(state);
       render();
     }
     return true;
@@ -101,10 +105,48 @@ export function initKnowledgePanel({ api } = {}) {
     body.appendChild(el('p', 'knowledge-row__desc', file.description || ''));
     body.appendChild(el('p', 'knowledge-row__meta', `${file.path} · ${charCount(file.chars)}`));
     if (file.covert?.length) body.appendChild(covertNote(file.covert));
+    if (hints) renderRuleHints(file, body);
     row.appendChild(body);
     row.appendChild(openButton({ path: file.path, request: { kind: 'rule', source: file.source, name: file.name } }));
     if (!level.enabled) row.classList.add('knowledge-row--off');
     return row;
+  }
+
+  /**
+   * The review's hints on a rules file (#1279): the file's own on a line of
+   * their own; its entries, which the page does not list, behind one
+   * disclosure — each entry with its line.
+   */
+  function renderRuleHints(file, body) {
+    const own = hints.line(hints.ofRuleFile(file), { area: 'rules' });
+    if (own) body.appendChild(own);
+    const entries = hints.ofRuleEntries(file);
+    if (!entries.length) return;
+    const id = `knowledge-entries-${file.source}-${file.name}`;
+    const open = openDisclosures.has(id);
+    const toggle = el('button', 'knowledge-disclosure', tPlural('settings.knowledge.hint.entries', entries.length));
+    toggle.type = 'button';
+    toggle.setAttribute('aria-expanded', String(open));
+    toggle.setAttribute('aria-controls', id);
+    const list = el('ul', 'knowledge-hint-entries');
+    list.id = id;
+    list.hidden = !open;
+    for (const entry of entries) {
+      const item = el('li', 'knowledge-hint-entries__item');
+      const text = el('p', 'knowledge-hint-entries__text', entry.text);
+      text.id = `${id}-${entry.line}`;
+      item.appendChild(text);
+      const line = hints.line(entry.hints, { area: 'rules', describedBy: text.id });
+      if (line) item.appendChild(line);
+      list.appendChild(item);
+    }
+    toggle.addEventListener('click', () => {
+      list.hidden = !list.hidden;
+      if (list.hidden) openDisclosures.delete(id);
+      else openDisclosures.add(id);
+      toggle.setAttribute('aria-expanded', String(!list.hidden));
+    });
+    body.append(toggle, list);
   }
 
   function renderNewRuleForm(level, container, trigger) {
@@ -157,6 +199,7 @@ export function initKnowledgePanel({ api } = {}) {
 
   function renderRules() {
     rulesRoot.replaceChildren();
+    if (hints) rulesRoot.appendChild(hints.status('rules'));
     for (const level of state.rules) {
       const card = el('div', 'knowledge-level');
       const head = el('div', 'knowledge-level__head');
@@ -177,6 +220,8 @@ export function initKnowledgePanel({ api } = {}) {
         for (const file of level.files) list.appendChild(renderRule(level, file));
         card.appendChild(list);
       }
+      const levelLine = hints?.line(hints.ofRulesLevel(level.level), { area: 'rules' });
+      if (levelLine) card.appendChild(levelLine);
       const notes = [];
       if (level.inSubfolders) notes.push(t('settings.knowledge.rules.subfolders', { count: level.inSubfolders }));
       if (level.overLimit) notes.push(t('settings.knowledge.rules.overLimit', { count: level.overLimit }));
@@ -262,6 +307,7 @@ export function initKnowledgePanel({ api } = {}) {
     async refresh() {
       try {
         state = await api.getKnowledgeState();
+        hints?.set(state);
         render();
       } catch (error) {
         console.warn('[knowledge] the state could not be loaded:', error);

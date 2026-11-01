@@ -778,6 +778,23 @@ function normalizeDisabledRules(value) {
   return [...new Set(keys)].slice(0, MAX_DISABLED_RULES);
 }
 
+/** Hints of Settings › Knowledge dismissed (#1279): at most this many keys are kept, the newest. */
+const MAX_DISMISSED_KNOWLEDGE_HINTS = 500;
+
+/**
+ * The keys of the knowledge hints dismissed — `key` of a hint in
+ * application/chat/knowledge-review.js. Strings only, each once; past the
+ * limit the oldest go first, so a long-dismissed hint may come back.
+ *
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function normalizeDismissedKnowledgeHints(value) {
+  if (!Array.isArray(value)) return [];
+  const keys = value.filter((key) => typeof key === 'string' && key.trim() && key.length <= 2048);
+  return [...new Set(keys)].slice(-MAX_DISMISSED_KNOWLEDGE_HINTS);
+}
+
 /**
  * @param {unknown} raw
  */
@@ -848,6 +865,7 @@ function normalizeUiPrefs(raw) {
   const rulesWorkspaceEnabled = data.rulesWorkspaceEnabled !== false;
   const rulesUserEnabled = data.rulesUserEnabled !== false;
   const disabledRules = normalizeDisabledRules(data.disabledRules);
+  const dismissedKnowledgeHints = normalizeDismissedKnowledgeHints(data.dismissedKnowledgeHints);
   // Skill-Vorschlaege (Issue #125): voreingestellt das lexikalische Verfahren,
   // weil es nichts kostet und nichts verlaesst den Rechner.
   const skillSuggestionMode = isSkillSuggestionMode(data.skillSuggestionMode)
@@ -912,6 +930,7 @@ function normalizeUiPrefs(raw) {
     rulesWorkspaceEnabled,
     rulesUserEnabled,
     disabledRules,
+    dismissedKnowledgeHints,
   };
 }
 

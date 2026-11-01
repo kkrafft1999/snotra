@@ -261,11 +261,12 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
    * @param {{ file: string, path: string, kind: string }} target
    * @param {string|null} before
    * @param {string|null} after
+   * @param {string} [source]  `remember`, or `settings` for a hint's action (#1279)
    */
-  async function note(target, before, after) {
+  async function note(target, before, after, source = 'remember') {
     if (!journal) return;
     try {
-      await journal.record({ file: target.file, path: target.path, kind: target.kind, source: 'remember', before, after });
+      await journal.record({ file: target.file, path: target.path, kind: target.kind, source, before, after });
     } catch {
       // The journal is a convenience; the entry is written either way.
     }
@@ -351,6 +352,7 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
     },
 
     async write(request) {
+      const source = request.source === 'settings' ? 'settings' : 'remember';
       const refusal = refusalOf(request);
       if (refusal) throw new Error(refusal);
       const replaced = await findReplaced(request);
@@ -381,15 +383,14 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
             body: /** @type {string} */ (request.body),
           });
           await textFiles.write({ file: target.file, root: target.root, text: next });
-          await note(target, current, next);
+          await note(target, current, next, source);
         });
-        return { kind: request.kind, scope: request.scope, file: target.file, text: request.topic || '' };
-      }
-      if (request.kind === KNOWLEDGE_KINDS.FACT && request.scope !== KNOWLEDGE_READERS.TEAM) {
+        file = target.file;
+      } else if (request.kind === KNOWLEDGE_KINDS.FACT && request.scope !== KNOWLEDGE_READERS.TEAM) {
         const memoryTarget = targetOf(KNOWLEDGE_KINDS.FACT, request.scope, request.workspaceRoot);
         const before = memoryTarget ? await read(memoryTarget) : null;
         const saved = await memory.remember({ scope: request.scope, workspaceRoot: request.workspaceRoot ?? null, text: body, origin });
-        if (memoryTarget) await note(memoryTarget, before, await read(memoryTarget));
+        if (memoryTarget) await note(memoryTarget, before, await read(memoryTarget), source);
         file = saved.file;
       } else {
         const target = targetOf(request.kind, request.scope, request.workspaceRoot, request.topic);
@@ -413,11 +414,11 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
             throw new RangeError(`The rules file "${request.topic}" would exceed ${RULE_LIMITS.BODY_CHARS} characters. Nothing was written.`);
           }
           await textFiles.write({ file: target.file, root: target.root, text: next });
-          await note(target, current, next);
+          await note(target, current, next, source);
         });
       }
       /** @type {{ kind: string, scope: string, file: string, text: string, replaced?: { removed: number, error?: string } }} */
-      const result = { kind: request.kind, scope: request.scope, file, text: body };
+      const result = { kind: request.kind, scope: request.scope, file, text: request.kind === KNOWLEDGE_KINDS.INSTRUCTION ? request.topic || '' : body };
       if (replaced) {
         // Written first, removed second: a failure here leaves a duplicate, never a loss.
         try {
@@ -426,7 +427,7 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
             const change = removeEntriesByText(current, replaced.text);
             if (change.removed > 0) {
               await textFiles.write({ file: replaced.target.file, root: replaced.target.root, text: change.text });
-              await note(replaced.target, current, change.text);
+              await note(replaced.target, current, change.text, source);
             }
             return change.removed;
           });

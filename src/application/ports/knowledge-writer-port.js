@@ -17,6 +17,7 @@
  * @property {string} origin  `requested` | `self`
  * @property {string} [replaces]  the exact text of an entry at the same level, removed after the write
  * @property {string} [replacesIn]  `memory` or a rules file's topic
+ * @property {'settings'} [source]  the write is a hint's action in *Settings › Knowledge* (#1279), and the journal says so
  */
 
 /**
