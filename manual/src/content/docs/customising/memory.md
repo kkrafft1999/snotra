@@ -30,9 +30,13 @@ To tidy up, ask *review my memory*: Snotra goes through memory and rules files a
 
 [since 1.30] A chat often turns up something worth keeping: a fact that came up, a correction that should hold next time, a way of doing something that worked. The chat itself is not kept as knowledge, so ask Snotra to draw it out.
 
-1. At the end of the chat, ask: *What do we take away from this?* or *Distil this chat.*
-2. Snotra goes through the chat and proposes **one item at a time**, each on its own card with its kind and who reads it — exactly as when you ask it to remember something.
+1. At the end of the chat, click ***Distil into knowledge…*** on the right of the chat header. Or ask in your own words: *What do we take away from this?*
+2. The button puts its request into the chat, so you see what was asked. Snotra goes through the chat and proposes **one item at a time**, each on its own card with its kind and who reads it — exactly as when you ask it to remember something.
 3. Change the kind or the reader on the card if it is sorted wrongly, then click *Remember* — or *Deny* to leave it out. The next proposal comes only after your answer.
+
+![The chat header with the button "Distil into knowledge…", below it the request the button sent, and the first proposal on its card: the fact "The beds in this garden are measured in centimetres.", kind Fact, read by Snotra in this folder, with Remember and Deny.](screenshots/distil-chat.webp)
+
+The button can't be used in an empty chat or while Snotra is answering; its tooltip says why. In a narrow chat column it shows only its icon, with the name in the tooltip. A draft in the message field stays where it is.
 
 What happened only in this chat — *the test is failing today* — is not proposed: the chat already has it. If nothing lasts, Snotra says so. Because you asked, this works even with *Snotra may remember things on its own* switched off. Snotra never offers a distillation by itself; it starts when you ask.
 

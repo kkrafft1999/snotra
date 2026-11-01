@@ -179,6 +179,9 @@ export function initChatStream({
   onRunsChanged = () => {},
   // A card in a run switched a skill or tool for its chat (#774).
   onConfigChanged = () => {},
+  // The send button was redrawn for the chat on screen — running or not;
+  // the distil action in the header follows it (#1317).
+  onSendStateShown = () => {},
 }) {
   const chatMessagesEl = document.getElementById('chat-messages');
   // The log role and aria-busy live on the wrapper around the list (#1103).
@@ -378,6 +381,11 @@ export function initChatStream({
     // Die Aufschlüsselung sagt waehrend einer laufenden Anfrage dazu, dass
     // ihre Werte noch von der vorherigen stammen (Issue #174).
     tokenBreakdownPanel.refresh();
+    try {
+      onSendStateShown();
+    } catch {
+      // A view of the run state; it must not get in the way of the run.
+    }
   }
 
   function appendReasoningDetails(bubble, reasoningText) {
@@ -1678,19 +1686,27 @@ export function initChatStream({
     });
   }
 
-  async function sendChatMessage() {
+  /**
+   * Sends the composer's draft — or, with `text`, a request of the app's own
+   * (#1317: "Distil into knowledge…"). Such a request is shown like a typed
+   * question but leaves the draft and its images in the composer.
+   *
+   * @param {{ text?: string }} [options]
+   */
+  async function sendChatMessage(options = {}) {
+    const request = typeof options?.text === 'string' && options.text.trim() ? options.text.trim() : null;
     if (appStore.chatInFlight || draftWaitingForChat) {
       recordSendRefused(appStore.chatInFlight ? 'run in flight' : 'draft waiting for its chat');
       return;
     }
     // An image pasted a moment ago is still being scaled. The send waits for
     // it rather than leaving without it (#589).
-    if (preparingImages > 0) {
+    if (!request && preparingImages > 0) {
       sendWhenPrepared = true;
       return;
     }
     stopChatVoiceListening();
-    const text = chatInput.value.trim();
+    const text = request ?? chatInput.value.trim();
     // Ein Screenshot ohne Begleitfrage ist eine gueltige Eingabe (Issue #84).
     if (!text && pendingAttachments.length === 0) return;
     if (!activeProviderConfigured()) {
@@ -1706,9 +1722,11 @@ export function initChatStream({
     let run = null;
     let payload = null;
     try {
-      chatInput.value = '';
-      onInputChanged();
-      if (pendingAttachments.length > 0) {
+      if (!request) {
+        chatInput.value = '';
+        onInputChanged();
+      }
+      if (!request && pendingAttachments.length > 0) {
         userMessage.attachments = pendingAttachments;
         pendingAttachments = [];
         renderAttachmentChips();

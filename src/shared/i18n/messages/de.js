@@ -2040,6 +2040,13 @@ module.exports = {
   'chat.taskKind.button.labelUnclassified': 'Aufgabenart: nicht eingeordnet. Art wählen',
   'chat.taskKind.error': 'Die Art konnte nicht gespeichert werden. Versuch es noch einmal.',
 
+  // ── Distil the chat into knowledge (#1317) ───────────────────────────────
+  'chat.distil.label': 'Wissen daraus ableiten…',
+  'chat.distil.description': 'Diesen Chat durchgehen und vorschlagen, was bleiben soll — Fakten, Regeln, Skills —, eine Karte nach der anderen.',
+  'chat.distil.running': 'Geht, sobald die Antwort fertig ist.',
+  'chat.distil.empty': 'Noch nichts abzuleiten: Dieser Chat hat keine Nachrichten.',
+  'chat.distil.prompt': 'Leite Wissen aus diesem Chat ab: Was nehmen wir daraus mit? Schlag jeden Fakt, jede Regel und jeden Skill, die bleiben sollen, einzeln vor.',
+
   // ── Kinds of task (#1281) ────────────────────────────────────────────────
   'taskKind.coding': 'Programmieren',
   'taskKind.coding.definition': 'Code, Skripte und Konfiguration schreiben, ändern, prüfen oder Fehler darin suchen.',

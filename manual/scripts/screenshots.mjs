@@ -1031,6 +1031,49 @@ const MOTIFS = {
   },
 
   /**
+   * "Distil into knowledge…" in the chat header (#1317): clicked after a short
+   * chat, its request in the chat and the first proposal on its card. Wide
+   * enough for the button's label in both languages (German needs ~620 px).
+   */
+  'distil-chat': {
+    prefs: { chatPanelWidth: 680 },
+    text: {
+      en: {
+        title: 'Width of the bean bed\nplanning',
+        question: 'The beds here are measured in centimetres. How wide should the bean bed be?',
+        answer: 'About 120 cm, so you can reach the middle from both sides.',
+        request: 'Distil this chat: what do we take away from it?',
+        fact: 'The beds in this garden are measured in centimetres.',
+      },
+      de: {
+        title: 'Breite des Bohnenbeets\nplanning',
+        question: 'Die Beete hier sind in Zentimetern gemessen. Wie breit soll das Bohnenbeet werden?',
+        answer: 'Etwa 120 cm, damit du von beiden Seiten an die Mitte kommst.',
+        request: 'Leite Wissen aus diesem Chat ab: Was nehmen wir daraus mit?',
+        fact: 'Die Beete in diesem Garten sind in Zentimetern gemessen.',
+      },
+    },
+    async setUp({ page, model, text }) {
+      model.queueAnswer({ match: text.question, text: text.answer });
+      await send(page, text.question);
+      await waitForRunEnd(page);
+      await poll(() => page.evaluate(() => {
+        const button = document.getElementById('btn-chat-distil');
+        return button.dataset.state === 'ready' && !button.classList.contains('chat-distil--compact');
+      }), { what: 'the labelled distil button, ready' });
+      model.queueAnswer({
+        match: text.request,
+        toolCalls: [{ name: 'remember', arguments: { kind: 'fact', scope: 'workspace', text: text.fact, origin: 'requested' } }],
+      });
+      await page.click('#btn-chat-distil');
+      await waitForCard(page);
+      await page.mouse.move(0, 0);
+      await pause(200);
+      return clipAround(page, ['#chat-header', PENDING_CARD], 16);
+    },
+  },
+
+  /**
    * The same menu on a Claude model (#994): every provider shows the levels
    * its chosen model takes.
    */
