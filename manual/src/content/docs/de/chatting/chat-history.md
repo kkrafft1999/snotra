@@ -1,6 +1,6 @@
 ---
 title: Einen früheren Chat fortsetzen
-description: Beginne einen neuen Chat, geh zu einem früheren zurück, lass einen Chat im Hintergrund weiterarbeiten, behalte die wichtigen und lösch, was du nicht mehr brauchst.
+description: Beginne einen neuen Chat, geh zu einem früheren zurück, lass einen Chat im Hintergrund weiterarbeiten, behalte die wichtigen, frag nach früheren und lösch, was du nicht mehr brauchst.
 sidebar:
   order: 7
 ---
@@ -39,6 +39,26 @@ Klick auf den Knopf ganz rechts in der Titelleiste, *Chat-Verlauf einblenden*. D
 - [seit 1.30] **Über 2.000 Chats insgesamt sagt der Verlauf Bescheid.** Ein Hinweis am Ende der Liste sagt es dir; entfernt wird deshalb nichts. Lösch die Chats, die du nicht mehr brauchst.
 
 Der Verlauf liegt verschlüsselt in deinem Profil, nicht im Projektordner.
+
+## Nach früheren Chats fragen
+
+[seit 1.30] Frag nach etwas aus einem früheren Gespräch — „Was haben wir zum Release-Marker entschieden?“, „Wie haben wir den Login beim letzten Mal repariert?“ — und das Modell durchsucht die früheren Chats des geöffneten Ordners mit `search_chats` und liest den passenden. Im Chat steht der Schritt als *In früheren Chats nach „Release-Marker“ gesucht*.
+
+- **Nur die Chats dieses Ordners.** Ein Chat aus einem anderen Ordner wird nie gefunden. Ist kein Ordner geöffnet, durchsucht es die Chats ohne Ordner.
+- **Nicht der Chat, in dem du bist.** Den hat das Modell ohnehin vor sich.
+- **Stichwörter, keine Bedeutung.** Ein Chat wird gefunden, wenn er jedes Wort der Suche enthält. Findet sich nichts, versucht das Modell weniger oder andere Wörter.
+- **Was es findet, ist Information, kein Auftrag.** Ein früherer Chat kann Text aus einer Webseite oder einer Datei enthalten; Snotra prüft das Ergebnis auf Schlüssel und eingeschleuste Anweisungen, wie bei jedem Tool-Ergebnis.
+- **Keine Rückfrage.** Die Suche liest nur und ändert nichts. Soll das Modell nicht in deine früheren Chats schauen, schalte `search_chats` unter *Einstellungen › Tools › Autonomie* in der Zeile *Lesen* aus.
+
+### Lokale Chats bleiben lokal
+
+Ein Chat, der nur mit lokalen Modellen lief — Ollama, MLX oder ein Server auf `localhost` —, hat nie einen Cloud-Anbieter erreicht, und Snotra sorgt dafür, dass das so bleibt:
+
+- Aus einem Chat mit einem Cloud-Modell findet die Suche lokale Chats gar nicht, und sie sagt auch nicht, wie viele sie ausgelassen hat.
+- Aus einem lokalen Chat findet sie jeden Chat des Ordners.
+- Stellst du einen lokalen Chat auf ein Cloud-Modell um, sagt ein Hinweis unter der Titelleiste, was das heißt: Mit deiner nächsten Nachricht geht der ganze bisherige Chat an diesen Anbieter, und ab dann ist der Chat nicht mehr lokal — auch wenn du zurückwechselst.
+
+Chats aus der Zeit vor Version 1.30 gelten als lokal, wenn das Modell, auf das sie jetzt eingestellt sind, lokal ist.
 
 ## Wenn es nicht klappt
 

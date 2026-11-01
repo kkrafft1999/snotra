@@ -97,6 +97,11 @@ export const SETTINGS_HELP = Object.freeze({
     slug: 'troubleshooting/files-set-aside',
     title: { en: 'When settings or the history start afresh', de: 'Wenn Einstellungen oder der Verlauf neu anfangen' },
   },
+  // The link in the notice about a local chat switched to a cloud model (#1315).
+  'notice.localChat': {
+    slug: 'chatting/chat-history',
+    section: { en: 'Local chats stay local', de: 'Lokale Chats bleiben lokal' },
+  },
   // The link in the notice about errors nobody caught (#978).
   'notice.backgroundError': {
     slug: 'troubleshooting/logs-and-reports',

@@ -53,6 +53,10 @@ reached — pass that on, do not fill the gap.
 run was isolated; go by it, not by the operating system. `permission_denied`
 names its reason.
 
+A question about an earlier conversation in this folder — "what did we decide
+last week?" — is answered from the chats themselves with `search_chats`, not
+from memory. It sees this folder's chats only, never the current one.
+
 ## Changing something
 
 To change something for this chat, ask with `propose_config_change`: kind,

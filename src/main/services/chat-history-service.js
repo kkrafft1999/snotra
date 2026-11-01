@@ -16,6 +16,7 @@ const { CHAT_ACTIVATION, sanitizeChatId } = require('../../shared/contracts/chat
 const { datedSessionCost, dayKeyOf, mergeSessionCost, normalizeSessionCost, withCostDays } = require('../../shared/contracts/cost');
 const { isTaskKindId, mayReplaceTaskKind } = require('../../shared/contracts/task-kind');
 const { CHAT_HISTORY_UNREADABLE } = require('./chat-history-store');
+const { CHAT_LOCALITY } = require('./chat-history-normalization');
 
 /**
  * Without an attachment store the history behaves as before #94: image data
@@ -78,6 +79,13 @@ function createChatHistoryService({
    * @type {Map<string, import('../../shared/contracts/cost').SessionCost>}
    */
   const pendingCost = new Map();
+  /**
+   * Chats with a turn on a cloud model before their first save (#1315): the
+   * first save stores them as `cloud` rather than `local`.
+   *
+   * @type {Set<string>}
+   */
+  const pendingCloud = new Set();
   /**
    * Chats deleted in this run of the app (#981): a turn still under way in one
    * of them must not write it back.
@@ -292,6 +300,11 @@ function createChatHistoryService({
           taskKind: existing?.taskKind,
           // *Keep* likewise (#1320): set by `setKeep` alone.
           keep: existing?.keep,
+          // Where its turns ran (#1315): `local` from the first save, `cloud`
+          // from `markCloudTurn` alone. A chat from before keeps having none.
+          locality: existing
+            ? existing.locality
+            : (pendingCloud.has(sessionId) ? CHAT_LOCALITY.CLOUD : CHAT_LOCALITY.LOCAL),
           // A time the renderer sends does not count (#245): it writes the chat
           // also when nothing was said — on leaving, on a model switch, for a
           // title that came later. Main sets the stamp just below, and only for
@@ -317,6 +330,7 @@ function createChatHistoryService({
       // lies moved aside next to this one — the folders may belong to its
       // chats, and the copy is kept so that it can be recovered (#565).
       pendingCost.delete(sessionId);
+      pendingCloud.delete(sessionId);
       for (const id of droppedIds) await chatAttachments.deleteChat(id);
       if (!(await chatHistoryStore.hasSetAsideChatHistory())) {
         await chatAttachments.pruneChats((await chatHistoryStore.listSessions()).map((s) => s.id));
@@ -534,6 +548,28 @@ function createChatHistoryService({
   }
 
   /**
+   * A turn of this chat goes to a cloud model (#1315, decision 13): from now
+   * on the chat is no longer local, for good. Called before the turn is sent;
+   * a chat not saved yet takes it along with its first save.
+   *
+   * @param {unknown} chatId
+   * @returns {Promise<boolean>} whether the chat is marked (or will be, on its first save)
+   */
+  function markCloudTurn(chatId) {
+    return /** @type {Promise<boolean>} */ (chatHistoryStore.withChatHistoryLock(async () => {
+      const id = sanitizeChatId(chatId);
+      if (!id) return false;
+      const meta = await chatHistoryStore.getSessionMeta(id);
+      if (!meta) {
+        pendingCloud.add(id);
+        return true;
+      }
+      if (meta.locality === CHAT_LOCALITY.CLOUD) return true;
+      return chatHistoryStore.patchSession(id, { locality: CHAT_LOCALITY.CLOUD });
+    }));
+  }
+
+  /**
    * Names a stored chat (#359, #981). A chat deleted meanwhile is not brought back.
    *
    * @param {string} chatId
@@ -585,6 +621,7 @@ function createChatHistoryService({
     load,
     save,
     addCost,
+    markCloudTurn,
     setTitle,
     setTaskKind,
   };

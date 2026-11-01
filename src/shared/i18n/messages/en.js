@@ -517,6 +517,8 @@ module.exports = {
   'settings.nav.developer': 'Developer',
   'notice.remoteWorkspaceSwitched': 'Switched from your phone',
   'notice.remoteWorkspaceSwitched.text': 'Your phone opened the folder “{folder}”.',
+  'notice.localChatToCloud': 'This chat goes to the cloud with your next message',
+  'notice.localChatToCloud.text': 'It has run only on this computer so far. Your next message sends the whole chat so far to {provider}, and from then on it is no longer local — also if you switch back.',
   'notice.backgroundError.copy': 'Copy diagnostics',
   'notice.backgroundError.copied': 'Copied',
   'notice.backgroundError.copyFailed': 'Could not copy',
@@ -1734,6 +1736,8 @@ module.exports = {
   'tools.desc.read_manual_page': 'Lets the model read a page of the user manual that ships with this version of Snotra, or one section of it, in the language of the app or the other one. Links in the page come along as addresses on docs.snotra-ai.dev, so the answer can point you to the page; a click on one opens it in the help window. It only reads the manual: none of your files, nothing on the internet, and it changes nothing.',
   'tools.short.list_release_notes': 'Lets the model read what the releases of Snotra changed for you.',
   'tools.desc.list_release_notes': 'Lets the model read the notes of Snotra’s releases — per version its number, date and what changed for you, in the language of the app. It uses it for questions such as “What has changed since 1.24.0?” or “What is new in my version?”, so that the answer comes from the notes instead of a guess. To do so it asks GitHub for the public list of releases, the same request as the update check; nothing of your files or this conversation goes along. If GitHub cannot be reached, it says so. It changes nothing.',
+  'tools.short.search_chats': 'Lets the model search your earlier chats in this folder.',
+  'tools.desc.search_chats': 'Lets the model search your earlier chats in the open folder for a few words and read more of one — for questions such as “What did we decide about the release last week?” or “How did we fix this last time?”. It finds only the chats of this folder; with no folder open, only the chats without one. The current chat is not searched. A chat that ran only on local models is found only from a chat that is local itself, never from one on a cloud model. What it finds goes to the model like any other tool result: checked for secrets and for injected instructions. It changes nothing.',
   'tools.short.propose_config_change': 'Lets the model suggest switching a skill or tool on or off for this chat; you decide on a card.',
   'tools.desc.propose_config_change': 'Lets the model suggest switching a skill or tool on or off when that would help with what you asked. You see a card with what the skill or tool does and the model\'s reason, and decide. Accepted, the change applies to this chat only — new chats keep your settings. The model never switches anything itself, and a suggestion you declined is not shown again in the same chat.',
 
@@ -2510,6 +2514,10 @@ module.exports = {
   'tools.line.readManualPage.done.plain': 'Manual page read',
   'tools.line.listReleaseNotes.start': 'Reading the release notes …',
   'tools.line.listReleaseNotes.done': 'Release notes read',
+  'tools.line.searchChats.start': 'Searching earlier chats for “{query}” …',
+  'tools.line.searchChats.done': 'Searched earlier chats for “{query}”',
+  'tools.line.searchChats.start.plain': 'Reading an earlier chat …',
+  'tools.line.searchChats.done.plain': 'Read an earlier chat',
 
   'tools.line.fetchUrl.start': 'Reading page {host} …',
   'tools.line.fetchUrl.done': 'Page {host} read',
