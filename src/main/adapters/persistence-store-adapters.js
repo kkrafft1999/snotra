@@ -43,6 +43,7 @@ function createUiPrefsStorePort(storage) {
 function createChatHistoryStorePort(storage) {
   return {
     MAX_CHAT_SESSIONS: storage.MAX_CHAT_SESSIONS,
+    MAX_CHAT_SESSIONS_PER_FOLDER: storage.MAX_CHAT_SESSIONS_PER_FOLDER,
     listSessions: (...args) => storage.listChatSessions(...args),
     getSessionMeta: (...args) => storage.getChatSessionMeta(...args),
     getSession: (...args) => storage.getChatSession(...args),
@@ -60,6 +61,7 @@ function createChatHistoryStorePort(storage) {
     normalizeWorkspaceRoot: (...args) => storage.normalizeWorkspaceRoot(...args),
     workspaceBucketKey: (...args) => storage.workspaceBucketKey(...args),
     sessionMatchesWorkspace: (...args) => storage.sessionMatchesWorkspace(...args),
+    workspaceRootExists: (...args) => storage.workspaceRootExists(...args),
   };
 }
 

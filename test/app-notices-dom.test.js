@@ -228,3 +228,26 @@ test('the phone\'s switch in German', async (t) => {
   assert.equal(entry.querySelector('.app-notice-heading').textContent, 'Vom Handy gewechselt');
   assert.equal(entry.querySelector('.app-notice-text').textContent, 'Dein Handy hat den Ordner „beta“ geöffnet.');
 });
+
+test('a local chat switched to a cloud model: what goes where, and the way to the manual (#1315)', async (t) => {
+  const LOCAL = { id: 'local-chat-to-cloud', kind: 'local-chat-to-cloud', provider: 'OpenAI', location: null, canReveal: false };
+  const { dom, entries, button, calls } = await mount({ listed: [LOCAL] });
+  t.after(() => dom.cleanup());
+  const [entry] = entries();
+  assert.ok(entry.classList.contains('app-notice--info'));
+  assert.equal(entry.querySelector('.app-notice-heading').textContent, 'This chat goes to the cloud with your next message');
+  assert.match(entry.querySelector('.app-notice-text').textContent, /the whole chat so far to OpenAI/);
+  assert.deepEqual(Array.from(entry.querySelectorAll('.app-notice-actions button')).map((b) => b.dataset.action), ['help']);
+  button(entry, 'help').click();
+  await flush();
+  assert.deepEqual(calls, ['manual:chatting/chat-history#local-chats-stay-local']);
+});
+
+test('the local-chat notice in German (#1315)', async (t) => {
+  const LOCAL = { id: 'local-chat-to-cloud', kind: 'local-chat-to-cloud', provider: 'OpenAI', location: null, canReveal: false };
+  const { dom, entries } = await mount({ locale: 'de', listed: [LOCAL] });
+  t.after(() => dom.cleanup());
+  const [entry] = entries();
+  assert.equal(entry.querySelector('.app-notice-heading').textContent, 'Mit deiner nächsten Nachricht geht dieser Chat in die Cloud');
+  assert.match(entry.querySelector('.app-notice-text').textContent, /den ganzen bisherigen Chat an OpenAI/);
+});
