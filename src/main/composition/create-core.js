@@ -35,8 +35,7 @@ const { createWorkspaceTreeChangedEvent } = require('../../shared/contracts/work
 const { TOOL_SETUPS } = require('../../shared/contracts/chat-configuration');
 const { createWorkspaceToolRegistry } = require('../../application/tools/workspace-tool-registry');
 const { createFileToolsAdapter } = require('../adapters/file-tools-adapter');
-const { createManualLookup, loadVendoredMarkedLexer } = require('../services/manual-lookup');
-const { createReleaseNotesService } = require('../services/release-notes-service');
+const { createLookupTools } = require('./create-lookup-tools');
 const { createMcpService } = require('../services/mcp-service');
 const { createMcpAdapter } = require('../adapters/mcp-adapter');
 const { createTavilyWebSearchAdapter } = require('../adapters/tavily-web-search-adapter');
@@ -48,7 +47,7 @@ const { createSandboxService, sensitiveReadPaths } = require('../services/sandbo
 const { createOutsideAccess } = require('../services/outside-access');
 const { createApprovalNotifier } = require('../services/approval-notifier');
 const { createProgramAllowances } = require('../services/program-allowances-service');
-const { existsSync, readFileSync } = require('fs');
+const { existsSync } = require('fs');
 const { createSettingsPresentationService } = require('../services/settings-presentation-service');
 const { resolveRunningPlatform } = require('../platforms/running-platform');
 const {
@@ -167,7 +166,7 @@ function createCore({
     fs,
     path,
     providerCatalog,
-    maxChatSessions: LIMITS.MAX_CHAT_SESSIONS,
+    maxChatSessions: LIMITS.MAX_CHAT_SESSIONS, maxChatSessionsPerFolder: LIMITS.MAX_CHAT_SESSIONS_PER_FOLDER,
     maxFolderHistory: LIMITS.MAX_FOLDER_HISTORY,
     defaultProviderId,
     onStoreFileEvent: (event) => postStoreFileEvent(notices, event),
@@ -271,7 +270,8 @@ function createCore({
       workspaceRoot: workspaceState.getActiveWorkspaceRoot(),
     }),
     onChatModeChanged: (chatId) => invalidateChatPermissions(chatId),
-    onActivated: () => pruneChatScopedPermissions(),
+    onActivated: (chatId) => { pruneChatScopedPermissions(); lookups.localChatNotice.chatChanged(chatId); },
+    onPresetChosen: (change) => lookups.localChatNotice.presetChosen(change),
   });
 
   // The engine is built further down; until then no chat is running.
@@ -359,8 +359,7 @@ function createCore({
     readUIPrefs: () => uiPrefsStore.readUIPrefs(),
   });
 
-  // The global skill folders and knowledge files stay read-only for every tool, also inside
-  // the open folder (#548, #650, #1319): fs-service refuses writes, the sandbox commands.
+  // Global skill folders and knowledge files: read-only for every tool, even inside the folder (#548, #650, #1319).
   const globalSkillRoots = [path.join(os.homedir(), '.snotra', 'skills'), path.join(os.homedir(), '.agents', 'skills')];
   const globalKnowledge = globalKnowledgePaths(path, os.homedir());
   const fsService = createFsService({
@@ -496,11 +495,13 @@ function createCore({
     path,
     rootDir: PDFJS_VENDOR_DIR,
   });
-  // The model's look into the manual (#947), with the marked the help window runs.
-  const MARKED_VENDOR_FILE = path.join(__dirname, '..', '..', 'renderer', 'vendor', 'marked.umd.js');
-  const manualLookup = manual
-    ? createManualLookup({ manual, loadLexer: () => loadVendoredMarkedLexer(MARKED_VENDOR_FILE, { readFileSync }) })
-    : null;
+  // The manual, the release notes and the folder's earlier chats (#947, #1191, #1315).
+  const lookups = createLookupTools({
+    manual, fetchImpl: fetchImpl || globalThis.fetch, getAppVersion, getAppLocale, chatHistoryStore, notices,
+    describeModel: (presetId) => chatLlm.describePreset(presetId),
+    providerLabel: (name) => translateMessage(getAppLocale(), name),
+    markCloudTurn: (chatId) => chatHistory.markCloudTurn(chatId),
+  });
   /** @type {ReturnType<typeof createChatConfigurationService>} Which skills and tools a chat has (#773); assigned below. */
   let chatConfiguration;
   const toolRegistry = createWorkspaceToolRegistry({
@@ -516,12 +517,9 @@ function createCore({
     imageGeneration: imageGenerationSettings.adapter,
     // Built further down: it needs the skills and the MCP servers (#773).
     configuration: { describeForModel: (input) => chatConfiguration.describeForModel(input) },
-    manual: manualLookup,
-    releaseNotes: createReleaseNotesService({ // what the releases changed for the user (#1191)
-      fetchImpl: fetchImpl || globalThis.fetch,
-      getCurrentVersion: getAppVersion,
-      getLocale: getAppLocale,
-    }),
+    manual: lookups.manual,
+    releaseNotes: lookups.releaseNotes,
+    chats: lookups.chats,
   });
 
   // MCP-Server (Issue #106/#107). Verbunden wird traege — `setServers` startet
@@ -669,6 +667,8 @@ function createCore({
       pruneChatScopedPermissions();
       onRunsChanged();
     },
+    // A turn about to go to a cloud model: the chat is no longer local (#1315).
+    onCloudTurn: (chatId) => lookups.cloudTurn(chatId),
     // The chat's own skills and tools, and the card that changes them (#774).
     configProposals: createConfigProposalAdapter({
       chatSessionSettings,

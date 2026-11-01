@@ -61,6 +61,13 @@ const WORDING = Object.freeze({
     tone: 'info',
     help: null,
   },
+  // A local chat switched to a cloud model (#1315): what its next turn sends, and where.
+  [NOTICE_KINDS.LOCAL_CHAT_TO_CLOUD]: {
+    heading: () => t('notice.localChatToCloud'),
+    text: (notice) => t('notice.localChatToCloud.text', { provider: notice.provider }),
+    tone: 'info',
+    help: 'notice.localChat',
+  },
 });
 
 /** How long *Copied* stays on the button before it reads *Copy diagnostics* again. */

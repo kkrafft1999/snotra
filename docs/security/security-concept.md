@@ -1044,6 +1044,35 @@ workspace can now carry a default mode of its own.
   the folder unnoticed), and a mode that belongs to the workspace instead of
   the chat (it would undo #211/#320).
 
+### Revision: the last pick is the workspace default (#1337)
+
+#413 left one thing out on purpose: a default taken from the last choice in a
+chat, because an `auto` switched on for one task would stick for the folder.
+In use that weighed the other way. The user picks a mode for a folder once and
+expects it to stay; ticking a second box for it, and seeing `auto` fall back to
+`smart` after a restart, worked against that. The user's own choice now
+outweighs the rule that `auto` is a decision for one chat.
+
+- **What it changes.** An explicit pick in the mode pill (main's `setMode`)
+  writes the default of the active workspace in the same signed update as the
+  chat's mode: `ask-all` and `auto` as an entry, `smart` by removing it. Only a
+  workspace in which the user never picked a mode starts at `smart`. Opening a
+  chat from the history, automatically or explicitly, writes nothing — only
+  the pick does. With no workspace open, nothing but the chat changes.
+- **Confirmation.** `auto` is still confirmed in main's native dialog, once,
+  for the chat and the workspace together: the dialog of section 8 adds a
+  sentence naming the root ("Every new chat in ‹root› will start in “Auto” as
+  well, also after an app restart."). The receipt is bound to the chat as
+  before; main binds the root itself. Cancelling changes neither.
+- **What stays.** Storage in the policy file, not in the folder; `safeStorage`
+  for `auto`, which a failed signature drops; Settings › Tools › Autonomy as
+  the place to set the default without a chat, with the dialog of #413 for
+  `auto`; the reset actions.
+- **The menu.** The checkbox of #413 is gone, since there is nothing left to
+  tick. The tag "Default in ‹folder›" shows for every default, `smart`
+  included, and the status line after a pick says that it holds for new chats
+  in the folder.
+
 ### Revision: "Always ask" without encrypted storage (#419)
 
 Without `safeStorage` the policy file cannot be signed, so every read went

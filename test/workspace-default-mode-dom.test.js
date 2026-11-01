@@ -1,6 +1,7 @@
-// The default mode per workspace in the renderer (#413): the checkbox under
-// the mode pill's menu, the tag on the option that is the default, and the
-// control in the header of Settings › Security (#448). Main is faked; what it
+// The default mode per workspace in the renderer (#413): the tag on the option
+// that is the default — every pick in the menu writes it since #1337, so there
+// is no checkbox any more — and the control in the header of Settings ›
+// Security (#448). Main is faked; what it
 // decides is tested in tool-permission-handlers.test.js and
 // chat-session-settings.test.js.
 
@@ -38,7 +39,9 @@ function fakePermissions(initial, { answer = async () => ({ ok: true }) } = {}) 
       state = next;
       for (const fn of listeners) fn(state);
     },
-    async setMode() {
+    async setMode(mode) {
+      // Main writes the pick as the folder's default as well (#1337).
+      this.push({ ...state, mode, workspaceMode: state?.workspaceRoot ? mode : state?.workspaceMode });
       return { ok: true };
     },
     async setWorkspaceMode(mode) {
@@ -60,53 +63,31 @@ async function withLocale(locale, fn) {
   }
 }
 
-test('view: nothing to remember without a workspace, or with the chat and the folder at "Smart"', async () => {
+test('view: no tag without a workspace', async () => {
   const { describeWorkspaceDefault } = await importRenderer('utils', 'tool-approval-view.js');
-  assert.equal(describeWorkspaceDefault(null).visible, false);
-  assert.equal(describeWorkspaceDefault(baseState({ workspaceRoot: null, mode: 'auto' })).visible, false);
-  const quiet = describeWorkspaceDefault(baseState());
-  assert.equal(quiet.visible, false);
-  assert.equal(quiet.tagMode, null);
-  assert.equal(quiet.folder, 'snotra');
+  assert.equal(describeWorkspaceDefault(null).tagMode, null);
+  const none = describeWorkspaceDefault(baseState({ workspaceRoot: null, mode: 'auto' }));
+  assert.equal(none.tagMode, null);
+  assert.equal(none.tag, '');
+  assert.equal(none.isDefault, false);
 });
 
-test('view: the checkbox speaks about the chat\'s mode and says what ticking it does', async () => {
+test('view: the tag names the folder\'s default, "Smart" included', async () => {
   const { describeWorkspaceDefault } = await importRenderer('utils', 'tool-approval-view.js');
+  const fresh = describeWorkspaceDefault(baseState());
+  assert.equal(fresh.folder, 'snotra');
+  assert.equal(fresh.tagMode, 'smart');
+  assert.equal(fresh.tag, 'Default in snotra');
+  assert.equal(fresh.isDefault, true);
 
-  const auto = describeWorkspaceDefault(baseState({ mode: 'auto' }));
-  assert.equal(auto.visible, true);
-  assert.equal(auto.checked, false);
-  assert.equal(auto.targetMode, 'auto');
-  assert.deepEqual(auto.label, { before: '“Auto” for new chats in ', folder: 'snotra', after: ' too' });
-  assert.equal(auto.hint, 'Also after a restart. You confirm it once in the system dialog.');
+  const auto = describeWorkspaceDefault(baseState({ mode: 'auto', workspaceMode: 'auto' }));
+  assert.equal(auto.tagMode, 'auto');
+  assert.equal(auto.isDefault, true);
 
-  const askAll = describeWorkspaceDefault(baseState({ mode: 'ask-all' }));
-  assert.equal(askAll.hint, 'Also after a restart.');
-
-  const remembered = describeWorkspaceDefault(baseState({ mode: 'auto', workspaceMode: 'auto' }));
-  assert.equal(remembered.checked, true);
-  assert.equal(remembered.isDefault, true);
-  assert.equal(remembered.targetMode, 'smart', 'unticking takes the default back to "Smart"');
-  assert.equal(remembered.tagMode, 'auto');
-  assert.equal(remembered.tag, 'Default in snotra');
-  assert.equal(remembered.hint, 'Untick it and new chats start with “Smart” again.');
-
-  // The chat left the default: the box offers its own mode and names the default.
-  const differs = describeWorkspaceDefault(baseState({ mode: 'smart', workspaceMode: 'auto' }));
-  assert.equal(differs.visible, true);
-  assert.equal(differs.checked, false);
+  // A chat from the history with a mode of its own: the tag stays where new chats start.
+  const differs = describeWorkspaceDefault(baseState({ mode: 'smart', workspaceMode: 'ask-all' }));
+  assert.equal(differs.tagMode, 'ask-all');
   assert.equal(differs.isDefault, false);
-  assert.equal(differs.targetMode, 'smart');
-  assert.equal(differs.hint, 'At the moment new chats here start with “Auto”.');
-});
-
-test('view: "Auto" cannot be offered without encrypted storage; taking one back still can', async () => {
-  const { describeWorkspaceDefault } = await importRenderer('utils', 'tool-approval-view.js');
-  const blocked = describeWorkspaceDefault(baseState({ mode: 'auto', platformCapabilities: { secureStorage: false } }));
-  assert.equal(blocked.disabled, true);
-  assert.equal(blocked.hint, 'Not available: this system offers no encrypted storage.');
-  const takeBack = describeWorkspaceDefault(baseState({ mode: 'auto', workspaceMode: 'auto', platformCapabilities: { secureStorage: false } }));
-  assert.equal(takeBack.disabled, false);
 });
 
 test('view: the folder name comes from either kind of path', async () => {
@@ -118,83 +99,52 @@ test('view: the folder name comes from either kind of path', async () => {
   assert.equal(workspaceFolderName(null), '');
 });
 
-test('menu: the tag sits on the default, the checkbox remembers the chat\'s mode', async () => {
-  const dom = setupRendererDom();
-  try {
-    const { initToolModePicker } = await importRenderer('components', 'ToolModePicker.js');
-    const permissions = fakePermissions(baseState({ mode: 'auto' }));
-    initToolModePicker({ toolPermissions: permissions });
-    const doc = dom.document;
-    const footer = doc.getElementById('chat-tool-mode-footer');
-    const box = doc.getElementById('chat-tool-mode-remember');
-
-    doc.getElementById('btn-chat-tool-mode').click();
-    assert.equal(footer.hidden, false);
-    assert.equal(box.checked, false);
-    assert.equal(doc.getElementById('chat-tool-mode-remember-label').textContent, '“Auto” for new chats in snotra too');
-    assert.equal(doc.getElementById('chat-tool-mode-remember-label').querySelector('strong').textContent, 'snotra');
-    assert.equal(doc.querySelector('.chat-tool-mode-default-tag'), null);
-
-    box.checked = true;
-    box.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.deepEqual(permissions.calls, ['auto']);
-    assert.equal(box.checked, true);
-    assert.equal(doc.getElementById('chat-tool-mode-status').textContent, 'New chats in snotra start with “Auto” from now on.');
-    assert.equal(doc.getElementById('chat-tool-mode-menu').classList.contains('hidden'), false, 'the menu stays open');
-
-    const tag = doc.querySelector('.chat-tool-mode-option[data-mode="auto"] .chat-tool-mode-default-tag');
-    assert.equal(tag?.textContent, 'Default in snotra');
-    assert.equal(doc.querySelectorAll('.chat-tool-mode-default-tag').length, 1);
-    assert.equal(doc.getElementById('btn-chat-tool-mode').title, 'Tool permissions: Auto, the default in snotra. Click to switch.');
-
-    // Unticking takes it back.
-    box.checked = false;
-    box.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.deepEqual(permissions.calls, ['auto', 'smart']);
-    assert.equal(doc.getElementById('chat-tool-mode-status').textContent, 'New chats in snotra start with “Smart” again.');
-    assert.equal(doc.querySelector('.chat-tool-mode-default-tag'), null);
-  } finally {
-    dom.cleanup();
-  }
-});
-
-test('menu: a cancelled system dialog puts the checkbox back', async () => {
-  const dom = setupRendererDom();
-  try {
-    const { initToolModePicker } = await importRenderer('components', 'ToolModePicker.js');
-    const permissions = fakePermissions(baseState({ mode: 'auto' }), {
-      answer: async () => ({ ok: false, code: 'cancelled', error: { key: 'permissions.error.workspaceAutoNotSet' } }),
-    });
-    initToolModePicker({ toolPermissions: permissions });
-    const doc = dom.document;
-    const box = doc.getElementById('chat-tool-mode-remember');
-    doc.getElementById('btn-chat-tool-mode').click();
-    box.checked = true;
-    box.dispatchEvent(new dom.window.Event('change', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    assert.equal(box.checked, false);
-    assert.equal(box.disabled, false);
-    assert.equal(doc.getElementById('chat-tool-mode-status').textContent, 'Default unchanged.');
-  } finally {
-    dom.cleanup();
-  }
-});
-
-test('menu: hidden with nothing to remember, and the same in German', async () => {
+test('menu: a pick moves the tag and says it holds for new chats in the folder', async () => {
   const dom = setupRendererDom();
   try {
     const { initToolModePicker } = await importRenderer('components', 'ToolModePicker.js');
     const permissions = fakePermissions(baseState());
     initToolModePicker({ toolPermissions: permissions });
     const doc = dom.document;
-    assert.equal(doc.getElementById('chat-tool-mode-footer').hidden, true);
+    const tagOn = () => [...doc.querySelectorAll('.chat-tool-mode-default-tag')]
+      .map((tag) => tag.closest('.chat-tool-mode-option').dataset.mode);
+
+    assert.equal(doc.getElementById('chat-tool-mode-footer'), null, 'no checkbox any more');
+    doc.getElementById('btn-chat-tool-mode').click();
+    assert.deepEqual(tagOn(), ['smart']);
+
+    doc.querySelector('.chat-tool-mode-option[data-mode="ask-all"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(doc.getElementById('chat-tool-mode-status').textContent, 'Permission mode: Always ask, also for new chats in snotra');
+    assert.equal(doc.getElementById('btn-chat-tool-mode').title, 'Tool permissions: Always ask, the default in snotra. Click to switch.');
+    doc.getElementById('btn-chat-tool-mode').click();
+    assert.deepEqual(tagOn(), ['ask-all']);
+    assert.equal(doc.querySelector('.chat-tool-mode-default-tag').textContent, 'Default in snotra');
+  } finally {
+    dom.cleanup();
+  }
+});
+
+test('menu: without a folder the status names no folder, and German reads the same', async () => {
+  const dom = setupRendererDom();
+  try {
+    const { initToolModePicker } = await importRenderer('components', 'ToolModePicker.js');
+    const permissions = fakePermissions(baseState({ workspaceRoot: null, workspaceMode: null }));
+    initToolModePicker({ toolPermissions: permissions });
+    const doc = dom.document;
+    doc.getElementById('btn-chat-tool-mode').click();
+    assert.equal(doc.querySelector('.chat-tool-mode-default-tag'), null);
+    doc.querySelector('.chat-tool-mode-option[data-mode="ask-all"]').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.equal(doc.getElementById('chat-tool-mode-status').textContent, 'Permission mode: Always ask');
+
     await withLocale('de', async () => {
-      permissions.push(baseState({ mode: 'ask-all', workspaceMode: 'ask-all' }));
-      assert.equal(doc.getElementById('chat-tool-mode-footer').hidden, false);
-      assert.equal(doc.getElementById('chat-tool-mode-remember-label').textContent, '„Immer fragen“ auch für neue Chats in snotra');
-      assert.equal(doc.getElementById('chat-tool-mode-remember-hint').textContent, 'Haken raus: Neue Chats starten wieder mit „Intelligent“.');
+      permissions.push(baseState({ mode: 'ask-all' }));
+      doc.querySelector('.chat-tool-mode-option[data-mode="smart"]').click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      assert.equal(doc.getElementById('chat-tool-mode-status').textContent, 'Berechtigungsmodus: Intelligent, auch für neue Chats in snotra');
+      doc.getElementById('btn-chat-tool-mode').click();
+      assert.equal(doc.querySelector('.chat-tool-mode-default-tag').textContent, 'Standard in snotra');
     });
   } finally {
     dom.cleanup();
@@ -278,7 +228,7 @@ test('settings: the state line describes the radiogroup, and each option carries
     assert.deepEqual(group.getAttribute('aria-describedby').split(' '), ['settings-security-mode-state', 'settings-security-mode-note']);
     const radio = (value) => group.querySelector(`input[value="${value}"]`);
     const description = (value) => doc.getElementById(radio(value).getAttribute('aria-describedby'));
-    assert.equal(description('smart').textContent, 'Reading runs without asking. File changes and sensitive files ask first. The default.');
+    assert.equal(description('smart').textContent, 'Reading runs without asking. File changes and sensitive files ask first. Every new folder starts here.');
     assert.equal(description('smart').hidden, true, 'read with the radio, not shown twice');
     assert.equal(description('smart').closest('label'), null, 'not part of the radio\'s name');
     assert.equal(radio('smart').closest('label').title, description('smart').textContent);

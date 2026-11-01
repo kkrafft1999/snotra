@@ -424,9 +424,12 @@ test('workspace registry declares all built-in tools with their minimum risk cla
   // without a reader nobody answers.
   assert.equal(names.includes('list_release_notes'), false);
   assert.equal(classes.list_release_notes, 'read');
-  // 24 registered tools minus the two essential ones, list_directory and
+  // Reads the folder's earlier chats (#1315); without the search, nothing to read.
+  assert.equal(names.includes('search_chats'), false);
+  assert.equal(classes.search_chats, 'read');
+  // 25 registered tools minus the two essential ones, list_directory and
   // load_skill, which nobody deselects (#195).
-  assert.equal(Object.keys(classes).length, 22);
+  assert.equal(Object.keys(classes).length, 23);
   assert.equal(Object.hasOwn(classes, 'list_directory'), false);
   assert.equal(Object.hasOwn(classes, 'load_skill'), false);
 });

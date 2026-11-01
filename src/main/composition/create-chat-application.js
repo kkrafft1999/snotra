@@ -43,6 +43,7 @@ const { createOwnSecretsAdapter } = require('../adapters/own-secrets-adapter');
  * @param {(run: { sessionId: string|number, chatId: string|null }) => void} [deps.onRunSettled]
  * @param {import('../../application/ports/config-proposal-port').ConfigProposalPort|null} [deps.configProposals]
  * @param {Parameters<typeof createProviderLlmAdapter>[0]['modelPrices']} [deps.modelPrices]
+ * @param {(chatId: string) => Promise<unknown>} [deps.onCloudTurn]  a turn goes to a cloud model (#1315)
  */
 function createChatApplication({
   llmConfigStore,
@@ -77,6 +78,8 @@ function createChatApplication({
   configProposals = null,
   // Prices for the estimated chat cost (#949).
   modelPrices = null,
+  // The chat is no longer local (#1315): marked before the turn is sent.
+  onCloudTurn = async () => {},
 }) {
   const llm = createProviderLlmAdapter({
     providerRuntime,
@@ -116,6 +119,7 @@ function createChatApplication({
     onRunStarted,
     onRunSettled,
     configProposals,
+    onCloudTurn,
   });
 
   return {

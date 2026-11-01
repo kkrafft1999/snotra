@@ -62,8 +62,8 @@ test('a page whose title holds the word comes first', () => {
 test('every word has to be on the page, and the best section is named', () => {
   const results = search.searchManual(indexes.en, 'default mode');
   assert.equal(results[0].slug, 'safety/choose-a-mode');
-  assert.equal(results[0].heading, 'Give a folder a default mode');
-  assert.equal(results[0].anchor, 'give-a-folder-a-default-mode');
+  assert.equal(results[0].heading, "The folder's default mode");
+  assert.equal(results[0].anchor, 'the-folders-default-mode');
   for (const result of results) {
     const page = indexes.en.find((entry) => entry.slug === result.slug);
     const all = [page.folded.title, page.folded.description, ...page.sections.flatMap((s) => [s.folded.heading, s.folded.text.text])].join(' ');
