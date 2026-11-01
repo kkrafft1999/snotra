@@ -237,7 +237,7 @@ function newestFirst(a, b) {
  * @param {(type: 'set-aside' | 'not-saved' | 'saved-again', file: string, keptAs: string|null, store: string) => void} [deps.reportStoreFile]
  * @param {(raw: unknown) => string|null} deps.normalizeWorkspaceRoot
  * @param {string} deps.noWorkspaceKey the folder pointer's key for chats without a folder
- * @param {number} deps.maxChatSessions
+ * @param {number} deps.maxChatSessionsPerFolder the chats a folder keeps, not counting those marked *Keep* (#1320)
  * @param {{ warn?: (message: string) => void, info?: (message: string) => void }|null} [deps.log]
  * @param {string} [deps.platform]
  * @param {number} [deps.cachedSessions]
@@ -254,7 +254,7 @@ function createChatHistoryStore({
   reportStoreFile = () => {},
   normalizeWorkspaceRoot,
   noWorkspaceKey,
-  maxChatSessions,
+  maxChatSessionsPerFolder,
   log = console,
   platform = process.platform,
   cachedSessions = DEFAULT_CACHED_SESSIONS,
@@ -946,8 +946,9 @@ function createChatHistoryStore({
 
   /**
    * Saves a chat in store form: its file — unless it is what is there
-   * already — and its index entry. Chats beyond `maxChatSessions` go, oldest
-   * first; their ids come back so that their images can go as well.
+   * already — and its index entry. The chats of its folder beyond
+   * `maxChatSessionsPerFolder` go, oldest first (#1320); their ids come back
+   * so that their images can go as well.
    *
    * @param {StoredSession} session
    * @returns {Promise<{ droppedIds: string[] }>}
@@ -968,7 +969,7 @@ function createChatHistoryStore({
       const meta = sessionMetaFromSession(session);
       if (plain) meta.plain = true;
       s.metas.set(id, meta);
-      const droppedIds = await dropBeyondLimit(s);
+      const droppedIds = await dropBeyondLimit(s, meta.workspaceRoot);
       return { droppedIds, written: persistIndex(s) };
     }).then(async ({ droppedIds, written }) => {
       // Outside the queue: the next change goes into memory while this one's
@@ -979,12 +980,20 @@ function createChatHistoryStore({
   }
 
   /**
+   * The limit holds per folder (#1320): what happens in other folders never
+   * pushes this folder's chats out, and chats without a folder are a bucket
+   * of their own. A chat marked *Keep* is never dropped and does not count.
+   * Only the saved chat's folder is looked at — the others did not grow.
+   *
    * @param {HistoryState} s
+   * @param {string|null} workspaceRoot
    * @returns {Promise<string[]>}
    */
-  async function dropBeyondLimit(s) {
-    if (s.metas.size <= maxChatSessions) return [];
-    const dropped = sortedMetas(s).slice(maxChatSessions).map((meta) => meta.id);
+  async function dropBeyondLimit(s, workspaceRoot) {
+    const bucket = workspaceRoot || noWorkspaceKey;
+    const counted = sortedMetas(s).filter((meta) => meta.keep !== true && (meta.workspaceRoot || noWorkspaceKey) === bucket);
+    if (counted.length <= maxChatSessionsPerFolder) return [];
+    const dropped = counted.slice(maxChatSessionsPerFolder).map((meta) => meta.id);
     for (const id of dropped) {
       try {
         await removeFile(sessionPath(id));
@@ -998,13 +1007,19 @@ function createChatHistoryStore({
   }
 
   /**
-   * Changes a chat's own settings — in the index alone. False when the chat is not there.
+   * Changes a chat's own settings — in the index alone, unless `withFile`
+   * asks for the chat's file to follow (#1320): a change that must survive
+   * the loss of the index — *Keep*, the folder it was moved to — is written
+   * to both, the file first. A file that cannot be read now is left as it is;
+   * the change then lives in the index, as every other setting does. False
+   * when the chat is not there.
    *
    * @param {string} id
    * @param {Record<string, unknown>} patch
+   * @param {{ withFile?: boolean }} [options]
    * @returns {Promise<boolean>}
    */
-  function patchSession(id, patch) {
+  function patchSession(id, patch, { withFile = false } = {}) {
     return serial(async () => {
       const s = await loaded();
       const meta = s.metas.get(id);
@@ -1019,6 +1034,7 @@ function createChatHistoryStore({
       const next = normalizeSessionMetaForStore(changed, { normalizeWorkspaceRoot });
       if (!next) return null;
       if (meta.plain) next.plain = true;
+      if (withFile) await rewriteSessionFile(id, next);
       s.metas.set(id, next);
       return { written: persistIndex(s) };
     }).then(async (result) => {
@@ -1026,6 +1042,31 @@ function createChatHistoryStore({
       await result.written;
       return true;
     });
+  }
+
+  /**
+   * Writes a chat's file again with what its index entry says now, the
+   * messages as they are. Runs inside the queue, so it reads the file itself
+   * rather than through `sessionFile`, whose clean-up queues behind it.
+   *
+   * @param {string} id
+   * @param {IndexedMeta} meta  the entry as it is about to be; `plain` follows the write
+   */
+  async function rewriteSessionFile(id, meta) {
+    if (blocked.has(sessionFileName(id))) return;
+    let file = cache.get(id);
+    if (!file) {
+      const read = await readEnvelope(sessionPath(id));
+      const session = read.status === READ.OK ? sessionFromFile(read.data) : null;
+      if (!session || session === 'newer' || session.id !== id) return;
+      file = session;
+    }
+    const session = sessionFromMeta(meta, file.messages);
+    bump(id);
+    const plain = !(await writeSessionFile(session));
+    remember(id, session);
+    if (plain) meta.plain = true;
+    else delete meta.plain;
   }
 
   /**

@@ -1149,6 +1149,7 @@ function mergeSandboxGrants(session, chosen) {
  * @property {(run: { sessionId: string|number, chatId: string|null }) => void} [onRunSettled]
  * @property {import('../ports/config-proposal-port').ConfigProposalPort|null} [configProposals]
  * @property {ReadonlyArray<import('../ports/injection-flag-port').InjectionFlagPort>} [injectionFlags]
+ * @property {(chatId: string) => Promise<unknown>} [onCloudTurn]  a turn of the chat goes to a cloud model (#1315)
  */
 
 /**
@@ -1181,6 +1182,9 @@ function createChatEngine({
   // Who may flag a tool result as a likely prompt injection (#1011): the
   // built-in detector, later a PostToolUse hook (#927). A warning only.
   injectionFlags = [createBuiltinInjectionDetector()],
+  // A turn is about to go to a model that does not run on this computer
+  // (#1315, decision 13): the chat stops being local, for good.
+  onCloudTurn = async () => {},
 }) {
   /**
    * One run per window *and* chat (#320). Until then a window had exactly one
@@ -1501,6 +1505,17 @@ function createChatEngine({
       awaitingProvider = true;
       const sendBundle = await llm.prepareSendBundle(target);
       awaitingProvider = false;
+      // Whether this turn stays on this computer (#193, #996). Marked before
+      // anything is sent: the whole history goes along with this turn.
+      const runsLocally = sendBundle?.traits?.runsLocally === true;
+      if (!runsLocally && chatId) {
+        try {
+          await onCloudTurn(chatId);
+        } catch (error) {
+          // The turn still runs; an unmarked chat only counts as local while its model is.
+          console.warn('[chat-engine] the chat could not be marked as sent to the cloud:', error);
+        }
+      }
       // Der Composer laesst Bilder gar nicht erst zu, wenn der Anbieter sie
       // nicht weiterreicht (Issue #93). Hier greift der Fall, dass nach dem
       // Anhaengen auf ein anderes Modell umgeschaltet wurde: lieber eine klare
@@ -1855,7 +1870,7 @@ function createChatEngine({
       // the server address already weighed in (#193, #996).
       const historyCharLimit = resolveHistoryCharLimit(
         uiPrefs,
-        sendBundle?.traits?.runsLocally === true
+        runsLocally
       );
       // Bild-Anhaenge (Issue #84) reisen als eigenes Feld mit, nicht im
       // Content — und werden hier normalisiert, weil der Payload aus dem
@@ -3121,6 +3136,9 @@ function createChatEngine({
             outsideGrants: outsideGrants(),
             // What this chat switched on a card, for get_configuration (#774).
             configOverrides,
+            // For search_chats (#1315): which chat asks, and whether its turn stays local.
+            chatId,
+            runsLocally,
           });
           // A command may change a knowledge file of the folder (#1319): what
           // they held before it, to compare once it has run.

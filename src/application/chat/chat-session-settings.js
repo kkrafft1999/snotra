@@ -28,7 +28,10 @@
  * of `smart` in both rules above: a new chat starts with it, and a chat
  * restored automatically from `auto` falls back to it — so a workspace whose
  * default is `auto` keeps `auto` across a restart. The default can only be
- * `auto` after main's own native confirmation for that workspace.
+ * `auto` after main's own native confirmation for that workspace. Since #1337
+ * every explicit pick in the mode pill writes that default as well (main's
+ * `setMode`), so a new chat starts where the user last left the workspace,
+ * and only a workspace that never had a pick starts at `smart`.
  *
  * The reasoning level is the chat's third value (#725), with a rule of its
  * own: a new chat has none and runs with the provider's default, `medium`. It
@@ -110,6 +113,7 @@ const MAX_REMEMBERED_CHATS = 500;
  * @param {(presetId: string) => Promise<{ presetId?: unknown, reasoningEffort?: unknown }|null>} [deps.getPresetAlias]
  * @param {(chatId: string) => void} [deps.onChatModeChanged]
  * @param {(chatId: string|null) => void} [deps.onActivated]
+ * @param {(change: { chatId: string, presetId: string, previousPresetId: string|null }) => unknown} [deps.onPresetChosen]
  * @param {{ warn?: (message: string) => void }|null} [deps.log]
  */
 function createChatSessionSettings({
@@ -135,6 +139,9 @@ function createChatSessionSettings({
   onChatModeChanged = () => {},
   // Another chat is on screen now; main drops what only the left chat needed.
   onActivated = () => {},
+  // The chat on screen got another model entry by an explicit choice (#1315):
+  // a local chat switched to a cloud model is told what that means.
+  onPresetChosen = () => {},
   log = console,
 }) {
   /** @type {string|null} */
@@ -468,8 +475,15 @@ function createChatSessionSettings({
   async function rememberPreset(rawPresetId) {
     const presetId = chatModelPresetIdForStore(rawPresetId);
     if (!currentChatId || !presetId) return;
-    rememberLocal(currentChatId, { modelPresetId: presetId });
-    await persist(currentChatId, { modelPresetId: presetId });
+    const chatId = currentChatId;
+    const previousPresetId = (await storedValuesFor(chatId)).modelPresetId ?? null;
+    rememberLocal(chatId, { modelPresetId: presetId });
+    await persist(chatId, { modelPresetId: presetId });
+    try {
+      await onPresetChosen({ chatId, presetId, previousPresetId });
+    } catch (error) {
+      log?.warn?.(`[chat-session-settings] Hook failed: ${error?.message || error}`);
+    }
   }
 
   /**

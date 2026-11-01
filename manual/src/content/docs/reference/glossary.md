@@ -39,7 +39,7 @@ What the model receives with a request: the conversation, the instructions, the 
 
 ### Default mode
 
-The mode a new chat starts in for one folder. Without one, it is *Smart*. See [Choose a mode](../../safety/choose-a-mode/).
+The mode a new chat starts in for one folder: the mode you picked last in a chat there. In a folder where you have never picked one, it is *Smart*. See [Choose a mode](../../safety/choose-a-mode/).
 
 ### Global
 

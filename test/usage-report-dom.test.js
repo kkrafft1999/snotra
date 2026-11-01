@@ -58,7 +58,7 @@ async function mount(t, { locale = 'en', getUsageReport, setChatTaskKind, active
   const api = {
     getUsageReport: getUsageReport || (async (period) => {
       calls.report.push(period);
-      return buildUsageReport(CHATS, period, { maxChats: 200 });
+      return buildUsageReport(CHATS, period, { maxChatsPerFolder: 200 });
     }),
     onOpenUsageReport: (fn) => { openFromMenu = fn; },
     setChatTaskKind,

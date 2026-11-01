@@ -92,6 +92,9 @@
  *   without, the level of the chat on screen.
  * @property {(params?: { chatId?: string }) => Promise<string[]>} [reasoningLevelsFor]
  *   The levels the chat's model takes (#1304); empty when it takes none.
+ * @property {(presetId: string|null) => Promise<{ runsLocally: boolean, providerName?: string|import('../../shared/contracts/message').Message }|null>} describePreset
+ *   Whether a model entry runs on this computer and who serves it (#1315); `null` for the
+ *   active one. Null when its provider is unknown.
  * @property {(target: ChatModelTarget, options?: LlmValidateOptions) => Promise<ChatErrorResult|null>} validateTarget
  * @property {(target: ChatModelTarget) => Promise<LlmSendBundle>} prepareSendBundle
  * @property {(params: {
