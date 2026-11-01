@@ -97,7 +97,7 @@ Eine Regel von dir, die ein Tool oder eine ganze [Risikoklasse](#risikoklasse) f
 
 ### Standardmodus
 
-Der Modus, in dem ein neuer Chat für einen Ordner beginnt. Ohne einen ist es *Intelligent*. Siehe [Einen Modus wählen](../../safety/choose-a-mode/).
+Der Modus, in dem ein neuer Chat für einen Ordner beginnt: der Modus, den du dort zuletzt in einem Chat gewählt hast. In einem Ordner, in dem du noch nie einen gewählt hast, ist es *Intelligent*. Siehe [Einen Modus wählen](../../safety/choose-a-mode/).
 
 ### System-Prompt
 

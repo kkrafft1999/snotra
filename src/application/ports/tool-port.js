@@ -101,6 +101,8 @@
  * @property {OutsideGrant[]} [outsideGrants]  what cards opened outside the open folder (#792, step 4)
  * @property {import('../../shared/contracts/chat-configuration').ChatConfigOverrides|null} [configOverrides]
  *   what this chat switched on a card, for `get_configuration` (#774)
+ * @property {string|null} [chatId]  the chat the call runs in; `search_chats` leaves it out (#1315)
+ * @property {boolean} [runsLocally]  whether this turn's model runs on this computer (#1315)
  */
 
 /**

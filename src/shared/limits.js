@@ -2,7 +2,17 @@
 // Default — der effektive Wert ist über Einstellungen › Allgemein
 // (ui-preferences.json, maxToolRounds) überschreibbar.
 const LIMITS = Object.freeze({
-  MAX_CHAT_SESSIONS: 200,
+  // The chat history is the agent's episodic memory (#1320, decision 8 of
+  // docs/concepts/memory-and-rules-concept.md), so the limit is per folder:
+  // a busy week elsewhere no longer pushes this folder's chats out. 200 is
+  // what the whole history held before, so a user who works in one folder
+  // keeps exactly as much as before. Chats marked *Keep* do not count.
+  MAX_CHAT_SESSIONS_PER_FOLDER: 200,
+  // The ceiling across all folders: the folder history remembers ten folders,
+  // ten times a full folder. It is a safeguard for the index held in memory
+  // and is never applied by dropping chats — the list reports when it is
+  // reached, and the user decides what goes.
+  MAX_CHAT_SESSIONS: 2000,
   MAX_FOLDER_HISTORY: 10,
   MAX_TOOL_ROUNDS: 14,
   MAX_READ_FILE_BYTES: 2 * 1024 * 1024,

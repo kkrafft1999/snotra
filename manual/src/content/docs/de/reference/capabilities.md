@@ -24,6 +24,7 @@ Diese Seite ist der Überblick. Jede Zeile verweist auf die Seite, die es erklä
 | MCP-Server | Nutzt die Tools von MCP-Servern, die du anbindest: Tickets, eine Datenbank, einen Kalender, was immer ein Server anbietet | [Einen MCP-Server anbinden](../../customising/mcp-servers/) |
 | Modelle | Arbeitet mit OpenAI, Anthropic und Google in der Cloud, mit Ollama, LM Studio und jedem Server mit OpenAI-kompatibler Schnittstelle auf deinem Rechner oder in deinem Netz und über Gateways wie OpenRouter | [Ein Modell anbinden](../../getting-started/connect-a-model/) |
 | Fragen zu Snotra | Schlägt die Antwort in diesem Handbuch nach und verlinkt die Seite, die es benutzt hat | [Die eingebauten Tools einrichten](../../customising/built-in-tools/#die-eingebauten-tools) |
+| Frühere Chats | [seit 1.30] Durchsucht die früheren Chats des geöffneten Ordners, wenn du nach einem vergangenen Gespräch fragst; ein Chat, der nur mit lokalen Modellen lief, bleibt für Cloud-Modelle unerreichbar | [Einen früheren Chat fortsetzen](../../chatting/chat-history/#nach-früheren-chats-fragen) |
 | Fragen zu Versionen | Sagt dir aus den Release Notes, was sich seit einer Version, die du nennst, oder in deiner installierten geändert hat | [Die Release Notes lesen](../../updating/release-notes/#snotra-nach-versionen-fragen) |
 
 Was ein Chat von sich aus darf, hängt von seinem Modus und von der Risikoklasse jedes Tools ab — siehe [Warum Snotra fragt, bevor es handelt](../../safety/why-snotra-asks/).
