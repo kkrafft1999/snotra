@@ -14,7 +14,7 @@ const click = async (button) => { button.click(); await new Promise((resolve) =>
 
 const QUESTION = [{ role: 'user', content: 'Which beds get the beans?' }, { role: 'assistant', content: 'The north bed.' }];
 
-async function setup({ locale = 'en', messages = QUESTION, inFlight = false } = {}) {
+async function setup({ locale = 'en', messages = QUESTION, inFlight = false, modelReady } = {}) {
   const dom = setupRendererDom();
   const { initChatDistilAction, DISTIL_MIN_TITLE_ROOM_PX } = await importRenderer('components', 'ChatDistilAction.js');
   const { appStore } = await importRenderer('state', 'store.js');
@@ -23,7 +23,7 @@ async function setup({ locale = 'en', messages = QUESTION, inFlight = false } = 
   appStore.chatMessages = messages;
   appStore.chatInFlight = inFlight;
   const sent = [];
-  const distil = initChatDistilAction({ appStore, send: (text) => sent.push(text) });
+  const distil = initChatDistilAction({ appStore, send: (text) => sent.push(text), modelReady });
   const document = dom.document;
   const button = document.getElementById('btn-chat-distil');
   return {
@@ -65,6 +65,19 @@ test('an empty chat: disabled with its reason, still focusable, and a click send
   assert.equal(button.ownerDocument.activeElement, button);
   await click(button);
   assert.deepEqual(sent, []);
+});
+
+test('without a model: disabled with its reason instead of a click that does nothing', async () => {
+  let ready = false;
+  const { button, reason, sent, distil } = await setup({ modelReady: () => ready });
+  assert.equal(button.dataset.state, 'noModel');
+  assert.equal(button.getAttribute('aria-disabled'), 'true');
+  assert.equal(reason.textContent, 'Available once a model is set up.');
+  await click(button);
+  assert.deepEqual(sent, []);
+  ready = true;
+  distil.sync();
+  assert.equal(button.dataset.state, 'ready');
 });
 
 test('while an answer is on its way: disabled with its reason, ready again afterwards', async () => {

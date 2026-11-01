@@ -29,18 +29,21 @@ const LABELLED_CHROME_PX = 14 + 6 + 10 + 12 + 2;
  * @param {{
  *   appStore: { chatMessages?: any[], chatInFlight?: boolean },
  *   send: (text: string) => unknown,
+ *   modelReady?: () => boolean,
  * }} deps
  */
-export function initChatDistilAction({ appStore, send }) {
+export function initChatDistilAction({ appStore, send, modelReady = () => true }) {
   const button = document.getElementById('btn-chat-distil');
   const reason = document.getElementById('chat-distil-reason');
   const header = document.getElementById('chat-header');
   if (!button || !reason) return { sync() {}, state: () => 'missing' };
   const label = button.querySelector('.chat-distil-label');
 
-  /** 'running', 'empty' or 'ready' — the first two say why it cannot run. */
+  /** 'running', 'noModel', 'empty' or 'ready' — all but the last say why it cannot run. */
   function state() {
     if (appStore.chatInFlight) return 'running';
+    // Without a model the request would go nowhere, silently.
+    if (!modelReady()) return 'noModel';
     const messages = Array.isArray(appStore.chatMessages) ? appStore.chatMessages : [];
     const asked = messages.some((m) => m && m.role === 'user' && !m.greeting);
     return asked ? 'ready' : 'empty';
@@ -78,9 +81,11 @@ export function initChatDistilAction({ appStore, send }) {
 
   function sync() {
     const current = state();
-    const text = current === 'running'
-      ? t('chat.distil.running')
-      : current === 'empty' ? t('chat.distil.empty') : t('chat.distil.description');
+    const text = {
+      running: t('chat.distil.running'),
+      noModel: t('chat.distil.noModel'),
+      empty: t('chat.distil.empty'),
+    }[current] ?? t('chat.distil.description');
     if (current === 'ready') button.removeAttribute('aria-disabled');
     else button.setAttribute('aria-disabled', 'true');
     button.dataset.state = current;

@@ -290,6 +290,7 @@ onLocaleChange(() => {
 
 // Parts further down that follow the active model (#1013); set once they exist.
 let afterLlmStateChange = () => {};
+let modelReady = () => true;
 // The kind of task in the chat header (#1282) is drawn with the title.
 const chatTaskKind = initChatTaskKind({ api, appStore });
 // "Distil into knowledge…" in the chat header (#1317). `chatStream` exists by
@@ -297,6 +298,7 @@ const chatTaskKind = initChatTaskKind({ api, appStore });
 const chatDistil = initChatDistilAction({
   appStore,
   send: (text) => chatStream.sendChatMessage({ text }),
+  modelReady: () => modelReady(),
 });
 const modelPicker = initChatModelPicker({
   api,
@@ -355,6 +357,7 @@ const chatConfig = initChatConfigIndicator({
 });
 // An entry without tools says so at the composer (#1013).
 afterLlmStateChange = () => chatConfig.redraw();
+modelReady = () => modelPicker.activeProviderConfigured();
 // A tool switched in the settings changes the list.
 toolPermissions.subscribe(() => void chatConfig.refresh());
 // A narrow chat puts the pills on a row of their own (#400).

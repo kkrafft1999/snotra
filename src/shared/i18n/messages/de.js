@@ -2063,6 +2063,7 @@ module.exports = {
   'chat.distil.label': 'Wissen daraus ableiten…',
   'chat.distil.description': 'Diesen Chat durchgehen und vorschlagen, was bleiben soll — Fakten, Regeln, Skills —, eine Karte nach der anderen.',
   'chat.distil.running': 'Geht, sobald die Antwort fertig ist.',
+  'chat.distil.noModel': 'Geht, sobald ein Modell eingerichtet ist.',
   'chat.distil.empty': 'Noch nichts abzuleiten: Dieser Chat hat keine Nachrichten.',
   'chat.distil.prompt': 'Leite Wissen aus diesem Chat ab: Was nehmen wir daraus mit? Schlag jeden Fakt, jede Regel und jeden Skill, die bleiben sollen, einzeln vor.',
 
