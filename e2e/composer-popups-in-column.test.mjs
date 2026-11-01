@@ -99,8 +99,17 @@ test('both composer popups stay inside the chat column at every width', { timeou
   // The window the issue was measured in. The chat column follows the window
   // by half its change (#637), so a resize that lands after the layout started
   // would move it off its default; a reload starts the layout at this size.
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1280, 800));
-  await poll(() => page.evaluate(() => window.innerWidth === 1280), { what: 'window at 1280 px' });
+  // Within the display's work area: a runner whose screen is narrower than
+  // 1280 px (the macos-15 images) shrinks the window after it was set, and
+  // the column follows by half the change — down to its minimum, past the
+  // check below (#1326).
+  const size = await app.evaluate(({ BrowserWindow, screen }) => {
+    const area = screen.getPrimaryDisplay().workAreaSize;
+    const win = BrowserWindow.getAllWindows()[0];
+    win.setContentSize(Math.min(1280, area.width - 40), Math.min(800, area.height - 40));
+    return { area, content: win.getContentSize() };
+  });
+  await poll(() => page.evaluate((width) => window.innerWidth === width, size.content[0]), { what: `window at ${size.content[0]} px` });
   await page.reload();
   await poll(async () => (await page.evaluate(() => window.electronAPI.getToolPermissionState()))?.workspaceRoot,
     { what: 'permission state with a workspace' });
@@ -137,7 +146,10 @@ test('both composer popups stay inside the chat column at every width', { timeou
       assert.ok(m.box.left >= m.column.left - 0.5, `${at} — left edge inside the column`);
       assert.ok(m.box.right <= m.column.right + 0.5, `${at} — right edge inside the column`);
       assert.deepEqual(m.spill, [], `${at} — nothing reaches out of the menu`);
-      if (layout.name === 'widest' && spec.name === 'mode menu') {
+      // A 1024 px runner screen leaves the widest column too narrow for the
+      // menu at its pill; it then only has to stay inside, checked above.
+      const room = m.anchorLeft + m.box.width + 16 <= m.column.right;
+      if (layout.name === 'widest' && spec.name === 'mode menu' && room) {
         assert.ok(Math.abs(m.box.left - m.anchorLeft) < 1, `${at} — flush with its pill where there is room`);
       }
     }
@@ -163,7 +175,7 @@ test('both composer popups stay inside the chat column at every width', { timeou
     `menu follows a column that narrows while it is open: ${JSON.stringify(followed)}`);
 
   // The three layouts really differ: default, minimum, and room for the menu.
-  assert.equal(widths[0], 320, `default column: ${widths}`);
+  assert.equal(widths[0], 320, `default column: ${widths} (window ${JSON.stringify(size)}, now ${JSON.stringify(await page.evaluate(() => [window.innerWidth, window.innerHeight]))})`);
   assert.equal(widths[2], 260, `narrowest column: ${widths}`);
   assert.ok(widths[4] > 360, `widest column: ${widths}`);
 });
