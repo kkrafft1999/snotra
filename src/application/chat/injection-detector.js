@@ -342,6 +342,53 @@ function hitsWarrantFlag(hits) {
 }
 
 /**
+ * The patterns that stay suspicious in text which is instructions by design
+ * (#1280): hiding something from the user, acting without them, sending
+ * secrets or the prompt out, image beacons and invisible text. The others —
+ * "from now on", orders addressed to the agent, role markup — are what an
+ * `AGENTS.md` or a rules file is made of, and would light up on every one.
+ */
+const COVERT_RULE_IDS = new Set([
+  'conceal-from-user',
+  'without-user',
+  'reveal-prompt',
+  'send-secrets',
+  'image-beacon',
+  'hidden-tags',
+]);
+
+/**
+ * One signal per kind, strong hits first: a row says what was found, not how often.
+ *
+ * @param {ReturnType<typeof findInjectionSignals>} hits
+ * @returns {Array<{ kind: import('../../shared/contracts/injection-flag').InjectionSignalKind, excerpt: string }>}
+ */
+function signalsOf(hits) {
+  const ordered = [...hits].sort((a, b) => (a.weight === b.weight ? 0 : a.weight === STRONG ? -1 : 1));
+  /** @type {Set<string>} */
+  const kinds = new Set();
+  const signals = [];
+  for (const hit of ordered) {
+    if (kinds.has(hit.kind)) continue;
+    kinds.add(hit.kind);
+    signals.push({ kind: hit.kind, excerpt: hit.excerpt });
+  }
+  return signals;
+}
+
+/**
+ * The covert signals in a text the prompt embeds from the open folder (#1280),
+ * by the same weighing as a tool result: one strong hit, or weak ones of two kinds.
+ *
+ * @param {unknown} text
+ * @returns {Array<{ kind: import('../../shared/contracts/injection-flag').InjectionSignalKind, excerpt: string }>|null}
+ */
+function findCovertSignals(text) {
+  const hits = findInjectionSignals(typeof text === 'string' ? text : '').filter((hit) => COVERT_RULE_IDS.has(hit.rule));
+  return hitsWarrantFlag(hits) ? signalsOf(hits) : null;
+}
+
+/**
  * The built-in detector as an injection-flag source.
  *
  * @returns {import('../ports/injection-flag-port').InjectionFlagPort}
@@ -352,24 +399,14 @@ function createBuiltinInjectionDetector() {
       if (SKIPPED_CATEGORIES.has(category) || skill) return null;
       const hits = findInjectionSignals(content);
       if (!hitsWarrantFlag(hits)) return null;
-      // Strong hits first, one signal per kind: the row says what was found,
-      // not how often.
-      const ordered = [...hits].sort((a, b) => (a.weight === b.weight ? 0 : a.weight === STRONG ? -1 : 1));
-      /** @type {Set<string>} */
-      const kinds = new Set();
-      const signals = [];
-      for (const hit of ordered) {
-        if (kinds.has(hit.kind)) continue;
-        kinds.add(hit.kind);
-        signals.push({ kind: hit.kind, excerpt: hit.excerpt });
-      }
-      return { signals, sources: [INJECTION_FLAG_SOURCES.BUILTIN] };
+      return { signals: signalsOf(hits), sources: [INJECTION_FLAG_SOURCES.BUILTIN] };
     },
   };
 }
 
 module.exports = {
   createBuiltinInjectionDetector,
+  findCovertSignals,
   findInjectionSignals,
   hitsWarrantFlag,
 };

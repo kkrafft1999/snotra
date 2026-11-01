@@ -418,3 +418,26 @@ test('tabbing out of the panel closes it', async () => {
   dom.document.getElementById('btn-chat-send').focus();
   assert.equal(api.isOpen(), false);
 });
+
+test('a folder file with a covert signal carries a warning in its row (#1280)', async () => {
+  const breakdown = createContextBreakdown({
+    promptTokens: 1000,
+    parts: [
+      {
+        id: 'system:agents-md:workspace-agents',
+        group: CONTEXT_PART_GROUPS.SYSTEM,
+        label: 'AGENTS.md',
+        chars: 400,
+        covertSignals: [{ kind: 'addressed', excerpt: 'Do not tell the user' }, { kind: 'hidden', excerpt: 'x' }],
+      },
+      { id: 'system:base', group: CONTEXT_PART_GROUPS.SYSTEM, label: 'Base', chars: 400 },
+    ],
+  });
+  const { trigger, panel } = await mount({ breakdown, usage: { prompt: 1000, completion: 0, total: 1000 } });
+  click(trigger);
+  expandAll(panel);
+  const warnings = panel.querySelectorAll('.token-breakdown__row-signal');
+  assert.equal(warnings.length, 1, 'only the marked row warns');
+  assert.match(warnings[0].textContent, /Check this file: it may hide instructions from you/);
+  assert.match(warnings[0].textContent, /act without you or to keep something from you · Holds text you cannot see/);
+});

@@ -14,6 +14,7 @@ import contracts from '../generated/contracts.js';
 import { dismissOnFocusLeave, dismissOnOutsideClick } from '../utils/helpers.js';
 import { getLocale, onLocaleChange, t } from '../i18n.js';
 import { formatTokensShort } from '../utils/token-format.js';
+import { INJECTION_ICON_HTML } from '../chat/injectionFlags.js';
 
 const { normalizeContextBreakdown, groupContextParts } = contracts;
 
@@ -100,7 +101,26 @@ function buildRowBody(part) {
   body.appendChild(buildBar(part.share));
   const detail = part.detailKey ? t(part.detailKey, part.params) : part.detail;
   if (detail) body.appendChild(el('span', 'token-breakdown__row-detail', detail));
+  if (Array.isArray(part.covertSignals) && part.covertSignals.length > 0) body.appendChild(buildCovertWarning(part.covertSignals));
   return body;
+}
+
+/**
+ * A file from the folder that reads like it hides something from the user
+ * (#1280). It went to the model as it is — the line says what was found, so
+ * the user can look at the file. The kinds have their own words: "gives the
+ * agent orders" is what every AGENTS.md does.
+ */
+function buildCovertWarning(signals) {
+  const box = el('span', 'token-breakdown__row-signal');
+  const title = el('span', 'token-breakdown__row-signal-title');
+  // The tool log's speech bubble with an exclamation mark: text that speaks to the agent.
+  title.insertAdjacentHTML('afterbegin', INJECTION_ICON_HTML);
+  title.appendChild(el('span', '', t('context.covert.title')));
+  box.appendChild(title);
+  const kinds = [...new Set(signals.map((signal) => signal.kind))].map((kind) => t(`context.covert.kind.${kind}`));
+  box.appendChild(el('span', 'token-breakdown__row-signal-kinds', kinds.join(' · ')));
+  return box;
 }
 
 export function initTokenBreakdownPanel({

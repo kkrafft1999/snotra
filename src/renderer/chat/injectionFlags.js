@@ -26,7 +26,7 @@ export const INJECTION_HELP_KEY = 'chat.injectionFlag';
 export const INJECTION_HELP_EVENT = 'snotra:open-injection-help';
 
 // A speech bubble with an exclamation mark: text that speaks to the agent.
-const ICON_HTML =
+export const INJECTION_ICON_HTML =
   '<svg class="chat-injection-flag-icon" viewBox="0 0 16 16" aria-hidden="true">'
   + '<path d="M2.5 3.5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v6.5a1 1 0 0 1-1 1H7l-3 2.5V11h-.5a1 1 0 0 1-1-1z"/>'
   + '<path d="M8 4.8v3"/><path d="M8 9.6v.01"/></svg>';
@@ -102,7 +102,7 @@ export function buildInjectionFlagBox(results) {
   const title = document.createElement('p');
   title.className = 'chat-injection-flag-title';
   title.id = titleId;
-  title.insertAdjacentHTML('afterbegin', ICON_HTML);
+  title.insertAdjacentHTML('afterbegin', INJECTION_ICON_HTML);
   const heading = document.createElement('span');
   heading.className = 'chat-injection-flag-heading';
   heading.textContent = tPlural('toolLog.injection.title', results.length, { count: results.length });
