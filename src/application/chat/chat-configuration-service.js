@@ -231,7 +231,8 @@ function createChatConfigurationService({ skills, toolRegistry, uiPrefsStore, mc
     const tools = [...offers, ...remembered]
       // An allowlist is no setting, and `load_skill` is essential and left out
       // already; neither is anything the user could change.
-      .filter((tool) => tool.reason !== TOOL_OFFER_REASONS.NOT_ALLOWED && tool.reason !== TOOL_OFFER_REASONS.NO_SKILL)
+      .filter((tool) => tool.reason !== TOOL_OFFER_REASONS.NOT_ALLOWED
+        && tool.reason !== TOOL_OFFER_REASONS.NO_SKILL && tool.reason !== TOOL_OFFER_REASONS.NO_RULE)
       .map((tool) => ({
         name: tool.name,
         mcpServer: tool.mcpServer || null,

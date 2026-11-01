@@ -45,6 +45,7 @@ const MAX_SUMMARY_GROUPS = 3;
 const GROUP_KEYS = {
   skill: 'toolLog.group.skill',
   'skill-write': 'toolLog.group.skillWrite',
+  rule: 'toolLog.group.rule',
   read: 'toolLog.group.read',
   search: 'toolLog.group.search',
   manual: 'toolLog.group.manual',
@@ -69,6 +70,7 @@ const CATEGORY_RANK = {
   exec: 1,
   skill: 2,
   'skill-write': 2,
+  rule: 2,
   // An image was paid for and is there to be looked at (#85).
   image: 3,
   write: 4,

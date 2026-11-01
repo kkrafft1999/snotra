@@ -78,6 +78,7 @@
  * @typedef {Object} ToolExecutionContext
  * @property {string|null} workspaceRoot  null while no folder is open
  * @property {Array<{name: string, dir: string}>} [skillRoots]
+ * @property {Array<{name: string, level: string}>} [ruleNames]  what `load_rule` may load (#1275)
  * @property {string[]} [sensitivePathPatterns]  the user's patterns; the broad tools leave out
  *   hits under them as under the built-in ones (#525)
  * @property {AbortSignal} abortSignal
@@ -128,6 +129,8 @@
  * @property {string[]} [skillNames]  the switched-on skills: `load_skill` lists them, and the
  *   read tools stay without a folder while there is one (#173, #429, #548)
  * @property {string[]} [revealedNames]  MCP tools whose schema the run loaded with `load_tools` (#188)
+ * @property {Array<{name: string, level: string}>} [ruleNames]  the rules of this request: `load_rule`
+ *   lists them, and without any it is not offered (#1275)
  */
 
 /**

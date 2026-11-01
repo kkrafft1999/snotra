@@ -97,6 +97,7 @@ const { createChatApplication } = require('./create-chat-application');
 const { startToolRuntimes } = require('./start-tool-runtimes');
 const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
 const { createProjectInstructionsAdapter } = require('../adapters/project-instructions-adapter');
+const { createRulesAdapter } = require('../adapters/rules-adapter');
 const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
 const { createRemoteBridge } = require('./create-remote-bridge');
@@ -468,11 +469,8 @@ function createCore({
   // Adressregeln stecken im Adapter (Issue #95).
   const urlFetch = createHttpUrlFetchAdapter({ getLocale: getAppLocale });
 
-  // Gedaechtnis (Issue #166). Der Adapter kennt die zwei Pfade, der Wrapper
-  // die eine Regel, die nicht in den Adapter gehoert: ob Snotra ungefragt
-  // merken darf. Sie haengt an einer Einstellung und wird deshalb bei jedem
-  // Aufruf frisch gelesen — ein Schalter, der erst nach einem Neustart wirkt,
-  // waere bei diesem Thema keiner.
+  // Gedaechtnis (Issue #166). Ob Snotra ungefragt merken darf, wird bei jedem
+  // Aufruf frisch gelesen — ein Schalter, der erst nach einem Neustart wirkt, waere keiner.
   const memory = createMemoryAdapter({
     fs,
     path,
@@ -482,6 +480,10 @@ function createCore({
     // heissen, wie der Nutzer sie sieht (#294).
     getLocale: getAppLocale,
   });
+  // AGENTS.md (#212) and the rules files (#1275): no cache, no watcher — read
+  // per request, so a changed file applies from the next message on.
+  const projectInstructions = createProjectInstructionsAdapter({ fs, path, os });
+  const rules = createRulesAdapter({ fs, path, os });
 
   // The vendored pdf.js (#346), read by the preview and by extract_document_text (#42).
   const PDFJS_VENDOR_DIR = path.join(__dirname, '..', '..', 'renderer', 'vendor', 'pdfjs');
@@ -509,6 +511,7 @@ function createCore({
   /** @type {ReturnType<typeof createChatConfigurationService>} */
   let chatConfiguration;
   const toolRegistry = createWorkspaceToolRegistry({
+    rules,
     fsService: createFileToolsAdapter(fsService),
     webSearch,
     pythonRunner,
@@ -638,10 +641,6 @@ function createCore({
     describeShell: () => shellSettings.describe(),
   });
 
-  // Projektanweisungen aus AGENTS.md (Issue #212). Kein Cache, kein Watcher:
-  // Die Kette ist vier Dateien lang und wird je Anfrage frisch gelesen — eine
-  // geaenderte AGENTS.md wirkt damit ab der naechsten Nachricht.
-  const projectInstructions = createProjectInstructionsAdapter({ fs, path, os });
 
   const { engine: chatEngine, llm: chatLlm, toolPolicy: chatToolPolicy } = createChatApplication({
     llmConfigStore,
@@ -653,6 +652,7 @@ function createCore({
     environment,
     projectInstructions,
     memory,
+    rules,
     path,
     maxToolRounds: LIMITS.MAX_TOOL_ROUNDS,
     toolPolicyStore,

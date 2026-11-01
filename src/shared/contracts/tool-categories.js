@@ -18,6 +18,8 @@ const TOOL_CATEGORIES = Object.freeze({
    * one more "file written" the skill would disappear from the summary.
    */
   SKILL_WRITE: 'skill-write',
+  /** A rule fetched from the rules files with `load_rule` (#1275). */
+  RULE: 'rule',
   READ: 'read',
   SEARCH: 'search',
   LIST: 'list',
