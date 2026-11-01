@@ -22,6 +22,10 @@ Nothing for the global memory. For the project memory, an open folder.
 
 From the next message on, the sentence is part of what the model knows.
 
+[since 1.30] **What Snotra keeps, and how.** Snotra sorts by two questions. *What is it?* Something true only now, or that happened once — *the test is failing*, *today we fixed the login* — is not kept: the chat already has it. Steps towards a goal become a [skill](../write-a-skill/), something that can be followed or broken becomes a [rule](../rules/), and something true or false a fact in memory. *Who reads it?* Only you, Snotra in this folder, or every tool here. When an entry looks sorted wrongly, the card says so in a hint — Snotra never refuses it for its kind; you decide.
+
+To tidy up, ask *review my memory*: Snotra goes through memory and rules files and proposes one change at a time — move a fact that is a rule, merge duplicates, drop what is stale — each on its own card.
+
 ## Where it is kept
 
 | Level | File | Applies to |

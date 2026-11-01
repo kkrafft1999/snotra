@@ -1004,6 +1004,14 @@ export function rememberState(card, kind, scope) {
   const notes = [];
   if (sendBack) notes.push(t(kind === 'rule' ? 'approval.remember.sendBack.rule' : 'approval.remember.sendBack.instruction'));
   if (!sendBack && card.switchedOff === true && proposal) notes.push(t('approval.remember.switchedOff'));
+  // Hints, never refusals (#1277): for what Snotra proposed, as it proposed it.
+  if (proposal && Array.isArray(card.hints)) {
+    for (const hint of card.hints) {
+      if (hint === 'factLooksLikeRule') notes.push(t('approval.remember.hint.factLooksLikeRule'));
+      else if (hint === 'factLooksLikeProcedure') notes.push(t('approval.remember.hint.factLooksLikeProcedure'));
+      else if (hint === 'looksLikeEpisode') notes.push(t('approval.remember.hint.looksLikeEpisode'));
+    }
+  }
   if (!sendBack && scope === 'user' && (card.folderInstructions?.agentsMd || card.folderInstructions?.rulesFiles > 0)) {
     const parts = [];
     if (card.folderInstructions.agentsMd) parts.push('AGENTS.md');

@@ -1,108 +1,92 @@
 ---
 name: snotra-memory
-description: How to remember something permanently and what does not belong in memory — scopes (project/global) and asking the user which one, wording, limits, forgetting. Use before calling the "remember" tool for the first time in a conversation, when the user says "remember …", "keep …", "forget …", or when they ask what you have remembered and where it is kept.
+description: How to remember something permanently — the two questions (what is it, who reads it), facts, rules and procedures, wording, and reviewing what is kept. Use before calling the "remember" tool for the first time in a conversation, when the user says "remember …", "keep …", "from now on …", "remember that we always …", "review my memory", "what do we take away from this?", "merk dir …", "ab jetzt immer …", or asks what you have remembered and where.
 license: Apache-2.0
 metadata:
   snotra-system-skill: 'true'
 ---
 
-# Memory
+# Remembering
 
-You can remember things beyond the end of a conversation. The tool for it is
-called `remember`. Whatever is remembered is part of every system prompt from
-the next message on — so it takes up room permanently and goes to the provider
-with **every** request. The important question is therefore not "can I remember
-this", but "does this have to come along permanently".
+The tool `remember` keeps something beyond this conversation. What it writes
+is read in every later one, so ask whether it has to come along permanently.
 
-## Two scopes
+## Two questions
 
-| Scope | File | Applies to |
+**What is it?** Ask in this order; the first "yes" decides. Go by the
+statement as it is phrased, not by what it could be rephrased into.
+
+1. Only true right now, or something that happened once without a lasting
+   consequence ("today we …", "the test is failing", "next we do …")? That is
+   an **episode**: do not store it — the chat keeps it. A decision is no
+   episode: its consequence lasts. Neither is a statement with a reason.
+2. Several steps towards a goal? A **procedure**: `kind: "instruction"`, a
+   skill — `topic` its name, `description` what it is for, `body` the whole
+   skill. It replaces the version before it.
+3. Can it be followed or broken? A **rule**: `kind: "rule"`, phrased as a
+   condition ("When you write a commit message, write it in English"), with a
+   `topic` (the rules file) and, for a new file, a `description` (the
+   situation). `always: true` only when the condition holds in every turn.
+4. Can it be true or false? A **fact**: `kind: "fact"`.
+
+**Who reads it?** Ask the user before the call, unless they said so or no
+folder is open (then only `user`):
+
+| scope | Who reads it | Where |
 | --- | --- | --- |
-| `workspace` | `<folder>/.agents/memory.md` | the open folder only |
-| `user` | `~/.snotra/memory.md` | every folder |
+| `user` | only the user, in every folder | `~/.snotra/` |
+| `workspace` | Snotra in this folder | `.agents/` — may end up in a repository |
+| `team` | every tool in this folder | the end of `AGENTS.md`, usually shared; facts and rules only |
 
-**The user picks the scope, not you.** Before every `remember` call, ask in
-the chat where the entry should go — this project or global — and call the tool
-only once they have answered. One short question is enough, with the entry
-worded the way you would store it, for example: "Should I remember 'Tests run
-with `npm test`' for this project or globally?" You may say which scope you
-would pick; the decision is theirs.
+One short question is enough, with the entry as you would store it.
 
-Ask no question only when the answer is already there:
+## Examples
 
-- **The user named the scope** in their request ("remember globally …", "for
-  this project …"). Then take it as said.
-- **No folder is open.** Then only `user` is possible — say that you are
-  remembering it globally instead of asking.
+- "Tests run with `npm test`" → fact, `team`.
+- "Address me as du" → rule, `user`, `always: true`: "When you address me, use du."
+- "Answer me in German" → rule; "I speak German" → fact. Both stay, each in its home.
+- A correction the user had to make ("no, we never squash here") → rule, `always: true`.
+- "How a release is cut" in steps → procedure.
 
-What helps them decide: a project detail that ends up global talks over them
-in every other project. `user` is right for things that belong to the person
-rather than the project: forms of address and language, preferred tools,
-recurring ways of working, how names are spelled.
+## Origin
 
-The project file lives **inside the user's folder** and may end up in a
-repository — it is visible to them, but possibly to others as well. Anything
-that concerns them alone belongs in `user`.
+`origin: "requested"` when the user asked for it — also for a proposal from a
+review or a distillation they asked for. Otherwise `"self"`. Say it truthfully:
+the user can switch off unprompted remembering, and a wrong `requested` goes
+around that.
 
-## When you remember
+## Never
 
-- **The user asks for it** ("remember …", "keep …", "from now on this always
-  applies"). Then `origin: "requested"`. Do not ask whether you may — they just
-  said so. The scope is the one thing you do ask about — see above.
-- **You notice something lasting** that the user would otherwise have to
-  explain again: a convention, a command, a decision along with its reasoning.
-  Then `origin: "self"`. Propose the entry and ask for the scope in the same
-  question.
+Passwords, keys, tokens, credentials — not even when asked: what is kept goes
+to the provider with every request. Nothing about third parties the user did
+not ask you to keep about themselves.
 
-Declare the origin **truthfully**. The user can switch off unprompted
-remembering; `self` entries are then rejected. An idea of your own passed off
-as `requested` circumvents that setting — it is the only way to do real damage
-with this tool. An entry you proposed stays `self` even after the user has
-picked a scope for it: the idea was still yours.
+## Wording
 
-## When you do not remember
+One thought per entry, readable in six months without this conversation.
+Resolve relative dates. Give the reason of a decision where it is not obvious.
 
-- **What only applies right now.** "We are in file X", "the test is failing",
-  "next we do Y". That is history, not memory.
-- **What is better kept in the project.** A convention that concerns the whole
-  team belongs in `AGENTS.md` or in the documentation — suggest that instead of
-  quietly noting it.
-- **Passwords, keys, tokens, credentials.** Never, not even when explicitly
-  asked. Say that memory goes to the provider with every request and is the
-  wrong place for them.
-- **Personal data about third parties.** What the user wants remembered about
-  themselves is their business; what they tell you about others is not.
-- **What is already there.** First read what the system prompt lists under
-  "memory". The same thing twice, worded slightly differently, makes both
-  entries useless.
+## Hints
 
-## How you word it
+The result and the card may carry a hint: a fact that reads like a rule or a
+procedure, or an entry that reads like an episode. Nothing is refused for its
+kind — re-sort it if the hint is right, and say why not if it is wrong.
 
-An entry has to make sense in six months without this conversation. So a
-complete sentence, readable on its own, one thought:
+## Changing and reviewing
 
-- ✅ "Tests run with `npm test`, end-to-end separately via `npm run test:e2e`."
-- ❌ "as just discussed" — worthless without the conversation.
-- ❌ "Tests, build, release and docs work like this: …" — four entries.
+To change an entry, remember the new one with `replaces` (the exact old text)
+and, if it is ambiguous, `replaces_in`. It is written first and removed second.
+You cannot simply delete; point the user to **{menu:settings.memory}**, or to
+the file itself.
 
-For decisions, include the **why** where it is not obvious. An entry whose
-reason is missing simply gets overridden at the next disagreement.
-
-Resolve relative dates: "since yesterday" becomes the date.
-
-## Forgetting and changing
-
-You **cannot** delete entries yourself. If the user asks, point them to
-**{menu:settings.memory}**, where every entry can be removed individually; both
-files can also be edited directly in an editor.
-
-If an entry turns out to be outdated, remember the **new** version and say that
-the old one can go in the settings. Two contradictory entries are worse than
-one stale entry.
+**Review, on request only** ("review my memory"): read the memory and the
+rules files of both levels, then propose **one change at a time** — move a
+fact that is a rule into a rules file, merge duplicates, drop what is stale —
+each as a `remember` call with `replaces` and the fitting kind, `origin:
+"requested"`. Wait for each card before the next proposal.
 
 ## What the user sees
 
-Every `remember` call needs approval and appears in the tool log, with scope
-and target path. Do not act as if remembering were invisible — but do not
-explain it afresh every time either. Half a sentence is enough: "Noted that for
-the project."
+Every `remember` call shows a card, in every mode; the user can change who
+reads it, or the kind. Half a sentence afterwards is enough: "Noted for the
+project."

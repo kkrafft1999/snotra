@@ -22,6 +22,10 @@ Nichts für das globale Gedächtnis. Für das Projektgedächtnis einen geöffnet
 
 Ab der nächsten Nachricht gehört der Satz zu dem, was das Modell weiß.
 
+[seit 1.30] **Was Snotra behält, und wie.** Snotra sortiert nach zwei Fragen. *Was ist es?* Was nur gerade gilt oder einmal passiert ist — *der Test schlägt fehl*, *heute haben wir den Login repariert* — wird nicht behalten: Der Chat hat es schon. Schritte zu einem Ziel werden ein [Skill](../write-a-skill/), was man befolgen oder brechen kann, eine [Regel](../rules/), und was wahr oder falsch ist, ein Fakt im Gedächtnis. *Wer liest es?* Nur du, Snotra in diesem Ordner oder alle Werkzeuge hier. Wirkt ein Eintrag falsch einsortiert, sagt die Karte das in einem Hinweis — Snotra lehnt ihn nie wegen seiner Art ab; du entscheidest.
+
+Zum Aufräumen bitte *überprüf mein Gedächtnis*: Snotra geht Gedächtnis und Regeldateien durch und schlägt eine Änderung nach der anderen vor — einen Fakt, der eine Regel ist, verschieben, Doppeltes zusammenführen, Veraltetes streichen —, jede auf ihrer eigenen Karte.
+
 ## Wo es aufbewahrt wird
 
 | Ebene | Datei | Gilt für |

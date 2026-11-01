@@ -31,6 +31,7 @@ const { RULE_LIMITS } = require('./rules');
  * @property {{ description: string, always: boolean }} [ruleFile]  the existing rules file
  * @property {{ text: string, where: string, count: number }} [replaced]
  * @property {{ description: string, kind: string, text: string, truncated: boolean }} [skill]  a procedure (#1314)
+ * @property {string[]} [hints]  KNOWLEDGE_HINTS values (#1277)
  * @property {Record<string, Record<string, { path: string, exists: boolean, file: string }|null>>} alternatives
  * @property {{ agentsMd: boolean, rulesFiles: number }} folderInstructions
  * @property {boolean} [switchedOff]
