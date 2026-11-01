@@ -153,6 +153,8 @@ const REQUEST_CHANNELS = Object.freeze({
   KNOWLEDGE_NEW_RULE_FILE: 'knowledge:newRuleFile',
   /** Undo one of the agent's changes to a knowledge file (#1278). */
   KNOWLEDGE_UNDO: 'knowledge:undo',
+  /** Dismiss one hint of the review for its entry (#1279). */
+  KNOWLEDGE_DISMISS_HINT: 'knowledge:dismissHint',
 
   /**
    * Link im Standardbrowser öffnen (Issue #64). Muss über den Main laufen:

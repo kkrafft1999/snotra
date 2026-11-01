@@ -4,7 +4,9 @@
  * Settings › Knowledge (#1278): what the page shows besides skills and
  * memory — the rules files of both levels with their state and switches, the
  * AGENTS.md files found, the folder's text marked when it showed a covert
- * signal (#1280), and the agent's last changes to knowledge files with *Undo*.
+ * signal (#1280), the agent's last changes to knowledge files with *Undo*,
+ * and the hints of the review for memory and rules entries (#1279) — those
+ * dismissed kept in the UI preferences, `dismissedKnowledgeHints`.
  *
  * Nothing here takes a path from the renderer: a file to open is named by
  * its source and name, and resolved against what the listing found.
@@ -30,6 +32,7 @@ const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
 const { newRuleFileText } = require('../../shared/contracts/knowledge-write');
 const { findCovertSignals } = require('../../application/chat/injection-detector');
 const { planRules, applyKnowledgeBudget, ON_DEMAND_REASONS } = require('../../application/chat/rules-prompt');
+const { reviewKnowledge } = require('../../application/chat/knowledge-review');
 
 /** @param {Array<{ kind: string }>|null} signals */
 const kindsOf = (signals) => (signals ? [...new Set(signals.map((signal) => signal.kind))] : []);
@@ -46,8 +49,9 @@ const kindsOf = (signals) => (signals ? [...new Set(signals.map((signal) => sign
  * @param {typeof import('fs/promises')} deps.fs
  * @param {typeof import('path')} deps.path
  * @param {string} deps.homeDir
+ * @param {() => Date} [deps.now]  the review's clock, for "noted a while ago"
  */
-function registerKnowledgeHandlers({ ipcMain, REQ, knowledge, memory, uiPrefsStore, getActiveWorkspaceRoot, shell = null, fs, path, homeDir }) {
+function registerKnowledgeHandlers({ ipcMain, REQ, knowledge, memory, uiPrefsStore, getActiveWorkspaceRoot, shell = null, fs, path, homeDir, now = () => new Date() }) {
   const { rules, projectInstructions, journal } = knowledge;
 
   async function buildState() {
@@ -105,6 +109,25 @@ function registerKnowledgeHandlers({ ipcMain, REQ, knowledge, memory, uiPrefsSto
       };
     });
 
+    // A memory file is known by its level, and the folder's by the folder too,
+    // so that a hint dismissed in one project stays in the others.
+    const hints = reviewKnowledge({
+      memory: memoryFiles.map((/** @type {any} */ file) => ({
+        scope: file.scope,
+        text: file.text,
+        key: file.scope === MEMORY_SCOPES.WORKSPACE ? `memory:${file.scope}:${workspaceRoot || ''}` : `memory:${file.scope}`,
+      })),
+      rules: listing.files.map((/** @type {any} */ file) => {
+        const key = ruleSwitchKey(file, workspaceRoot);
+        return {
+          level: file.level, source: file.source, name: file.name, body: file.body, always: file.always,
+          on: levelOn(file.level) && !switchedOff.has(key), shadowed: file.shadowed === true, truncated: file.truncated === true, key,
+        };
+      }),
+      now: now(),
+      dismissed: Array.isArray(prefs.dismissedKnowledgeHints) ? prefs.dismissedKnowledgeHints : [],
+    });
+
     const workspaceMemory = memoryFiles.find((/** @type {any} */ file) => file.scope === MEMORY_SCOPES.WORKSPACE);
     return {
       workspaceRoot,
@@ -122,6 +145,7 @@ function registerKnowledgeHandlers({ ipcMain, REQ, knowledge, memory, uiPrefsSto
         })),
       },
       memoryCovert: workspaceMemory ? kindsOf(findCovertSignals(workspaceMemory.text)) : [],
+      hints,
       journal: journal ? await journal.list() : [],
     };
   }
@@ -201,6 +225,21 @@ function registerKnowledgeHandlers({ ipcMain, REQ, knowledge, memory, uiPrefsSto
     if (!journal || !id) return createSettingsError(createMessage('settings.knowledge.error.invalid'));
     const result = await journal.undo(id);
     if (!result.ok) return createSettingsError(createMessage(`settings.knowledge.undo.error.${result.reason || 'gone'}`));
+    return { ok: true, state: await buildState() };
+  });
+
+  // Only a key the review gives right now is kept — the renderer cannot fill
+  // the preferences with anything else.
+  ipcMain.handle(REQ.KNOWLEDGE_DISMISS_HINT, async (_event, payload) => {
+    const key = typeof payload?.key === 'string' ? payload.key : '';
+    const state = await buildState();
+    if (!key || !state.hints.some((hint) => hint.dismissible && hint.key === key)) {
+      return createSettingsError(createMessage('settings.knowledge.error.invalid'));
+    }
+    await uiPrefsStore.updateUIPrefs((/** @type {any} */ prefs) => ({
+      ...prefs,
+      dismissedKnowledgeHints: [...(Array.isArray(prefs.dismissedKnowledgeHints) ? prefs.dismissedKnowledgeHints : []).filter((/** @type {string} */ known) => known !== key), key],
+    }));
     return { ok: true, state: await buildState() };
   });
 

@@ -122,6 +122,26 @@ test('main hands the page the rules with their states, AGENTS.md with its covert
   assert.equal((await call(REQ.KNOWLEDGE_NEW_RULE_FILE, { level: 'workspace', name: 'reviews', description: 'x' })).ok, false, 'never written over');
 });
 
+test('the state carries the review\'s hints, and a dismissed one stays dismissed in the UI preferences (#1279)', async () => {
+  const { root, call, prefs } = await setup();
+  await fs.writeFile(path.join(root, '.agents', 'memory.md'), '# Memory\n\n- 2026-10-31 — Today we fixed the login bug.\n- 2026-01-02 — Commit messages are written in English.\n');
+  await fs.writeFile(path.join(root, '.agents', 'rules', 'commit-message.md'), '- Commit messages are written in English.\n');
+  const state = await call(REQ.KNOWLEDGE_GET_STATE);
+  const ids = state.hints.map((hint) => `${hint.id}:${hint.at.kind}:${hint.at.text || hint.at.name}`);
+  assert.ok(ids.includes('looksLikeEpisode:memory:Today we fixed the login bug.'), ids.join('\n'));
+  assert.ok(ids.includes('notedAWhileAgo:memory:Commit messages are written in English.'));
+  assert.ok(ids.includes('nearlyTheSame:rule:Commit messages are written in English.'));
+  assert.ok(ids.includes('similarTopicNames:ruleFile:commit-message'));
+
+  const episode = state.hints.find((hint) => hint.id === 'looksLikeEpisode');
+  const dismissed = await call(REQ.KNOWLEDGE_DISMISS_HINT, { key: episode.key });
+  assert.equal(dismissed.ok, true);
+  assert.equal(dismissed.state.hints.some((hint) => hint.key === episode.key), false);
+  assert.deepEqual(prefs().dismissedKnowledgeHints, [episode.key]);
+  assert.equal((await call(REQ.KNOWLEDGE_GET_STATE)).hints.some((hint) => hint.key === episode.key), false, 'still dismissed');
+  assert.equal((await call(REQ.KNOWLEDGE_DISMISS_HINT, { key: 'made-up' })).ok, false, 'only a key the review gives');
+});
+
 test('the page draws the rules, AGENTS.md with its warning, and the journal with Undo', async (t) => {
   const dom = setupRendererDom();
   t.after(dom.cleanup);

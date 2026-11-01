@@ -184,6 +184,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     level: String(file?.level || ''), name: String(file?.name || ''), description: String(file?.description || ''), always: file?.always === true,
   }),
   undoKnowledgeChange: (id) => ipcRenderer.invoke(REQ.KNOWLEDGE_UNDO, { id: String(id || '') }),
+  dismissKnowledgeHint: (key) => ipcRenderer.invoke(REQ.KNOWLEDGE_DISMISS_HINT, { key: String(key || '') }),
   onSkillsChanged: (callback) => {
     const channel = PUSH.SKILLS_CHANGED;
     const listener = (_event, payload) => callback(payload);
