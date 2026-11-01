@@ -30,9 +30,13 @@ Zum Aufräumen bitte *überprüf mein Gedächtnis*: Snotra geht Gedächtnis und 
 
 [seit 1.30] In einem Chat kommt oft etwas auf, das sich zu behalten lohnt: ein Fakt, der zur Sprache kam, eine Korrektur, die beim nächsten Mal gelten soll, ein Vorgehen, das funktioniert hat. Der Chat selbst wird nicht als Wissen behalten, also bitte Snotra, es herauszuziehen.
 
-1. Frag am Ende des Chats: *Was nehmen wir daraus mit?* oder *Was bleibt aus diesem Chat?*
-2. Snotra geht den Chat durch und schlägt **einen Eintrag nach dem anderen** vor, jeden auf seiner eigenen Karte mit seiner Art und mit dem, wer ihn liest — genau wie wenn du es bittest, sich etwas zu merken.
+1. Klick am Ende des Chats rechts im Chat-Kopf auf ***Wissen daraus ableiten…***. Oder frag mit eigenen Worten: *Was nehmen wir daraus mit?*
+2. Der Knopf stellt seine Bitte in den Chat, damit du siehst, was gefragt wurde. Snotra geht den Chat durch und schlägt **einen Eintrag nach dem anderen** vor, jeden auf seiner eigenen Karte mit seiner Art und mit dem, wer ihn liest — genau wie wenn du es bittest, sich etwas zu merken.
 3. Ändere auf der Karte die Art oder den Leser, wenn er falsch einsortiert ist, und klick dann *Merken* — oder *Ablehnen*, um ihn wegzulassen. Der nächste Vorschlag kommt erst nach deiner Antwort.
+
+![Der Chat-Kopf mit dem Knopf „Wissen daraus ableiten…“, darunter die Bitte, die der Knopf geschickt hat, und der erste Vorschlag auf seiner Karte: der Fakt „Die Beete in diesem Garten sind in Zentimetern gemessen.“, Art Fakt, gelesen von Snotra in diesem Ordner, mit Merken und Ablehnen.](screenshots/distil-chat.webp)
+
+Der Knopf geht nicht in einem leeren Chat und nicht, während Snotra antwortet; sein Tooltip sagt, warum. In einer schmalen Chat-Spalte zeigt er nur sein Symbol, den Namen im Tooltip. Ein Entwurf im Nachrichtenfeld bleibt, wo er ist.
 
 Was nur in diesem Chat passiert ist — *heute schlägt der Test fehl* — wird nicht vorgeschlagen: Der Chat hat es schon. Bleibt nichts, sagt Snotra das. Weil du darum gebeten hast, geht das auch, wenn *Snotra darf sich von selbst etwas merken* ausgeschaltet ist. Snotra bietet das Herausziehen nie von sich aus an; es beginnt, wenn du fragst.
 

@@ -184,6 +184,15 @@ test('the workspace and every settings section pass axe, light and dark; System 
   await poll(() => shown(page, 'chat-kind-menu'), { what: 'the kind menu' });
   await checkScreen(page, 'workspace › kind of task', findings, { context: '#chat-header' });
   await page.keyboard.press('Escape');
+  // "Distil into knowledge…" (#1317): the workspace above has it icon-only;
+  // a wider panel shows its label, focused from the keyboard.
+  const panelWidth = await page.evaluate(() => document.getElementById('chat-panel').style.width);
+  await page.evaluate(() => { document.getElementById('chat-panel').style.width = '680px'; });
+  await poll(() => page.evaluate(() => !document.getElementById('btn-chat-distil').classList.contains('chat-distil--compact')),
+    { what: 'the labelled distil button' });
+  await page.focus('#btn-chat-distil');
+  await checkScreen(page, 'workspace › distil, labelled', findings, { context: '#chat-header' });
+  await page.evaluate((width) => { document.getElementById('chat-panel').style.width = width; }, panelWidth);
   // The phone in the title bar, connected and keeping awake (#1196).
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].webContents
     .send('remote:presence', { connected: true, keepingAwake: true }));

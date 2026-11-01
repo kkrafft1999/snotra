@@ -2052,6 +2052,14 @@ module.exports = {
   'chat.taskKind.button.labelUnclassified': 'Kind of task: unclassified. Choose a kind',
   'chat.taskKind.error': 'The kind could not be saved. Try again.',
 
+  // ── Distil the chat into knowledge (#1317) ───────────────────────────────
+  'chat.distil.label': 'Distil into knowledge…',
+  'chat.distil.description': 'Go through this chat and propose what to keep — facts, rules, skills — one card at a time.',
+  'chat.distil.running': 'Available once the answer is finished.',
+  'chat.distil.noModel': 'Available once a model is set up.',
+  'chat.distil.empty': 'Nothing to distil yet: this chat has no messages.',
+  'chat.distil.prompt': 'Distil this chat: what do we take away from it? Propose each fact, rule or skill worth keeping, one at a time.',
+
   // ── Kinds of task (#1281) ────────────────────────────────────────────────
   'taskKind.coding': 'Coding',
   'taskKind.coding.definition': 'Writing, changing, reviewing or debugging code, scripts and configuration.',

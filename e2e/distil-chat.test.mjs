@@ -1,5 +1,7 @@
 // Distilling a chat on request (#1316): a chat with one fact, one rule and one
-// episode; the user asks what to take away from it. The model loads
+// episode; the user asks what to take away from it — through "Distil into
+// knowledge…" in the chat header (#1317), with the keyboard, while a draft
+// waits in the composer. The model loads
 // snotra-memory, proposes the fact and the rule one at a time through
 // `remember`, each on its own card with kind and reader, and nothing for the
 // episode. The proposals are `requested`, so they go through with unprompted
@@ -20,7 +22,9 @@ import { launchApp, prepareUserData, poll, makeTempDir, sendChat } from './helpe
 const FACT = 'The garden planner measures beds in centimetres.';
 const RULE = 'When you tag a release, check the manual marker first.';
 const EPISODE = 'Today the south bed test is failing.';
-const ASK = 'What do we take away from this chat?';
+// What the header button sends, in English (#1317).
+const ASK = 'Distil this chat: what do we take away from it? Propose each fact, rule or skill worth keeping, one at a time.';
+const DRAFT = 'A half-written question';
 const CLOSING = 'That is all that lasts; the failing test was only today.';
 
 test('distilling a chat proposes the fact and the rule, one card each, and not the episode', { timeout: 180000 }, async (t) => {
@@ -48,6 +52,13 @@ test('distilling a chat proposes the fact and the rule, one card each, and not t
   await poll(() => page.evaluate(() => document.querySelectorAll('#tree-container .tree-item').length > 0),
     { what: 'drawn tree' });
 
+  const distil = () => page.evaluate(() => {
+    const button = document.getElementById('btn-chat-distil');
+    return { state: button.dataset.state, disabled: button.getAttribute('aria-disabled'), reason: document.getElementById('chat-distil-reason').textContent };
+  });
+  assert.deepEqual(await distil(),
+    { state: 'empty', disabled: 'true', reason: 'Nothing to distil yet: this chat has no messages.' });
+
   // The chat to distil: a fact, a rule, an episode. Unqueued, the fake model
   // answers each with a short default.
   for (const line of [FACT, RULE, EPISODE]) await sendChat(page, line, { explain: evidence, t });
@@ -70,7 +81,18 @@ test('distilling a chat proposes the fact and the rule, one card each, and not t
     } }],
   });
   model.queueAnswer({ match: RULE, text: CLOSING });
-  await sendChat(page, ASK, { explain: evidence, t });
+  assert.equal((await distil()).state, 'ready');
+  await page.evaluate((draft) => {
+    const input = document.getElementById('chat-input');
+    input.value = draft;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }, DRAFT);
+  await page.focus('#btn-chat-distil');
+  await page.keyboard.press('Enter');
+  // The request stands in the chat as asked; the draft stays where it was.
+  await poll(() => page.evaluate((ask) => [...document.querySelectorAll('#chat-messages > li.user')]
+    .some((li) => li.textContent.includes(ask)), ASK), { what: 'the request in the chat', explain: evidence });
+  assert.equal(await page.evaluate(() => document.getElementById('chat-input').value), DRAFT);
 
   // One card at a time: the second proposal only comes after the first answer.
   const cards = [];
@@ -87,6 +109,7 @@ test('distilling a chat proposes the fact and the rule, one card each, and not t
       };
     }, PENDING), { what: `remember card for the ${expected.kind}`, timeoutMs: 30000, explain: evidence });
     assert.equal(card.pending, 1, 'one card at a time');
+    assert.deepEqual(await distil(), { state: 'running', disabled: 'true', reason: 'Available once the answer is finished.' });
     assert.equal(card.kind, expected.kind, `${card.text}\n${await evidence()}`);
     assert.equal(card.scope, expected.scope);
     assert.ok(card.text.includes(expected.text), card.text);

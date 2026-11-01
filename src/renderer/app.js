@@ -6,6 +6,7 @@ import { initFileTree } from './components/FileTree.js';
 import { initVoiceRecorder } from './voice/VoiceRecorder.js';
 import { initChatModelPicker } from './components/ChatModelPicker.js';
 import { initChatTaskKind } from './components/ChatTaskKind.js';
+import { initChatDistilAction } from './components/ChatDistilAction.js';
 import { initChatStream } from './components/ChatStream.js';
 import { initMentionAutocomplete } from './components/MentionAutocomplete.js';
 import { createWorkspacePathSource } from './tree/workspacePaths.js';
@@ -289,13 +290,24 @@ onLocaleChange(() => {
 
 // Parts further down that follow the active model (#1013); set once they exist.
 let afterLlmStateChange = () => {};
+let modelReady = () => true;
 // The kind of task in the chat header (#1282) is drawn with the title.
 const chatTaskKind = initChatTaskKind({ api, appStore });
+// "Distil into knowledge…" in the chat header (#1317). `chatStream` exists by
+// the time anyone clicks.
+const chatDistil = initChatDistilAction({
+  appStore,
+  send: (text) => chatStream.sendChatMessage({ text }),
+  modelReady: () => modelReady(),
+});
 const modelPicker = initChatModelPicker({
   api,
   appStore,
   onLlmStateChanged: () => afterLlmStateChange(),
-  onChatTitleShown: () => chatTaskKind.sync(),
+  onChatTitleShown: () => {
+    chatTaskKind.sync();
+    chatDistil.sync();
+  },
 });
 // A phone set the level of the chat on screen (#1304): the model button shows it.
 api.onChatReasoningChanged?.((payload) => {
@@ -345,6 +357,7 @@ const chatConfig = initChatConfigIndicator({
 });
 // An entry without tools says so at the composer (#1013).
 afterLlmStateChange = () => chatConfig.redraw();
+modelReady = () => modelPicker.activeProviderConfigured();
 // A tool switched in the settings changes the list.
 toolPermissions.subscribe(() => void chatConfig.refresh());
 // A narrow chat puts the pills on a row of their own (#400).
@@ -461,6 +474,7 @@ const chatStream = initChatStream({
   appStore,
   // The pill follows what a proposal card switched (#774).
   onConfigChanged: () => void chatConfig.refresh(),
+  onSendStateShown: () => chatDistil.sync(),
   onInputChanged: syncChatInputHeight,
   stopChatVoiceListening: voice.stopChatVoiceListening,
   activeProviderConfigured: () => modelPicker.activeProviderConfigured(),

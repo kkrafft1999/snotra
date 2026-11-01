@@ -2405,6 +2405,78 @@ body {
   border-radius: var(--ds-radius-pill);
 }
 
+/* "Distil into knowledge…" (#1317, mockup variant A): on the right of the
+ * header, a quiet pill like the kind of task beside it. It cannot run while an
+ * answer is on its way or before the first question; it then keeps its place
+ * and its focus (aria-disabled) and turns muted. The border stays solid: a
+ * dashed one already means "unclassified" on the kind pill. */
+.chat-distil {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: var(--ds-touch-min);
+  min-height: var(--ds-touch-min);
+  margin: 0;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-pill);
+  background: var(--bg-primary);
+  color: var(--text-muted-strong);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    border-color var(--ds-motion-fast),
+    background var(--ds-motion-fast),
+    color var(--ds-motion-fast);
+}
+
+.chat-distil:not([aria-disabled='true']):hover {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.chat-distil[aria-disabled='true'] {
+  color: var(--text-muted);
+  background: transparent;
+  cursor: default;
+}
+
+.chat-distil:focus-visible {
+  border-radius: var(--ds-radius-pill);
+}
+
+.chat-distil-icon {
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+/* A narrow panel (see DISTIL_COMPACT_BELOW_PX): only the icon. The label stays
+ * in the accessibility tree, so the button keeps its name. */
+.chat-distil.chat-distil--compact {
+  width: var(--ds-touch-min);
+  padding: 0;
+}
+
+.chat-distil--compact .chat-distil-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 /* Opens below the pill, over the conversation. */
 .chat-kind-menu {
   position: absolute;

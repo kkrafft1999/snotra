@@ -368,6 +368,18 @@
               </div>
             </span>
           </div>
+          <!-- Distil the chat into knowledge (#1317, mockup variant A): sends a
+               visible request that snotra-memory answers with one card per
+               item. aria-disabled rather than disabled, so the tooltip and the
+               focus stay while it cannot run; the reason is its description.
+               In a narrow panel only the icon shows, the name stays the same. -->
+          <button type="button" id="btn-chat-distil" class="chat-distil" aria-describedby="chat-distil-reason">
+            <svg class="chat-distil-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M2.5 3h11L9.2 8.2v4.3l-2.4 1V8.2z"/>
+            </svg>
+            <span class="chat-distil-label" data-i18n="chat.distil.label">Distil into knowledge…</span>
+          </button>
+          <span id="chat-distil-reason" hidden></span>
         </div>
         <!-- While the history does not take this session's chats (#977). Said once
              through #chat-announcer when it appears; the text names the cause. -->
