@@ -67,7 +67,7 @@ test('pill, popover and get_configuration report the same skills and tools', { t
   assert.equal(skill('release').origin, 'folder');
   assert.equal(skill('pdf-export').state, 'off');
   assert.equal(skill('pdf-export').description, 'Turns Markdown into a PDF.');
-  assert.equal(answer.skills_settings, 'Settings › Skills');
+  assert.equal(answer.skills_settings, 'Settings › Knowledge');
   assert.deepEqual(answer.tools_off.find((tool) => tool.name === 'fetch_url'),
     { name: 'fetch_url', reason: 'switched off by the user', settings: 'Settings › Tools › Autonomy' });
   assert.ok(answer.tools_on.includes('read_file_text'));

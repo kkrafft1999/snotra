@@ -218,7 +218,7 @@ test('the workspace and every settings section pass axe, light and dark; System 
   // Each section of the settings, the dialog only: the window behind it is
   // inert while it is open and was checked above.
   await openSettings(app, page);
-  for (const panel of ['models', 'security', 'tools', 'skills', 'memory', 'remote', 'general']) {
+  for (const panel of ['models', 'security', 'tools', 'memory', 'remote', 'general']) {
     await page.click(`.settings-nav-item[data-settings-panel="${panel}"]`);
     await poll(() => page.evaluate((key) => document.querySelector(`.settings-nav-item[data-settings-panel="${key}"]`)
       ?.getAttribute('aria-selected') === 'true', panel), { what: `settings section ${panel}` });

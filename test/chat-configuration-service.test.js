@@ -173,9 +173,9 @@ test('for the model: states, reasons and the settings page in the interface lang
 
   // The instructions of a skill — on or off — never reach this answer (#18).
   assert.equal(text.includes(BODY_MARKER), false);
-  assert.equal(answer.skills_settings, 'Einstellungen › Skills');
+  assert.equal(answer.skills_settings, 'Einstellungen › Wissen');
   // A system skill's description quotes the page in the interface language too.
-  assert.equal(answer.skills.find((skill) => skill.name === 'snotra-capabilities').description, 'Settings under Einstellungen › Skills.');
+  assert.equal(answer.skills.find((skill) => skill.name === 'snotra-capabilities').description, 'Settings under Einstellungen › Wissen.');
   assert.equal(answer.skills.find((skill) => skill.name === 'pdf-export').state, 'off');
   assert.equal(answer.skills.find((skill) => skill.name === 'release').origin, 'folder');
   assert.match(answer.skills.find((skill) => skill.name === 'meeting-notes').state, /this chat only/);

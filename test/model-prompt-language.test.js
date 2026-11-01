@@ -33,8 +33,7 @@ const { removeTempDir } = require('./helpers/temp-dir');
 const ERLAUBTE_UI_ZITATE = [
   'Einstellungen › Tools › Einrichtung',
   'Einstellungen › Tools › Autonomie',
-  'Einstellungen › Gedächtnis',
-  'Einstellungen › Skills',
+  'Einstellungen › Wissen',
 ];
 
 function ohneUiZitate(text) {

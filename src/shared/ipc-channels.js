@@ -143,6 +143,16 @@ const REQUEST_CHANNELS = Object.freeze({
   SETTINGS_GET_MEMORY: 'settings:getMemory',
   /** Einen einzelnen Gedaechtnis-Eintrag vergessen (Issue #166). */
   SETTINGS_FORGET_MEMORY: 'settings:forgetMemory',
+  /** Settings › Knowledge (#1278): rules files, AGENTS.md and the agent's last changes. */
+  KNOWLEDGE_GET_STATE: 'knowledge:getState',
+  /** Switch a level of rules files, or one file, on or off (#1278). */
+  KNOWLEDGE_SET_RULE_SWITCH: 'knowledge:setRuleSwitch',
+  /** Open a rules file or an AGENTS.md the page lists, in the system's editor (#1278). */
+  KNOWLEDGE_OPEN_FILE: 'knowledge:openFile',
+  /** Create a rules file with its front matter filled in, and open it (#1278). */
+  KNOWLEDGE_NEW_RULE_FILE: 'knowledge:newRuleFile',
+  /** Undo one of the agent's changes to a knowledge file (#1278). */
+  KNOWLEDGE_UNDO: 'knowledge:undo',
 
   /**
    * Link im Standardbrowser öffnen (Issue #64). Muss über den Main laufen:

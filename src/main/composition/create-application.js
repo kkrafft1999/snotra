@@ -24,6 +24,7 @@ const { defaultOnSwitch } = require('../services/ui-pref-switches');
 const { registerWhisperHandlers } = require('../ipc/whisper-handlers');
 const { registerVoiceHandlers } = require('../ipc/voice-handlers');
 const { registerSettingsHandlers } = require('../ipc/settings-handlers');
+const { registerKnowledgeHandlers } = require('../ipc/knowledge-handlers');
 const { registerChatHistoryHandlers } = require('../ipc/chat-history-handlers');
 const { registerUsageReportHandlers } = require('../ipc/usage-report-handlers');
 const { registerUpdateHandlers } = require('../ipc/update-handlers');
@@ -226,6 +227,11 @@ function createApplication({
     shellSettings: core.shellSettings,
     confirmations,
     describeMcpContextCosts: core.securityPageData.describeMcpContextCosts,
+  });
+  // Settings › Knowledge (#1278): rules files, AGENTS.md, the agent's last changes.
+  registerKnowledgeHandlers({
+    ipcMain, REQ, knowledge: core.knowledge, memory: core.memory, uiPrefsStore, getActiveWorkspaceRoot, shell,
+    fs, path, homeDir: core.os.homedir(),
   });
   registerModelPriceHandlers({ ipcMain, modelPrices: core.modelPrices, REQ });
   registerChatHistoryHandlers({ ipcMain, chatHistory: core.chatHistory, REQ });

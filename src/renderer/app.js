@@ -30,6 +30,7 @@ import { initToolApprovalCards } from './components/ToolApprovalCard.js';
 import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
 import { initMcpPanel } from './components/McpPanel.js';
 import { initMemoryPanel } from './components/MemoryPanel.js';
+import { initKnowledgePanel } from './components/KnowledgePanel.js';
 import { initAppVersionBadge } from './components/AppVersionBadge.js';
 import { initRemoteIndicator } from './components/RemoteIndicator.js';
 import { initWorkspaceHeader } from './components/WorkspaceHeader.js';
@@ -373,7 +374,10 @@ const approvalCards = initToolApprovalCards({
 });
 const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
 const mcpPanel = initMcpPanel({ api });
-const memoryPanel = initMemoryPanel({ api });
+const facts = initMemoryPanel({ api });
+// Settings › Knowledge (#1278): the facts and the rest of the page refresh together.
+const knowledgePanel = initKnowledgePanel({ api });
+const memoryPanel = { ...facts, refresh: async () => { await facts.refresh?.(); await knowledgePanel.refresh(); } };
 
 /**
  * Chat wird zum aktiven (Issue #211): Der Main stellt Modell und Freigabemodus

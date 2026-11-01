@@ -55,7 +55,7 @@ test('a skill written by the model lands in the open folder, is checked and show
       arguments: { relative_path: '.agents/skills/release-notes/SKILL.md', content: SKILL },
     }],
   });
-  model.queueAnswer({ text: 'Done — switch it on under Settings › Skills.' });
+  model.queueAnswer({ text: 'Done — switch it on under Settings › Knowledge.' });
   await sendChat(page, 'Make a skill for release notes.');
   await poll(async () => {
     await page.evaluate(() => {
@@ -75,7 +75,7 @@ test('a skill written by the model lands in the open folder, is checked and show
   const result = JSON.parse(toolMessage.content);
   assert.equal(result.skill_check.skill, 'release-notes');
   assert.equal(result.skill_check.valid, true);
-  assert.match(result.skill_check.note, /Settings › Skills/);
+  assert.match(result.skill_check.note, /Settings › Knowledge/);
 
   // The log names the skill rather than an anonymous file.
   const lines = await page.evaluate(() =>

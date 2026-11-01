@@ -89,7 +89,7 @@ Ein Ja von einer Freigabekarte, das für den Rest eines Chats gilt — genau die
 
 ### Skill
 
-Ein Ordner mit einer `SKILL.md`, die dem Modell sagt, wie es eine Art von Aufgabe erledigt. Skills schaltest du unter *Einstellungen › Skills* ein. Siehe [Skills nutzen](../../customising/skills/).
+Ein Ordner mit einer `SKILL.md`, die dem Modell sagt, wie es eine Art von Aufgabe erledigt. Skills schaltest du unter *Einstellungen › Wissen* ein. Siehe [Skills nutzen](../../customising/skills/).
 
 ### Sperre
 

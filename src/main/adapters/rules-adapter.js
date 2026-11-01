@@ -133,11 +133,17 @@ function createRulesAdapter({ fs, path, os }) {
       const inSubfolders = {};
       /** @type {Record<string, number>} */
       const overLimit = {};
+      /** `.md` files whose name is no rule name: listed in the settings as invalid (#1278). */
+      /** @type {Array<{ source: string, file: string }>} */
+      const invalid = [];
       /** Names already taken at the user level: `~/.snotra` shadows `~/.agents`. */
       const userNames = new Set();
       for (const target of chain(workspaceRoot)) {
-        const names = (await entriesOf(target.dir))
-          .filter((entry) => entry.isFile() || entry.isSymbolicLink())
+        const entries = (await entriesOf(target.dir)).filter((entry) => entry.isFile() || entry.isSymbolicLink());
+        for (const entry of entries) {
+          if (entry.name.endsWith('.md') && ruleNameOfFile(entry.name) === null) invalid.push({ source: target.source, file: entry.name });
+        }
+        const names = entries
           .map((entry) => ruleNameOfFile(entry.name))
           .filter((name) => name !== null)
           .sort();
@@ -157,7 +163,12 @@ function createRulesAdapter({ fs, path, os }) {
         const nested = await countInSubfolders(target);
         if (nested) inSubfolders[target.source] = nested;
       }
-      return { files: normalizeRuleFiles(files), inSubfolders, overLimit };
+      return { files: normalizeRuleFiles(files), inSubfolders, overLimit, invalid };
+    },
+
+    /** Where the rules files of a source lie, for *Open* and *New rules file* (#1278). */
+    dirOf({ workspaceRoot = null, source }) {
+      return chain(workspaceRoot).find((target) => target.source === source)?.dir ?? null;
     },
 
     async loadRule({ workspaceRoot = null, name, level }) {

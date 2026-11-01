@@ -38,9 +38,9 @@ Both are ordinary Markdown files: you can read and edit them in any editor. The 
 
 ## See and change what it keeps
 
-*Settings › Memory* shows both levels with every entry, its date, and whether Snotra remembered it on its own.
+*Settings › Knowledge* shows both levels with every entry, its date, and whether Snotra remembered it on its own.
 
-![Settings › Memory: the switch "Snotra may remember things on its own", the project memory of the folder garden-planner in .agents/memory.md with three entries — one marked "remembered on its own" — each with a bin, and the count of characters used.](screenshots/memory-settings.webp)
+![Settings › Knowledge › Facts: the switch "Snotra may remember things on its own", the project memory of the folder garden-planner in .agents/memory.md with three entries — one marked "remembered on its own" — each with a bin, and the count of characters used.](screenshots/memory-settings.webp)
 
 - The bin next to an entry deletes it.
 - *Send along* switches a level off without deleting it.
@@ -50,11 +50,11 @@ Changes in this section take effect at once.
 
 ## What happens
 
-The memory goes to the provider with every request, up to 8,000 characters per level; *Settings › Memory* shows how much is used. Because a repository can bring a project memory along, the model reads it as notes kept in the folder, not as something you said.
+The memory goes to the provider with every request, up to 8,000 characters per level; *Settings › Knowledge* shows how much is used. Because a repository can bring a project memory along, the model reads it as notes kept in the folder, not as something you said.
 
 [since 1.30] The project memory is checked like the project's `AGENTS.md`: a memory that reads as if it hides something from you is marked in the breakdown behind the token count — see [Project instructions](../project-instructions/#instructions-from-a-folder-you-did-not-write). Your personal memory is not checked; it holds what you said.
 
-Only you delete: the model can add to the memory, but not remove anything from it — that is what the bin in *Settings › Memory* is for.
+Only you delete: the model can add to the memory, but not remove anything from it — that is what the bin in *Settings › Knowledge* is for.
 
 ## If it doesn't work
 

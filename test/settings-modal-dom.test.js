@@ -1091,7 +1091,7 @@ test('geoeffnet startet der Dialog auf dem Modell-Tab', async (t) => {
   assert.equal(panelFor('models').hidden, false);
   assert.equal(document.getElementById('settings-panel-heading').textContent, 'Modelle');
   // Alle uebrigen Panels sind wirklich weg, nicht nur unsichtbar.
-  for (const key of ['security', 'sandbox', 'tools', 'skills', 'general']) {
+  for (const key of ['security', 'sandbox', 'tools', 'memory', 'general']) {
     assert.equal(panelFor(key).hidden, true, `Panel ${key} muesste versteckt sein`);
   }
 });
@@ -1104,7 +1104,7 @@ test('ein Klick auf einen Tab schaltet Panel, aria-selected und Ueberschrift um'
     ['security', 'Tools › Autonomie'],
     ['sandbox', 'Tools › Sicherheit'],
     ['tools', 'Tools › Einrichtung'],
-    ['skills', 'Skills'],
+    ['memory', 'Wissen'],
     ['general', 'Allgemein'],
     ['models', 'Modelle'],
   ]) {
@@ -1154,13 +1154,13 @@ test('nur der aktive Tab liegt in der Tabreihenfolge (Roving Tabindex)', async (
   const { dom } = await mountSettings();
   t.after(dom.cleanup);
 
-  tabFor('skills').click();
+  tabFor('memory').click();
   await flush();
 
   const tabs = [...document.querySelectorAll('.settings-nav-item[role="tab"]')];
   assert.deepEqual(
     tabs.map((tab) => tab.tabIndex),
-    tabs.map((tab) => (tab.dataset.settingsPanel === 'skills' ? 0 : -1))
+    tabs.map((tab) => (tab.dataset.settingsPanel === 'memory' ? 0 : -1))
   );
 });
 
@@ -1211,7 +1211,7 @@ test('Home and End jump to the first and last tab (#378)', async (t) => {
 
   const order = [...document.querySelectorAll('.settings-nav-item[role="tab"]')].map((tab) => tab.dataset.settingsPanel);
 
-  pressOnTab('skills', 'End');
+  pressOnTab('memory', 'End');
   await flush();
   assert.equal(selectedTabKey(), order[order.length - 1]);
   assert.equal(document.activeElement, tabFor(order[order.length - 1]));
@@ -1307,7 +1307,7 @@ test('mehr als acht Skills lassen sich gleichzeitig aktivieren und speichern', a
   });
   t.after(dom.cleanup);
 
-  tabFor('skills').click();
+  tabFor('memory').click();
   await flush();
 
   const boxes = [...document.querySelectorAll('#settings-skill-list input[data-skill-name]')];
@@ -1941,7 +1941,7 @@ test('a skill list redraw by the file watcher keeps the focus on the same skill 
     onSkillsChanged: (callback) => { onChanged = callback; },
   });
   t.after(dom.cleanup);
-  tabFor('skills').click();
+  tabFor('memory').click();
 
   const before = skillBox('xlsx');
   before.focus();
@@ -1963,7 +1963,7 @@ test('"Reload skills" gives the focus back to its button after the busy state (C
     reloadSkills: async () => ({ skills: TWO_SKILLS }),
   });
   t.after(dom.cleanup);
-  tabFor('skills').click();
+  tabFor('memory').click();
   const reload = document.getElementById('btn-reload-skills');
 
   reload.focus();
@@ -1993,7 +1993,7 @@ test('"Make global" sits only under a usable skill of the open folder, named for
     makeSkillGlobal: async () => ({ cancelled: true }),
   });
   t.after(dom.cleanup);
-  tabFor('skills').click();
+  tabFor('memory').click();
 
   const buttons = [...document.querySelectorAll('#settings-skill-list button[data-skill-make-global]')];
   assert.deepEqual(buttons.map((button) => button.dataset.skillMakeGlobal), ['notes']);
@@ -2012,7 +2012,7 @@ test('"Make global" moves the skill to its new group and puts the focus on its r
     makeSkillGlobal: async (name) => { asked.push(name); moved = true; return { ok: true }; },
   });
   t.after(dom.cleanup);
-  tabFor('skills').click();
+  tabFor('memory').click();
   document.querySelector('#settings-skill-list .settings-skill-item__summary').click();
 
   makeGlobalButton().click();
@@ -2036,7 +2036,7 @@ test('a skill list redraw keeps the focus on "Make global" (#764)', async (t) =>
     makeSkillGlobal: async () => ({ cancelled: true }),
   });
   t.after(dom.cleanup);
-  tabFor('skills').click();
+  tabFor('memory').click();
   document.querySelector('#settings-skill-list .settings-skill-item__summary').click();
 
   const before = makeGlobalButton();
@@ -2058,7 +2058,7 @@ test('a redraw while the move is asked about keeps "Make global" off (#764)', as
     makeSkillGlobal: () => new Promise((resolve) => { answer = resolve; }),
   });
   t.after(dom.cleanup);
-  tabFor('skills').click();
+  tabFor('memory').click();
   document.querySelector('#settings-skill-list .settings-skill-item__summary').click();
 
   makeGlobalButton().click();
@@ -2077,7 +2077,7 @@ test('a cancelled "Make global" leaves the list alone and the focus on the butto
     makeSkillGlobal: async () => ({ cancelled: true }),
   });
   t.after(dom.cleanup);
-  tabFor('skills').click();
+  tabFor('memory').click();
   document.querySelector('#settings-skill-list .settings-skill-item__summary').click();
 
   const button = makeGlobalButton();
@@ -2124,7 +2124,7 @@ test('"Reload skills" keeps an unsaved untick; a new skill takes its saved state
     commitSettings: async (payload) => { sent = payload; return { ok: true }; },
   });
   t.after(dom.cleanup);
-  tabFor('skills').click();
+  tabFor('memory').click();
 
   skillBox('xlsx').click();
   assert.equal(skillBox('xlsx').checked, false);

@@ -135,18 +135,15 @@ test('der Bereich „Allgemein“ hat einen Schalter für Umgebungsinformationen
 
 // Issue #212: Derselbe Platz, dieselbe Begruendungspflicht — der Schalter
 // entscheidet, ob fremde Anweisungen aus einem geoeffneten Ordner wirken.
-test('der Bereich „Allgemein“ hat einen Schalter für AGENTS.md (#212)', () => {
+// Since #1278 the switch sits with the other knowledge, under Knowledge › AGENTS.md.
+test('der Bereich „Wissen“ hat einen Schalter für AGENTS.md (#212, #1278)', () => {
   assert.equal(html.split('id="input-project-instructions"').length - 1, 1);
 
-  const panelStart = html.indexOf('id="panel-settings-general"');
+  const panelStart = html.indexOf('id="knowledge-section-agents"');
   const panelEnd = html.indexOf('</section>', panelStart);
   const panel = html.slice(panelStart, panelEnd);
   const toggleAt = panel.indexOf('id="input-project-instructions"');
-  assert.ok(toggleAt > -1, 'der Schalter liegt im Allgemein-Panel');
-  assert.ok(
-    toggleAt > panel.indexOf('id="input-global-system-prompt"'),
-    'er steht hinter dem System-Prompt, den er ergänzt'
-  );
+  assert.ok(toggleAt > -1, 'der Schalter liegt im Abschnitt AGENTS.md');
 
   const hintAt = panel.indexOf('id="hint-project-instructions"');
   assert.ok(hintAt > -1, 'zum Schalter gehört ein Erklärtext');

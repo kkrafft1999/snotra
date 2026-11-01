@@ -50,9 +50,11 @@ const { createEmbeddedTextFiles } = require('../services/embedded-text-file');
  * @param {import('../../application/ports/memory-port').MemoryPort} deps.memory
  * @param {() => Promise<boolean>} [deps.isSelfMemoryAllowed]
  * @param {() => string|undefined} [deps.getLocale]
+ * @param {import('../../application/ports/knowledge-journal-port').KnowledgeJournalPort|null} [deps.journal]
+ *   where every write is recorded, for *Undo* in the settings (#1278)
  * @returns {import('../../application/ports/knowledge-writer-port').KnowledgeWriterPort}
  */
-function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowed, getLocale = () => undefined }) {
+function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowed, getLocale = () => undefined, journal = null }) {
   const textFiles = createEmbeddedTextFiles({ fs, path });
   /** @type {Map<string, Promise<unknown>>} */
   const queues = new Map();
@@ -253,6 +255,23 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
   }
 
   /**
+   * A write into the journal behind *Settings › Knowledge* (#1278). Never
+   * fails the write: what could not be noted still stands.
+   *
+   * @param {{ file: string, path: string, kind: string }} target
+   * @param {string|null} before
+   * @param {string|null} after
+   */
+  async function note(target, before, after) {
+    if (!journal) return;
+    try {
+      await journal.record({ file: target.file, path: target.path, kind: target.kind, source: 'remember', before, after });
+    } catch {
+      // The journal is a convenience; the entry is written either way.
+    }
+  }
+
+  /**
    * What the card shows of a changed skill: the diff against the current
    * version, with a little context (#1314).
    *
@@ -362,11 +381,15 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
             body: /** @type {string} */ (request.body),
           });
           await textFiles.write({ file: target.file, root: target.root, text: next });
+          await note(target, current, next);
         });
         return { kind: request.kind, scope: request.scope, file: target.file, text: request.topic || '' };
       }
       if (request.kind === KNOWLEDGE_KINDS.FACT && request.scope !== KNOWLEDGE_READERS.TEAM) {
+        const memoryTarget = targetOf(KNOWLEDGE_KINDS.FACT, request.scope, request.workspaceRoot);
+        const before = memoryTarget ? await read(memoryTarget) : null;
         const saved = await memory.remember({ scope: request.scope, workspaceRoot: request.workspaceRoot ?? null, text: body, origin });
+        if (memoryTarget) await note(memoryTarget, before, await read(memoryTarget));
         file = saved.file;
       } else {
         const target = targetOf(request.kind, request.scope, request.workspaceRoot, request.topic);
@@ -390,6 +413,7 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
             throw new RangeError(`The rules file "${request.topic}" would exceed ${RULE_LIMITS.BODY_CHARS} characters. Nothing was written.`);
           }
           await textFiles.write({ file: target.file, root: target.root, text: next });
+          await note(target, current, next);
         });
       }
       /** @type {{ kind: string, scope: string, file: string, text: string, replaced?: { removed: number, error?: string } }} */
@@ -400,7 +424,10 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
           const removed = await serialize(replaced.target.file, async () => {
             const current = await read(replaced.target);
             const change = removeEntriesByText(current, replaced.text);
-            if (change.removed > 0) await textFiles.write({ file: replaced.target.file, root: replaced.target.root, text: change.text });
+            if (change.removed > 0) {
+              await textFiles.write({ file: replaced.target.file, root: replaced.target.root, text: change.text });
+              await note(replaced.target, current, change.text);
+            }
             return change.removed;
           });
           result.replaced = { removed: removed };

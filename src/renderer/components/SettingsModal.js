@@ -46,7 +46,7 @@ const APPLY_HINT_KEYS = {
 // `security` is Tools › Autonomy (once "Tools & security"), `sandbox` is
 // Tools › Security (#1119), `tools` is Tools › Setup with the MCP servers
 // (#767); the keys stayed so that links and ids did not move.
-const SETTINGS_NAV_KEYS = ['models', 'security', 'sandbox', 'tools', 'skills', 'memory', 'remote', 'general'];
+const SETTINGS_NAV_KEYS = ['models', 'security', 'sandbox', 'tools', 'memory', 'remote', 'general'];
 
 /** Disclosure arrow of the skill rows (#98); turns by CSS. */
 const CHEVRON_ICON_HTML =
@@ -1889,7 +1889,11 @@ export function initSettingsModal(deps) {
     line.classList.remove('hidden');
   }
 
-  function activateSettingsPanel(panelKey) {
+  function activateSettingsPanel(requestedKey) {
+    // The skills moved onto the knowledge page (#1278): the old key opens it
+    // at its procedures.
+    const panelKey = requestedKey === 'skills' ? 'memory' : requestedKey;
+    if (requestedKey === 'skills') requestAnimationFrame(() => document.getElementById('knowledge-section-skills')?.scrollIntoView({ block: 'start' }));
     document.querySelectorAll('.settings-panel').forEach((p) => {
       const on = p.id === `panel-settings-${panelKey}`;
       p.classList.toggle('settings-panel--active', on);

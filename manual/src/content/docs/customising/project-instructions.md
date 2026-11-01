@@ -37,11 +37,11 @@ For instructions that apply in **every** folder, put an `AGENTS.md` into `~/.sno
 
 ## Instructions from a folder you did not write
 
-An `AGENTS.md` is meant to change how the model behaves — so when you open someone else's folder, you take on its instructions too. To work in a folder without them, switch off *Send AGENTS.md* under *Settings › General*. That switch covers all three places.
+An `AGENTS.md` is meant to change how the model behaves — so when you open someone else's folder, you take on its instructions too. To work in a folder without them, switch off *Send AGENTS.md* under *Settings › Knowledge*. That switch covers all three places.
 
 [since 1.30] Snotra also checks the project's `AGENTS.md` for signs that it hides something from you: telling the agent to keep something from you or to act without you, to send keys or the conversation out, or text you cannot see. The file still goes along as it is — the check is a hint, not a filter. A file that shows such a sign is marked in the breakdown behind the token count: *Check this file: it may hide instructions from you*, with what was found. Open the file and read it before you go on.
 
 ## If it doesn't work
 
 - **Snotra ignores the file.** It must be called exactly `AGENTS.md` and lie at the top of the folder. Snotra does not read `CLAUDE.md`, `.cursorrules` or an `AGENTS.md` under `.agents/`; move such a file up into the folder.
-- **Nothing is sent at all.** *Send AGENTS.md* under *Settings › General* is off.
+- **Nothing is sent at all.** *Send AGENTS.md* under *Settings › Knowledge* is off.
