@@ -36,7 +36,7 @@ To tidy up, ask *review my memory*: Snotra goes through memory and rules files a
 
 ![The chat header with the button "Distil into knowledge…", below it the request the button sent, and the first proposal on its card: the fact "The beds in this garden are measured in centimetres.", kind Fact, read by Snotra in this folder, with Remember and Deny.](screenshots/distil-chat.webp)
 
-The button can't be used in an empty chat or while Snotra is answering; its tooltip says why. In a narrow chat column it shows only its icon, with the name in the tooltip. A draft in the message field stays where it is.
+The button can't be used in an empty chat, while Snotra is answering or while no model is set up; its tooltip says why. In a narrow chat column it shows only its icon, with the name in the tooltip. A draft in the message field stays where it is.
 
 What happened only in this chat — *the test is failing today* — is not proposed: the chat already has it. If nothing lasts, Snotra says so. Because you asked, this works even with *Snotra may remember things on its own* switched off. Snotra never offers a distillation by itself; it starts when you ask.
 
@@ -79,13 +79,21 @@ Changes in this section take effect at once.
 
 The hints know every language Snotra speaks, whatever language the interface is in. When an entry has more than one hint, the first shows and *+1 more* unfolds the rest. *Dismiss* hides a hint for that entry for good; it comes back only when the entry's words change. What a hint changes appears under *Last changes*, with *Undo*.
 
+### Undo a change
+
+[since 1.30] *Settings › Knowledge › Last changes* lists the last 50 changes Snotra made to a file it reads in every chat — memory, rules files, `AGENTS.md`, skills. Each shows when it was made, how — *Remembered*, *File tool*, *Command*, or *Settings* for an action taken on a hint — and the file, with the old text above the new one.
+
+*Undo* puts back what the file held before that change. When the file has changed again since, or the earlier version was too large to keep, nothing is undone and Snotra says so: open the file and change it by hand. What you edit yourself in an editor is not listed.
+
 ## What happens
 
 The memory goes to the provider with every request, up to 8,000 characters per level; *Settings › Knowledge* shows how much is used. Because a repository can bring a project memory along, the model reads it as notes kept in the folder, not as something you said.
 
 [since 1.30] The project memory is checked like the project's `AGENTS.md`: a memory that reads as if it hides something from you is marked in the breakdown behind the token count — see [Project instructions](../project-instructions/#instructions-from-a-folder-you-did-not-write). Your personal memory is not checked; it holds what you said.
 
-Only you delete: the model can add to the memory, but not remove anything from it — that is what the bin in *Settings › Knowledge* is for.
+Only you delete: the model can add to the memory, and replace an entry with a better one on a card that shows both, but not just remove anything from it — that is what the bin in *Settings › Knowledge* is for.
+
+[since 1.30] When you ask Snotra to remember something for *Only you* while the open folder brings its own `AGENTS.md` or rules files, the card adds *This folder brings its own instructions: …*. A wish to keep something for every folder can come from a folder's instructions rather than from you; check that it is yours.
 
 ## If it doesn't work
 

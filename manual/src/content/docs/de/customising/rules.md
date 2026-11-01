@@ -48,6 +48,18 @@ Du musst die Datei nicht selbst schreiben: Bitte Snotra, sich eine Regel zu merk
 
 Was du im Chat sagst, geht jeder Regel vor. Zwischen zwei Regeln gewinnt die mit der genaueren Bedingung, dann die neuere. Sagen eine Regel des Projekts und eine deiner eigenen in derselben Situation Verschiedenes, sagt Snotra dir das und fragt — es sucht sich nicht still eine aus. Die Regeln eines Projekts können mit einem geklonten Repository kommen; sie wiegen nie mehr als das, was du sagst.
 
+## Regeln sehen und ausschalten
+
+*Einstellungen › Wissen › Regeln* zeigt die Regeldateien beider Ebenen — *Projekt* für den geöffneten Ordner, *Global · in jedem Ordner* für deine eigenen —, jede mit ihrer Beschreibung, ihrem Pfad und wie viele Zeichen sie hat.
+
+- Der Schalter neben einer Ebene, *Regeln mitschicken: Projekt*, lässt alle ihre Dateien weg, ohne sie zu löschen; der Schalter in der Zeile einer Datei, *Regeldatei commit-messages verwenden*, lässt nur diese eine weg.
+- *Öffnen* öffnet die Datei in deinem Editor.
+- *Neue Regeldatei* fragt nach *Name* und *Wann gilt sie?*, mit einem Kästchen für *Gilt in jedem Zug (always)*, schreibt dann die Datei mit dieser Beschreibung und öffnet sie in deinem Editor.
+
+Die Etiketten in einer Zeile sagen, was Snotra mit der Datei macht: *Immer*; *Beschreibung abgeleitet*, wenn die Datei keine eigene Beschreibung hat; *Gekürzt*, wenn sie über 20.000 Zeichen hat; *Über dem Immer-Budget — wird geholt, wenn sie greift* und *Dem Wissensbudget gewichen*, wenn nicht für alles Platz war; *Verdeckt von ~/.snotra/rules* für eine Datei in `~/.agents/rules/`, die in `~/.snotra/rules/` eine gleichnamige hat. Dateien, die nicht gelesen werden, stehen unter ihrer Ebene: in Unterordnern, über der Grenze von 50 oder mit einem Namen, der kein Regelname ist. Eine Regeldatei des Projekts, die aussieht, als verberge sie dir etwas, trägt den Hinweis *Prüf diese Datei: Sie könnte Anweisungen vor dir verbergen*.
+
+Schalter und neue Dateien wirken ab der nächsten Nachricht.
+
 ## Grenzen
 
 | Was | Grenze |

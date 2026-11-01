@@ -19,7 +19,7 @@ Alles, was du in Snotra einrichten kannst, steht an einer Stelle: in den Einstel
 | *Tools › Autonomie* | Wie selbstständig Snotra im geöffneten Ordner handelt, und mit welchen Tools. Siehe [Sehen und ändern, was Snotra darf](../../safety/tools-and-security/). |
 | *Tools › Sicherheit* | [seit 1.26] Die Sandbox jedes Workspace und was Befehle und Python-Läufe darüber hinaus erreichen dürfen. Siehe [Befehle in der Sandbox ausführen](../../safety/sandbox/#die-sandbox-einrichten). |
 | *Tools › Einrichtung* | Der Python-Interpreter, der Schlüssel für die Websuche, das Bildmodell und die MCP-Server. Siehe [Die eingebauten Tools einrichten](../built-in-tools/) und [Einen MCP-Server anbinden](../mcp-servers/). |
-| *Wissen* | [seit 1.30] Was Snotra in jedem Chat liest: *Abläufe* (die Skills), *Regeln*, *Fakten* (das Gedächtnis), *AGENTS.md* und *Letzte Änderungen* — die von Snotra und die aus einem Hinweis — mit ihrem Rückgängig. Siehe [Skills nutzen](../skills/), [Snotra etwas merken lassen](../memory/) und [Einem Projekt seine Anweisungen geben](../project-instructions/). |
+| *Wissen* | [seit 1.30] Was Snotra in jedem Chat liest: *Abläufe* (die Skills), *Regeln*, *Fakten* (das Gedächtnis), *AGENTS.md* und *Letzte Änderungen* — die von Snotra und die aus einem Hinweis — mit ihrem Rückgängig. Siehe [Skills nutzen](../skills/), [Snotra Regeln geben](../rules/#regeln-sehen-und-ausschalten), [Snotra etwas merken lassen](../memory/) und [Einem Projekt seine Anweisungen geben](../project-instructions/). |
 | *Allgemein* | Anweisungen für jeden Chat, das Aussehen, die Sprache — siehe unten. |
 
 [seit 1.26] *Autonomie*, *Sicherheit* und *Einrichtung* stehen zusammen unter der Überschrift *Tools*; die Überschrift selbst ist kein Bereich.

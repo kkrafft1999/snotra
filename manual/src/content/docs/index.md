@@ -17,7 +17,7 @@ This manual explains how to use it: how to get started, how to work with files a
 - **Chatting:** [write a message](chatting/write-a-message/), [see what Snotra changed](chatting/review-changes/) and [continue an earlier chat](chatting/chat-history/).
 - **The workspace:** [find your way around the window](workspace/the-window/), [find a file](workspace/find-a-file/) and [look at it](workspace/preview/).
 - **Safety:** [why Snotra asks before it acts](safety/why-snotra-asks/), and how to [choose a mode](safety/choose-a-mode/) for a chat or a folder.
-- **Customising:** [manage your models](customising/models/), give a project [its instructions](customising/project-instructions/), and add [skills](customising/skills/) or [MCP servers](customising/mcp-servers/).
+- **Customising:** [manage your models](customising/models/), give a project [its instructions](customising/project-instructions/), let Snotra [remember](customising/memory/) facts and follow [rules](customising/rules/), and add [skills](customising/skills/) or [MCP servers](customising/mcp-servers/).
 - **When something goes wrong:** what to do about [an error from the model](troubleshooting/provider-errors/) or [a keychain question](troubleshooting/keychain-and-storage/), and [how to report a problem](troubleshooting/logs-and-reports/).
 - **Reference:** every [keyboard shortcut](reference/keyboard-shortcuts/), [where Snotra keeps its files](reference/files-and-folders/) and a [glossary](reference/glossary/).
 - **Download:** the latest release for macOS, Windows and Linux is on the [releases page](https://github.com/kkrafft1999/snotra/releases/latest).

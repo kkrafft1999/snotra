@@ -19,8 +19,9 @@ Diese Seite ist der Überblick. Jede Zeile verweist auf die Seite, die es erklä
 | Das Web | Sucht im Web (mit einem Tavily-Schlüssel) und ruft eine einzelne Seite ab | [Die eingebauten Tools einrichten](../../customising/built-in-tools/#websuche) |
 | Bilder | Zeichnet ein Bild mit deinem OpenAI-Schlüssel und speichert es im Ordner; liest Screenshots, die du in eine Nachricht einfügst, wenn das Modell Bilder versteht | [Ein Bild erzeugen](../../chatting/generate-images/), [Eine Nachricht schreiben](../../chatting/write-a-message/) |
 | Diktieren | Macht aus Sprache Text im Nachrichtenfeld, mit Zugang zu OpenAI | [Eine Nachricht schreiben](../../chatting/write-a-message/) |
-| Gedächtnis | Behält Fakten für diesen Ordner oder für dich über Chats hinweg | [Snotra etwas merken lassen](../../customising/memory/) |
-| Skills | Folgt Anleitungen, die du ihm als Skills gibst — eingebaut, für einen Ordner oder für alle —, und kann einen neuen Skill in den geöffneten Ordner schreiben | [Skills nutzen](../../customising/skills/), [Snotra einen Skill schreiben lassen](../../customising/write-a-skill/) |
+| Gedächtnis | Behält Fakten für diesen Ordner oder für dich über Chats hinweg; [seit 1.30] auf deine Bitte auch Regeln und Abläufe, und zieht aus einem Chat heraus, was sich zu behalten lohnt | [Snotra etwas merken lassen](../../customising/memory/) |
+| Regeln | [seit 1.30] Befolgt Regeldateien — „wenn das passiert, mach das“ —, immer oder wenn sie greifen | [Snotra Regeln geben](../../customising/rules/) |
+| Skills | Folgt Anleitungen, die du ihm als Skills gibst — eingebaut, für einen Ordner oder für alle —, und kann einen neuen Skill in den geöffneten Ordner schreiben oder, [seit 1.30] auf deine Bitte, für jeden Ordner | [Skills nutzen](../../customising/skills/), [Snotra einen Skill schreiben lassen](../../customising/write-a-skill/) |
 | MCP-Server | Nutzt die Tools von MCP-Servern, die du anbindest: Tickets, eine Datenbank, einen Kalender, was immer ein Server anbietet | [Einen MCP-Server anbinden](../../customising/mcp-servers/) |
 | Modelle | Arbeitet mit OpenAI, Anthropic und Google in der Cloud, mit Ollama, LM Studio und jedem Server mit OpenAI-kompatibler Schnittstelle auf deinem Rechner oder in deinem Netz und über Gateways wie OpenRouter | [Ein Modell anbinden](../../getting-started/connect-a-model/) |
 | Fragen zu Snotra | Schlägt die Antwort in diesem Handbuch nach und verlinkt die Seite, die es benutzt hat | [Die eingebauten Tools einrichten](../../customising/built-in-tools/#die-eingebauten-tools) |
@@ -49,6 +50,8 @@ Du kannst chatten, ohne einen Ordner zu öffnen, aber das Modell hat dann keine 
 | Größe einer Datei, die das Modell schreibt oder bearbeitet | 2 MB |
 | Bilder pro Antwort | 4 |
 | Gedächtnis pro Ebene (dieser Ordner, überall) | 8.000 Zeichen |
+| Eine Regeldatei | [seit 1.30] 20.000 Zeichen; 50 Dateien pro Ordner |
+| Behaltene Chats pro Ordner | [seit 1.30] die 200 jüngsten, dazu die mit *Behalten* markierten |
 | Eine aus dem Web abgerufene Seite | eine `http`- oder `https`-Adresse pro Aufruf, nur Text, nie eine Adresse in deinem lokalen Netz |
 
 ## Wenn es nicht klappt

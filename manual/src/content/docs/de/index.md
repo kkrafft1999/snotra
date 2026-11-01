@@ -17,7 +17,7 @@ Dieses Handbuch erklärt, wie du damit arbeitest: wie du anfängst, wie du mit D
 - **Chatten:** [Eine Nachricht schreiben](chatting/write-a-message/), [sehen, was Snotra geändert hat](chatting/review-changes/) und [einen früheren Chat fortsetzen](chatting/chat-history/).
 - **Der Arbeitsbereich:** [Dich im Fenster zurechtfinden](workspace/the-window/), [eine Datei finden](workspace/find-a-file/) und [sie ansehen](workspace/preview/).
 - **Sicherheit:** [Warum Snotra fragt, bevor es handelt](safety/why-snotra-asks/) und wie du für einen Chat oder Ordner [einen Modus wählst](safety/choose-a-mode/).
-- **Anpassen:** [Deine Modelle verwalten](customising/models/), einem Projekt [seine Anweisungen geben](customising/project-instructions/) und [Skills](customising/skills/) oder [MCP-Server](customising/mcp-servers/) dazunehmen.
+- **Anpassen:** [Deine Modelle verwalten](customising/models/), einem Projekt [seine Anweisungen geben](customising/project-instructions/), Snotra Fakten [merken](customising/memory/) und [Regeln](customising/rules/) befolgen lassen und [Skills](customising/skills/) oder [MCP-Server](customising/mcp-servers/) dazunehmen.
 - **Wenn etwas schiefgeht:** was du bei [einem Fehler des Modells](troubleshooting/provider-errors/) oder [einer Schlüsselbund-Frage](troubleshooting/keychain-and-storage/) tust, und [wie du ein Problem meldest](troubleshooting/logs-and-reports/).
 - **Referenz:** jedes [Tastenkürzel](reference/keyboard-shortcuts/), [wo Snotra seine Dateien ablegt](reference/files-and-folders/) und ein [Glossar](reference/glossary/).
 - **Download:** Die aktuelle Version für macOS, Windows und Linux findest du auf der [Release-Seite](https://github.com/kkrafft1999/snotra/releases/latest).

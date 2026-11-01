@@ -9,7 +9,7 @@ Die Begriffe in alphabetischer Reihenfolge. Jeder Eintrag sagt, was das Wort in 
 
 ### AGENTS.md
 
-Eine Textdatei oben in einem Ordner, in der du aufschreibst, wie dort gearbeitet wird. Snotra folgt ihr in jedem Chat in diesem Ordner. Siehe [Einem Projekt seine Anweisungen geben](../../customising/project-instructions/).
+Eine Textdatei oben in einem Ordner, in der du aufschreibst, wie dort gearbeitet wird. Snotra folgt ihr in jedem Chat in diesem Ordner und ergänzt [seit 1.30] in einem eigenen Abschnitt, was es sich auf deinen Wunsch für alle Werkzeuge dort merkt. Siehe [Einem Projekt seine Anweisungen geben](../../customising/project-instructions/).
 
 ### Anbieter
 
@@ -31,7 +31,7 @@ Die Karte, die im Chat erscheint, wenn Snotra etwas tun will, wofür es dein Ja 
 
 ### Gedächtnis
 
-Was Snotra für spätere Chats behält: `.agents/memory.md` für ein Projekt, `~/.snotra/memory.md` für jeden Ordner. Siehe [Snotra etwas merken lassen](../../customising/memory/).
+Die Fakten, die Snotra für spätere Chats behält — Dinge, die stimmen, etwa *die Beete sind in Zentimetern gemessen*: `.agents/memory.md` für ein Projekt, `~/.snotra/memory.md` für jeden Ordner. Siehe [Snotra etwas merken lassen](../../customising/memory/).
 
 ### Geöffneter Ordner
 
@@ -70,6 +70,10 @@ Wie oft Snotra dich fragt: *Intelligent*, *Immer fragen* oder *Auto*. Er gehört
 ### Reasoning-Stufe
 
 Wie viel ein Modell nachdenkt, bevor es antwortet; eine Einstellung des Chats, neben dem Modell. Siehe [Modell oder Reasoning-Stufe wechseln](../../chatting/model-and-reasoning/).
+
+### Regel
+
+[seit 1.30] Eine Bedingung und was dann zu tun ist — *wenn du eine Commit-Nachricht schreibst, schreib sie auf Englisch* —, abgelegt in einer Regeldatei in `.agents/rules/` für ein Projekt oder `~/.snotra/rules/` für jeden Ordner. Siehe [Snotra Regeln geben](../../customising/rules/).
 
 ### Risikoklasse
 
@@ -126,3 +130,7 @@ Die Liste deiner früheren Chats, rechts im Fenster. Siehe [Einen früheren Chat
 ### Vorschau
 
 Die mittlere Spalte, die eine Datei zeigt — formatiertes Markdown, Code, ein Bild, ein PDF, eine HTML-Seite. Siehe [Eine Datei ansehen](../../workspace/preview/).
+
+### Wissen
+
+[seit 1.30] Was Snotra in jedem Chat außer deinen Nachrichten liest: Fakten im [Gedächtnis](#gedächtnis), [Regeln](#regel), Abläufe als [Skills](#skill) und `AGENTS.md`. Zusammen zu sehen unter *Einstellungen › Wissen*. Siehe [Snotra etwas merken lassen](../../customising/memory/).

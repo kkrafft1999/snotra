@@ -2306,7 +2306,7 @@ module.exports = {
   'approval.remember.skill.description': 'Beschreibung',
   'approval.remember.skill.offered': 'Angeboten',
   'approval.remember.skill.everyFolder': 'in jedem Ordner',
-  'approval.remember.skill.switchOn': 'Ein neuer Skill gilt, sobald du ihn unter Einstellungen › Skills einschaltest.',
+  'approval.remember.skill.switchOn': 'Ein neuer Skill gilt, sobald du ihn unter Einstellungen › Wissen einschaltest.',
   'approval.verb.read': 'lesen',
   'approval.verb.external': 'an einen externen Dienst senden',
   'approval.verb.execute': 'ausführen',

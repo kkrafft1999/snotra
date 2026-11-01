@@ -34,12 +34,19 @@ For instructions that apply in **every** folder, put an `AGENTS.md` into `~/.sno
 - Changes take effect with the next message, without a restart.
 - Each file contributes up to 20,000 characters; a longer one is cut visibly, not dropped. The breakdown behind the token count in the input field lists what each file costs — see [Write a message](../../chatting/write-a-message/#see-what-a-request-costs).
 - Before a file goes to the provider, Snotra leaves it out if it contains one of your own keys, and masks credentials such as tokens or `password = …`.
+- *Settings › Knowledge › AGENTS.md* lists the files Snotra found, with their size and *Open*, which opens a file in your editor.
+
+## When Snotra adds to it
+
+[since 1.30] Ask Snotra to remember something for *Every tool here*, and it goes into the project's `AGENTS.md` — the file other coding tools read too, and which is usually shared with the team. Snotra writes only into a section of its own at the end, *Added by Snotra*, and creates the file if there is none; what you wrote above it stays as it is. See [Let Snotra remember](../memory/).
+
+Any other change Snotra makes to the file asks first, in every mode, *Auto* included; a command such as `git pull` that changed it is followed by a card with *Keep* and *Reset*. See [Answer an approval request](../../safety/approve-a-request/#a-file-snotra-reads-in-every-chat).
 
 ## Instructions from a folder you did not write
 
 An `AGENTS.md` is meant to change how the model behaves — so when you open someone else's folder, you take on its instructions too. To work in a folder without them, switch off *Send AGENTS.md* under *Settings › Knowledge*. That switch covers all three places.
 
-[since 1.30] Snotra also checks the project's `AGENTS.md` for signs that it hides something from you: telling the agent to keep something from you or to act without you, to send keys or the conversation out, or text you cannot see. The file still goes along as it is — the check is a hint, not a filter. A file that shows such a sign is marked in the breakdown behind the token count: *Check this file: it may hide instructions from you*, with what was found. Open the file and read it before you go on.
+[since 1.30] Snotra also checks the project's `AGENTS.md` for signs that it hides something from you: telling the agent to keep something from you or to act without you, to send keys or the conversation out, or text you cannot see. The file still goes along as it is — the check is a hint, not a filter. A file that shows such a sign is marked in the breakdown behind the token count and under *Settings › Knowledge*: *Check this file: it may hide instructions from you*, with what was found. Open the file and read it before you go on.
 
 ## If it doesn't work
 

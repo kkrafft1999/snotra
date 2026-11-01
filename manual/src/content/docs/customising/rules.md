@@ -48,6 +48,18 @@ You don't have to write the file yourself: ask Snotra to remember a rule — *re
 
 What you say in the chat wins over every rule. Between two rules, the one with the more specific condition wins, then the newer one. When a rule of the project and one of your own say different things in the same situation, Snotra tells you and asks — it does not pick one quietly. A project's rules can come with a repository you cloned; they never outweigh what you say.
 
+## See and switch off rules
+
+*Settings › Knowledge › Rules* shows the rules files of both levels — *Project* for the open folder, *Global · every folder* for your own — each with its description, its path and how many characters it holds.
+
+- The switch next to a level, *Send the rules: Project*, leaves all its files out without deleting them; the switch on a file's row, *Use the rules file commit-messages*, leaves out that one file.
+- *Open* opens the file in your editor.
+- *New rules file* asks for the *Name* and *When does it apply?*, with a box for *Applies in every turn (always)*, then writes the file with that description and opens it in your editor.
+
+The labels on a row say what Snotra does with the file: *Always*; *Description derived* when the file has no description of its own; *Shortened* when it is over 20,000 characters; *Over the always budget — fetched when it applies* and *Gave way to the knowledge budget* when there was not room for all of it; *Shadowed by ~/.snotra/rules* for a file in `~/.agents/rules/` that has a namesake in `~/.snotra/rules/`. Files that are not read are named under their level: in subfolders, past the limit of 50, or with a name that is no rule name. A project rules file that looks as if it hides something from you carries the note *Check this file: it may hide instructions from you*.
+
+Switches and new files take effect with the next message.
+
 ## Limits
 
 | What | Limit |

@@ -63,7 +63,7 @@ Ein Vorschlag wird nie von selbst eingeschaltet.
 
 [seit 1.20] In der Chat-Leiste, neben Modell und Modus, zählt eine Pille die Skills, die in diesem Chat eingeschaltet sind: *3 Skills* oder *Keine Skills*. Ein Klick darauf zeigt das ganze Bild:
 
-![Das Popover der Pille „3 Skills“: unter Skills die drei System-Skills an und aussaat-tipps aus dem Ordner aus; unter Tools run_python und shell_execute ausgeschaltet mit je einem Knopf „Einschalten“, web_search und generate_image mit „Einrichten“, darunter zugeklappt „15 eingeschaltet“; ganz unten Links zu Einstellungen › Wissen und Einstellungen › Tools › Autonomie.](screenshots/chat-config.webp)
+![Das Popover der Pille „3 Skills“: unter Skills die drei System-Skills an und aussaat-tipps aus dem Ordner aus; unter Tools run_python und shell_execute ausgeschaltet mit je einem Knopf „Einschalten“, web_search und generate_image mit „Einrichten“, darunter zugeklappt „19 eingeschaltet“; ganz unten Links zu Einstellungen › Wissen und Einstellungen › Tools › Autonomie.](screenshots/chat-config.webp)
 
 - **Skills** – jeder Skill, die eingeschalteten zuerst, jeweils mit seiner Herkunft. Ein Skill, den du mit `/name` aufgerufen oder auf einer Karte für diesen Chat eingeschaltet hast, trägt die Marke *nur dieser Chat*.
 - **Tools** – was fehlt, steht oben, mit dem Grund, etwa *ausgeschaltet* oder *kein Suchdienst-Schlüssel*. *Einschalten* oder *Einrichten* öffnet die Einstellung, die das ändert. Die eingeschalteten Tools sind in einer Zeile zusammengefasst; ein Klick darauf zeigt sie nach Gruppen.

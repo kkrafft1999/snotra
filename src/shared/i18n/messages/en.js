@@ -2299,7 +2299,7 @@ module.exports = {
   'approval.remember.skill.description': 'Description',
   'approval.remember.skill.offered': 'Offered',
   'approval.remember.skill.everyFolder': 'in every folder',
-  'approval.remember.skill.switchOn': 'A new skill applies once you switch it on under Settings › Skills.',
+  'approval.remember.skill.switchOn': 'A new skill applies once you switch it on under Settings › Knowledge.',
   'approval.verb.read': 'read',
   'approval.verb.external': 'send to an external service',
   'approval.verb.execute': 'run',

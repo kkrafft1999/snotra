@@ -19,7 +19,7 @@ Everything you can set up in Snotra is in one place: the settings. They open ove
 | *Tools › Autonomy* | How freely Snotra acts in the open folder, and with which tools. See [See and change what Snotra may do](../../safety/tools-and-security/). |
 | *Tools › Security* | [since 1.26] The sandbox of every workspace, and what commands and Python runs may reach beyond it. See [Run commands in the sandbox](../../safety/sandbox/#set-up-the-sandbox). |
 | *Tools › Setup* | The Python interpreter, the web search key, the image model and the MCP servers. See [Set up the built-in tools](../built-in-tools/) and [Connect an MCP server](../mcp-servers/). |
-| *Knowledge* | [since 1.30] What Snotra reads in every chat: *Procedures* (the skills), *Rules*, *Facts* (the memory), *AGENTS.md*, and *Last changes* — Snotra's and the ones made from a hint — with their undo. See [Use skills](../skills/), [Let Snotra remember](../memory/) and [Give a project its instructions](../project-instructions/). |
+| *Knowledge* | [since 1.30] What Snotra reads in every chat: *Procedures* (the skills), *Rules*, *Facts* (the memory), *AGENTS.md*, and *Last changes* — Snotra's and the ones made from a hint — with their undo. See [Use skills](../skills/), [Give Snotra rules](../rules/#see-and-switch-off-rules), [Let Snotra remember](../memory/) and [Give a project its instructions](../project-instructions/). |
 | *General* | Instructions for every chat, the look, the language — see below. |
 
 [since 1.26] *Autonomy*, *Security* and *Setup* sit together under the heading *Tools*; the heading itself is not a section.
