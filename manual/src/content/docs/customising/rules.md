@@ -42,6 +42,7 @@ You don't have to write the file yourself: ask Snotra to remember a rule — *re
 - A file without a description still counts: Snotra takes its first heading, or its first line, as the description. A description that says *when* works better than one that says *what*.
 - Each list item is one rule. A date at the start of a line — `- 2026-10-31 — …` — says how old it is.
 - Rules files are also read from `~/.agents/rules/`, where other tools keep theirs. A file of the same name in `~/.snotra/rules/` takes precedence.
+- [since 1.30] *Settings › Knowledge* marks rules that read like an episode, that are nearly the same as another rule or a memory entry, or that are older than 180 days, and two files of a level whose names differ only slightly (`commit`, `commits`). The rules of a file with hints sit behind *1 entry with a hint* on its row; *Merge…* moves the rules of one file into the other, without the ones it already has, and removes the emptied file. Files in `~/.agents/rules/` belong to the other tools and are not changed. See [Hints on entries](../memory/#hints-on-entries).
 
 ### When rules disagree
 

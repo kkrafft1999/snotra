@@ -48,6 +48,23 @@ Beide sind gewöhnliche Markdown-Dateien: Du kannst sie in jedem Editor lesen un
 
 Änderungen in diesem Bereich wirken sofort.
 
+### Hinweise an Einträgen
+
+[seit 1.30] *Einstellungen › Wissen* weist auf Einträge hin, die einen Blick brauchen könnten — ohne ein Modell zu fragen und ohne von sich aus etwas zu ändern. Ein Hinweis steht unter seinem Eintrag, mit dem, was du damit tun kannst:
+
+![Einstellungen › Wissen › Fakten: unter dem Eintrag „Immer wenn du die Beete gießt, nimm zuerst die Regentonne“ der Hinweis „Liest sich wie eine Regel“ mit In Regeln verschieben… und Ausblenden; unter „Heute ist das Südbeet überflutet“ der Hinweis „Liest sich wie eine Episode“ mit Entfernen, Ausblenden und +1 weitere.](screenshots/memory-hints.webp)
+
+| Hinweis | Was du tun kannst |
+| --- | --- |
+| *Liest sich wie eine Regel* — *immer*, *nie*, *immer wenn*, *muss* … | *In Regeln verschieben…* fragt nach Ebene und Regeldatei, schreibt die Regel dorthin und nimmt den Eintrag aus dem Gedächtnis. Siehe [Snotra Regeln geben](../rules/). |
+| *Liest sich wie ein Ablauf* — Schritte, *zuerst … dann …* | *Skill erstellen…* fragt nach dem Namen des Skills und wofür er da ist, schreibt ihn nach `.agents/skills/` (beim globalen Gedächtnis nach `~/.snotra/skills/`) und nimmt den Eintrag aus dem Gedächtnis. Einen vorhandenen Skill gleichen Namens überschreibt er nie. |
+| *Liest sich wie eine Episode* — *heute*, *gerade*, etwas, das einmal passiert ist | *Entfernen*. Eine Begründung (*weil …*) oder eine Entscheidung zählt nicht als Episode. |
+| *Fast derselbe Eintrag wie …* — mindestens 80 % gleiche Wörter, im Gedächtnis oder in einer Regeldatei derselben Ebene; oder *steht auch global* | *Entfernen* oder *Bearbeiten*, das die Datei in deinem Editor öffnet. |
+| *Notiert am … — stimmt das noch?* — älter als 180 Tage | *Entfernen* oder *Bearbeiten*. Ein Eintrag ohne Datum bekommt diesen Hinweis nie. |
+| *Fast voll* — 80 % der 8.000 Zeichen einer Ebene belegt | Bitte Snotra im Chat: *sieh mein Gedächtnis durch*. |
+
+Die Hinweise kennen jede Sprache, die Snotra spricht, egal in welcher Sprache die Oberfläche läuft. Hat ein Eintrag mehrere Hinweise, steht der erste da, und *+1 weitere* klappt die übrigen auf. *Ausblenden* blendet einen Hinweis für diesen Eintrag dauerhaft aus; er kommt erst wieder, wenn sich die Wörter des Eintrags ändern. Was ein Hinweis ändert, steht unter *Letzte Änderungen*, mit *Rückgängig*.
+
 ## Was dann passiert
 
 Das Gedächtnis geht mit jeder Anfrage an den Anbieter, bis zu 8.000 Zeichen pro Ebene; *Einstellungen › Wissen* zeigt, wie viel genutzt ist. Weil ein Repository ein Projektgedächtnis mitbringen kann, liest das Modell es als Notizen, die im Ordner geführt werden, nicht als etwas, das du gesagt hast.

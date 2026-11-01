@@ -14,7 +14,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
@@ -143,6 +143,13 @@ test('the workspace and every settings section pass axe, light and dark; System 
   const userDataDir = await makeTempDir('snotra-a11y-userdata-');
   await writeFile(path.join(workspace, 'README.md'), '# Garden notes\n\nTomatoes go out after the last frost.\n', 'utf8');
   await writeFile(path.join(workspace, 'beds.md'), '- Bed 1: tomatoes\n- Bed 2: beans\n', 'utf8');
+  // Settings › Knowledge with the review's hints (#1279): entries that read
+  // like a rule and an episode, and two rules files of similar names.
+  await mkdir(path.join(workspace, '.agents', 'rules'), { recursive: true });
+  await writeFile(path.join(workspace, '.agents', 'memory.md'),
+    '# Memory\n\n- 2026-10-31 — Whenever you water the beds, use the rain barrel first.\n- 2025-01-02 — Today the south bed flooded.\n', 'utf8');
+  await writeFile(path.join(workspace, '.agents', 'rules', 'watering.md'), '---\ndescription: When you plan watering\n---\n\n- Water in the morning.\n- Today the pump is broken.\n', 'utf8');
+  await writeFile(path.join(workspace, '.agents', 'rules', 'waterings.md'), '---\ndescription: When you plan watering\n---\n\n- Never water at noon.\n', 'utf8');
   await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
   // Developer mode on (#1213), so that Settings › Remote access is there to be checked.
   await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en', developerMode: true }), 'utf8');
@@ -224,6 +231,16 @@ test('the workspace and every settings section pass axe, light and dark; System 
       ?.getAttribute('aria-selected') === 'true', panel), { what: `settings section ${panel}` });
     await page.mouse.move(0, 0);
     await checkScreen(page, `settings › ${panel}`, findings, { context: '#modal-settings' });
+    if (panel !== 'memory') continue;
+    // The hints' own controls (#1279): a rules file's entries unfolded, an entry's "+1 more", a form open.
+    await poll(() => page.evaluate(() => document.querySelectorAll('#modal-settings .knowledge-hint').length > 2), { what: 'knowledge hints' });
+    await page.evaluate(() => {
+      document.querySelector('#settings-knowledge-rules .knowledge-disclosure')?.click();
+      document.querySelector('#settings-memory-scopes .knowledge-hint__more')?.click();
+      document.querySelector('#settings-memory-scopes .knowledge-hint__btn')?.click();
+    });
+    await poll(() => page.evaluate(() => Boolean(document.querySelector('#modal-settings .knowledge-hint-form'))), { what: 'a hint form' });
+    await checkScreen(page, 'settings › memory › hints and a form', findings, { context: '#modal-settings' });
   }
 
   // Remote access (#1110) in the states main pushes once pairing is open —

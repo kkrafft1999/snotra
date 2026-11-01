@@ -171,6 +171,7 @@ function ageInDays(date, now) {
  * @typedef {Object} ReviewHint
  * @property {string} id  a value of REVIEW_HINTS
  * @property {string} key  dismissal key
+ * @property {string} ref  this hint on this entry or file — what an action names it by
  * @property {boolean} dismissible  false for a state that has no action (close to the limit)
  * @property {ReviewTarget} at
  * @property {ReviewTarget} [with]  the other entry or file (nearly the same, similar topic names)
@@ -179,6 +180,20 @@ function ageInDays(date, now) {
  * @property {number} [share]  close to the limit: the share of the file's limit used, 0…1+
  * @property {boolean} [budgetUsedUp]  close to the limit: the level's `always` budget
  */
+
+/**
+ * Where a hint sits, as a short id: two hints under one key — nearly the same,
+ * similar topic names — sit on two entries or files.
+ *
+ * @param {any} at
+ */
+function targetId(at) {
+  if (at.kind === 'memory') return `m:${at.scope}:${at.line}`;
+  if (at.kind === 'rule') return `r:${at.source}:${at.name}:${at.line}`;
+  if (at.kind === 'memoryFile') return `mf:${at.scope}`;
+  if (at.kind === 'ruleFile') return `rf:${at.source}:${at.name}`;
+  return `rl:${at.level}`;
+}
 
 /**
  * Every hint for the memory and rules files of both levels.
@@ -191,7 +206,7 @@ function ageInDays(date, now) {
  * @returns {ReviewHint[]}
  */
 function reviewKnowledge({ memory = [], rules = [], now = new Date(), dismissed = [] } = {}) {
-  /** @type {ReviewHint[]} */
+  /** @type {Array<Omit<ReviewHint, 'ref'>>} */
   const hints = [];
   /** @type {Array<{ at: any, level: string, words: string[], key: string, file: string }>} */
   const entries = [];
@@ -285,7 +300,9 @@ function reviewKnowledge({ memory = [], rules = [], now = new Date(), dismissed 
   }
 
   const gone = new Set(dismissed);
-  return /** @type {ReviewHint[]} */ (hints.filter((hint) => !hint.dismissible || !gone.has(hint.key)));
+  return /** @type {ReviewHint[]} */ (hints
+    .filter((hint) => !hint.dismissible || !gone.has(hint.key))
+    .map((hint) => ({ ...hint, ref: `${hint.key}@${targetId(hint.at)}` })));
 }
 
 module.exports = {

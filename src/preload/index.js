@@ -185,6 +185,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }),
   undoKnowledgeChange: (id) => ipcRenderer.invoke(REQ.KNOWLEDGE_UNDO, { id: String(id || '') }),
   dismissKnowledgeHint: (key) => ipcRenderer.invoke(REQ.KNOWLEDGE_DISMISS_HINT, { key: String(key || '') }),
+  knowledgeHintAction: (ref, action, choice) => ipcRenderer.invoke(REQ.KNOWLEDGE_HINT_ACTION, {
+    ref: String(ref || ''),
+    action: String(action || ''),
+    choice: choice && typeof choice === 'object'
+      ? {
+        level: String(choice.level || ''),
+        topic: String(choice.topic || ''),
+        description: String(choice.description || ''),
+        always: choice.always === true,
+        name: String(choice.name || ''),
+        keep: String(choice.keep || ''),
+      }
+      : {},
+  }),
   onSkillsChanged: (callback) => {
     const channel = PUSH.SKILLS_CHANGED;
     const listener = (_event, payload) => callback(payload);

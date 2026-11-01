@@ -520,6 +520,22 @@ description: Rat, was als Nächstes gesät wird und in welches Beet, aus pflanze
 };
 
 /** The project memory of the demo project, per language. */
+/** A project memory whose entries earn hints (#1279): one reads like a rule, one is an old episode. */
+const DEMO_MEMORY_HINTS = {
+  en: `# Memory · project
+
+- 2026-09-28 — The beds are measured in centimetres, not in metres.
+- 2026-10-02 — Whenever you water the beds, use the rain barrel first.
+- 2026-03-14 — Today the south bed flooded.
+`,
+  de: `# Gedächtnis · Projekt
+
+- 2026-09-28 — Die Beete sind in Zentimetern gemessen, nicht in Metern.
+- 2026-10-02 — Immer wenn du die Beete gießt, nimm zuerst die Regentonne.
+- 2026-03-14 — Heute ist das Südbeet überflutet.
+`,
+};
+
 const DEMO_MEMORY = {
   en: `# Memory · project
 
@@ -1549,6 +1565,23 @@ const MOTIFS = {
       await page.mouse.move(0, 0);
       await pause(200);
       return clipAround(page, SETTINGS_PANEL, 0);
+    },
+  },
+
+  /** Settings › Knowledge › Facts with the review's hints (#1279): a rule, and an episode with "+1 more". */
+  'memory-hints': {
+    async prepare({ workspace, locale }) {
+      await mkdir(path.join(workspace, '.agents'), { recursive: true });
+      await writeFile(path.join(workspace, '.agents', 'memory.md'), DEMO_MEMORY_HINTS[locale], 'utf8');
+    },
+    async setUp({ app, page, locale }) {
+      await openSettingsPanel(app, page, 'memory');
+      await poll(() => page.evaluate(() => document.querySelectorAll('#settings-memory-scopes .knowledge-hint').length >= 2),
+        { what: 'the hints under the entries' });
+      await page.evaluate(() => document.querySelector('#settings-memory-scopes .memory-card[data-scope="workspace"]').scrollIntoView({ block: 'start' }));
+      await page.mouse.move(0, 0);
+      await pause(200);
+      return clipAround(page, '#settings-memory-scopes .memory-card[data-scope="workspace"]', 12);
     },
   },
 

@@ -31,6 +31,7 @@ import { initToolPermissionsPanel } from './components/ToolPermissionsPanel.js';
 import { initMcpPanel } from './components/McpPanel.js';
 import { initMemoryPanel } from './components/MemoryPanel.js';
 import { initKnowledgePanel } from './components/KnowledgePanel.js';
+import { createKnowledgeHints } from './components/KnowledgeHints.js';
 import { initAppVersionBadge } from './components/AppVersionBadge.js';
 import { initRemoteIndicator } from './components/RemoteIndicator.js';
 import { initWorkspaceHeader } from './components/WorkspaceHeader.js';
@@ -374,10 +375,15 @@ const approvalCards = initToolApprovalCards({
 });
 const toolPermissionsPanel = initToolPermissionsPanel({ toolPermissions });
 const mcpPanel = initMcpPanel({ api });
-const facts = initMemoryPanel({ api });
-// Settings › Knowledge (#1278): the facts and the rest of the page refresh together.
-const knowledgePanel = initKnowledgePanel({ api });
-const memoryPanel = { ...facts, refresh: async () => { await facts.refresh?.(); await knowledgePanel.refresh(); } };
+// Settings › Knowledge (#1278): the facts and the rest of the page refresh
+// together — the rest first, since it brings the review's hints (#1279) the
+// facts draw under their entries.
+const knowledgeHints = createKnowledgeHints({ api });
+const facts = initMemoryPanel({ api, hints: knowledgeHints });
+const knowledgePanel = initKnowledgePanel({ api, hints: knowledgeHints });
+const memoryPanel = { ...facts, refresh: async () => { await knowledgePanel.refresh(); await facts.refresh?.(); } };
+knowledgeHints.reload = () => knowledgePanel.refresh();
+knowledgeHints.refreshAll = () => memoryPanel.refresh();
 
 /**
  * Chat wird zum aktiven (Issue #211): Der Main stellt Modell und Freigabemodus

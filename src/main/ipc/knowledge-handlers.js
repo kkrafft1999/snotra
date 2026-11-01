@@ -28,11 +28,26 @@ const {
   PROJECT_INSTRUCTION_SOURCES,
   PROJECT_INSTRUCTION_SOURCE_PATHS,
 } = require('../../shared/contracts/project-instructions');
-const { MEMORY_SCOPES } = require('../../shared/contracts/memory');
+const { MEMORY_SCOPES, MEMORY_SCOPE_SHORT_PATHS } = require('../../shared/contracts/memory');
 const { newRuleFileText } = require('../../shared/contracts/knowledge-write');
 const { findCovertSignals } = require('../../application/chat/injection-detector');
 const { planRules, applyKnowledgeBudget, ON_DEMAND_REASONS } = require('../../application/chat/rules-prompt');
 const { reviewKnowledge } = require('../../application/chat/knowledge-review');
+const { createKnowledgeHintActions, HintActionError } = require('../services/knowledge-hint-actions');
+
+/** What a hint's button asks main to do (#1279); *Distil…* (#1316) joins them later. */
+const HINT_ACTION_NAMES = new Set(['remove', 'edit', 'moveToRules', 'createSkill', 'merge']);
+
+/**
+ * Where a hint's entry or file is, as the page shows paths.
+ *
+ * @param {any} at
+ */
+function placeOf(at) {
+  if (at.kind === 'memory' || at.kind === 'memoryFile') return MEMORY_SCOPE_SHORT_PATHS[at.scope] || '';
+  if (at.kind === 'rule' || at.kind === 'ruleFile') return `${RULE_SOURCE_PATHS[/** @type {import('../../shared/contracts/rules').RuleSource} */ (at.source)]}/${at.name}.md`;
+  return '';
+}
 
 /** @param {Array<{ kind: string }>|null} signals */
 const kindsOf = (signals) => (signals ? [...new Set(signals.map((signal) => signal.kind))] : []);
@@ -53,6 +68,7 @@ const kindsOf = (signals) => (signals ? [...new Set(signals.map((signal) => sign
  */
 function registerKnowledgeHandlers({ ipcMain, REQ, knowledge, memory, uiPrefsStore, getActiveWorkspaceRoot, shell = null, fs, path, homeDir, now = () => new Date() }) {
   const { rules, projectInstructions, journal } = knowledge;
+  const hintActions = createKnowledgeHintActions({ fs, path, homeDir, rules, memory, knowledgeWriter: knowledge.knowledgeWriter, journal });
 
   async function buildState() {
     const workspaceRoot = getActiveWorkspaceRoot();
@@ -126,7 +142,12 @@ function registerKnowledgeHandlers({ ipcMain, REQ, knowledge, memory, uiPrefsSto
       }),
       now: now(),
       dismissed: Array.isArray(prefs.dismissedKnowledgeHints) ? prefs.dismissedKnowledgeHints : [],
-    });
+    }).map((hint) => ({
+      ...hint,
+      actions: hintActions.actionsOf(hint),
+      where: placeOf(hint.at),
+      ...(hint.with ? { withWhere: placeOf(hint.with) } : {}),
+    }));
 
     const workspaceMemory = memoryFiles.find((/** @type {any} */ file) => file.scope === MEMORY_SCOPES.WORKSPACE);
     return {
@@ -241,6 +262,29 @@ function registerKnowledgeHandlers({ ipcMain, REQ, knowledge, memory, uiPrefsSto
       dismissedKnowledgeHints: [...(Array.isArray(prefs.dismissedKnowledgeHints) ? prefs.dismissedKnowledgeHints : []).filter((/** @type {string} */ known) => known !== key), key],
     }));
     return { ok: true, state: await buildState() };
+  });
+
+  // A hint's action names the hint, never a file, a line or a text: main finds
+  // the hint in its own review and acts on what that points at.
+  ipcMain.handle(REQ.KNOWLEDGE_HINT_ACTION, async (_event, payload) => {
+    const ref = typeof payload?.ref === 'string' ? payload.ref : '';
+    const action = typeof payload?.action === 'string' ? payload.action : '';
+    const choice = payload?.choice && typeof payload.choice === 'object' ? payload.choice : {};
+    const workspaceRoot = getActiveWorkspaceRoot();
+    const hint = HINT_ACTION_NAMES.has(action) ? (await buildState()).hints.find((item) => item.ref === ref) : null;
+    if (!hint || !hint.actions.includes(action)) return createSettingsError(createMessage('settings.knowledge.error.invalid'));
+    try {
+      if (action === 'edit') {
+        if (!shell) return createSettingsError(createMessage('settings.knowledge.error.open'));
+        const failure = await shell.openPath(hintActions.fileOf(hint, workspaceRoot));
+        return failure ? createSettingsError(failure) : { ok: true };
+      }
+      const done = await hintActions[/** @type {'remove'|'moveToRules'|'createSkill'|'merge'} */ (action)](hint, choice, workspaceRoot);
+      return { ok: true, done: { action, ...(done || {}) }, state: await buildState() };
+    } catch (error) {
+      if (error instanceof HintActionError) return createSettingsError(createMessage(error.key, error.params));
+      return createSettingsError(createMessage('settings.knowledge.hint.error.write', { reason: error?.message || '' }));
+    }
   });
 
   return { buildState };

@@ -155,6 +155,8 @@ const REQUEST_CHANNELS = Object.freeze({
   KNOWLEDGE_UNDO: 'knowledge:undo',
   /** Dismiss one hint of the review for its entry (#1279). */
   KNOWLEDGE_DISMISS_HINT: 'knowledge:dismissHint',
+  /** Carry out one hint's action — remove, edit, move to rules, create a skill, merge (#1279). */
+  KNOWLEDGE_HINT_ACTION: 'knowledge:hintAction',
 
   /**
    * Link im Standardbrowser öffnen (Issue #64). Muss über den Main laufen:
