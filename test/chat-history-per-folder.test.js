@@ -6,6 +6,7 @@ const path = require('path');
 const { createStorageService } = require('../src/main/services/storage-service');
 const { createChatHistoryStorePort } = require('../src/main/adapters/persistence-store-adapters');
 const { createChatHistoryService } = require('../src/main/services/chat-history-service');
+const { chatSessionFileName } = require('../src/main/services/chat-history-store');
 const { registerChatHistoryHandlers } = require('../src/main/ipc/chat-history-handlers');
 const { REQUEST_CHANNELS: REQ } = require('../src/shared/ipc-channels');
 const { createMockProviderCatalog } = require('./helpers/provider-ports');
@@ -201,13 +202,19 @@ test('with no folder open nothing is assigned', async (t) => {
   assert.deepEqual(await chatHistory.assignToActiveFolder(''), { ok: false });
 });
 
-test('Keep and the new folder are on the disk: a fresh start reads them back', async (t) => {
+test('Keep and the new folder are in the chat\'s own file too: losing the index loses neither', async (t) => {
   const { chatHistory, tmpDir, folderA, userData } = await setup(t);
   await save(chatHistory, 'a1', folderA);
   await save(chatHistory, 'g1', path.join(tmpDir, 'gone'));
   await chatHistory.setKeep('a1', true);
   await chatHistory.assignToActiveFolder('g1');
 
+  const fileOf = async (id) => JSON.parse(await fs.readFile(path.join(userData, 'chat-history', chatSessionFileName(id)), 'utf8')).session;
+  assert.equal((await fileOf('a1')).keep, true);
+  assert.equal((await fileOf('g1')).workspaceRoot, folderA);
+  assert.equal((await fileOf('g1')).messages.length, 2, 'the messages stay as they were');
+
+  await fs.rm(path.join(userData, 'chat-history', 'index.json'));
   const fresh = createStorageService({
     userDataPath: userData,
     secretStore: { isEncryptionAvailable: () => false },
@@ -223,6 +230,48 @@ test('Keep and the new folder are on the disk: a fresh start reads them back', a
   assert.equal(metas.find((meta) => meta.id === 'g1').workspaceRoot, folderA);
 });
 
+test('a save from a turn that began before the move does not carry the chat back', async (t) => {
+  const { chatHistory, tmpDir, folderA } = await setup(t);
+  const gone = path.join(tmpDir, 'gone');
+  await save(chatHistory, 'g1', gone);
+  await chatHistory.assignToActiveFolder('g1');
+  await chatHistory.saveSession({ id: 'g1', messages: [...turn('g1'), ...turn('later')], workspaceRoot: gone });
+  const listed = await chatHistory.listForActiveFolder();
+  assert.deepEqual(ids(listed.sessions), ['g1']);
+  assert.equal(listed.sessions[0].workspaceRoot, folderA);
+  assert.deepEqual(listed.orphaned, []);
+});
+
+test('Assign all moves every chat of a folder that is gone, and nothing else', async (t) => {
+  const { chatHistory, tmpDir, folderA, folderB, open } = await setup(t, { perFolder: 10 });
+  const gone = path.join(tmpDir, 'gone');
+  const other = path.join(tmpDir, 'other-gone');
+  for (const id of ['g1', 'g2', 'g3']) await save(chatHistory, id, gone);
+  await save(chatHistory, 'x1', other);
+  await save(chatHistory, 'b1', folderB);
+  await fs.mkdir(gone);
+  open(gone);
+  await chatHistory.setActive('g2');
+  open(folderA);
+  await removeDir(gone);
+
+  assert.deepEqual(await chatHistory.assignFolderToActiveFolder(folderB), { ok: false, count: 0 }, 'a folder that is there');
+  assert.deepEqual(await chatHistory.assignFolderToActiveFolder(folderA), { ok: false, count: 0 }, 'the open folder itself');
+  assert.deepEqual(await chatHistory.assignFolderToActiveFolder(''), { ok: false, count: 0 });
+  assert.deepEqual(await chatHistory.assignFolderToActiveFolder(path.join(tmpDir, 'never')), { ok: false, count: 0 }, 'no chats there');
+
+  assert.deepEqual(await chatHistory.assignFolderToActiveFolder(gone), { ok: true, count: 3, workspaceRoot: folderA });
+  const listed = await chatHistory.listForActiveFolder();
+  assert.deepEqual(ids(listed.sessions), ['g1', 'g2', 'g3']);
+  assert.deepEqual(ids(listed.orphaned), ['x1'], 'another missing folder stays as it is');
+
+  await fs.mkdir(gone);
+  open(gone);
+  assert.equal((await chatHistory.listForActiveFolder()).activeChatId, null, 'the old pointer went with the chat');
+  open(null);
+  assert.deepEqual(await chatHistory.assignFolderToActiveFolder(other), { ok: false, count: 0 }, 'no folder open');
+});
+
 test('the IPC channels delegate Keep and Assign to this folder', async (t) => {
   const { chatHistory, tmpDir, folderA } = await setup(t);
   /** @type {Map<string, Function>} */
@@ -235,4 +284,8 @@ test('the IPC channels delegate Keep and Assign to this folder', async (t) => {
   assert.deepEqual(await handlers.get(REQ.CHAT_HISTORY_ASSIGN_TO_FOLDER)({}, 'g1'), { ok: true, workspaceRoot: folderA });
   const listed = await handlers.get(REQ.CHAT_HISTORY_GET)({});
   assert.deepEqual(ids(listed.sessions), ['a1', 'g1']);
+  await save(chatHistory, 'h1', path.join(tmpDir, 'gone-too'));
+  await save(chatHistory, 'h2', path.join(tmpDir, 'gone-too'));
+  assert.deepEqual(await handlers.get(REQ.CHAT_HISTORY_ASSIGN_ALL_TO_FOLDER)({}, path.join(tmpDir, 'gone-too')),
+    { ok: true, count: 2, workspaceRoot: folderA });
 });

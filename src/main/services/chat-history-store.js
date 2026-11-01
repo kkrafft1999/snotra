@@ -1007,13 +1007,19 @@ function createChatHistoryStore({
   }
 
   /**
-   * Changes a chat's own settings — in the index alone. False when the chat is not there.
+   * Changes a chat's own settings — in the index alone, unless `withFile`
+   * asks for the chat's file to follow (#1320): a change that must survive
+   * the loss of the index — *Keep*, the folder it was moved to — is written
+   * to both, the file first. A file that cannot be read now is left as it is;
+   * the change then lives in the index, as every other setting does. False
+   * when the chat is not there.
    *
    * @param {string} id
    * @param {Record<string, unknown>} patch
+   * @param {{ withFile?: boolean }} [options]
    * @returns {Promise<boolean>}
    */
-  function patchSession(id, patch) {
+  function patchSession(id, patch, { withFile = false } = {}) {
     return serial(async () => {
       const s = await loaded();
       const meta = s.metas.get(id);
@@ -1028,6 +1034,7 @@ function createChatHistoryStore({
       const next = normalizeSessionMetaForStore(changed, { normalizeWorkspaceRoot });
       if (!next) return null;
       if (meta.plain) next.plain = true;
+      if (withFile) await rewriteSessionFile(id, next);
       s.metas.set(id, next);
       return { written: persistIndex(s) };
     }).then(async (result) => {
@@ -1035,6 +1042,31 @@ function createChatHistoryStore({
       await result.written;
       return true;
     });
+  }
+
+  /**
+   * Writes a chat's file again with what its index entry says now, the
+   * messages as they are. Runs inside the queue, so it reads the file itself
+   * rather than through `sessionFile`, whose clean-up queues behind it.
+   *
+   * @param {string} id
+   * @param {IndexedMeta} meta  the entry as it is about to be; `plain` follows the write
+   */
+  async function rewriteSessionFile(id, meta) {
+    if (blocked.has(sessionFileName(id))) return;
+    let file = cache.get(id);
+    if (!file) {
+      const read = await readEnvelope(sessionPath(id));
+      const session = read.status === READ.OK ? sessionFromFile(read.data) : null;
+      if (!session || session === 'newer' || session.id !== id) return;
+      file = session;
+    }
+    const session = sessionFromMeta(meta, file.messages);
+    bump(id);
+    const plain = !(await writeSessionFile(session));
+    remember(id, session);
+    if (plain) meta.plain = true;
+    else delete meta.plain;
   }
 
   /**

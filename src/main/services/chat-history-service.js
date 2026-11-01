@@ -278,7 +278,12 @@ function createChatHistoryService({
         {
           ...(sessionRow || {}),
           messages,
-          workspaceRoot: await resolveSessionWorkspaceRoot(sessionRow),
+          // A stored chat stays in its folder (#1320): only *Assign to this
+          // folder* moves it, and a save from a turn that began before the move
+          // must not carry it back.
+          workspaceRoot: existing
+            ? chatHistoryStore.normalizeWorkspaceRoot(existing.workspaceRoot)
+            : await resolveSessionWorkspaceRoot(sessionRow),
           ...sessionSettings,
           // The cost is main's word as well (#981): summed per turn by the
           // conversation service, never taken from the renderer.
@@ -371,18 +376,31 @@ function createChatHistoryService({
       // Only the open folder's chats, as the list hands them out (#68).
       if (!meta || !chatHistoryStore.sessionMatchesWorkspace(meta, wsRoot)) return { ok: false };
       if ((meta.keep === true) === keep) return { ok: true, keep };
-      const written = await chatHistoryStore.patchSession(id, { keep: keep ? true : undefined });
+      const written = await chatHistoryStore.patchSession(id, { keep: keep ? true : undefined }, { withFile: true });
       return written ? { ok: true, keep } : { ok: false };
     }));
+  }
+
+  /**
+   * Moves one chat into the open folder, its file with it, and drops the old
+   * folder's pointer to it. Runs under the history lock.
+   *
+   * @param {import('../ports/chat-history-store-port').SessionMeta} meta
+   * @param {string} wsRoot
+   */
+  async function moveIntoFolder(meta, wsRoot) {
+    const previousKey = chatHistoryStore.workspaceBucketKey(chatHistoryStore.normalizeWorkspaceRoot(meta.workspaceRoot));
+    if (!(await chatHistoryStore.patchSession(meta.id, { workspaceRoot: wsRoot }, { withFile: true }))) return false;
+    if ((await chatHistoryStore.getActiveChatId(previousKey)) === meta.id) await chatHistoryStore.setActiveChatId(previousKey, null);
+    return true;
   }
 
   /**
    * Moves a chat whose folder is gone into the open folder (#1320). The
    * renderer names the chat alone: the target is always the open folder, and
    * only a chat whose folder is certainly gone moves — a chat of a folder
-   * that is still there is not taken from it this way. The old folder's
-   * pointer to the chat goes with it. The folder's limit is applied at its
-   * next save, as for every chat.
+   * that is still there is not taken from it this way. The folder's limit is
+   * applied at its next save, as for every chat.
    *
    * @param {unknown} rawId
    */
@@ -393,10 +411,29 @@ function createChatHistoryService({
       if (!id || !wsRoot) return { ok: false };
       const meta = await chatHistoryStore.getSessionMeta(id);
       if (!meta || !(await isOrphaned(meta, wsRoot))) return { ok: false };
-      const previousKey = chatHistoryStore.workspaceBucketKey(chatHistoryStore.normalizeWorkspaceRoot(meta.workspaceRoot));
-      if (!(await chatHistoryStore.patchSession(id, { workspaceRoot: wsRoot }))) return { ok: false };
-      if ((await chatHistoryStore.getActiveChatId(previousKey)) === id) await chatHistoryStore.setActiveChatId(previousKey, null);
+      if (!(await moveIntoFolder(meta, wsRoot))) return { ok: false };
       return { ok: true, workspaceRoot: wsRoot };
+    }));
+  }
+
+  /**
+   * Moves every chat of a folder that is gone into the open folder (#1320):
+   * a rename leaves all of a folder's chats behind at once. The renderer
+   * names the old folder as the list showed it; the same rules hold as for
+   * one chat. `count` is how many moved.
+   *
+   * @param {unknown} rawRoot
+   */
+  function assignFolderToActiveFolder(rawRoot) {
+    return skipWhenUnreadable(() => chatHistoryStore.withChatHistoryLock(async () => {
+      const from = chatHistoryStore.normalizeWorkspaceRoot(rawRoot);
+      const wsRoot = chatHistoryStore.normalizeWorkspaceRoot(getActiveWorkspaceRoot());
+      if (!from || !wsRoot || from === wsRoot) return { ok: false, count: 0 };
+      if (await chatHistoryStore.workspaceRootExists(from)) return { ok: false, count: 0 };
+      const chats = (await chatHistoryStore.listSessions()).filter((s) => chatHistoryStore.sessionMatchesWorkspace(s, from));
+      let count = 0;
+      for (const meta of chats) if (await moveIntoFolder(meta, wsRoot)) count += 1;
+      return count > 0 ? { ok: true, count, workspaceRoot: wsRoot } : { ok: false, count: 0 };
     }));
   }
 
@@ -542,6 +579,7 @@ function createChatHistoryService({
     setActive,
     setKeep,
     assignToActiveFolder,
+    assignFolderToActiveFolder,
     activate,
     readAttachment,
     load,

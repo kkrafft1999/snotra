@@ -22,7 +22,7 @@
  * @property {(id: string) => Promise<StoredSession|null>} getSession The whole chat in store form; `null` when it is not there or cannot be read
  * @property {(bucketKey: string) => Promise<string|null>} getActiveChatId The chat a folder opens with
  * @property {(session: StoredSession) => Promise<{ droppedIds: string[] }>} saveSession Saves a chat in store form; returns the chats its folder dropped beyond MAX_CHAT_SESSIONS_PER_FOLDER
- * @property {(id: string, patch: Record<string, unknown>) => Promise<boolean>} patchSession Changes a chat's own settings (model, mode, level, overrides, *Keep*) or its folder
+ * @property {(id: string, patch: Record<string, unknown>, options?: { withFile?: boolean }) => Promise<boolean>} patchSession Changes a chat's own settings (model, mode, level, overrides, *Keep*) or its folder; `withFile` writes the chat's file as well
  * @property {(id: string) => Promise<void>} deleteSession
  * @property {(bucketKey: string, id: string|null) => Promise<boolean>} setActiveChatId Resolves to whether anything was written
  * @property {(fn: () => Promise<unknown>) => Promise<unknown>} withChatHistoryLock

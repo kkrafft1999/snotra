@@ -33,6 +33,8 @@ function registerChatHistoryHandlers({ ipcMain, chatHistory, REQ }) {
   ipcMain.handle(REQ.CHAT_HISTORY_SET_KEEP, async (_event, chatId, keep) => chatHistory.setKeep(chatId, keep));
 
   ipcMain.handle(REQ.CHAT_HISTORY_ASSIGN_TO_FOLDER, async (_event, chatId) => chatHistory.assignToActiveFolder(chatId));
+
+  ipcMain.handle(REQ.CHAT_HISTORY_ASSIGN_ALL_TO_FOLDER, async (_event, oldRoot) => chatHistory.assignFolderToActiveFolder(oldRoot));
 }
 
 module.exports = { registerChatHistoryHandlers };

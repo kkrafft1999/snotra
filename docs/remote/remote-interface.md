@@ -604,7 +604,7 @@ listed together where they share their class.
 | `chatHistory:setActive`, `chatHistory:activate` | desktop | The desktop's own screen state; `activate` switches the global preset and mode |
 | `chatHistory:delete` | desktop, for now ([O6](#11-open-decisions)) | Destructive |
 | `chatHistory:readAttachment` | later, as `attachment.read` | Images are placeholders in the first version ([§6.4](#64-binary-payloads)) |
-| `chatHistory:setKeep`, `assignToFolder` | desktop | The chat list's housekeeping (#1320): *Keep* and *Assign to this folder* act on the desktop's open folder |
+| `chatHistory:setKeep`, `assignToFolder`, `assignAllToFolder` | desktop | The chat list's housekeeping (#1320): *Keep* and *Assign to this folder* act on the desktop's open folder |
 | `chatHistory:setTaskKind` | desktop | A chat's kind of task (#1281) is set in the chat header and the usage report; kinds on the phone are out of scope (`docs/concepts/task-kinds-concept.md`) |
 | `chat:file-changes` | later | The diff of what the agent changed; useful to a local client, not needed first |
 | `toolPermissions:setMode`, `addRule`, `removeRule`, `setSensitivePaths`, `resetWorkspaceRules`, `resetAll`, `setWorkspaceSandbox`, `setWorkspaceMode`, `setProgramAllowance`, `addHosts`, `setNewWorkspaceSandbox`, `resetWorkspaceSandbox`, `resetSandboxEverywhere` | desktop, **never** remote | Loosening (§7.6), or a reset that can undo a tightening |

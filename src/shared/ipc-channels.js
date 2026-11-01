@@ -298,6 +298,11 @@ const REQUEST_CHANNELS = Object.freeze({
    * renderer names the chat alone; the target is main's word.
    */
   CHAT_HISTORY_ASSIGN_TO_FOLDER: 'chatHistory:assignToFolder',
+  /**
+   * Every chat of a folder that is gone moves into the open folder (#1320):
+   * the renderer names the old folder as the list showed it.
+   */
+  CHAT_HISTORY_ASSIGN_ALL_TO_FOLDER: 'chatHistory:assignAllToFolder',
 
   /** A question for a chat (#981): main keeps the history, saves the turn and names the chat. */
   CHAT_SEND: 'chat:send',
