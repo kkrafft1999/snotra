@@ -47,9 +47,32 @@ test('Copy shows on hover and focus and puts the message source on the clipboard
   await poll(async () => (await opacity(answerCopy)) === '0', { what: 'Copy hidden at rest' });
 
   // The pointer on the answer: Copy shows; a click puts the Markdown on the clipboard.
+  // Hovered again on every look: a redraw or a scroll after the first hover
+  // leaves the pointer over a node that was replaced or moved away, and
+  // Chromium only works out `:hover` again on the next move (#1346).
   await app.evaluate(({ clipboard }) => clipboard.writeText(''));
-  await page.hover('#chat-messages > .chat-msg.assistant:last-child .chat-md');
-  await poll(async () => (await opacity(answerCopy)) === '1', { what: 'Copy shown on hover' });
+  const answerText = '#chat-messages > .chat-msg.assistant:last-child .chat-md';
+  await poll(async () => {
+    await page.hover(answerText);
+    return (await opacity(answerCopy)) === '1';
+  }, {
+    what: 'Copy shown on hover',
+    explain: () => page.evaluate(({ text, copy }) => {
+      const r = document.querySelector(text).getBoundingClientRect();
+      const x = r.left + r.width / 2;
+      const y = r.top + r.height / 2;
+      const hit = document.elementFromPoint(x, y);
+      const button = document.querySelector(copy);
+      return {
+        point: [Math.round(x), Math.round(y)],
+        hit: hit ? `${hit.nodeName}.${hit.className}` : null,
+        hitInAnswer: Boolean(hit?.closest('.chat-msg.assistant:last-child')),
+        answerHovered: button.closest('.chat-msg').matches(':hover'),
+        opacity: getComputedStyle(button).opacity,
+        hoverNone: matchMedia('(hover: none)').matches,
+      };
+    }, { text: answerText, copy: answerCopy }),
+  });
   await page.click(answerCopy);
   await poll(async () => (await app.evaluate(({ clipboard }) => clipboard.readText())) === ANSWER,
     { what: 'the answer on the clipboard', explain: () => app.evaluate(({ clipboard }) => clipboard.readText()) });
