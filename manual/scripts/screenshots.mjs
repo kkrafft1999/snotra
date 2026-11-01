@@ -726,8 +726,8 @@ const MOTIFS = {
 
   /**
    * The mode menu, opened from the pill in the composer. The chat is switched
-   * to "Always ask" first — no system dialog on that way — so that the menu
-   * also offers it as the folder's default for new chats.
+   * to "Always ask" first — no system dialog on that way — which makes it the
+   * folder's default too (#1337), so the tag sits on it.
    */
   'mode-menu': {
     prefs: { chatPanelWidth: WIDE_CHAT },
@@ -738,8 +738,8 @@ const MOTIFS = {
       await poll(() => page.evaluate(() => document.getElementById('chat-tool-mode-wrap').dataset.mode === 'ask-all'),
         { what: 'chat on "Always ask"' });
       if (!(await shown(page, 'chat-tool-mode-menu'))) await page.click('#btn-chat-tool-mode');
-      await poll(() => page.evaluate(() => !document.getElementById('chat-tool-mode-footer').hidden),
-        { what: 'default for new chats offered' });
+      await poll(() => page.evaluate(() => !!document.querySelector('#chat-tool-mode-list [data-mode="ask-all"] .chat-tool-mode-default-tag')),
+        { what: 'default tag on "Always ask"' });
       // Off the pill that was clicked last, or its hover ring shows in some variants.
       await page.mouse.move(0, 0);
       return clipAround(page, ['#chat-tool-mode-menu', '#btn-chat-tool-mode'], 16);

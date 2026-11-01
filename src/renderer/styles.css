@@ -9353,15 +9353,21 @@ select.modal-input {
 
 /* The option that is the workspace default carries a tag next to its name
    (#413). */
+/* Since #1337 the tag shows on "Smart" too, so it meets the narrowest column:
+   it moves under the title there, and a long folder name ends in an ellipsis
+   instead of reaching out of the menu. */
 .chat-tool-mode-opt-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 2px 8px;
   min-width: 0;
 }
 
 .chat-tool-mode-default-tag {
-  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0 6px;
   border: 1px solid var(--ds-blue-border);
   border-radius: var(--ds-radius-pill);
@@ -9370,66 +9376,6 @@ select.modal-input {
   font-weight: var(--ds-font-weight-medium);
   line-height: 1.6;
   white-space: nowrap;
-}
-
-/* The workspace default under the list (#413), set apart like the notice
-   above it. */
-.chat-tool-mode-footer {
-  margin-top: 6px;
-  padding: 10px 12px 4px;
-  border-top: 1px solid var(--ds-grey-divider);
-}
-
-.chat-tool-mode-footer[hidden] {
-  display: none;
-}
-
-.chat-tool-mode-remember {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: var(--ds-font-size-md);
-  line-height: 1.4;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.chat-tool-mode-remember input {
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  margin: 2px 0 0;
-  accent-color: var(--ds-blue);
-  cursor: pointer;
-}
-
-.chat-tool-mode-remember input:focus-visible {
-  outline: var(--ds-focus-ring);
-  outline-offset: var(--ds-focus-offset);
-}
-
-.chat-tool-mode-remember:has(input:disabled) {
-  color: var(--text-muted-strong);
-  cursor: default;
-}
-
-.chat-tool-mode-remember:has(input:disabled) input {
-  cursor: default;
-}
-
-.chat-tool-mode-remember-body {
-  min-width: 0;
-}
-
-.chat-tool-mode-remember strong {
-  font-weight: var(--ds-font-weight-bold);
-}
-
-.chat-tool-mode-remember-hint {
-  display: block;
-  margin-top: 2px;
-  font-size: var(--ds-font-size-sm);
-  color: var(--text-muted-strong);
 }
 
 /* Freigabe-Karte: flacher Container (6px, Divider-Border), zwischen Tool-Log

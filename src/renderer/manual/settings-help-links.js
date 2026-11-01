@@ -56,7 +56,7 @@ export const SETTINGS_HELP = Object.freeze({
   },
   defaultMode: {
     slug: 'safety/choose-a-mode',
-    section: { en: 'Give a folder a default mode', de: 'Einem Ordner einen Standardmodus geben' },
+    section: { en: 'The folder\'s default mode', de: 'Der Standardmodus des Ordners' },
   },
   sessionGrants: {
     slug: 'safety/tools-and-security',
