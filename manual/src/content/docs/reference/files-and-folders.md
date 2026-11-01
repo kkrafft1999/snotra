@@ -12,9 +12,9 @@ Snotra keeps what belongs to you in three places: a profile folder for settings 
 | Place | What lives there |
 | --- | --- |
 | The profile folder | Your models and keys, your settings, your chats, your permissions. Belongs to you, not to a project. |
-| `AGENTS.md` and `.agents/` in the open folder | Instructions, memory, skills and skill data of this project. Travels with the folder — and can end up in a repository. |
-| `~/.snotra/` in your home folder | Instructions, memory and skills for **every** folder. |
-| `~/.agents/` in your home folder | The older place for global instructions and skills. Still read. |
+| `AGENTS.md` and `.agents/` in the open folder | Instructions, memory, rules, skills and skill data of this project. Travels with the folder — and can end up in a repository. |
+| `~/.snotra/` in your home folder | Instructions, memory, rules and skills for **every** folder. |
+| `~/.agents/` in your home folder | The older place for global instructions, rules and skills, shared with other tools. Still read. |
 
 ## The profile folder
 
@@ -37,6 +37,7 @@ It still carries the name of the platform, Snotra AI, although the app is called
 | `chat-attachments/` | The images that belong to your chats, one folder per chat. |
 | `folder-history.json` and `last-folder.json` | The recent folders, and the one that opens at the next start. |
 | `window-state.json` | Size and place of the window. |
+| `knowledge-journal.json` | [since 1.30] The last 50 changes Snotra made to a knowledge file, with the text before each one, for *Undo* under *Settings › Knowledge* — see [Let Snotra remember](../../customising/memory/#undo-a-change). |
 | `logs/` | [since 1.25] Snotra's log file, `main.log`, and the one before it, `main.old.log`: warnings and errors, never your chats — see [Find logs and report a problem](../../troubleshooting/logs-and-reports/#the-log-file). |
 
 Anything else in the folder — `Cache`, `Local Storage` and the like — is the framework's own and can be left alone.
@@ -60,8 +61,9 @@ If the key changes, a chat history that can no longer be read is not deleted: th
 
 | What | Where | Written by |
 | --- | --- | --- |
-| Project instructions | `AGENTS.md`, at the top of the folder | you — see [Give a project its instructions](../../customising/project-instructions/) |
+| Project instructions | `AGENTS.md`, at the top of the folder | you; [since 1.30] Snotra adds to its section *Added by Snotra* on your request — see [Give a project its instructions](../../customising/project-instructions/) |
 | Project memory | `.agents/memory.md` | Snotra on your request, or you — see [Let Snotra remember](../../customising/memory/) |
+| Rules of the project | `.agents/rules/<name>.md` | you, or Snotra on your request — see [Give Snotra rules](../../customising/rules/) |
 | Skills of the project | `.agents/skills/<name>/SKILL.md` | you, or Snotra when you ask for a skill — see [Use skills](../../customising/skills/) |
 | What a skill keeps | `.agents/data/` | the skill |
 
@@ -73,9 +75,10 @@ When Snotra overwrites a file in a project, a copy of the old version goes to th
 | --- | --- |
 | Instructions for every folder | `~/.snotra/AGENTS.md`, then `~/.agents/AGENTS.md` |
 | Global memory | `~/.snotra/memory.md` |
+| Your own rules | `~/.snotra/rules/<name>.md`, and `~/.agents/rules/<name>.md` |
 | Your own skills | `~/.snotra/skills/<name>/`, and `~/.agents/skills/<name>/` |
 
-The skill folders in your home folder are read-only for every tool: you change your own skills and instructions yourself, in your file manager or editor. Global memory is written when you ask Snotra to remember something for every folder, and every such write asks first.
+These files are read-only for the file tools, and a sandboxed command cannot reach them: you change your own instructions and skills yourself, in your file manager or editor, or with the buttons under *Settings › Knowledge*. From a chat, Snotra writes here only when you ask it to remember something for every folder — a fact into `~/.snotra/memory.md`, [since 1.30] a rule into `~/.snotra/rules/`, a procedure as a skill of one `SKILL.md` into `~/.snotra/skills/` — and every such write asks first, on a card that shows it. `~/.agents/` belongs to the other tools and is never written.
 
 ## If it doesn't work
 

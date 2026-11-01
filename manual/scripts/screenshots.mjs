@@ -601,7 +601,9 @@ async function offerUpdate(app, page, overrides = {}) {
  * `profile: 'fresh'` starts the app the way it is after installing: no folder,
  * no model of its own, only the language set. Every other motif starts on the
  * demo project with the fake model. `prefs` go into ui-preferences.json, for a
- * motif that needs a tool switched on.
+ * motif that needs a tool switched on. `mainPreload` is loaded into the main
+ * process before the app's own code, for a state the app only reads while it
+ * starts.
  */
 const MOTIFS = {
   /** The first start: no folder, no usable model, the hint above the composer. */
@@ -1769,8 +1771,10 @@ const MOTIFS = {
 
   /** Settings › Models on a system without encrypted storage, as on a Linux desktop without a keyring. */
   'storage-unavailable': {
+    // The app resolves whether encrypted storage exists once, while it starts
+    // (#1156); patching safeStorage afterwards no longer reaches the settings.
+    mainPreload: path.join(MANUAL_DIR, '..', 'e2e', 'helpers', 'no-encryption-preload.cjs'),
     async setUp({ app, page }) {
-      await app.evaluate(({ safeStorage }) => { safeStorage.isEncryptionAvailable = () => false; });
       await openSettingsPanel(app, page, 'models');
       await poll(() => shown(page, 'modal-encryption-warning'), { what: 'the warning about encrypted storage' });
       await page.mouse.move(0, 0);
@@ -1972,6 +1976,7 @@ async function shootMotif(name, motif, locale, model) {
 
   const snotra = await launchApp({
     userDataDir,
+    mainPreload: motif.mainPreload ?? null,
     args: [`--force-device-scale-factor=${WINDOW.scale}`],
   });
   const { app, page } = snotra;

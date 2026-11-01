@@ -39,7 +39,7 @@ Jeder Tool-Aufruf gehört zu einer Risikoklasse. Die Klasse entscheidet zusammen
 Auch in *Auto*, dem Modus ohne Rückfragen:
 
 - Kein Tool reicht ungefragt über den geöffneten Ordner hinaus. Lesen geht auch in den Ordnern von Skills, die du eingeschaltet hast. [seit 1.18] Will ein Datei-Tool eine Datei oder einen Ordner außerhalb, fragt vorher eine Karte, in jedem Modus, auch in *Auto* — siehe [Auf eine Freigabe-Anfrage antworten](../approve-a-request/#eine-datei-außerhalb-des-geöffneten-ordners). Dein Home-Ordner als Ganzes, das Wurzelverzeichnis eines Laufwerks und Snotras eigener Speicher werden nie angeboten.
-- Skill-Ordner bleiben schreibgeschützt.
+- Die System-Skills und deine eigenen Skills in deinem Benutzerordner sind für die Datei-Tools und Befehle unerreichbar; nur einen Ablauf, den Snotra sich auf deine Bitte für jeden Ordner merkt, schreibt es dorthin, auf einer Karte. Die Skills eines Projekts in `.agents/skills/` ändern sich nur über eine Karte, wie unten.
 - [seit 1.30] Eine Änderung an einer Datei, die Snotra in jedem Chat liest — `AGENTS.md`, Gedächtnis, Regeldateien, Skills —, fragt jedes Mal, einzeln; auf einen Befehl, der eine geändert hat, folgt eine Karte — siehe [Auf eine Freigabe-Anfrage antworten](../approve-a-request/#eine-datei-die-snotra-in-jedem-chat-liest).
 - Snotras eigene Einstellungen, Schlüssel und Berechtigungen sind für jedes Tool unerreichbar.
 - Eine Tool-Ausgabe, die einen deiner Anbieter-Schlüssel enthält, wird zurückgehalten — ebenso eine, die sich nicht darauf prüfen ließ.

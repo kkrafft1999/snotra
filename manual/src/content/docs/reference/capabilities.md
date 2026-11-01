@@ -19,8 +19,9 @@ This page is the overview. Every row links to the page that explains it.
 | The web | Searches the web (with a Tavily key) and fetches a single page | [Set up the built-in tools](../../customising/built-in-tools/#web-search) |
 | Images | Draws an image with your OpenAI key and saves it in the folder; reads screenshots you paste into a message, when the model understands images | [Generate an image](../../chatting/generate-images/), [Write a message](../../chatting/write-a-message/) |
 | Dictation | Turns speech into text in the message field, with OpenAI access | [Write a message](../../chatting/write-a-message/) |
-| Memory | Keeps facts for this folder or for you across chats | [Let Snotra remember](../../customising/memory/) |
-| Skills | Follows instructions you give it as skills — built in, for one folder or for all of them — and can write a new skill into the open folder | [Use skills](../../customising/skills/), [Let Snotra write a skill](../../customising/write-a-skill/) |
+| Memory | Keeps facts for this folder or for you across chats; [since 1.30] on your request also rules and procedures, and draws out of a chat what is worth keeping | [Let Snotra remember](../../customising/memory/) |
+| Rules | [since 1.30] Follows rules files — "when this happens, do that" — always or when they apply | [Give Snotra rules](../../customising/rules/) |
+| Skills | Follows instructions you give it as skills — built in, for one folder or for all of them — and can write a new skill into the open folder or, [since 1.30] on your request, for every folder | [Use skills](../../customising/skills/), [Let Snotra write a skill](../../customising/write-a-skill/) |
 | MCP servers | Uses the tools of MCP servers you connect: tickets, a database, a calendar, anything a server offers | [Connect an MCP server](../../customising/mcp-servers/) |
 | Models | Works with OpenAI, Anthropic and Google in the cloud; with Ollama, LM Studio and any server with an OpenAI-compatible interface on your machine or in your network; and through gateways such as OpenRouter | [Connect a model](../../getting-started/connect-a-model/) |
 | Questions about Snotra | Looks the answer up in this manual and links the page it used | [Set up the built-in tools](../../customising/built-in-tools/#the-built-in-tools) |
@@ -49,6 +50,8 @@ You can chat without opening a folder, but the model then has no tools to change
 | Size of a file the model writes or edits | 2 MB |
 | Images per answer | 4 |
 | Memory per level (this folder, everywhere) | 8,000 characters |
+| One rules file | [since 1.30] 20,000 characters; 50 files per folder |
+| Chats kept per folder | [since 1.30] the 200 most recent, plus the ones marked *Keep* |
 | A page fetched from the web | one `http` or `https` address per call, text only, never an address on your local network |
 
 ## If it doesn't work

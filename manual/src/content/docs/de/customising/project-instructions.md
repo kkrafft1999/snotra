@@ -34,12 +34,19 @@ Für Anweisungen, die in **jedem** Ordner gelten, leg eine `AGENTS.md` in `~/.sn
 - Änderungen wirken mit der nächsten Nachricht, ohne Neustart.
 - Jede Datei trägt bis zu 20.000 Zeichen bei; eine längere wird sichtbar gekürzt, nicht verworfen. Die Aufschlüsselung hinter der Token-Anzeige im Eingabefeld nennt, was jede Datei kostet — siehe [Eine Nachricht schreiben](../../chatting/write-a-message/#sehen-was-eine-anfrage-kostet).
 - Bevor eine Datei an den Anbieter geht, lässt Snotra sie weg, wenn sie einen deiner eigenen Schlüssel enthält, und maskiert Zugangsdaten wie Tokens oder `password = …`.
+- *Einstellungen › Wissen › AGENTS.md* listet die Dateien, die Snotra gefunden hat, mit ihrer Größe und *Öffnen*, das eine Datei in deinem Editor öffnet.
+
+## Wenn Snotra etwas ergänzt
+
+[seit 1.30] Bitte Snotra, sich etwas für *Alle Werkzeuge hier* zu merken, und es landet in der `AGENTS.md` des Projekts — der Datei, die auch andere Coding-Werkzeuge lesen und die meist mit dem Team geteilt wird. Snotra schreibt nur in einen eigenen Abschnitt am Ende, *Von Snotra ergänzt*, und legt die Datei an, wenn es keine gibt; was du darüber geschrieben hast, bleibt, wie es ist. Siehe [Snotra etwas merken lassen](../memory/).
+
+Jede andere Änderung, die Snotra an der Datei vornimmt, fragt vorher, in jedem Modus, auch in *Auto*; auf einen Befehl wie `git pull`, der sie geändert hat, folgt eine Karte mit *Behalten* und *Zurücksetzen*. Siehe [Auf eine Freigabe-Anfrage antworten](../../safety/approve-a-request/#eine-datei-die-snotra-in-jedem-chat-liest).
 
 ## Anweisungen aus einem Ordner, den du nicht geschrieben hast
 
 Eine `AGENTS.md` soll das Verhalten des Modells ändern — wer einen fremden Ordner öffnet, übernimmt also auch dessen Anweisungen. Um in einem Ordner ohne sie zu arbeiten, schalte *AGENTS.md mitschicken* unter *Einstellungen › Wissen* aus. Der Schalter gilt für alle drei Orte.
 
-[seit 1.30] Snotra prüft die `AGENTS.md` des Projekts außerdem auf Anzeichen, dass sie dir etwas verschweigt: dass der Agent dir etwas verheimlichen oder ohne dich handeln soll, Schlüssel oder das Gespräch nach außen schicken soll, oder Text, den du nicht sehen kannst. Die Datei geht trotzdem so mit, wie sie ist — die Prüfung ist ein Hinweis, kein Filter. Eine Datei mit einem solchen Anzeichen ist in der Aufschlüsselung hinter der Token-Anzeige markiert: *Prüf diese Datei: Sie könnte Anweisungen vor dir verbergen*, mit dem, was gefunden wurde. Öffne die Datei und lies sie, bevor du weitermachst.
+[seit 1.30] Snotra prüft die `AGENTS.md` des Projekts außerdem auf Anzeichen, dass sie dir etwas verschweigt: dass der Agent dir etwas verheimlichen oder ohne dich handeln soll, Schlüssel oder das Gespräch nach außen schicken soll, oder Text, den du nicht sehen kannst. Die Datei geht trotzdem so mit, wie sie ist — die Prüfung ist ein Hinweis, kein Filter. Eine Datei mit einem solchen Anzeichen ist in der Aufschlüsselung hinter der Token-Anzeige und unter *Einstellungen › Wissen* markiert: *Prüf diese Datei: Sie könnte Anweisungen vor dir verbergen*, mit dem, was gefunden wurde. Öffne die Datei und lies sie, bevor du weitermachst.
 
 ## Wenn es nicht klappt
 

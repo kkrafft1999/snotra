@@ -59,8 +59,8 @@ try {
   });
   model.queueAnswer({
     text: locale === 'de'
-      ? 'Der Skill `release-notes` liegt in `.agents/skills/`. Schalte ihn unter Einstellungen › Skills ein.'
-      : 'The skill `release-notes` is in `.agents/skills/`. Switch it on under Settings › Skills.',
+      ? 'Der Skill `release-notes` liegt in `.agents/skills/`. Schalte ihn unter Einstellungen › Wissen ein.'
+      : 'The skill `release-notes` is in `.agents/skills/`. Switch it on under Settings › Knowledge.',
   });
   await sendChat(page, locale === 'de' ? 'Bau mir einen Skill für release notes.' : 'Make me a skill for release notes.');
 

@@ -9,7 +9,7 @@ The terms in alphabetical order. Each entry says what the word means in Snotra a
 
 ### AGENTS.md
 
-A text file at the top of a folder in which you write down how work is done there. Snotra follows it in every chat in that folder. See [Give a project its instructions](../../customising/project-instructions/).
+A text file at the top of a folder in which you write down how work is done there. Snotra follows it in every chat in that folder, and [since 1.30] adds to it, in a section of its own, what you ask it to remember for every tool there. See [Give a project its instructions](../../customising/project-instructions/).
 
 ### Always ask
 
@@ -49,13 +49,17 @@ Valid in every folder, as opposed to the open one: global memory, instructions a
 
 The list of your earlier chats, on the right of the window. See [Continue an earlier chat](../../chatting/chat-history/).
 
+### Knowledge
+
+[since 1.30] What Snotra reads in every chat besides your messages: facts in the [memory](#memory), [rules](#rule), procedures as [skills](#skill), and `AGENTS.md`. Shown together under *Settings › Knowledge*. See [Let Snotra remember](../../customising/memory/).
+
 ### MCP server
 
 A program that offers Snotra tools from another system — an issue tracker, a database — through the Model Context Protocol. Snotra starts it on your computer, or reaches it over the network by its address. See [Connect an MCP server](../../customising/mcp-servers/).
 
 ### Memory
 
-What Snotra keeps for later chats: `.agents/memory.md` for a project, `~/.snotra/memory.md` for every folder. See [Let Snotra remember](../../customising/memory/).
+The facts Snotra keeps for later chats — things that are true, such as *the beds are measured in centimetres*: `.agents/memory.md` for a project, `~/.snotra/memory.md` for every folder. See [Let Snotra remember](../../customising/memory/).
 
 ### Mode
 
@@ -82,6 +86,10 @@ The company or server that runs a model: OpenAI, or an OpenAI-compatible server 
 ### Reasoning level
 
 How much a model thinks before it answers; a setting of the chat, next to the model. See [Switch the model or the reasoning level](../../chatting/model-and-reasoning/).
+
+### Rule
+
+[since 1.30] A condition and what to do then — *when you write a commit message, write it in English* — kept in a rules file in `.agents/rules/` for a project or `~/.snotra/rules/` for every folder. See [Give Snotra rules](../../customising/rules/).
 
 ### Risk class
 

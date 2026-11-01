@@ -12,9 +12,9 @@ Snotra legt ab, was dir gehört, an drei Orten: in einem Profilordner für Einst
 | Ort | Was dort liegt |
 | --- | --- |
 | Der Profilordner | Deine Modelle und Schlüssel, deine Einstellungen, deine Chats, deine Berechtigungen. Gehört dir, nicht einem Projekt. |
-| `AGENTS.md` und `.agents/` im geöffneten Ordner | Anweisungen, Gedächtnis, Skills und Skill-Daten dieses Projekts. Zieht mit dem Ordner um — und kann in einem Repository landen. |
-| `~/.snotra/` in deinem Benutzerordner | Anweisungen, Gedächtnis und Skills für **jeden** Ordner. |
-| `~/.agents/` in deinem Benutzerordner | Der ältere Ort für globale Anweisungen und Skills. Wird weiter gelesen. |
+| `AGENTS.md` und `.agents/` im geöffneten Ordner | Anweisungen, Gedächtnis, Regeln, Skills und Skill-Daten dieses Projekts. Zieht mit dem Ordner um — und kann in einem Repository landen. |
+| `~/.snotra/` in deinem Benutzerordner | Anweisungen, Gedächtnis, Regeln und Skills für **jeden** Ordner. |
+| `~/.agents/` in deinem Benutzerordner | Der ältere Ort für globale Anweisungen, Regeln und Skills, den auch andere Werkzeuge nutzen. Wird weiter gelesen. |
 
 ## Der Profilordner
 
@@ -37,6 +37,7 @@ Er trägt noch den Namen der Plattform, Snotra AI, obwohl die App Snotra Agent h
 | `chat-attachments/` | Die Bilder, die zu deinen Chats gehören, ein Ordner je Chat. |
 | `folder-history.json` und `last-folder.json` | Die zuletzt benutzten Ordner und der, der beim nächsten Start öffnet. |
 | `window-state.json` | Größe und Platz des Fensters. |
+| `knowledge-journal.json` | [seit 1.30] Die letzten 50 Änderungen, die Snotra an einer Wissensdatei vorgenommen hat, mit dem Text vor jeder, für *Rückgängig* unter *Einstellungen › Wissen* — siehe [Snotra etwas merken lassen](../../customising/memory/#eine-änderung-rückgängig-machen). |
 | `logs/` | [seit 1.25] Die Logdatei von Snotra, `main.log`, und die davor, `main.old.log`: Warnungen und Fehler, nie deine Chats — siehe [Logs finden und ein Problem melden](../../troubleshooting/logs-and-reports/#die-logdatei). |
 
 Alles andere im Ordner — `Cache`, `Local Storage` und Ähnliches — gehört dem Framework und lässt sich in Ruhe.
@@ -60,8 +61,9 @@ API-Schlüssel, geheime Umgebungsvariablen, der Suchschlüssel und deine Chats s
 
 | Was | Wo | Geschrieben von |
 | --- | --- | --- |
-| Projekt-Anweisungen | `AGENTS.md`, oben im Ordner | dir — siehe [Einem Projekt seine Anweisungen geben](../../customising/project-instructions/) |
+| Projekt-Anweisungen | `AGENTS.md`, oben im Ordner | dir; [seit 1.30] Snotra ergänzt auf deine Bitte ihren Abschnitt *Von Snotra ergänzt* — siehe [Einem Projekt seine Anweisungen geben](../../customising/project-instructions/) |
 | Projektgedächtnis | `.agents/memory.md` | Snotra auf deine Bitte, oder dir — siehe [Snotra etwas merken lassen](../../customising/memory/) |
+| Regeln des Projekts | `.agents/rules/<name>.md` | dir, oder Snotra auf deine Bitte — siehe [Snotra Regeln geben](../../customising/rules/) |
 | Skills des Projekts | `.agents/skills/<name>/SKILL.md` | dir, oder Snotra, wenn du um einen Skill bittest — siehe [Skills nutzen](../../customising/skills/) |
 | Was ein Skill aufbewahrt | `.agents/data/` | dem Skill |
 
@@ -73,9 +75,10 @@ API-Schlüssel, geheime Umgebungsvariablen, der Suchschlüssel und deine Chats s
 | --- | --- |
 | Anweisungen für jeden Ordner | `~/.snotra/AGENTS.md`, dann `~/.agents/AGENTS.md` |
 | Globales Gedächtnis | `~/.snotra/memory.md` |
+| Deine eigenen Regeln | `~/.snotra/rules/<name>.md` und `~/.agents/rules/<name>.md` |
 | Deine eigenen Skills | `~/.snotra/skills/<name>/` und `~/.agents/skills/<name>/` |
 
-Die Skill-Ordner in deinem Benutzerordner sind für jedes Tool schreibgeschützt: Deine eigenen Skills und Anweisungen änderst du selbst, im Dateimanager oder Editor. Das globale Gedächtnis wird geschrieben, wenn du Snotra bittest, sich etwas für jeden Ordner zu merken, und jedes dieser Schreiben fragt vorher.
+Diese Dateien sind für die Datei-Tools schreibgeschützt, und ein Befehl in der Sandbox erreicht sie nicht: Deine eigenen Anweisungen und Skills änderst du selbst, im Dateimanager oder Editor, oder mit den Knöpfen unter *Einstellungen › Wissen*. Aus einem Chat schreibt Snotra hier nur, wenn du es bittest, sich etwas für jeden Ordner zu merken — einen Fakt in `~/.snotra/memory.md`, [seit 1.30] eine Regel nach `~/.snotra/rules/`, einen Ablauf als Skill aus einer `SKILL.md` nach `~/.snotra/skills/` —, und jedes dieser Schreiben fragt vorher, auf einer Karte, die es zeigt. `~/.agents/` gehört den anderen Werkzeugen und wird nie beschrieben.
 
 ## Wenn es nicht klappt
 

@@ -36,7 +36,7 @@ Zum Aufräumen bitte *überprüf mein Gedächtnis*: Snotra geht Gedächtnis und 
 
 ![Der Chat-Kopf mit dem Knopf „Wissen daraus ableiten…“, darunter die Bitte, die der Knopf geschickt hat, und der erste Vorschlag auf seiner Karte: der Fakt „Die Beete in diesem Garten sind in Zentimetern gemessen.“, Art Fakt, gelesen von Snotra in diesem Ordner, mit Merken und Ablehnen.](screenshots/distil-chat.webp)
 
-Der Knopf geht nicht in einem leeren Chat und nicht, während Snotra antwortet; sein Tooltip sagt, warum. In einer schmalen Chat-Spalte zeigt er nur sein Symbol, den Namen im Tooltip. Ein Entwurf im Nachrichtenfeld bleibt, wo er ist.
+Der Knopf geht nicht in einem leeren Chat, nicht, während Snotra antwortet, und nicht, solange kein Modell eingerichtet ist; sein Tooltip sagt, warum. In einer schmalen Chat-Spalte zeigt er nur sein Symbol, den Namen im Tooltip. Ein Entwurf im Nachrichtenfeld bleibt, wo er ist.
 
 Was nur in diesem Chat passiert ist — *heute schlägt der Test fehl* — wird nicht vorgeschlagen: Der Chat hat es schon. Bleibt nichts, sagt Snotra das. Weil du darum gebeten hast, geht das auch, wenn *Snotra darf sich von selbst etwas merken* ausgeschaltet ist. Snotra bietet das Herausziehen nie von sich aus an; es beginnt, wenn du fragst.
 
@@ -79,13 +79,21 @@ Beide sind gewöhnliche Markdown-Dateien: Du kannst sie in jedem Editor lesen un
 
 Die Hinweise kennen jede Sprache, die Snotra spricht, egal in welcher Sprache die Oberfläche läuft. Hat ein Eintrag mehrere Hinweise, steht der erste da, und *+1 weitere* klappt die übrigen auf. *Ausblenden* blendet einen Hinweis für diesen Eintrag dauerhaft aus; er kommt erst wieder, wenn sich die Wörter des Eintrags ändern. Was ein Hinweis ändert, steht unter *Letzte Änderungen*, mit *Rückgängig*.
 
+### Eine Änderung rückgängig machen
+
+[seit 1.30] *Einstellungen › Wissen › Letzte Änderungen* listet die letzten 50 Änderungen, die Snotra an einer Datei vorgenommen hat, die es in jedem Chat liest — Gedächtnis, Regeldateien, `AGENTS.md`, Skills. Jede zeigt, wann sie gemacht wurde, wie — *Gemerkt*, *Datei-Tool*, *Befehl* oder *Einstellungen* für eine Aktion an einem Hinweis — und die Datei, mit dem alten Text über dem neuen.
+
+*Rückgängig* stellt wieder her, was die Datei vor dieser Änderung enthielt. Hat sich die Datei seitdem noch einmal geändert oder war die frühere Fassung zu groß zum Aufbewahren, wird nichts zurückgenommen, und Snotra sagt das: Öffne die Datei und ändere sie von Hand. Was du selbst in einem Editor änderst, steht nicht in der Liste.
+
 ## Was dann passiert
 
 Das Gedächtnis geht mit jeder Anfrage an den Anbieter, bis zu 8.000 Zeichen pro Ebene; *Einstellungen › Wissen* zeigt, wie viel genutzt ist. Weil ein Repository ein Projektgedächtnis mitbringen kann, liest das Modell es als Notizen, die im Ordner geführt werden, nicht als etwas, das du gesagt hast.
 
 [seit 1.30] Das Projektgedächtnis wird wie die `AGENTS.md` des Projekts geprüft: Ein Gedächtnis, das so klingt, als verschweige es dir etwas, ist in der Aufschlüsselung hinter der Token-Anzeige markiert — siehe [Projektanweisungen](../project-instructions/#anweisungen-aus-einem-ordner-den-du-nicht-geschrieben-hast). Dein persönliches Gedächtnis wird nicht geprüft; es enthält, was du gesagt hast.
 
-Löschen kannst nur du: Das Modell kann dem Gedächtnis etwas hinzufügen, aber nichts daraus entfernen — dafür ist der Papierkorb unter *Einstellungen › Wissen* da.
+Löschen kannst nur du: Das Modell kann dem Gedächtnis etwas hinzufügen und einen Eintrag durch einen besseren ersetzen, auf einer Karte, die beide zeigt, aber nichts einfach daraus entfernen — dafür ist der Papierkorb unter *Einstellungen › Wissen* da.
+
+[seit 1.30] Bittest du Snotra, sich etwas für *Nur du* zu merken, während der geöffnete Ordner eine eigene `AGENTS.md` oder Regeldateien mitbringt, ergänzt die Karte *Dieser Ordner bringt eigene Anweisungen mit: …*. Der Wunsch, etwas für jeden Ordner zu behalten, kann aus den Anweisungen eines Ordners kommen statt von dir; prüf, dass er von dir ist.
 
 ## Wenn es nicht klappt
 
