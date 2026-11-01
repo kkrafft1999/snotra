@@ -50,6 +50,16 @@ Allowed, the call runs with exactly that opened; everything else outside stays c
 
 Never offered: your home folder as a whole, the root of a disk, Snotra's own storage, the global skill folders, and for writing places with credentials such as `~/.ssh` and shell start-up files such as `.zshrc`. A file in a place with credentials can be read; the card marks it *sensitive* and names the provider its content would go to.
 
+## A file Snotra reads in every chat
+
+[since 1.30] Some files shape every later chat: `AGENTS.md`, the project memory `.agents/memory.md`, the [rules files](../../customising/rules/) in `.agents/rules/` and the skills in `.agents/skills/`. A change to one outlives the chat it was made in, so Snotra asks before every change to them — in every mode, *Auto* included, and one change at a time: *For this session* is not offered, and no allowance you stored covers it.
+
+- **A file tool wants to write one.** The card names the file and what it is — *rules file — Snotra reads it in every chat in this folder* — and, for a rule marked `always`, that it goes along with every message.
+- **A command changed one.** `git pull` or `git checkout` change `AGENTS.md` on purpose, so commands are not blocked. When one changed a knowledge file, Snotra stops after it and shows *A command changed a knowledge file*, with the change. *Keep* lets it stand; *Reset* puts back what the files held before the command. The chat waits for your answer.
+- **A warning on the card.** When a tool result earlier in the chat read like instructions to the agent, or the folder's own text looked like it hides something from you, the card says so. Snotra does not block the change — check that it is one you want.
+
+Your global memory, `AGENTS.md` and rules files under `~/.snotra` and `~/.agents` cannot be written with the file tools at all, and a sandboxed command cannot reach them either; where a command runs without a sandbox, the check after the command covers them too. The way to change them from a chat is to ask Snotra to remember something.
+
 ## If it doesn't work
 
 - ***Allow for this session* is missing.** It only exists for reading, reading sensitive data and ordinary changes, and not in *Always ask*. Overwriting with no way back, commands and external services can only be allowed one call at a time.

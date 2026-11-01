@@ -509,7 +509,7 @@ release list, **2** #981, **3** #980.
 
 | Method | Params → result | Errors | Kinds | Step | From IPC |
 | --- | --- | --- | --- | --- | --- |
-| `session.hello` | `{ protocol: int[], client: { name ≤64, version ≤32 }, locale?: 'en'\|'de', capabilities?: ('approvals')[] }` → `{ protocol: int, connectionId, kind: 'local'\|'relay', app: { version }, methods: string[], approvalResponses: string[], limits: { maxRequestBytes, maxTextChars, maxConnections, eventBufferSeconds } }` | `protocol-unsupported`, `busy` | L R | 1 | `update:getVersion` |
+| `session.hello` | `{ protocol: int[], client: { name ≤64, version ≤32 }, locale?: 'en'\|'de', capabilities?: ('approvals'\|'knowledge-cards')[] }` → `{ protocol: int, connectionId, kind: 'local'\|'relay', app: { version }, methods: string[], approvalResponses: string[], limits: { maxRequestBytes, maxTextChars, maxConnections, eventBufferSeconds } }` | `protocol-unsupported`, `busy` | L R | 1 | `update:getVersion` |
 | `session.bye` | `{}` → `{}` | — | L R | 1 | — |
 | `workspaces.list` | `{}` → `{ workspaces: [{ workspaceId, name, active: bool }] }` — `name` is the folder's name, never its path | — | L R | 1 | `settings:getFolderHistory`, `settings:getLastFolder`, filtered by the release |
 | `chats.list` | `{ workspaceId?, limit? ≤200, before? }` → `{ chats: [{ chatId, title, updatedAt, messageCount, state: 'idle'\|'running'\|'needs-approval' }], before? }` — `title` already worded | `not-found` | L R | 1 | `chatHistory:get` + the running chats + open cards |
@@ -555,6 +555,15 @@ being approved), `reason` worded and `reasonParts`, `checkpoint`, `preview`
 masked exactly as on the desktop, `sandbox` offers, and `options` — the
 answers this connection may give. `sessionAllowed`, `alwaysAllowed`,
 `workspaceAllowed` and the command rule are replaced by `options`.
+
+A card about a **knowledge file** (#1319, kkrafft1999/snotra-mobile#92) carries
+`knowledge: true`, `knowledgeWarning` when the chat met a likely injection or
+the folder's text a covert signal (#1280), `knowledge` and `knowledgeAlways`
+on its targets, and — after a shell command changed one — `checkpoint:
+'knowledge'` with `knowledgeChange` and a diff as `preview`. A client shows all
+of it and answers only `allow-once` (keep) or `deny` (reset); a client that did
+not declare the capability `knowledge-cards` in `session.hello` gets
+`options: ['deny']` for such a card, and any other answer is `refused`.
 
 ### 8.2 Events
 

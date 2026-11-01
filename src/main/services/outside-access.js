@@ -48,6 +48,7 @@ const { sensitiveReadPaths, isAlwaysUnwritable } = require('./sandbox-service');
  * @param {string} [deps.platform]
  * @param {string} [deps.userDataPath]     Snotra's settings and key storage
  * @param {string[]} [deps.globalSkillRoots]  read-only for every tool (#548, #650)
+ * @param {string[]} [deps.globalKnowledgePaths]  the global knowledge files and folders, read-only as well (#1319)
  * @param {(p: string) => Promise<string>} [deps.realPath]  realpath of the nearest existing part
  */
 function createOutsideAccess({
@@ -56,13 +57,17 @@ function createOutsideAccess({
   platform = process.platform,
   userDataPath = '',
   globalSkillRoots = [],
+  globalKnowledgePaths = [],
   realPath = async (p) => p,
 }) {
   const home = path.resolve(homeDir);
   const expand = (/** @type {string} */ p) => (p === '~' ? home : p.startsWith('~/') ? path.join(home, p.slice(2)) : p);
   const own = typeof userDataPath === 'string' && userDataPath ? [path.resolve(userDataPath)] : [];
   const credentials = sensitiveReadPaths({ platform, userDataPath: '' }).map((p) => path.resolve(expand(p)));
-  const skills = (Array.isArray(globalSkillRoots) ? globalSkillRoots : [])
+  const skills = [
+    ...(Array.isArray(globalSkillRoots) ? globalSkillRoots : []),
+    ...(Array.isArray(globalKnowledgePaths) ? globalKnowledgePaths : []),
+  ]
     .filter((p) => typeof p === 'string' && p)
     .map((p) => path.resolve(p));
 

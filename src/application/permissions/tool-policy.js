@@ -297,6 +297,7 @@ function commandRuleCovers(rules, { toolName, riskClasses, shellCommand }) {
  * @param {boolean} [input.toolDisabled]
  * @param {boolean} [input.unknownTool]
  * @param {{ reason?: string }|null} [input.hardLimit]
+ * @param {boolean} [input.knowledgeWrite]  the call writes a knowledge file (#1319)
  * @returns {ToolPolicyVerdict}
  */
 function decideToolPolicy(input = {}) {
@@ -338,6 +339,11 @@ function decideToolPolicy(input = {}) {
     };
   }
 
+  // A knowledge file outlives the run (#1319): it asks in every mode, and no
+  // session grant or allow rule answers for the user. Only a deny rule wins.
+  if (input.knowledgeWrite === true) {
+    return { decision: POLICY_DECISIONS.ASK, mode, askClasses: [...riskClasses] };
+  }
   if (mode === TOOL_PERMISSION_MODES.ASK_ALL) {
     return { decision: POLICY_DECISIONS.ASK, mode, askClasses: [...riskClasses] };
   }

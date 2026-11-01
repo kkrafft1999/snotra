@@ -1,4 +1,5 @@
-import { buildApprovalCardView, describeApprovalOutcome } from '../utils/tool-approval-view.js';
+import { buildApprovalCardView,
+  buildKnowledgeChangeCardView, describeKnowledgeChangeOutcome, describeApprovalOutcome } from '../utils/tool-approval-view.js';
 import {
   buildSandboxCardView, describeSandboxOutcome, describeLiveRun, describeLiveWaited, sandboxAnswerRecorded,
 } from '../utils/sandbox-approval-view.js';
@@ -273,6 +274,7 @@ export function initToolApprovalCards({
   function viewOf(dto) {
     if (dto?.checkpoint === 'config') return buildConfigProposalCardView(dto);
     const homeDir = readHomeDir();
+    if (dto?.checkpoint === 'knowledge') return buildKnowledgeChangeCardView(dto, { homeDir });
     return buildSandboxCardView(dto, { homeDir }) || buildApprovalCardView(dto, { homeDir });
   }
 
@@ -661,6 +663,15 @@ export function initToolApprovalCards({
       card.appendChild(warning);
     }
 
+    // A knowledge file while the chat holds a likely injection (#1280): said
+    // above the preview, a warning and no block — the user decides.
+    if (view.knowledgeWarning) {
+      const note = el('p', 'chat-approval-card__warning');
+      note.appendChild(el('strong', null, t('approval.warning.prefix')));
+      note.append(view.knowledgeWarning);
+      card.appendChild(note);
+    }
+
     // Invisible characters in what the model chose (CR-B13-01): marked where
     // they sit, and said once here, above the preview most of them are in.
     if (view.invisibleWarning) {
@@ -682,7 +693,7 @@ export function initToolApprovalCards({
       card.appendChild(hint);
     }
 
-    const status = el('p', 'chat-approval-card__status', t('approval.status.waiting'));
+    const status = el('p', 'chat-approval-card__status', view.waitingStatus || t('approval.status.waiting'));
     status.setAttribute('role', 'status');
     status.setAttribute('aria-live', 'polite');
     card.appendChild(status);
@@ -714,6 +725,7 @@ export function initToolApprovalCards({
       && describeSandboxOutcome(resolved, { live: entry.dto.sandbox?.live === true, before: entry.dto.sandbox?.before === true }))
       || (entry.dto?.checkpoint === 'config'
         && describeConfigProposalOutcome(resolved, { enable: entry.dto.config?.enable === true }))
+      || (entry.dto?.checkpoint === 'knowledge' && describeKnowledgeChangeOutcome(resolved))
       || describeApprovalOutcome(resolved);
     // A decided card about a waiting connection (#792) says how long it
     // waited, not that the command is still running. Taken once, so that a

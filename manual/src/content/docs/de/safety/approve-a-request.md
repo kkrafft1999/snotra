@@ -50,6 +50,16 @@ Freigegeben läuft der Aufruf mit genau dieser Freigabe; alles andere außerhalb
 
 Nie angeboten: dein Home-Ordner als Ganzes, das Wurzelverzeichnis eines Laufwerks, Snotras eigener Speicher, die globalen Skill-Ordner und zum Schreiben Orte mit Zugangsdaten wie `~/.ssh` und Startdateien der Shell wie `.zshrc`. Eine Datei an einem Ort mit Zugangsdaten lässt sich lesen; die Karte markiert sie als *sensibel* und nennt den Anbieter, an den ihr Inhalt ginge.
 
+## Eine Datei, die Snotra in jedem Chat liest
+
+[seit 1.30] Manche Dateien prägen jeden späteren Chat: `AGENTS.md`, das Projektgedächtnis `.agents/memory.md`, die [Regeldateien](../../customising/rules/) in `.agents/rules/` und die Skills in `.agents/skills/`. Eine Änderung daran überdauert den Chat, in dem sie entstand. Deshalb fragt Snotra vor jeder Änderung an ihnen — in jedem Modus, auch in *Auto*, und jede Änderung einzeln: *Für diese Sitzung* wird nicht angeboten, und keine gespeicherte Freigabe deckt sie ab.
+
+- **Ein Datei-Tool will eine schreiben.** Die Karte nennt die Datei und was sie ist — *Regeldatei — Snotra liest sie in jedem Chat in diesem Ordner* — und bei einer Regel mit `always`, dass sie mit jeder Nachricht mitgeht.
+- **Ein Befehl hat eine geändert.** `git pull` oder `git checkout` ändern `AGENTS.md` absichtlich, deshalb werden Befehle nicht blockiert. Hat einer eine Wissensdatei geändert, hält Snotra danach an und zeigt *Ein Befehl hat eine Wissensdatei geändert*, mit der Änderung. *Behalten* lässt sie stehen; *Zurücksetzen* stellt wieder her, was vor dem Befehl in den Dateien stand. Der Chat wartet auf deine Antwort.
+- **Eine Warnung auf der Karte.** Klang früher im Chat ein Tool-Ergebnis wie Anweisungen an den Agenten, oder sah der eigene Text des Ordners so aus, als verschweige er dir etwas, sagt die Karte das. Snotra blockiert die Änderung nicht — prüf, ob du sie willst.
+
+Dein globales Gedächtnis, `AGENTS.md` und die Regeldateien unter `~/.snotra` und `~/.agents` lassen sich mit den Datei-Tools gar nicht schreiben, und ein Befehl in der Sandbox erreicht sie auch nicht; wo ein Befehl ohne Sandbox läuft, deckt die Prüfung nach dem Befehl sie mit ab. Ändern lassen sie sich aus einem Chat heraus, indem du Snotra bittest, sich etwas zu merken.
+
 ## Wenn es nicht klappt
 
 - ***Für diese Sitzung erlauben* fehlt.** Das gibt es nur für Lesen, das Lesen sensibler Daten und gewöhnliche Änderungen, und nicht in *Immer fragen*. Überschreiben ohne Rückweg, Befehle und externe Dienste lassen sich nur Aufruf für Aufruf erlauben.

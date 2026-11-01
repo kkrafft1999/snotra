@@ -203,6 +203,9 @@ function approvalRequest(dto, { root, word, options }) {
       exists: target.exists === true,
       sensitive: target.sensitive === true,
       ...(typeof target.sensitiveReason === 'string' ? { sensitiveReason: target.sensitiveReason } : {}),
+      // What the knowledge file is, and an `always` rule (#1319).
+      ...(typeof target.knowledge === 'string' ? { knowledge: target.knowledge } : {}),
+      ...(target.knowledgeAlways === true ? { knowledgeAlways: true } : {}),
     })),
     reason: parts.length ? parts.map((part) => word(part)).join(' ') : text(dto.reason),
     ...(parts.length ? { reasonParts: parts } : {}),
@@ -233,6 +236,12 @@ function approvalRequest(dto, { root, word, options }) {
     };
   }
   if (isRecord(dto.config)) out.config = dto.config;
+  // A knowledge card (#1319) and its warning (#1280): the phone shows it in full.
+  if (dto.knowledge === true) {
+    out.knowledge = true;
+    if (dto.knowledgeWarning === true) out.knowledgeWarning = true;
+  }
+  if (isRecord(dto.knowledgeChange)) out.knowledgeChange = dto.knowledgeChange;
   return out;
 }
 

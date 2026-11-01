@@ -98,6 +98,8 @@ const { startToolRuntimes } = require('./start-tool-runtimes');
 const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
 const { createProjectInstructionsAdapter } = require('../adapters/project-instructions-adapter');
 const { createRulesAdapter } = require('../adapters/rules-adapter');
+const { createKnowledgeFilesAdapter } = require('../adapters/knowledge-files-adapter');
+const { globalKnowledgePaths } = require('../../shared/contracts/knowledge-files');
 const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
 const { createRemoteBridge } = require('./create-remote-bridge');
@@ -359,31 +361,29 @@ function createCore({
     readUIPrefs: () => uiPrefsStore.readUIPrefs(),
   });
 
-  // The global skill folders stay read-only for every tool, also when the
-  // open folder contains them (#548, #650): fs-service refuses the write
-  // tools, the sandbox denies the commands.
+  // The global skill folders and knowledge files stay read-only for every tool, also inside
+  // the open folder (#548, #650, #1319): fs-service refuses writes, the sandbox commands.
   const globalSkillRoots = [path.join(os.homedir(), '.snotra', 'skills'), path.join(os.homedir(), '.agents', 'skills')];
+  const globalKnowledge = globalKnowledgePaths(path, os.homedir());
   const fsService = createFsService({
     fs,
     path,
     maxReadFileBytes: LIMITS.MAX_READ_FILE_BYTES,
     maxWriteFileBytes: LIMITS.MAX_WRITE_FILE_BYTES,
-    // The user folders skills-service scans: read-only for the write tools
-    // even when the open folder contains them (#650).
     globalSkillRoots,
+    globalKnowledgePaths: globalKnowledge,
     // Nur für die Wege, die beim Nutzer enden — Baum, Vorschau, Drag & Drop
     // (#292). Was an das Modell zurückgeht, bleibt englisch.
     getLocale: getAppLocale,
     // A tool path like `~/notes/todo.md` (#792, step 4).
     homeDir: os.homedir(),
   });
-  // What a card may open for the file tools outside the open folder (#792,
-  // step 4): the lines the sandbox cards keep, by realpath as well.
-  const outsideAccess = createOutsideAccess({
+  const outsideAccess = createOutsideAccess({ // what a card may open outside the open folder (#792, step 4)
     path,
     homeDir: os.homedir(),
     userDataPath,
     globalSkillRoots,
+    globalKnowledgePaths: globalKnowledge,
     realPath: (p) => fsService.resolveExistingRealPath(p),
   });
   // Before and after of every write, in memory, for "Show changes" (#348).
@@ -404,7 +404,7 @@ function createCore({
     existsSync,
     spawn: childProcess.spawn,
     userDataPath,
-    protectedWritePaths: globalSkillRoots,
+    protectedWritePaths: [...globalSkillRoots, ...globalKnowledge],
     readShellPath: async () => (await shellRunnerService.detect()).path || '',
     // The interpreter run_python would use decides whether pip needs its
     // certifi fallback inside the sandbox (decision 2b on #329).
@@ -480,8 +480,7 @@ function createCore({
     // heissen, wie der Nutzer sie sieht (#294).
     getLocale: getAppLocale,
   });
-  // AGENTS.md (#212) and the rules files (#1275): no cache, no watcher — read
-  // per request, so a changed file applies from the next message on.
+  // AGENTS.md (#212) and rules files (#1275): no cache, no watcher — a change applies with the next message.
   const projectInstructions = createProjectInstructionsAdapter({ fs, path, os });
   const rules = createRulesAdapter({ fs, path, os });
 
@@ -653,6 +652,7 @@ function createCore({
     projectInstructions,
     memory,
     rules,
+    knowledgeFiles: createKnowledgeFilesAdapter({ fs, path, homeDir: os.homedir() }),
     path,
     maxToolRounds: LIMITS.MAX_TOOL_ROUNDS,
     toolPolicyStore,
