@@ -23,6 +23,7 @@ const UI_PREFS_STORE_KEYS = ['readUIPrefs', 'updateUIPrefs'];
 
 const CHAT_HISTORY_STORE_KEYS = [
   'MAX_CHAT_SESSIONS',
+  'MAX_CHAT_SESSIONS_PER_FOLDER',
   'deleteSession',
   'getActiveChatId',
   'getSession',
@@ -40,6 +41,7 @@ const CHAT_HISTORY_STORE_KEYS = [
   'storedChatMessagesChanged',
   'withChatHistoryLock',
   'workspaceBucketKey',
+  'workspaceRootExists',
 ];
 
 const WORKSPACE_FOLDER_STORE_KEYS = [
@@ -84,6 +86,7 @@ function makeStorageStub() {
     readUIPrefs: async () => ({}),
     updateUIPrefs: async () => ({}),
     MAX_CHAT_SESSIONS: 3,
+    MAX_CHAT_SESSIONS_PER_FOLDER: 2,
     listChatSessions: async () => [],
     getChatSessionMeta: async () => null,
     getChatSession: async () => null,
@@ -101,6 +104,7 @@ function makeStorageStub() {
     normalizeWorkspaceRoot: () => null,
     workspaceBucketKey: () => '__none__',
     sessionMatchesWorkspace: () => true,
+    workspaceRootExists: async () => true,
     getValidatedLastFolder: async () => null,
     persistLastFolder: async () => {},
     getValidatedFolderHistory: async () => [],

@@ -40,7 +40,7 @@ Chats, die ein Modell genutzt haben. Einrichten musst du nichts: Der Bericht lie
 - **Ein unbekannter Preis zeigt einen Strich.** Ein Modell, das die Preistabelle nicht kennt, zeigt *–* und *kein Preis*, nie *0,00 $*, und eine Summe, die solche Anfragen auslässt, endet auf *+*, zum Beispiel *~3,62 $+*. Lege unter *Einstellungen › Modelle* einen Preis dafür fest, wie in [Sehen, was ein Chat kostet](../chat-cost/) beschrieben.
 - **Ein Modell auf deinem Rechner kostet nichts.** Ollama, LM Studio und andere Server unter einer lokalen Adresse zeigen ihre Tokens und *0,00 $ lokal*.
 - **Chats ohne Ordner bilden eine eigene Gruppe,** *Ohne Ordner*. Sie öffnen sich nur, solange kein Ordner offen ist; ist einer offen, haben ihre Zeilen keinen Knopf *Öffnen*.
-- **Der Bericht ist dein Verlauf, wie er ist.** Ein Chat, den du löschst, zählt nicht mehr, und ebenso wenig einer, den der Verlauf losgelassen hat: Er behält die 200 neuesten Chats.
+- **Der Bericht ist dein Verlauf, wie er ist.** Ein Chat, den du löschst, zählt nicht mehr, und ebenso wenig einer, den der Verlauf losgelassen hat: [seit 1.30] Er behält die 200 neuesten Chats jedes Ordners, dazu die, die du mit *Behalten* markiert hast.
 - **Chats aus der Zeit vor 1.28** haben eine Summe, aber keine Tage. Sie zählen vollständig an dem Tag, an dem sie zuletzt genutzt wurden. Setzt du einen solchen Chat fort, zählen seine neuen Anfragen an ihren eigenen Tagen.
 - **Preise:** Der Hinweis unter den Summen nennt das Datum der Preistabelle, mit der die Chats bepreist wurden. Es sind Listenpreise in US-Dollar, wie bei einem einzelnen Chat.
 - **Hilfsanfragen zählen mit.** [seit 1.28] Die Anfragen, die einen Chat benennen und mit *Das Modell fragen* einen Skill vorschlagen, gehören zu den Kosten des Chats und damit auch zum Bericht, an dem Tag, an dem sie gestellt wurden.
@@ -49,7 +49,7 @@ Chats, die ein Modell genutzt haben. Einrichten musst du nichts: Der Bericht lie
 ## Wenn es nicht klappt
 
 - **Der Bericht zeigt *In diesem Zeitraum wurde nichts verbraucht.*** In diesem Zeitraum hat kein Chat ein Modell genutzt. Wähle einen längeren oder *Gesamt*.
-- **Ein Chat scheint zu fehlen.** Er wurde gelöscht, oder er ist älter als die 200 Chats, die der Verlauf behält. Ein Chat mit einem Modell, das keine Token-Zahlen gemeldet hat, hat nichts zum Zusammenzählen.
+- **Ein Chat scheint zu fehlen.** Er wurde gelöscht, oder er ist älter als die 200 Chats, die der Verlauf von seinem Ordner behält. Ein Chat mit einem Modell, das keine Token-Zahlen gemeldet hat, hat nichts zum Zusammenzählen.
 - **Das Kürzel tut nichts.** Ein anderes Programm hat `Cmd+Shift+K` bzw. `Strg+Shift+K` womöglich für sich belegt. Nimm *Ansicht › Nutzung & Kosten…* oder den Knopf unten in der Seitenleiste.
 - **Das meiste ist *Nicht eingeordnet*.** Diese Chats sind älter als 1.29, oder ihre Namensanfrage ist gescheitert und Snotra konnte keine Art schätzen. Wähl in der Chatliste dieser Zeile eine Art – das genügt für den Bericht.
 - **Die Art eines Chats ließ sich nicht ändern.** Der Bericht sagt *Die Art ließ sich nicht speichern.* Vielleicht wurde der Chat inzwischen gelöscht; schließ den Bericht, öffne ihn neu und versuch es noch einmal.

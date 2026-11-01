@@ -40,7 +40,7 @@ Chats that used a model. Nothing has to be set up: the report reads the same est
 - **An unknown price shows a dash.** A model the price table does not know shows *–* and *no price*, never *$0.00*, and a total that leaves such requests out ends in *+*, for example *~$3.62+*. Set a price for it under *Settings › Models*, as described in [See what a chat costs](../chat-cost/).
 - **A model on your computer costs nothing.** Ollama, LM Studio and other servers at a local address show their tokens and *$0.00 local*.
 - **Chats without a folder are a group of their own,** *Without a folder*. They open only while no folder is open, so their rows have no *Open* button while one is.
-- **The report is your history as it is.** A chat you delete no longer counts, and neither does one the history let go: it keeps the 200 most recent chats.
+- **The report is your history as it is.** A chat you delete no longer counts, and neither does one the history let go: [since 1.30] it keeps the 200 most recent chats of each folder, plus the ones you marked *Keep*.
 - **Chats from before 1.28** have a total but no days. They count in full on the day they were last used. Once you continue such a chat, its new requests count on their own days.
 - **Prices:** the note under the totals names the date of the price table the chats were priced with. Prices are list prices in US dollars, as for a single chat.
 - **Helper requests count.** [since 1.28] The requests that name a chat and, with *Ask the model*, suggest a skill are part of the chat's cost, so they are part of the report too, on the day they were made.
@@ -49,7 +49,7 @@ Chats that used a model. Nothing has to be set up: the report reads the same est
 ## If it doesn't work
 
 - **The report shows *Nothing spent in this period.*** No chat used a model in that period. Pick a longer one, or *All time*.
-- **A chat seems to be missing.** It was deleted, or it is older than the 200 chats the history keeps. A chat with a model that reported no token counts has nothing to add up.
+- **A chat seems to be missing.** It was deleted, or it is older than the 200 chats the history keeps of its folder. A chat with a model that reported no token counts has nothing to add up.
 - **The shortcut does nothing.** Another program may have taken `Cmd+Shift+K` / `Ctrl+Shift+K` for itself. Use *View › Usage & Cost…* or the button at the foot of the sidebar.
 - **Most of the cost is *Unclassified*.** Those chats are older than 1.29, or their naming request failed and Snotra could not estimate a kind. Choose a kind in the chat list of that row — that is enough for the report.
 - **The kind of a chat could not be changed.** The report says *The kind could not be stored.* The chat may have been deleted in the meantime; close the report, open it again and try once more.

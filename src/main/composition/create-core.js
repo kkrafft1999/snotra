@@ -166,7 +166,7 @@ function createCore({
     fs,
     path,
     providerCatalog,
-    maxChatSessions: LIMITS.MAX_CHAT_SESSIONS,
+    maxChatSessions: LIMITS.MAX_CHAT_SESSIONS, maxChatSessionsPerFolder: LIMITS.MAX_CHAT_SESSIONS_PER_FOLDER,
     maxFolderHistory: LIMITS.MAX_FOLDER_HISTORY,
     defaultProviderId,
     onStoreFileEvent: (event) => postStoreFileEvent(notices, event),

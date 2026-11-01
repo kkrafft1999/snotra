@@ -14,7 +14,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFile } from 'node:fs/promises';
+import { writeFile, realpath } from 'node:fs/promises';
 import path from 'node:path';
 
 import { startFakeModel } from './helpers/fake-model.mjs';
@@ -270,4 +270,44 @@ test('the workspace and every settings section pass axe, light and dark; System 
   await page.emulateMedia({ colorScheme: 'light' });
   await poll(async () => (await shownTheme()) === 'light', { what: 'and back' });
   assert.equal(await page.evaluate(() => localStorage.getItem('theme')), 'system');
+});
+
+test('the history column with kept chats and chats from missing folders passes axe, light and dark (#1320)', { timeout: 120000 }, async (t) => {
+  const model = await startFakeModel();
+  t.after(() => model.close());
+  const workspace = await realpath(await makeTempDir('snotra-a11y-history-'));
+  const gone = path.join(await realpath(await makeTempDir('snotra-a11y-gone-')), 'renamed-project');
+  const userDataDir = await makeTempDir('snotra-a11y-history-userdata-');
+  await writeFile(path.join(workspace, 'README.md'), '# Example\n', 'utf8');
+  await prepareUserData(userDataDir, { workspace, modelBaseUrl: model.baseUrl });
+  await writeFile(path.join(userDataDir, 'ui-preferences.json'), JSON.stringify({ appLocale: 'en' }), 'utf8');
+  const turn = (text) => [{ role: 'user', content: text }, { role: 'assistant', content: 'Done.' }];
+  const now = Date.now();
+  const sessions = [
+    { id: 'kept', workspaceRoot: workspace, title: 'Plan the release', updatedAt: now - 1000, messages: turn('a'), keep: true },
+    { id: 'plain', workspaceRoot: workspace, title: 'Compare the three hosting offers and what each one costs per month', updatedAt: now - 2000, messages: turn('b') },
+    { id: 'gone-1', workspaceRoot: gone, title: 'Watering schedule', updatedAt: now - 86_400_000, messages: turn('c') },
+    { id: 'gone-2', workspaceRoot: gone, title: 'Order list for spring', updatedAt: now - 2 * 86_400_000, messages: turn('d') },
+  ];
+  await writeFile(path.join(userDataDir, 'chat-history.json'),
+    JSON.stringify({ version: 2, activeByWorkspace: { [workspace]: 'kept' }, sessions }), 'utf8');
+
+  const snotra = await launchApp({ userDataDir });
+  t.after(() => snotra.stop().catch(() => {}));
+  const { page } = snotra;
+  await waitForSettledWindow(page);
+  await page.evaluate(() => {
+    if (document.getElementById('app').classList.contains('app--no-history')) {
+      document.getElementById('btn-toggle-chat-history').click();
+    }
+  });
+  await poll(() => page.evaluate(() => document.querySelectorAll('.chat-history-row').length === 2
+    && Boolean(document.querySelector('.chat-history-orphans-toggle'))), { what: 'two rows and the note about missing folders' });
+  await page.click('.chat-history-orphans-toggle');
+  // The bookmark of the chat that is not kept shows on focus.
+  await page.focus('.chat-history-row[data-chat-id="plain"] .chat-history-row-keep');
+
+  const findings = [];
+  await checkScreen(page, 'history › keep and missing folders', findings, { context: '#chat-history' });
+  assertClean(findings);
 });
