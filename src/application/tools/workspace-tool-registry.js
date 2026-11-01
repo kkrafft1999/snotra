@@ -4,7 +4,8 @@ const { SANDBOX_REASONS } = require('../../shared/contracts/sandbox-reasons');
 const { LIST_DIRECTORY_MAX_ENTRIES } = require('../../shared/contracts/list-directory');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
-const { LOAD_RULE_TOOL, RULE_LEVELS, RULE_LEVEL_PROMPT_LABELS } = require('../../shared/contracts/rules');
+const { LOAD_RULE_TOOL, RULE_LEVELS, RULE_LEVEL_PROMPT_LABELS, RULE_LIMITS } = require('../../shared/contracts/rules');
+const { KNOWLEDGE_KINDS, KNOWLEDGE_READERS } = require('../../shared/contracts/knowledge-write');
 const {
   LOAD_MCP_TOOLS_TOOL,
   LAZY_MCP_TOOLS_THRESHOLD,
@@ -871,6 +872,31 @@ function sandboxDisabledByPlan(plan) {
 }
 
 /**
+ * The arguments of `remember` as a request to the knowledge writer (#1276).
+ * Only what is declared as requested counts as requested (#553).
+ *
+ * @param {any} args
+ * @param {string|null|undefined} workspaceRoot
+ * @returns {import('../ports/knowledge-writer-port').KnowledgeWriteRequest}
+ */
+function rememberRequest(args, workspaceRoot) {
+  const text = (/** @type {unknown} */ value) => (typeof value === 'string' && value.trim() ? value.trim() : undefined);
+  return {
+    // Before #1276 there was no kind: a call without one is a fact, as it was.
+    kind: text(args?.kind) || KNOWLEDGE_KINDS.FACT,
+    scope: text(args?.scope) || '',
+    workspaceRoot: workspaceRoot ?? null,
+    text: typeof args?.text === 'string' ? args.text : '',
+    topic: text(args?.topic),
+    description: text(args?.description),
+    always: args?.always === true,
+    origin: args?.origin === MEMORY_ORIGINS.REQUESTED ? MEMORY_ORIGINS.REQUESTED : MEMORY_ORIGINS.SELF,
+    replaces: text(args?.replaces),
+    replacesIn: text(args?.replaces_in),
+  };
+}
+
+/**
  * Die eingebauten Tools.
  *
  * Zu den Beschreibungsfeldern siehe `normalizeDefinition`. Seit #183 stehen
@@ -911,6 +937,7 @@ function sandboxDisabledByPlan(plan) {
  *     & { setupNeeded?: () => string | undefined }) | null,
  *   memory?: import('../ports/memory-port').MemoryPort | null,
  *   rules?: import('../ports/rules-port').RulesPort | null,
+ *   knowledgeWriter?: import('../ports/knowledge-writer-port').KnowledgeWriterPort | null,
  *   documentText?: { runExtractDocumentTextTool: (args: import('../ports/tool-port').ToolArguments,
  *     workspaceRoot: string | null | undefined, options: object) => Promise<string> } | null,
  *   imageGeneration?: import('../ports/image-generation-port').ImageGenerationPort | null,
@@ -929,6 +956,8 @@ function createWorkspaceToolRegistry({
   urlFetch = null,
   shellRunner = null,
   memory = null,
+  /** Writes facts and rules for `remember` (#1276), see knowledge-writer-adapter.js. */
+  knowledgeWriter = null,
   /** Reads the rules files for `load_rule` (#1275), see rules-adapter.js. */
   rules = null,
   documentText = null,
@@ -2141,85 +2170,86 @@ function createWorkspaceToolRegistry({
       configGroup: CONFIG_TOOL_GROUPS.WRITE,
       display: { key: 'tools.line.remember', target: TOOL_LINE_TARGETS.MEMORY_SCOPE },
       preview: TOOL_PREVIEW_KINDS.MEMORY,
-      // Schreibt eine Datei, also `write` — trotz kleiner Datenmenge. Die
-      // Klasse entscheidet die Rueckfrage, und ein Gedaechtniseintrag geht mit
-      // jeder kuenftigen Anfrage zum Anbieter: Das soll niemand uebersehen.
+      // A write, and one that goes along with every later request: the card
+      // asks in every mode (#1276), see `knowledgeWrite`.
       riskClass: TOOL_RISK_CLASSES.WRITE,
-      // Die globale Ebene braucht keinen geoeffneten Ordner. Fehlt er, lehnt
-      // der Handler nur `scope: "workspace"` ab (Issue #166).
+      // The global level needs no open folder; without one the writer refuses
+      // only `workspace` and `team` (#166, #1276).
       requiresWorkspace: false,
-      // Das Modell benennt keinen Pfad — es waehlt eine Ebene, und wohin die
-      // zeigt, entscheidet allein der Memory-Port. Deshalb gibt es hier nichts
-      // zu pruefen, was der Pfad-Freigabe vorzulegen waere; `pathlessWrite`
-      // nimmt das Tool von der Regel aus, dass ein Schreib-Tool ohne Ziel
-      // abgelehnt wird (tool-call-planner.js).
+      // The model names no path: it picks a kind and a reader, and where they
+      // point only the knowledge writer decides. Nothing for the path check.
       targets: () => [],
       pathlessWrite: true,
-      isAvailable: () => memory !== null,
+      // A knowledge file (#1276, #1319): a card in every mode, never covered by
+      // a stored allowance, showing what the writer will do.
+      knowledgeWrite: true,
+      /** @param {any} args @param {{ workspaceRoot?: string|null }} [context] */
+      describeKnowledge: (args, { workspaceRoot } = {}) => (knowledgeWriter
+        ? knowledgeWriter.describe(rememberRequest(args, workspaceRoot))
+        : null),
+      isAvailable: () => memory !== null || knowledgeWriter !== null,
       descriptionKey: 'tools.desc.remember',
-      // The user picks the scope, not the model (#416). The question to ask
-      // is stated here and not only in the skill: the description goes along
-      // with every request, the skill only once the model decides to load it.
+      // Who reads it is the user's call, not the model's (#416): the question
+      // is stated here, since the skill is loaded only when the model decides to.
+      // Kept short: the schema goes along with every request, and a local
+      // model's budget is small (#1276). The details are in `snotra-memory`.
       modelDescription:
-        'Remembers a statement permanently (level "workspace" = this folder only, "user" = '
-        + 'everywhere). From the next message on, the entry is part of every system prompt. Only '
-        + 'lasting facts, never passwords or keys. Before calling it, ask the user in the chat '
-        + 'whether the entry is for this project or global, and wait for the answer — unless they '
-        + 'already named the scope, or no folder is open (then only "user" is possible). Load the '
-        + 'skill "snotra-memory" before first use.',
+        'Remembers something for every later conversation. kind: "fact" (true or false) or "rule" (can be '
+        + 'followed or broken; phrase it "When …, …" and give a topic and a description). scope = who reads it: '
+        + '"user" (only the user, every folder), "workspace" (Snotra in this folder), "team" (every tool here, '
+        + 'via AGENTS.md). Ask the user who should read it before the call, unless they said so or no folder is '
+        + 'open. Never passwords or keys. Load the skill "snotra-memory" before first use.',
       shortDescriptionKey: 'tools.short.remember',
       parameters: {
         type: 'object',
         properties: {
+          kind: { type: 'string', enum: [KNOWLEDGE_KINDS.FACT, KNOWLEDGE_KINDS.RULE], description: '"fact" or "rule".' },
           scope: {
             type: 'string',
-            enum: ['workspace', 'user'],
-            description:
-              'Scope, as chosen by the user — ask them before the call: "workspace" for '
-              + 'anything that applies to the open folder only (build commands, project '
-              + 'conventions); "user" for anything that applies regardless of the project '
-              + '(forms of address, language, preferred tools).',
+            enum: [KNOWLEDGE_READERS.USER, KNOWLEDGE_READERS.WORKSPACE, KNOWLEDGE_READERS.TEAM],
+            description: 'Who reads it, as the user chose — ask them before the call.',
           },
           text: {
             type: 'string',
             maxLength: MAX_MEMORY_ENTRY_CHARS,
-            description:
-              'The statement to remember, understandable on its own and without reference to this '
-              + 'conversation. So "tests run with npm test" rather than "as just discussed". One '
-              + 'thought per call.',
+            description: 'One thought, understandable without this conversation; a rule as "When …, …".',
           },
+          topic: { type: 'string', description: 'rule: the rules file name (a-z, 0-9, -).' },
+          description: { type: 'string', maxLength: RULE_LIMITS.DESCRIPTION_CHARS, description: 'rule: when the file applies; required for a new file.' },
+          always: { type: 'boolean', description: 'rule, new file only: it applies in every turn.' },
           origin: {
             type: 'string',
             enum: ['requested', 'self'],
-            description:
-              'Truthfully: "requested" when the user explicitly asked for it, otherwise "self". '
-              + 'The user can switch off unprompted remembering — "self" entries are then '
-              + 'rejected, and a wrongly declared entry subverts that setting.',
+            description: 'Truthfully: "requested" when the user asked for it, otherwise "self".',
           },
+          replaces: { type: 'string', description: 'Optional: exact text of an entry at this level that this one replaces.' },
+          replaces_in: { type: 'string', description: 'With replaces: "memory", "agents" or a rules file topic.' },
         },
-        required: ['scope', 'text', 'origin'],
+        required: ['kind', 'scope', 'text', 'origin'],
       },
       handler: async (args, { workspaceRoot } = {}) => {
-        if (!memory) {
-          return JSON.stringify({ error: 'Memory is not available in this installation.' });
+        const request = rememberRequest(args, workspaceRoot);
+        // Without a writer — an installation or a test with the memory port
+        // alone — a fact for the user or the folder still goes into memory.
+        /** @type {Pick<import('../ports/knowledge-writer-port').KnowledgeWriterPort, 'write'>|null} */
+        const writer = knowledgeWriter || (memory && request.kind === KNOWLEDGE_KINDS.FACT
+          && (request.scope === KNOWLEDGE_READERS.USER || request.scope === KNOWLEDGE_READERS.WORKSPACE)
+          ? { write: async () => ({ kind: request.kind, ...(await memory.remember({ scope: request.scope, text: request.text, origin: request.origin, workspaceRoot: request.workspaceRoot })) }) }
+          : null);
+        if (!writer) {
+          return JSON.stringify({ error: 'Remembering is not available in this installation.' });
         }
         try {
-          const saved = await memory.remember({
-            scope: args?.scope,
-            text: args?.text,
-            // Only what is declared as requested counts as requested (#553):
-            // anything else would pass the switch for unprompted remembering.
-            origin: args?.origin === MEMORY_ORIGINS.REQUESTED ? MEMORY_ORIGINS.REQUESTED : MEMORY_ORIGINS.SELF,
-            workspaceRoot,
-          });
-          // Der Pfad geht mit zurueck, damit im Chat steht, *wohin* gemerkt
-          // wurde — „gemerkt" allein laesst offen, ob es den Ordner oder alle
-          // Ordner betrifft, und genau das ist der Unterschied.
+          const saved = await writer.write(request);
+          // The file goes back with the result, so that the chat says *where*
+          // it went — that is the difference between this folder and all.
           return JSON.stringify({
             ok: true,
+            kind: saved.kind,
             scope: saved.scope,
             file: saved.file,
             remembered: saved.text,
+            ...(saved.replaced ? { replaced: saved.replaced } : {}),
           });
         } catch (error) {
           return JSON.stringify({ error: error?.message || 'The entry could not be saved.' });

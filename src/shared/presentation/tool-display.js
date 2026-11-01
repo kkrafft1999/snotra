@@ -210,10 +210,13 @@ const TARGET_PARAMS = Object.freeze({
   },
   [TOOL_LINE_TARGETS.MEMORY_SCOPE]: (args, t) => {
     // Where the entry went, not that a tool ran (#555): it goes along with
-    // every request from now on. Two literal keys, so the key scan sees both.
-    const scope = args?.scope === 'user'
-      ? t('tools.line.remember.scope.user')
-      : args?.scope === 'workspace' ? t('tools.line.remember.scope.workspace') : '';
+    // every request from now on. Literal keys, so the key scan sees them; a
+    // rule goes into the rules files, `team` into AGENTS.md (#1276).
+    const rule = args?.kind === 'rule';
+    let scope = '';
+    if (args?.scope === 'team') scope = t('tools.line.remember.scope.team');
+    else if (args?.scope === 'user') scope = rule ? t('tools.line.remember.scope.userRules') : t('tools.line.remember.scope.user');
+    else if (args?.scope === 'workspace') scope = rule ? t('tools.line.remember.scope.workspaceRules') : t('tools.line.remember.scope.workspace');
     return { scope };
   },
   [TOOL_LINE_TARGETS.HOST]: (args) => {

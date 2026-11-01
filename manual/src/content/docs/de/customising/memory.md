@@ -14,8 +14,11 @@ Nichts für das globale Gedächtnis. Für das Projektgedächtnis einen geöffnet
 ## Schritte
 
 1. Sag es im Chat: *Bitte merk dir, dass die Beete in Zentimetern gemessen sind.*
-2. Snotra fragt, ob es das **für dieses Projekt** oder **global**, für jeden Ordner, behalten soll — außer du hast es schon gesagt (*merk dir global …*), oder es ist kein Ordner geöffnet.
-3. Gib die Karte frei. Sich etwas zu merken, ist eine Änderung an einer Datei, also fragt es wie bei jeder anderen.
+2. Snotra fragt, wer es lesen soll — außer du hast es schon gesagt (*merk dir global …*), oder es ist kein Ordner geöffnet:
+   - **Nur du** — global, in jedem Ordner.
+   - **Snotra in diesem Ordner** — im Projektgedächtnis.
+   - **Alle Werkzeuge hier** — in der `AGENTS.md` des Ordners, die auch andere Coding-Werkzeuge lesen und die meist mit dem Team geteilt wird. [seit 1.30]
+3. Prüf die Karte. [seit 1.30] Sie zeigt Snotras Vorschlag als zwei Reihen zur Auswahl: *Art* — ein Fakt, eine [Regel](../rules/) oder ein Ablauf — und *Wer liest es*. Hat Snotra falsch einsortiert, wähl etwas anderes: Ein anderer Leser oder *Fakt* wird so geschrieben, wie du es gewählt hast; *Regel* oder *Ablauf* geht an Snotra zurück, das es formuliert und erneut fragt. Dann klick *Merken*. Die Karte fragt in jedem Modus, auch in *Auto*, und jeden Eintrag einzeln.
 
 Ab der nächsten Nachricht gehört der Satz zu dem, was das Modell weiß.
 
@@ -25,6 +28,7 @@ Ab der nächsten Nachricht gehört der Satz zu dem, was das Modell weiß.
 | --- | --- | --- |
 | Projekt | `.agents/memory.md` im geöffneten Ordner | nur diesen Ordner |
 | Global | `~/.snotra/memory.md` in deinem Benutzerordner | jeden Ordner |
+| Alle Werkzeuge hier | der Abschnitt *Von Snotra ergänzt* am Ende der `AGENTS.md` | diesen Ordner und jedes Werkzeug, das `AGENTS.md` liest |
 
 Beide sind gewöhnliche Markdown-Dateien: Du kannst sie in jedem Editor lesen und bearbeiten. Das Projektgedächtnis zieht mit dem Ordner um — und es liegt **in deinem Projekt**, kann also in einem Repository landen. Was nur dich betrifft, gehört ins globale Gedächtnis.
 

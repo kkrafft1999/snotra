@@ -540,12 +540,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Freigabe-Karten: erst nach subscribeToolApprovals() schickt der Main
   // Anfragen; ohne Anmeldung werden Rueckfragen sicher abgelehnt.
   subscribeToolApprovals: () => ipcRenderer.invoke(REQ.TOOL_APPROVAL_SUBSCRIBE),
-  // `extra.sandboxPaths`: what a sandbox card opens, per resource (#792).
+  // `extra.sandboxPaths`: what a sandbox card opens, per resource (#792);
+  // `extra.knowledgeChoice`: the kind and reader a `remember` card was re-sorted to (#1276).
   respondToolApproval: (requestId, response, extra = {}) =>
     ipcRenderer.invoke(REQ.TOOL_APPROVAL_RESPOND, {
       requestId,
       response,
       ...(Array.isArray(extra?.sandboxPaths) ? { sandboxPaths: extra.sandboxPaths } : {}),
+      ...(extra?.knowledgeChoice && typeof extra.knowledgeChoice === 'object'
+        ? { knowledgeChoice: { kind: String(extra.knowledgeChoice.kind), scope: String(extra.knowledgeChoice.scope) } }
+        : {}),
     }),
   listPendingToolApprovals: () => ipcRenderer.invoke(REQ.TOOL_APPROVAL_LIST_PENDING),
   onToolApprovalRequest: (callback) => {

@@ -238,6 +238,8 @@ function buildApprovalRequest({
     // The reason is the file, not the mode: it asks in every mode (#1319).
     request.reasonParts = [createMessage('approval.reason.knowledge')];
     request.knowledge = true;
+    // A `remember` card (#1276): the proposal and what the writer found.
+    if (plan?.knowledgeCard) request.knowledgeCard = { ...plan.knowledgeCard };
     request.alwaysAllowed = false;
     return request;
   }

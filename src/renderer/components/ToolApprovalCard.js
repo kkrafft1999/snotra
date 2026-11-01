@@ -1,5 +1,6 @@
 import { buildApprovalCardView,
-  buildKnowledgeChangeCardView, describeKnowledgeChangeOutcome, describeApprovalOutcome } from '../utils/tool-approval-view.js';
+  buildKnowledgeChangeCardView, describeKnowledgeChangeOutcome, describeApprovalOutcome,
+  buildRememberView, rememberState } from '../utils/tool-approval-view.js';
 import {
   buildSandboxCardView, describeSandboxOutcome, describeLiveRun, describeLiveWaited, sandboxAnswerRecorded,
 } from '../utils/sandbox-approval-view.js';
@@ -566,6 +567,102 @@ export function initToolApprovalCards({
     return card;
   }
 
+  /**
+   * The rows of a remember card (#1276): kind and reader as pill groups —
+   * radio buttons, so the keyboard and a screen reader know them — in the
+   * card's own table of facts, and what follows from the choice, redrawn when
+   * a pill changes. The notes go below the table.
+   */
+  function buildRememberSection(requestId, remember, facts) {
+    const card = remember.card;
+    let kind = card.kind;
+    let scope = card.scope;
+    /** @type {HTMLButtonElement|null} */
+    let primary = null;
+    /** @type {Element[]} */
+    let dynamicRows = [];
+    const notes = el('div', 'chat-approval-card__remember-notes');
+
+    const row = (term, value) => {
+      const node = el('div', 'chat-approval-card__fact');
+      node.appendChild(el('dt', null, term));
+      const dd = el('dd');
+      if (typeof value === 'string') dd.textContent = value;
+      else dd.appendChild(value);
+      node.appendChild(dd);
+      return node;
+    };
+    const pills = (name, legend, options, current) => {
+      const fieldset = el('fieldset', 'chat-approval-card__pills');
+      fieldset.appendChild(el('legend', 'visually-hidden', legend));
+      for (const option of options) {
+        const label = el('label', 'chat-approval-card__pill');
+        const input = el('input');
+        input.type = 'radio';
+        input.name = domId(requestId, name);
+        input.value = option.value;
+        input.checked = option.value === current;
+        label.appendChild(input);
+        label.appendChild(el('span', null, option.label));
+        fieldset.appendChild(label);
+      }
+      return fieldset;
+    };
+    const kinds = pills('remember-kind', t('approval.remember.kindLegend'), remember.kinds, kind);
+    const readers = pills('remember-reader', t('approval.remember.readerLegend'), remember.readers, scope);
+    const kindRow = row(t('approval.remember.kindLegend'), kinds);
+    const readerRow = row(t('approval.remember.readerLegend'), readers);
+    facts.append(kindRow, readerRow);
+
+    const draw = () => {
+      const state = rememberState(card, kind, scope);
+      for (const input of readers.querySelectorAll('input')) {
+        input.disabled = !state.readerEnabled(input.value);
+        input.closest('label').classList.toggle('is-disabled', input.disabled);
+      }
+      for (const node of dynamicRows) node.remove();
+      dynamicRows = [];
+      if (state.target) {
+        const value = el('span');
+        value.appendChild(code(state.target.path));
+        value.append(` · ${state.target.exists ? '' : `${t('approval.remember.new')} · `}${state.readerNote}`);
+        dynamicRows.push(row(t('approval.remember.target'), value));
+      }
+      for (const entry of state.rows) dynamicRows.push(row(entry.term, entry.value));
+      if (!state.sendBack) {
+        dynamicRows.push(row(t('approval.remember.entry'), el('span', 'chat-approval-card__remember-entry', card.entry)));
+        if (state.replaced) dynamicRows.push(row(t('approval.remember.replaces'), el('span', 'chat-approval-card__remember-old', state.replaced)));
+      }
+      readerRow.after(...dynamicRows);
+      notes.replaceChildren(...state.notes.map((note) => el('p', 'chat-approval-card__note', note)));
+      if (primary) primary.textContent = state.primaryLabel;
+    };
+    const onChange = (event) => {
+      const input = event.target;
+      if (!(input instanceof HTMLInputElement)) return;
+      if (input.name === domId(requestId, 'remember-kind')) kind = input.value;
+      if (input.name === domId(requestId, 'remember-reader')) scope = input.value;
+      // A reader the new kind has no place for falls back to the proposal's.
+      if (!rememberState(card, kind, scope).readerEnabled(scope)) {
+        scope = card.scope;
+        const back = readers.querySelector(`input[value="${scope}"]`);
+        if (back) back.checked = true;
+      }
+      draw();
+    };
+    kinds.addEventListener('change', onChange);
+    readers.addEventListener('change', onChange);
+    draw();
+    return {
+      notes,
+      bind(actions) {
+        primary = actions.querySelector('button[data-response="allow-once"]');
+        draw();
+      },
+      choice: () => (kind === card.kind && scope === card.scope ? null : { kind, scope }),
+    };
+  }
+
   function buildCard(entry, view) {
     if (view.kind === 'config') return buildConfigCard(entry, view);
     if (view.kind === 'sandbox') return buildSandboxCard(entry, view);
@@ -606,17 +703,19 @@ export function initToolApprovalCards({
     card.appendChild(headline);
 
     const facts = el('dl', 'chat-approval-card__facts');
-    fact(facts, t('approval.fact.effect'), view.classText);
+    // A remember card (#1276): kind and reader as pills, and what follows.
+    const remember = view.remember ? buildRememberSection(requestId, view.remember, facts) : null;
+    if (!remember) fact(facts, t('approval.fact.effect'), view.classText);
     if (view.shellLabel) fact(facts, t('approval.fact.shell'), view.shellLabel);
     if (view.cwdLabel) fact(facts, t('approval.fact.cwd'), code(view.cwdLabel));
     if (view.isolation?.isolated) fact(facts, t('approval.fact.network'), buildDomainList(view.isolation));
     // The memory has no file target the user could influence (issue #166) —
     // the reach is the decision here, not the path.
-    if (view.memoryScopeLabel) fact(facts, t('approval.fact.memoryScope'), view.memoryScopeLabel);
+    if (view.memoryScopeLabel && !remember) fact(facts, t('approval.fact.memoryScope'), view.memoryScopeLabel);
     // A shell command has no file target — the line "no file target" would be
     // noise next to the shell and the working folder (issue #102); the same
     // holds for remembering, next to the reach.
-    if ((!view.shellLabel && !view.memoryScopeLabel) || view.targets.length > 0) {
+    if (!remember && ((!view.shellLabel && !view.memoryScopeLabel) || view.targets.length > 0)) {
       fact(facts, t(view.targets.length === 1 ? 'approval.fact.target' : 'approval.fact.targets'), buildTargetList(view));
     }
     if (view.reason) fact(facts, t('approval.fact.reason'), view.reason);
@@ -624,6 +723,7 @@ export function initToolApprovalCards({
     if (view.scopeNote) fact(facts, t('approval.fact.sessionScope'), view.scopeNote);
     fact(facts, t('approval.fact.mode'), view.modeLabel);
     card.appendChild(facts);
+    if (remember) card.appendChild(remember.notes);
 
     if (view.isolation?.isolated) card.appendChild(el('p', 'chat-approval-card__note', view.isolation.note));
 
@@ -698,10 +798,12 @@ export function initToolApprovalCards({
     status.setAttribute('aria-live', 'polite');
     card.appendChild(status);
 
+    if (remember) remember.bind(actions);
     actions.addEventListener('click', (e) => {
       const button = e.target.closest('button[data-response]');
       if (!button || button.disabled) return;
-      void respond(requestId, button.dataset.response);
+      const choice = remember?.choice();
+      void respond(requestId, button.dataset.response, choice ? { knowledgeChoice: choice } : undefined);
     });
     return card;
   }

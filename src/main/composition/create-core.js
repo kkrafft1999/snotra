@@ -99,6 +99,7 @@ const { createEnvironmentAdapter } = require('../adapters/environment-adapter');
 const { createProjectInstructionsAdapter } = require('../adapters/project-instructions-adapter');
 const { createRulesAdapter } = require('../adapters/rules-adapter');
 const { createKnowledgeFilesAdapter } = require('../adapters/knowledge-files-adapter');
+const { createKnowledgeWriterAdapter } = require('../adapters/knowledge-writer-adapter');
 const { globalKnowledgePaths } = require('../../shared/contracts/knowledge-files');
 const { createMemoryAdapter } = require('../adapters/memory-adapter');
 const { APP_NAME } = require('../app-identity');
@@ -361,8 +362,7 @@ function createCore({
     readUIPrefs: () => uiPrefsStore.readUIPrefs(),
   });
 
-  // The global skill folders and knowledge files stay read-only for every tool, also inside
-  // the open folder (#548, #650, #1319): fs-service refuses writes, the sandbox commands.
+  // Global skill folders and knowledge files: read-only for every tool, even inside the folder (#548, #650, #1319).
   const globalSkillRoots = [path.join(os.homedir(), '.snotra', 'skills'), path.join(os.homedir(), '.agents', 'skills')];
   const globalKnowledge = globalKnowledgePaths(path, os.homedir());
   const fsService = createFsService({
@@ -506,8 +506,7 @@ function createCore({
     providerLabel: (name) => translateMessage(getAppLocale(), name),
     markCloudTurn: (chatId) => chatHistory.markCloudTurn(chatId),
   });
-  // Which skills and tools a chat has (#773); assigned once the skills exist.
-  /** @type {ReturnType<typeof createChatConfigurationService>} */
+  /** @type {ReturnType<typeof createChatConfigurationService>} Which skills and tools a chat has (#773); assigned below. */
   let chatConfiguration;
   const toolRegistry = createWorkspaceToolRegistry({
     rules,
@@ -517,6 +516,7 @@ function createCore({
     urlFetch,
     shellRunner,
     memory,
+    knowledgeWriter: createKnowledgeWriterAdapter({ fs, path, os, memory, getLocale: getAppLocale, isSelfMemoryAllowed: defaultOnSwitch(uiPrefsStore, 'memorySelfEnabled') }),
     documentText,
     imageGeneration: imageGenerationSettings.adapter,
     // Built further down: it needs the skills and the MCP servers (#773).
