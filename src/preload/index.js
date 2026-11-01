@@ -187,6 +187,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setActiveChatId: (id) => ipcRenderer.invoke(REQ.CHAT_HISTORY_SET_ACTIVE, id),
   // The user's choice of a chat's kind of task (#1281); answers with the stored kind or null.
   setChatTaskKind: (chatId, kindId) => ipcRenderer.invoke(REQ.CHAT_HISTORY_SET_TASK_KIND, chatId, kindId),
+  // *Keep* exempts a chat from every limit of the history (#1320); answers { ok, keep }.
+  setChatKeep: (chatId, keep) => ipcRenderer.invoke(REQ.CHAT_HISTORY_SET_KEEP, chatId, keep === true),
+  // A chat whose folder is gone moves into the open folder (#1320); answers { ok, workspaceRoot }.
+  assignChatToFolder: (chatId) => ipcRenderer.invoke(REQ.CHAT_HISTORY_ASSIGN_TO_FOLDER, chatId),
+  // Every chat of a folder that is gone, by its old path (#1320); answers { ok, count, workspaceRoot }.
+  assignFolderChatsToFolder: (oldRoot) => ipcRenderer.invoke(REQ.CHAT_HISTORY_ASSIGN_ALL_TO_FOLDER, oldRoot),
   // Modell und Freigabemodus des Chats herstellen (Issue #211). `activation`
   // trennt den ausdruecklichen Wechsel im Verlauf vom automatischen
   // Wiederherstellen beim Start oder Ordnerwechsel.

@@ -500,12 +500,17 @@ function createToolPolicyStore({
    * receipt bound to that chat (#980), and the chat is remembered as
    * confirmed; any other mode forgets it again.
    *
+   * With `workspaceRoot` the pick becomes that workspace's default as well
+   * (#1337): the user's choice outweighs "Auto is for one chat only". The one
+   * receipt covers both — the dialog it came from names the folder.
+   *
    * @param {unknown} rawMode
-   * @param {{ confirmation?: Receipt, chatId?: unknown }} [options]
+   * @param {{ confirmation?: Receipt, chatId?: unknown, workspaceRoot?: unknown }} [options]
    */
-  async function setMode(rawMode, { confirmation = null, chatId = null } = {}) {
+  async function setMode(rawMode, { confirmation = null, chatId = null, workspaceRoot = null } = {}) {
     const mode = normalizeToolPermissionMode(rawMode);
     const chat = chatKey(chatId);
+    const root = typeof workspaceRoot === 'string' && workspaceRoot ? workspaceRoot : null;
     return update((draft, { encryptionAvailable: enc }) => {
       if (mode === TOOL_PERMISSION_MODES.AUTO) {
         if (!enc) return { error: createMessage('permissions.error.autoNeedsEncryption') };
@@ -515,6 +520,8 @@ function createToolPolicyStore({
         draft.autoChats = draft.autoChats.filter((id) => id !== chat);
       }
       draft.mode = mode;
+      if (root && mode === DEFAULT_TOOL_PERMISSION_MODE) delete draft.workspaceModes[root];
+      else if (root) draft.workspaceModes[root] = mode;
       return null;
     });
   }

@@ -162,7 +162,7 @@ last rows moved with
 | How far a model's arguments fit the schema | `src/application/tools/argument-conformance.js` | — | moved |
 | The roots a card's grant opens outside the folder | `src/application/tools/outside-roots.js` | — | moved; which grants a card may offer — the home folder, Snotra's own storage, the skill roots — stays in `services/outside-access.js`, which knows this machine's paths |
 | Why a command runs without the sandbox | `src/shared/contracts/sandbox-reasons.js` | — | moved out of `services/sandbox-service.js` |
-| The tool registry: the built-in definitions, which tools are offered and why not (`whyNotOffered`), the MCP tools merged in — above `LAZY_MCP_TOOLS_THRESHOLD` as catalog lines that `load_tools` turns into schemas (`resolveOffer`, #188) —, the system prompt's tool part, `generate_image` | `src/application/tools/workspace-tool-registry.js`, `src/application/tools/generate-image-tool.js` | — | moved; the file tools reach the file service through `file-tools-port` (`adapters/file-tools-adapter.js`), the others through the ports that were there for it (web search, URL fetch, code and shell execution, MCP, image generation) |
+| The tool registry: the built-in definitions, which tools are offered and why not (`whyNotOffered`), the MCP tools merged in — above `LAZY_MCP_TOOLS_THRESHOLD` as catalog lines that `load_tools` turns into schemas (`resolveOffer`, #188) —, the system prompt's tool part, `generate_image`, `search_chats` (#1315) | `src/application/tools/workspace-tool-registry.js`, `src/application/tools/generate-image-tool.js`, `src/application/tools/search-chats-tool.js` | — | moved; the file tools reach the file service through `file-tools-port` (`adapters/file-tools-adapter.js`), the others through the ports that were there for it (web search, URL fetch, code and shell execution, MCP, image generation) |
 | Which skills are on, what the prompt gets of them, what a tick becomes when stored and what making a skill global does to its switch | `src/application/skills/skill-selection.js` | — | moved; `services/skills-service.js` scans the folders, resolves the folder's key and hands the scanned skills in |
 | The model's skill suggestion | `src/application/skills/skill-suggestion-service.js` | — | moved (#1172); reads the catalogue through `application/skills/skill-catalog.js`, a typedef it shares with the chat configuration |
 | A chat's model, mode, reasoning level and switched skills and tools; the fallback to "Smart" when "Auto" is refused | `src/application/chat/chat-session-settings.js` | — | moved; keeps them in the chat history through a typedef of its own (`ChatSettingsStore`); the stored fields are normalized in `shared/contracts/chat-session-fields.js` for it and for the history |
@@ -390,6 +390,12 @@ the port it returns, so `npm run typecheck` fails when the two disagree — see
   (`application/chat/conversation-service.js`) reads and changes it: a chat
   with its messages, the cost added per turn, the title (#981). Implemented by
   `main/adapters/chat-history-adapter.js` over `main/services/chat-history-service.js`
+- `chat-search-port` — the earlier chats of the open workspace as the tool
+  `search_chats` reads them (#1315): a keyword search with excerpts, and more
+  of one chat within a size limit. Behind it sit the boundaries the tool cannot
+  check itself — only the run's folder (no folder: the chats without one),
+  never the asking chat, and a local chat only for a local turn, without a
+  count of what was left out. Implemented by `main/services/chat-search-service.js`
 - `workspace-path-port` — path helpers (e.g. `basename`)
 - `own-secrets-port` — the app's own secrets, compared against the text the
   prompt embeds by itself (#528); `main/adapters/own-secrets-adapter.js` wires
@@ -1666,7 +1672,7 @@ These are the topics that did move out:
 | Topic | Module |
 | ----- | ------ |
 | The tool permissions (#1006): their state and the overviews of the Security pages, every change with the confirmation it asks and what it voids, the answers to approval cards; the prompts | `services/tool-permission-service.js`, `services/tool-permission-dialogs.js`; channels and the native folder picker: `ipc/tool-permission-handlers.js` |
-| The chat history's rules (#1006): which folder a chat is kept under, model, mode and level as main's word, the time stamp, the oldest chats beyond `MAX_CHAT_SESSIONS` with their images | `services/chat-history-service.js`; channels: `ipc/chat-history-handlers.js` |
+| The chat history's rules (#1006): which folder a chat is kept under, model, mode and level as main's word, where its turns ran (`locality`: `local` from the first save, `cloud` for good from the first cloud turn, #1315), the time stamp, the oldest chats beyond `MAX_CHAT_SESSIONS` with their images | `services/chat-history-service.js`; channels: `ipc/chat-history-handlers.js` |
 | The model settings (#1006): merging and encrypting a provider's or an entry's connection, when an entry is usable, the active entry; the dialog's save with its rollback, the reasoning level, the interface preferences with their confirmations | rules: `services/llm-settings.js`; flow: `services/settings-service.js`; channels: `ipc/settings-handlers.js` |
 | Own secrets (concept §5): which values a tool result must never carry | `services/own-secrets.js` |
 | Masking the status of an MCP server | `services/mcp-status-masking.js` |

@@ -287,6 +287,22 @@ const REQUEST_CHANNELS = Object.freeze({
    * and one of the six ids, main stores it as the user's choice.
    */
   CHAT_HISTORY_SET_TASK_KIND: 'chatHistory:setTaskKind',
+  /**
+   * The user marks a chat *Keep* or takes the mark off (#1320): a kept chat
+   * is exempt from every limit of the history. The renderer names the chat
+   * and a boolean; only a chat of the open folder is marked.
+   */
+  CHAT_HISTORY_SET_KEEP: 'chatHistory:setKeep',
+  /**
+   * A chat whose folder is gone moves into the open folder (#1320). The
+   * renderer names the chat alone; the target is main's word.
+   */
+  CHAT_HISTORY_ASSIGN_TO_FOLDER: 'chatHistory:assignToFolder',
+  /**
+   * Every chat of a folder that is gone moves into the open folder (#1320):
+   * the renderer names the old folder as the list showed it.
+   */
+  CHAT_HISTORY_ASSIGN_ALL_TO_FOLDER: 'chatHistory:assignAllToFolder',
 
   /** A question for a chat (#981): main keeps the history, saves the turn and names the chat. */
   CHAT_SEND: 'chat:send',

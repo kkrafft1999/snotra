@@ -149,7 +149,7 @@
     "renderer/components/SkillAutocomplete.js": 4,
     "renderer/components/SkillSuggestion.js": 1,
     "renderer/components/ToolApprovalCard.js": 6,
-    "renderer/components/ToolModePicker.js": 2,
+    "renderer/components/ToolModePicker.js": 1,
     "renderer/components/ToolPermissionsPanel.js": 2,
     "renderer/components/TreeFilter.js": 5,
     "renderer/file-views/autosave.js": 1,
