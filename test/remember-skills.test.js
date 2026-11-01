@@ -41,6 +41,17 @@ test('a procedure becomes a skill in the folder, with name, description and meta
   assert.deepEqual(await fs.readdir(path.join(root, '.agents', 'skills', 'release')), ['SKILL.md'], 'text only');
 });
 
+test('a procedure written with replaces removes the fact it replaces from memory', async () => {
+  const { root, port } = await writer();
+  const fact = 'First bump the version, then tag it, then push the tag.';
+  await port.write({ kind: 'fact', scope: 'workspace', text: fact, origin: 'requested', workspaceRoot: root });
+  const result = await port.write({ ...SKILL, workspaceRoot: root, replaces: fact });
+  assert.equal(result.text, 'release');
+  assert.deepEqual(result.replaced, { removed: 1 });
+  const memory = await fs.readFile(path.join(root, '.agents', 'memory.md'), 'utf8');
+  assert.equal(memory.includes(fact), false);
+});
+
 test('a global skill goes to ~/.snotra/skills, never ~/.agents/skills; a new version replaces the old and the card shows the diff', async () => {
   const { root, home, port } = await writer();
   await port.write({ ...SKILL, scope: 'user', workspaceRoot: root });

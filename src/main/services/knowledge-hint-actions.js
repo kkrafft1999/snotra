@@ -265,17 +265,10 @@ function createKnowledgeHintActions({ fs, path, homeDir, rules, memory, knowledg
       try {
         await knowledgeWriter.write({
           kind: KNOWLEDGE_KINDS.INSTRUCTION, scope: at.scope, topic: name, description, body: at.text, text: '', workspaceRoot,
-          origin: 'requested', source: JOURNAL_SOURCE,
+          origin: 'requested', source: JOURNAL_SOURCE, replaces: at.text, replacesIn: 'memory',
         });
       } catch (error) {
         throw new HintActionError('settings.knowledge.hint.error.write', { reason: error?.message || '' });
-      }
-      // The writer does not take `replaces` for a procedure: the fact is
-      // forgotten here, after the skill stands — a duplicate at worst.
-      const memoryTarget = memoryFileOf(workspaceRoot, at.scope);
-      if (memoryTarget) {
-        await journaled([memoryTarget.file], workspaceRoot,
-          () => memory.forget({ scope: at.scope, workspaceRoot, line: at.line, text: at.text }));
       }
       return { name };
     },

@@ -385,9 +385,8 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
           await textFiles.write({ file: target.file, root: target.root, text: next });
           await note(target, current, next, source);
         });
-        return { kind: request.kind, scope: request.scope, file: target.file, text: request.topic || '' };
-      }
-      if (request.kind === KNOWLEDGE_KINDS.FACT && request.scope !== KNOWLEDGE_READERS.TEAM) {
+        file = target.file;
+      } else if (request.kind === KNOWLEDGE_KINDS.FACT && request.scope !== KNOWLEDGE_READERS.TEAM) {
         const memoryTarget = targetOf(KNOWLEDGE_KINDS.FACT, request.scope, request.workspaceRoot);
         const before = memoryTarget ? await read(memoryTarget) : null;
         const saved = await memory.remember({ scope: request.scope, workspaceRoot: request.workspaceRoot ?? null, text: body, origin });
@@ -419,7 +418,7 @@ function createKnowledgeWriterAdapter({ fs, path, os, memory, isSelfMemoryAllowe
         });
       }
       /** @type {{ kind: string, scope: string, file: string, text: string, replaced?: { removed: number, error?: string } }} */
-      const result = { kind: request.kind, scope: request.scope, file, text: body };
+      const result = { kind: request.kind, scope: request.scope, file, text: request.kind === KNOWLEDGE_KINDS.INSTRUCTION ? request.topic || '' : body };
       if (replaced) {
         // Written first, removed second: a failure here leaves a duplicate, never a loss.
         try {

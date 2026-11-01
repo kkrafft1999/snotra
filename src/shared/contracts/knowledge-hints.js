@@ -27,6 +27,9 @@ const RULE_SHAPE = [
   /\b(?:you (?:should|must|have to)|make sure to|never|always|whenever|must(?:n't| not)?)\b/i,
   /^(?:wenn|sobald|bevor|nachdem|immer|nie|niemals|bitte)\b/i,
   /\b(?:du (?:sollst|musst)|achte darauf|immer wenn|jedes mal,? wenn|muss|müssen|darf nicht|dürfen nicht)\b/i,
+  // Like "always" and "never" anywhere in an English entry — but not "wie immer",
+  // "für immer", "immer noch", "immer mehr", "immer wieder", which state no rule.
+  /(?<!\b(?:wie|für) )\b(?:immer(?! noch\b| mehr\b| wieder\b)|nie|niemals)\b/i,
 ];
 
 /** Steps: numbered lines, or "first … then …". */
