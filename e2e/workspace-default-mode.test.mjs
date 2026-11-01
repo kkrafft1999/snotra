@@ -1,5 +1,5 @@
-// The default mode per workspace in the running app (#413): the checkbox under
-// the mode pill's menu stores the default in main, a new chat starts with it,
+// The default mode per workspace in the running app (#413): a pick in the mode
+// pill's menu stores it in main as well (#1337), a new chat starts with it,
 // and it is still there after a restart — with "Auto" as the default, "Auto"
 // itself survives the restart.
 //
@@ -29,7 +29,7 @@ async function waitForTree(page) {
     { what: 'drawn tree' });
 }
 
-test('workspace default mode: remembered from the menu, used by a new chat, kept across a restart', { timeout: 180000 }, async (t) => {
+test('workspace default mode: picked in the menu, used by a new chat, kept across a restart', { timeout: 180000 }, async (t) => {
   const model = await startFakeModel();
   const workspace = await makeTempDir('snotra-ws-mode-');
   const userDataDir = await makeTempDir('snotra-ws-mode-userdata-');
@@ -47,56 +47,52 @@ test('workspace default mode: remembered from the menu, used by a new chat, kept
   await waitForTree(page);
   await poll(async () => (await state(page))?.workspaceRoot, { what: 'permission state with a workspace' });
 
-  // Nothing to remember while the chat and the folder are at "Smart".
+  const tagOn = () => page.evaluate(() => [...document.querySelectorAll('.chat-tool-mode-default-tag')]
+    .map((tag) => tag.closest('.chat-tool-mode-option').dataset.mode));
+  const pick = async (mode) => {
+    if (!(await page.evaluate(() => !document.getElementById('chat-tool-mode-menu').classList.contains('hidden')))) {
+      await page.click('#btn-chat-tool-mode');
+    }
+    await page.click(`.chat-tool-mode-option[data-mode="${mode}"]`);
+    await poll(async () => (await pillMode(page)) === mode, { what: `chat at "${mode}"` });
+  };
+
+  // A folder that never had a pick: "Smart", tagged as its default.
   assert.equal(await pillMode(page), 'smart');
+  assert.equal((await state(page)).workspaceMode, 'smart');
   await page.click('#btn-chat-tool-mode');
-  assert.equal(await page.evaluate(() => document.getElementById('chat-tool-mode-footer').hidden), true);
+  assert.deepEqual(await tagOn(), ['smart']);
   await page.keyboard.press('Escape');
 
-  // The chat switches to "Always ask" from the menu; the checkbox offers it for
-  // the folder. Through the menu, not the bare API: the menu waits for the
-  // start-up's chat switch, which would otherwise put the chat back at the
-  // folder's "Smart" a moment later and take the checkbox away (#564).
-  await page.click('#btn-chat-tool-mode');
-  await page.click('.chat-tool-mode-option[data-mode="ask-all"]');
-  await poll(async () => (await pillMode(page)) === 'ask-all', { what: 'chat at "Always ask"' });
-  await page.click('#btn-chat-tool-mode');
-  const offer = await page.evaluate(() => ({
-    hidden: document.getElementById('chat-tool-mode-footer').hidden,
-    label: document.getElementById('chat-tool-mode-remember-label').textContent,
-    checked: document.getElementById('chat-tool-mode-remember').checked,
-  }));
-  assert.deepEqual(offer, {
-    hidden: false,
-    label: `“Always ask” for new chats in ${path.basename(workspace)} too`,
-    checked: false,
-  });
-  await page.click('#chat-tool-mode-remember');
+  // The chat switches to "Always ask" from the menu, and the folder with it.
+  // Through the menu, not the bare API: the menu waits for the start-up's chat
+  // switch, which would otherwise put the chat back at the folder's "Smart" a
+  // moment later (#564).
+  await pick('ask-all');
   await poll(async () => (await state(page)).workspaceMode === 'ask-all', { what: 'default stored in main' })
     .catch(async (error) => {
       // What the menu said about it, so that a failure explains itself.
       const status = await page.evaluate(() => document.getElementById('chat-tool-mode-status').textContent);
       throw new Error(`${error.message} — menu status: ${JSON.stringify(status)}`);
     });
-  await poll(() => page.evaluate(() =>
-    document.querySelector('.chat-tool-mode-option[data-mode="ask-all"] .chat-tool-mode-default-tag')?.textContent || null),
-  { what: 'tag on the default' });
+  assert.equal(await page.evaluate(() => document.getElementById('chat-tool-mode-status').textContent),
+    `Permission mode: Always ask, also for new chats in ${path.basename(workspace)}`);
+  await page.click('#btn-chat-tool-mode');
+  assert.deepEqual(await tagOn(), ['ask-all']);
   await page.keyboard.press('Escape');
 
-  // Back to "Smart" in this chat; a new chat starts with the folder's default.
-  await page.evaluate(() => window.electronAPI.setToolPermissionMode('smart'));
-  await poll(async () => (await pillMode(page)) === 'smart', { what: 'chat back at "Smart"' });
+  // A new chat starts with the folder's default.
   await page.evaluate(() => document.getElementById('btn-chat-new').click());
   await poll(async () => (await pillMode(page)) === 'ask-all', { what: 'new chat at the default' });
 
-  // With encrypted storage, "Auto" as the default — and the next start keeps it.
+  // With encrypted storage, "Auto" picked in the chat is the default too — and
+  // the next start keeps it.
   let expected = 'ask-all';
-  const set = await page.evaluate(() => window.electronAPI.setWorkspaceMode('auto'));
   if ((await state(page)).platformCapabilities?.secureStorage === true) {
-    assert.equal(set.ok, true);
+    await pick('auto');
+    await poll(async () => (await state(page)).workspaceMode === 'auto', { what: '"Auto" as the default' });
     expected = 'auto';
   } else {
-    assert.deepEqual(set.error, { key: 'permissions.error.autoNeedsEncryption' });
     t.diagnostic('no encrypted storage here: the restart is checked with "Always ask"');
   }
 
