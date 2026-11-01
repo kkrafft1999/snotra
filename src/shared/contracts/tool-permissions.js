@@ -765,6 +765,15 @@ function sanitizeKnowledgeCard(raw) {
   if (isRecord(raw.replaced) && typeof raw.replaced.text === 'string') {
     out.replaced = { text: raw.replaced.text.slice(0, 600), where: cardText(raw.replaced.where, 64), count: Number.isInteger(raw.replaced.count) ? raw.replaced.count : 1 };
   }
+  // A procedure (#1314): the skill's description and its new body or the diff.
+  if (isRecord(raw.skill) && typeof raw.skill.text === 'string') {
+    out.skill = {
+      description: cardText(raw.skill.description, 200),
+      kind: raw.skill.kind === 'diff' ? 'diff' : 'text',
+      text: raw.skill.text.slice(0, 40_000),
+      truncated: raw.skill.truncated === true,
+    };
+  }
   if (raw.switchedOff === true) out.switchedOff = true;
   if (raw.alwaysOverBudget === true) out.alwaysOverBudget = true;
   return out;

@@ -607,7 +607,19 @@ export function buildApprovalCardView(dto, { homeDir = '' } = {}) {
     const headline = t(`approval.remember.headline.${view.remember.card.kind}`);
     view.title = t('approval.remember.title');
     view.headline = { targetLabel: '', verb: '', tool: view.headline.tool, template: headline, text: headline };
-    view.preview = null;
+    // A procedure (#1314) shows the new skill, or the diff against the one it replaces.
+    const skill = view.remember.card.kind === 'instruction' ? view.remember.card.skill : null;
+    view.preview = skill
+      ? {
+        kind: skill.kind === 'diff' ? 'diff' : 'text',
+        text: skill.text,
+        truncated: skill.truncated === true,
+        masked: false,
+        summary: t(skill.kind === 'diff' ? 'approval.remember.skill.diff' : 'approval.remember.skill.new'),
+        truncatedNote: skill.truncated === true ? t('approval.preview.truncatedNote') : '',
+        maskedNote: '',
+      }
+      : null;
     view.memoryScopeLabel = '';
     view.actions.once = { ...view.actions.once, label: t('approval.remember.action') };
     // Remembering is approved one entry at a time: two buttons, no session.
@@ -1012,6 +1024,14 @@ export function rememberState(card, kind, scope) {
       });
       if (card.alwaysOverBudget === true) notes.push(t('approval.remember.alwaysOverBudget'));
     }
+  }
+  if (!sendBack && kind === 'instruction' && proposal) {
+    const old = card.skill?.description || '';
+    const next = card.description || '';
+    const shown = old && next && old !== next ? t('approval.remember.oldNew', { old, next }) : next || old;
+    if (shown) rows.push({ term: t('approval.remember.skill.description'), value: shown });
+    if (scope === 'user') rows.push({ term: t('approval.remember.skill.offered'), value: t('approval.remember.skill.everyFolder') });
+    if (card.skill?.kind !== 'diff') notes.push(t('approval.remember.skill.switchOn'));
   }
   return {
     kind,

@@ -317,6 +317,7 @@ function knowledgeCardOf(args, described) {
     target: described.target,
     ...(described.ruleFile ? { ruleFile: described.ruleFile } : {}),
     ...(described.replaced ? { replaced: described.replaced } : {}),
+    ...(described.skill ? { skill: described.skill } : {}),
     alternatives: described.alternatives,
     folderInstructions: described.folderInstructions,
   };

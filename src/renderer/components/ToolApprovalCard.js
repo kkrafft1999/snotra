@@ -612,6 +612,9 @@ export function initToolApprovalCards({
     const readers = pills('remember-reader', t('approval.remember.readerLegend'), remember.readers, scope);
     const kindRow = row(t('approval.remember.kindLegend'), kinds);
     const readerRow = row(t('approval.remember.readerLegend'), readers);
+    // The fieldset's legend names the group for a screen reader; the visible
+    // label beside it would only say the same word twice.
+    for (const node of [kindRow, readerRow]) node.querySelector('dt')?.setAttribute('aria-hidden', 'true');
     facts.append(kindRow, readerRow);
 
     const draw = () => {
@@ -629,7 +632,7 @@ export function initToolApprovalCards({
         dynamicRows.push(row(t('approval.remember.target'), value));
       }
       for (const entry of state.rows) dynamicRows.push(row(entry.term, entry.value));
-      if (!state.sendBack) {
+      if (!state.sendBack && !(state.kind === 'instruction' && state.proposal)) {
         dynamicRows.push(row(t('approval.remember.entry'), el('span', 'chat-approval-card__remember-entry', card.entry)));
         if (state.replaced) dynamicRows.push(row(t('approval.remember.replaces'), el('span', 'chat-approval-card__remember-old', state.replaced)));
       }

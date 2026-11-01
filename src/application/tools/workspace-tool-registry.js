@@ -3,7 +3,7 @@ const { resolveNetworkDomains, resolveRunDomains } = require('../../shared/runti
 const { SANDBOX_REASONS } = require('../../shared/contracts/sandbox-reasons');
 const { LIST_DIRECTORY_MAX_ENTRIES } = require('../../shared/contracts/list-directory');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
-const { LOAD_SKILL_TOOL } = require('../../shared/contracts/skills');
+const { LOAD_SKILL_TOOL, MAX_SKILL_BODY_CHARS } = require('../../shared/contracts/skills');
 const { LOAD_RULE_TOOL, RULE_LEVELS, RULE_LEVEL_PROMPT_LABELS, RULE_LIMITS } = require('../../shared/contracts/rules');
 const { KNOWLEDGE_KINDS, KNOWLEDGE_READERS } = require('../../shared/contracts/knowledge-write');
 const {
@@ -887,6 +887,7 @@ function rememberRequest(args, workspaceRoot) {
     scope: text(args?.scope) || '',
     workspaceRoot: workspaceRoot ?? null,
     text: typeof args?.text === 'string' ? args.text : '',
+    body: typeof args?.body === 'string' ? args.body : undefined,
     topic: text(args?.topic),
     description: text(args?.description),
     always: args?.always === true,
@@ -2194,8 +2195,9 @@ function createWorkspaceToolRegistry({
       // Kept short: the schema goes along with every request, and a local
       // model's budget is small (#1276). The details are in `snotra-memory`.
       modelDescription:
-        'Remembers something for every later conversation. kind: "fact" (true or false) or "rule" (can be '
-        + 'followed or broken; phrase it "When …, …" and give a topic and a description). scope = who reads it: '
+        'Remembers something for every later conversation. kind: "fact" (true or false), "rule" (can be '
+        + 'followed or broken; phrase it "When …, …" and give a topic and a description) or "instruction" (a '
+        + 'procedure: the whole skill in body, with topic and description). scope = who reads it: '
         + '"user" (only the user, every folder), "workspace" (Snotra in this folder), "team" (every tool here, '
         + 'via AGENTS.md). Ask the user who should read it before the call, unless they said so or no folder is '
         + 'open. Never passwords or keys. Load the skill "snotra-memory" before first use.',
@@ -2203,7 +2205,7 @@ function createWorkspaceToolRegistry({
       parameters: {
         type: 'object',
         properties: {
-          kind: { type: 'string', enum: [KNOWLEDGE_KINDS.FACT, KNOWLEDGE_KINDS.RULE], description: '"fact" or "rule".' },
+          kind: { type: 'string', enum: [KNOWLEDGE_KINDS.FACT, KNOWLEDGE_KINDS.RULE, KNOWLEDGE_KINDS.INSTRUCTION], description: '"fact", "rule" or "instruction".' },
           scope: {
             type: 'string',
             enum: [KNOWLEDGE_READERS.USER, KNOWLEDGE_READERS.WORKSPACE, KNOWLEDGE_READERS.TEAM],
@@ -2214,7 +2216,8 @@ function createWorkspaceToolRegistry({
             maxLength: MAX_MEMORY_ENTRY_CHARS,
             description: 'One thought, understandable without this conversation; a rule as "When …, …".',
           },
-          topic: { type: 'string', description: 'rule: the rules file name (a-z, 0-9, -).' },
+          topic: { type: 'string', description: 'rule: the rules file name (a-z, 0-9, -); instruction: the skill name.' },
+          body: { type: 'string', maxLength: MAX_SKILL_BODY_CHARS, description: 'instruction: the whole skill as it should read — it replaces the version before it.' },
           description: { type: 'string', maxLength: RULE_LIMITS.DESCRIPTION_CHARS, description: 'rule: when the file applies; required for a new file.' },
           always: { type: 'boolean', description: 'rule, new file only: it applies in every turn.' },
           origin: {
@@ -2225,7 +2228,8 @@ function createWorkspaceToolRegistry({
           replaces: { type: 'string', description: 'Optional: exact text of an entry at this level that this one replaces.' },
           replaces_in: { type: 'string', description: 'With replaces: "memory", "agents" or a rules file topic.' },
         },
-        required: ['kind', 'scope', 'text', 'origin'],
+        // `text` for a fact or a rule, `body` for a procedure: the writer checks which.
+        required: ['kind', 'scope', 'origin'],
       },
       handler: async (args, { workspaceRoot } = {}) => {
         const request = rememberRequest(args, workspaceRoot);
