@@ -1,6 +1,6 @@
 ---
 name: snotra-memory
-description: How to remember something permanently — the two questions (what is it, who reads it), facts, rules and procedures, wording, and reviewing what is kept. Use before calling the "remember" tool for the first time in a conversation, when the user says "remember …", "keep …", "from now on …", "remember that we always …", "review my memory", "what do we take away from this?", "merk dir …", "ab jetzt immer …", or asks what you have remembered and where.
+description: How to remember something permanently — the two questions (what is it, who reads it), facts, rules and procedures, wording, reviewing what is kept, and distilling a chat. Use before calling the "remember" tool for the first time in a conversation, when the user says "remember …", "keep …", "from now on …", "remember that we always …", "review my memory", "what do we take away from this?", "distil this chat", "merk dir …", "ab jetzt immer …", "was nehmen wir daraus mit?", "was bleibt aus diesem Chat?", or asks what you have remembered and where.
 license: Apache-2.0
 metadata:
   snotra-system-skill: 'true'
@@ -72,18 +72,26 @@ The result and the card may carry a hint: a fact that reads like a rule or a
 procedure, or an entry that reads like an episode. Nothing is refused for its
 kind — re-sort it if the hint is right, and say why not if it is wrong.
 
-## Changing and reviewing
+## Changing, reviewing, distilling
 
 To change an entry, remember the new one with `replaces` (the exact old text)
 and, if it is ambiguous, `replaces_in`. It is written first and removed second.
 You cannot simply delete; point the user to **{menu:settings.memory}**, or to
 the file itself.
 
-**Review, on request only** ("review my memory"): read the memory and the
-rules files of both levels, then propose **one change at a time** — move a
-fact that is a rule into a rules file, merge duplicates, drop what is stale —
-each as a `remember` call with `replaces` and the fitting kind, `origin:
-"requested"`. Wait for each card before the next proposal.
+**On request only — never offered by you, not even at the end of a run:**
+
+- **Review** ("review my memory"): read the memory and the rules files of
+  both levels; move a fact that is a rule into a rules file, merge
+  duplicates, drop what is stale — with `replaces`.
+- **Distil** ("what do we take away from this?"): go through the chat — with
+  `search_chats` also an earlier one, never a local one from a cloud chat —
+  for facts, rules and procedures that outlast it. Never an episode.
+
+Either way, propose **one item at a time**: its own `remember` call with
+kind and scope, `origin: "requested"`. Pick the reader yourself; the card
+lets the user change it. Wait for each card before the next. Nothing
+lasting? Say so.
 
 ## What the user sees
 

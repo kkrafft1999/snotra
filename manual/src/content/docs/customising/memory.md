@@ -26,6 +26,16 @@ From the next message on, the sentence is part of what the model knows.
 
 To tidy up, ask *review my memory*: Snotra goes through memory and rules files and proposes one change at a time — move a fact that is a rule, merge duplicates, drop what is stale — each on its own card.
 
+## Take away what lasts from a chat
+
+[since 1.30] A chat often turns up something worth keeping: a fact that came up, a correction that should hold next time, a way of doing something that worked. The chat itself is not kept as knowledge, so ask Snotra to draw it out.
+
+1. At the end of the chat, ask: *What do we take away from this?* or *Distil this chat.*
+2. Snotra goes through the chat and proposes **one item at a time**, each on its own card with its kind and who reads it — exactly as when you ask it to remember something.
+3. Change the kind or the reader on the card if it is sorted wrongly, then click *Remember* — or *Deny* to leave it out. The next proposal comes only after your answer.
+
+What happened only in this chat — *the test is failing today* — is not proposed: the chat already has it. If nothing lasts, Snotra says so. Because you asked, this works even with *Snotra may remember things on its own* switched off. Snotra never offers a distillation by itself; it starts when you ask.
+
 ## Where it is kept
 
 | Level | File | Applies to |
