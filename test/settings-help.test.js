@@ -108,15 +108,15 @@ test('a ? names its target and opens the manual there, in English and in German'
   const button = document.querySelector('[data-manual-help="defaultMode"]');
   try {
     assert.equal(button.getAttribute('type'), 'button');
-    assert.equal(button.getAttribute('aria-label'), 'Help: Give a folder a default mode');
-    assert.equal(button.title, 'Help: Give a folder a default mode');
+    assert.equal(button.getAttribute('aria-label'), 'Help: The folder\'s default mode');
+    assert.equal(button.title, 'Help: The folder\'s default mode');
     button.click();
-    assert.deepEqual(calls, [{ slug: 'safety/choose-a-mode', fragment: 'give-a-folder-a-default-mode' }]);
+    assert.deepEqual(calls, [{ slug: 'safety/choose-a-mode', fragment: 'the-folders-default-mode' }]);
 
     i18n.setLocale('de', { force: true });
-    assert.equal(button.getAttribute('aria-label'), 'Hilfe: Einem Ordner einen Standardmodus geben');
+    assert.equal(button.getAttribute('aria-label'), 'Hilfe: Der Standardmodus des Ordners');
     button.click();
-    assert.deepEqual(calls[1], { slug: 'safety/choose-a-mode', fragment: 'einem-ordner-einen-standardmodus-geben' });
+    assert.deepEqual(calls[1], { slug: 'safety/choose-a-mode', fragment: 'der-standardmodus-des-ordners' });
   } finally {
     i18n.setLocale('en', { force: true });
     controller.refresh();

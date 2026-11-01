@@ -28,7 +28,10 @@
  * of `smart` in both rules above: a new chat starts with it, and a chat
  * restored automatically from `auto` falls back to it — so a workspace whose
  * default is `auto` keeps `auto` across a restart. The default can only be
- * `auto` after main's own native confirmation for that workspace.
+ * `auto` after main's own native confirmation for that workspace. Since #1337
+ * every explicit pick in the mode pill writes that default as well (main's
+ * `setMode`), so a new chat starts where the user last left the workspace,
+ * and only a workspace that never had a pick starts at `smart`.
  *
  * The reasoning level is the chat's third value (#725), with a rule of its
  * own: a new chat has none and runs with the provider's default, `medium`. It
