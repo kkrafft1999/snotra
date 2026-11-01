@@ -1,6 +1,6 @@
 {
   "name": "snotra",
-  "version": "1.29.1",
+  "version": "1.30.0",
   "main": "src/main/index.js",
   "productName": "Snotra Agent",
   "scripts": {
