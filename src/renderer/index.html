@@ -493,17 +493,6 @@
                     </div>
                   </div>
                   <ul id="chat-tool-mode-list" class="chat-tool-mode-list" role="listbox" tabindex="-1" aria-label="Permission mode" data-i18n-attr="aria-label:chat.toolMode.menu"></ul>
-                  <!-- The workspace default (#413): outside the listbox as well,
-                       it is a setting of the folder, not a mode to pick. -->
-                  <div id="chat-tool-mode-footer" class="chat-tool-mode-footer" hidden>
-                    <label class="chat-tool-mode-remember">
-                      <input type="checkbox" id="chat-tool-mode-remember" aria-describedby="chat-tool-mode-remember-hint">
-                      <span class="chat-tool-mode-remember-body">
-                        <span id="chat-tool-mode-remember-label"></span>
-                        <span id="chat-tool-mode-remember-hint" class="chat-tool-mode-remember-hint"></span>
-                      </span>
-                    </label>
-                  </div>
                   <!-- The way to everything else Snotra may do here (#449). -->
                   <div class="chat-tool-mode-more">
                     <button type="button" id="chat-tool-mode-security-link" class="chat-tool-mode-notice-link" data-i18n="chat.toolMode.securityLink">All permissions in Settings › Tools › Autonomy</button>
@@ -608,6 +597,7 @@
         </div>
         <p id="chat-history-empty" class="chat-history-empty hidden" data-i18n="history.empty">No saved chats yet.</p>
         <div id="chat-history-list" class="chat-history-list"></div>
+        <p id="chat-history-status" class="visually-hidden" role="status" aria-live="polite"></p>
       </aside>
     </div>
 

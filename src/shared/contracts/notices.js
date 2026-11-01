@@ -21,6 +21,8 @@ const NOTICE_KINDS = Object.freeze({
   REMOTE_WORKSPACE_SWITCHED: 'remote-workspace-switched',
   /** Developer mode was switched on or off with its shortcut (#1213). */
   DEVELOPER_MODE: 'developer-mode',
+  /** A local chat was switched to a cloud model (#1315): its next turn takes the whole chat there. */
+  LOCAL_CHAT_TO_CLOUD: 'local-chat-to-cloud',
 });
 
 /** The one id of the background-error notice: a second error counts up instead of stacking. */
@@ -29,6 +31,10 @@ const BACKGROUND_ERROR_NOTICE_ID = 'background-error';
 const REMOTE_WORKSPACE_SWITCHED_NOTICE_ID = 'remote-workspace-switched';
 /** The one id of the developer mode notice: switching again replaces it. */
 const DEVELOPER_MODE_NOTICE_ID = 'developer-mode';
+/** The one id of the local-chat notice: another chat switched replaces it. */
+const LOCAL_CHAT_TO_CLOUD_NOTICE_ID = 'local-chat-to-cloud';
+/** How long a provider's name in a notice may be. */
+const NOTICE_PROVIDER_MAX = 120;
 /** How long a folder's name in a notice may be. */
 const NOTICE_FOLDER_MAX = 255;
 
@@ -74,6 +80,9 @@ const NOTICE_STORE_IDS = Object.freeze([...new Set([...Object.values(NOTICE_STOR
  * The phone's switch notice is `{ id, kind, folder, location: null,
  * canReveal: false }`: the name of the folder the phone opened (#1194).
  *
+ * The local-chat notice is `{ id, kind, provider, location: null, canReveal:
+ * false }`: the name of the provider the chat goes to with its next turn (#1315).
+ *
  * @param {unknown} input
  */
 function normalizeNotice(input) {
@@ -91,6 +100,11 @@ function normalizeNotice(input) {
     if (typeof folder !== 'string' || !folder || folder.length > NOTICE_FOLDER_MAX) return null;
     return { id, kind, folder, location: null, canReveal: false };
   }
+  if (kind === NOTICE_KINDS.LOCAL_CHAT_TO_CLOUD) {
+    const { provider } = input;
+    if (typeof provider !== 'string' || !provider || provider.length > NOTICE_PROVIDER_MAX) return null;
+    return { id, kind, provider, location: null, canReveal: false };
+  }
   if (kind === NOTICE_KINDS.BACKGROUND_ERROR) {
     const { count } = input;
     if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 1) return null;
@@ -107,6 +121,7 @@ module.exports = {
   BACKGROUND_ERROR_NOTICE_ID,
   REMOTE_WORKSPACE_SWITCHED_NOTICE_ID,
   DEVELOPER_MODE_NOTICE_ID,
+  LOCAL_CHAT_TO_CLOUD_NOTICE_ID,
   NOTICE_STORES,
   NOTICE_STORE_IDS,
   CHAT_SESSION_NOTICE_STORE,

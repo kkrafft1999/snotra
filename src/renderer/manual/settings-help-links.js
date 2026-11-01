@@ -52,7 +52,7 @@ export const SETTINGS_HELP = Object.freeze({
   },
   defaultMode: {
     slug: 'safety/choose-a-mode',
-    section: { en: 'Give a folder a default mode', de: 'Einem Ordner einen Standardmodus geben' },
+    section: { en: 'The folder\'s default mode', de: 'Der Standardmodus des Ordners' },
   },
   sessionGrants: {
     slug: 'safety/tools-and-security',
@@ -92,6 +92,11 @@ export const SETTINGS_HELP = Object.freeze({
   'notice.store': {
     slug: 'troubleshooting/files-set-aside',
     title: { en: 'When settings or the history start afresh', de: 'Wenn Einstellungen oder der Verlauf neu anfangen' },
+  },
+  // The link in the notice about a local chat switched to a cloud model (#1315).
+  'notice.localChat': {
+    slug: 'chatting/chat-history',
+    section: { en: 'Local chats stay local', de: 'Lokale Chats bleiben lokal' },
   },
   // The link in the notice about errors nobody caught (#978).
   'notice.backgroundError': {

@@ -2808,6 +2808,220 @@ body {
   box-shadow: var(--ds-icon-btn-active-shadow);
 }
 
+/* *Keep* (#1320): a bookmark next to the bin, in its geometry. It shows on
+ * hover and focus, and stays — filled, in the accent — once the chat is kept.
+ * Hidden by opacity only, so it stays in the tab order. */
+.chat-history-row-keep {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  margin-right: -6px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    background var(--ds-motion-fast),
+    color var(--ds-motion-fast),
+    opacity var(--ds-motion-fast),
+    transform 0.1s ease;
+}
+
+.chat-history-row:hover .chat-history-row-keep,
+.chat-history-row:focus-within .chat-history-row-keep,
+.chat-history-row-keep[aria-pressed='true'] {
+  opacity: 1;
+}
+
+.chat-history-row-keep:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.chat-history-row-keep:active {
+  background: var(--bg-active);
+  transform: scale(0.97);
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+.chat-history-row-keep[aria-pressed='true'] {
+  color: var(--ds-blue);
+}
+
+.chat-history-row-keep[aria-pressed='true']:hover {
+  color: var(--ds-blue-strong);
+}
+
+.chat-history-row-keep[aria-pressed='true'] svg path {
+  fill: currentColor;
+}
+
+.chat-history-row-keep[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+.chat-history-row--confirm .chat-history-row-keep {
+  display: none;
+}
+
+/* Chats from folders that no longer exist (#1320): one quiet note above the
+ * list, unfolded into groups by the folder they were in. Not a warning —
+ * nothing is lost, and nothing needs doing now. */
+.chat-history-orphans {
+  margin: 4px 8px 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--ds-radius-md);
+  background: var(--bg-primary);
+}
+
+.chat-history-orphans-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: var(--ds-touch-min);
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--ds-radius-md);
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--ds-font-size-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--ds-motion-fast);
+}
+
+.chat-history-orphans-toggle:hover {
+  background: var(--ds-blue-soft);
+}
+
+.chat-history-orphans-icon {
+  display: flex;
+  flex-shrink: 0;
+  color: var(--ds-blue-strong);
+}
+
+.chat-history-orphans-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+.chat-history-orphans-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  color: var(--ds-blue-strong);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.chat-history-orphans-chevron {
+  display: flex;
+  transition: transform var(--ds-motion-fast);
+}
+
+.chat-history-orphans-toggle[aria-expanded='true'] .chat-history-orphans-chevron {
+  transform: rotate(180deg);
+}
+
+.chat-history-orphans-list {
+  border-top: 1px solid var(--ds-grey-divider);
+  padding-bottom: 4px;
+}
+
+.chat-history-orphans-group + .chat-history-orphans-group {
+  border-top: 1px solid var(--ds-grey-divider);
+}
+
+.chat-history-orphans-path {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 6px 2px 10px;
+  font-size: var(--ds-font-size-xs);
+  color: var(--text-secondary);
+}
+
+.chat-history-orphans-folder {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+
+.chat-history-orphans-count {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The two assign actions are text buttons in the accent, as quiet as the note. */
+.chat-history-orphans-assign-all,
+.chat-history-orphan-assign {
+  flex-shrink: 0;
+  min-height: 24px;
+  padding: 2px 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ds-blue-strong);
+  font: inherit;
+  font-size: var(--ds-font-size-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--ds-motion-fast);
+}
+
+.chat-history-orphans-assign-all {
+  margin-left: auto;
+}
+
+.chat-history-orphans-assign-all:hover,
+.chat-history-orphan-assign:hover {
+  background: var(--ds-blue-soft);
+}
+
+.chat-history-orphans-assign-all[aria-busy='true'],
+.chat-history-orphan-assign[aria-busy='true'] {
+  opacity: 0.6;
+}
+
+.chat-history-orphan {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+}
+
+.chat-history-orphan-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--ds-font-size-md);
+}
+
+/* The ceiling across all folders, reached (#1320): said once, quietly. */
+.chat-history-ceiling {
+  margin: 6px 0 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  font-size: var(--ds-font-size-xs);
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
 /* "Delete this chat?" in place of the row (#582). Cancel sits where the bin
  * was, so a double click on the bin lands on Cancel. */
 .chat-history-row--confirm {
@@ -9599,15 +9813,21 @@ select.modal-input {
 
 /* The option that is the workspace default carries a tag next to its name
    (#413). */
+/* Since #1337 the tag shows on "Smart" too, so it meets the narrowest column:
+   it moves under the title there, and a long folder name ends in an ellipsis
+   instead of reaching out of the menu. */
 .chat-tool-mode-opt-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
+  gap: 2px 8px;
   min-width: 0;
 }
 
 .chat-tool-mode-default-tag {
-  flex-shrink: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   padding: 0 6px;
   border: 1px solid var(--ds-blue-border);
   border-radius: var(--ds-radius-pill);
@@ -9616,66 +9836,6 @@ select.modal-input {
   font-weight: var(--ds-font-weight-medium);
   line-height: 1.6;
   white-space: nowrap;
-}
-
-/* The workspace default under the list (#413), set apart like the notice
-   above it. */
-.chat-tool-mode-footer {
-  margin-top: 6px;
-  padding: 10px 12px 4px;
-  border-top: 1px solid var(--ds-grey-divider);
-}
-
-.chat-tool-mode-footer[hidden] {
-  display: none;
-}
-
-.chat-tool-mode-remember {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  font-size: var(--ds-font-size-md);
-  line-height: 1.4;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.chat-tool-mode-remember input {
-  flex-shrink: 0;
-  width: 14px;
-  height: 14px;
-  margin: 2px 0 0;
-  accent-color: var(--ds-blue);
-  cursor: pointer;
-}
-
-.chat-tool-mode-remember input:focus-visible {
-  outline: var(--ds-focus-ring);
-  outline-offset: var(--ds-focus-offset);
-}
-
-.chat-tool-mode-remember:has(input:disabled) {
-  color: var(--text-muted-strong);
-  cursor: default;
-}
-
-.chat-tool-mode-remember:has(input:disabled) input {
-  cursor: default;
-}
-
-.chat-tool-mode-remember-body {
-  min-width: 0;
-}
-
-.chat-tool-mode-remember strong {
-  font-weight: var(--ds-font-weight-bold);
-}
-
-.chat-tool-mode-remember-hint {
-  display: block;
-  margin-top: 2px;
-  font-size: var(--ds-font-size-sm);
-  color: var(--text-muted-strong);
 }
 
 /* Freigabe-Karte: flacher Container (6px, Divider-Border), zwischen Tool-Log

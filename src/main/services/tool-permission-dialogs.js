@@ -23,15 +23,20 @@ const { menuPath } = require('../../shared/i18n/ui-quotes');
 // moment they open (#353). They live only until the click, so there is nothing
 // to repaint on a language change.
 /**
+ * "Auto" for the chat on screen — and, with a workspace open, for every new
+ * chat in it (#1337), which the dialog says with the folder's path.
+ *
  * @param {Translator} t
+ * @param {string|null} [root]
  * @returns {ConfirmationPrompt}
  */
-function autoModeDialog(t) {
+function autoModeDialog(t, root = null) {
+  const detail = t('permissionDialog.auto.detail');
   return {
     type: 'warning',
     title: t('permissionDialog.auto.title'),
     message: t('permissionDialog.auto.title'),
-    detail: t('permissionDialog.auto.detail'),
+    detail: root ? `${detail}\n\n${t('permissionDialog.auto.detailWorkspace', { root })}` : detail,
     buttons: [t('permissionDialog.auto.confirm'), t('permissionDialog.cancel')],
     defaultId: 1,
     cancelId: 1,

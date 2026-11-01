@@ -505,16 +505,18 @@ function createToolPermissionService({
     if (mode !== rawMode) return createSettingsError(createMessage('permissions.error.unknownMode'));
     // "Auto" is confirmed for the chat on screen, and remembered for it (#980).
     const chatId = chatSessionSettings?.getCurrentChatId?.() ?? null;
+    // The pick is the open workspace's default from now on (#1337).
+    const workspaceRoot = getActiveWorkspaceRoot() || null;
     /** @type {object|null} */
     let confirmation = null;
     if (mode === TOOL_PERMISSION_MODES.AUTO) {
       // Without safeStorage "Auto" cannot be stored (#419): say so instead of
       // asking for a confirmation that leads nowhere.
       if (!(await canStoreLoosening())) return createSettingsError(createMessage('permissions.error.autoNeedsEncryption'));
-      confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.MODE_AUTO, chatId || '', autoModeDialog(createTranslator(getLocale())));
+      confirmation = await confirmLoosening(CONFIRMATION_ACTIONS.MODE_AUTO, chatId || '', autoModeDialog(createTranslator(getLocale()), workspaceRoot));
       if (!confirmation) return createSettingsError(createMessage('permissions.error.autoNotEnabled'), 'cancelled');
     }
-    const result = await toolPolicyStore.setMode(mode, { confirmation, chatId });
+    const result = await toolPolicyStore.setMode(mode, { confirmation, chatId, workspaceRoot });
     if (!result.ok) return createSettingsError(result.error);
     await chatSessionSettings?.rememberMode(result.mode);
     afterModeChange(notify);

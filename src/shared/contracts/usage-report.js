@@ -93,7 +93,8 @@ const WEEKLY_BARS_MAX_DAYS = 371;
  * @property {UsageDay[]} days                 only days with spending, oldest first
  * @property {{ from: string, to: string }|null} priceTables  the oldest and newest price table the chats in it were priced with
  * @property {number} historyChats  how many chats the history holds
- * @property {boolean} historyFull  the history is at its limit; older chats are gone
+ * @property {boolean} historyFull  a folder is at its limit (#1320); its older chats are gone, those marked *Keep* aside
+ * @property {number|null} historyFolderLimit  the chats a folder keeps, when it is known
  */
 
 /**
@@ -260,14 +261,36 @@ function inPeriod(date, period) {
 }
 
 /**
+ * Has a folder reached its limit (#1320)? Then its oldest chats have gone and
+ * the report does not see them. Chats without a folder are a folder of their
+ * own; chats marked *Keep* do not count.
+ *
+ * @param {unknown[]} chats
+ * @param {number} max
+ */
+function folderAtLimit(chats, max) {
+  if (!Number.isFinite(max)) return false;
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  for (const chat of chats) {
+    if (!isRecord(chat) || chat.keep === true) continue;
+    const key = typeof chat.workspaceRoot === 'string' ? chat.workspaceRoot : '';
+    const count = (counts.get(key) || 0) + 1;
+    if (count >= max) return true;
+    counts.set(key, count);
+  }
+  return false;
+}
+
+/**
  * Builds the report from the history's index entries.
  *
  * @param {UsageChatInput[]} chats  every chat the history holds
  * @param {unknown} rawPeriod
- * @param {{ maxChats?: number }} [options]
+ * @param {{ maxChatsPerFolder?: number }} [options]
  * @returns {UsageReport}
  */
-function buildUsageReport(chats, rawPeriod, { maxChats = Infinity } = {}) {
+function buildUsageReport(chats, rawPeriod, { maxChatsPerFolder = Infinity } = {}) {
   const period = /** @type {{ from: string|null, to: string|null }} */ (normalizeUsagePeriod(rawPeriod));
   const list = Array.isArray(chats) ? chats : [];
   const totals = { ...emptyFigures(), chats: 0 };
@@ -372,7 +395,8 @@ function buildUsageReport(chats, rawPeriod, { maxChats = Infinity } = {}) {
       ? { from: priceTableDates[0], to: priceTableDates[priceTableDates.length - 1] }
       : null,
     historyChats,
-    historyFull: historyChats >= maxChats,
+    historyFull: folderAtLimit(list, maxChatsPerFolder),
+    historyFolderLimit: Number.isFinite(maxChatsPerFolder) ? maxChatsPerFolder : null,
   };
 }
 

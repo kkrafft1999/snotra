@@ -28,17 +28,12 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
   const noticeLink = document.getElementById('chat-tool-mode-notice-link');
   const securityLink = document.getElementById('chat-tool-mode-security-link');
   const status = document.getElementById('chat-tool-mode-status');
-  const footer = document.getElementById('chat-tool-mode-footer');
-  const remember = document.getElementById('chat-tool-mode-remember');
-  const rememberLabel = document.getElementById('chat-tool-mode-remember-label');
-  const rememberHint = document.getElementById('chat-tool-mode-remember-hint');
   if (!wrap || !btn || !label || !menu || !list || !toolPermissions) {
     return { close() {}, isOpen: () => false };
   }
 
   let open = false;
   let statusTimer = 0;
-  let rememberBusy = false;
   // True while the list is rebuilt: the focused option goes away for a moment.
   let rebuilding = false;
 
@@ -97,6 +92,8 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
         const tag = document.createElement('span');
         tag.className = 'chat-tool-mode-default-tag';
         tag.textContent = defaults.tag;
+        // A long folder name ends in an ellipsis in a narrow column.
+        tag.title = defaults.tag;
         head.appendChild(title);
         head.appendChild(tag);
         main.appendChild(head);
@@ -126,26 +123,6 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
     else list.removeAttribute('aria-describedby');
   }
 
-  /** The checkbox under the list (#413). Kept as it is while main decides. */
-  function renderFooter(defaults) {
-    if (!footer || !remember) return;
-    footer.hidden = !defaults.visible;
-    if (!defaults.visible || rememberBusy) return;
-    remember.checked = defaults.checked;
-    remember.disabled = defaults.disabled;
-    remember.dataset.target = defaults.targetMode;
-    if (rememberLabel) {
-      rememberLabel.textContent = defaults.label.before;
-      if (defaults.label.folder) {
-        const strong = document.createElement('strong');
-        strong.textContent = defaults.label.folder;
-        rememberLabel.appendChild(strong);
-      }
-      rememberLabel.append(defaults.label.after);
-    }
-    if (rememberHint) rememberHint.textContent = defaults.hint;
-  }
-
   function render(state) {
     const view = describeModePill(state);
     const defaults = describeWorkspaceDefault(state);
@@ -168,7 +145,6 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
       btn.setAttribute('aria-label', t('chat.toolMode.button.label', { mode: view.label }));
     }
     renderNotice(view);
-    renderFooter(defaults);
     if (open) {
       rebuild(view.mode, defaults);
       keepPopupInColumn(menu, wrap);
@@ -201,7 +177,11 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
     setStatus('');
     const result = await toolPermissions.setMode(mode);
     if (result?.ok) {
-      setStatus(t('chat.toolMode.changed', { mode: modeLabel(mode) }));
+      // The pick is the open folder's default as well (#1337); say so.
+      const { folder } = describeWorkspaceDefault(toolPermissions.get());
+      setStatus(folder
+        ? t('chat.toolMode.changedDefault', { mode: modeLabel(mode), folder })
+        : t('chat.toolMode.changed', { mode: modeLabel(mode) }));
       return;
     }
     if (isCancelledResult(result)) {
@@ -210,42 +190,6 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
     }
     setStatus(tMessage(result?.error) || t('chat.toolMode.failed'));
   }
-
-  /**
-   * Ticked: the chat's mode becomes the workspace default; unticked: the
-   * default goes back to "Smart". The menu stays open, so the result can be
-   * read where the click happened.
-   */
-  async function rememberForWorkspace() {
-    const target = remember.dataset.target;
-    const folder = describeWorkspaceDefault(toolPermissions.get()).folder;
-    rememberBusy = true;
-    remember.disabled = true;
-    setStatus('');
-    let result;
-    try {
-      result = await toolPermissions.setWorkspaceMode(target);
-    } finally {
-      rememberBusy = false;
-    }
-    if (result?.ok) {
-      setStatus(t(target === 'smart' ? 'chat.toolMode.remember.cleared' : 'chat.toolMode.remember.set', {
-        folder,
-        mode: modeLabel(target),
-      }));
-    } else if (isCancelledResult(result)) {
-      setStatus(t('chat.toolMode.remember.unchanged'));
-    } else {
-      setStatus(tMessage(result?.error) || t('chat.toolMode.remember.failed'));
-    }
-    // Whatever happened, the checkbox shows what main holds.
-    render(toolPermissions.get());
-    if (open) remember.focus();
-  }
-
-  remember?.addEventListener('change', () => {
-    void rememberForWorkspace();
-  });
 
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -303,7 +247,7 @@ export function initToolModePicker({ toolPermissions, onOpenSandboxSettings, onO
   dismissOnFocusLeave({
     container: wrap,
     isOpen: () => open,
-    isPaused: () => rebuilding || rememberBusy,
+    isPaused: () => rebuilding,
     onDismiss: close,
   });
 
