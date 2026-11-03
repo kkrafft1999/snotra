@@ -58,6 +58,9 @@ Thumbs.db
 # The negations above take Finder files back in; drop them again
 .claude/**/.DS_Store
 
+# Snotra's own memory for this folder, written when the app works on this repo (#1358)
+.agents/memory.md
+
 # Benchmark fixture (#186): the tasks need these files, ignored names included.
 # Its own .gitignore is stored as dot-gitignore and renamed when it is copied.
 !bench/tool-accuracy/fixture/dist/
