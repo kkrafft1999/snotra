@@ -717,6 +717,10 @@ if (welcomeCta) {
 }
 
 btnChatNew.addEventListener('click', () => chatHistory.startNewChatWithHistory());
+// The same action from the chat header (#1363), there also while the history
+// column is hidden.
+document.getElementById('btn-chat-new-header')
+  ?.addEventListener('click', () => chatHistory.startNewChatWithHistory());
 
 // Menu "File > New Chat" or Cmd/Ctrl+N (issue #381): the same as the button,
 // plus what a keyboard user needs — a hidden chat column comes back, and the

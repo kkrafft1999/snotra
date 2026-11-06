@@ -1032,7 +1032,9 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const linkChatId = await page.evaluate(() =>
     document.querySelector('.chat-history-row--current[data-chat-id]')?.dataset.chatId || null);
   assert.ok(linkChatId, 'the chat with the links is in the history');
-  await page.evaluate(() => document.getElementById('btn-chat-new').click());
+  // Through the chat header's own New chat (#1363): the same action as the
+  // history column's button.
+  await page.evaluate(() => document.getElementById('btn-chat-new-header').click());
   await poll(() => page.evaluate((id) =>
     !document.querySelector(`.chat-history-row--current[data-chat-id="${id}"]`)
     && ![...document.querySelectorAll('#chat-messages .chat-msg.user')].length, linkChatId),

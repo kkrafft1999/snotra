@@ -373,12 +373,26 @@
                item. aria-disabled rather than disabled, so the tooltip and the
                focus stay while it cannot run; the reason is its description.
                In a narrow panel only the icon shows, the name stays the same. -->
-          <button type="button" id="btn-chat-distil" class="chat-distil" aria-describedby="chat-distil-reason">
-            <svg class="chat-distil-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
-              <path d="M2.5 3h11L9.2 8.2v4.3l-2.4 1V8.2z"/>
-            </svg>
-            <span class="chat-distil-label" data-i18n="chat.distil.label">Distil into knowledge…</span>
-          </button>
+          <div class="chat-header-actions">
+            <button type="button" id="btn-chat-distil" class="chat-distil" aria-describedby="chat-distil-reason">
+              <svg class="chat-distil-icon" width="14" height="14" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M2.5 3h11L9.2 8.2v4.3l-2.4 1V8.2z"/>
+              </svg>
+              <span class="chat-distil-label" data-i18n="chat.distil.label">Distil into knowledge…</span>
+            </button>
+            <!-- New chat from the chat itself (#1363), also while the history
+                 column is hidden. Always shown, as a round icon button with the
+                 history button's pencil; the aria-label is its name, the title
+                 the tooltip. Same action as #btn-chat-new. -->
+            <button type="button" id="btn-chat-new-header" class="chat-new-header"
+                    title="New chat" aria-label="New chat"
+                    data-i18n-attr="title:history.new;aria-label:history.new">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"/>
+              </svg>
+            </button>
+          </div>
           <span id="chat-distil-reason" hidden></span>
         </div>
         <!-- While the history does not take this session's chats (#977). Said once

@@ -218,3 +218,26 @@ test('die vier Spalten-Schalter stehen in der Titelzeile und melden ihren Zustan
   assert.match(newChatButton, /class="btn-chat-new-label" data-i18n="history\.new"/);
   assert.doesNotMatch(newChatButton, /aria-label=/);
 });
+
+test('the chat header has its own New chat, always there (#1363)', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'index.html'), 'utf8');
+  const header = html.slice(
+    html.indexOf('<div id="chat-header">'),
+    html.indexOf('id="chat-distil-reason"')
+  );
+  const actions = header.slice(header.indexOf('class="chat-header-actions"'));
+  assert.match(actions, /id="btn-chat-distil"/);
+  assert.match(actions, /id="btn-chat-new-header"/);
+  assert.ok(
+    actions.indexOf('id="btn-chat-distil"') < actions.indexOf('id="btn-chat-new-header"'),
+    'New chat sits at the far right, after Distil'
+  );
+  const button = actions.slice(
+    actions.indexOf('<button type="button" id="btn-chat-new-header"'),
+    actions.indexOf('</button>', actions.indexOf('id="btn-chat-new-header"'))
+  );
+  // Icon only, so the name comes from aria-label, translated with the title.
+  assert.match(button, /data-i18n-attr="title:history\.new;aria-label:history\.new"/);
+  const openTag = button.slice(0, button.indexOf('>') + 1);
+  assert.doesNotMatch(openTag, /\shidden\b|class="[^"]*\bhidden\b/, 'shown whether or not the history column is');
+});

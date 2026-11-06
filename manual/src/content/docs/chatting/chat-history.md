@@ -19,7 +19,7 @@ Click the rightmost button in the title bar, *Show chat history*. The history ap
 
 ## Steps
 
-- **Start a new chat:** *New chat* at the top of the history, *File › New Chat*, or `Cmd+N` / `Ctrl+N`.
+- **Start a new chat:** *New chat* at the top of the history, the pencil at the top right of the chat itself [since 1.31] — there also while the history is hidden — *File › New Chat*, or `Cmd+N` / `Ctrl+N`.
 - **Go back to a chat:** click it in the history. It comes back with its messages, its model, its reasoning level and its mode.
 - **Delete a chat:** click the bin next to it and confirm *Delete this chat?* with *Delete*. Images you attached to it go with it.
 - [since 1.30] **Keep a chat:** point at it and click the bookmark next to the bin, *Keep chat*. The bookmark stays filled; a kept chat is never removed to make room. Click it again to take the mark off.

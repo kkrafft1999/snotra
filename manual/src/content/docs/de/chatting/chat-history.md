@@ -19,7 +19,7 @@ Klick auf den Knopf ganz rechts in der Titelleiste, *Chat-Verlauf einblenden*. D
 
 ## Schritte
 
-- **Einen neuen Chat beginnen:** *Neuer Chat* oben im Verlauf, *Datei › Neuer Chat* oder `Cmd+N` / `Strg+N`.
+- **Einen neuen Chat beginnen:** *Neuer Chat* oben im Verlauf, der Stift oben rechts im Chat selbst [seit 1.31] — dort auch, wenn der Verlauf ausgeblendet ist —, *Datei › Neuer Chat* oder `Cmd+N` / `Strg+N`.
 - **Zu einem Chat zurückgehen:** Klick ihn im Verlauf an. Er kommt mit seinen Nachrichten, seinem Modell, seiner Reasoning-Stufe und seinem Modus zurück.
 - **Einen Chat löschen:** Klick auf den Papierkorb daneben und bestätige *Diesen Chat löschen?* mit *Löschen*. Bilder, die du angehängt hattest, verschwinden mit ihm.
 - [seit 1.30] **Einen Chat behalten:** Zeig auf ihn und klick auf das Lesezeichen neben dem Papierkorb, *Chat behalten*. Das Lesezeichen bleibt gefüllt; ein behaltener Chat wird nie entfernt, um Platz zu schaffen. Ein weiterer Klick nimmt die Markierung wieder weg.
