@@ -13,9 +13,9 @@ In this project **everything runs through GitHub issues**.
   write access in this environment (token scopes `repo`, `workflow`, `project`,
   `read:org`, `gist`; verified 2026-09-13). The `project` scope also allows
   **reading and setting the board column** via `gh project item-list` /
-  `gh project item-edit`. New issues do not land on the board by themselves,
-  though — after `gh issue create`, either file them yourself with
-  `gh project item-add 2 --owner kkrafft1999 --url <issue-url>` or tell the user.
+  `gh project item-edit`. New issues land on the board by themselves: the
+  board's *Auto-add to project* workflow files them and *Item added to project*
+  puts them into `Backlog` (checked 2026-11-06, #1360).
 - If `gh` cannot write for once (another machine, a missing scope, no network):
   print the finished issue text **in the conversation** and ask the user to
   create it. Don't write it into the repository.
@@ -74,9 +74,19 @@ In this project **everything runs through GitHub issues**.
   ```
   (Bugs with `--label bug`.) Put the body file in the scratchpad, not in the
   repository. Mention the issue link in the conversation afterwards.
-- **Put fresh issues on the board.** `item-add` attaches the issue without a
-  status; the `Backlog` column is set afterwards with `item-edit` (never
-  `Ready` — what comes next is the user's call):
+- **Check that fresh issues are on the board.** The auto-add workflow files a
+  new issue in `Backlog` within moments, so there is normally nothing to do —
+  and `item-add` on an issue that is already there fails with
+  `Content already exists in this project`. Look it up instead:
+  ```sh
+  gh project item-list 2 --owner kkrafft1999 --query "is:issue is:open" \
+    --limit 200 --format json \
+    --jq '.items[] | select(.content.number==<nr>) | .status'
+  ```
+  Only if it is missing (the workflow switched off, an issue its filter does
+  not match), file it by hand: `item-add` attaches the issue without a status,
+  and the `Backlog` column is set afterwards with `item-edit` (never `Ready` —
+  what comes next is the user's call):
   ```sh
   gh project item-add 2 --owner kkrafft1999 --url <issue-url>
   gh project item-edit --id <item-id from item-add> \
