@@ -31,7 +31,9 @@ import { startFakeModel } from './helpers/fake-model.mjs';
 import { launchApp, prepareUserData, poll, makeTempDir, rendererToolEvents, sendChat } from './helpers/app.mjs';
 
 const REQUIRED = process.env.SNOTRA_REQUIRE_SANDBOX === '1' || process.env.CI === 'true';
-const curl = (url) => `curl -sS -m 60 -o /dev/null -w "%{http_code}" ${url}`;
+// -k: the proxy only tunnels, so whether curl trusts the site's certificate chain
+// is not under test — and the macOS runner does not trust every CA it uses (#1365).
+const curl = (url) => `curl -ksS -m 60 -o /dev/null -w "%{http_code}" ${url}`;
 
 /**
  * One look at the chat. An access card of "Smart" is answered with "Allow
