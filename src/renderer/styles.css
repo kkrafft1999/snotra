@@ -2460,6 +2460,54 @@ body {
   stroke-linejoin: round;
 }
 
+/* The header's right-hand group: "Distil into knowledge…" and New chat. */
+.chat-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+/* New chat in the chat header (#1363): a round icon button, as quiet as the
+ * history button in its narrow state, so the distil pill stays the one
+ * outlined control in the header. */
+.chat-new-header {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--ds-motion-fast),
+    color var(--ds-motion-fast),
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
+}
+
+.chat-new-header:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.chat-new-header:active {
+  background: var(--bg-active);
+  color: var(--text-primary);
+  transform: scale(0.97);
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+.chat-new-header svg {
+  flex-shrink: 0;
+}
+
 /* A narrow panel (see DISTIL_COMPACT_BELOW_PX): only the icon. The label stays
  * in the accessibility tree, so the button keeps its name. */
 .chat-distil.chat-distil--compact {

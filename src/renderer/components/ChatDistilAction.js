@@ -11,8 +11,12 @@ import { onLocaleChange, t } from '../i18n.js';
  * about 640 px in German, and longer kinds move it again. So the breakpoint is
  * measured where it falls — the label shows while the title keeps at least
  * this much room, enough for two or three words.
+ *
+ * 130 until New chat joined the header (#1363). Its 36 px left the widest
+ * column of a 1280 px window 116 px for the title in English and 104 px in
+ * German, so the label would never show there any more.
  */
-export const DISTIL_MIN_TITLE_ROOM_PX = 130;
+export const DISTIL_MIN_TITLE_ROOM_PX = 100;
 
 /** Icon, gap and the button's own padding and border around the label. */
 const LABELLED_CHROME_PX = 14 + 6 + 10 + 12 + 2;
@@ -74,8 +78,21 @@ export function initChatDistilAction({ appStore, send, modelReady = () => true }
     const kindWidth = kindWrap && kindPill && !kindWrap.classList.contains('hidden')
       ? kindPill.scrollWidth + 2 + metaGap + (kindLabel ? kindLabel.scrollWidth - kindLabel.clientWidth : 0)
       : 0;
+    // Whatever else sits in the actions group beside it (New chat, #1363).
+    const actions = button.parentElement?.classList.contains('chat-header-actions')
+      ? button.parentElement
+      : null;
+    let siblings = 0;
+    if (actions) {
+      const actionsGap = parseFloat(getComputedStyle(actions).columnGap) || 0;
+      for (const el of actions.children) {
+        if (el === button) continue;
+        const w = el.getBoundingClientRect().width;
+        if (w) siblings += w + actionsGap;
+      }
+    }
     const labelled = label.scrollWidth + LABELLED_CHROME_PX;
-    const room = width - padding - gap - labelled - dotWidth - kindWidth;
+    const room = width - padding - gap - labelled - siblings - dotWidth - kindWidth;
     return room < DISTIL_MIN_TITLE_ROOM_PX;
   }
 
