@@ -245,7 +245,9 @@ test('a folder allowed on the sandbox card is writable on the second run; Snotra
 test('no network unless a domain is allowed — an allowed domain works', async (t) => {
   const ctx = await ready(t);
   if (!ctx) return;
-  const curl = 'curl -sS -m 20 -o /dev/null -w "%{http_code}" https://example.com';
+  // -k: the proxy only tunnels, so whether curl trusts example.com's certificate
+  // chain is not under test — and the macOS runner does not trust every CA it uses (#1365).
+  const curl = 'curl -ksS -m 20 -o /dev/null -w "%{http_code}" https://example.com';
 
   const blocked = await runThroughProxy(t, ctx, 'blocked', curl, { timeoutMs: 30_000 });
   const allowed = await runThroughProxy(t, ctx, 'allowed', curl, {
@@ -284,7 +286,8 @@ test('a connection that goes around the proxy is refused and named as direct, no
 test('a connection outside the run\'s domains waits for the user: allowed it goes through, denied it is refused (#792)', async (t) => {
   const ctx = await ready(t);
   if (!ctx) return;
-  const curl = 'curl -sS -m 20 -o /dev/null -w "%{http_code}" https://example.com';
+  // -k for the same reason as above (#1365).
+  const curl = 'curl -ksS -m 20 -o /dev/null -w "%{http_code}" https://example.com';
   const asked = [];
   const answering = (answer) => async (request) => { asked.push(request); return answer(request); };
 
