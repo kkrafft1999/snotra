@@ -3180,6 +3180,9 @@ body {
   padding: 9px 13px;
   border-radius: var(--ds-radius-bubble);
   white-space: pre-wrap;
+  font-family: var(--ds-font-chat);
+  font-size: var(--ds-font-size-chat);
+  line-height: var(--ds-line-height-chat);
 }
 
 /* A question written on the phone (#1197): a quiet line under the bubble —
@@ -3253,7 +3256,7 @@ body {
   vertical-align: -2px;
 }
 
-/* Phase 3: AI-Antwort in der Referenz-Typo (17px / 1.55) — luftiger zu lesen. */
+/* The answer in the chat type: system face, 16px / 1.6 (#1362). */
 .chat-msg.assistant {
   align-self: stretch;
   background: transparent;
@@ -3265,8 +3268,9 @@ body {
 
 .chat-msg.assistant .chat-md,
 .chat-msg.assistant .chat-md-streaming {
-  font-size: var(--ds-font-size-lg);    /* 15px */
-  line-height: var(--ds-line-height-prose);  /* 1.55 */
+  font-family: var(--ds-font-chat);
+  font-size: var(--ds-font-size-chat);
+  line-height: var(--ds-line-height-chat);
   margin-top: 2px;
 }
 
@@ -4167,13 +4171,30 @@ button.chat-image-open:hover {
   color: var(--text-secondary);
 }
 
+/* Inline code: a quiet grey ground, no border — a border turned every
+ * snippet in a sentence into a small box (#1362). */
 .chat-md code {
   font-family: var(--font-mono);
-  font-size: 0.92em;
-  padding: 0.1em 0.35em;
-  border-radius: 4px;
+  font-size: 0.86em;
+  padding: 0.14em 0.4em;
+  border-radius: 5px;
   background: var(--ds-grey-card);
-  border: 1px solid var(--ds-grey-divider);
+}
+
+/* Links in chat text: a thicker line set off from the baseline, in a tint of
+ * the accent, so a sentence with several links stays calm; the line turns
+ * full on hover. The link text keeps the accent colour, so it is never told
+ * apart by the line alone (#1362). */
+.chat-md a[href] {
+  text-decoration-line: underline;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.22em;
+  text-decoration-color: color-mix(in srgb, var(--accent-text) 38%, transparent);
+  transition: text-decoration-color var(--ds-motion-fast, 0.15s);
+}
+
+.chat-md a[href]:hover {
+  text-decoration-color: currentColor;
 }
 
 .chat-md pre {
@@ -4644,9 +4665,9 @@ button.chat-image-open:hover {
 #chat-input,
 .chat-input-mirror {
   padding: 10px 10px 6px;
-  font-size: 14px;
-  line-height: 1.45;
-  font-family: var(--font-ui);
+  font-size: var(--ds-font-size-chat);
+  line-height: var(--ds-line-height-chat);
+  font-family: var(--ds-font-chat);
   font-weight: 400;
   letter-spacing: normal;
   white-space: pre-wrap;
