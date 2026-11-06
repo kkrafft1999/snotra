@@ -209,6 +209,10 @@
   --ds-font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   --ds-font-tool: Consolas, ui-monospace, 'SF Mono', Menlo, monospace;
   --ds-font-numeric-tabular: tabular-nums;
+  /* Running text in the chat — question, answer, input (#1362). The system
+   * face (SF Pro, Segoe UI, the desktop default on Linux) reads like prose
+   * where Inter reads like UI; everything around the text stays Inter. */
+  --ds-font-chat: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
 
   --ds-font-size-xs: 11px;     /* Mindestgroesse Pill */
   --ds-font-size-sm: 12px;     /* Eyebrow, Mono-Tags */
@@ -218,6 +222,7 @@
   --ds-font-size-h3: 17px;     /* AI-Antwort */
   --ds-font-size-h2: 24px;     /* Empty-State Headline (mobile) */
   --ds-font-size-h1: 32px;     /* Empty-State Headline (desktop) */
+  --ds-font-size-chat: 16px;   /* chat question, answer and input alike (#1362) */
 
   --ds-font-weight-regular: 400;
   --ds-font-weight-medium: 500;     /* Phase 5 F: CTA, Chip-Cmd, btn-secondary */
@@ -227,6 +232,7 @@
   --ds-line-height-tight: 1.15;
   --ds-line-height-base: 1.5;
   --ds-line-height-prose: 1.55;
+  --ds-line-height-chat: 1.6;
 
   /* ── Abstaende & Radien ───────────────────────────────────────────────── */
   --ds-radius-sm: 4px;         /* Fokus-Ring Radius */

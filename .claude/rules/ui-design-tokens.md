@@ -104,6 +104,18 @@ contrast headroom.
   extremely light or heavy display weights.
 - Mono: `ui-monospace, 'SF Mono', Menlo, Consolas, monospace`
 - `font-variant-numeric: tabular-nums` for numbers in tables and timings.
+- **Chat text is the one exception to Inter** (#1362, picked by the user on
+  2026-11-06 from a mockup with four variants): the user's question, the
+  answer and the input field use `--ds-font-chat` — the system face, SF Pro
+  on macOS, Segoe UI on Windows, the desktop default on Linux — at
+  `--ds-font-size-chat` / `--ds-line-height-chat` (16px / 1.6), the same
+  for all three so you type in the size the message is shown in. Inter reads
+  like UI; long answers read better in a face made for running text.
+  Everything around the text — tool lines, cards, buttons, the composer bar —
+  stays Inter.
+- Links in chat text carry a 1.5px underline, 0.22em below the baseline, in
+  a 38% tint of the accent that turns full on hover; inline code has a grey
+  ground and no border.
 
 ### Radius
 
