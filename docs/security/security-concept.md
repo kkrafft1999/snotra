@@ -1603,6 +1603,13 @@ can be committed by anyone who works in it.
   *Keep* or *Reset* (#1319). No persistent allow rule covers such a write, and
   every global knowledge path is a protected write path of the sandbox, so a
   shell command cannot reach it at all.
+  **Exception in *Auto* (#1371):** a knowledge file of the open folder is
+  written without a card, by the user's decision of 2026-11-07 — it is part
+  of the folder Auto already hands to the agent. What stays: the card returns
+  as soon as the chat carries an injection warning; the agent's answer has to
+  name every knowledge file it changed; the tree marks the change and
+  *Settings › Knowledge* lists it for undo. The accepted risk is an injected
+  instruction that persists in the folder without a flag in the chat.
 
   Built in #1319: `shared/contracts/knowledge-files.js` names the knowledge
   files — `AGENTS.md`, `.agents/memory.md`, `.agents/rules/**`,

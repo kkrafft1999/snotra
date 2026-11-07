@@ -29,8 +29,10 @@ with `load_skill` once the description matches the task.
 - **A skill of several files** — `references/`, `scripts/`, `assets/` — only
   in the open folder, under `.agents/skills/<name>/`, with the ordinary file
   tools: `write_file_text` for a new file (missing folders are created),
-  `edit_file` or `apply_patch` for changes. Every such write asks the user on a
-  card.
+  `edit_file` or `apply_patch` for changes. An existing skill there is
+  changed the same way — it is part of the folder, not locked. Such a write
+  asks on a card in *Smart* and *Always ask*; in *Auto* it goes through, and
+  your answer names every skill file you wrote.
 
 Read-only for the file tools, with no way around it:
 

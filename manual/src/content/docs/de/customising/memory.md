@@ -18,7 +18,7 @@ Nichts für das globale Gedächtnis. Für das Projektgedächtnis einen geöffnet
    - **Nur du** — global, in jedem Ordner.
    - **Snotra in diesem Ordner** — im Projektgedächtnis.
    - **Alle Werkzeuge hier** — in der `AGENTS.md` des Ordners, die auch andere Coding-Werkzeuge lesen und die meist mit dem Team geteilt wird. [seit 1.30]
-3. Prüf die Karte. [seit 1.30] Sie zeigt Snotras Vorschlag als zwei Reihen zur Auswahl: *Art* — ein Fakt, eine [Regel](../rules/) oder ein Ablauf — und *Wer liest es*. Hat Snotra falsch einsortiert, wähl etwas anderes: Ein anderer Leser oder *Fakt* wird so geschrieben, wie du es gewählt hast; *Regel* oder *Ablauf* geht an Snotra zurück, das es formuliert und erneut fragt. Dann klick *Merken*. Die Karte fragt in jedem Modus, auch in *Auto*, und jeden Eintrag einzeln.
+3. Prüf die Karte. [seit 1.30] Sie zeigt Snotras Vorschlag als zwei Reihen zur Auswahl: *Art* — ein Fakt, eine [Regel](../rules/) oder ein Ablauf — und *Wer liest es*. Hat Snotra falsch einsortiert, wähl etwas anderes: Ein anderer Leser oder *Fakt* wird so geschrieben, wie du es gewählt hast; *Regel* oder *Ablauf* geht an Snotra zurück, das es formuliert und erneut fragt. Dann klick *Merken*. Die Karte fragt jeden Eintrag einzeln, für dein eigenes Gedächtnis in jedem Modus. [seit 1.32] Für diesen Ordner schreibt *Auto* ohne die Karte, und die Antwort nennt die Datei.
 
 Ab der nächsten Nachricht gehört der Satz zu dem, was das Modell weiß.
 

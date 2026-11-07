@@ -52,11 +52,13 @@ Never offered: your home folder as a whole, the root of a disk, Snotra's own sto
 
 ## A file Snotra reads in every chat
 
-[since 1.30] Some files shape every later chat: `AGENTS.md`, the project memory `.agents/memory.md`, the [rules files](../../customising/rules/) in `.agents/rules/` and the skills in `.agents/skills/`. A change to one outlives the chat it was made in, so Snotra asks before every change to them — in every mode, *Auto* included, and one change at a time: *For this session* is not offered, and no allowance you stored covers it.
+[since 1.30] Some files shape every later chat: `AGENTS.md`, the project memory `.agents/memory.md`, the [rules files](../../customising/rules/) in `.agents/rules/` and the skills in `.agents/skills/`. A change to one outlives the chat it was made in, so Snotra asks before every change to them — in *Smart* and *Always ask*, one change at a time: *For this session* is not offered, and no allowance you stored covers it.
+
+[since 1.32] In *Auto*, Snotra creates and changes them without a card: they belong to the open folder like any other file there. You still see every change — the answer names each knowledge file that was created or changed, the file tree marks it, and *Settings › Knowledge* lists it so you can undo it. The card comes back in *Auto* when the chat carries a warning (see below).
 
 - **A file tool wants to write one.** The card names the file and what it is — *rules file — Snotra reads it in every chat in this folder* — and, for a rule marked `always`, that it goes along with every message.
-- **A command changed one.** `git pull` or `git checkout` change `AGENTS.md` on purpose, so commands are not blocked. When one changed a knowledge file, Snotra stops after it and shows *A command changed a knowledge file*, with the change. *Keep* lets it stand; *Reset* puts back what the files held before the command; `Esc` resets as well. The chat waits for your answer.
-- **A warning on the card.** When a tool result earlier in the chat read like instructions to the agent, or the folder's own text looked like it hides something from you, the card says so. Snotra does not block the change — check that it is one you want.
+- **A command changed one.** `git pull` or `git checkout` change `AGENTS.md` on purpose, so commands are not blocked. When one changed a knowledge file, Snotra stops after it and shows *A command changed a knowledge file*, with the change. *Keep* lets it stand; *Reset* puts back what the files held before the command; `Esc` resets as well. The chat waits for your answer. [since 1.32] In *Auto* the change stands without this stop, and the answer names the files.
+- **A warning on the card.** When a tool result earlier in the chat read like instructions to the agent, or the folder's own text looked like it hides something from you, the card says so — and in *Auto* the card appears for that reason alone. Snotra does not block the change — check that it is one you want.
 
 Your global memory, `AGENTS.md` and rules files under `~/.snotra` and `~/.agents` cannot be written with the file tools at all, and a sandboxed command cannot reach them either; where a command runs without a sandbox, the check after the command covers them too. The way to change them from a chat is to ask Snotra to remember something.
 

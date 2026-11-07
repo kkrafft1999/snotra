@@ -151,7 +151,7 @@ test('Schreib-Tools erreichen kein Skill-Verzeichnis', async (t) => {
       workspace
     )
   );
-  assert.match(written.error, /Skill folders are read-only\. Keep what a skill produces in "\.agents\/data\/"/);
+  assert.match(written.error, /Global and built-in skill folders are read-only\. Keep what a skill produces in "\.agents\/data\/"/);
 
   // Weder im Skill noch als Datei mit dem wörtlichen Namen „skill:demo“.
   const original = await fs.readFile(path.join(skillDir, 'references', 'anleitung.md'), 'utf8');
@@ -229,7 +229,7 @@ test('the registry keeps every write tool out of a skill folder (#548)', async (
   ];
   for (const [tool, args] of calls) {
     const out = JSON.parse(await registry.execute(tool, args, context));
-    assert.match(out.error, /Skill folders are read-only/, `${tool} ${args.relative_path}`);
+    assert.match(out.error, /Global and built-in skill folders are read-only/, `${tool} ${args.relative_path}`);
   }
   // An absolute path lies outside the workspace for a write tool.
   const absolute = JSON.parse(await registry.execute('write_file_text', { relative_path: target, content: 'nein' }, context));

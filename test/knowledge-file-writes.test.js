@@ -39,9 +39,9 @@ test('the knowledge files of the folder and of the home folder are known by path
 
 const WRITE = { mode: 'auto', toolName: 'write_file_text', riskClasses: ['write'], targets: [{ path: 'AGENTS.md' }], root: '/w' };
 
-test('a write to a knowledge file asks in every mode, past a session grant and an allow rule', () => {
-  for (const mode of ['auto', 'smart', 'ask-all']) {
-    assert.equal(decideToolPolicy({ ...WRITE, mode, knowledgeWrite: true }).decision, 'ask', mode);
+test('a write to a knowledge file asks in Smart and Always ask, past a session grant and an allow rule', () => {
+  for (const mode of ['smart', 'ask-all']) {
+    assert.equal(decideToolPolicy({ ...WRITE, mode, knowledgeWrite: true, knowledgeKinds: ['agents'] }).decision, 'ask', mode);
   }
   assert.equal(decideToolPolicy({ ...WRITE, mode: 'smart', knowledgeWrite: true, sessionGrant: { id: 'g' } }).decision, 'ask');
   const allow = { id: 'r', effect: 'allow', scope: 'global', riskClass: 'write', pathPattern: '**' };
@@ -49,6 +49,17 @@ test('a write to a knowledge file asks in every mode, past a session grant and a
   const deny = { id: 'd', effect: 'deny', scope: 'global', tool: 'write_file_text' };
   assert.equal(decideToolPolicy({ ...WRITE, knowledgeWrite: true, rules: [deny] }).decision, 'deny', 'a deny rule still wins');
   assert.equal(decideToolPolicy(WRITE).decision, 'allow', 'an ordinary write in Auto is unchanged');
+});
+
+test('in Auto, a knowledge file of the open folder is written without a card, unless the chat carries a warning (#1371)', () => {
+  for (const kind of ['agents', 'memory', 'rules', 'skills']) {
+    assert.equal(decideToolPolicy({ ...WRITE, knowledgeWrite: true, knowledgeKinds: [kind] }).decision, 'allow', kind);
+    assert.equal(decideToolPolicy({ ...WRITE, knowledgeWrite: true, knowledgeKinds: [kind], knowledgeWarning: true }).decision, 'ask', `${kind} with a warning`);
+  }
+  assert.equal(decideToolPolicy({ ...WRITE, knowledgeWrite: true }).decision, 'ask', 'no kinds known: the card');
+  assert.equal(decideToolPolicy({ ...WRITE, knowledgeWrite: true, knowledgeKinds: ['skills', 'global'] }).decision, 'ask', 'a global file keeps the card');
+  const deny = { id: 'd', effect: 'deny', scope: 'global', tool: 'write_file_text' };
+  assert.equal(decideToolPolicy({ ...WRITE, knowledgeWrite: true, knowledgeKinds: ['agents'], rules: [deny] }).decision, 'deny', 'a deny rule still wins');
 });
 
 test('the card offers neither "for this session" nor "always", and names the file', () => {
@@ -217,7 +228,7 @@ function fileToolPort() {
   };
 }
 
-test('in Auto, a file-tool write to AGENTS.md waits for a card, and a flag earlier in the chat warns on it', async () => {
+test('in Auto, a file-tool write to AGENTS.md waits for a card only when a flag earlier in the chat warns on it', async () => {
   const tools = fileToolPort();
   const { requests } = await runEngine({ root: '/tmp/snotra-1319', tools, answer: 'deny', payload: { injectionFlagged: true } });
   assert.equal(requests.length, 1);
@@ -225,10 +236,21 @@ test('in Auto, a file-tool write to AGENTS.md waits for a card, and a flag earli
   assert.equal(requests[0].sessionAllowed, false);
   assert.equal(requests[0].knowledgeWarning, true);
   assert.equal(tools.calls.length, 0, 'denied: nothing written');
+  // No flag, no folder signal: written without a card, and the model is told
+  // to name the file (#1371).
   const allowed = fileToolPort();
-  const second = await runEngine({ root: '/tmp/snotra-1319', tools: allowed, answer: 'allow-once' });
-  assert.equal(second.requests[0].knowledgeWarning, undefined, 'no flag, no folder signal: no warning');
+  const second = await runEngine({ root: '/tmp/snotra-1319', tools: allowed, answer: 'deny' });
+  assert.equal(second.requests.length, 0);
   assert.equal(allowed.calls.length, 1);
+  const note = second.llm.calls[1].find((m) => m.role === 'tool').content;
+  assert.match(note, /Written without a card \(Auto\): AGENTS\.md\./);
+  assert.match(note, /name every knowledge file you created or changed/);
+  // Smart still asks, with no warning.
+  const smart = fileToolPort();
+  const third = await runEngine({ root: '/tmp/snotra-1319', tools: smart, answer: 'allow-once', mode: 'smart' });
+  assert.equal(third.requests.length, 1);
+  assert.equal(third.requests[0].knowledgeWarning, undefined);
+  assert.equal(smart.calls.length, 1);
 });
 
 function shellToolPort(root, change) {
@@ -252,7 +274,10 @@ test('a git checkout that changes AGENTS.md is followed by a card; Keep keeps it
   for (const [answer, expected, word] of [['allow-once', 'Tests with npm run test:all.\n', 'kept'], ['deny', 'Tests with npm test.\n', 'reset']]) {
     const { root, adapter } = await folder();
     const tools = shellToolPort(root, () => fs.writeFile(path.join(root, 'AGENTS.md'), 'Tests with npm run test:all.\n'));
-    const { requests, llm, result } = await runEngine({ root, tools, answer, knowledgeFiles: adapter });
+    // Smart: the command's own card is allowed, the one after it answered.
+    const { requests, llm, result } = await runEngine({
+      root, tools, answer: (r) => (r.checkpoint === 'knowledge' ? answer : 'allow-once'), knowledgeFiles: adapter, mode: 'smart',
+    });
     const card = requests.find((r) => r.checkpoint === 'knowledge');
     assert.ok(card, 'a card after the command');
     assert.deepEqual(card.knowledgeChange.files, [{ path: 'AGENTS.md', status: 'changed' }]);
@@ -264,11 +289,30 @@ test('a git checkout that changes AGENTS.md is followed by a card; Keep keeps it
   }
 });
 
+test('in Auto, a command that changes AGENTS.md is kept without a card and the model is told to name it (#1371)', async () => {
+  const { root, adapter } = await folder();
+  const tools = shellToolPort(root, () => fs.writeFile(path.join(root, 'AGENTS.md'), 'Tests with npm run test:all.\n'));
+  const { requests, llm, result } = await runEngine({ root, tools, answer: 'deny', knowledgeFiles: adapter });
+  assert.equal(requests.filter((r) => r.checkpoint === 'knowledge').length, 0);
+  assert.equal(await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8'), 'Tests with npm run test:all.\n');
+  assert.equal(result.toolTrace[0].knowledgeChange.kept, true);
+  const toolMessage = llm.calls[1].find((m) => m.role === 'tool');
+  assert.match(toolMessage.content, /The command changed AGENTS\.md\. It stands without a card in Auto/);
+  assert.match(toolMessage.content, /name every knowledge file/);
+  // A flag in the chat brings the card back.
+  const flagged = await folder();
+  const again = shellToolPort(flagged.root, () => fs.writeFile(path.join(flagged.root, 'AGENTS.md'), 'changed\n'));
+  const warned = await runEngine({ root: flagged.root, tools: again, answer: 'deny', knowledgeFiles: flagged.adapter, payload: { injectionFlagged: true } });
+  assert.equal(warned.requests.filter((r) => r.checkpoint === 'knowledge').length, 1);
+  assert.equal(await fs.readFile(path.join(flagged.root, 'AGENTS.md'), 'utf8'), 'Tests with npm test.\n');
+});
+
 test('a command that changes no knowledge file brings no card, and without anyone to ask a change is reset', async () => {
   const { root, adapter } = await folder();
   const quiet = shellToolPort(root, () => fs.writeFile(path.join(root, 'README.md'), 'x'));
   assert.equal((await runEngine({ root, tools: quiet, answer: 'allow-once', knowledgeFiles: adapter })).requests.length, 0);
   const loud = shellToolPort(root, () => fs.writeFile(path.join(root, 'AGENTS.md'), 'changed\n'));
-  await runEngine({ root, tools: loud, answer: 'allow-once', knowledgeFiles: adapter, available: false });
+  // Flagged, so Auto keeps the card (#1371) — and nobody is there to answer it.
+  await runEngine({ root, tools: loud, answer: 'allow-once', knowledgeFiles: adapter, available: false, payload: { injectionFlagged: true } });
   assert.equal(await fs.readFile(path.join(root, 'AGENTS.md'), 'utf8'), 'Tests with npm test.\n');
 });

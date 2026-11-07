@@ -157,7 +157,7 @@ test('the card travels sanitised, and a choice only to what the card offered', (
 const { createChatEngine } = require('../src/application/chat/chat-engine');
 const { createSessionGrants } = require('../src/application/permissions/session-grants');
 
-function engineRun({ args, choice, mode = 'auto' }) {
+function engineRun({ args, choice, mode = 'smart', target = CARD.target }) {
   const requests = [];
   const executed = [];
   const tools = {
@@ -166,7 +166,7 @@ function engineRun({ args, choice, mode = 'auto' }) {
     async plan(toolName, planned) {
       return {
         tool: toolName, riskClasses: ['write'], targets: [], planKey: JSON.stringify(planned), knowledge: true,
-        knowledgeCard: { ...CARD, kind: planned.kind, scope: planned.scope },
+        knowledgeCard: { ...CARD, kind: planned.kind, scope: planned.scope, target },
       };
     },
     buildTraceEntry: (toolName, a, extra = {}) => ({ tool: toolName, args: a, category: 'write', ...extra }),
@@ -211,12 +211,24 @@ function engineRun({ args, choice, mode = 'auto' }) {
 
 const RULE_ARGS = { kind: 'rule', scope: 'workspace', text: 'When x, y.', topic: 't', description: 'When x', origin: 'requested' };
 
-test('in Auto the remember card asks; another reader chosen on it is written without a second card', async () => {
+test('the remember card asks; another reader chosen on it is written without a second card', async () => {
   const { requests, executed } = await engineRun({ args: RULE_ARGS, choice: { kind: 'rule', scope: 'team' } });
   assert.equal(requests.length, 1, 'one card');
   assert.equal(requests[0].knowledgeCard.kind, 'rule');
   assert.equal(executed.length, 1);
   assert.equal(executed[0].scope, 'team');
+});
+
+test('in Auto, remember for the open folder writes without a card and the model names the file; for every folder it asks (#1371)', async () => {
+  const folder = await engineRun({ args: RULE_ARGS, mode: 'auto' });
+  assert.equal(folder.requests.length, 0);
+  assert.equal(folder.executed.length, 1);
+  const note = folder.llm.calls[1].find((m) => m.role === 'tool').content;
+  assert.match(note, /Written without a card \(Auto\): \.agents\/rules\/t\.md\./);
+  const global = await engineRun({
+    args: { ...RULE_ARGS, scope: 'user' }, mode: 'auto', target: { path: '~/.snotra/rules/t.md', exists: false, file: 'rules' },
+  });
+  assert.equal(global.requests.length, 1, 'the user\'s own memory keeps the card');
 });
 
 test('a rule turned into a fact on the card loses its rule fields and is written', async () => {

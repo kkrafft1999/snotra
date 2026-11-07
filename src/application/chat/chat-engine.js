@@ -86,7 +86,7 @@ const {
   toolOutputRoom,
   capToolOutput,
 } = require('./chat-history-trim');
-const { decideToolPolicy } = require('../permissions/tool-policy');
+const { decideToolPolicy, workspaceKnowledgePassesInAuto } = require('../permissions/tool-policy');
 const { createSessionGrants } = require('../permissions/session-grants');
 const { buildApprovalRequest } = require('../permissions/approval-request');
 const { createBuiltinInjectionDetector } = require('./injection-detector');
@@ -462,9 +462,13 @@ function buildSkillsSystemPrompt(
   }
   // A skill folder is shared by every workspace the skill is on in and gets
   // replaced on an update, so what a skill keeps lives in the project (#548).
+  // A skill in the open folder is part of it and changed there (#1371).
   intro.push(
     workspaceOpen
-      ? 'Skill folders are read-only. What a skill produces and wants to keep — learned ' +
+      ? 'A skill under ".agents/skills/" in the open folder is part of that folder: ' +
+        'change its files there like any other file, as ".agents/skills/<name>/…". ' +
+        'Global and built-in skill folders are read-only. ' +
+        'What a skill produces and wants to keep — learned ' +
         'rules, contacts, state for the next run — goes into ".agents/data/" in the open ' +
         'folder, for example ".agents/data/contacts.md". Use the file name the skill ' +
         'gives; a skill that speaks of "<workspace>/.agents/data/…" means exactly that ' +
@@ -970,6 +974,14 @@ function parseToolOutput(output) {
     return null;
   }
 }
+
+/**
+ * What the model owes the user after a knowledge file changed without a card
+ * (#1371): the file shapes every later chat, so the answer names it.
+ */
+const KNOWLEDGE_UNASKED_NOTE =
+  'This file shapes every later chat in this folder. In your answer, name every knowledge file ' +
+  'you created or changed, by its path, and say in one sentence what changed.';
 
 /**
  * A sentence for the model about a sandbox card's outcome (#792), added to the tool result.
@@ -2123,6 +2135,22 @@ function createChatEngine({
         }
         const { changes, diff, truncated } = knowledgeFiles.compare(before, after);
         if (changes.length === 0) return '';
+        // Only knowledge files of the open folder, in Auto, with no sign of
+        // injected instructions: the change stands without a card (#1371),
+        // and is listed under Settings › Knowledge like a kept one.
+        if (workspaceKnowledgePassesInAuto({
+          mode: policy.mode,
+          kinds: changes.map((change) => (String(change.path).startsWith('~/') ? 'global' : change.kind)),
+          warning: knowledgeWarningApplies(),
+        })) {
+          entry.knowledgeChange = { files: changes.map((change) => ({ path: change.path, status: change.status })), kept: true };
+          try {
+            await knowledgeFiles.keep?.({ before, after, changes });
+          } catch {
+            // The journal is a convenience: a change it could not note still stands.
+          }
+          return `The command changed ${changes.map((change) => change.path).join(', ')}. It stands without a card in Auto and applies from the next message on. ${KNOWLEDGE_UNASKED_NOTE}`;
+        }
         const scan = scanSensitiveContent(diff);
         /** @type {import('../ports/tool-approval-port').ToolApprovalRequest} */
         const request = {
@@ -2994,7 +3022,17 @@ function createChatEngine({
             unknownTool: plan.unknownTool === true,
             hardLimit: plan.hardLimit || null,
             knowledgeWrite: plan.knowledge === true,
+            // A knowledge file of the open folder passes in Auto (#1371);
+            // `remember` for every folder (`~/.snotra/…`) keeps its card.
+            knowledgeKinds: plan.knowledgeCard
+              ? (plan.knowledgeCard.target && !plan.knowledgeCard.target.path.startsWith('~/')
+                ? [plan.knowledgeCard.target.file]
+                : [])
+              : (plan.targets || []).map((target) => target.knowledge).filter(Boolean),
+            knowledgeWarning: plan.knowledge === true && knowledgeWarningApplies(),
           });
+          // Written without a card: the model has to say so (#1371).
+          const knowledgeUnasked = plan.knowledge === true && verdict.decision === POLICY_DECISIONS.ALLOW;
 
           if (verdict.decision === POLICY_DECISIONS.DENY) {
             return permissionDenied(entry, {
@@ -3215,6 +3253,19 @@ function createChatEngine({
           if (knowledgeBefore) {
             const note = await reviewKnowledgeChanges({ entry, callIndex, toolName, plan, policy, before: knowledgeBefore });
             if (note) execution = { ...execution, output: withSandboxNote(execution?.output, note, 'knowledge_files') };
+          }
+          if (knowledgeUnasked && !execution?.invalidated && !execution?.hardLimit) {
+            const files = plan.knowledgeCard?.target?.path
+              ? [plan.knowledgeCard.target.path]
+              : (plan.targets || []).filter((target) => target.knowledge).map((target) => target.rulePaths?.[0] || target.path);
+            execution = {
+              ...execution,
+              output: withSandboxNote(
+                execution?.output,
+                `Written without a card (Auto): ${files.join(', ')}. ${KNOWLEDGE_UNASKED_NOTE}`,
+                'knowledge_files'
+              ),
+            };
           }
 
           if (execution?.invalidated) {

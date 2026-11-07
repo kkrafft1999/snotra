@@ -16,7 +16,7 @@ const { createWorkspaceToolRegistry } = require('../src/application/tools/worksp
 const { createToolCallPlanner } = require('../src/application/tools/tool-call-planner');
 const { removeTempDir } = require('./helpers/temp-dir');
 
-const READ_ONLY = /Skill folders are read-only\. Keep what a skill produces in "\.agents\/data\/" in the open folder\./;
+const READ_ONLY = /Global and built-in skill folders are read-only\. Keep what a skill produces in "\.agents\/data\/" in the open folder\./;
 const SKILL_TEXT = '---\nname: demo\ndescription: d\n---\n\nBe helpful.\n';
 
 async function makeHome(t) {

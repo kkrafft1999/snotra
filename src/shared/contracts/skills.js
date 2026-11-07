@@ -66,12 +66,14 @@ const WORKSPACE_SKILLS_DIR = '.agents/skills';
 const SKILL_AUTHORING_SKILL = 'snotra-skill-authoring';
 
 /**
- * The refusal of a write into a skill folder — it names the places to use
- * instead: the data folder for what a skill produces (#548), the workspace
- * source for writing a skill (#160).
+ * The refusal of a write into a global or built-in skill folder — it names
+ * the places to use instead: the data folder for what a skill produces
+ * (#548), the workspace source for writing a skill (#160). A skill of the
+ * open folder is not refused (#1371).
  */
 const SKILL_FOLDER_READ_ONLY =
-  `Skill folders are read-only. Keep what a skill produces in "${SKILL_DATA_DIR}/" in the open folder. `
+  'Global and built-in skill folders are read-only. '
+  + `Keep what a skill produces in "${SKILL_DATA_DIR}/" in the open folder. `
   + `To create or change a skill, write it under "${WORKSPACE_SKILLS_DIR}/<name>/" in the open folder `
   + `(skill "${SKILL_AUTHORING_SKILL}").`;
 
