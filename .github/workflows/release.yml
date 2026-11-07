@@ -14,6 +14,10 @@ name: Release
 # Windows, Linux). Schlaegt sie fehl, wird weder gebaut noch veroeffentlicht
 # (#70).
 #
+# Start gate (#1066): every build job starts each artifact it is about to
+# upload once (scripts/smoke-start.js) and fails when the app does not open its
+# window. A package that crashes at start never reaches the release job.
+#
 # Tag check (#570): before anything else, a release tag has to name exactly
 # the version in package.json and point at a commit on main. A release is
 # served to every running installation as "latest"; a tag on the wrong commit
@@ -215,6 +219,22 @@ jobs:
           assess --type open --context context:primary-signature "$dmg"
           xcrun stapler validate "$dmg"
           shasum -a 256 "$dmg"
+      # Start gate (#1066): the app is started once from the DMG users will
+      # download and has to confirm that its window is open, the signal the
+      # update helper waits for (scripts/smoke-start.js). A package that does
+      # not come up fails here, before anything is uploaded. 180 s instead of
+      # the helper's 120: Gatekeeper scans a bundle it has not seen before.
+      - name: Start the app from the DMG
+        shell: bash
+        run: |
+          set -euo pipefail
+          dmg="$(ls dist/*.dmg)"
+          mnt="$RUNNER_TEMP/smoke-dmg"
+          mkdir -p "$mnt"
+          hdiutil attach "$dmg" -nobrowse -readonly -mountpoint "$mnt"
+          trap 'hdiutil detach "$mnt" -force >/dev/null || true' EXIT
+          node scripts/smoke-start.js --timeout 180 --label "macOS DMG" \
+            -- "$mnt/Snotra Agent.app/Contents/MacOS/Snotra Agent"
       # Paketinhalt gegen die Allowlist aus package.json pruefen (#72): keine
       # .claude/, docs/, test/ usw. im ausgelieferten app.asar.
       - name: Check package contents (allowlist)
@@ -330,6 +350,17 @@ jobs:
           if (-not $dir) { throw 'Kein *-win32-x64 Package-Verzeichnis gefunden.' }
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           Compress-Archive -Path "$dir/*" -DestinationPath "dist/Snotra-Agent-$version-win-x64.zip"
+      # Start gate (#1066): unpacked from the ZIP users will download, the app
+      # has to start once and confirm its window; see build-macos.
+      - name: Start the app from the ZIP
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $zip = (Get-ChildItem -Path dist -Filter '*.zip' | Select-Object -First 1).FullName
+          $dir = Join-Path $env:RUNNER_TEMP 'smoke-zip'
+          Expand-Archive -LiteralPath $zip -DestinationPath $dir -Force
+          node scripts/smoke-start.js --timeout 180 --label 'Windows ZIP' -- (Join-Path $dir 'Snotra Agent.exe')
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows
@@ -391,6 +422,36 @@ jobs:
           stage="snotra-agent-${version}-linux-x64"
           mv "$dir" "out/${stage}"
           tar -czf "dist/Snotra-Agent-${version}-linux-x64.tar.gz" -C out "${stage}"
+      # Start gate (#1066): each of the three files users can download is
+      # started once and has to confirm its window; see build-macos. The .deb
+      # is installed the way a user installs it, with its dependencies. As in
+      # ci.yml, Ubuntu 24.04's AppArmor restriction on unprivileged user
+      # namespaces is lifted: AppImage and tarball have no setuid
+      # chrome-sandbox and rely on them. The AppImage mounts itself through
+      # FUSE (fuse3), and every start gets a display of its own (xvfb-run).
+      - name: Start the deb, the AppImage and the tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          sudo apt-get install -y --no-install-recommends xvfb fuse3
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          smoke() { xvfb-run --auto-servernum node scripts/smoke-start.js --timeout 180 "$@"; }
+
+          deb="$(ls dist/*.deb)"
+          sudo apt-get install -y "./$deb"
+          bin="$(dpkg -L "$(dpkg-deb -f "$deb" Package)" | grep '^/usr/bin/' | head -1)"
+          [ -n "$bin" ] || { echo "::error::The .deb installs nothing into /usr/bin."; exit 1; }
+          smoke --label "Linux deb" -- "$bin"
+
+          appimage="$(ls dist/*.AppImage)"
+          chmod +x "$appimage"
+          smoke --label "Linux AppImage" -- "$PWD/$appimage"
+
+          unpacked="$RUNNER_TEMP/smoke-tarball"
+          mkdir -p "$unpacked"
+          tar -xzf "dist/Snotra-Agent-${version}-linux-x64.tar.gz" -C "$unpacked"
+          smoke --label "Linux tarball" -- "$unpacked/snotra-agent-${version}-linux-x64/Snotra Agent"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: linux

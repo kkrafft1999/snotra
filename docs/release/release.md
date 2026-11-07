@@ -104,6 +104,12 @@ which downloads a **dated release** and writes it to
 that file. A test guards both. To raise it, change URL and SHA-256 in the script
 together — GitHub lists the digest next to each release asset.
 
+The runtime can only mount the squashfs compressions listed in `RUNTIME.compressors`
+(`zlib` and `zstd` for `20251108`), and the maker's `compressor` has to be one
+of them. With `xz`, every AppImage from v1.13.3 to v1.31.0 failed at start
+without anyone noticing, until the start gate found it (#1370). A test keeps the
+two in line; check the list again whenever you raise the runtime.
+
 The artifacts end up under `out/`. The app's comparison uses **the release tag
 only**, not the file names — so the asset names can be chosen freely, but should
 carry the version and the platform, e.g. `Snotra-Agent-1.1.0-mac-arm64.dmg`.
@@ -213,6 +219,26 @@ Two GitHub Actions workflows under [`.github/workflows/`](../../.github/workflow
   artifacts to the release. If a test fails, **no** build and **no** release
   comes into existence — fix the cause, set the tag again
   (`git tag -d vX.Y.Z && git push origin :vX.Y.Z`, then tag and push anew).
+- **Start gate (#1066).** Before a build job uploads anything, it starts each
+  file a user can download once: the app from the mounted **DMG**, the
+  `Snotra Agent.exe` unpacked from the **ZIP**, and on Linux the installed
+  **`.deb`**, the **AppImage** and the unpacked **tarball**.
+  [`scripts/smoke-start.js`](../../scripts/smoke-start.js) waits for the
+  signal the update helper waits for: it writes `update-install-pending.json`
+  into a fresh `--user-data-dir`, and the app removes it once its window is
+  open. A package that ends first, or does not confirm within 180 seconds,
+  fails its build job, so the release job never runs and nothing is
+  published. The step prints the app's output and its log. Linux starts run
+  under `xvfb-run`, with the same AppArmor setting as `ci.yml`; every start
+  has `SNOTRA_NO_UPDATE_CHECK=1`, so it does not ask GitHub for an update. The
+  check runs locally too, against any packaged build:
+
+  ```sh
+  node scripts/smoke-start.js -- "out/Snotra Agent-darwin-arm64/Snotra Agent.app/Contents/MacOS/Snotra Agent"
+  ```
+
+  The first start of a freshly built, unnotarised bundle can take a minute
+  while Gatekeeper scans it; later starts take about a second.
 
 Watching runs:
 
