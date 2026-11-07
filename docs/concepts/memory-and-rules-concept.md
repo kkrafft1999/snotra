@@ -93,6 +93,13 @@ kind is loaded from where and when; the rules files, `load_rule` and
    for every kind — and through every tool, not only `remember`. The agent may
    write global rules and skills, and `AGENTS.md` in the open folder; it no
    longer writes the global `AGENTS.md` (2026-10-31, review).
+   **Narrowed on 2026-11-07 (#1371):** in *Auto*, a knowledge file of the open
+   folder — `AGENTS.md`, `.agents/memory.md`, `.agents/rules/`,
+   `.agents/skills/`, through `remember` (`workspace`, `team`), a file tool
+   or the shell — is written without a card, unless the chat carries an
+   injection warning. The agent names every such file in its answer, the
+   tree marks it, and *Settings › Knowledge* lists it for undo. Global
+   knowledge files keep the card in every mode.
 7. **Memory gets a review** against a fixed catalogue, in two stages
    (2026-10-25): rule-based hints in the settings panel, and an agent-led
    review in the chat when the user asks for it. `replaces` moves or corrects
@@ -202,7 +209,9 @@ overridden at the next disagreement.
 | `~/.agents/…` (rules, skills, `AGENTS.md`) | edits the files | never (legacy location, read only) |
 
 Every write to a knowledge file shows a card, in every permission mode,
-whichever tool makes it; see *Knowledge files written by other tools*.
+whichever tool makes it; see *Knowledge files written by other tools*. The
+exception since #1371: a knowledge file of the open folder in *Auto*, without
+an injection warning in the chat (decision 6).
 
 ## Rules files
 

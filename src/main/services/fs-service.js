@@ -1,7 +1,7 @@
 const { SKILL_PATH_PREFIX, parseSkillPath } = require('../../shared/runtime/skill-path');
 const { formatSkillPath } = require('../../shared/runtime/skill-path');
 const { parseSkillDocument } = require('../../shared/runtime/skill-frontmatter');
-const { MAX_SKILL_BODY_CHARS, SKILL_DATA_DIR, SKILL_FOLDER_READ_ONLY, isValidSkillName } = require('../../shared/contracts/skills');
+const { MAX_SKILL_BODY_CHARS, SKILL_DATA_DIR, SKILL_FOLDER_READ_ONLY, WORKSPACE_SKILLS_DIR, isValidSkillName } = require('../../shared/contracts/skills');
 
 /** The answer to a file-tool write into a global knowledge file (#1319). */
 const GLOBAL_KNOWLEDGE_READ_ONLY =
@@ -1849,6 +1849,43 @@ function createFsService({
   }
 
   /**
+   * A `skill:<name>/…` path spelled as the workspace path it stands for, when
+   * `<name>` is a skill of the open folder (#1371): `.agents/skills/<name>/…`.
+   * Null for every other path — a global or system skill stays read-only and
+   * its `skill:` path is refused as before.
+   *
+   * With `skillRoots` (planning) the switched-on skill of that name has to be
+   * the one in the open folder, so a system skill that shadows a workspace
+   * folder of the same name is not written around. Without them (execution)
+   * the folder has to exist.
+   *
+   * @param {string | null | undefined} workspaceRoot
+   * @param {unknown} relativePath
+   * @param {SkillRoot[] | undefined} skillRoots
+   * @returns {Promise<string | null>}
+   */
+  async function workspaceSkillSpelling(workspaceRoot, relativePath, skillRoots) {
+    if (typeof workspaceRoot !== 'string' || !workspaceRoot.trim()) return null;
+    const parsed = parseSkillPath(typeof relativePath === 'string' ? relativePath : '');
+    if (!parsed || !isValidSkillName(parsed.name)) return null;
+    const dir = path.resolve(workspaceRoot, WORKSPACE_SKILLS_DIR, parsed.name);
+    const hit = Array.isArray(skillRoots)
+      ? skillRoots.find((entry) => entry && entry.name === parsed.name && typeof entry.dir === 'string' && entry.dir)
+      : null;
+    if (hit) {
+      if (path.resolve(hit.dir) !== dir) return null;
+    } else {
+      try {
+        if (!(await fs.stat(dir)).isDirectory()) return null;
+      } catch {
+        // No such skill in the open folder: the `skill:` path is refused as before.
+        return null;
+      }
+    }
+    return parsed.rest ? `${WORKSPACE_SKILLS_DIR}/${parsed.name}/${parsed.rest}` : `${WORKSPACE_SKILLS_DIR}/${parsed.name}`;
+  }
+
+  /**
    * True when a path lies in a global skill folder (#650), compared as given
    * and by realpath against each folder as configured and by realpath — the
    * same spellings `skillPathForAbsolute` matches. A global skill is switched
@@ -1977,7 +2014,10 @@ function createFsService({
    */
   async function resolveToolPath(workspaceRoot, relativePath, options = {}) {
     const access = options.access === 'write' ? 'write' : 'read';
-    const given = expandHome(typeof relativePath === 'string' ? relativePath.trim() : relativePath);
+    const expanded = expandHome(typeof relativePath === 'string' ? relativePath.trim() : relativePath);
+    // A skill of the open folder is part of it (#1371): written through its
+    // skill path, it lands in `.agents/skills/<name>/` like any other file there.
+    const given = (access === 'write' && (await workspaceSkillSpelling(workspaceRoot, expanded, options.skillRoots))) || expanded;
     const asSkillPath = await skillPathForAbsolute(workspaceRoot, given, options.skillRoots);
     let chosen = resolveAccessRoot(
       workspaceRoot,
@@ -2194,7 +2234,19 @@ function createFsService({
         : body;
       // The folder travels with the instructions (#427): a skill that refers
       // to its own directory — "find your folder, then read assets/…" — gets
-      // it without a search, and learns how the read tools reach it.
+      // it without a search, and learns how the read tools reach it. A skill
+      // of the open folder is part of it and is changed there (#1371); every
+      // other skill folder is read-only (#548).
+      const inWorkspace =
+        typeof workspaceRoot === 'string' &&
+        workspaceRoot.trim() !== '' &&
+        containsPath(workspaceRoot, root);
+      const access = inWorkspace
+        ? 'It belongs to the open folder: change its files like any other file there, as ' +
+          `"${WORKSPACE_SKILLS_DIR}/${name}/<path>". What the skill produces and wants to keep ` +
+          `goes into "${SKILL_DATA_DIR}/" in the open folder.`
+        : 'It is read-only: what the skill produces ' +
+          `and wants to keep goes into "${SKILL_DATA_DIR}/" in the open folder.`;
       return JSON.stringify({
         skill: name,
         truncated,
@@ -2202,8 +2254,7 @@ function createFsService({
         files:
           `Files next to ${SKILL_FILE} are read with the read tools as ` +
           `"${formatSkillPath(name, '<path>')}"; an absolute path inside "directory" works the same. ` +
-          'There is no need to search for this folder. It is read-only: what the skill produces ' +
-          `and wants to keep goes into "${SKILL_DATA_DIR}/" in the open folder.`,
+          `There is no need to search for this folder. ${access}`,
         instructions,
       });
     } catch (e) {

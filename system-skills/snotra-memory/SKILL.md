@@ -95,6 +95,8 @@ lasting? Say so.
 
 ## What the user sees
 
-Every `remember` call shows a card, in every mode; the user can change who
-reads it, or the kind. Half a sentence afterwards is enough: "Noted for the
-project."
+A `remember` call shows a card, where the user can change who reads it, or
+the kind — in every mode for the user's own memory (`scope: "user"`). For this
+folder (`workspace`, `team`) *Auto* writes without a card; then
+name the file you wrote in your answer. Half a sentence afterwards is enough:
+"Noted for the project in `.agents/memory.md`."

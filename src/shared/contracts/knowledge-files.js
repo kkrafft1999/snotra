@@ -2,7 +2,8 @@
  * Knowledge files (#1319): the files Snotra embeds into every later
  * conversation — `AGENTS.md`, memory, rules files and skills. A write to one
  * outlives its run, so no tool writes one without a card the user answered,
- * in every permission mode (decision 6 of the knowledge concept,
+ * in every permission mode — except one of the open folder in Auto, without
+ * an injection warning (#1371) — (decision 6 of the knowledge concept,
  * `docs/concepts/memory-and-rules-concept.md`; threat model in
  * `docs/security/security-concept.md`, revision #1280).
  *

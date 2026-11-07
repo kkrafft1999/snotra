@@ -18,7 +18,7 @@ Nothing for the global memory. For the project memory, an open folder.
    - **Only you** — globally, in every folder.
    - **Snotra in this folder** — in the project memory.
    - **Every tool here** — in the folder's `AGENTS.md`, which other coding tools read too and which is usually shared with the team. [since 1.30]
-3. Check the card. [since 1.30] It shows what Snotra proposes as two rows of choices: *Kind* — a fact, a [rule](../rules/) or a procedure — and *Who reads it*. If Snotra sorted it wrongly, pick another one: another reader, or *Fact*, is written as you chose; *Rule* or *Procedure* goes back to Snotra, which words it and asks again. Then click *Remember*. The card asks in every mode, *Auto* included, one entry at a time.
+3. Check the card. [since 1.30] It shows what Snotra proposes as two rows of choices: *Kind* — a fact, a [rule](../rules/) or a procedure — and *Who reads it*. If Snotra sorted it wrongly, pick another one: another reader, or *Fact*, is written as you chose; *Rule* or *Procedure* goes back to Snotra, which words it and asks again. Then click *Remember*. The card asks one entry at a time, in every mode for your own memory. [since 1.32] For this folder, *Auto* writes without the card, and the answer names the file.
 
 From the next message on, the sentence is part of what the model knows.
 

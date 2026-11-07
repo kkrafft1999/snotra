@@ -22,7 +22,7 @@ const loadRenderer = (file) =>
 const loadRendererI18n = () =>
   import(pathToFileURL(path.join(__dirname, '..', 'src', 'renderer', 'i18n.js')).href);
 
-const READ_ONLY = /Skill folders are read-only\. Keep what a skill produces in "\.agents\/data\/" in the open folder\./;
+const READ_ONLY = /Global and built-in skill folders are read-only\. Keep what a skill produces in "\.agents\/data\/" in the open folder\./;
 
 async function makeFixture(t) {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skill-ro-'));
@@ -206,19 +206,63 @@ test('card: names the skill of a read target and lists no skill folders for a ru
   }
 });
 
-test('the security overview names no skill folder as a place to write (en/de)', async () => {
+test('the security overview names only the open folder\'s own skills as a place to write (en/de)', async () => {
   const { setLocale, t } = await loadRendererI18n();
   try {
     setLocale('en');
-    assert.match(t('security.a.where.write'), /^In this folder\. Skill folders stay read-only: what a skill keeps goes into \.agents\/data/);
-    assert.match(t('security.a.where.write.noWorkspace'), /^Nowhere: no folder is open, and skill folders are read-only\./);
+    assert.match(t('security.a.where.write'), /^In this folder, its own skills in \.agents\/skills included\. Global and built-in skill folders stay read-only: what a skill keeps goes into \.agents\/data/);
+    assert.match(t('security.a.where.write.noWorkspace'), /^Nowhere: no folder is open, and global and built-in skill folders are read-only\./);
     // What a run may write is said on Tools › Security since #1119.
     assert.match(t('toolSecurity.base.openText'), /^writing in the project folder and a temporary folder;/);
     setLocale('de');
-    assert.match(t('security.a.where.write'), /^In diesem Ordner\. Skill-Ordner bleiben schreibgeschützt: Was ein Skill aufbewahrt, landet in \.agents\/data/);
-    assert.match(t('security.a.where.write.noWorkspace'), /^Nirgends: Kein Ordner ist offen, und Skill-Ordner sind schreibgeschützt\./);
+    assert.match(t('security.a.where.write'), /^In diesem Ordner, seine eigenen Skills in \.agents\/skills eingeschlossen\. Globale und eingebaute Skill-Ordner bleiben schreibgeschützt: Was ein Skill aufbewahrt, landet in \.agents\/data/);
+    assert.match(t('security.a.where.write.noWorkspace'), /^Nirgends: Kein Ordner ist offen, und globale und eingebaute Skill-Ordner sind schreibgeschützt\./);
     assert.match(t('toolSecurity.base.openText'), /^Schreiben im Projektordner und in einem temporären Ordner;/);
   } finally {
     setLocale('en');
   }
+});
+
+// ── A skill of the open folder is part of it (#1371) ───────────────────────
+
+async function makeWorkspaceSkill(t) {
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'snotra-skill-ws-'));
+  t.after(() => removeTempDir(base));
+  const workspace = path.join(base, 'projekt');
+  const skillDir = path.join(workspace, '.agents', 'skills', 'traffic');
+  await fs.mkdir(skillDir, { recursive: true });
+  await fs.writeFile(path.join(skillDir, 'SKILL.md'), '---\nname: traffic\ndescription: d\n---\n\nReport.\n', 'utf8');
+  const fsService = createFsService({ fs, path, maxReadFileBytes: 1024 * 1024, maxWriteFileBytes: 1024 * 1024 });
+  return { workspace, skillDir, fsService, skillRoots: [{ name: 'traffic', dir: skillDir }] };
+}
+
+test('a write to a skill of the open folder is an ordinary write, also through its skill path', async (t) => {
+  const { workspace, skillDir, fsService, skillRoots } = await makeWorkspaceSkill(t);
+  const registry = createWorkspaceToolRegistry({ fsService });
+  const planner = makePlanner(fsService);
+  for (const relative_path of ['.agents/skills/traffic/SKILL.md', 'skill:traffic/SKILL.md', path.join(skillDir, 'SKILL.md')]) {
+    const plan = await planner.plan(registry.getDefinition('edit_file'), { relative_path, old_string: 'Report.', new_string: 'Report as HTML.' }, { workspaceRoot: workspace, skillRoots });
+    assert.equal(plan.error, undefined, relative_path);
+    assert.equal(plan.targets[0].absPath, path.join(skillDir, 'SKILL.md'), relative_path);
+    assert.equal(plan.targets[0].knowledge, 'skills', relative_path);
+  }
+  // At execution, without skill roots, the skill path lands in the same file.
+  const resolved = await fsService.resolveWorkspacePathForAccess(workspace, 'skill:traffic/references/new.md');
+  assert.equal(resolved.absPath, path.join(skillDir, 'references', 'new.md'));
+});
+
+test('a skill path of a skill that is not in the open folder stays read-only', async (t) => {
+  const { workspace, fsService } = await makeWorkspaceSkill(t);
+  const elsewhere = { name: 'traffic', dir: path.join(os.tmpdir(), 'somewhere-else', 'traffic') };
+  const shadowed = await fsService.resolveToolPath(workspace, 'skill:traffic/SKILL.md', { access: 'write', skillRoots: [elsewhere] });
+  assert.match(shadowed.error, READ_ONLY);
+  const missing = await fsService.resolveWorkspacePathForAccess(workspace, 'skill:unknown/SKILL.md');
+  assert.match(missing.error, READ_ONLY);
+});
+
+test('load_skill tells the model a skill of the open folder is changed there', async (t) => {
+  const { workspace, fsService, skillRoots } = await makeWorkspaceSkill(t);
+  const out = JSON.parse(await fsService.runLoadSkillTool({ name: 'traffic' }, workspace, { skillRoots }));
+  assert.match(out.files, /It belongs to the open folder: change its files like any other file there, as "\.agents\/skills\/traffic\/<path>"\./);
+  assert.doesNotMatch(out.files, /read-only/);
 });

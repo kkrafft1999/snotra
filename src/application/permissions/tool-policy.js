@@ -10,7 +10,8 @@
  *  1. harte Grenze / unbekanntes Tool / deaktiviertes Tool → deny
  *  2. passende Deny-Regel (global oder Workspace) → deny
  *  3. Modus `ask-all` → ask (auch bei Lesetools, ignoriert Freigaben)
- *  4. Modus `auto` → allow
+ *  4. Modus `auto` → allow; a knowledge file asks in every mode before that,
+ *     except one of the open folder in `auto` (#1319, #1371)
  *  5. Modus `smart` → gültige Sitzungsfreigabe, passende Befehlsregel (#121)
  *     oder deckende Allow-Regel → allow, sonst Grundmatrix
  */
@@ -32,6 +33,7 @@ const {
   isCommandRule,
 } = require('../../shared/contracts/tool-permissions');
 const { matchesPathPattern } = require('../../shared/runtime/path-pattern');
+const { KNOWLEDGE_FILE_KINDS } = require('../../shared/contracts/knowledge-files');
 
 /**
  * @typedef {import('../../shared/contracts/tool-permissions').PermissionRule} PermissionRule
@@ -298,6 +300,8 @@ function commandRuleCovers(rules, { toolName, riskClasses, shellCommand }) {
  * @param {boolean} [input.unknownTool]
  * @param {{ reason?: string }|null} [input.hardLimit]
  * @param {boolean} [input.knowledgeWrite]  the call writes a knowledge file (#1319)
+ * @param {unknown[]} [input.knowledgeKinds]  the kinds of the knowledge files it writes (#1371)
+ * @param {boolean} [input.knowledgeWarning]  the chat shows a sign of injected instructions (#1371)
  * @returns {ToolPolicyVerdict}
  */
 function decideToolPolicy(input = {}) {
@@ -341,7 +345,13 @@ function decideToolPolicy(input = {}) {
 
   // A knowledge file outlives the run (#1319): it asks in every mode, and no
   // session grant or allow rule answers for the user. Only a deny rule wins.
-  if (input.knowledgeWrite === true) {
+  // The one exception is a knowledge file of the open folder in Auto, as long
+  // as the chat shows no sign of injected instructions (#1371).
+  if (input.knowledgeWrite === true && !workspaceKnowledgePassesInAuto({
+    mode,
+    kinds: input.knowledgeKinds,
+    warning: input.knowledgeWarning,
+  })) {
     return { decision: POLICY_DECISIONS.ASK, mode, askClasses: [...riskClasses] };
   }
   if (mode === TOOL_PERMISSION_MODES.ASK_ALL) {
@@ -387,7 +397,30 @@ function decideToolPolicy(input = {}) {
   return { decision: POLICY_DECISIONS.ASK, mode, askClasses: classesRequiringAsk(mode, riskClasses) };
 }
 
+/**
+ * Whether a change to knowledge files goes through without a card (#1371):
+ * in Auto, when every file it touches is a knowledge file of the open folder
+ * — `AGENTS.md`, `.agents/memory.md`, `.agents/rules/`, `.agents/skills/` —
+ * and the chat shows no sign of injected instructions. They are part of the
+ * folder Auto already lets the model change; the model names what it changed,
+ * and the tree marks it. Global knowledge files and a chat with a warning
+ * still ask, in every mode.
+ *
+ * @param {{ mode?: unknown, kinds?: unknown, warning?: unknown }} input
+ *   `kinds`: the workspace kind of every file touched; anything else (a
+ *   global file, an unknown kind) keeps the card
+ * @returns {boolean}
+ */
+function workspaceKnowledgePassesInAuto({ mode, kinds, warning } = {}) {
+  if (normalizeToolPermissionMode(mode) !== TOOL_PERMISSION_MODES.AUTO) return false;
+  if (warning === true) return false;
+  if (!Array.isArray(kinds) || kinds.length === 0) return false;
+  const workspaceKinds = Object.values(KNOWLEDGE_FILE_KINDS);
+  return kinds.every((kind) => workspaceKinds.includes(kind));
+}
+
 module.exports = {
+  workspaceKnowledgePassesInAuto,
   POLICY_MATRIX,
   TOOL_RISK_CLASS_ORDER,
   matrixDecision,

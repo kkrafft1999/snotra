@@ -2000,7 +2000,9 @@ test('the skills prompt sends what a skill keeps to .agents/data (#548)', async 
     payload: { messages: [{ role: 'user', content: 'Hi' }], workspaceRoot: '/tmp/snotra-project' },
   });
   const system = withFolder.calls[0].messages.find((m) => m.role === 'system').content;
-  assert.match(system, /Skill folders are read-only\. What a skill produces and wants to keep/);
+  assert.match(system, /Global and built-in skill folders are read-only\. What a skill produces and wants to keep/);
+  // A skill of the open folder is part of it (#1371).
+  assert.match(system, /A skill under "\.agents\/skills\/" in the open folder is part of that folder/);
   assert.match(system, /"\.agents\/data\/" in the open folder/);
   assert.match(system, /"<workspace>\/\.agents\/data\/…" means exactly that place/);
   assert.doesNotMatch(system, /write tools reach its folder/);
