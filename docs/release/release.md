@@ -104,6 +104,12 @@ which downloads a **dated release** and writes it to
 that file. A test guards both. To raise it, change URL and SHA-256 in the script
 together — GitHub lists the digest next to each release asset.
 
+The runtime can only mount the squashfs compressions listed in `RUNTIME.compressors`
+(`zlib` and `zstd` for `20251108`), and the maker's `compressor` has to be one
+of them. With `xz`, every AppImage from v1.13.3 to v1.31.0 failed at start
+without anyone noticing, until the start gate found it (#1370). A test keeps the
+two in line; check the list again whenever you raise the runtime.
+
 The artifacts end up under `out/`. The app's comparison uses **the release tag
 only**, not the file names — so the asset names can be chosen freely, but should
 carry the version and the platform, e.g. `Snotra-Agent-1.1.0-mac-arm64.dmg`.

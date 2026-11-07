@@ -30,6 +30,10 @@ const RUNTIME = Object.freeze({
   sha256: '2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d',
   // Must match `runtime` of the AppImage maker in package.json.
   target: path.join('out', 'appimage-runtime', 'runtime-x86_64'),
+  // The squashfs compressions this runtime can mount. The maker's
+  // `compressor` has to be one of them: an xz image made every AppImage from
+  // v1.13.3 on fail at start (#1370). Check it again when raising the runtime.
+  compressors: Object.freeze(['zlib', 'zstd']),
 });
 
 function sha256(buffer) {

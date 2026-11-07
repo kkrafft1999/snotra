@@ -52,6 +52,18 @@ test('AppImage maker starts the packaged executable from a verified runtime', ()
   assert.match(pkg.scripts['make:linux'], /node scripts\/fetch-appimage-runtime\.js && electron-forge make/);
 });
 
+// #1370: the pinned runtime mounts only zlib and zstd. With `xz` every
+// AppImage built since v1.13.3 refused to start, and nothing noticed until the
+// release pipeline started its artifacts (#1066). mksquashfs calls zlib "gzip".
+test('AppImage is compressed with something the pinned runtime can mount', () => {
+  const { RUNTIME } = require('../scripts/fetch-appimage-runtime.js');
+  const appImage = pkg.config.forge.makers.find((m) => m.name === '@reforged/maker-appimage');
+  const compressor = appImage.config.options.compressor ?? 'gzip';
+  const asRuntimeNames = { gzip: 'zlib' };
+  assert.ok(RUNTIME.compressors.includes(asRuntimeNames[compressor] ?? compressor),
+    `compressor "${compressor}" is not one of ${RUNTIME.compressors.join(', ')}`);
+});
+
 // @reforged/maker-appimage 5.3.1 still asks for maker-base 6 or 7. Left alone,
 // it drags the whole Forge 7 chain back in, packager 18 and extract-zip
 // included, which is what the move to Forge 8 removed (#88). The override in

@@ -100,7 +100,7 @@
                 "Development"
               ],
               "icon": "icon.png",
-              "compressor": "xz",
+              "compressor": "zstd",
               "runtime": "out/appimage-runtime/runtime-x86_64"
             }
           }
