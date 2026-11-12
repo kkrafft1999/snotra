@@ -75,6 +75,8 @@ const SKIP_KEYS = Object.freeze({
   compound: 'approval.allowance.skipped.compound',
   expansion: 'approval.allowance.skipped.expansion',
   otherFile: 'approval.allowance.skipped.otherFile',
+  redirectOutside: 'approval.allowance.skipped.redirectOutside',
+  redirectSecrets: 'approval.allowance.skipped.redirectSecrets',
 });
 
 /**

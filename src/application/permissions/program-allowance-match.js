@@ -7,6 +7,14 @@
  * allowance names; the line that then runs starts with that file's absolute
  * path. Finding a program on the user's PATH and reading real paths is the
  * host's (`src/main/services/program-allowances-service.js`), handed in.
+ *
+ * The line may end in redirections of the program's output (#1379), so a
+ * large output can go straight into a file instead of through the
+ * conversation. Every file target must lie inside the open folder, where any
+ * sandboxed command may write anyway, or be `/dev/null`; a target outside it
+ * — an allowance's own write folders among them — keeps the allowance off.
+ * So does a file target when the allowance hands over credentials: the
+ * output is masked on its way to the model, a file would keep the secret.
  */
 
 const {
@@ -18,6 +26,10 @@ const { parseSimpleCommand } = require('../../shared/runtime/simple-command');
 const { quoteArgv } = require('../../shared/runtime/quote-argv');
 
 /** @typedef {import('../../shared/contracts/program-allowances').ProgramAllowance} ProgramAllowance */
+/** @typedef {import('../../shared/runtime/simple-command').Redirection} Redirection */
+
+/** Discards what is written to it; no file of the open folder needed. */
+const DEV_NULL = '/dev/null';
 
 /**
  * @param {Object} deps
@@ -26,10 +38,15 @@ const { quoteArgv } = require('../../shared/runtime/quote-argv');
  * @param {(word: string, cwd: string|null|undefined) => Promise<string|null>} deps.locate
  *   the executable a command's first word names, through the user's PATH
  * @param {(target: string) => Promise<string|null>} deps.realPath  null when it does not resolve
+ * @param {(target: string, cwd: string|null|undefined, workspaceRoot: string|null|undefined) => Promise<boolean>} [deps.isFileInFolder]
+ *   whether a redirection target is a file inside the open folder, by its real
+ *   path (#1379); without it no file target is accepted
  * @param {boolean} deps.sandboxSupported  whether this platform isolates commands at all
  * @param {boolean} deps.trustdApplies  whether an allowance can open trustd (macOS)
  */
-function createProgramAllowanceMatcher({ readAllowances, locate, realPath, sandboxSupported, trustdApplies }) {
+function createProgramAllowanceMatcher({
+  readAllowances, locate, realPath, isFileInFolder = async () => false, sandboxSupported, trustdApplies,
+}) {
   /**
    * Program names an unreadable line mentions, for saying why nothing applies.
    *
@@ -44,6 +61,30 @@ function createProgramAllowanceMatcher({ readAllowances, locate, realPath, sandb
       if (name) names.add(name);
     }
     return allowances.map((entry) => programName(entry.path)).filter((name) => names.has(name));
+  }
+
+  /**
+   * Why the line's redirections keep an allowance off, or null (#1379).
+   *
+   * @param {Redirection[]} redirections
+   * @param {ProgramAllowance} entry
+   * @param {string|null|undefined} cwd
+   * @param {string|null} workspaceRoot
+   */
+  async function refusedRedirection(redirections, entry, cwd, workspaceRoot) {
+    /** @type {string[]} */
+    const files = [];
+    for (const redirection of redirections) {
+      if ('target' in redirection && redirection.target !== DEV_NULL) files.push(redirection.target);
+    }
+    if (files.length === 0) return null;
+    if (entry.credentials.length > 0) return PROGRAM_ALLOWANCE_SKIP_REASONS.REDIRECT_SECRETS;
+    for (const target of files) {
+      if (!workspaceRoot || !(await isFileInFolder(target, cwd, workspaceRoot))) {
+        return PROGRAM_ALLOWANCE_SKIP_REASONS.REDIRECT_OUTSIDE;
+      }
+    }
+    return null;
   }
 
   /**
@@ -64,7 +105,7 @@ function createProgramAllowanceMatcher({ readAllowances, locate, realPath, sandb
       .filter((entry) => entry !== null);
     if (allowances.length === 0 || typeof command !== 'string') return null;
 
-    const parsed = parseSimpleCommand(command);
+    const parsed = parseSimpleCommand(command, { redirections: true });
     if (!parsed.ok) {
       if (parsed.reason === 'empty') return null;
       const [program] = mentionedPrograms(command, allowances);
@@ -83,6 +124,8 @@ function createProgramAllowanceMatcher({ readAllowances, locate, realPath, sandb
     const real = located ? await realPath(located) : null;
     for (const entry of candidates) {
       if (!real || real !== (await realPath(entry.path))) continue;
+      const refused = await refusedRedirection(parsed.redirections || [], entry, cwd, workspaceRoot);
+      if (refused) return { skipped: { program: name, reason: refused } };
       return {
         allowance: {
           path: entry.path,

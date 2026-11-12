@@ -39,3 +39,24 @@ test('another file of the same name, or a compound line, is told apart', async (
   const compound = await make().match({ command: 'gh pr list && rm -rf /' });
   assert.equal(compound.skipped.program, 'gh');
 });
+
+test('a redirection target is the host\'s to judge; without a judge no file is accepted (#1379)', async () => {
+  const seen = [];
+  const matcher = createProgramAllowanceMatcher({
+    readAllowances: async () => [ENTRY],
+    locate: async () => '/opt/bin/gh',
+    realPath: async (target) => target,
+    isFileInFolder: async (target, cwd, root) => { seen.push([target, cwd, root]); return target.startsWith('out/'); },
+    sandboxSupported: true,
+    trustdApplies: true,
+  });
+  const inside = await matcher.match({ command: 'gh pr list --json number > out/prs.json', cwd: '/ws', workspaceRoot: '/ws' });
+  assert.equal(inside.command, '/opt/bin/gh pr list --json number > out/prs.json');
+  assert.deepEqual(seen, [['out/prs.json', '/ws', '/ws']]);
+  assert.deepEqual((await matcher.match({ command: 'gh pr list > prs.json', cwd: '/ws', workspaceRoot: '/ws' })).skipped,
+    { program: 'gh', reason: PROGRAM_ALLOWANCE_SKIP_REASONS.REDIRECT_OUTSIDE });
+  assert.deepEqual((await make().match({ command: 'gh pr list > out/prs.json', cwd: '/ws', workspaceRoot: '/ws' })).skipped,
+    { program: 'gh', reason: PROGRAM_ALLOWANCE_SKIP_REASONS.REDIRECT_OUTSIDE });
+  // /dev/null and duplications need no judge.
+  assert.ok((await make().match({ command: 'gh pr list 2>/dev/null 2>&1', cwd: '/ws', workspaceRoot: '/ws' })).allowance);
+});

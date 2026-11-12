@@ -806,9 +806,13 @@ const NETWORK_DOMAINS_PARAMETER = Object.freeze({
 /** Why a program allowance stayed off, as the model reads it (#408). */
 /** @type {Readonly<Record<string, string>>} */
 const ALLOWANCE_SKIP_TEXT = Object.freeze({
-  compound: 'the command does more than run the program: no chaining, pipes, redirections or variables in front',
+  compound: 'the command does more than run the program: no chaining, pipes, input redirection or variables in front; '
+    + 'output may only be redirected at the end of the line (> file, 2> file, 2>&1)',
   expansion: 'the command uses $ or backticks, so what runs is only known after the shell expanded it',
   otherFile: 'the command starts a different file of that name, not the one the user allowed',
+  redirectOutside: 'the output is redirected into a file outside the project folder; redirect it into the project folder or /dev/null',
+  redirectSecrets: 'the allowance hands over credentials, and a file would keep what the output masking hides; '
+    + 'drop the redirection into a file',
 });
 
 /**
@@ -1932,8 +1936,9 @@ function createWorkspaceToolRegistry({
         + 'stores, and no network except the domains listed in network_domains — pip and npm installs '
         + 'get their registry automatically. Programs the user has given an allowance in Settings '
         + '(Program allowances) get its domains, folders and token (such as GH_TOKEN for gh) by themselves, but only when the command '
-        + 'runs the program on its own: no chaining, pipes, redirections or $ — so call such a program '
-        + 'alone and filter its output afterwards. What the sandbox refused — a write, a read of a protected '
+        + 'runs the program on its own: no chaining, pipes or $. Its output may be redirected at the end '
+        + 'of the line into a file of the project folder (> out.json, 2> out.err, 2>&1), which keeps a '
+        + 'large output out of the conversation; read or process the file afterwards. What the sandbox refused — a write, a read of a protected '
         + 'location, a connection — is listed in stderr under <sandbox_blocked>, and the user sees the same list. '
         + 'For a refused write or read the user is asked right away; if they allow it, the command runs a second '
         + 'time and sandbox_decision in the result says so. Do not work around a refusal with another location, '

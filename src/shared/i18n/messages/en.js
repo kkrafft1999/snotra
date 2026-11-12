@@ -2371,6 +2371,8 @@ module.exports = {
   'approval.allowance.skipped.compound': 'The allowance for {program} does not apply: the command does more than run the program.',
   'approval.allowance.skipped.expansion': 'The allowance for {program} does not apply: the command uses $ or backticks.',
   'approval.allowance.skipped.otherFile': 'The allowance for {program} does not apply: the command starts a different file of that name.',
+  'approval.allowance.skipped.redirectOutside': 'The allowance for {program} does not apply: the output goes into a file outside the open folder.',
+  'approval.allowance.skipped.redirectSecrets': 'The allowance for {program} does not apply: it hands over credentials, and a file would keep them unmasked.',
   'approval.allowance.settings': 'Programs with more room',
   'approval.warning.delete': 'The existing file will be overwritten completely – without a recovery copy. This cannot be undone.',
   'approval.warning.knowledge': 'Earlier in this chat, a tool result or this folder\'s own text read like hidden instructions. Check that you want this in a file Snotra reads in every chat.',
