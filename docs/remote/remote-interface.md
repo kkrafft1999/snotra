@@ -629,12 +629,12 @@ listed together where they share their class.
 | `skills:makeGlobal` | desktop | Native confirmation; writes a global skill folder (#980) |
 | `dialog:openFolder` | desktop | A new folder comes in only through the native dialog (#68) |
 | `fs:readDirectory`, `fs:readFile`, `fs:listWorkspacePaths`, `fs:readWorkspaceImage`, `fs:readWorkspacePdf` | desktop, for now ([O5](#11-open-decisions)) | They take paths, which the protocol does not; a read-only file scope for local programs would be its own decision |
-| `fs:writeFile`, `fs:moveItem`, `fs:createItem`, `fs:renameItem` | desktop | Writes chosen by the user at the window |
+| `fs:writeFile`, `fs:writeWorkspacePdf`, `fs:moveItem`, `fs:createItem`, `fs:renameItem` | desktop | Writes chosen by the user at the window |
 | `fs:inspectImport`, `fs:importItems` | desktop, **never** remote | The source lies outside the workspace and is trusted only because the preload resolved it from a dropped file (#646) |
 | `fs:showFileContextMenu`, `fs:revealItem`, `ui:showPreviewHistoryMenu` | desktop | Native menus and the file manager of the desktop |
 | `fs:item-deleted`, `fs:clear-agent-mark`, `fs:show-changes`, `fs:show-info`, `fs:begin-create`, `fs:begin-rename` (push) | desktop | Follow-ups of a native context menu |
 | `fs:tree-changed` (push) | later, with a file scope ([O5](#11-open-decisions)) | — |
-| `pdf:readAsset`, all seven `htmlPreview:*`, `htmlPreview:event` (push) | desktop | pdf.js internals; a native view over the window |
+| `pdf:readAsset`, `pdf:commentAuthor`, all seven `htmlPreview:*`, `htmlPreview:event` (push) | desktop | pdf.js internals; a native view over the window |
 | `shell:openExternal`, `shell:writeClipboardText`, `help:openManual` | desktop | The desktop's browser, clipboard and help window; a client opens links itself |
 | `approvalNotification:show`, `approvalNotification:close`, `approvalNotification:open` (push) | desktop | Notifications of the desktop; the phone's push notifications are a later phase of the mobile concept |
 | `modelPrices:describe`, `setOverride`, `update` | desktop | The settings; a chat's cost reaches clients in `chat.updated` once #981 keeps it |

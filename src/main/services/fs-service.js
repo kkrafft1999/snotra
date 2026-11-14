@@ -42,10 +42,12 @@ const {
 const {
   MAX_WORKSPACE_PDF_BYTES,
   WORKSPACE_PDF_ERRORS,
+  WORKSPACE_PDF_WRITE_ERRORS,
   WORKSPACE_PDF_SNIFF_BYTES,
   isPdfHeader,
   createWorkspacePdfResult,
   createWorkspacePdfError,
+  createWorkspacePdfWriteError,
 } = require('../../shared/contracts/workspace-pdf');
 const {
   REGEX_SEARCH_DEFAULT_TIME_BUDGET_MS,
@@ -1509,6 +1511,22 @@ function applyHunksToLines(source, hunks, relativePath, eol) {
   }
 
   return { lines: result, endings, offsets };
+}
+
+/**
+ * Is `next` an incremental update of `current` (#1386)? The old file must
+ * survive byte for byte at the start of the new one.
+ *
+ * @param {Uint8Array} current
+ * @param {Uint8Array} next
+ */
+function isIncrementalUpdate(current, next) {
+  if (!(current instanceof Uint8Array) || !(next instanceof Uint8Array)) return false;
+  if (next.length <= current.length) return false;
+  return Buffer.compare(
+    Buffer.from(current.buffer, current.byteOffset, current.length),
+    Buffer.from(next.buffer, next.byteOffset, current.length),
+  ) === 0;
 }
 
 /**
@@ -4268,10 +4286,59 @@ function createFsService({
   }
 
   /**
+   * A comment the user added in the PDF view (#1386). pdf.js made `bytes` by
+   * appending an incremental update to the file the view had read; they are
+   * written only if that holds against the file on disk **now**: the current
+   * bytes must be the start of the new ones, byte for byte. A file someone
+   * changed since is refused as `changed`, never overwritten — and nothing
+   * that was in the file before can be lost or altered, which also keeps a
+   * signature over it valid.
+   *
+   * The path goes through the read checks (lexically, via `realpath`, a
+   * file, the 50 MB limit), the new bytes must start like a PDF and stay
+   * under the limit, and the target is checked once more right before the
+   * atomic write, as for every write from the preview (#642, #863).
+   *
+   * @param {unknown} workspaceRoot
+   * @param {unknown} rawPath
+   * @param {unknown} bytes
+   * @returns {Promise<{ ok: boolean, reason?: unknown, size?: number, mtimeMs?: number }>}
+   */
+  async function writeWorkspacePdfFromUser(workspaceRoot, rawPath, bytes) {
+    if (!(bytes instanceof Uint8Array) || !isPdfHeader(bytes.subarray(0, WORKSPACE_PDF_SNIFF_BYTES))) {
+      return createWorkspacePdfWriteError(WORKSPACE_PDF_WRITE_ERRORS.INVALID);
+    }
+    if (bytes.length > MAX_WORKSPACE_PDF_BYTES) {
+      return createWorkspacePdfWriteError(WORKSPACE_PDF_WRITE_ERRORS.TOO_LARGE, { size: bytes.length });
+    }
+    const read = await readWorkspaceBytes(workspaceRoot, rawPath, MAX_WORKSPACE_PDF_BYTES);
+    if (read.reason !== undefined) return createWorkspacePdfWriteError(read.reason);
+    if (!isIncrementalUpdate(read.buffer, bytes)) {
+      return createWorkspacePdfWriteError(WORKSPACE_PDF_WRITE_ERRORS.CHANGED);
+    }
+    try {
+      // As given, not resolved: the check and the write resolve links
+      // themselves, against the root resolved the same way.
+      const checked = await assertPathAccessibleInWorkspace(read.root, read.absPath);
+      if (checked.error) return createWorkspacePdfWriteError(WORKSPACE_PDF_WRITE_ERRORS.OUTSIDE_WORKSPACE);
+      await writeFileAtomic(read.absPath, Buffer.from(bytes.buffer, bytes.byteOffset, bytes.length), read.root);
+      const stats = await fs.stat(read.absPath);
+      return { ok: true, size: stats.size, mtimeMs: stats.mtimeMs };
+    } catch (err) {
+      // Permission, a full disk, a lock: the write is atomic, so the file is
+      // as it was, and the view says the comment was not saved.
+      console.warn('PDF comment could not be written:', err?.code ?? err?.message ?? err);
+      return createWorkspacePdfWriteError(WORKSPACE_PDF_WRITE_ERRORS.FAILED);
+    }
+  }
+
+  /**
    * One file of the open folder, read in full after the checks both preview
    * channels share (#244, #346): a path relative to the root or absolute,
    * inside it lexically **and** after `realpath`, a file, at most `maxBytes`.
-   * Answers `{ buffer, stats }` or `{ reason, size? }` with the reason codes
+   * Answers `{ buffer, stats, absPath, root }` (both as given, links not
+   * resolved) or `{ reason, size? }` with
+   * the reason codes
    * of the image contract, which the PDF contract shares.
    *
    * @param {unknown} workspaceRoot
@@ -4310,7 +4377,7 @@ function createFsService({
       const read = await readRegularFile(fs, realTarget, { maxBytes });
       if (read.notFile) return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
       if (read.tooLarge || !read.buffer) return { reason: WORKSPACE_IMAGE_ERRORS.TOO_LARGE, size: read.stats.size };
-      return { buffer: read.buffer, stats: read.stats };
+      return { buffer: read.buffer, stats: read.stats, absPath, root };
     } catch {
       return { reason: WORKSPACE_IMAGE_ERRORS.NOT_FOUND };
     }
@@ -4421,6 +4488,7 @@ function createFsService({
     writeFileFromUser,
     readWorkspaceImage,
     readWorkspacePdf,
+    writeWorkspacePdfFromUser,
     // The same checks for any file an HTML page loads (#479).
     readWorkspaceFile: readWorkspaceBytes,
   };

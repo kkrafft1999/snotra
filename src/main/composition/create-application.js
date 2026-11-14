@@ -41,6 +41,7 @@ const { registerChatHandlers } = require('../ipc/chat-handlers');
 const { registerToolPermissionHandlers } = require('../ipc/tool-permission-handlers');
 const { registerRemoteHandlers } = require('../ipc/remote-handlers');
 const { registerDeveloperModeHandlers } = require('../ipc/developer-mode-handlers');
+const { createAccountName } = require('../services/account-name');
 const { createRemoteReleaseSettings } = require('../services/remote-release-settings');
 const { createCore } = require('./create-core');
 
@@ -187,6 +188,7 @@ function createApplication({
     confirmations,
     getLocale: getAppLocale,
     pdfAssets: core.pdfAssets,
+    accountName: createAccountName(),
     getWorkspaceRoot: getActiveWorkspaceRoot,
   });
   // The menu behind ‹ and › in the preview header (#822).

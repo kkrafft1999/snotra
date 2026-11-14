@@ -744,6 +744,79 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.ok(comment.focused);
   await page.keyboard.press('Escape');
   assert.equal(await page.evaluate(() => document.querySelector('.pdf-comment')), null);
+  // A new comment (#1386): text selected with the mouse in pdf.js's text
+  // layer, the composer opened by its shortcut, and the comment appended to
+  // the file — the old bytes untouched at its start — and shown after the
+  // reload like any other.
+  const pdfPath = path.join(workspace, 'notizen', 'spezifikation.pdf');
+  const pdfBefore = await readFile(pdfPath);
+  // The view has to be at rest first. Fit width draws every page again 120 ms
+  // after the column changed width — a scroll bar coming or going is enough —
+  // and a drag that falls into that redraw loses its selection with the old
+  // text layer (macOS and Windows CI, first run of #1387). So the line is
+  // scrolled into view, and the mouse only goes down once the very same span
+  // has stood at the same spot for longer than that pause and is what the
+  // pointer would hit. The line is the first one, two lines clear of Ada's
+  // comment: a comment's target is at least 32 px tall, and at the 54 % zoom
+  // of a 1024 × 768 runner it reaches over the neighbouring lines.
+  const lineBox = await poll(() => page.evaluate(() => {
+    const span = [...document.querySelectorAll('.pdf-page[data-page="1"] .pdf-text-layer span')]
+      .find((s) => s.textContent.startsWith('This page is drawn'));
+    if (!span) return null;
+    span.scrollIntoView({ block: 'center', inline: 'nearest' });
+    const r = span.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + 2, r.top + r.height / 2);
+    const spot = `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)}`;
+    const now = performance.now();
+    const steady = span.dataset.smokeSpot === spot && now - Number(span.dataset.smokeSince) > 300;
+    if (span.dataset.smokeSpot !== spot) {
+      span.dataset.smokeSpot = spot;
+      span.dataset.smokeSince = String(now);
+    }
+    if (!steady || r.width === 0 || (hit !== span && !span.contains(hit))) return null;
+    return { left: r.left, top: r.top, width: r.width, height: r.height };
+  }), {
+    what: 'ruhende Textebene der PDF-Seite',
+    intervalMs: 100,
+    explain: () => page.evaluate(() => {
+      const view = document.querySelector('.pdf-view');
+      const span = [...document.querySelectorAll('.pdf-page[data-page="1"] .pdf-text-layer span')]
+        .find((s) => s.textContent.startsWith('This page is drawn'));
+      const r = span?.getBoundingClientRect();
+      const hit = r ? document.elementFromPoint(r.left + 2, r.top + r.height / 2) : null;
+      return {
+        window: [innerWidth, innerHeight],
+        view: view && [view.clientWidth, view.clientHeight, view.scrollWidth, view.scrollHeight, view.scrollTop],
+        zoom: document.querySelector('.pdf-tools__zoom-value, .pdf-tools [aria-live]')?.textContent ?? null,
+        span: span ? { spot: span.dataset.smokeSpot, box: [r.left, r.top, r.width, r.height].map(Math.round) } : null,
+        hit: hit ? `${hit.tagName}.${hit.className}` : null,
+      };
+    }),
+  });
+  const lineY = lineBox.top + lineBox.height / 2;
+  await page.mouse.move(lineBox.left + 1, lineY);
+  await page.mouse.down();
+  await page.mouse.move(lineBox.left + lineBox.width * 0.5, lineY, { steps: 8 });
+  await page.mouse.up();
+  assert.match(await page.evaluate(() => String(document.getSelection())), /^This page is/);
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+KeyM' : 'Control+Alt+KeyM');
+  await poll(() => page.evaluate(() => document.activeElement?.classList.contains('pdf-compose__field')),
+    { what: 'Kommentarfeld' });
+  await page.keyboard.type('Smoke test note');
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+  const added = await poll(() => page.evaluate(() => {
+    const targets = [...document.querySelectorAll('.pdf-comment-target')];
+    if (targets.length < 2 || document.querySelector('.pdf-compose')) return null;
+    return {
+      labels: targets.map((b) => b.getAttribute('aria-label')),
+      announced: document.querySelector('.pdf-view__announcer')?.textContent ?? '',
+    };
+  }), { what: 'gespeicherter PDF-Kommentar' });
+  assert.equal(added.announced, 'Kommentar im PDF gespeichert.');
+  const pdfAfter = await readFile(pdfPath);
+  assert.ok(pdfAfter.length > pdfBefore.length);
+  assert.ok(pdfAfter.subarray(0, pdfBefore.length).equals(pdfBefore), 'appended, not rewritten');
+  assert.ok(pdfAfter.includes(Buffer.from('/Highlight')));
   // What the clicks and the rest of the markdown could have set going is read
   // after the next step, the HTML page below, not after a fixed pause.
   step('PDF-Vorschau geprueft');

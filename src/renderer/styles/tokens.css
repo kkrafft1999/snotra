@@ -185,6 +185,13 @@
    * purpose not redefined under [data-theme='dark'], where --ds-grey-strong
    * would give 1.7:1. 6.7:1 on --ds-paper. */
   --ds-paper-ink: #5E5C59;
+  /* A new comment on that paper (#1386): the passage being commented, until
+   * it is saved, in the yellow pdf.js and most readers highlight with, and
+   * the selection of the text layer. Like the paper, the same in both
+   * themes. Neither is ink: they lie under the page's own text, multiplied
+   * onto it. */
+  --ds-paper-highlight: #FFFF98;
+  --ds-paper-selection: rgba(0, 117, 158, 0.28);
 
   /* ── Component greys ──────────────────────────────────────────────────
    * The scale behind the aliases at the top of styles.css (--text-primary,

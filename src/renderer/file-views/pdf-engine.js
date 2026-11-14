@@ -94,3 +94,74 @@ export async function openPdfDocument(api, bytes, { onPassword } = {}) {
   }
   return { promise: task.promise, destroy: () => task.destroy() };
 }
+
+/**
+ * The text of a page as a layer of transparent, selectable text over the
+ * canvas (#1386), by pdf.js's public `TextLayer`. Nothing in it acts: it is
+ * spans of text, no links, no form fields. Answers `{ promise, cancel }`; the
+ * promise settles once the text is laid out.
+ */
+export function renderTextLayer(page, container, viewport) {
+  let layer = null;
+  let cancelled = false;
+  const promise = loadPdfjs().then((pdfjs) => {
+    if (cancelled) return;
+    layer = new pdfjs.TextLayer({
+      textContentSource: page.streamTextContent({ includeMarkedContent: true, disableNormalization: true }),
+      container,
+      viewport,
+    });
+    return layer.render();
+  });
+  return {
+    promise,
+    cancel() {
+      cancelled = true;
+      layer?.cancel();
+    },
+  };
+}
+
+// pdf.js's `AnnotationEditorPrefix`: storage keys with it are new annotations
+// to be written. Not exported by pdf.js; `test/pdf-annotate-save.test.mjs`
+// writes and reads back a comment through the real pdf.js, so an update that
+// changes it fails there.
+const NEW_ANNOTATION_PREFIX = 'pdfjs_internal_editor_';
+let saveCounter = 0;
+
+/**
+ * The document with one more highlight (#1386), as the bytes of the file:
+ * pdf.js appends an incremental update and leaves everything before it as
+ * it was. `highlight` from `highlightAnnotation()` in `pdf-annotate.js`.
+ */
+export async function saveWithHighlight(doc, highlight) {
+  return addHighlight(await loadPdfjs(), doc, highlight);
+}
+
+/** `saveWithHighlight` with the pdf.js module given — for the round-trip test in Node. */
+export async function addHighlight(pdfjs, doc, highlight) {
+  saveCounter += 1;
+  const key = `${NEW_ANNOTATION_PREFIX}snotra-comment-${saveCounter}`;
+  doc.annotationStorage.setValue(key, { annotationType: pdfjs.AnnotationEditorType.HIGHLIGHT, ...highlight });
+  try {
+    return await doc.saveDocument();
+  } finally {
+    doc.annotationStorage.remove(key);
+  }
+}
+
+/**
+ * Why this document takes no comments, or null: a signature over it is
+ * left alone, and so is a protected file — `'signed'`, `'protected'`.
+ */
+export async function commentBlockReason(doc) {
+  try {
+    const { info } = await doc.getMetadata();
+    if (info?.IsSignaturesPresent) return 'signed';
+    if (info?.EncryptFilterName) return 'protected';
+    return null;
+  } catch {
+    // Unreadable metadata: no way to tell, so no write.
+    return 'protected';
+  }
+}

@@ -73,6 +73,7 @@ const FILESYSTEM_PORT_KEYS = [
   'writeFile',
   'readWorkspaceImage',
   'readWorkspacePdf',
+  'writeWorkspacePdf',
 ];
 
 function makeStorageStub() {

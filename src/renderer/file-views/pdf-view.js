@@ -22,15 +22,20 @@
 // hundred.
 //
 // **Comments** behind highlights and notes open by a click on the marking
-// (#1299), through a layer of our own — `pdf-comments.js`.
+// (#1299), through a layer of our own — `pdf-comments.js`. **New comments**
+// (#1386): every drawn page carries pdf.js's text layer, so its text can be
+// selected; a selection gets a "Comment" chip, and what the user writes is
+// appended to the file as a highlight annotation — `pdf-annotate.js`. Signed
+// and protected PDFs take no comments.
 //
 // The interface it implements is documented in the header of `registry.js`.
 
 import contracts from '../generated/contracts.js';
 import { t, tPlural, onLocaleChange } from '../i18n.js';
 import { formatSize } from '../utils/helpers.js';
-import { openPdfDocument } from './pdf-engine.js';
+import { openPdfDocument, renderTextLayer, saveWithHighlight, commentBlockReason } from './pdf-engine.js';
 import { commentsFromAnnotations, createCommentLayer } from './pdf-comments.js';
+import { createCommentComposer, highlightAnnotation } from './pdf-annotate.js';
 import { ZOOM_STEPS, nextZoom, iconButton, ZOOM_IN_ICON, ZOOM_OUT_ICON } from './zoom-tools.js';
 
 export { ZOOM_STEPS, nextZoom };
@@ -75,9 +80,15 @@ function nbsp(text) {
 
 /**
  * Builds the view. `openDocument(api, bytes, { onPassword })` is pdf.js in
- * the app and a stand-in in the tests, which have no canvas and no worker.
+ * the app and a stand-in in the tests, which have no canvas and no worker;
+ * so are `renderText`, `saveHighlight` and `blockReason` (`pdf-engine.js`).
  */
-export function createPdfView({ openDocument = openPdfDocument } = {}) {
+export function createPdfView({
+  openDocument = openPdfDocument,
+  renderText = renderTextLayer,
+  saveHighlight = saveWithHighlight,
+  blockReason = commentBlockReason,
+} = {}) {
   return {
     id: 'pdf',
     kind: 'viewer',
@@ -105,6 +116,12 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
       let pageCount = 0;
       let defaultSize = null; // { width, height } in PDF points
       const pageSizes = new Map();
+      // Page number → pdf.js's viewport at scale 1, for the pages drawn so
+      // far: what a new comment's position is converted with (#1386).
+      const baseViewports = new Map();
+      // Why the shown document takes no comments, or null (#1386).
+      let commentBlock = null;
+      let authorPromise = null;
       // Zoom: 'fit' follows the column width; otherwise a fixed factor.
       let zoomMode = 'fit';
       let zoom = 1;
@@ -147,6 +164,16 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
       hostEl.append(viewEl, messageEl, announcerEl);
 
       const comments = createCommentLayer({ viewEl });
+      const composer = createCommentComposer({
+        viewEl,
+        pageGeometry,
+        save: saveComment,
+        blockedReason: () => commentBlock,
+        author: commentAuthor,
+        announce: (text) => {
+          announcerEl.textContent = text;
+        },
+      });
 
       // ── Header tools: page and zoom ─────────────────────────────────────
 
@@ -436,14 +463,16 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         // Stopped: stopPending() has let go of the handle already.
         if (!current()) return;
         pending = null;
+        // A reload — the file changed, a comment was added — keeps the place.
         const keepPage = doc ? currentPage : 1;
+        const keepFraction = doc ? currentFraction(currentPage) : 0;
         closeDocument();
         handle = load.handle;
         doc = next;
         loaded = { size: load.size, mtimeMs: load.mtimeMs };
         passwordState = null;
         shownError = null;
-        await showDocument(keepPage);
+        await showDocument(keepPage, keepFraction);
       }
 
       /** Destroys the open under way, wherever it stands, and settles it. */
@@ -472,13 +501,15 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         observer?.disconnect();
         pagesEl.replaceChildren();
         pageSizes.clear();
+        baseViewports.clear();
+        commentBlock = null;
         letGo(handle);
         handle = null;
         doc = null;
         loaded = null;
       }
 
-      async function showDocument(startPage) {
+      async function showDocument(startPage, startFraction = 0) {
         clearTimeout(loadingTimer);
         const shownDoc = doc;
         pageCount = doc.numPages;
@@ -496,6 +527,15 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
           return;
         }
         if (disposed || doc !== shownDoc) return;
+        void Promise.resolve()
+          .then(() => blockReason(shownDoc))
+          .catch(() => {
+            // Unknown whether it may be written: then it is not.
+            return 'protected';
+          })
+          .then((reason) => {
+            if (doc === shownDoc) commentBlock = reason;
+          });
         const viewport = first.getViewport({ scale: 1 });
         defaultSize = { width: viewport.width, height: viewport.height };
         pageSizes.set(1, defaultSize);
@@ -517,7 +557,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         applyToolLabels();
         context.setMeta({ size: loaded.size, detail: tPlural('fileView.pdf.pages', pageCount, { count: pageCount }) });
         currentPage = Math.min(Math.max(1, startPage), pageCount);
-        layout({ keepPage: currentPage, fraction: 0 });
+        layout({ keepPage: currentPage, fraction: startFraction });
       }
 
       function applyPageLabels() {
@@ -560,6 +600,10 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         if (target) viewEl.scrollTop = target.offsetTop + anchor * target.offsetHeight - PAGES_PADDING_PX;
         currentPage = keepPage;
         renderTools();
+        // The selection was in text layers that are gone now; a comment
+        // being written stays and is placed again as its page is drawn.
+        composer.hideChip();
+        composer.relayout();
         observePages();
       }
 
@@ -593,7 +637,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         const generation = layoutGeneration;
         const pageEl = pagesEl.children[n - 1];
         if (!pageEl) return;
-        const entry = { task: null, page: null };
+        const entry = { task: null, page: null, text: null };
         rendering.set(n, entry);
         try {
           const page = await doc.getPage(n);
@@ -617,6 +661,15 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
           canvas.height = Math.max(1, Math.floor(viewport.height));
           canvas.setAttribute('aria-hidden', 'true');
           entry.task = page.render({ canvas, viewport });
+          baseViewports.set(n, base);
+          // The text over the canvas, so it can be selected (#1386). A page
+          // whose text cannot be laid out is still shown, without it.
+          const cssViewport = page.getViewport({ scale: cssScale });
+          const textEl = document.createElement('div');
+          textEl.className = 'pdf-text-layer';
+          textEl.style.setProperty('--total-scale-factor', String(cssScale));
+          entry.text = renderText(page, textEl, cssViewport);
+          const textReady = Promise.resolve(entry.text?.promise).then(() => true, () => false);
           // Asked alongside the drawing; a page whose comments cannot be
           // read is still shown, without them.
           const annotations = typeof page.getAnnotations === 'function'
@@ -627,11 +680,19 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
             : Promise.resolve([]);
           await entry.task.promise;
           const found = commentsFromAnnotations(await annotations);
+          const hasText = await textReady;
           if (disposed || generation !== layoutGeneration || rendering.get(n) !== entry) return;
           comments.detach(n);
           pageEl.replaceChildren(canvas);
+          if (hasText) {
+            const end = document.createElement('div');
+            end.className = 'pdf-text-layer__end';
+            textEl.append(end);
+            pageEl.append(textEl);
+          }
           pageEl.classList.remove('pdf-page--failed');
-          if (found.length) comments.attach(pageEl, n, found, page.getViewport({ scale: cssScale }));
+          if (found.length) comments.attach(pageEl, n, found, cssViewport);
+          composer.relayout();
         } catch (err) {
           if (err?.name === 'RenderingCancelledException') return;
           if (disposed || generation !== layoutGeneration || rendering.get(n) !== entry) return;
@@ -651,6 +712,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         comments.detach(n);
         try {
           entry.task?.cancel();
+          entry.text?.cancel();
         } catch {
           // Already done.
         }
@@ -673,6 +735,67 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         // A page drawn at the old zoom would be blurry or clipped; the next
         // pass draws it again.
         for (const pageEl of pagesEl.children) pageEl.replaceChildren();
+      }
+
+      // ── New comments (#1386) ────────────────────────────────────────────
+
+      function reportReload(err) {
+        console.warn('PDF could not be reloaded after a change on disk:', err?.message ?? err);
+      }
+
+      /** A drawn page and its viewport at the current zoom, or null. */
+      function pageGeometry(n) {
+        const el = pagesEl.children[n - 1];
+        const base = baseViewports.get(n);
+        if (!el || !base || !rendering.has(n)) return null;
+        return { el, viewport: base.clone({ scale: zoom * CSS_PX_PER_PT }) };
+      }
+
+      /** The account name a comment is signed with; asked once per view. */
+      function commentAuthor() {
+        authorPromise ??= Promise.resolve()
+          .then(() => (typeof api.pdfCommentAuthor === 'function' ? api.pdfCommentAuthor() : ''))
+          .then((name) => (typeof name === 'string' ? name : ''))
+          .catch(() => {
+            // No name from main: the comment goes out unsigned.
+            return '';
+          });
+        return authorPromise;
+      }
+
+      /**
+       * Writes a comment into the file: pdf.js appends the highlight to the
+       * document on show, main writes the bytes if the file on disk is still
+       * that document, and the view reloads to show it. A file changed
+       * meanwhile is reloaded too, and the comment stays in the composer.
+       */
+      async function saveComment({ page, boxes, text }) {
+        const shownDoc = doc;
+        if (!shownDoc || commentBlock) return { ok: false, reason: 'failed' };
+        const author = await commentAuthor();
+        let bytes;
+        try {
+          bytes = await saveHighlight(shownDoc, highlightAnnotation({ pageIndex: page - 1, boxes, text, author, date: new Date() }));
+        } catch (err) {
+          console.warn('PDF comment could not be added:', err?.message ?? err);
+          return { ok: false, reason: 'failed' };
+        }
+        if (disposed || doc !== shownDoc) return { ok: false, reason: 'changed' };
+        let result = null;
+        try {
+          result = await api.writeWorkspacePdf(file.path, bytes);
+        } catch (err) {
+          console.warn('PDF comment could not be written:', err?.message ?? err);
+          result = null;
+        }
+        if (disposed) return { ok: false, reason: 'failed' };
+        if (!result?.ok) {
+          if (result?.reason === 'changed') open().catch(reportReload);
+          else console.warn('PDF comment was not written:', result?.reason ?? 'no answer');
+          return { ok: false, reason: result?.reason ?? 'failed' };
+        }
+        await open();
+        return { ok: true };
       }
 
       function setZoom(next) {
@@ -721,8 +844,15 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
       }
 
       function onKeyDown(event) {
-        if (event.target !== viewEl || event.altKey) return;
+        if (event.target !== viewEl) return;
         const mod = event.metaKey || event.ctrlKey;
+        // ⌘⌥M / Ctrl+Alt+M, as in Word and Google Docs: comment on the
+        // selection. By the key's place, since Alt changes what it types.
+        if (mod && event.altKey && !event.shiftKey && event.code === 'KeyM') {
+          if (composer.openFromSelection()) event.preventDefault();
+          return;
+        }
+        if (event.altKey) return;
         if (mod && (event.key === '+' || event.key === '=')) {
           event.preventDefault();
           setZoom(nextZoom(zoom, 1));
@@ -738,8 +868,23 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         }
       }
 
+      // While the pointer drags a selection, the layer's end block covers
+      // the whole page, so that a gap between lines does not make the
+      // selection jump to the end of the page — pdf.js's viewer does the same.
+      function onPointerDown(event) {
+        const layer = event.target?.closest?.('.pdf-text-layer');
+        if (layer && event.button === 0) layer.classList.add('pdf-text-layer--selecting');
+      }
+      function onPointerUp() {
+        for (const layer of viewEl.querySelectorAll('.pdf-text-layer--selecting')) {
+          layer.classList.remove('pdf-text-layer--selecting');
+        }
+      }
+
       viewEl.addEventListener('scroll', onScroll, { passive: true });
       viewEl.addEventListener('keydown', onKeyDown);
+      viewEl.addEventListener('pointerdown', onPointerDown);
+      document.addEventListener('pointerup', onPointerUp);
 
       // Fit width follows the column; debounced, since a drag on the divider
       // reports every pixel.
@@ -760,6 +905,7 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
         if (doc) {
           applyPageLabels();
           comments.relabel();
+          composer.relabel();
           renderTools();
           context.setMeta({ size: loaded.size, detail: tPlural('fileView.pdf.pages', pageCount, { count: pageCount }) });
         } else if (shownError) {
@@ -787,16 +933,28 @@ export function createPdfView({ openDocument = openPdfDocument } = {}) {
           stopFollowingLocale();
           viewEl.removeEventListener('scroll', onScroll);
           viewEl.removeEventListener('keydown', onKeyDown);
+          viewEl.removeEventListener('pointerdown', onPointerDown);
+          document.removeEventListener('pointerup', onPointerUp);
           password = null;
           // A load left at the password prompt goes too, with its worker, and
           // an open() or update() still waiting for it settles (#634).
           stopPending();
           closeDocument();
           comments.dispose();
+          composer.dispose();
         },
         /** For tests: where the view stands. */
         get state() {
-          return { page: currentPage, pages: pageCount, zoom, zoomMode, rendered: [...rendering.keys()], openComment: comments.openComment };
+          return {
+            page: currentPage,
+            pages: pageCount,
+            zoom,
+            zoomMode,
+            rendered: [...rendering.keys()],
+            openComment: comments.openComment,
+            composer: composer.state,
+            commentBlock,
+          };
         },
       };
     },

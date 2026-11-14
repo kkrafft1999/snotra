@@ -167,3 +167,134 @@ test('the vendored pdf.js compiles no code from strings: in the worker nothing e
     assert.doesNotMatch(source, /(?<![\w$.])(?:Function|eval)\(|\bnew Function\b/, script);
   }
 });
+
+// ── Writing a comment (#1386) ──────────────────────────────────────────────
+
+const APPENDED = Buffer.from('\n2 0 obj\n<<>>\nendobj\n%%EOF\n', 'latin1');
+
+test('a comment is written when the new bytes append to the file on disk', async (t) => {
+  const root = await makeWorkspace(t);
+  const file = path.join(root, 'spec.pdf');
+  await fs.writeFile(file, PDF);
+  await fs.chmod(file, 0o640);
+  const next = new Uint8Array(Buffer.concat([PDF, APPENDED]));
+  const result = await makeFsService().writeWorkspacePdfFromUser(root, file, next);
+  assert.equal(result.ok, true);
+  assert.equal(result.size, next.length);
+  assert.deepEqual(await fs.readFile(file), Buffer.from(next));
+  if (process.platform !== 'win32') assert.equal((await fs.stat(file)).mode & 0o777, 0o640, 'the mode stays');
+  const leftovers = (await fs.readdir(root)).filter((name) => name !== 'spec.pdf');
+  assert.deepEqual(leftovers, [], 'no temporary file is left behind');
+});
+
+test('a workspace opened through a link takes comments too', async (t) => {
+  // macOS keeps temporary folders behind /var → /private/var; a folder the
+  // user opened may sit behind a link the same way.
+  const real = await makeWorkspace(t);
+  const holder = await makeWorkspace(t);
+  const root = path.join(holder, 'linked');
+  try {
+    await fs.symlink(real, root, 'dir');
+  } catch (e) {
+    if (['EPERM', 'EACCES', 'ENOSYS'].includes(e.code)) return t.skip(`no symlinks here: ${e.code}`);
+    throw e;
+  }
+  await fs.writeFile(path.join(real, 'spec.pdf'), PDF);
+  const next = new Uint8Array(Buffer.concat([PDF, APPENDED]));
+  const result = await makeFsService().writeWorkspacePdfFromUser(root, path.join(root, 'spec.pdf'), next);
+  assert.equal(result.ok, true, JSON.stringify(result));
+  assert.deepEqual(await fs.readFile(path.join(real, 'spec.pdf')), Buffer.from(next));
+});
+
+test('a file changed on disk since it was read is not overwritten', async (t) => {
+  const root = await makeWorkspace(t);
+  const file = path.join(root, 'spec.pdf');
+  await fs.writeFile(file, PDF);
+  const next = new Uint8Array(Buffer.concat([PDF, APPENDED]));
+  // Someone else saved meanwhile: the old bytes are no longer the start.
+  const theirs = Buffer.concat([PDF.subarray(0, 10), Buffer.from('X'), PDF.subarray(11)]);
+  await fs.writeFile(file, theirs);
+  const svc = makeFsService();
+  assert.deepEqual(await svc.writeWorkspacePdfFromUser(root, file, next), { ok: false, reason: 'changed' });
+  assert.deepEqual(await fs.readFile(file), theirs);
+  // Bytes that only cut the file, or leave it as it is, are no update either.
+  await fs.writeFile(file, PDF);
+  assert.equal((await svc.writeWorkspacePdfFromUser(root, file, new Uint8Array(PDF))).reason, 'changed');
+  assert.equal((await svc.writeWorkspacePdfFromUser(root, file, new Uint8Array(PDF.subarray(0, 20)))).reason, 'changed');
+  assert.deepEqual(await fs.readFile(file), PDF);
+});
+
+test('what is not a PDF update, or not in the workspace, is refused with a reason', async (t) => {
+  const root = await makeWorkspace(t);
+  const outside = await makeWorkspace(t);
+  await fs.writeFile(path.join(root, 'spec.pdf'), PDF);
+  await fs.writeFile(path.join(outside, 'other.pdf'), PDF);
+  let linked = true;
+  try {
+    await fs.symlink(path.join(outside, 'other.pdf'), path.join(root, 'link.pdf'));
+  } catch (e) {
+    if (!['EPERM', 'EACCES', 'ENOSYS'].includes(e.code)) throw e;
+    linked = false;
+  }
+  const svc = makeFsService();
+  const next = new Uint8Array(Buffer.concat([PDF, APPENDED]));
+  assert.equal((await svc.writeWorkspacePdfFromUser(root, 'spec.pdf', 'text')).reason, 'invalid');
+  assert.equal((await svc.writeWorkspacePdfFromUser(root, 'spec.pdf', new Uint8Array(Buffer.from('<html>')))).reason, 'invalid');
+  assert.equal((await svc.writeWorkspacePdfFromUser(root, '../other.pdf', next)).reason, 'outside-workspace');
+  if (linked) assert.equal((await svc.writeWorkspacePdfFromUser(root, 'link.pdf', next)).reason, 'outside-workspace');
+  assert.equal((await svc.writeWorkspacePdfFromUser(root, 'gone.pdf', next)).reason, 'not-found');
+  assert.equal((await svc.writeWorkspacePdfFromUser(null, 'spec.pdf', next)).reason, 'no-workspace');
+  assert.deepEqual(await fs.readFile(path.join(outside, 'other.pdf')), PDF, 'nothing outside was touched');
+  const tooLarge = new Uint8Array(MAX_WORKSPACE_PDF_BYTES + 1);
+  tooLarge.set(PDF);
+  assert.equal((await svc.writeWorkspacePdfFromUser(root, 'spec.pdf', tooLarge)).reason, 'too-large');
+});
+
+test('the write contract reaches the renderer with its reasons', () => {
+  assert.equal(contracts.WORKSPACE_PDF_WRITE_ERRORS.CHANGED, 'changed');
+  assert.equal(contracts.MAX_PDF_COMMENT_CHARS, 5000);
+  assert.deepEqual(contracts.createWorkspacePdfWriteError('nonsense'), { ok: false, reason: 'failed' });
+});
+
+// ── The name a comment is signed with (#1386) ─────────────────────────────
+
+const { createAccountName } = require('../src/main/services/account-name');
+
+test('the comment author is the account\'s full name, else its login name', async () => {
+  const mac = createAccountName({
+    platform: 'darwin',
+    userInfo: () => ({ username: 'kim', uid: 501 }),
+    execFileFn: (file, args, options, done) => done(null, 'Kim Example\n'),
+  });
+  assert.equal(await mac.fullName(), 'Kim Example');
+
+  const linux = createAccountName({
+    platform: 'linux',
+    userInfo: () => ({ username: 'kim', uid: 1000 }),
+    readFileFn: async () => 'root:x:0:0:root:/root:/bin/sh\nkim:x:1000:1000:Kim Example,,,:/home/kim:/bin/bash\n',
+  });
+  assert.equal(await linux.fullName(), 'Kim Example');
+
+  const failing = createAccountName({
+    platform: 'darwin',
+    userInfo: () => ({ username: 'kim', uid: 501 }),
+    execFileFn: (file, args, options, done) => done(new Error('no id')),
+  });
+  assert.equal(await failing.fullName(), 'kim');
+
+  const windows = createAccountName({ platform: 'win32', userInfo: () => ({ username: 'Kim\u0007', uid: -1 }) });
+  assert.equal(await windows.fullName(), 'Kim', 'control characters go');
+
+  let asked = 0;
+  const once = createAccountName({
+    platform: 'darwin',
+    userInfo: () => ({ username: 'kim', uid: 501 }),
+    execFileFn: (file, args, options, done) => {
+      asked += 1;
+      done(null, 'Kim');
+    },
+  });
+  await once.fullName();
+  await once.fullName();
+  assert.equal(asked, 1, 'asked once and kept');
+});
