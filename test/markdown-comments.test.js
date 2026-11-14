@@ -217,3 +217,17 @@ test('a reply goes right after its thread, in the format of a comment (#1399)', 
   const [mark] = render(text).querySelectorAll('mark.md-comment');
   assert.deepEqual(JSON.parse(mark.getAttribute('data-md-replies')), ['Grace, 2026-11-15: Yes, checked << } done']);
 });
+
+// ── Deleting (#1405) ────────────────────────────────────────────────────────
+
+test('deleting a thread takes the comment and its replies, and leaves the passage (#1405)', () => {
+  const cut = (source, raw, occurrence = 0) => comments.removeThread(source, comments.locateThread(source, raw, occurrence));
+  const thread = '{==beans **next** year==}{>>Grace, 2026-11-12: Beans or peas?<<}{>>Ada, 2026-11-14: Peas.<<}';
+  assert.equal(cut(`It gets ${thread}.`, thread), 'It gets beans **next** year.', 'the passage stays, formatting included');
+  assert.equal(cut('A note {>>x<<}{>>y<<}.', '{>>x<<}{>>y<<}'), 'A note.', 'a point comment goes with the space before it');
+  assert.equal(cut('One {>>x<<} two', '{>>x<<}'), 'One two');
+  assert.equal(cut('One{>>x<<}two', '{>>x<<}'), 'Onetwo', 'no space, none taken');
+  const twin = '{==same==}{>>Why?<<}';
+  assert.equal(cut(`${twin} and ${twin}`, twin, 1), `${twin} and same`, 'the one it answers, not the first alike');
+  assert.equal(cut('a {==b==}{>>c\r\nd<<} e\r\n', '{==b==}{>>c\nd<<}'), 'a b e\r\n', 'across CRLF');
+});

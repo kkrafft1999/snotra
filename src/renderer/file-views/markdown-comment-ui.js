@@ -25,6 +25,8 @@ const COMMENT_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidde
 const REPLY_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M6.5 4 3 7.5 6.5 11M3.5 7.5H10a3 3 0 0 1 3 3V12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 let replyIds = 0;
 const REPLY_ERRORS = new Set(['changed', 'notFound', 'deleted', 'failed']);
+const DELETE_ERRORS = REPLY_ERRORS;
+const TRASH_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.1a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8.1M6.8 7v4M9.2 7v4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const CLOSE_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
 
 /** Where a selection may not be commented, and why — checked before anything is searched. */
@@ -60,15 +62,18 @@ function elementOf(node) {
  *   locate: (request: { blockRange: [number, number] | null, selected: string, occurrence: number }) => ({ target: object } | { error: string }),
  *   save: (target: object, text: string) => Promise<boolean>,
  *   reply: (thread: { blockRange: [number, number] | null, raw: string, occurrence: number }, text: string) => Promise<{ ok: boolean, reason?: string }>,
+ *   remove: (thread: { blockRange: [number, number] | null, raw: string, occurrence: number }) => Promise<{ ok: boolean, reason?: string }>,
  *   notify: (message: string) => void,
  * }} options
  *
  * Replies (#1399): consecutive `{>>…<<}` after a comment are its thread; the
  * popover lists them and offers "Reply" in its footer. `reply` writes the
  * reply after the thread and renders the file again; the comment then opens
- * again, with the reply under it.
+ * again, with the reply under it. Deleting (#1405): "Delete comment" next to
+ * it asks first, then `remove` takes the whole thread out and leaves the
+ * passage.
  */
-export function createCommentUi({ previewEl, articleEl, canComment, isBlocked, getAuthor, locate, save, reply = null, notify }) {
+export function createCommentUi({ previewEl, articleEl, canComment, isBlocked, getAuthor, locate, save, reply = null, remove = null, notify }) {
   let disposed = false;
   let frame = 0;
   // The open form or comment: `{ kind: 'compose'|'view', el, returnFocus, … }`.
@@ -444,14 +449,22 @@ export function createCommentUi({ previewEl, articleEl, canComment, isBlocked, g
       el.append(list);
     }
     const thread = threadOf(marker);
-    const footer = reply && thread && canComment() ? replyFooter(marker, thread) : null;
+    const footer = (reply || remove) && thread && canComment() ? actionFooter(marker, thread) : null;
+    // A notice goes into the reply form when there is text to give back.
+    if (notice && !(footer?.canReply && draft !== null)) {
+      const noticeEl = document.createElement('p');
+      noticeEl.className = 'md-comment-popover__message md-comment-popover__notice';
+      noticeEl.setAttribute('role', 'alert');
+      noticeEl.textContent = notice;
+      el.append(noticeEl);
+    }
     if (footer) el.append(footer.el);
 
     open = { kind: 'view', el, returnFocus: marker, marker };
     marker.setAttribute('aria-expanded', 'true');
     previewEl.append(el);
     placeAtMarker(el, marker);
-    if (footer && draft !== null) {
+    if (footer?.canReply && draft !== null) {
       footer.openForm(draft, notice);
       return;
     }
@@ -471,35 +484,142 @@ export function createCommentUi({ previewEl, articleEl, canComment, isBlocked, g
   }
 
   /**
-   * The footer of an open comment (#1399): "Reply", which turns into the
-   * reply form in the same place — the pattern of the PDF preview.
+   * The footer of an open comment: "Reply" on the left (#1399), "Delete
+   * comment" on the right (#1405). Each turns the footer, in the same place,
+   * into its form — the pattern of the PDF preview.
    */
-  function replyFooter(marker, thread) {
+  function actionFooter(marker, thread) {
     const foot = document.createElement('div');
     foot.className = 'md-comment-popover__foot';
-    const trigger = document.createElement('button');
-    trigger.type = 'button';
-    trigger.className = 'md-comment-popover__reply';
-    trigger.innerHTML = REPLY_ICON;
-    const triggerLabel = document.createElement('span');
-    triggerLabel.textContent = t('fileView.markdown.comment.reply');
-    trigger.append(triggerLabel);
-    trigger.addEventListener('click', () => {
-      if (isBlocked()) {
-        notify(t('fileView.markdown.comment.blocked'));
-        return;
-      }
-      openForm('', '');
-    });
-    foot.append(trigger);
+    const bar = document.createElement('div');
+    bar.className = 'md-comment-popover__bar';
+    const footButton = (className, icon, label, onClick) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = className;
+      button.innerHTML = icon;
+      const text = document.createElement('span');
+      text.textContent = label;
+      button.append(text);
+      button.addEventListener('click', () => {
+        if (isBlocked()) {
+          notify(t('fileView.markdown.comment.blocked'));
+          return;
+        }
+        onClick();
+      });
+      bar.append(button);
+      return button;
+    };
+    const trigger = reply ? footButton('md-comment-popover__reply', REPLY_ICON, t('fileView.markdown.comment.reply'), () => openForm('', '')) : null;
+    const deleteTrigger = remove ? footButton('md-comment-popover__delete', TRASH_ICON, t('fileView.markdown.comment.delete'), () => ask()) : null;
+    foot.append(bar);
+    let returnTo = null;
 
     function back() {
       foot.classList.remove('md-comment-popover__foot--open');
-      foot.replaceChildren(trigger);
-      trigger.focus({ preventScroll: true });
+      foot.replaceChildren(bar);
+      returnTo?.focus({ preventScroll: true });
+    }
+
+    /** The question before deleting: Cancel first and focused, so that neither Enter nor a double click deletes. */
+    function ask() {
+      returnTo = deleteTrigger;
+      replyIds += 1;
+      const count = repliesOf(marker).length;
+      const confirm = document.createElement('div');
+      confirm.className = 'md-comment-popover__confirm';
+      confirm.setAttribute('role', 'group');
+      const question = document.createElement('p');
+      question.className = 'md-comment-popover__question';
+      question.id = `md-comment-question-${replyIds}`;
+      question.textContent = count
+        ? tPlural('fileView.markdown.comment.delete.questionReplies', count, { count })
+        : t('fileView.markdown.comment.delete.question');
+      const detail = document.createElement('p');
+      detail.className = 'md-comment-popover__detail';
+      detail.id = `md-comment-detail-${replyIds}`;
+      const point = markOfMarker.get(marker)?.classList.contains('md-comment--point');
+      detail.textContent = t(`fileView.markdown.comment.delete.detail${point ? 'Point' : ''}${count ? 'Replies' : ''}`);
+      confirm.setAttribute('aria-labelledby', question.id);
+      confirm.setAttribute('aria-describedby', detail.id);
+      const message = document.createElement('p');
+      message.className = 'md-comment-popover__message';
+      message.setAttribute('role', 'alert');
+      message.hidden = true;
+      const actions = document.createElement('div');
+      actions.className = 'md-comment-popover__actions';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'btn-secondary md-comment-popover__cancel';
+      cancel.textContent = t('fileView.markdown.comment.delete.cancel');
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'btn-destructive md-comment-popover__confirm-delete';
+      del.textContent = t('fileView.markdown.comment.delete.confirm');
+      actions.append(cancel, del);
+      confirm.append(question, detail, message, actions);
+
+      let busy = false;
+      const setBusy = (value) => {
+        busy = value;
+        // aria-disabled rather than disabled: a disabled button drops the focus.
+        for (const button of [cancel, del]) button.setAttribute('aria-disabled', String(value));
+        del.textContent = t(value ? 'fileView.markdown.comment.delete.deleting' : 'fileView.markdown.comment.delete.confirm');
+      };
+      confirm.addEventListener('keydown', (event) => {
+        // Escape steps back to the comment instead of closing it.
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!busy) back();
+      });
+      cancel.addEventListener('click', () => {
+        if (!busy) back();
+      });
+      del.addEventListener('click', async () => {
+        if (busy) return;
+        if (isBlocked()) {
+          notify(t('fileView.markdown.comment.blocked'));
+          return;
+        }
+        setBusy(true);
+        message.hidden = true;
+        let result;
+        try {
+          result = await remove(thread);
+        } catch (err) {
+          console.warn('Markdown comment could not be deleted:', err?.message ?? err);
+          result = { ok: false, reason: 'failed' };
+        }
+        if (disposed) return;
+        if (result?.ok) {
+          // The file was rendered again without it; the popover went with the marker.
+          if (open?.el.contains(confirm)) closeOpen({ focus: false });
+          previewEl.focus({ preventScroll: true });
+          notify(t('fileView.markdown.comment.delete.done'));
+          return;
+        }
+        const reason = t(`fileView.markdown.comment.delete.error.${DELETE_ERRORS.has(result?.reason) ? result.reason : 'failed'}`);
+        if (confirm.isConnected) {
+          setBusy(false);
+          message.textContent = reason;
+          message.hidden = false;
+          return;
+        }
+        // Read again: the comment opens again with the reason, if it is still there.
+        const again = findMarker(thread);
+        if (again) show(again, { notice: reason });
+        else notify(reason);
+      });
+      foot.replaceChildren(confirm);
+      foot.classList.add('md-comment-popover__foot--open');
+      cancel.focus({ preventScroll: true });
+      confirm.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }
 
     function openForm(text, notice) {
+      returnTo = trigger;
       replyIds += 1;
       const form = document.createElement('div');
       form.className = 'md-comment-popover__form';
@@ -620,7 +740,7 @@ export function createCommentUi({ previewEl, articleEl, canComment, isBlocked, g
       }
     }
 
-    return { el: foot, openForm };
+    return { el: foot, canReply: Boolean(trigger), openForm };
   }
 
   /**

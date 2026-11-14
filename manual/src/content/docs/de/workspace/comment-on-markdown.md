@@ -41,6 +41,18 @@ sidebar:
 
 Die Antwort wird direkt hinter dem Kommentar in die Datei geschrieben, als weiterer Kommentar in derselben Schreibweise: `{==nächstes Jahr Bohnen==}{>>Grace Hopper, 2026-11-12: Bohnen oder Erbsen?<<}{>>Ada Lovelace, 2026-11-14: Erbsen, die Bohnen standen letztes Jahr dort.<<}`. Snotra liest Kommentare, die so aufeinander folgen, als einen Verlauf und zeigt sie unter dem ersten; der Agent liest sie als das Gespräch, das sie sind. Der Kommentar öffnet sich wieder, mit deiner Antwort darunter.
 
+## Einen Kommentar löschen
+
+[seit 1.33] Ein Kommentar an der falschen Stelle oder einer, der erledigt ist, lässt sich wieder herausnehmen — deiner und auch der von anderen.
+
+1. Öffne den Kommentar.
+2. Klick unten rechts im Kommentar auf *Kommentar löschen*.
+3. Snotra fragt an derselben Stelle nach und sagt, wie viele Antworten mitgehen. Klick auf *Löschen*. *Abbrechen* oder `Esc` behält den Kommentar.
+
+![Die mittlere Spalte mit fruchtfolge.md: der geöffnete Kommentar von Grace Hopper an „nächstes Jahr Bohnen“ mit einer Antwort von Ada Lovelace und unten die Frage „Diesen Kommentar und 1 Antwort löschen?“ mit dem Hinweis, dass der markierte Text bleibt, und den Knöpfen Abbrechen und Löschen.](screenshots/markdown-delete.webp)
+
+Der Kommentar und alle Antworten verschwinden aus der Datei; die Worte, an denen sie hingen, bleiben, wie sie waren: Aus `{==nächstes Jahr Bohnen==}{>>…<<}{>>…<<}` wird `nächstes Jahr Bohnen`. Eine einzelne Antwort lässt sich nicht für sich löschen.
+
 ## Wenn es nicht klappt
 
 - ***Kommentieren* ist ausgegraut und sagt, dass Snotra arbeitet.** Warte, bis die Chat-Antwort fertig ist, oder halte sie an.
@@ -51,4 +63,5 @@ Die Antwort wird direkt hinter dem Kommentar in die Datei geschrieben, als weite
 - ***Diese Stelle überschneidet sich mit einem Kommentar, der schon da ist.*** Kommentare lassen sich nicht verschachteln. Markier eine Stelle daneben.
 - ***Die Datei wurde auf der Festplatte geändert und neu geladen. Deine Antwort ist noch da …*** Ein anderes Programm hat die Datei gespeichert, während du geschrieben hast. Der Kommentar öffnet sich mit deinem Text im Feld wieder: Prüf den Kommentar und schick sie dann noch einmal ab.
 - ***Dieser Kommentar lässt sich in der Datei nicht mehr finden.*** Der Kommentar wurde in der Zwischenzeit woanders geändert oder entfernt. Öffne ihn in der neu geladenen Vorschau noch einmal.
-- **Um einen Kommentar zu ändern oder zu löschen,** wechsle zu *Quelltext*, [bearbeite](../edit-a-file/) den Text zwischen `{>>` und `<<}`, oder entferne die ganze Markierung. Eine Antwort ist das `{>>…<<}` dahinter und geht genauso.
+- ***Die Datei wurde auf der Festplatte geändert und neu geladen. Es wurde nichts gelöscht.*** Ein anderes Programm hat die Datei in der Zwischenzeit gespeichert. Der Kommentar öffnet sich mit diesem Hinweis wieder: Prüf, ob es noch der gemeinte ist, und lösch ihn noch einmal.
+- **Um einen Kommentar oder eine einzelne Antwort zu ändern,** wechsle zu *Quelltext* und [bearbeite](../edit-a-file/) den Text zwischen `{>>` und `<<}`. Eine Antwort ist das `{>>…<<}` hinter ihrem Kommentar.

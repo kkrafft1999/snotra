@@ -1442,6 +1442,31 @@ const MOTIFS = {
     },
   },
 
+  /** Deleting a comment in a Markdown note (#1405): the question in the comment's footer. */
+  'markdown-delete': {
+    prefs: { commentAuthor: 'Ada Lovelace' },
+    get text() {
+      const reply = {
+        en: '{>>Ada Lovelace, 2026-11-14: Peas, the beans had it last year.<<}',
+        de: '{>>Ada Lovelace, 2026-11-14: Erbsen, die Bohnen standen letztes Jahr dort.<<}',
+      };
+      const base = MOTIFS['markdown-comment'].text;
+      const withReply = (locale) => ({ ...base[locale], content: base[locale].content.replace(/(\{>>[^<]*<<\})/, `$1${reply[locale]}`) });
+      return { en: withReply('en'), de: withReply('de') };
+    },
+    async setUp({ page, text, workspace }) {
+      await writeFile(path.join(workspace, text.file), text.content);
+      await clickTreeRow(page, text.file);
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.md-doc .md-comment-marker'))),
+        { what: 'commented note in the preview' });
+      await page.click('.md-doc .md-comment-marker');
+      await page.click('.md-comment-popover__delete');
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.md-comment-popover__confirm'))), { what: 'delete question' });
+      await page.mouse.move(0, 0);
+      return clipPreview(page);
+    },
+  },
+
   /** An image in the preview, with the zoom in its header. */
   'image-preview': {
     text: { en: { file: 'garden-plan.png' }, de: { file: 'gartenplan.png' } },

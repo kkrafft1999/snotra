@@ -681,6 +681,19 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   const replyOnDisk = await readFile(path.join(workspace, 'notizen', 'liste.md'), 'utf8');
   assert.match(replyOnDisk, /^- eins \{==zwei==\}\{>>Grace, 2026-11-14: [^\n]*?<<\}\{>>(?:[^,\n<]+, )?\d{4}-\d{2}-\d{2}: sechs<<\}\n/);
   await page.keyboard.press('Escape');
+  // Deleting (#1405) the comment on "vier" again: after the question, the
+  // marks go and the words stay.
+  await page.locator('.md-doc .md-comment-marker').nth(1).click();
+  await page.locator('.md-comment-popover__delete').click();
+  await poll(() => page.evaluate(() => document.activeElement?.classList.contains('md-comment-popover__cancel')),
+    { what: 'delete question' });
+  await page.locator('.md-comment-popover__confirm-delete').click();
+  await poll(async () => {
+    const text = await readFile(path.join(workspace, 'notizen', 'liste.md'), 'utf8');
+    return text.endsWith('\n- drei vier\n') ? text : null;
+  }, { what: 'comment deleted from liste.md' });
+  await poll(() => page.evaluate(() => document.querySelectorAll('.md-doc mark.md-comment').length === 1),
+    { what: 'one comment left in the preview' });
   step('Markdown-Kommentar geprueft');
 
   // --- Images in the preview (#345) -----------------------------------------
