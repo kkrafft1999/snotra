@@ -8964,7 +8964,7 @@ select.modal-input {
   white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
-  transition: border-color var(--ds-motion-fast), background var(--ds-motion-fast);
+  transition: border-color var(--ds-motion-fast);
 }
 
 .pdf-compose-chip[hidden] {
@@ -8975,9 +8975,16 @@ select.modal-input {
   color: var(--ds-blue);
 }
 
+/* The chip floats over the page's text, so its ground stays opaque on hover:
+ * the --ds-blue-soft wash of the inviting hover is see-through and let the
+ * text show through the label (#1395). Like .md-comment-action, the hover
+ * turns the edge blue and a press adds the active lift. */
 .pdf-compose-chip:hover {
   border-color: var(--ds-blue);
-  background: var(--ds-blue-soft);
+}
+
+.pdf-compose-chip:active {
+  box-shadow: var(--ds-overlay-shadow), var(--ds-icon-btn-active-shadow);
 }
 
 .pdf-compose-chip:focus-visible {
