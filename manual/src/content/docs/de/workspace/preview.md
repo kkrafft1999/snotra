@@ -29,6 +29,7 @@ Eine `.md`-Datei öffnet sich formatiert: Überschriften, Listen, Tabellen, Code
 - Bilder aus dem geöffneten Ordner werden gezeigt. Bilder aus dem Netz werden nie geladen: Ein Platzhalter, *Bild aus dem Netz, nicht geladen*, sagt, wohin sie zeigen.
 - Ein Link auf eine andere Datei des Ordners öffnet diese Datei und wählt sie im Baum aus. `‹` bringt dich zurück dorthin, wo du ihm gefolgt bist.
 - [seit 1.19] Zoomen kannst du mit `−` und `+` im Kopf, oder mit `Cmd` / `Strg` und `+`, `−`, `0`, während die Vorschau den Fokus hat. Es wächst das ganze Dokument — Text, Bilder und Tabellen —, und jede Markdown-Datei öffnet sich in der Größe, die du zuletzt gewählt hast, auch nach einem Neustart. Der Quelltext wird nicht gezoomt.
+- [seit 1.32] Markier eine Stelle und klick auf *Kommentieren*, um sie zu [kommentieren](../comment-on-markdown/). Der Kommentar steht in der Datei; eine kommentierte Stelle trägt eine helle Tönung und eine Sprechblase.
 
 ## Code und Text
 

@@ -460,3 +460,15 @@ test('the Markdown zoom is stored within 50 % and 300 %, and absent until chosen
   assert.deepEqual(normalizeUiPrefsPatch({ markdownZoom: 0.1 }), { markdownZoom: 0.5 });
   assert.deepEqual(normalizeUiPrefsPatch({ markdownZoom: Number.NaN }), {});
 });
+
+test('the name for comments is one clean line, or empty (#1388)', () => {
+  assert.equal(normalizeUiPrefs({}).commentAuthor, '');
+  assert.equal(normalizeUiPrefs({ commentAuthor: 42 }).commentAuthor, '');
+  assert.equal(normalizeUiPrefs({ commentAuthor: '  Ada\n Lovelace  ' }).commentAuthor, 'Ada Lovelace');
+  // A colon would read as the end of the name, `<<}` as the end of the comment.
+  assert.equal(normalizeUiPrefs({ commentAuthor: 'Dr: Ada <<}' }).commentAuthor, 'Dr Ada');
+  assert.equal(normalizeUiPrefs({ commentAuthor: 'x'.repeat(200) }).commentAuthor.length, 80);
+  assert.deepEqual(normalizeUiPrefsPatch({ commentAuthor: ' Grace ' }), { commentAuthor: 'Grace' });
+  assert.deepEqual(normalizeUiPrefsPatch({ commentAuthor: '' }), { commentAuthor: '' });
+  assert.deepEqual(normalizeUiPrefsPatch({ commentAuthor: null }), {});
+});

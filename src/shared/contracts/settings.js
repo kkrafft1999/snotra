@@ -795,6 +795,28 @@ function normalizeDismissedKnowledgeHints(value) {
   return [...new Set(keys)].slice(-MAX_DISMISSED_KNOWLEDGE_HINTS);
 }
 
+/** The longest name a comment in a Markdown file is signed with (#1388). */
+const MAX_COMMENT_AUTHOR_LENGTH = 80;
+
+/**
+ * The name for comments: one line, trimmed, at most 80 characters. A colon
+ * and `<<}` are taken out — the first separates name and date in a comment,
+ * the second would close it.
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+function normalizeCommentAuthor(value) {
+  if (typeof value !== 'string') return '';
+  return value
+    .replace(/\s+/g, ' ')
+    .replace(/<<\}/g, '')
+    .replace(/:/g, '')
+    .trim()
+    .slice(0, MAX_COMMENT_AUTHOR_LENGTH)
+    .trim();
+}
+
 /**
  * @param {unknown} raw
  */
@@ -899,6 +921,8 @@ function normalizeUiPrefs(raw) {
     // in the patch below — only main's own toggle writes it.
     developerMode: data.developerMode === true,
     baseSystemPrompt,
+    // Signs the comments added in the Markdown preview (#1388); '' for none.
+    commentAuthor: normalizeCommentAuthor(data.commentAuthor),
     appLocale,
     // `allowWorkspaceWrite` (bis v1.3.1) wird bewusst nicht mehr übernommen: das
     // Berechtigungsmodell aus Issue #66 ersetzt den Schalter durch den Modus in
@@ -960,6 +984,9 @@ function normalizeUiPrefsPatch(raw) {
   }
   if (typeof patch.baseSystemPrompt === 'string') {
     out.baseSystemPrompt = patch.baseSystemPrompt;
+  }
+  if (typeof patch.commentAuthor === 'string') {
+    out.commentAuthor = normalizeCommentAuthor(patch.commentAuthor);
   }
   if (isAppLocale(patch.appLocale)) {
     out.appLocale = patch.appLocale;

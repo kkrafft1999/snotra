@@ -29,6 +29,7 @@ A `.md` file opens formatted: headings, lists, tables, code. *Preview | Source* 
 - Images from the open folder are shown. Images from the web are never loaded: a placeholder, *Image from the web, not loaded*, says where they point.
 - A link to another file of the folder opens that file and selects it in the tree. `‹` takes you back to where you followed it.
 - [since 1.19] Zoom with `−` and `+` in the header, or with `Cmd` / `Ctrl` and `+`, `−`, `0` while the preview has the focus. The whole document grows — text, images and tables — and every Markdown file opens at the size you chose last, after a restart too. The source is not zoomed.
+- [since 1.32] Select a passage and click *Comment* to [comment on it](../comment-on-markdown/). The comment goes into the file; a passage that carries one shows a light wash and a speech bubble.
 
 ## Code and text
 

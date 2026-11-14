@@ -242,6 +242,8 @@ export function initSettingsModal(deps) {
   const btnSettingsClose = document.getElementById('btn-settings-close');
   const btnSettingsFooterClose = document.getElementById('btn-settings-footer-close');
   const inputGlobalSystemPrompt = document.getElementById('input-global-system-prompt');
+  // The name a comment in a Markdown file is signed with (#1388).
+  const inputCommentAuthor = document.getElementById('input-comment-author');
   // Appearance and interface language take effect at once (issue #297).
   const choiceAppLocale = document.getElementById('choice-app-locale');
   const choiceAppTheme = document.getElementById('choice-app-theme');
@@ -2184,6 +2186,7 @@ export function initSettingsModal(deps) {
       const up = await api.getUIPrefs();
       if (stale()) return;
       inputGlobalSystemPrompt.value = typeof up.baseSystemPrompt === 'string' ? up.baseSystemPrompt : '';
+      if (inputCommentAuthor) inputCommentAuthor.value = typeof up.commentAuthor === 'string' ? up.commentAuthor : '';
       localeChoice.set(LOCALES.includes(up.appLocale) ? up.appLocale : DEFAULT_LOCALE);
       if (selectSkillSuggestionMode) {
         selectSkillSuggestionMode.value = isSkillSuggestionMode(up.skillSuggestionMode)
@@ -2217,6 +2220,7 @@ export function initSettingsModal(deps) {
       loadError = err || new Error('');
       showLoadFailed(loadError);
       inputGlobalSystemPrompt.value = '';
+      if (inputCommentAuthor) inputCommentAuthor.value = '';
       // Without readable preferences the dialog shows the language it is
       // currently standing in — not a third one nobody picked.
       localeChoice.set(getLocale());
@@ -2647,6 +2651,7 @@ export function initSettingsModal(deps) {
           providerPatches,
           uiPrefs: {
             baseSystemPrompt: inputGlobalSystemPrompt.value || '',
+            ...(inputCommentAuthor ? { commentAuthor: inputCommentAuthor.value } : {}),
             skillSuggestionMode: selectSkillSuggestionMode?.value || DEFAULT_SKILL_SUGGESTION_MODE,
             maxToolRounds: (() => {
               const n = parseInt(inputMaxToolRounds?.value || '', 10);

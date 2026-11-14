@@ -1221,6 +1221,16 @@
               </details>
             </div>
             <div class="modal-field-group">
+              <label class="modal-field-label eyebrow-row" for="input-comment-author" data-i18n="settings.general.commentAuthor.label">Name for comments</label>
+              <input type="text" id="input-comment-author" class="modal-input" maxlength="80" autocomplete="name" spellcheck="false" placeholder="Your name" data-i18n-attr="placeholder:settings.general.commentAuthor.placeholder" aria-describedby="hint-comment-author">
+              <details id="hint-comment-author" class="settings-note settings-note--tight">
+                <summary class="settings-note__summary"><span data-i18n="settings.general.commentAuthor.note.summary">Stands next to every comment you add to a Markdown file.</span></summary>
+                <div class="settings-note__body" data-i18n-html="settings.general.commentAuthor.note.body">
+                  <p>The comment is written into the file, together with this name and the date, so anyone who opens the file sees who wrote it. Leave the field empty to comment without a name.</p>
+                </div>
+              </details>
+            </div>
+            <div class="modal-field-group">
               <div class="modal-field-label eyebrow-row" data-i18n="settings.general.environment.label">Environment</div>
               <div class="settings-switch-row">
                 <label for="input-environment-info" class="settings-switch-row__label" data-i18n="settings.general.environment.toggle">Send environment information</label>

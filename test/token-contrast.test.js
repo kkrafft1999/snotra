@@ -113,6 +113,8 @@ const PAIRS = [
   ['--ds-blue-strong', [['--ds-warning-bg', '--ds-surface']], TEXT, '"Saved" on the sandbox tile while it is off (#1119)'],
   ['--ds-blue-strong', [['--ds-blue-soft', '--ds-bg-header']], TEXT, 'the phone indicator in the title bar (#1196)'],
   ['--ds-text-secondary', ['--ds-diff-removed-bg'], TEXT, 'a removed line (#348)'],
+  ['--ds-text-primary', [['--ds-comment-bg', '--ds-surface']], TEXT, 'a commented passage in the Markdown preview (#1388)'],
+  ['--ds-blue-strong', [['--ds-comment-bg', '--ds-surface']], TEXT, 'a link inside a commented passage (#1388)'],
   ...['keyword', 'tag', 'string', 'comment', 'number', 'function', 'type', 'property', 'punctuation']
     .map((role) => [`--ds-syntax-${role}`, ['--ds-surface'], TEXT, 'source text in the preview (#745)']),
   ['--ds-paper-ink', ['--ds-paper'], TEXT, 'the note on a page that could not be drawn (#641)'],

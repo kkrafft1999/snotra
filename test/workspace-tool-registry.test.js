@@ -940,3 +940,14 @@ test('listToolSchemas gives every switchable tool the schema getTools sends, swi
     assert.deepEqual(schemas.find((entry) => entry.name === tool.function.name)?.schema, tool);
   }
 });
+
+test('the prompt explains Markdown comments only where the agent can edit files (#1388)', () => {
+  const COMMENT = /\{==passage==\}\{>>Name, YYYY-MM-DD: comment<<\}.*remove its markup/s;
+  const reader = createToolRegistry([definition('read_file_text')]);
+  assert.doesNotMatch(reader.buildSystemPrompt(), COMMENT);
+  const editor = createToolRegistry([
+    definition('read_file_text'),
+    definition('edit_file', { riskClass: TOOL_RISK_CLASSES.WRITE }),
+  ]);
+  assert.match(editor.buildSystemPrompt(), COMMENT);
+});

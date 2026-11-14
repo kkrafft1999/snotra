@@ -40,6 +40,7 @@ Die Zeile unten in jedem Bereich sagt es, weil es sich unterscheidet:
 ![Einstellungen › Allgemein: ein Textfeld für den System-Prompt, der Schalter „Umgebungsinformationen mitschicken“ und die Wahl zwischen Hell, Dunkel und System.](screenshots/settings-general.webp)
 
 - ***System-Prompt*** — deine eigenen Anweisungen für jedes Gespräch: eine Rolle, ein Ton, feste Regeln. Geht unverändert an das Modell. Standardmäßig leer; Snotra setzt hier nichts Eigenes.
+- ***Name für Kommentare*** — [seit 1.32] der Name, mit dem ein Kommentar in einer Markdown-Datei unterschrieben wird, neben dem Datum. Standardmäßig leer: Dann trägt ein Kommentar nur das Datum. Siehe [Eine Markdown-Datei kommentieren](../../workspace/comment-on-markdown/).
 - ***Umgebungsinformationen mitschicken*** — nennt dem Modell den vollständigen Pfad des geöffneten Ordners (der deinen Benutzernamen enthält), ob es ein Git-Repository ist, deine Plattform, die Shell und das heutige Datum. Ohne das rät das Modell die Plattform für Befehle und datiert „letzte Woche“ nach seinem Trainingsstand. Standardmäßig an.
 - ***Erscheinungsbild*** — *Hell*, *Dunkel* oder [seit 1.26] *System*: Snotra folgt dann der hellen oder dunklen Einstellung von macOS, Windows oder Linux und wechselt mit, während es offen ist. Voreingestellt ist *Hell*. Diese Wahl bleibt auf diesem Rechner.
 - ***Sprache der Oberfläche*** — Englisch oder Deutsch, sofort umgestellt. Sie gilt für Fenster und Menüleiste; was an das Modell geht, bleibt Englisch.
