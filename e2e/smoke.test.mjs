@@ -867,14 +867,12 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.ok(pdfAfter.length > pdfBefore.length);
   assert.ok(pdfAfter.subarray(0, pdfBefore.length).equals(pdfBefore), 'appended, not rewritten');
   assert.ok(pdfAfter.includes(Buffer.from('/Highlight')));
-  // Deleting a comment (#1397): Ada's comment goes with Grace's reply, after
-  // the question in the popover's footer, as one more appended update; the
-  // new comment stays. The save reloaded the view, and fit width draws it
-  // again a moment later, which closes an open comment (macOS CI, first run
-  // of #1400): the click waits until Ada's marking has stood still for longer
-  // than that pause, as the drag above does.
-  await poll(() => page.evaluate(() => {
-    const target = document.querySelector('.pdf-comment-target[aria-label^="Kommentar von Ada"]');
+  // A save reloads the view, and fit width draws it again a moment later,
+  // which closes an open comment (macOS CI, first run of #1400): a click on
+  // a marking waits until it has stood still for longer than that pause, as
+  // the drag above does.
+  const untilResting = (selector, what) => poll(() => page.evaluate((sel) => {
+    const target = document.querySelector(sel);
     if (!target) return null;
     const r = target.getBoundingClientRect();
     const spot = `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)}`;
@@ -885,7 +883,32 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
       target.dataset.smokeSince = String(now);
     }
     return steady || null;
-  }), { what: 'ruhende Kommentarmarkierung nach dem Speichern', intervalMs: 100 });
+  }, selector), { what, intervalMs: 100 });
+  // A reply (#1399) to the new comment: written from the popover's footer,
+  // two more appended updates, and the comment opens again with it.
+  const ownTarget = '.pdf-comment-target:not([aria-label^="Kommentar von Ada"])';
+  await untilResting(ownTarget, 'ruhende Markierung des neuen Kommentars');
+  await page.locator(ownTarget).click();
+  await page.locator('.pdf-comment__reply').click();
+  await poll(() => page.evaluate(() => document.activeElement?.classList.contains('pdf-comment__field')), { what: 'Antwortfeld' });
+  await page.keyboard.type('Smoke test reply');
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+  const replied = await poll(() => page.evaluate(() => {
+    const popover = document.querySelector('.pdf-comment');
+    const replies = [...(popover?.querySelectorAll('.pdf-comment__entry--reply .pdf-comment__text') ?? [])].map((el) => el.textContent);
+    if (!replies.length || popover.querySelector('.pdf-comment__form')) return null;
+    return { replies, announced: document.querySelector('.pdf-view__announcer')?.textContent ?? '' };
+  }), { what: 'gespeicherte Antwort' });
+  assert.deepEqual(replied.replies, ['Smoke test reply']);
+  assert.equal(replied.announced, 'Antwort im PDF gespeichert.');
+  const pdfReplied = await readFile(pdfPath);
+  assert.ok(pdfReplied.subarray(0, pdfAfter.length).equals(pdfAfter), 'the reply is appended, not rewritten');
+  assert.ok(pdfReplied.includes(Buffer.from('/IRT')));
+  await page.keyboard.press('Escape');
+  // Deleting a comment (#1397): Ada's comment goes with Grace's reply, after
+  // the question in the popover's footer, as one more appended update; the
+  // new comment stays.
+  await untilResting('.pdf-comment-target[aria-label^="Kommentar von Ada"]', 'ruhende Kommentarmarkierung von Ada');
   await page.locator('.pdf-comment-target[aria-label^="Kommentar von Ada"]').click();
   await page.locator('.pdf-comment__delete').click();
   const question = await poll(() => page.evaluate(() => {
@@ -905,7 +928,7 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.equal(deleted.announced, 'Kommentar aus dem PDF gelöscht.');
   assert.ok(!deleted.labels[0].startsWith('Kommentar von Ada'), 'the new comment is the one left');
   const pdfDeleted = await readFile(pdfPath);
-  assert.ok(pdfDeleted.subarray(0, pdfAfter.length).equals(pdfAfter), 'appended again, not rewritten');
+  assert.ok(pdfDeleted.subarray(0, pdfReplied.length).equals(pdfReplied), 'appended again, not rewritten');
   // What the clicks and the rest of the markdown could have set going is read
   // after the next step, the HTML page below, not after a fixed pause.
   step('PDF-Vorschau geprueft');

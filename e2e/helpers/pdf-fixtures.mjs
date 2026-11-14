@@ -27,7 +27,7 @@ function escapePdfString(text) {
 }
 
 /** Assembles objects 1..n, the cross-reference table and the trailer. */
-function assemble(objects, trailerExtra = '') {
+function assemble(objects, trailerExtra = '', options = {}) {
   const header = Buffer.from('%PDF-1.7\n%\xe2\xe3\xcf\xd3\n', 'latin1');
   const parts = [header];
   const offsets = [];
@@ -42,6 +42,24 @@ function assemble(objects, trailerExtra = '') {
     offset += chunk.length;
     parts.push(chunk);
   });
+  if (options.xrefStream) {
+    // A cross-reference stream (PDF 1.5) instead of the table, uncompressed:
+    // the stream is the last object and lists itself.
+    const self = objects.length + 1;
+    const entries = Buffer.alloc((self + 1) * 7);
+    entries.writeUInt8(0, 0);
+    entries.writeUInt16BE(65535, 5);
+    [...offsets, offset].forEach((o, i) => {
+      entries.writeUInt8(1, (i + 1) * 7);
+      entries.writeUInt32BE(o, (i + 1) * 7 + 1);
+    });
+    parts.push(
+      Buffer.from(`${self} 0 obj\n<< /Type /XRef /Size ${self + 1} /W [1 4 2] /Root 1 0 R ${trailerExtra}/Length ${entries.length} >>\nstream\n`, 'latin1'),
+      entries,
+      Buffer.from(`\nendstream\nendobj\nstartxref\n${offset}\n%%EOF\n`, 'latin1'),
+    );
+    return Buffer.concat(parts);
+  }
   const xref = [
     'xref',
     `0 ${objects.length + 1}`,
@@ -145,7 +163,7 @@ function commentObjects(comments, first) {
   return { objects, refs };
 }
 
-export function makeTextPdf({ pages = 1, title = 'Specification', hostile = false, lines = DEFAULT_LINES, comments = [] } = {}) {
+export function makeTextPdf({ pages = 1, title = 'Specification', hostile = false, lines = DEFAULT_LINES, comments = [], xrefStream = false } = {}) {
   // 1 catalog, 2 pages, 3 regular font, 4 bold font, 5 JavaScript action,
   // then two objects (page, content) per page.
   const first = 6;
@@ -174,7 +192,7 @@ export function makeTextPdf({ pages = 1, title = 'Specification', hostile = fals
     );
   }
   objects.push(...extra.objects);
-  return assemble(objects);
+  return assemble(objects, '', { xrefStream });
 }
 
 // ── Encryption: standard security handler, revision 2, 40-bit RC4 ─────────

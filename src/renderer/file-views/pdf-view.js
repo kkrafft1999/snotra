@@ -33,7 +33,7 @@
 import contracts from '../generated/contracts.js';
 import { t, tPlural, onLocaleChange } from '../i18n.js';
 import { formatSize } from '../utils/helpers.js';
-import { openPdfDocument, renderTextLayer, saveWithHighlight, saveWithoutAnnotations, commentBlockReason } from './pdf-engine.js';
+import { openPdfDocument, renderTextLayer, saveWithHighlight, saveWithoutAnnotations, saveWithReply, commentBlockReason } from './pdf-engine.js';
 import { commentsFromAnnotations, createCommentLayer } from './pdf-comments.js';
 import { createCommentComposer, highlightAnnotation } from './pdf-annotate.js';
 import { commentAuthor as resolveCommentAuthor } from './comment-author.js';
@@ -82,14 +82,15 @@ function nbsp(text) {
 /**
  * Builds the view. `openDocument(api, bytes, { onPassword })` is pdf.js in
  * the app and a stand-in in the tests, which have no canvas and no worker;
- * so are `renderText`, `saveHighlight`, `saveDeletion` and `blockReason`
- * (`pdf-engine.js`).
+ * so are `renderText`, `saveHighlight`, `saveDeletion`, `saveReply` and
+ * `blockReason` (`pdf-engine.js`).
  */
 export function createPdfView({
   openDocument = openPdfDocument,
   renderText = renderTextLayer,
   saveHighlight = saveWithHighlight,
   saveDeletion = saveWithoutAnnotations,
+  saveReply = saveWithReply,
   blockReason = commentBlockReason,
 } = {}) {
   return {
@@ -168,7 +169,9 @@ export function createPdfView({
       const comments = createCommentLayer({
         viewEl,
         deleteComment,
-        canDelete: () => Boolean(doc) && !commentBlock,
+        replyComment,
+        canWrite: () => Boolean(doc) && !commentBlock,
+        author: commentAuthor,
         announce: (text) => {
           announcerEl.textContent = text;
         },
@@ -809,6 +812,26 @@ export function createPdfView({
       }
 
       /**
+       * Appends a reply to a comment (#1399), signed like a new comment. The
+       * comment layer opens the comment again after the reload, with the
+       * reply under it.
+       */
+      async function replyComment({ page, comment, text }) {
+        const shownDoc = doc;
+        const parentId = comment?.refs?.[0]?.id;
+        if (!shownDoc || commentBlock || !parentId) return { ok: false, reason: 'failed' };
+        const author = await commentAuthor();
+        let bytes;
+        try {
+          bytes = await saveReply(shownDoc, { pageIndex: page - 1, parentId, parentRect: comment.rect, text, author, date: new Date() });
+        } catch (err) {
+          console.warn('PDF reply could not be added:', err?.message ?? err);
+          return { ok: false, reason: 'failed' };
+        }
+        return writeAndReload(shownDoc, bytes, 'reply');
+      }
+
+      /**
        * Main writes the bytes if the file on disk is still the document they
        * were made from, and the view reloads to show them. A file changed
        * meanwhile is reloaded too, and nothing is written.
@@ -929,7 +952,12 @@ export function createPdfView({
           if (zoomMode !== 'fit' || !doc || width === lastWidth) return;
           lastWidth = width;
           clearTimeout(resizeTimer);
-          resizeTimer = setTimeout(() => layout(), 120);
+          resizeTimer = setTimeout(() => {
+            // Not the user's doing — a scroll bar coming or going after a
+            // reload is enough: an open comment stays open (#1399).
+            comments.holdOpen();
+            layout();
+          }, 120);
         })
         : null;
       resizeObserver?.observe(viewEl);

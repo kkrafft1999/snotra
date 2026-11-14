@@ -9210,10 +9210,11 @@ select.modal-input {
   border-left: 2px solid var(--ds-grey-divider);
 }
 
-/* Deleting a comment (#1397): a footer across the popover's full width,
- * held at its bottom edge while a long thread scrolls. "Delete comment" is a
- * quiet text button, away from the close button; it turns into the question
- * in the same place, on the footer ground of a dialog. */
+/* The popover's footer (#1397, #1399): across its full width, held at its
+ * bottom edge while a long thread scrolls. "Reply" on the left and "Delete
+ * comment" on the right are quiet text buttons, away from the close button;
+ * each turns the footer, in the same place, into its form — the reply field
+ * or the question — on the footer ground of a dialog. */
 .pdf-comment__foot {
   position: sticky;
   bottom: -14px;
@@ -9223,11 +9224,23 @@ select.modal-input {
   background: var(--ds-surface);
 }
 
-.pdf-comment__foot--confirm {
+/* An open form needs room of its own; the thread above it stays readable. */
+.pdf-comment:has(.pdf-comment__foot--open) {
+  max-height: 480px;
+}
+
+.pdf-comment__foot--open {
   padding: 10px 12px 12px 16px;
   background: var(--ds-grey-bg);
 }
 
+.pdf-comment__bar {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pdf-comment__reply,
 .pdf-comment__delete {
   display: inline-flex;
   align-items: center;
@@ -9245,19 +9258,47 @@ select.modal-input {
   transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
 }
 
+.pdf-comment__reply:hover,
 .pdf-comment__delete:hover {
   background: var(--ds-grey-bg);
   color: var(--text-primary);
 }
 
+.pdf-comment__reply:active,
 .pdf-comment__delete:active {
   box-shadow: var(--ds-icon-btn-active-shadow);
 }
 
+.pdf-comment__reply:focus-visible,
 .pdf-comment__delete:focus-visible,
 .pdf-comment__actions button:focus-visible {
   outline: var(--ds-focus-ring);
   outline-offset: var(--ds-focus-offset);
+}
+
+.pdf-comment__label {
+  display: block;
+  margin: 0 0 6px;
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.pdf-comment__field {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  max-height: 160px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.pdf-comment__as {
+  margin: 6px 0 0;
+  color: var(--text-muted-strong);
+  font-size: var(--ds-font-size-sm);
+}
+
+.pdf-comment__as[hidden] {
+  display: none;
 }
 
 .pdf-comment__question {

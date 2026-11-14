@@ -1500,6 +1500,36 @@ const MOTIFS = {
     },
   },
 
+  /** Replying to a comment in a PDF (#1399): the reply form in the popover's footer. */
+  'pdf-reply': {
+    // Signed with a made-up name (*Name for comments*), never the name of
+    // whoever generates the screenshots.
+    prefs: { commentAuthor: 'Grace Hopper' },
+    get text() {
+      const base = MOTIFS['pdf-comments'].text;
+      return {
+        en: { ...base.en, reply: 'Swapped in the draft of 3 November.' },
+        de: { ...base.de, reply: 'Im Entwurf vom 3. November getauscht.' },
+      };
+    },
+    async setUp(context) {
+      const { page, text } = context;
+      await MOTIFS['pdf-comments'].setUp(context);
+      await page.locator('.pdf-comment__reply').click();
+      await poll(() => page.evaluate(() => /Grace Hopper/.test(document.querySelector('.pdf-comment__as')?.textContent ?? '')),
+        { what: 'reply form with its author' });
+      await page.keyboard.type(text.reply);
+      await page.mouse.move(0, 0);
+      await pause(300);
+      // Down to a little below the opened comment and its form.
+      return page.evaluate(() => {
+        const column = document.getElementById('file-preview').getBoundingClientRect();
+        const popover = document.querySelector('.pdf-comment').getBoundingClientRect();
+        return { x: column.left, y: column.top, width: column.width, height: Math.min(column.height, popover.bottom + 40 - column.top) };
+      });
+    },
+  },
+
   /** Deleting a comment in a PDF (#1397): the question in the popover's footer. */
   'pdf-delete': {
     get text() {
@@ -1523,6 +1553,10 @@ const MOTIFS = {
 
   /** Writing a new comment on selected text in a PDF (#1386). */
   'pdf-annotate': {
+    // Signed with a made-up name (*Name for comments*), never the name of
+    // whoever generates the screenshots (#1391 moved the account name off
+    // the IPC channel the motif used to replace).
+    prefs: { commentAuthor: 'Ada Lovelace' },
     text: {
       en: {
         file: 'review.pdf',
@@ -1551,13 +1585,7 @@ const MOTIFS = {
         comment: 'Braucht die Spirale im August wirklich kein Wasser? Letzten Sommer ist sie ausgetrocknet.',
       },
     },
-    async setUp({ app, page, text, workspace }) {
-      // The comment is signed with the account's full name; the manual shows
-      // a made-up one, never the name of whoever generates the screenshots.
-      await app.evaluate(({ ipcMain }) => {
-        ipcMain.removeHandler('pdf:commentAuthor');
-        ipcMain.handle('pdf:commentAuthor', async () => 'Ada Lovelace');
-      });
+    async setUp({ page, text, workspace }) {
       const { makeTextPdf } = await import('../../e2e/helpers/pdf-fixtures.mjs');
       await writeFile(path.join(workspace, text.file), makeTextPdf({ pages: 2, title: text.title, lines: text.lines }));
       await clickTreeRow(page, text.file);

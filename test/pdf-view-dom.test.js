@@ -1029,8 +1029,9 @@ test('commentsFromAnnotations names what deleting a comment removes: the thread 
   assert.deepEqual(unlinked.refs, [], 'nothing to name, so nothing to delete');
 });
 
-async function mountDeletable(t, { blocked = null, write, saveDeletion } = {}) {
+async function mountDeletable(t, { blocked = null, write, saveDeletion, saveReply, resizable = false } = {}) {
   const deletions = [];
+  const replies = [];
   const writes = [];
   let version = 1;
   const annotations = commentAnnotations();
@@ -1044,8 +1045,14 @@ async function mountDeletable(t, { blocked = null, write, saveDeletion } = {}) {
         deletions.push({ pageIndex, refs });
         return new Uint8Array([37, 80, 68, 70, 45, 2]);
       }),
+      saveReply: saveReply ?? (async (doc, reply) => {
+        replies.push(reply);
+        return new Uint8Array([37, 80, 68, 70, 45, 3]);
+      }),
     },
     api: {
+      commentAccountName: async () => 'Kim Example',
+      getUIPrefs: async () => ({ commentAuthor: '' }),
       writeWorkspacePdf: async (p, bytes) => {
         writes.push({ path: p, bytes });
         const result = write ? write() : { ok: true, size: bytes.length, mtimeMs: 2 };
@@ -1054,9 +1061,10 @@ async function mountDeletable(t, { blocked = null, write, saveDeletion } = {}) {
       },
     },
   });
+  const column = resizable ? fakeResizeObserver() : null;
   await pane.host.open(item('spec.pdf'));
   await settle();
-  return Object.assign(pane, { deletions, writes, bump: () => { version += 1; } });
+  return Object.assign(pane, { deletions, replies, writes, column, bump: () => { version += 1; } });
 }
 
 test('a comment offers Delete in its footer; the question takes its place and Cancel the focus (#1397)', async (t) => {
@@ -1161,4 +1169,144 @@ test('a signed or protected PDF offers no delete (#1397)', async (t) => {
   $('.pdf-comment-target').click();
   assert.ok($('.pdf-comment'));
   assert.equal($('.pdf-comment__foot'), null);
+});
+
+// ── Replying to a comment (#1399) ──────────────────────────────────────────
+
+function typeReply(text) {
+  const field = $('.pdf-comment__field');
+  field.value = text;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  return field;
+}
+
+test('the footer carries Reply on the left and Delete on the right; Reply opens the form in its place (#1399)', async (t) => {
+  await mountDeletable(t);
+  $('.pdf-comment-target').click();
+  const bar = $('.pdf-comment__foot .pdf-comment__bar');
+  assert.deepEqual([...bar.children].map((b) => b.textContent), ['Reply', 'Delete comment']);
+
+  $('.pdf-comment__reply').click();
+  await settle();
+  const form = $('.pdf-comment__foot .pdf-comment__form');
+  assert.ok(form, 'the form in the footer');
+  assert.equal($('.pdf-comment__bar'), null, 'instead of the buttons');
+  assert.equal(form.getAttribute('role'), 'group');
+  assert.equal(document.getElementById(form.getAttribute('aria-labelledby')).textContent, 'Your reply');
+  const field = $('.pdf-comment__field');
+  assert.equal(document.activeElement, field);
+  assert.equal($('.pdf-comment__label').htmlFor, field.id, 'the label names the field');
+  assert.equal(field.placeholder, 'Write a reply…');
+  assert.equal($('.pdf-comment__as').textContent, 'as Kim Example');
+  assert.equal($('.pdf-comment__send').disabled, true, 'nothing to send yet');
+  typeReply('   ');
+  assert.equal($('.pdf-comment__send').disabled, true, 'blanks are nothing');
+  typeReply('Confirmed.');
+  assert.equal($('.pdf-comment__send').disabled, false);
+
+  // Escape steps back to the comment; the popover stays.
+  press(field, 'Escape');
+  assert.ok($('.pdf-comment'));
+  assert.equal($('.pdf-comment__form'), null);
+  assert.equal(document.activeElement, $('.pdf-comment__reply'));
+});
+
+test('sending a reply writes it, reloads, and opens the comment again (#1399)', async (t) => {
+  const { replies, writes, calls } = await mountDeletable(t);
+  $('.pdf-comment-target').click();
+  $('.pdf-comment__reply').click();
+  const field = typeReply('  Two years, confirmed.  ');
+  const readsBefore = calls.pdfs.length;
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
+  await settle();
+  assert.equal(replies.length, 1);
+  const [reply] = replies;
+  assert.equal(reply.pageIndex, 0);
+  assert.equal(reply.parentId, '12R');
+  assert.deepEqual(reply.parentRect, [100, 700, 300, 720]);
+  assert.equal(reply.text, 'Two years, confirmed.', 'trimmed');
+  assert.equal(reply.author, 'Kim Example');
+  assert.ok(reply.date instanceof Date);
+  assert.equal(writes.length, 1);
+  assert.ok(calls.pdfs.length > readsBefore, 'the file is read again');
+  const popover = $('.pdf-comment');
+  assert.ok(popover, 'the comment is open again after the reload');
+  assert.equal(popover.getAttribute('aria-label'), 'Comment by Ada');
+  assert.equal($('.pdf-comment__form'), null, 'with the buttons, not the form');
+  assert.equal(document.activeElement, popover);
+  assert.equal($('.pdf-view__announcer').textContent, 'Reply saved in the PDF.');
+});
+
+test('a file changed elsewhere gives the reply back with the reason (#1399)', async (t) => {
+  const pane = await mountDeletable(t, {
+    write: () => {
+      pane.bump();
+      return { ok: false, reason: 'changed' };
+    },
+  });
+  $('.pdf-comment-target').click();
+  $('.pdf-comment__reply').click();
+  typeReply('Keep this text');
+  $('.pdf-comment__send').click();
+  await settle();
+  assert.equal(pane.writes.length, 1);
+  const field = $('.pdf-comment .pdf-comment__field');
+  assert.ok(field, 'the comment is open again, with the form');
+  assert.equal(field.value, 'Keep this text', 'what was typed is back');
+  assert.equal(document.activeElement, field);
+  const message = $('.pdf-comment__form .pdf-comment__message');
+  assert.equal(message.hidden, false);
+  assert.match(message.textContent, /changed elsewhere.*still here/);
+  assert.equal($('.pdf-comment__notice'), null, 'the reason sits in the form, once');
+  assert.equal($('.pdf-comment__send').disabled, false, 'and it can be sent again');
+});
+
+test('a failing reply leaves the file alone, keeps the text and says so (#1399)', async (t) => {
+  const { writes } = await mountDeletable(t, { saveReply: async () => { throw new Error('pdf.js said no'); } });
+  const warn = t.mock.method(console, 'warn', () => {});
+  $('.pdf-comment-target').click();
+  $('.pdf-comment__reply').click();
+  typeReply('Typo');
+  $('.pdf-comment__send').click();
+  await settle();
+  assert.equal(writes.length, 0, 'nothing was written');
+  assert.match($('.pdf-comment__form .pdf-comment__message').textContent, /could not be saved/);
+  assert.equal($('.pdf-comment__field').value, 'Typo');
+  assert.equal($('.pdf-comment__field').readOnly, false);
+  assert.equal($('.pdf-comment__send').getAttribute('aria-disabled'), 'false');
+  assert.equal($('.pdf-comment__send').textContent, 'Reply');
+  assert.equal(warn.mock.callCount(), 1);
+  // Closing it drops what waits for a reload.
+  $('.pdf-comment__close').click();
+  assert.equal($('.pdf-comment'), null);
+});
+
+test('a redraw for the column width keeps the open comment, its reply and the question; a zoom still closes it (#1399)', async (t) => {
+  const { column } = await mountDeletable(t, { resizable: true });
+  const view = $('.pdf-view');
+  const redraw = async (width) => {
+    Object.defineProperty(view, 'clientWidth', { configurable: true, value: width });
+    column.resize();
+    await new Promise((resolve) => setTimeout(resolve, 160));
+    await settle();
+  };
+
+  $('.pdf-comment-target').click();
+  $('.pdf-comment__reply').click();
+  typeReply('Half written');
+  await redraw(840);
+  assert.ok($('.pdf-comment'), 'the comment is still open');
+  assert.equal($('.pdf-comment__field')?.value, 'Half written', 'with what was typed');
+  assert.equal(document.activeElement, $('.pdf-comment__field'), 'and the focus in it');
+
+  press($('.pdf-comment__field'), 'Escape');
+  $('.pdf-comment__delete').click();
+  await redraw(760);
+  assert.ok($('.pdf-comment__confirm'), 'the question stays open too');
+  assert.equal(document.activeElement, $('.pdf-comment__cancel'));
+
+  // A zoom is the user's doing: the comment closes, as before (#1299).
+  $('.pdf-tools__zoom-in').click();
+  await settle();
+  assert.equal($('.pdf-comment'), null);
 });
