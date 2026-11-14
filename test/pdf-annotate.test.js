@@ -125,6 +125,56 @@ test('pdf.js writes the comment as an appended highlight that reads back as a co
   assert.equal(comment.date?.toISOString(), date.toISOString());
 });
 
+test('pdf.js deletes a comment with its replies and popup as an appended update (#1397)', async (t) => {
+  const dom = setupRendererDom();
+  t.after(() => dom.cleanup());
+  const pdfjs = await import(pathToFileURL(path.join(ROOT, 'node_modules/pdfjs-dist/legacy/build/pdf.mjs')).href);
+  const { makeTextPdf, lineRect } = await import(pathToFileURL(path.join(ROOT, 'e2e/helpers/pdf-fixtures.mjs')).href);
+  const { addHighlight, saveWithoutAnnotations } = await importRenderer('file-views', 'pdf-engine.js');
+  const { highlightAnnotation } = await importRenderer('file-views', 'pdf-annotate.js');
+  const { commentsFromAnnotations } = await importRenderer('file-views', 'pdf-comments.js');
+  const open = async (bytes) => {
+    const doc = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, useWorkerFetch: false, verbosity: 0 }).promise;
+    t.after(() => doc.loadingTask.destroy());
+    return doc;
+  };
+  const annotationsOf = async (doc) => (await doc.getPage(1)).getAnnotations({ intent: 'display' });
+
+  // Two comments from another tool, the first with two replies.
+  const date = new Date('2026-11-01T09:00:00Z');
+  const original = new Uint8Array(makeTextPdf({
+    comments: [
+      { kind: 'highlight', rect: lineRect(0), author: 'Ada', text: 'Check this.', date, replies: [
+        { author: 'Grace', text: 'Asked sales.', date },
+        { author: 'Alan', text: 'Two years.', date },
+      ] },
+      { kind: 'note', rect: lineRect(2, 20), author: 'Grace', text: 'Keep this one.', date },
+    ],
+  }));
+  const doc = await open(original);
+  const [threaded, kept] = commentsFromAnnotations(await annotationsOf(doc));
+  assert.equal(threaded.replies.length, 2);
+  assert.equal(threaded.refs.length, 3, 'the comment and both replies');
+
+  const saved = await saveWithoutAnnotations(doc, 0, threaded.refs);
+  assert.deepEqual(saved.subarray(0, original.length), original, 'the old file is untouched at the start');
+  assert.equal(doc.annotationStorage.size, 0, 'nothing is left in the storage');
+  const after = await annotationsOf(await open(saved));
+  assert.deepEqual(after.map((a) => a.contentsObj?.str), ['Keep this one.'], 'replies gone with their comment, the other comment kept');
+  assert.equal(commentsFromAnnotations(after)[0].id, kept.id);
+
+  // A comment written by Snotra carries a popup; it goes with the comment.
+  const withOwn = await addHighlight(pdfjs, await open(saved), highlightAnnotation({
+    pageIndex: 0, boxes: [{ x1: 56, y1: 600, x2: 300, y2: 614 }], text: 'Mine.', author: 'Kim', date,
+  }));
+  const ownDoc = await open(withOwn);
+  const own = commentsFromAnnotations(await annotationsOf(ownDoc)).find((c) => c.text === 'Mine.');
+  assert.ok(own.refs[0].popupRef, 'the popup is named');
+  const cleared = await saveWithoutAnnotations(ownDoc, 0, own.refs);
+  const left = await annotationsOf(await open(cleared));
+  assert.deepEqual(left.map((a) => a.subtype), ['Text'], 'neither the highlight nor its popup is left');
+});
+
 test('a protected PDF takes no comments', async (t) => {
   const dom = setupRendererDom();
   t.after(() => dom.cleanup());

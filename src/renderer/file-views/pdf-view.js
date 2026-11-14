@@ -33,7 +33,7 @@
 import contracts from '../generated/contracts.js';
 import { t, tPlural, onLocaleChange } from '../i18n.js';
 import { formatSize } from '../utils/helpers.js';
-import { openPdfDocument, renderTextLayer, saveWithHighlight, commentBlockReason } from './pdf-engine.js';
+import { openPdfDocument, renderTextLayer, saveWithHighlight, saveWithoutAnnotations, commentBlockReason } from './pdf-engine.js';
 import { commentsFromAnnotations, createCommentLayer } from './pdf-comments.js';
 import { createCommentComposer, highlightAnnotation } from './pdf-annotate.js';
 import { commentAuthor as resolveCommentAuthor } from './comment-author.js';
@@ -82,12 +82,14 @@ function nbsp(text) {
 /**
  * Builds the view. `openDocument(api, bytes, { onPassword })` is pdf.js in
  * the app and a stand-in in the tests, which have no canvas and no worker;
- * so are `renderText`, `saveHighlight` and `blockReason` (`pdf-engine.js`).
+ * so are `renderText`, `saveHighlight`, `saveDeletion` and `blockReason`
+ * (`pdf-engine.js`).
  */
 export function createPdfView({
   openDocument = openPdfDocument,
   renderText = renderTextLayer,
   saveHighlight = saveWithHighlight,
+  saveDeletion = saveWithoutAnnotations,
   blockReason = commentBlockReason,
 } = {}) {
   return {
@@ -163,7 +165,14 @@ export function createPdfView({
 
       hostEl.append(viewEl, messageEl, announcerEl);
 
-      const comments = createCommentLayer({ viewEl });
+      const comments = createCommentLayer({
+        viewEl,
+        deleteComment,
+        canDelete: () => Boolean(doc) && !commentBlock,
+        announce: (text) => {
+          announcerEl.textContent = text;
+        },
+      });
       const composer = createCommentComposer({
         viewEl,
         pageGeometry,
@@ -773,18 +782,50 @@ export function createPdfView({
           console.warn('PDF comment could not be added:', err?.message ?? err);
           return { ok: false, reason: 'failed' };
         }
+        return writeAndReload(shownDoc, bytes, 'comment');
+      }
+
+      /**
+       * Deletes a comment with its replies (#1397): pdf.js appends the
+       * document without them, and the bytes take the same guarded way into
+       * the file as a new comment. The popover goes with the reload, so the
+       * focus returns to the view unless it has moved on meanwhile.
+       */
+      async function deleteComment({ page, refs }) {
+        const shownDoc = doc;
+        if (!shownDoc || commentBlock || !refs?.length) return { ok: false, reason: 'failed' };
+        let bytes;
+        try {
+          bytes = await saveDeletion(shownDoc, page - 1, refs);
+        } catch (err) {
+          console.warn('PDF comment could not be deleted:', err?.message ?? err);
+          return { ok: false, reason: 'failed' };
+        }
+        const result = await writeAndReload(shownDoc, bytes, 'deletion');
+        if (result.ok && !disposed && (!document.activeElement || document.activeElement === document.body)) {
+          viewEl.focus({ preventScroll: true });
+        }
+        return result;
+      }
+
+      /**
+       * Main writes the bytes if the file on disk is still the document they
+       * were made from, and the view reloads to show them. A file changed
+       * meanwhile is reloaded too, and nothing is written.
+       */
+      async function writeAndReload(shownDoc, bytes, what) {
         if (disposed || doc !== shownDoc) return { ok: false, reason: 'changed' };
         let result = null;
         try {
           result = await api.writeWorkspacePdf(file.path, bytes);
         } catch (err) {
-          console.warn('PDF comment could not be written:', err?.message ?? err);
+          console.warn(`PDF ${what} could not be written:`, err?.message ?? err);
           result = null;
         }
         if (disposed) return { ok: false, reason: 'failed' };
         if (!result?.ok) {
           if (result?.reason === 'changed') open().catch(reportReload);
-          else console.warn('PDF comment was not written:', result?.reason ?? 'no answer');
+          else console.warn(`PDF ${what} was not written:`, result?.reason ?? 'no answer');
           return { ok: false, reason: result?.reason ?? 'failed' };
         }
         await open();

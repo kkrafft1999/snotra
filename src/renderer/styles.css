@@ -9210,6 +9210,88 @@ select.modal-input {
   border-left: 2px solid var(--ds-grey-divider);
 }
 
+/* Deleting a comment (#1397): a footer across the popover's full width,
+ * held at its bottom edge while a long thread scrolls. "Delete comment" is a
+ * quiet text button, away from the close button; it turns into the question
+ * in the same place, on the footer ground of a dialog. */
+.pdf-comment__foot {
+  position: sticky;
+  bottom: -14px;
+  margin: 12px -44px -14px -16px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--ds-grey-divider);
+  background: var(--ds-surface);
+}
+
+.pdf-comment__foot--confirm {
+  padding: 10px 12px 12px 16px;
+  background: var(--ds-grey-bg);
+}
+
+.pdf-comment__delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ds-touch-min);
+  padding: 0 12px 0 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-md);
+  font-weight: var(--ds-font-weight-medium);
+  cursor: pointer;
+  transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+}
+
+.pdf-comment__delete:hover {
+  background: var(--ds-grey-bg);
+  color: var(--text-primary);
+}
+
+.pdf-comment__delete:active {
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+.pdf-comment__delete:focus-visible,
+.pdf-comment__actions button:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.pdf-comment__question {
+  margin: 0;
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.pdf-comment__detail {
+  margin: 2px 0 0;
+  color: var(--text-muted-strong);
+  font-size: var(--ds-font-size-sm);
+}
+
+.pdf-comment__message {
+  margin: 8px 0 0;
+  color: var(--ds-error);
+  font-size: var(--ds-font-size-sm);
+}
+
+.pdf-comment__message[hidden] {
+  display: none;
+}
+
+.pdf-comment__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.pdf-comment__actions button[aria-disabled='true'] {
+  cursor: progress;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pdf-comment-target {
     transition: none;

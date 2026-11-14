@@ -85,6 +85,28 @@ Eine Markierung über mehrere Seiten wird auf der Seite kommentiert, auf der sie
 - ***Die Datei wurde woanders geändert und neu geladen.*** Jemand — eine andere App oder ein Sync — hat die PDF gespeichert, während du geschrieben hast. Dein Kommentar bleibt im Feld: Prüf, ob die gelbe Stelle noch stimmt, und speichere dann noch einmal.
 - **Es lässt sich kein Text markieren.** Die Seite ist ein Scan, oder ihr Text wurde in Formen umgewandelt. Dann gibt es nichts, woran der Kommentar hängen kann.
 
+### Einen Kommentar löschen
+
+[seit 1.33] Ein Kommentar an der falschen Stelle oder einer, der sich als falsch herausgestellt hat, lässt sich wieder aus der PDF entfernen — deiner und auch der von anderen.
+
+**Was du brauchst:** eine PDF, die weder signiert noch geschützt ist, wie beim Hinzufügen.
+
+**Schritte**
+
+1. Klick auf die Markierung, um ihren Kommentar zu öffnen.
+2. Klick unten im Kommentar auf *Kommentar löschen*.
+3. Snotra fragt an derselben Stelle nach und sagt, wie viele Antworten mitgehen. Klick auf *Löschen*. *Abbrechen* oder `Esc` behält den Kommentar.
+
+![Die mittlere Spalte mit pruefung.pdf: der geöffnete Kommentar von Ada Lovelace mit zwei Antworten und unten die Frage „Diesen Kommentar und 2 Antworten löschen?“ mit den Knöpfen Abbrechen und Löschen.](screenshots/pdf-delete.webp)
+
+**Was passiert:** Die Markierung verschwindet mitsamt ihrem Kommentar und allen Antworten darauf. Wie ein neuer Kommentar wird die Änderung ans Ende der Datei angehängt; nichts von dem, was schon drinstand, wird umgeschrieben. Auch andere PDF-Programme zeigen den Kommentar danach nicht mehr.
+
+**Wenn es nicht klappt**
+
+- **Es gibt kein *Kommentar löschen*.** Die PDF ist signiert oder geschützt, und Snotra lässt sie, wie sie ist.
+- ***Die Datei wurde woanders geändert und neu geladen. Es wurde nichts gelöscht.*** Jemand hat die PDF in der Zwischenzeit gespeichert. Der Kommentar öffnet sich mit diesem Hinweis wieder: Prüf, ob es noch der gemeinte ist, und lösch ihn noch einmal.
+- ***Der Kommentar ließ sich nicht löschen. Die Datei ist unverändert.*** Die Datei ließ sich nicht schreiben — etwa weil sie schreibgeschützt ist. Der Kommentar bleibt, und du kannst es noch einmal versuchen.
+
 ## HTML-Seiten
 
 Eine `.html`-Datei öffnet sich als die Seite, die sie ist. Skripte laufen, ein interaktiver Entwurf oder ein Bericht funktioniert also wie im Browser. *Preview | Quelltext* wechselt zum Text.

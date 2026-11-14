@@ -85,6 +85,28 @@ A selection that runs over several pages is commented on the page where it start
 - ***The file was changed elsewhere and has been reloaded.*** Someone — another app, or a sync — saved the PDF while you were writing. Your comment stays in the box: check that the yellow passage is still the right one, then save again.
 - **No text can be selected.** The page is a scan, or its text was turned into shapes. There is nothing to attach the comment to.
 
+### Delete a comment
+
+[since 1.33] A comment in the wrong place, or one that turned out to be wrong, can be taken out of the PDF again — yours or anyone else's.
+
+**What you need:** a PDF that is neither signed nor protected, as for adding a comment.
+
+**Steps**
+
+1. Click the marking to open its comment.
+2. Click *Delete comment* at the bottom of the comment.
+3. Snotra asks in the same place, and says how many replies go with it. Click *Delete*. *Cancel* or `Esc` keeps the comment.
+
+![The middle column with review.pdf: the opened comment by Ada Lovelace with two replies, and at its bottom the question "Delete this comment and 2 replies?" with the buttons Cancel and Delete.](screenshots/pdf-delete.webp)
+
+**What happens:** the marking disappears together with its comment and all replies to it. Like a new comment, the change is appended to the end of the file; nothing that was there before is rewritten. Other PDF readers no longer show the comment either.
+
+**If it doesn't work**
+
+- **There is no *Delete comment*.** The PDF is signed or protected, and Snotra leaves it as it is.
+- ***The file was changed elsewhere and has been reloaded. Nothing was deleted.*** Someone saved the PDF in the meantime. The comment opens again with this note: check that it is still the one you meant, and delete it again.
+- ***The comment could not be deleted. The file is unchanged.*** The file could not be written — for example because it is read-only. The comment stays, and you can try again.
+
 ## HTML pages
 
 An `.html` file opens as the page it is. Scripts run, so an interactive mockup or a report works as in a browser. *Preview | Source* switches to the text.

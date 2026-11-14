@@ -1007,3 +1007,158 @@ test('the name from the settings signs a PDF comment before the account name (#1
   await settle();
   assert.equal(saved[0].user, 'Ada Lovelace');
 });
+
+// ── Deleting a comment (#1397) ─────────────────────────────────────────────
+
+test('commentsFromAnnotations names what deleting a comment removes: the thread at any depth, with popups (#1397)', async () => {
+  const { commentsFromAnnotations } = await importRenderer('file-views', 'pdf-comments.js');
+  const [comment, unlinked] = commentsFromAnnotations([
+    highlight({ popupRef: '30R' }),
+    { id: '20R', subtype: 'Text', inReplyTo: '12R', contentsObj: { str: 'reply' }, popupRef: '31R' },
+    { id: '21R', subtype: 'Text', inReplyTo: '20R', contentsObj: { str: 'reply to the reply' } },
+    { id: '22R', subtype: 'Highlight', inReplyTo: '12R', replyType: 'Group', contentsObj: { str: '' } },
+    { id: '23R', subtype: 'Text', inReplyTo: '99R', contentsObj: { str: 'orphan' } },
+    { subtype: 'Text', annotationFlags: 4, rect: [0, 0, 10, 10], contentsObj: { str: 'no object of its own' } },
+  ]);
+  assert.deepEqual(comment.refs, [
+    { id: '12R', popupRef: '30R' },
+    { id: '20R', popupRef: '31R' },
+    { id: '21R', popupRef: '' },
+    { id: '22R', popupRef: '' },
+  ]);
+  assert.deepEqual(unlinked.refs, [], 'nothing to name, so nothing to delete');
+});
+
+async function mountDeletable(t, { blocked = null, write, saveDeletion } = {}) {
+  const deletions = [];
+  const writes = [];
+  let version = 1;
+  const annotations = commentAnnotations();
+  annotations[1][0] = highlight({ popupRef: '14R' });
+  const pane = await mountPane(t, {
+    pdfs: { '/ws/spec.pdf': () => pdfBytes({ mtimeMs: version }) },
+    open: () => Promise.resolve(fakeDocument({ annotations })),
+    view: {
+      blockReason: async () => blocked,
+      saveDeletion: saveDeletion ?? (async (doc, pageIndex, refs) => {
+        deletions.push({ pageIndex, refs });
+        return new Uint8Array([37, 80, 68, 70, 45, 2]);
+      }),
+    },
+    api: {
+      writeWorkspacePdf: async (p, bytes) => {
+        writes.push({ path: p, bytes });
+        const result = write ? write() : { ok: true, size: bytes.length, mtimeMs: 2 };
+        if (result.ok) version += 1;
+        return result;
+      },
+    },
+  });
+  await pane.host.open(item('spec.pdf'));
+  await settle();
+  return Object.assign(pane, { deletions, writes, bump: () => { version += 1; } });
+}
+
+test('a comment offers Delete in its footer; the question takes its place and Cancel the focus (#1397)', async (t) => {
+  await mountDeletable(t);
+  $('.pdf-comment-target').click();
+  const trigger = $('.pdf-comment__foot .pdf-comment__delete');
+  assert.ok(trigger, 'a footer with the delete button');
+  assert.equal(trigger.tagName, 'BUTTON');
+  assert.equal(trigger.textContent, 'Delete comment');
+
+  trigger.click();
+  const confirm = $('.pdf-comment__foot .pdf-comment__confirm');
+  assert.ok(confirm, 'the question in the footer');
+  assert.equal($('.pdf-comment__delete'), null, 'instead of the button');
+  assert.equal(confirm.getAttribute('role'), 'group');
+  const question = document.getElementById(confirm.getAttribute('aria-labelledby'));
+  assert.equal(question.textContent, 'Delete this comment and 1 reply?');
+  assert.equal(document.getElementById(confirm.getAttribute('aria-describedby')).textContent, 'Snotra removes them from the PDF file.');
+  const [cancel, del] = confirm.querySelectorAll('.pdf-comment__actions button');
+  assert.equal(cancel.textContent, 'Cancel', 'Cancel comes first');
+  assert.ok(cancel.classList.contains('btn-secondary'));
+  assert.equal(del.textContent, 'Delete');
+  assert.ok(del.classList.contains('btn-destructive'));
+  assert.equal(document.activeElement, cancel, 'Enter does not delete by accident');
+
+  // Escape steps back to the comment instead of closing it.
+  press(confirm, 'Escape');
+  assert.ok($('.pdf-comment'), 'the comment stays open');
+  assert.equal(document.activeElement, $('.pdf-comment__delete'));
+
+  $('.pdf-comment__delete').click();
+  $('.pdf-comment__cancel').click();
+  assert.equal($('.pdf-comment__confirm'), null);
+  assert.equal(document.activeElement, $('.pdf-comment__delete'));
+});
+
+test('a comment without replies asks only about itself (#1397)', async (t) => {
+  await mountDeletable(t);
+  $$('.pdf-comment-target')[1].click();
+  $('.pdf-comment__delete').click();
+  assert.equal($('.pdf-comment__question').textContent, 'Delete this comment?');
+  assert.equal($('.pdf-comment__detail').textContent, 'Snotra removes it from the PDF file.');
+});
+
+test('deleting writes the file without the thread, reloads it and says so (#1397)', async (t) => {
+  const { deletions, writes, calls } = await mountDeletable(t);
+  $('.pdf-comment-target').click();
+  $('.pdf-comment__delete').click();
+  const readsBefore = calls.pdfs.length;
+  $('.pdf-comment__confirm-delete').click();
+  await settle();
+  assert.deepEqual(deletions, [{ pageIndex: 0, refs: [{ id: '12R', popupRef: '14R' }, { id: '13R', popupRef: '' }] }]);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].path, '/ws/spec.pdf');
+  assert.ok(calls.pdfs.length > readsBefore, 'the file is read again');
+  assert.equal($('.pdf-comment'), null, 'the popover went with the reload');
+  assert.equal($('.pdf-view__announcer').textContent, 'Comment deleted from the PDF.');
+  assert.equal(document.activeElement, $('.pdf-view'), 'the focus lands on the view, not on nothing');
+});
+
+test('a failing delete leaves the file alone, says so and can be tried again (#1397)', async (t) => {
+  const { writes } = await mountDeletable(t, { saveDeletion: async () => { throw new Error('pdf.js said no'); } });
+  const warn = t.mock.method(console, 'warn', () => {});
+  $('.pdf-comment-target').click();
+  $('.pdf-comment__delete').click();
+  $('.pdf-comment__confirm-delete').click();
+  await settle();
+  assert.equal(writes.length, 0, 'nothing was written');
+  const message = $('.pdf-comment__confirm .pdf-comment__message');
+  assert.equal(message.hidden, false);
+  assert.equal(message.getAttribute('role'), 'alert');
+  assert.match(message.textContent, /could not be deleted/);
+  assert.equal($('.pdf-comment__confirm-delete').getAttribute('aria-disabled'), 'false', 'and can be tried again');
+  assert.equal($('.pdf-comment__confirm-delete').textContent, 'Delete');
+  assert.equal(warn.mock.callCount(), 1);
+});
+
+test('a file changed elsewhere is reloaded, and the comment opens again with the reason (#1397)', async (t) => {
+  // "changed" means other bytes on disk: the reload reads a new version.
+  const pane = await mountDeletable(t, {
+    write: () => {
+      pane.bump();
+      return { ok: false, reason: 'changed' };
+    },
+  });
+  const { writes } = pane;
+  $('.pdf-comment-target').click();
+  $('.pdf-comment__delete').click();
+  $('.pdf-comment__confirm-delete').click();
+  await settle();
+  assert.equal(writes.length, 1);
+  const notice = $('.pdf-comment .pdf-comment__notice');
+  assert.ok(notice, 'the comment is open again after the reload');
+  assert.match(notice.textContent, /changed elsewhere.*Nothing was deleted/);
+  assert.equal(notice.getAttribute('role'), 'alert');
+  assert.ok($('.pdf-comment__delete'), 'and offers Delete again');
+  assert.match($('.pdf-view__announcer').textContent, /Nothing was deleted/);
+});
+
+test('a signed or protected PDF offers no delete (#1397)', async (t) => {
+  await mountDeletable(t, { blocked: 'signed' });
+  $('.pdf-comment-target').click();
+  assert.ok($('.pdf-comment'));
+  assert.equal($('.pdf-comment__foot'), null);
+});

@@ -122,10 +122,10 @@ export function renderTextLayer(page, container, viewport) {
   };
 }
 
-// pdf.js's `AnnotationEditorPrefix`: storage keys with it are new annotations
-// to be written. Not exported by pdf.js; `test/pdf-annotate-save.test.mjs`
-// writes and reads back a comment through the real pdf.js, so an update that
-// changes it fails there.
+// pdf.js's `AnnotationEditorPrefix`: storage keys with it are annotations to
+// be written — new ones, or `deleted` ones to be dropped. Not exported by
+// pdf.js; `test/pdf-annotate.test.js` writes, deletes and reads back comments
+// through the real pdf.js, so an update that changes it fails there.
 const NEW_ANNOTATION_PREFIX = 'pdfjs_internal_editor_';
 let saveCounter = 0;
 
@@ -147,6 +147,27 @@ export async function addHighlight(pdfjs, doc, highlight) {
     return await doc.saveDocument();
   } finally {
     doc.annotationStorage.remove(key);
+  }
+}
+
+/**
+ * The document without a comment (#1397), as the bytes of the file: pdf.js
+ * drops the annotations from the page's /Annots, frees their objects and
+ * appends that as an incremental update, so the old file stays at the start
+ * of the new one. `refs` are a comment's `refs` from `commentsFromAnnotations`
+ * — the comment, its replies and their popups — on page `pageIndex`.
+ */
+export async function saveWithoutAnnotations(doc, pageIndex, refs) {
+  saveCounter += 1;
+  const keys = refs.map(({ id, popupRef }, i) => {
+    const key = `${NEW_ANNOTATION_PREFIX}snotra-delete-${saveCounter}-${i}`;
+    doc.annotationStorage.setValue(key, { id, deleted: true, pageIndex, popupRef: popupRef || '' });
+    return key;
+  });
+  try {
+    return await doc.saveDocument();
+  } finally {
+    for (const key of keys) doc.annotationStorage.remove(key);
   }
 }
 
