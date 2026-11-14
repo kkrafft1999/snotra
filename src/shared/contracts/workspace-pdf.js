@@ -31,6 +31,25 @@ const WORKSPACE_PDF_ERRORS = Object.freeze({
 });
 
 /**
+ * Why a comment could not be written into a PDF (#1386). The read reasons,
+ * plus three of its own: the file is no longer the one the view showed
+ * (`changed`), what came is not an update of it (`invalid`), and the write
+ * itself failed (`failed`).
+ */
+const WORKSPACE_PDF_WRITE_ERRORS = Object.freeze({
+  ...WORKSPACE_PDF_ERRORS,
+  CHANGED: 'changed',
+  INVALID: 'invalid',
+  FAILED: 'failed',
+});
+
+/**
+ * The longest comment the PDF view takes. Far more than a review note needs,
+ * and short enough that no one pastes a document into a highlight.
+ */
+const MAX_PDF_COMMENT_CHARS = 5000;
+
+/**
  * The spec puts `%PDF-` at the start, and every reader, pdf.js included,
  * accepts it within the first kilobyte — some generators write junk first.
  */
@@ -75,6 +94,17 @@ function createWorkspacePdfError(reason, extra = {}) {
 }
 
 /**
+ * @param {unknown} reason
+ * @param {Record<string, unknown>} [extra]
+ */
+function createWorkspacePdfWriteError(reason, extra = {}) {
+  const known = Object.values(WORKSPACE_PDF_WRITE_ERRORS).includes(reason)
+    ? reason
+    : WORKSPACE_PDF_WRITE_ERRORS.FAILED;
+  return { ok: false, reason: known, ...extra };
+}
+
+/**
  * The data pdf.js asks for, by the option name it uses for them, and the
  * folder under `src/renderer/vendor/pdfjs/` they are copied to. Nothing else
  * can be asked for: the ICC profile would need a synchronous request from
@@ -102,10 +132,13 @@ function isPdfAssetName(name) {
 module.exports = {
   MAX_WORKSPACE_PDF_BYTES,
   WORKSPACE_PDF_ERRORS,
+  WORKSPACE_PDF_WRITE_ERRORS,
+  MAX_PDF_COMMENT_CHARS,
   WORKSPACE_PDF_SNIFF_BYTES,
   PDF_ASSET_DIRS,
   isPdfHeader,
   isPdfAssetName,
   createWorkspacePdfResult,
   createWorkspacePdfError,
+  createWorkspacePdfWriteError,
 };

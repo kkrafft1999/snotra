@@ -55,9 +55,34 @@ PNG, JPEG, GIF, WebP und SVG öffnen sich als Bild, eingepasst in die Spalte.
 
 Eine PDF öffnet sich Seite für Seite, eingepasst in die Spaltenbreite. Der Kopf zeigt die Seite, auf der du bist — tipp eine Zahl, um dorthin zu springen —, und zoomt mit `−`, `+` und *Breite*. Eine passwortgeschützte PDF fragt direkt dort nach ihrem Passwort; es wird nicht gespeichert. Skripte in einer PDF laufen nie, und ihre Links tun nichts.
 
-[seit 1.28.1] **Kommentare.** Markierungen und Notizen, die jemand in einer PDF hinterlassen hat, bringen ihren Kommentar mit: Klick auf die Markierung — oder erreich sie mit `Tab` und drück `Enter` —, und der Kommentar öffnet sich daneben, mit Autor, Datum und den Antworten darunter. `Esc` oder `×` schließt ihn. Kommentare erscheinen als reiner Text, ohne ihre Formatierung, und du kannst sie hier lesen, aber nicht schreiben.
+[seit 1.28.1] **Kommentare.** Markierungen und Notizen, die jemand in einer PDF hinterlassen hat, bringen ihren Kommentar mit: Klick auf die Markierung — oder erreich sie mit `Tab` und drück `Enter` —, und der Kommentar öffnet sich daneben, mit Autor, Datum und den Antworten darunter. `Esc` oder `×` schließt ihn. Kommentare erscheinen als reiner Text, ohne ihre Formatierung.
 
 ![Die mittlere Spalte mit pruefung.pdf: eine gelbe Markierung auf der Zeile „Beet 1 bekommt wieder die Tomaten“, darunter der geöffnete Kommentar von Ada Lovelace mit zwei Antworten, von Grace Hopper und von Ada Lovelace.](screenshots/pdf-comments.webp)
+
+### Einen Kommentar hinzufügen
+
+[seit 1.32] Du kannst eine PDF auch selbst kommentieren: Stelle markieren, Notiz schreiben, und sie wird in der Datei gespeichert.
+
+**Was du brauchst:** eine PDF mit echtem Text. Ein Scan enthält nur ein Bild des Textes, und ein Bild lässt sich nicht markieren.
+
+**Schritte**
+
+1. Markier die Stelle mit der Maus, wie in jedem Dokument.
+2. Klick neben der Markierung auf *Kommentieren* — oder drück `Cmd+Alt+M` (`Strg+Alt+M` unter Windows und Linux).
+3. Schreib deinen Kommentar und klick auf *Speichern*, oder drück `Cmd+Enter` (`Strg+Enter`). `Esc` oder *Abbrechen* verwirft ihn.
+
+![Die mittlere Spalte mit pruefung.pdf: die Zeile „Die Kräuterspirale bleibt, wo sie ist“ gelb markiert, darunter das Feld „Neuer Kommentar als Ada Lovelace“ mit einer Frage zum Gießen der Spirale und den Knöpfen Abbrechen und Speichern.](screenshots/pdf-annotate.webp)
+
+**Was passiert:** Die Stelle wird gelb markiert, und der Kommentar wird in die PDF selbst geschrieben, mit dem vollen Namen deines Benutzerkontos und der Uhrzeit. Snotra hängt ihn ans Ende der Datei an und ändert nichts an dem, was schon drinstand. Acrobat, die macOS-Vorschau und andere PDF-Programme zeigen ihn wie einen dort geschriebenen Kommentar, und Snotra zeigt ihn sofort, wie oben beschrieben.
+
+Eine Markierung über mehrere Seiten wird auf der Seite kommentiert, auf der sie beginnt.
+
+**Wenn es nicht klappt**
+
+- ***Dieses PDF ist signiert.*** Snotra fügt einer signierten PDF keine Kommentare hinzu, damit nichts die Signatur in Zweifel ziehen kann.
+- ***Dieses PDF ist geschützt.*** Eine PDF mit Passwort oder anderem Schutz nimmt hier keine Kommentare an.
+- ***Die Datei wurde woanders geändert und neu geladen.*** Jemand — eine andere App oder ein Sync — hat die PDF gespeichert, während du geschrieben hast. Dein Kommentar bleibt im Feld: Prüf, ob die gelbe Stelle noch stimmt, und speichere dann noch einmal.
+- **Es lässt sich kein Text markieren.** Die Seite ist ein Scan, oder ihr Text wurde in Formen umgewandelt. Dann gibt es nichts, woran der Kommentar hängen kann.
 
 ## HTML-Seiten
 

@@ -94,6 +94,7 @@ function contextMenuPosition(position, win) {
  * @param {typeof LIMITS} [deps.limits]
  * @param {() => string | undefined} [deps.getLocale]
  * @param {{ readPdfAsset(kind: string, filename: string): Promise<unknown> } | null} [deps.pdfAssets]
+ * @param {{ fullName(): Promise<string> } | null} [deps.accountName]
  * @param {Pick<typeof import('fs').promises, 'lstat'>} [deps.fs]
  * @param {() => string | null} [deps.getWorkspaceRoot]
  */
@@ -115,6 +116,7 @@ function registerFsHandlers({
   // Reader for the pdf.js data files (#346); without it the channel stays
   // unregistered and pdf.js renders without CMaps, fonts and decoders.
   pdfAssets = null,
+  accountName = null,
   // For the context menu's own look at the path (#649).
   fs = require('fs').promises,
   // The open folder (#349): its own menu offers "New" but no rename or delete.
@@ -155,6 +157,14 @@ function registerFsHandlers({
   if (pdfAssets) {
     ipcMain.handle(REQ.PDF_READ_ASSET, async (_event, kind, filename) =>
       pdfAssets.readPdfAsset(kind, filename));
+  }
+  // #1386: a comment written into a PDF, and the name it is signed with.
+  // The renderer hands over bytes; whether they may replace the file is
+  // decided in the service, against the file on disk.
+  ipcMain.handle(REQ.FS_WRITE_WORKSPACE_PDF, async (_event, pdfPath, bytes) =>
+    filesystem.writeWorkspacePdf(pdfPath, bytes));
+  if (accountName) {
+    ipcMain.handle(REQ.PDF_COMMENT_AUTHOR, async () => accountName.fullName());
   }
 
   ipcMain.handle(REQ.FS_LIST_WORKSPACE_PATHS, async (_event, options) =>

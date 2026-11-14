@@ -150,6 +150,9 @@ test('every colour token of the light set is read by one rule or the other', () 
     '--ds-overlay-border', '--ds-checker-light', '--ds-checker-dark', '--ds-paper-ground', '--ds-border',
     '--ds-scrollbar-thumb', '--ds-backdrop', '--ds-backdrop-nested', '--ds-chat-composer-border',
     '--ds-tool-shimmer-highlight',
+    // Washes under a PDF page's own text (#1386): the passage being
+    // commented and the selection. The text is the document's, not ours.
+    '--ds-paper-highlight', '--ds-paper-selection',
   ]);
   const used = new Set(PAIRS.flatMap(([ink, grounds]) => [ink, ...grounds.flat()]));
   const colours = Object.entries(ROOT)

@@ -220,6 +220,16 @@ function createFilesystemIpcAdapter({
     async readWorkspacePdf(pdfPath) {
       return fsService.readWorkspacePdf(getActiveWorkspaceRoot(), pdfPath);
     },
+    // A comment from the PDF view (#1386): the bytes pdf.js appended to, for
+    // the file the view shows. Whether they may replace it the service
+    // decides; a refusal comes back as a reason code.
+    /**
+     * @param {string} pdfPath
+     * @param {unknown} bytes
+     */
+    async writeWorkspacePdf(pdfPath, bytes) {
+      return fsService.writeWorkspacePdfFromUser(getActiveWorkspaceRoot(), pdfPath, bytes);
+    },
     // A failed read carries a `reason` next to its `error` (CR-B18-09, #641):
     // the message is the system's — English, with the full path in it — and
     // fit for the log; the renderer says why in the interface language

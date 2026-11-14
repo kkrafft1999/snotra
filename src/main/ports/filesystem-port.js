@@ -47,6 +47,9 @@
  * @property {(imagePath: string) => Promise<object>} readWorkspaceImage
  *   Relative or absolute, as the model wrote it (#244).
  * @property {(pdfPath: string) => Promise<object>} readWorkspacePdf
+ * @property {(pdfPath: string, bytes: unknown) => Promise<object>} writeWorkspacePdf
+ *   A comment added in the PDF view (#1386): pdf.js's appended bytes for the
+ *   shown file, written only if the file on disk is still their start.
  */
 
 module.exports = {};

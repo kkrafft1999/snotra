@@ -55,7 +55,7 @@ function fakeDocument({ pages = 3, failPage = null, unreadablePage = null, sizes
   };
 }
 
-async function mountPane(t, { pdfs = {}, open } = {}) {
+async function mountPane(t, { pdfs = {}, open, view = {}, api: extraApi = {} } = {}) {
   const dom = setupRendererDom();
   const { createFileViewHost } = await importRenderer('file-views', 'host.js');
   const { createFileViewRegistry } = await importRenderer('file-views', 'registry.js');
@@ -77,10 +77,11 @@ async function mountPane(t, { pdfs = {}, open } = {}) {
       if (typeof entry === 'function') return entry();
       return entry ?? { ok: false, reason: 'not-found' };
     },
+    ...extraApi,
   };
   const host = createFileViewHost({
     api,
-    registry: createFileViewRegistry([createPdfView({ openDocument })]),
+    registry: createFileViewRegistry([createPdfView({ openDocument, ...view })]),
     getWorkspaceRoot: () => '/ws',
   });
   t.after(() => {
@@ -778,4 +779,217 @@ test('commentsFromAnnotations threads replies and parsePdfDate reads PDF dates (
   assert.equal(found.length, 1);
   assert.deepEqual(found[0].replies.map((r) => r.text), ['first', 'second']);
   assert.deepEqual(commentsFromAnnotations(null), []);
+});
+
+// ── New comments (#1386) ───────────────────────────────────────────────────
+//
+// happy-dom lays nothing out, so the page's place and the selection's
+// rectangles are given: the page at the view's top left, the selection one
+// line on page 1. What pdf.js does with a real selection is the smoke
+// test's; here it is the flow around it.
+
+/** A document whose pages convert points like pdf.js, at any scale. */
+function annotatableDocument() {
+  const doc = fakeDocument({ pages: 2 });
+  const getPage = doc.getPage.bind(doc);
+  doc.getPage = async (n) => {
+    const page = await getPage(n);
+    const viewportAt = (scale) => ({
+      width: 595 * scale,
+      height: 842 * scale,
+      scale,
+      convertToViewportPoint: (x, y) => [x * scale, (842 - y) * scale],
+      convertToPdfPoint: (x, y) => [x / scale, 842 - y / scale],
+      clone: ({ scale: next }) => viewportAt(next),
+    });
+    page.getViewport = ({ scale }) => viewportAt(scale);
+    return page;
+  };
+  return doc;
+}
+
+async function mountAnnotatable(t, { blocked = null, write, saveHighlight } = {}) {
+  const saved = [];
+  const writes = [];
+  let version = 1;
+  const pane = await mountPane(t, {
+    pdfs: { '/ws/spec.pdf': () => pdfBytes({ mtimeMs: version }) },
+    open: () => Promise.resolve(annotatableDocument()),
+    view: {
+      renderText: (page, container) => {
+        const span = document.createElement('span');
+        span.textContent = 'The quick brown fox';
+        container.append(span);
+        return { promise: Promise.resolve(), cancel() {} };
+      },
+      saveHighlight: saveHighlight ?? (async (doc, highlight) => {
+        saved.push(highlight);
+        return new Uint8Array([37, 80, 68, 70, 45, 1]);
+      }),
+      blockReason: async () => blocked,
+    },
+    api: {
+      pdfCommentAuthor: async () => 'Kim Example',
+      writeWorkspacePdf: async (p, bytes) => {
+        writes.push({ path: p, bytes });
+        const result = write ? write() : { ok: true, size: bytes.length, mtimeMs: 2 };
+        if (result.ok) version += 1;
+        return result;
+      },
+    },
+  });
+  // The page at the top left of the view; the selection's rectangle lies on
+  // it, in page pixels.
+  const proto = document.defaultView.HTMLElement.prototype;
+  const original = proto.getBoundingClientRect;
+  proto.getBoundingClientRect = function rectOf() {
+    if (this.classList?.contains('pdf-page')) return { left: 0, top: 0, width: 600, height: 840, right: 600, bottom: 840, x: 0, y: 0 };
+    return original.call(this);
+  };
+  const rangeProto = Object.getPrototypeOf(document.createRange());
+  const originalRects = rangeProto.getClientRects;
+  rangeProto.getClientRects = () => [{ left: 100, top: 200, width: 150, height: 14, right: 250, bottom: 214 }];
+  t.after(() => {
+    proto.getBoundingClientRect = original;
+    rangeProto.getClientRects = originalRects;
+  });
+  await pane.host.open(item('spec.pdf'));
+  await settle();
+  return { ...pane, saved, writes };
+}
+
+function selectOnPage(n) {
+  const span = $(`.pdf-page[data-page="${n}"] .pdf-text-layer span`);
+  const range = document.createRange();
+  range.selectNodeContents(span);
+  const selection = document.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function shortcut() {
+  $('.pdf-view').dispatchEvent(new KeyboardEvent('keydown', { key: 'µ', code: 'KeyM', metaKey: true, altKey: true, bubbles: true }));
+}
+
+function typeComment(text) {
+  const field = $('.pdf-compose textarea');
+  field.value = text;
+  field.dispatchEvent(new Event('input', { bubbles: true }));
+  return field;
+}
+
+test('every drawn page carries a selectable text layer above its canvas', async (t) => {
+  await mountAnnotatable(t);
+  const layers = $$('.pdf-page .pdf-text-layer');
+  assert.equal(layers.length, 2, 'one per drawn page');
+  const page = $('.pdf-page[data-page="1"]');
+  assert.deepEqual([...page.children].map((c) => c.className), ['pdf-page__canvas', 'pdf-text-layer']);
+  assert.ok(layers[0].querySelector('.pdf-text-layer__end'), 'with the block that steadies a drag');
+  assert.notEqual(layers[0].style.getPropertyValue('--total-scale-factor'), '');
+});
+
+test('a selection gets a Comment chip, and the shortcut opens the composer', async (t) => {
+  await mountAnnotatable(t);
+  selectOnPage(1);
+  document.dispatchEvent(new Event('selectionchange'));
+  await new Promise((resolve) => setTimeout(resolve, 160));
+  const chip = $('.pdf-compose-chip');
+  assert.equal(chip.hidden, false);
+  assert.equal(chip.textContent, 'Comment');
+  assert.match(chip.title, /^Comment on the selected text \(/);
+
+  chip.click();
+  await settle();
+  const composer = $('.pdf-compose');
+  assert.ok(composer, 'the chip opens it');
+  assert.equal(composer.getAttribute('role'), 'dialog');
+  assert.equal(composer.querySelector('.pdf-compose__title').textContent, 'New comment');
+  assert.equal(composer.querySelector('.pdf-compose__author').textContent, 'as Kim Example');
+  assert.equal(document.activeElement, composer.querySelector('textarea'));
+  assert.equal(chip.hidden, true);
+  assert.equal($$('.pdf-compose-mark').length, 1, 'the passage stays marked');
+  assert.equal(composer.querySelector('.pdf-compose__save').disabled, true, 'nothing to save yet');
+
+  press(composer.querySelector('textarea'), 'Escape');
+  assert.equal($('.pdf-compose'), null);
+  assert.equal($$('.pdf-compose-mark').length, 0);
+  assert.equal(document.activeElement, $('.pdf-view'), 'the focus goes back to the document');
+
+  selectOnPage(1);
+  shortcut();
+  assert.ok($('.pdf-compose'), 'the shortcut opens it as well');
+});
+
+test('saving writes the appended file, reloads it and says so', async (t) => {
+  const { saved, writes, calls } = await mountAnnotatable(t);
+  selectOnPage(1);
+  shortcut();
+  const field = typeComment('  Please rephrase.  ');
+  assert.equal($('.pdf-compose__save').disabled, false);
+  const readsBefore = calls.pdfs.length;
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
+  await settle();
+
+  assert.equal(saved.length, 1);
+  const [highlight] = saved;
+  assert.equal(highlight.pageIndex, 0);
+  assert.equal(highlight.popup.contents, 'Please rephrase.', 'trimmed');
+  assert.equal(highlight.user, 'Kim Example');
+  assert.equal(highlight.quadPoints.length, 8, 'one line, one quad');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].path, '/ws/spec.pdf');
+  assert.ok(calls.pdfs.length > readsBefore, 'the file is read again');
+  assert.equal($('.pdf-compose'), null);
+  assert.equal($('.pdf-view__announcer').textContent, 'Comment saved in the PDF.');
+});
+
+test('a file changed elsewhere keeps the comment and says what to do', async (t) => {
+  const { writes } = await mountAnnotatable(t, { write: () => ({ ok: false, reason: 'changed' }) });
+  selectOnPage(1);
+  shortcut();
+  typeComment('Typo');
+  $('.pdf-compose__save').click();
+  await settle();
+  assert.equal(writes.length, 1);
+  const message = $('.pdf-compose__message');
+  assert.equal(message.hidden, false);
+  assert.equal(message.getAttribute('role'), 'alert');
+  assert.match(message.textContent, /changed elsewhere/);
+  assert.equal($('.pdf-compose textarea').value, 'Typo', 'what was typed stays');
+  assert.equal($('.pdf-compose__save').disabled, false, 'and can be saved again');
+});
+
+test('a failing save leaves the file alone and says so', async (t) => {
+  const { writes } = await mountAnnotatable(t, { saveHighlight: async () => { throw new Error('pdf.js said no'); } });
+  const warn = t.mock.method(console, 'warn', () => {});
+  selectOnPage(1);
+  shortcut();
+  typeComment('Typo');
+  $('.pdf-compose__save').click();
+  await settle();
+  assert.equal(writes.length, 0, 'nothing was written');
+  assert.match($('.pdf-compose__message').textContent, /could not be saved/);
+  assert.equal(warn.mock.callCount(), 1);
+});
+
+test('a signed PDF can be selected, but the composer explains instead of asking', async (t) => {
+  const { writes } = await mountAnnotatable(t, { blocked: 'signed' });
+  selectOnPage(1);
+  shortcut();
+  const composer = $('.pdf-compose');
+  assert.equal(composer.querySelector('textarea'), null);
+  assert.match(composer.querySelector('.pdf-compose__note').textContent, /This PDF is signed/);
+  assert.equal(composer.querySelector('.pdf-compose__cancel').textContent, 'Close');
+  await settle();
+  assert.equal(composer.querySelector('.pdf-compose__author').hidden, true);
+  composer.querySelector('.pdf-compose__cancel').click();
+  assert.equal($('.pdf-compose'), null);
+  assert.equal(writes.length, 0);
+});
+
+test('without a selection in the text the shortcut does nothing', async (t) => {
+  await mountAnnotatable(t);
+  document.getSelection().removeAllRanges();
+  shortcut();
+  assert.equal($('.pdf-compose'), null);
 });

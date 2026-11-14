@@ -1430,6 +1430,82 @@ const MOTIFS = {
     },
   },
 
+  /** Writing a new comment on selected text in a PDF (#1386). */
+  'pdf-annotate': {
+    text: {
+      en: {
+        file: 'review.pdf',
+        title: 'Garden plan 2027',
+        lines: [
+          'Bed 1 gets the tomatoes again, bed 2 the beans.',
+          'The herb spiral stays where it is; it needs no water.',
+          'Sowing starts in the second week of March, indoors.',
+        ],
+        line: 'The herb spiral',
+        // How much of the line the drag covers: "The herb spiral stays where it is".
+        share: 0.62,
+        comment: 'Does the spiral really need no water in August? Last summer it dried out.',
+      },
+      de: {
+        file: 'pruefung.pdf',
+        title: 'Gartenplan 2027',
+        lines: [
+          'Beet 1 bekommt wieder die Tomaten, Beet 2 die Bohnen.',
+          'Die Kräuterspirale bleibt, wo sie ist; sie braucht kein Wasser.',
+          'Ausgesät wird ab der zweiten Märzwoche, drinnen.',
+        ],
+        line: 'Die Kräuterspirale',
+        // "Die Kräuterspirale bleibt, wo sie ist".
+        share: 0.6,
+        comment: 'Braucht die Spirale im August wirklich kein Wasser? Letzten Sommer ist sie ausgetrocknet.',
+      },
+    },
+    async setUp({ app, page, text, workspace }) {
+      // The comment is signed with the account's full name; the manual shows
+      // a made-up one, never the name of whoever generates the screenshots.
+      await app.evaluate(({ ipcMain }) => {
+        ipcMain.removeHandler('pdf:commentAuthor');
+        ipcMain.handle('pdf:commentAuthor', async () => 'Ada Lovelace');
+      });
+      const { makeTextPdf } = await import('../../e2e/helpers/pdf-fixtures.mjs');
+      await writeFile(path.join(workspace, text.file), makeTextPdf({ pages: 2, title: text.title, lines: text.lines }));
+      await clickTreeRow(page, text.file);
+      const findLine = () => page.evaluate((wanted) => {
+        const span = [...document.querySelectorAll('.pdf-page[data-page="1"] .pdf-text-layer span')]
+          .find((s) => s.textContent.startsWith(wanted));
+        if (!span) return null;
+        const r = span.getBoundingClientRect();
+        return { left: r.left, top: r.top, width: r.width, height: r.height };
+      }, text.line);
+      await poll(findLine, { what: 'text layer of the PDF' });
+      // The page is laid out again once the column has its width; the drag
+      // must find the text layer of that layout, not of the first.
+      await pause(800);
+      const line = await poll(findLine, { what: 'settled text layer of the PDF' });
+      const y = line.top + line.height / 2;
+      await page.mouse.move(line.left + 1, y);
+      await page.mouse.down();
+      await page.mouse.move(line.left + line.width * text.share, y, { steps: 10 });
+      await page.mouse.up();
+      await poll(() => page.evaluate(() => !document.querySelector('.pdf-compose-chip')?.hidden), {
+        what: 'Comment chip',
+        explain: () => page.evaluate(() => ({ selection: String(document.getSelection()) })),
+      });
+      await page.locator('.pdf-compose-chip').click();
+      await poll(() => page.evaluate(() => /Ada Lovelace/.test(document.querySelector('.pdf-compose__author')?.textContent ?? '')),
+        { what: 'composer with its author' });
+      await page.keyboard.type(text.comment);
+      await page.mouse.move(0, 0);
+      await pause(300);
+      // Down to a little below the composer.
+      return page.evaluate(() => {
+        const column = document.getElementById('file-preview').getBoundingClientRect();
+        const composer = document.querySelector('.pdf-compose').getBoundingClientRect();
+        return { x: column.left, y: column.top, width: column.width, height: Math.min(column.height, composer.bottom + 40 - column.top) };
+      });
+    },
+  },
+
   /** An HTML page in the preview, offline, with the notice of what it blocked. */
   'html-preview': {
     htmlView: true,

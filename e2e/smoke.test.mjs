@@ -744,6 +744,43 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.ok(comment.focused);
   await page.keyboard.press('Escape');
   assert.equal(await page.evaluate(() => document.querySelector('.pdf-comment')), null);
+  // A new comment (#1386): text selected with the mouse in pdf.js's text
+  // layer, the composer opened by its shortcut, and the comment appended to
+  // the file — the old bytes untouched at its start — and shown after the
+  // reload like any other.
+  const pdfPath = path.join(workspace, 'notizen', 'spezifikation.pdf');
+  const pdfBefore = await readFile(pdfPath);
+  const lineBox = await poll(() => page.evaluate(() => {
+    const span = [...document.querySelectorAll('.pdf-page[data-page="1"] .pdf-text-layer span')]
+      .find((s) => s.textContent.startsWith('Helvetica is not'));
+    if (!span) return null;
+    const r = span.getBoundingClientRect();
+    return { left: r.left, top: r.top, width: r.width, height: r.height };
+  }), { what: 'Textebene der PDF-Seite' });
+  const lineY = lineBox.top + lineBox.height / 2;
+  await page.mouse.move(lineBox.left + 1, lineY);
+  await page.mouse.down();
+  await page.mouse.move(lineBox.left + lineBox.width * 0.5, lineY, { steps: 8 });
+  await page.mouse.up();
+  assert.match(await page.evaluate(() => String(document.getSelection())), /^Helvetica is/);
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+KeyM' : 'Control+Alt+KeyM');
+  await poll(() => page.evaluate(() => document.activeElement?.classList.contains('pdf-compose__field')),
+    { what: 'Kommentarfeld' });
+  await page.keyboard.type('Smoke test note');
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+  const added = await poll(() => page.evaluate(() => {
+    const targets = [...document.querySelectorAll('.pdf-comment-target')];
+    if (targets.length < 2 || document.querySelector('.pdf-compose')) return null;
+    return {
+      labels: targets.map((b) => b.getAttribute('aria-label')),
+      announced: document.querySelector('.pdf-view__announcer')?.textContent ?? '',
+    };
+  }), { what: 'gespeicherter PDF-Kommentar' });
+  assert.equal(added.announced, 'Kommentar im PDF gespeichert.');
+  const pdfAfter = await readFile(pdfPath);
+  assert.ok(pdfAfter.length > pdfBefore.length);
+  assert.ok(pdfAfter.subarray(0, pdfBefore.length).equals(pdfBefore), 'appended, not rewritten');
+  assert.ok(pdfAfter.includes(Buffer.from('/Highlight')));
   // What the clicks and the rest of the markdown could have set going is read
   // after the next step, the HTML page below, not after a fixed pause.
   step('PDF-Vorschau geprueft');

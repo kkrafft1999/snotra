@@ -8594,6 +8594,225 @@ select.modal-input {
   text-align: center;
 }
 
+/* The text of a page (#1386): pdf.js's text layer, transparent spans over the
+ * canvas, there to be selected. The rules are pdf.js's own (pdf_viewer.css)
+ * cut down to what a text layer without search highlighting needs; the
+ * custom properties on the spans are set by pdf.js. */
+.pdf-text-layer {
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  position: absolute;
+  inset: 0;
+  overflow: clip;
+  color-scheme: only light;
+  text-align: initial;
+  line-height: 1;
+  letter-spacing: normal;
+  word-spacing: normal;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
+  caret-color: transparent;
+  user-select: text;
+  z-index: 0;
+}
+
+.pdf-text-layer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  user-select: text;
+}
+
+.pdf-text-layer > :not(.markedContent, .pdf-text-layer__end),
+.pdf-text-layer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  z-index: 1;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.pdf-text-layer .markedContent {
+  display: contents;
+}
+
+.pdf-text-layer span[role="img"] {
+  user-select: none;
+  cursor: default;
+}
+
+.pdf-text-layer ::selection {
+  background: var(--ds-paper-selection);
+  color: transparent;
+}
+
+/* Under the spans; while a drag selects it covers the page, so that a gap
+ * between lines does not throw the selection to the end of the page. */
+.pdf-text-layer__end {
+  position: absolute;
+  inset: 100% 0 0;
+  z-index: 0;
+  display: block;
+  cursor: default;
+  user-select: none;
+}
+
+.pdf-text-layer--selecting .pdf-text-layer__end {
+  top: 0;
+}
+
+/* Writing a new comment (#1386): a layer of the scrolling view, not of a
+ * page, so that a reload or a zoom does not take what is typed with it. As
+ * wide as the view, so that the popover can measure itself against it; no
+ * z-index of its own, so that the marking multiplies onto the page below
+ * instead of onto an empty layer. */
+.pdf-compose-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 0;
+  pointer-events: none;
+}
+
+.pdf-compose-mark {
+  position: absolute;
+  background: var(--ds-paper-highlight);
+  mix-blend-mode: multiply;
+  pointer-events: none;
+}
+
+.pdf-compose-chip {
+  position: absolute;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ds-touch-min);
+  padding: 0 14px 0 11px;
+  border: 1px solid var(--ds-overlay-border);
+  border-radius: 999px;
+  background: var(--ds-surface);
+  box-shadow: var(--ds-overlay-shadow);
+  color: var(--text-primary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-md);
+  font-weight: var(--ds-font-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: border-color var(--ds-motion-fast), background var(--ds-motion-fast);
+}
+
+.pdf-compose-chip[hidden] {
+  display: none;
+}
+
+.pdf-compose-chip svg {
+  color: var(--ds-blue);
+}
+
+.pdf-compose-chip:hover {
+  border-color: var(--ds-blue);
+  background: var(--ds-blue-soft);
+}
+
+.pdf-compose-chip:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.pdf-compose {
+  position: absolute;
+  z-index: 3;
+  box-sizing: border-box;
+  width: 340px;
+  max-width: calc(100% - 16px);
+  border: 1px solid var(--ds-overlay-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  box-shadow: var(--ds-overlay-shadow);
+  color: var(--text-primary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+  text-align: start;
+  pointer-events: auto;
+  user-select: none;
+}
+
+.pdf-compose[hidden] {
+  display: none;
+}
+
+.pdf-compose__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 12px 16px 0;
+}
+
+.pdf-compose__title {
+  font-size: var(--ds-font-size-md);
+  font-weight: var(--ds-font-weight-bold);
+}
+
+.pdf-compose__author {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: var(--ds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.pdf-compose__author[hidden] {
+  display: none;
+}
+
+.pdf-compose__body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 16px 0;
+}
+
+.pdf-compose__field {
+  box-sizing: border-box;
+  min-height: 84px;
+  max-height: 240px;
+  resize: vertical;
+  line-height: 1.45;
+}
+
+.pdf-compose__note {
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.pdf-compose__message {
+  margin: 0;
+  color: var(--ds-error);
+  font-size: var(--ds-font-size-sm);
+}
+
+.pdf-compose__message[hidden] {
+  display: none;
+}
+
+.pdf-compose__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px 14px;
+}
+
 /* Comments behind highlights and notes (#1299): a transparent button over
  * each marking, and one popover. The markings are pdf.js's drawing; the
  * button only shows itself on hover, on focus and while its comment is open.
