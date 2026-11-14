@@ -70,6 +70,7 @@ Click into the tree, or move there with `Tab`. The full table with what each key
 | --- | --- |
 | Zoom a PDF, an image or a Markdown file in · out · back to its fitted size | `Cmd` and `+` · `Cmd` and `−` · `Cmd` and `0` (`Ctrl` on Windows and Linux) |
 | In a PDF: first page · last page | `Home` · `End` |
+| In a PDF [since 1.32]: comment on the selected text · save the comment | `Cmd+Alt+M` / `Ctrl+Alt+M` · `Cmd+Enter` / `Ctrl+Enter` |
 | While editing a text file [since 1.24]: save now · stop editing | `Cmd+S` / `Ctrl+S` · `Esc` |
 
 The zoom keys act on the document only while the preview has the focus — click into it first. Otherwise they zoom the whole window, as *View › Zoom In* does. A Markdown file returns to 100 % with `Cmd+0`, a PDF or an image to its fitted size. The Markdown zoom is [since 1.19]. Details in [Look at a file](../../workspace/preview/).

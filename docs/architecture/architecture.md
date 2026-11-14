@@ -2161,7 +2161,8 @@ type: a new view is one module and one line in the registry.
 | `renderer/file-views/read-failures.js` | Why a file is not shown as text: main's reason codes of `fs:readFile` and their catalogue sentences, for the info card and the SVG source ([#641](https://github.com/kkrafft1999/snotra/issues/641)) | `test/file-view-host-dom.test.js`, `test/image-view-dom.test.js` |
 | `renderer/file-views/pdf-view.js` | `pdf`: continuous pages drawn near the viewport, page and zoom in the header, password field, a reason instead of an empty column ([#346](https://github.com/kkrafft1999/snotra/issues/346)) | `test/pdf-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/zoom-tools.js` | Zoom steps and header icon buttons shared by the PDF and the image view ([#803](https://github.com/kkrafft1999/snotra/issues/803)) | both view tests |
-| `renderer/file-views/pdf-engine.js` | Loading the vendored pdf.js, its options, the BinaryDataFactory that asks the main process for data files | `e2e/smoke.test.mjs` |
+| `renderer/file-views/pdf-engine.js` | Loading the vendored pdf.js, its options, the BinaryDataFactory that asks the main process for data files; the text layer and the save of a new highlight ([#1386](https://github.com/kkrafft1999/snotra/issues/1386)) | `e2e/smoke.test.mjs`, `test/pdf-annotate.test.js` |
+| `renderer/file-views/pdf-annotate.js` | A new comment ([#1386](https://github.com/kkrafft1999/snotra/issues/1386)): selection geometry, the highlight annotation, the chip and the composer | `test/pdf-annotate.test.js`, `test/pdf-view-dom.test.js` |
 | `renderer/file-views/html-view.js` | `html`, `htm`: the page as it runs, in a view the main process lays over the stage; "Preview \| Source", Reload, Open in browser, the notice of what was blocked, a reason instead of an empty column ([#479](https://github.com/kkrafft1999/snotra/issues/479)) | `test/html-view-dom.test.js`, `e2e/html-preview.test.mjs`, `e2e/smoke.test.mjs` |
 | `main/electron/html-preview-service.js` | The page's side: its `WebContentsView`, the in-memory session, the `snotra-html:` scheme, what the page may load and where its links lead | `test/html-preview-service.test.js`, `test/html-preview-isolation.test.js` |
 | `renderer/file-views/changes-view.js` | "Show changes": the diff of one or more writes to a file, its states and notes. Not in the registry — no file *is* a diff; the host mounts it on request and adds "Content \| Changes" to any file the conversation on screen changed ([#348](https://github.com/kkrafft1999/snotra/issues/348)) | `test/file-changes-dom.test.js`, `e2e/file-changes.test.mjs` |
@@ -2501,9 +2502,37 @@ name, nothing else.
   size or mtime changes.
 - **The header wraps** in a narrow column: the name keeps at least 10em, page
   and zoom tools and the size move to a second row, right-aligned.
-- Not included: text selection and search (pdf.js's text layer), printing,
-  the ICC profile for CMYK (it would need a synchronous request from the
-  worker; colours are converted the simple way).
+- **Comments are read** ([#1299](https://github.com/kkrafft1999/snotra/issues/1299))
+  through `page.getAnnotations()` and a layer of buttons of our own
+  (`file-views/pdf-comments.js`); pdf.js's annotation layer stays off.
+- **Comments are written** ([#1386](https://github.com/kkrafft1999/snotra/issues/1386)).
+  Every drawn page carries pdf.js's public `TextLayer` — transparent spans,
+  nothing that acts — so its text can be selected. A selection becomes a
+  highlight annotation in the shape pdf.js's own highlight editor
+  serialises (`file-views/pdf-annotate.js`), and pdf.js writes it with
+  `saveDocument()` as an **incremental update**: the old file stays byte for
+  byte at the start of the new one, so a signature over it stays valid and
+  nothing of the document can be lost. The storage key prefix that marks a
+  new annotation is not exported by pdf.js; `test/pdf-annotate.test.js` writes
+  and reads back a comment through the real pdf.js, so an update that changes
+  it fails there.
+
+  ```
+  selection ─▶ quads in PDF space ─▶ pdf.js saveDocument() ─▶ bytes
+     fs:writeWorkspacePdf(path, bytes) ─▶ main: read checks as above, %PDF-,
+        50 MB, the file on disk must be the start of `bytes` (else `changed`),
+        path checked again, atomic write ─▶ the view reloads the file
+  ```
+
+  The comment is signed with the system account's full name
+  (`pdf:commentAuthor`, `main/services/account-name.js`: `id -F` on macOS,
+  GECOS on Linux, the login name elsewhere). Signed and protected PDFs
+  (pdf.js's `IsSignaturesPresent`, `EncryptFilterName`) take no comments.
+  `pdf-lib` was the first plan; it rewrites the whole file and so breaks
+  signatures, and it is unmaintained — pdf.js, already vendored, appends.
+- Not included: search, printing, editing or deleting a comment, the ICC
+  profile for CMYK (it would need a synchronous request from the worker;
+  colours are converted the simple way).
 
 #### HTML pages ([#479](https://github.com/kkrafft1999/snotra/issues/479))
 

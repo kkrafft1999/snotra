@@ -56,9 +56,34 @@ PNG, JPEG, GIF, WebP and SVG open as images, fitted to the column.
 
 A PDF opens page after page, fitted to the column width. The header shows the page you are on — type a number to jump there — and zooms with `−`, `+` and *Width*. A password-protected PDF asks for its password right there; it is not stored. Scripts inside a PDF never run, and its links do nothing.
 
-[since 1.28.1] **Comments.** Highlights and notes that someone left in a PDF carry their comment along: click the marking — or reach it with `Tab` and press `Enter` — and the comment opens next to it, with its author, its date and any replies underneath. `Esc` or `×` closes it. Comments are shown as plain text, without their formatting, and they can be read here, not written.
+[since 1.28.1] **Comments.** Highlights and notes that someone left in a PDF carry their comment along: click the marking — or reach it with `Tab` and press `Enter` — and the comment opens next to it, with its author, its date and any replies underneath. `Esc` or `×` closes it. Comments are shown as plain text, without their formatting.
 
 ![The middle column with review.pdf: a yellow highlight on the line "Bed 1 gets the tomatoes again", and below it the opened comment by Ada Lovelace with two replies, by Grace Hopper and by Ada Lovelace.](screenshots/pdf-comments.webp)
+
+### Add a comment
+
+[since 1.32] You can comment on a PDF yourself: select a passage, write a note, and it is saved in the file.
+
+**What you need:** a PDF with real text in it. A scan has only a picture of the text, and a picture cannot be selected.
+
+**Steps**
+
+1. Select the passage with the mouse, as in any document.
+2. Click *Comment* next to the selection — or press `Cmd+Alt+M` (`Ctrl+Alt+M` on Windows and Linux).
+3. Write your comment and click *Save*, or press `Cmd+Enter` (`Ctrl+Enter`). `Esc` or *Cancel* drops it.
+
+![The middle column with review.pdf: the line "The herb spiral stays where it is" marked yellow, and below it the box "New comment as Ada Lovelace" with a question about watering the spiral, and the buttons Cancel and Save.](screenshots/pdf-annotate.webp)
+
+**What happens:** the passage is highlighted in yellow and the comment is written into the PDF itself, signed with the full name of your user account and the time. Snotra appends it to the end of the file and changes nothing that was there before. Acrobat, macOS Preview and other PDF readers show it like a comment made there, and Snotra shows it right away, as described above.
+
+A selection that runs over several pages is commented on the page where it starts.
+
+**If it doesn't work**
+
+- ***This PDF is signed.*** Snotra adds no comments to a signed PDF, so that nothing can put the signature in doubt.
+- ***This PDF is protected.*** A PDF with a password or other protection takes no comments here.
+- ***The file was changed elsewhere and has been reloaded.*** Someone — another app, or a sync — saved the PDF while you were writing. Your comment stays in the box: check that the yellow passage is still the right one, then save again.
+- **No text can be selected.** The page is a scan, or its text was turned into shapes. There is nothing to attach the comment to.
 
 ## HTML pages
 

@@ -35,6 +35,15 @@ const REQUEST_CHANNELS = Object.freeze({
   FS_READ_WORKSPACE_PDF: 'fs:readWorkspacePdf',
   PDF_READ_ASSET: 'pdf:readAsset',
   /**
+   * A comment the user added in the PDF view (#1386): the new bytes, which
+   * pdf.js made by appending to the file the view had read. Main writes them
+   * only if the file on disk is still that one, byte for byte.
+   * `PDF_COMMENT_AUTHOR` is the name the comment is signed with — the
+   * system account's full name.
+   */
+  FS_WRITE_WORKSPACE_PDF: 'fs:writeWorkspacePdf',
+  PDF_COMMENT_AUTHOR: 'pdf:commentAuthor',
+  /**
    * An HTML file as a live page (#479), in a view of its own that main lays
    * over the preview column. The renderer names the file and says where the
    * view goes; what the page may load, and where its links lead, main
