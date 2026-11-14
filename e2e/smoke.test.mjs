@@ -750,13 +750,30 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // reload like any other.
   const pdfPath = path.join(workspace, 'notizen', 'spezifikation.pdf');
   const pdfBefore = await readFile(pdfPath);
+  // The view has to be at rest first. Fit width draws every page again 120 ms
+  // after the column changed width — a scroll bar coming or going is enough —
+  // and a drag that falls into that redraw loses its selection with the old
+  // text layer (macOS and Windows CI, first run of #1387). So the line is
+  // scrolled into view, and the mouse only goes down once the very same span
+  // has stood at the same spot for longer than that pause and is what the
+  // pointer would hit.
   const lineBox = await poll(() => page.evaluate(() => {
     const span = [...document.querySelectorAll('.pdf-page[data-page="1"] .pdf-text-layer span')]
       .find((s) => s.textContent.startsWith('Helvetica is not'));
     if (!span) return null;
+    span.scrollIntoView({ block: 'center', inline: 'nearest' });
     const r = span.getBoundingClientRect();
+    const hit = document.elementFromPoint(r.left + 2, r.top + r.height / 2);
+    const spot = `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)}`;
+    const now = performance.now();
+    const steady = span.dataset.smokeSpot === spot && now - Number(span.dataset.smokeSince) > 300;
+    if (span.dataset.smokeSpot !== spot) {
+      span.dataset.smokeSpot = spot;
+      span.dataset.smokeSince = String(now);
+    }
+    if (!steady || r.width === 0 || (hit !== span && !span.contains(hit))) return null;
     return { left: r.left, top: r.top, width: r.width, height: r.height };
-  }), { what: 'Textebene der PDF-Seite' });
+  }), { what: 'ruhende Textebene der PDF-Seite', intervalMs: 100 });
   const lineY = lineBox.top + lineBox.height / 2;
   await page.mouse.move(lineBox.left + 1, lineY);
   await page.mouse.down();
