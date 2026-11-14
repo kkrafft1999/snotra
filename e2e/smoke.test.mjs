@@ -869,7 +869,23 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.ok(pdfAfter.includes(Buffer.from('/Highlight')));
   // Deleting a comment (#1397): Ada's comment goes with Grace's reply, after
   // the question in the popover's footer, as one more appended update; the
-  // new comment stays.
+  // new comment stays. The save reloaded the view, and fit width draws it
+  // again a moment later, which closes an open comment (macOS CI, first run
+  // of #1400): the click waits until Ada's marking has stood still for longer
+  // than that pause, as the drag above does.
+  await poll(() => page.evaluate(() => {
+    const target = document.querySelector('.pdf-comment-target[aria-label^="Kommentar von Ada"]');
+    if (!target) return null;
+    const r = target.getBoundingClientRect();
+    const spot = `${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)}`;
+    const now = performance.now();
+    const steady = target.dataset.smokeSpot === spot && now - Number(target.dataset.smokeSince) > 300;
+    if (target.dataset.smokeSpot !== spot) {
+      target.dataset.smokeSpot = spot;
+      target.dataset.smokeSince = String(now);
+    }
+    return steady || null;
+  }), { what: 'ruhende Kommentarmarkierung nach dem Speichern', intervalMs: 100 });
   await page.locator('.pdf-comment-target[aria-label^="Kommentar von Ada"]').click();
   await page.locator('.pdf-comment__delete').click();
   const question = await poll(() => page.evaluate(() => {
