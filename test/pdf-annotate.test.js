@@ -175,6 +175,57 @@ test('pdf.js deletes a comment with its replies and popup as an appended update 
   assert.deepEqual(left.map((a) => a.subtype), ['Text'], 'neither the highlight nor its popup is left');
 });
 
+for (const xrefStream of [false, true]) {
+  test(`a reply is appended as an /IRT text annotation and reads back under its comment (#1399, ${xrefStream ? 'xref stream' : 'xref table'})`, async (t) => {
+    const dom = setupRendererDom();
+    t.after(() => dom.cleanup());
+    const pdfjs = await import(pathToFileURL(path.join(ROOT, 'node_modules/pdfjs-dist/legacy/build/pdf.mjs')).href);
+    const { makeTextPdf, lineRect } = await import(pathToFileURL(path.join(ROOT, 'e2e/helpers/pdf-fixtures.mjs')).href);
+    const { addReply } = await importRenderer('file-views', 'pdf-engine.js');
+    const { commentsFromAnnotations } = await importRenderer('file-views', 'pdf-comments.js');
+    const open = async (bytes) => {
+      const doc = await pdfjs.getDocument({ data: bytes.slice(), isEvalSupported: false, useWorkerFetch: false, verbosity: 0 }).promise;
+      t.after(() => doc.loadingTask.destroy());
+      return doc;
+    };
+    const annotationsOf = async (doc) => (await doc.getPage(1)).getAnnotations({ intent: 'display' });
+
+    const first = new Date('2026-11-01T09:00:00Z');
+    const original = new Uint8Array(makeTextPdf({
+      xrefStream,
+      comments: [{ kind: 'highlight', rect: lineRect(0), author: 'Ada', text: 'Check this.', date: first, replies: [
+        { author: 'Grace', text: 'Asked sales.', date: first },
+      ] }],
+    }));
+    const doc = await open(original);
+    const [comment] = commentsFromAnnotations(await annotationsOf(doc));
+    const date = new Date('2026-11-14T10:30:00Z');
+    const saved = await addReply(pdfjs, doc, {
+      pageIndex: 0, parentId: comment.id, parentRect: comment.rect, text: 'Two years — confirmed (Grüße).', author: 'Zoë Example', date,
+    });
+    assert.deepEqual(saved.subarray(0, original.length), original, 'the old file is untouched at the start');
+    assert.equal(doc.annotationStorage.size, 0, 'nothing is left in the storage');
+    const tail = Buffer.from(saved.subarray(original.length)).toString('latin1');
+    assert.equal(Buffer.from(original).includes('/Type /XRef'), xrefStream, 'the fixture has the kind of cross-reference it claims');
+    assert.equal((tail.match(/\/Type \/XRef/g) ?? []).length, xrefStream ? 2 : 0, 'both updates keep that kind');
+
+    const reopened = await open(saved);
+    const annotations = await annotationsOf(reopened);
+    const [after] = commentsFromAnnotations(annotations);
+    assert.equal(after.id, comment.id);
+    assert.deepEqual(after.replies.map((r) => [r.author, r.text]), [
+      ['Grace', 'Asked sales.'],
+      ['Zoë Example', 'Two years — confirmed (Grüße).'],
+    ]);
+    assert.equal(after.replies[1].date?.toISOString(), date.toISOString());
+    assert.equal(annotations.filter((a) => a.subtype === 'Highlight').length, 1, 'the placeholder is gone, only the comment is a highlight');
+    const reply = annotations.find((a) => a.contentsObj?.str === 'Two years — confirmed (Grüße).');
+    assert.equal(reply.subtype, 'Text');
+    assert.equal(reply.inReplyTo, comment.id);
+    assert.equal(after.refs.length, 3, 'deleting the comment takes the new reply along');
+  });
+}
+
 test('a protected PDF takes no comments', async (t) => {
   const dom = setupRendererDom();
   t.after(() => dom.cleanup());

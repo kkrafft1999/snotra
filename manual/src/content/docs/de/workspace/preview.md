@@ -85,6 +85,30 @@ Eine Markierung über mehrere Seiten wird auf der Seite kommentiert, auf der sie
 - ***Die Datei wurde woanders geändert und neu geladen.*** Jemand — eine andere App oder ein Sync — hat die PDF gespeichert, während du geschrieben hast. Dein Kommentar bleibt im Feld: Prüf, ob die gelbe Stelle noch stimmt, und speichere dann noch einmal.
 - **Es lässt sich kein Text markieren.** Die Seite ist ein Scan, oder ihr Text wurde in Formen umgewandelt. Dann gibt es nichts, woran der Kommentar hängen kann.
 
+### Auf einen Kommentar antworten
+
+[seit 1.33] Ein Kommentar lässt sich direkt dort beantworten, wo er steht, damit Frage und Antwort zusammenbleiben.
+
+**Was du brauchst:** eine PDF, die weder signiert noch geschützt ist, wie beim Hinzufügen.
+
+**Schritte**
+
+1. Klick auf die Markierung, um ihren Kommentar zu öffnen.
+2. Klick unten links im Kommentar auf *Antworten*.
+3. Schreib deine Antwort und klick auf *Antworten*, oder drück `Cmd+Enter` (`Strg+Enter`). `Esc` oder *Abbrechen* verwirft sie.
+
+![Die mittlere Spalte mit pruefung.pdf: der geöffnete Kommentar von Ada Lovelace mit zwei Antworten und unten das Feld „Deine Antwort“ mit einer geschriebenen Antwort, gezeichnet „als Grace Hopper“, und den Knöpfen Abbrechen und Antworten.](screenshots/pdf-reply.webp)
+
+**Was passiert:** Die Antwort wird als Antwort auf diesen Kommentar in die PDF geschrieben, mit der Uhrzeit und dem Namen unter [*Einstellungen › Allgemein*](../../customising/settings/#der-bereich-allgemein), *Name für Kommentare* — oder, solange der leer ist, dem vollen Namen deines Benutzerkontos. Snotra hängt sie ans Ende der Datei an und ändert nichts an dem, was schon drinstand. Der Kommentar öffnet sich wieder, mit der Antwort darunter. Es ist eine gewöhnliche PDF-Antwort: Programme, die Kommentarverläufe zeigen, führen sie unter dem Kommentar, und die macOS-Vorschau, die keine kennt, zeigt sie als eigene Notiz.
+
+Eine einzelne Antwort lässt sich nicht für sich löschen: *Kommentar löschen* entfernt den Kommentar mitsamt allen Antworten.
+
+**Wenn es nicht klappt**
+
+- **Es gibt kein *Antworten*.** Die PDF ist signiert oder geschützt, und Snotra lässt sie, wie sie ist.
+- ***Die Datei wurde woanders geändert und neu geladen. Deine Antwort ist noch da …*** Jemand hat die PDF gespeichert, während du geschrieben hast. Der Kommentar öffnet sich mit deinem Text im Feld wieder: Prüf den Kommentar und schick sie dann noch einmal ab.
+- ***Die Antwort ließ sich nicht speichern. Die Datei ist unverändert.*** Die Datei ließ sich nicht schreiben — etwa weil sie schreibgeschützt ist. Dein Text bleibt im Feld.
+
 ### Einen Kommentar löschen
 
 [seit 1.33] Ein Kommentar an der falschen Stelle oder einer, der sich als falsch herausgestellt hat, lässt sich wieder aus der PDF entfernen — deiner und auch der von anderen.
@@ -94,7 +118,7 @@ Eine Markierung über mehrere Seiten wird auf der Seite kommentiert, auf der sie
 **Schritte**
 
 1. Klick auf die Markierung, um ihren Kommentar zu öffnen.
-2. Klick unten im Kommentar auf *Kommentar löschen*.
+2. Klick unten rechts im Kommentar auf *Kommentar löschen*.
 3. Snotra fragt an derselben Stelle nach und sagt, wie viele Antworten mitgehen. Klick auf *Löschen*. *Abbrechen* oder `Esc` behält den Kommentar.
 
 ![Die mittlere Spalte mit pruefung.pdf: der geöffnete Kommentar von Ada Lovelace mit zwei Antworten und unten die Frage „Diesen Kommentar und 2 Antworten löschen?“ mit den Knöpfen Abbrechen und Löschen.](screenshots/pdf-delete.webp)

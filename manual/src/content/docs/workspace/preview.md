@@ -85,6 +85,30 @@ A selection that runs over several pages is commented on the page where it start
 - ***The file was changed elsewhere and has been reloaded.*** Someone — another app, or a sync — saved the PDF while you were writing. Your comment stays in the box: check that the yellow passage is still the right one, then save again.
 - **No text can be selected.** The page is a scan, or its text was turned into shapes. There is nothing to attach the comment to.
 
+### Reply to a comment
+
+[since 1.33] A comment can be answered right where it is, so that question and answer stay together.
+
+**What you need:** a PDF that is neither signed nor protected, as for adding a comment.
+
+**Steps**
+
+1. Click the marking to open its comment.
+2. Click *Reply* at the bottom left of the comment.
+3. Write your reply and click *Reply*, or press `Cmd+Enter` (`Ctrl+Enter`). `Esc` or *Cancel* drops it.
+
+![The middle column with review.pdf: the opened comment by Ada Lovelace with two replies, and at its bottom the box "Your reply" with a reply typed in, signed "as Grace Hopper", and the buttons Cancel and Reply.](screenshots/pdf-reply.webp)
+
+**What happens:** the reply is written into the PDF as a reply to that comment, signed with the time and the name under [*Settings › General*](../../customising/settings/#the-section-general), *Name for comments* — or, while that is empty, the full name of your user account. Snotra appends it to the end of the file and changes nothing that was there before. The comment opens again with the reply under it. It is a standard PDF reply: readers that show comment threads list it under the comment, and macOS Preview, which shows none, lists it as a note of its own.
+
+A single reply cannot be deleted on its own: *Delete comment* removes the comment together with all its replies.
+
+**If it doesn't work**
+
+- **There is no *Reply*.** The PDF is signed or protected, and Snotra leaves it as it is.
+- ***The file was changed elsewhere and has been reloaded. Your reply is still here …*** Someone saved the PDF while you were writing. The comment opens again with your text in the box: check the comment, then send it again.
+- ***The reply could not be saved. The file is unchanged.*** The file could not be written — for example because it is read-only. Your text stays in the box.
+
 ### Delete a comment
 
 [since 1.33] A comment in the wrong place, or one that turned out to be wrong, can be taken out of the PDF again — yours or anyone else's.
@@ -94,7 +118,7 @@ A selection that runs over several pages is commented on the page where it start
 **Steps**
 
 1. Click the marking to open its comment.
-2. Click *Delete comment* at the bottom of the comment.
+2. Click *Delete comment* at the bottom right of the comment.
 3. Snotra asks in the same place, and says how many replies go with it. Click *Delete*. *Cancel* or `Esc` keeps the comment.
 
 ![The middle column with review.pdf: the opened comment by Ada Lovelace with two replies, and at its bottom the question "Delete this comment and 2 replies?" with the buttons Cancel and Delete.](screenshots/pdf-delete.webp)

@@ -14,7 +14,10 @@
 // of their own; members of a group (`/RT /Group`) share their parent's
 // comment and are left out.
 
+import contracts from '../generated/contracts.js';
 import { t, tPlural, getLocale } from '../i18n.js';
+
+const { MAX_PDF_COMMENT_CHARS } = contracts;
 
 // What never opens a comment: links and form fields stay inert, a popup is
 // only the window of its parent, and a text box shows its text on the page.
@@ -27,7 +30,20 @@ const MIN_TARGET_PX = 32;
 const POPOVER_GAP_PX = 6;
 
 const TRASH_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.1a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8.1M6.8 7v4M9.2 7v4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-let confirmIds = 0;
+const REPLY_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M6.5 4 3 7.5 6.5 11M3.5 7.5H10a3 3 0 0 1 3 3V12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+let panelIds = 0;
+
+/** A quiet text button with an icon, for the popover's footer. */
+function footButton(className, icon, label) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = className;
+  button.innerHTML = icon;
+  const text = document.createElement('span');
+  text.textContent = label;
+  button.append(text);
+  return button;
+}
 
 const textOf = (obj) => (typeof obj?.str === 'string' ? obj.str.trim() : '');
 const dirOf = (obj) => (obj?.dir === 'rtl' ? 'rtl' : 'ltr');
@@ -198,18 +214,29 @@ function entryNode(entry, className) {
  * scrolling view; the popover is placed inside the page it belongs to and
  * kept within the view's visible width.
  *
- * Deleting (#1397): `deleteComment({ page, refs })` removes a comment with
- * its replies from the file and answers `{ ok }` or `{ ok: false, reason }`;
- * `canDelete()` says whether the document takes changes at all; `announce`
- * speaks the outcome. Without `deleteComment` the popover offers no delete.
+ * Writing to the file, from the popover's footer: `deleteComment({ page,
+ * refs })` removes a comment with its replies (#1397), `replyComment({ page,
+ * comment, text })` appends a reply (#1399); both answer `{ ok }` or `{ ok:
+ * false, reason }` and reload the view on success. `canWrite()` says whether
+ * the document takes changes at all, `author()` the name a reply is signed
+ * with, `announce` speaks the outcome. Without either callback the popover
+ * has no footer.
  */
-export function createCommentLayer({ viewEl, deleteComment = null, canDelete = () => true, announce = () => {} }) {
+export function createCommentLayer({
+  viewEl,
+  deleteComment = null,
+  replyComment = null,
+  canWrite = () => true,
+  author = async () => '',
+  announce = () => {},
+}) {
   // Page number → { layerEl, comments, buttons }
   const pages = new Map();
   let open = null; // { page, id, button, popover }
-  // A delete that found the file changed (#1397): the view reloads, and the
-  // comment opens again with the reason, if it is still there.
-  let pendingNotice = null; // { page, id, text }
+  // What the reload after a write opens again, if the comment is still
+  // there: the comment with its new reply, or — when the file had changed —
+  // with the reason and what was typed.
+  let pendingOpen = null; // { page, id, notice?, draft?, panel?, focus? }
 
   function attach(pageEl, n, comments, viewport) {
     detach(n);
@@ -245,24 +272,24 @@ export function createCommentLayer({ viewEl, deleteComment = null, canDelete = (
     }
     pageEl.append(layerEl);
     pages.set(n, { layerEl, comments, buttons });
-    if (pendingNotice?.page === n) {
-      const { id, text } = pendingNotice;
-      pendingNotice = null;
+    if (pendingOpen?.page === n) {
+      const { id, notice, draft, panel, focus = true } = pendingOpen;
+      pendingOpen = null;
       const comment = comments.find((c) => c.id === id);
-      if (comment) show(n, comment, buttons.get(id), { notice: text });
+      if (comment) show(n, comment, buttons.get(id), { notice, draft, panel, focus });
     }
   }
 
   function detach(n) {
     const entry = pages.get(n);
     if (!entry) return;
-    // A page drawn again keeps a notice that waits for it; any other close drops it.
-    if (open?.page === n) close({ focus: false, keepNotice: true });
+    // A page drawn again keeps what waits for it; any other close drops it.
+    if (open?.page === n) close({ focus: false, keepPending: true });
     entry.layerEl.remove();
     pages.delete(n);
   }
 
-  function show(n, comment, button, { focus = true, notice = '' } = {}) {
+  function show(n, comment, button, { focus = true, notice = '', draft = null, panel = null } = {}) {
     close({ focus: false });
     const layerEl = pages.get(n)?.layerEl;
     if (!layerEl) return;
@@ -283,14 +310,17 @@ export function createCommentLayer({ viewEl, deleteComment = null, canDelete = (
       }
       popover.append(list);
     }
-    if (notice) {
+    const writable = Boolean((deleteComment || replyComment) && comment.refs?.length && canWrite());
+    const footer = writable ? actionFooter(n, comment) : null;
+    // A notice goes into the reply form when there is one to give back.
+    if (notice && !(footer?.canReply && draft !== null)) {
       const noticeEl = document.createElement('p');
       noticeEl.className = 'pdf-comment__message pdf-comment__notice';
       noticeEl.setAttribute('role', 'alert');
       noticeEl.textContent = notice;
       popover.append(noticeEl);
     }
-    if (deleteComment && comment.refs?.length && canDelete()) popover.append(deleteFooter(n, comment));
+    if (footer) popover.append(footer.el);
     const closeButton = document.createElement('button');
     closeButton.type = 'button';
     closeButton.className = 'pdf-comment__close';
@@ -309,8 +339,16 @@ export function createCommentLayer({ viewEl, deleteComment = null, canDelete = (
     layerEl.append(popover);
     button.setAttribute('aria-expanded', 'true');
     button.classList.add('pdf-comment-target--open');
-    open = { page: n, id: comment.id, button, popover };
+    open = { page: n, id: comment.id, button, popover, footer };
     place(popover, button);
+    if (footer?.canReply && draft !== null) {
+      footer.openReply(draft, notice, { focus });
+      return;
+    }
+    if (footer?.canDelete && panel === 'delete') {
+      footer.ask({ focus });
+      return;
+    }
     if (!focus) return;
     popover.focus({ preventScroll: true });
     // Into view, if it opened past the edge of what is visible.
@@ -318,127 +356,254 @@ export function createCommentLayer({ viewEl, deleteComment = null, canDelete = (
   }
 
   /**
-   * The popover's footer: "Delete comment", which turns into the question in
-   * the same place. Cancel comes first and takes the focus, so that neither
-   * Enter nor a double click deletes by accident.
+   * The popover's footer: "Reply" on the left, "Delete comment" on the
+   * right. Each turns the footer, in the same place, into its form — the
+   * reply field, or the question before deleting. In the question Cancel
+   * comes first and takes the focus, so that neither Enter nor a double
+   * click deletes by accident; Escape steps back to the comment.
    */
-  function deleteFooter(n, comment) {
+  function actionFooter(n, comment) {
     const foot = document.createElement('div');
     foot.className = 'pdf-comment__foot';
-    const trigger = document.createElement('button');
-    trigger.type = 'button';
-    trigger.className = 'pdf-comment__delete';
-    trigger.innerHTML = TRASH_ICON;
-    const triggerLabel = document.createElement('span');
-    triggerLabel.textContent = t('fileView.pdf.comment.delete');
-    trigger.append(triggerLabel);
-    trigger.addEventListener('click', ask);
-    foot.append(trigger);
-
+    const bar = document.createElement('div');
+    bar.className = 'pdf-comment__bar';
+    const replyTrigger = replyComment ? footButton('pdf-comment__reply', REPLY_ICON, t('fileView.pdf.comment.reply')) : null;
+    const deleteTrigger = deleteComment ? footButton('pdf-comment__delete', TRASH_ICON, t('fileView.pdf.comment.delete')) : null;
+    if (replyTrigger) {
+      replyTrigger.addEventListener('click', () => openReply('', ''));
+      bar.append(replyTrigger);
+    }
+    if (deleteTrigger) {
+      deleteTrigger.addEventListener('click', () => ask());
+      bar.append(deleteTrigger);
+    }
+    foot.append(bar);
     let busy = false;
-    let confirmEl = null;
-    let cancelButton = null;
-    let deleteButton = null;
-    let messageEl = null;
 
-    function ask() {
-      const count = comment.replies.length;
-      confirmIds += 1;
-      confirmEl = document.createElement('div');
-      confirmEl.className = 'pdf-comment__confirm';
-      confirmEl.setAttribute('role', 'group');
-      const question = document.createElement('p');
-      question.className = 'pdf-comment__question';
-      question.id = `pdf-comment-question-${confirmIds}`;
-      question.textContent = count
-        ? tPlural('fileView.pdf.comment.delete.questionReplies', count, { count })
-        : t('fileView.pdf.comment.delete.question');
-      const detail = document.createElement('p');
-      detail.className = 'pdf-comment__detail';
-      detail.id = `pdf-comment-detail-${confirmIds}`;
-      detail.textContent = t(count ? 'fileView.pdf.comment.delete.detailReplies' : 'fileView.pdf.comment.delete.detail');
-      confirmEl.setAttribute('aria-labelledby', question.id);
-      confirmEl.setAttribute('aria-describedby', detail.id);
-      messageEl = document.createElement('p');
-      messageEl.className = 'pdf-comment__message';
-      messageEl.setAttribute('role', 'alert');
-      messageEl.hidden = true;
-      const actions = document.createElement('div');
-      actions.className = 'pdf-comment__actions';
-      cancelButton = document.createElement('button');
-      cancelButton.type = 'button';
-      cancelButton.className = 'btn-secondary pdf-comment__cancel';
-      cancelButton.textContent = t('fileView.pdf.comment.delete.cancel');
-      cancelButton.addEventListener('click', () => {
-        if (!busy) back();
-      });
-      deleteButton = document.createElement('button');
-      deleteButton.type = 'button';
-      deleteButton.className = 'btn-destructive pdf-comment__confirm-delete';
-      deleteButton.textContent = t('fileView.pdf.comment.delete.confirm');
-      deleteButton.addEventListener('click', run);
-      actions.append(cancelButton, deleteButton);
-      confirmEl.append(question, detail, messageEl, actions);
-      confirmEl.addEventListener('keydown', (event) => {
-        // Escape steps back to the comment instead of closing it.
+    let state = null; // what is open in the footer: { kind: 'reply', field } or { kind: 'delete' }
+
+    function showPanel(panel, focusEl, { focus = true } = {}) {
+      panel.addEventListener('keydown', (event) => {
         if (event.key !== 'Escape') return;
         event.preventDefault();
         event.stopPropagation();
         if (!busy) back();
       });
-      foot.replaceChildren(confirmEl);
-      foot.classList.add('pdf-comment__foot--confirm');
-      cancelButton.focus({ preventScroll: true });
-      confirmEl.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+      foot.replaceChildren(panel);
+      foot.classList.add('pdf-comment__foot--open');
+      // Taller now: above the marking, if it no longer fits below.
+      replace();
+      if (!focus) return;
+      focusEl.focus({ preventScroll: true });
+      panel.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     }
 
+    let returnTo = null;
     function back() {
-      foot.classList.remove('pdf-comment__foot--confirm');
-      foot.replaceChildren(trigger);
-      confirmEl = null;
-      trigger.focus({ preventScroll: true });
+      foot.classList.remove('pdf-comment__foot--open');
+      foot.replaceChildren(bar);
+      state = null;
+      replace();
+      returnTo?.focus({ preventScroll: true });
     }
 
-    function setBusy(value) {
+    function messageNode(text = '') {
+      const message = document.createElement('p');
+      message.className = 'pdf-comment__message';
+      message.setAttribute('role', 'alert');
+      message.textContent = text;
+      message.hidden = !text;
+      return message;
+    }
+
+    function actionsNode(cancel, primary) {
+      const actions = document.createElement('div');
+      actions.className = 'pdf-comment__actions';
+      cancel.addEventListener('click', () => {
+        if (!busy) back();
+      });
+      actions.append(cancel, primary);
+      return actions;
+    }
+
+    function plainButton(className, label) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = className;
+      button.textContent = label;
+      return button;
+    }
+
+    // aria-disabled rather than disabled while busy: a disabled button drops the focus.
+    function setBusy(value, buttons) {
       busy = value;
-      // aria-disabled rather than disabled: a disabled button drops the focus.
-      for (const button of [cancelButton, deleteButton]) button.setAttribute('aria-disabled', String(value));
-      deleteButton.textContent = t(value ? 'fileView.pdf.comment.delete.deleting' : 'fileView.pdf.comment.delete.confirm');
+      for (const button of buttons) button.setAttribute('aria-disabled', String(value));
     }
 
-    async function run() {
-      if (busy) return;
-      setBusy(true);
-      messageEl.hidden = true;
-      let result;
-      try {
-        result = await deleteComment({ page: n, refs: comment.refs });
-      } catch (err) {
-        console.warn('PDF comment could not be deleted:', err?.message ?? err);
-        result = { ok: false, reason: 'failed' };
+    // ── Reply (#1399) ──
+
+    function openReply(text, notice, { focus = true } = {}) {
+      returnTo = replyTrigger;
+      panelIds += 1;
+      const form = document.createElement('div');
+      form.className = 'pdf-comment__form';
+      form.setAttribute('role', 'group');
+      const label = document.createElement('label');
+      label.className = 'pdf-comment__label';
+      label.id = `pdf-comment-reply-label-${panelIds}`;
+      label.htmlFor = `pdf-comment-reply-${panelIds}`;
+      label.textContent = t('fileView.pdf.comment.reply.label');
+      form.setAttribute('aria-labelledby', label.id);
+      const field = document.createElement('textarea');
+      field.id = `pdf-comment-reply-${panelIds}`;
+      field.className = 'modal-input pdf-comment__field';
+      field.rows = 3;
+      field.maxLength = MAX_PDF_COMMENT_CHARS;
+      field.placeholder = t('fileView.pdf.comment.reply.placeholder');
+      field.value = text;
+      const byline = document.createElement('p');
+      byline.className = 'pdf-comment__as';
+      byline.hidden = true;
+      author().then((name) => {
+        if (!name || !form.isConnected) return;
+        byline.textContent = t('fileView.pdf.annotate.as', { author: name });
+        byline.hidden = false;
+      }).catch(() => {
+        // author() answers '' rather than failing; without a name the byline stays hidden.
+      });
+      const message = messageNode(notice);
+      const cancel = plainButton('btn-secondary pdf-comment__cancel', t('fileView.pdf.comment.reply.cancel'));
+      const submit = plainButton('btn-primary pdf-comment__send', t('fileView.pdf.comment.reply.submit'));
+      submit.disabled = !field.value.trim();
+      field.addEventListener('input', () => {
+        submit.disabled = !field.value.trim();
+      });
+      field.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          send();
+        }
+      });
+      submit.addEventListener('click', send);
+      form.append(label, field, byline, message, actionsNode(cancel, submit));
+      state = { kind: 'reply', field };
+      showPanel(form, field, { focus });
+
+      async function send() {
+        const value = field.value.trim();
+        if (busy || !value) return;
+        setBusy(true, [cancel, submit]);
+        submit.textContent = t('fileView.pdf.comment.reply.saving');
+        field.readOnly = true;
+        message.hidden = true;
+        // The reload on success comes before the answer; it opens the comment
+        // again, with the new reply under it.
+        pendingOpen = { page: n, id: comment.id };
+        let result;
+        try {
+          result = await replyComment({ page: n, comment, text: value });
+        } catch (err) {
+          console.warn('PDF reply could not be saved:', err?.message ?? err);
+          result = { ok: false, reason: 'failed' };
+        }
+        if (result?.ok) {
+          announce(t('fileView.pdf.comment.reply.saved'));
+          return;
+        }
+        const changed = result?.reason === 'changed';
+        const reason = t(`fileView.pdf.comment.reply.error.${changed ? 'changed' : 'failed'}`);
+        // A changed file is reloaded: the comment comes back with the reason and the text.
+        pendingOpen = changed ? { page: n, id: comment.id, notice: reason, draft: value } : null;
+        if (changed) announce(reason);
+        if (!form.isConnected) {
+          if (!changed) announce(reason);
+          return;
+        }
+        setBusy(false, [cancel, submit]);
+        submit.textContent = t('fileView.pdf.comment.reply.submit');
+        field.readOnly = false;
+        message.textContent = reason;
+        message.hidden = false;
       }
-      // On success the view reloads, and this popover goes with the page.
-      if (result?.ok) {
-        announce(t('fileView.pdf.comment.delete.done'));
-        return;
-      }
-      const changed = result?.reason === 'changed';
-      const text = t(`fileView.pdf.comment.delete.error.${changed ? 'changed' : 'failed'}`);
-      if (changed) {
-        // The reload takes this popover; the comment comes back with the reason.
-        pendingNotice = { page: n, id: comment.id, text };
-        announce(text);
-      }
-      if (!foot.isConnected) {
-        if (!changed) announce(text);
-        return;
-      }
-      setBusy(false);
-      messageEl.textContent = text;
-      messageEl.hidden = false;
     }
 
-    return foot;
+    // ── Delete (#1397) ──
+
+    function ask({ focus = true } = {}) {
+      returnTo = deleteTrigger;
+      const count = comment.replies.length;
+      panelIds += 1;
+      const confirmEl = document.createElement('div');
+      confirmEl.className = 'pdf-comment__confirm';
+      confirmEl.setAttribute('role', 'group');
+      const question = document.createElement('p');
+      question.className = 'pdf-comment__question';
+      question.id = `pdf-comment-question-${panelIds}`;
+      question.textContent = count
+        ? tPlural('fileView.pdf.comment.delete.questionReplies', count, { count })
+        : t('fileView.pdf.comment.delete.question');
+      const detail = document.createElement('p');
+      detail.className = 'pdf-comment__detail';
+      detail.id = `pdf-comment-detail-${panelIds}`;
+      detail.textContent = t(count ? 'fileView.pdf.comment.delete.detailReplies' : 'fileView.pdf.comment.delete.detail');
+      confirmEl.setAttribute('aria-labelledby', question.id);
+      confirmEl.setAttribute('aria-describedby', detail.id);
+      const message = messageNode();
+      const cancel = plainButton('btn-secondary pdf-comment__cancel', t('fileView.pdf.comment.delete.cancel'));
+      const confirm = plainButton('btn-destructive pdf-comment__confirm-delete', t('fileView.pdf.comment.delete.confirm'));
+      confirm.addEventListener('click', run);
+      confirmEl.append(question, detail, message, actionsNode(cancel, confirm));
+      state = { kind: 'delete' };
+      showPanel(confirmEl, cancel, { focus });
+
+      async function run() {
+        if (busy) return;
+        setBusy(true, [cancel, confirm]);
+        confirm.textContent = t('fileView.pdf.comment.delete.deleting');
+        message.hidden = true;
+        let result;
+        try {
+          result = await deleteComment({ page: n, refs: comment.refs });
+        } catch (err) {
+          console.warn('PDF comment could not be deleted:', err?.message ?? err);
+          result = { ok: false, reason: 'failed' };
+        }
+        // On success the view reloads, and this popover goes with the page.
+        if (result?.ok) {
+          announce(t('fileView.pdf.comment.delete.done'));
+          return;
+        }
+        const changed = result?.reason === 'changed';
+        const reason = t(`fileView.pdf.comment.delete.error.${changed ? 'changed' : 'failed'}`);
+        if (changed) {
+          // The reload takes this popover; the comment comes back with the reason.
+          pendingOpen = { page: n, id: comment.id, notice: reason };
+          announce(reason);
+        }
+        if (!confirmEl.isConnected) {
+          if (!changed) announce(reason);
+          return;
+        }
+        setBusy(false, [cancel, confirm]);
+        confirm.textContent = t('fileView.pdf.comment.delete.confirm');
+        message.textContent = reason;
+        message.hidden = false;
+      }
+    }
+
+    /** What is open in the footer, to be opened again after a redraw. */
+    function snapshot() {
+      if (state?.kind === 'reply') return { draft: state.field.value };
+      if (state?.kind === 'delete') return { panel: 'delete' };
+      return {};
+    }
+
+    return { el: foot, canReply: Boolean(replyTrigger), canDelete: Boolean(deleteTrigger), openReply, ask, snapshot };
+  }
+
+  /** Places the open popover again, after its height changed. */
+  function replace() {
+    if (open?.popover.isConnected) place(open.popover, open.button);
   }
 
   /** Below the marking, or above it when the page ends first; inside the view's width. */
@@ -461,8 +626,8 @@ export function createCommentLayer({ viewEl, deleteComment = null, canDelete = (
     popover.style.left = `${Math.max(visibleLeft, x)}px`;
   }
 
-  function close({ focus, keepNotice = false }) {
-    if (!keepNotice) pendingNotice = null;
+  function close({ focus, keepPending = false }) {
+    if (!keepPending) pendingOpen = null;
     if (!open) return;
     const { button, popover } = open;
     open = null;
@@ -499,16 +664,32 @@ export function createCommentLayer({ viewEl, deleteComment = null, canDelete = (
     }
   }
 
+  /**
+   * Keeps the open comment through the next redraw of its page — the one
+   * that follows the column width — with what is open in its footer and
+   * what was typed there. A zoom by the user still closes it.
+   */
+  function holdOpen() {
+    if (!open || pendingOpen) return;
+    pendingOpen = {
+      page: open.page,
+      id: open.id,
+      focus: open.popover.contains(document.activeElement),
+      ...open.footer?.snapshot(),
+    };
+  }
+
   return {
     attach,
     detach,
     close,
+    holdOpen,
     relabel,
     clear() {
       for (const n of [...pages.keys()]) detach(n);
     },
     dispose() {
-      pendingNotice = null;
+      pendingOpen = null;
       this.clear();
       document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('focusin', onFocusIn);
