@@ -31,7 +31,7 @@ sidebar:
 
 ## Auf einen Kommentar antworten
 
-[seit 1.33] Ein Kommentar lässt sich direkt dort beantworten, wo er steht, damit Frage und Antwort zusammenbleiben.
+[seit 1.32.1] Ein Kommentar lässt sich direkt dort beantworten, wo er steht, damit Frage und Antwort zusammenbleiben.
 
 1. Öffne den Kommentar: Klick auf seine Sprechblase oder die Stelle.
 2. Klick unten im Kommentar auf *Antworten*.
@@ -43,7 +43,7 @@ Die Antwort wird direkt hinter dem Kommentar in die Datei geschrieben, als weite
 
 ## Einen Kommentar löschen
 
-[seit 1.33] Ein Kommentar an der falschen Stelle oder einer, der erledigt ist, lässt sich wieder herausnehmen — deiner und auch der von anderen.
+[seit 1.32.1] Ein Kommentar an der falschen Stelle oder einer, der erledigt ist, lässt sich wieder herausnehmen — deiner und auch der von anderen.
 
 1. Öffne den Kommentar.
 2. Klick unten rechts im Kommentar auf *Kommentar löschen*.
