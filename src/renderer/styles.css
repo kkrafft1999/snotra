@@ -8685,6 +8685,108 @@ select.modal-input {
   outline-offset: var(--ds-focus-offset);
 }
 
+/* Replies (#1399): listed under the comment like in the PDF preview, and
+ * written from a footer across the popover's full width — "Reply" turns it
+ * into the form in the same place, on the footer ground of a dialog. */
+.md-comment-popover__replies {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 12px 0 0;
+  border-top: 1px solid var(--ds-grey-divider);
+  list-style: none;
+}
+
+.md-comment-popover__entry--reply {
+  padding-left: 10px;
+  border-left: 2px solid var(--ds-grey-divider);
+}
+
+.md-comment-popover--view:has(.md-comment-popover__foot--open) {
+  max-height: 480px;
+}
+
+.md-comment-popover__foot {
+  position: sticky;
+  bottom: -16px;
+  margin: 12px -44px -16px -16px;
+  padding: 6px 10px;
+  border-top: 1px solid var(--ds-grey-divider);
+  background: var(--ds-surface);
+}
+
+.md-comment-popover__foot--open {
+  padding: 10px 12px 12px 16px;
+  background: var(--ds-grey-bg);
+}
+
+.md-comment-popover__reply {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--ds-touch-min);
+  padding: 0 12px 0 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-md);
+  font-weight: var(--ds-font-weight-medium);
+  cursor: pointer;
+  transition: background var(--ds-motion-fast), color var(--ds-motion-fast);
+}
+
+.md-comment-popover__reply:hover {
+  background: var(--ds-grey-bg);
+  color: var(--text-primary);
+}
+
+.md-comment-popover__reply:active {
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+.md-comment-popover__reply:focus-visible,
+.md-comment-popover__form button:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.md-comment-popover__label {
+  display: block;
+  margin: 0 0 6px;
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.md-comment-popover__form .md-comment-popover__input {
+  width: 100%;
+  min-height: 64px;
+  max-height: 160px;
+}
+
+.md-comment-popover__form .md-comment-popover__author {
+  color: var(--text-muted-strong);
+}
+
+.md-comment-popover__message {
+  margin: 8px 0 0;
+  color: var(--ds-error);
+  font-size: var(--ds-font-size-sm);
+}
+
+.md-comment-popover__message[hidden] {
+  display: none;
+}
+
+.md-comment-popover__form .md-comment-popover__actions {
+  margin-top: 10px;
+}
+
+.md-comment-popover__form button[aria-disabled='true'] {
+  cursor: progress;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .md-comment-marker,
   .md-comment-action {

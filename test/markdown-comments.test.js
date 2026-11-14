@@ -179,3 +179,41 @@ test('a comment cannot close itself early', () => {
 test('the date is the local calendar day', () => {
   assert.equal(comments.commentDate(new Date(2026, 0, 5, 23, 59)), '2026-01-05');
 });
+
+// ── Replies (#1399) ─────────────────────────────────────────────────────────
+
+test('comments right after a comment are its replies: one thread, one marking (#1399)', () => {
+  const doc = render('A {==passage==}{>>Ada, 2026-11-14: Is this right?<<}{>>Grace, 2026-11-15: Yes.<<} and {>>one<<}{>>two<<} end.');
+  const marks = [...doc.querySelectorAll('mark.md-comment[data-md-comment]')];
+  assert.equal(marks.length, 2);
+  assert.equal(marks[0].getAttribute('data-md-comment'), 'Ada, 2026-11-14: Is this right?');
+  assert.deepEqual(JSON.parse(marks[0].getAttribute('data-md-replies')), ['Grace, 2026-11-15: Yes.']);
+  assert.equal(marks[0].getAttribute('data-md-raw'), '{==passage==}{>>Ada, 2026-11-14: Is this right?<<}{>>Grace, 2026-11-15: Yes.<<}');
+  assert.equal(marks[0].textContent, 'passage');
+  assert.ok(marks[1].classList.contains('md-comment--point'));
+  assert.deepEqual(JSON.parse(marks[1].getAttribute('data-md-replies')), ['two']);
+  assert.equal(render('Plain {==x==}{>>only<<} here.').querySelector('mark').hasAttribute('data-md-replies'), false);
+  // Markup in a reply stays text, in the attribute as everywhere.
+  const hostile = render('A {==b==}{>>c<<}{>>"><img src=x onerror=alert(1)><<} d.');
+  assert.equal(hostile.querySelector('img'), null);
+  assert.deepEqual(JSON.parse(hostile.querySelector('mark').getAttribute('data-md-replies')), ['"><img src=x onerror=alert(1)>']);
+});
+
+test('a thread is found again in its block, also the second of two alike and across CRLF (#1399)', () => {
+  const raw = '{==a==}{>>q<<}';
+  assert.deepEqual(comments.locateThread(`x ${raw} y`, raw), { start: 2, end: 2 + raw.length });
+  assert.deepEqual(comments.locateThread(`${raw} y ${raw}`, raw, 1), { start: raw.length + 3, end: 2 * raw.length + 3 });
+  assert.equal(comments.locateThread(`${raw} y`, raw, 1), null, 'no second one');
+  assert.equal(comments.locateThread('x y', raw), null);
+  assert.deepEqual(comments.locateThread('a {>>line\r\nbreak<<} b', '{>>line\nbreak<<}'), { start: 2, end: 19 });
+});
+
+test('a reply goes right after its thread, in the format of a comment (#1399)', () => {
+  const source = 'Text {==a==}{>>Ada, 2026-11-14: q<<} rest.';
+  const end = source.indexOf(' rest');
+  const { text, block } = comments.insertReply(source, end, { author: 'Grace', date: '2026-11-15', text: 'Yes,\nchecked <<} done' });
+  assert.equal(block, '{>>Grace, 2026-11-15: Yes, checked << } done<<}', 'one line, and the closing marker defused');
+  assert.equal(text, `Text {==a==}{>>Ada, 2026-11-14: q<<}${block} rest.`);
+  const [mark] = render(text).querySelectorAll('mark.md-comment');
+  assert.deepEqual(JSON.parse(mark.getAttribute('data-md-replies')), ['Grace, 2026-11-15: Yes, checked << } done']);
+});

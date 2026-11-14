@@ -24,10 +24,22 @@ sidebar:
 ## What happens
 
 - **The comment is written into the file.** The passage becomes `{==the version scheme==}{>>Ada Lovelace, 2026-11-14: Semantic versioning, or a date?<<}` — CriticMarkup, a plain-text convention for comments. The comment travels with the file: through Git, a synced folder, an e-mail.
-- **The preview marks the passage** with a light wash and a small speech bubble after it. Click the bubble or the passage, or move to the bubble with `Tab` and press `Enter`, to read the comment with its author and date. `Esc` closes it.
+- **The preview marks the passage** with a light wash and a small speech bubble after it. Click the bubble or the passage, or move to the bubble with `Tab` and press `Enter`, to read the comment with its author, its date and any replies underneath. `Esc` closes it.
 - **The agent reads the comments with the file.** Ask it to "work through the comments in concept.md": it changes the text as asked and then removes the comments it has addressed. Comments it did not address stay.
 - **Nothing is overwritten silently.** As with editing, Snotra checks that the file on disk is still the one you selected in. If another program changed it, the comment is not written; the preview shows the new version and you select again.
 - Other Markdown viewers that don't know CriticMarkup — GitHub, for one — show the marks as plain text.
+
+## Reply to a comment
+
+[since 1.33] A comment can be answered right where it is, so that question and answer stay together.
+
+1. Open the comment: click its speech bubble or the passage.
+2. Click *Reply* at the bottom of the comment.
+3. Type your reply and click *Reply*, or press `Cmd+Enter` / `Ctrl+Enter`. `Esc` or *Cancel* goes back to the comment.
+
+![The middle column with crop-rotation.md: the opened comment by Grace Hopper "Beans or peas?" on "beans next year", and at its bottom the box "Your reply" with a reply typed in, the line "As Ada Lovelace" and the buttons Cancel and Reply.](screenshots/markdown-reply.webp)
+
+The reply is written into the file right after the comment, as one more comment in the same notation: `{==beans next year==}{>>Grace Hopper, 2026-11-12: Beans or peas?<<}{>>Ada Lovelace, 2026-11-14: Peas, the beans had it last year.<<}`. Snotra reads comments that follow each other like this as one thread and shows them under the first; the agent reads them as the conversation they are. The comment opens again with your reply under it.
 
 ## If it doesn't work
 
@@ -37,4 +49,6 @@ sidebar:
 - ***This text occurs more than once here.*** The same words appear several times in the paragraph, and Snotra cannot tell which you meant. Select a few more words.
 - ***This passage cannot be traced back to the file exactly.*** Some formatting — raw HTML, an image, an unusual link — sits in the way. Select a little less or a little more.
 - ***This passage overlaps a comment that is already there.*** Comments don't nest. Select a passage beside it.
-- **To change or delete a comment,** switch to *Source*, [edit](../edit-a-file/) the text between `{>>` and `<<}`, or remove the whole mark.
+- ***The file was changed on disk and has been reloaded. Your reply is still here …*** Another program saved the file while you were writing. The comment opens again with your text in the box: check the comment, then send it again.
+- ***This comment can no longer be found in the file.*** The comment was changed or removed elsewhere in the meantime. Open it again in the reloaded preview.
+- **To change or delete a comment,** switch to *Source*, [edit](../edit-a-file/) the text between `{>>` and `<<}`, or remove the whole mark. A reply is the `{>>…<<}` after it and goes the same way.

@@ -1417,6 +1417,31 @@ const MOTIFS = {
     },
   },
 
+  /** Replying to a comment in a Markdown note (#1399): the form in the comment's footer. */
+  'markdown-reply': {
+    prefs: { commentAuthor: 'Ada Lovelace' },
+    get text() {
+      const base = MOTIFS['markdown-comment'].text;
+      return {
+        en: { ...base.en, reply: 'Peas, the beans had it last year.' },
+        de: { ...base.de, reply: 'Erbsen, die Bohnen standen letztes Jahr dort.' },
+      };
+    },
+    async setUp({ page, text, workspace }) {
+      await writeFile(path.join(workspace, text.file), text.content);
+      await clickTreeRow(page, text.file);
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.md-doc .md-comment-marker'))),
+        { what: 'commented note in the preview' });
+      await page.click('.md-doc .md-comment-marker');
+      await page.click('.md-comment-popover__reply');
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.md-comment-popover__form .md-comment-popover__author')?.textContent)),
+        { what: 'reply form with its author' });
+      await page.keyboard.type(text.reply);
+      await page.mouse.move(0, 0);
+      return clipPreview(page);
+    },
+  },
+
   /** An image in the preview, with the zoom in its header. */
   'image-preview': {
     text: { en: { file: 'garden-plan.png' }, de: { file: 'gartenplan.png' } },

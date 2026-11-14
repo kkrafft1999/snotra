@@ -47,7 +47,7 @@ import { MARKDOWN_ZOOM_STEPS, markdownZoom, rememberMarkdownZoom } from './markd
 import { ZOOM_IN_ICON, ZOOM_OUT_ICON, iconButton, nextZoom } from './zoom-tools.js';
 import { plainTextView } from './plain-text-view.js';
 import { sha256Hex } from './autosave.js';
-import { COMMENT_ERRORS, commentDate, insertComment, locateSelection } from './markdown-comments.js';
+import { COMMENT_ERRORS, commentDate, insertComment, insertReply, locateSelection, locateThread } from './markdown-comments.js';
 import { createCommentUi, isCommentShortcut } from './markdown-comment-ui.js';
 import { commentAuthor as resolveCommentAuthor } from './comment-author.js';
 
@@ -347,6 +347,46 @@ export const markdownView = {
       return false;
     }
 
+    /**
+     * Writes a reply right after its thread (#1399), through the same checked
+     * path as a new comment. `{ ok }`, or `{ ok: false, reason }` with
+     * `changed` (the file was read again), `notFound`, `deleted` or `failed`.
+     */
+    async function replyComment({ blockRange, raw, occurrence }, text) {
+      const base = content;
+      const { body } = splitDocument(base);
+      if (!base.endsWith(body)) return { ok: false, reason: 'notFound' };
+      const bodyOffset = base.length - body.length;
+      const [from, to] = blockRange ?? [0, body.length];
+      const where = locateThread(body.slice(from, to), raw, occurrence);
+      if (!where) return { ok: false, reason: 'notFound' };
+      const author = await commentAuthor().catch(() => {
+        // Unreadable prefs sign the reply without a name rather than lose it.
+        return '';
+      });
+      if (disposed) return { ok: false, reason: 'failed' };
+      if (content !== base) return { ok: false, reason: 'changed' };
+      const { text: next } = insertReply(base, bodyOffset + from + where.end, { author, date: commentDate(), text });
+      let written;
+      try {
+        written = await context.writeFile(next, { baseHash: await sha256Hex(base) });
+      } catch (err) {
+        console.warn('Markdown preview: the reply could not be written:', err?.message ?? err);
+        written = { error: 'failed' };
+      }
+      if (disposed) return { ok: false, reason: 'failed' };
+      if (written?.ok) {
+        adoptContent(next);
+        return { ok: true };
+      }
+      if (written?.conflict === 'changed') {
+        const read = await context.readFile?.();
+        if (!disposed && read && !read.error && typeof read.content === 'string') adoptContent(read.content);
+        return { ok: false, reason: 'changed' };
+      }
+      return { ok: false, reason: written?.conflict === 'deleted' ? 'deleted' : 'failed' };
+    }
+
     const comments = createCommentUi({
       previewEl,
       articleEl,
@@ -355,6 +395,7 @@ export const markdownView = {
       getAuthor: commentAuthor,
       locate: locateComment,
       save: saveComment,
+      reply: replyComment,
       notify: showNotice,
     });
 
