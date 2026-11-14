@@ -259,3 +259,112 @@ test('with the setting empty, the account name signs the comment, as in a PDF (#
   await settle();
   assert.match(calls.writes[0].text, /^Plain \{==words==\}\{>>Kim Example, \d{4}-\d{2}-\d{2}: x<<\}\.\n$/);
 });
+
+// ── Replies (#1399) ─────────────────────────────────────────────────────────
+
+const THREAD = 'Some {==text==}{>>Grace, 2026-11-14: Is this right?<<}{>>Alan, 2026-11-15: I think so.<<} here.\n';
+
+function typeReply(text) {
+  const input = $('.md-comment-popover__form textarea');
+  input.value = text;
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  return input;
+}
+
+test('a comment shows its replies, and Reply opens the form in its footer (#1399)', async (t) => {
+  await mountPane(t, { content: THREAD });
+  assert.equal($$('.md-doc .md-comment-marker').length, 1, 'one thread, one marker');
+  $('.md-doc .md-comment-marker').click();
+  const popover = $('.md-comment-popover--view');
+  const list = popover.querySelector('.md-comment-popover__replies');
+  assert.equal(list.getAttribute('aria-label'), '1 reply');
+  assert.deepEqual([...list.querySelectorAll('.md-comment-popover__name')].map((el) => el.textContent), ['Alan']);
+  assert.deepEqual([...list.querySelectorAll('.md-comment-popover__text')].map((el) => el.textContent), ['I think so.']);
+  assert.equal(popover.querySelector('.md-comment-popover__text').textContent, 'Is this right?', 'the comment first');
+
+  const trigger = popover.querySelector('.md-comment-popover__foot .md-comment-popover__reply');
+  assert.equal(trigger.textContent, 'Reply');
+  trigger.click();
+  await settle();
+  const form = $('.md-comment-popover__foot .md-comment-popover__form');
+  assert.ok(form);
+  assert.equal(form.getAttribute('role'), 'group');
+  assert.equal(document.getElementById(form.getAttribute('aria-labelledby')).textContent, 'Your reply');
+  const input = form.querySelector('textarea');
+  assert.equal(document.activeElement, input);
+  assert.equal(input.placeholder, 'Write a reply…');
+  assert.equal(form.querySelector('.md-comment-popover__author').textContent, 'As Ada Lovelace');
+  assert.equal($('.md-comment-popover__send').disabled, true);
+  typeReply('Confirmed.');
+  assert.equal($('.md-comment-popover__send').disabled, false);
+
+  // Escape steps back to the comment; it stays open.
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.ok($('.md-comment-popover--view'));
+  assert.equal($('.md-comment-popover__form'), null);
+  assert.equal(document.activeElement, $('.md-comment-popover__reply'));
+});
+
+test('a reply is written right after the thread, and the comment opens again with it (#1399)', async (t) => {
+  const { calls } = await mountPane(t, { content: THREAD });
+  $('.md-doc .md-comment-marker').click();
+  $('.md-comment-popover__reply').click();
+  const input = typeReply('  Confirmed by sales.  ');
+  input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
+  await settle();
+  assert.equal(calls.writes.length, 1);
+  assert.match(calls.writes[0].text,
+    /^Some \{==text==\}\{>>Grace, 2026-11-14: Is this right\?<<\}\{>>Alan, 2026-11-15: I think so\.<<\}\{>>Ada Lovelace, \d{4}-\d{2}-\d{2}: Confirmed by sales\.<<\} here\.\n$/);
+  const popover = $('.md-comment-popover--view');
+  assert.ok(popover, 'the comment is open again');
+  assert.deepEqual([...popover.querySelectorAll('.md-comment-popover__replies .md-comment-popover__text')].map((el) => el.textContent),
+    ['I think so.', 'Confirmed by sales.']);
+  assert.equal(document.activeElement, popover);
+  assert.equal($('.md-notice').textContent, 'Reply added.');
+});
+
+test('of two alike threads in a paragraph, the reply goes after the one it answers (#1399)', async (t) => {
+  const twin = '{==same==}{>>Grace, 2026-11-14: Why?<<}';
+  const { calls } = await mountPane(t, { content: `First ${twin} and then ${twin} again.\n` });
+  const markers = $$('.md-doc .md-comment-marker');
+  assert.equal(markers.length, 2);
+  markers[1].click();
+  $('.md-comment-popover__reply').click();
+  typeReply('Second one.');
+  $('.md-comment-popover__send').click();
+  await settle();
+  const written = calls.writes[0].text;
+  assert.ok(written.startsWith(`First ${twin} and then ${twin}{>>Ada Lovelace, `), written);
+  assert.ok(written.endsWith(': Second one.<<} again.\n'));
+});
+
+test('a file changed on disk gives the reply back with the reason (#1399)', async (t) => {
+  const { calls, disk } = await mountPane(t, { content: THREAD, write: () => ({ conflict: 'changed' }) });
+  $('.md-doc .md-comment-marker').click();
+  $('.md-comment-popover__reply').click();
+  typeReply('Keep me');
+  disk['/ws/notes.md'] = `# Added elsewhere\n\n${THREAD}`;
+  $('.md-comment-popover__send').click();
+  await settle();
+  assert.equal(calls.writes.length, 1);
+  assert.equal($('.md-doc h1').textContent, 'Added elsewhere', 'the file was read again');
+  const input = $('.md-comment-popover--view .md-comment-popover__form textarea');
+  assert.ok(input, 'the comment is open again, with the form');
+  assert.equal(input.value, 'Keep me');
+  assert.equal(document.activeElement, input);
+  const message = $('.md-comment-popover__message');
+  assert.equal(message.hidden, false);
+  assert.equal(message.getAttribute('role'), 'alert');
+  assert.match(message.textContent, /changed on disk.*still here/);
+});
+
+test('while Snotra is working, Reply says so and writes nothing (#1399)', async (t) => {
+  const { host, calls } = await mountPane(t, { content: THREAD });
+  host.setEditingBlocked(true);
+  $('.md-doc .md-comment-marker').click();
+  $('.md-comment-popover__reply').click();
+  await settle();
+  assert.equal($('.md-comment-popover__form'), null);
+  assert.equal($('.md-notice').textContent, 'Comments wait until Snotra has finished.');
+  assert.equal(calls.writes.length, 0);
+});

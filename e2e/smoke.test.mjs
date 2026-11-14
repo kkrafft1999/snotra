@@ -664,6 +664,23 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.match(listOnDisk, /\n- drei \{==vier==\}\{>>(?:[^,\n<]+, )?\d{4}-\d{2}-\d{2}: fuenf\?<<\}\n$/);
   await poll(() => page.evaluate(() => document.querySelectorAll('.md-doc mark.md-comment').length === 2),
     { what: 'new comment in the preview' });
+  // A reply (#1399) to Grace's comment, through the real sanitizer: written
+  // as one more {>>…<<} right after her block, and shown under it when the
+  // comment opens again.
+  await page.locator('.md-doc .md-comment-marker').first().click();
+  await page.locator('.md-comment-popover__reply').click();
+  await poll(() => page.evaluate(() => document.activeElement?.closest('.md-comment-popover__form') !== null),
+    { what: 'reply form' });
+  await page.keyboard.type('sechs');
+  await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Enter' : 'Control+Enter');
+  const replyShown = await poll(() => page.evaluate(() => {
+    const replies = [...document.querySelectorAll('.md-comment-popover--view .md-comment-popover__replies .md-comment-popover__text')];
+    return replies.length ? { replies: replies.map((el) => el.textContent), pwned: globalThis.__pwned ?? null } : null;
+  }), { what: 'reply under the comment' });
+  assert.deepEqual(replyShown, { replies: ['sechs'], pwned: null });
+  const replyOnDisk = await readFile(path.join(workspace, 'notizen', 'liste.md'), 'utf8');
+  assert.match(replyOnDisk, /^- eins \{==zwei==\}\{>>Grace, 2026-11-14: [^\n]*?<<\}\{>>(?:[^,\n<]+, )?\d{4}-\d{2}-\d{2}: sechs<<\}\n/);
+  await page.keyboard.press('Escape');
   step('Markdown-Kommentar geprueft');
 
   // --- Images in the preview (#345) -----------------------------------------

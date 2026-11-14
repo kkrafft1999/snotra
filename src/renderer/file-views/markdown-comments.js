@@ -63,11 +63,18 @@ export function normalizeSpace(text) {
 
 // ── Rendering ───────────────────────────────────────────────────────────────
 
+/** The comments of a run as written: `{>>a<<}{>>b<<}` → `['a', 'b']`. */
+function runComments(run) {
+  return [...String(run ?? '').matchAll(/\{>>([\s\S]*?)<<\}/g)].map((m) => m[1]);
+}
+
 /**
  * The `marked` extension for CriticMarkup comments. `{==text==}` alone is a
  * highlight; followed by `{>>comment<<}` it carries that comment; a bare
- * `{>>comment<<}` is a comment on a point. Inline only: the inline lexer
- * never runs inside code, so `{==` in a code span stays text.
+ * `{>>comment<<}` is a comment on a point. Further `{>>…<<}` right after the
+ * first are its replies, in order (#1399): one thread, one marking. Inline
+ * only: the inline lexer never runs inside code, so `{==` in a code span
+ * stays text.
  */
 export const criticMarkupExtension = Object.freeze({
   name: 'criticComment',
@@ -77,21 +84,30 @@ export const criticMarkupExtension = Object.freeze({
     return at === -1 ? undefined : at;
   },
   tokenizer(src) {
-    const highlight = /^\{==([\s\S]+?)==\}(?:\{>>([\s\S]*?)<<\})?/.exec(src);
+    const highlight = /^\{==([\s\S]+?)==\}((?:\{>>[\s\S]*?<<\})*)/.exec(src);
     if (highlight) {
-      const token = { type: 'criticComment', raw: highlight[0], comment: highlight[2] ?? null, tokens: [] };
+      const [comment = null, ...replies] = runComments(highlight[2]);
+      const token = { type: 'criticComment', raw: highlight[0], comment, replies, tokens: [] };
       this.lexer.inline(highlight[1], token.tokens);
       return token;
     }
-    const point = /^\{>>([\s\S]*?)<<\}/.exec(src);
-    if (point) return { type: 'criticComment', raw: point[0], comment: point[1], tokens: [] };
+    const point = /^(?:\{>>[\s\S]*?<<\})+/.exec(src);
+    if (point) {
+      const [comment, ...replies] = runComments(point[0]);
+      return { type: 'criticComment', raw: point[0], comment, replies, tokens: [] };
+    }
     return undefined;
   },
   renderer(token) {
     const inner = this.parser.parseInline(token.tokens);
     const point = token.tokens.length === 0;
-    const comment = token.comment === null ? '' : ` data-md-comment="${escapeAttribute(token.comment)}"`;
-    return `<mark class="md-comment${point ? ' md-comment--point' : ''}"${comment}>${inner}</mark>`;
+    let data = '';
+    if (token.comment !== null) {
+      // The thread's source, so that a reply finds its place again (#1399).
+      data = ` data-md-comment="${escapeAttribute(token.comment)}" data-md-raw="${escapeAttribute(token.raw)}"`;
+      if (token.replies?.length) data += ` data-md-replies="${escapeAttribute(JSON.stringify(token.replies))}"`;
+    }
+    return `<mark class="md-comment${point ? ' md-comment--point' : ''}"${data}>${inner}</mark>`;
   },
 });
 
@@ -376,4 +392,35 @@ export function parseComment(raw) {
 export function insertComment(source, { start, end }, comment) {
   const text = String(source ?? '');
   return `${text.slice(0, start)}{==${text.slice(start, end)}==}{>>${formatComment(comment)}<<}${text.slice(end)}`;
+}
+
+// ── Replies (#1399) ─────────────────────────────────────────────────────────
+
+/**
+ * Where a thread stands in the source of its block: the `occurrence`-th
+ * place of its source text `raw`, as `{ start, end }`, or null. `marked`
+ * hands out `raw` with `\n` where the file may have `\r\n`.
+ */
+export function locateThread(blockSource, raw, occurrence = 0) {
+  const text = String(blockSource ?? '');
+  for (const needle of new Set([raw, raw.replace(/\r?\n/g, '\r\n')])) {
+    let at = -1;
+    let found = true;
+    for (let i = 0; i <= occurrence; i += 1) {
+      at = text.indexOf(needle, at + 1);
+      if (at === -1) {
+        found = false;
+        break;
+      }
+    }
+    if (found) return { start: at, end: at + needle.length };
+  }
+  return null;
+}
+
+/** `source` with a reply right after the thread that ends at `end`. */
+export function insertReply(source, end, comment) {
+  const text = String(source ?? '');
+  const block = `{>>${formatComment(comment)}<<}`;
+  return { text: `${text.slice(0, end)}${block}${text.slice(end)}`, block };
 }
