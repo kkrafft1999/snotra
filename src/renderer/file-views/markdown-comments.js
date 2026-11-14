@@ -424,3 +424,20 @@ export function insertReply(source, end, comment) {
   const block = `{>>${formatComment(comment)}<<}`;
   return { text: `${text.slice(0, end)}${block}${text.slice(end)}`, block };
 }
+
+// ── Deleting (#1405) ────────────────────────────────────────────────────────
+
+/**
+ * `source` without the thread at `[start, end)`: the comment and its replies
+ * go, the passage they were on stays — `{==words==}{>>…<<}` becomes `words`.
+ * A comment on a point goes entirely, and with it the space before it when
+ * nothing but a space, a line end or punctuation follows.
+ */
+export function removeThread(source, { start, end }) {
+  const text = String(source ?? '');
+  const highlight = /^\{==([\s\S]+?)==\}/.exec(text.slice(start, end));
+  if (highlight) return `${text.slice(0, start)}${highlight[1]}${text.slice(end)}`;
+  const after = text.charAt(end);
+  const from = /[ \t]/.test(text.charAt(start - 1)) && (after === '' || /[\s.,;:!?)\]]/.test(after)) ? start - 1 : start;
+  return `${text.slice(0, from)}${text.slice(end)}`;
+}

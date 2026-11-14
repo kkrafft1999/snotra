@@ -41,6 +41,18 @@ sidebar:
 
 The reply is written into the file right after the comment, as one more comment in the same notation: `{==beans next year==}{>>Grace Hopper, 2026-11-12: Beans or peas?<<}{>>Ada Lovelace, 2026-11-14: Peas, the beans had it last year.<<}`. Snotra reads comments that follow each other like this as one thread and shows them under the first; the agent reads them as the conversation they are. The comment opens again with your reply under it.
 
+## Delete a comment
+
+[since 1.33] A comment in the wrong place, or one that has done its job, can be taken out again — yours or anyone else's.
+
+1. Open the comment.
+2. Click *Delete comment* at the bottom right of the comment.
+3. Snotra asks in the same place and says how many replies go with it. Click *Delete*. *Cancel* or `Esc` keeps the comment.
+
+![The middle column with crop-rotation.md: the opened comment by Grace Hopper on "beans next year" with a reply by Ada Lovelace, and at its bottom the question "Delete this comment and 1 reply?" with the note that the marked text stays, and the buttons Cancel and Delete.](screenshots/markdown-delete.webp)
+
+The comment and all its replies leave the file; the words they were on stay as they were: `{==beans next year==}{>>…<<}{>>…<<}` becomes `beans next year`. A single reply cannot be deleted on its own.
+
 ## If it doesn't work
 
 - ***Comment* is greyed out and says Snotra is working.** Wait until the chat answer is finished, or stop it.
@@ -51,4 +63,5 @@ The reply is written into the file right after the comment, as one more comment 
 - ***This passage overlaps a comment that is already there.*** Comments don't nest. Select a passage beside it.
 - ***The file was changed on disk and has been reloaded. Your reply is still here …*** Another program saved the file while you were writing. The comment opens again with your text in the box: check the comment, then send it again.
 - ***This comment can no longer be found in the file.*** The comment was changed or removed elsewhere in the meantime. Open it again in the reloaded preview.
-- **To change or delete a comment,** switch to *Source*, [edit](../edit-a-file/) the text between `{>>` and `<<}`, or remove the whole mark. A reply is the `{>>…<<}` after it and goes the same way.
+- ***The file was changed on disk and has been reloaded. Nothing was deleted.*** Another program saved the file in the meantime. The comment opens again with this note: check that it is still the one you meant, and delete it again.
+- **To change a comment or a single reply,** switch to *Source* and [edit](../edit-a-file/) the text between `{>>` and `<<}`. A reply is the `{>>…<<}` after its comment.

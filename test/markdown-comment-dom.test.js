@@ -368,3 +368,77 @@ test('while Snotra is working, Reply says so and writes nothing (#1399)', async 
   assert.equal($('.md-notice').textContent, 'Comments wait until Snotra has finished.');
   assert.equal(calls.writes.length, 0);
 });
+
+// ── Deleting (#1405) ────────────────────────────────────────────────────────
+
+test('Delete sits right of Reply; the question takes its place and Cancel the focus (#1405)', async (t) => {
+  await mountPane(t, { content: THREAD });
+  $('.md-doc .md-comment-marker').click();
+  assert.deepEqual([...$('.md-comment-popover__bar').children].map((b) => b.textContent), ['Reply', 'Delete comment']);
+  $('.md-comment-popover__delete').click();
+  const confirm = $('.md-comment-popover__foot .md-comment-popover__confirm');
+  assert.ok(confirm);
+  assert.equal($('.md-comment-popover__bar'), null, 'instead of the buttons');
+  assert.equal(confirm.getAttribute('role'), 'group');
+  assert.equal(document.getElementById(confirm.getAttribute('aria-labelledby')).textContent, 'Delete this comment and 1 reply?');
+  assert.equal(document.getElementById(confirm.getAttribute('aria-describedby')).textContent, 'Snotra removes them from the file; the marked text stays.');
+  const [cancel, del] = confirm.querySelectorAll('.md-comment-popover__actions button');
+  assert.equal(cancel.textContent, 'Cancel');
+  assert.ok(del.classList.contains('btn-destructive'));
+  assert.equal(document.activeElement, cancel);
+  confirm.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.ok($('.md-comment-popover--view'), 'Escape steps back; the comment stays open');
+  assert.equal(document.activeElement, $('.md-comment-popover__delete'));
+});
+
+test('a point comment without replies asks only about itself (#1405)', async (t) => {
+  await mountPane(t, { content: 'A note {>>Grace, 2026-11-14: Check.<<} here.\n' });
+  $('.md-doc .md-comment-marker').click();
+  $('.md-comment-popover__delete').click();
+  assert.equal($('.md-comment-popover__question').textContent, 'Delete this comment?');
+  assert.equal($('.md-comment-popover__detail').textContent, 'Snotra removes it from the file.');
+});
+
+test('deleting writes the file without the thread, keeps the passage and says so (#1405)', async (t) => {
+  const { calls } = await mountPane(t, { content: THREAD });
+  $('.md-doc .md-comment-marker').click();
+  $('.md-comment-popover__delete').click();
+  $('.md-comment-popover__confirm-delete').click();
+  await settle();
+  assert.equal(calls.writes.length, 1);
+  assert.equal(calls.writes[0].text, 'Some text here.\n');
+  assert.equal($('.md-doc mark.md-comment'), null, 'no marking left');
+  assert.equal($('.md-doc p').textContent, 'Some text here.');
+  assert.equal($('.md-comment-popover'), null);
+  assert.equal($('.md-notice').textContent, 'Comment deleted.');
+  assert.equal(document.activeElement, $('.md-view'), 'the focus lands on the preview, not on nothing');
+});
+
+test('a file changed on disk is read again, and the comment opens again with the reason (#1405)', async (t) => {
+  const { calls, disk } = await mountPane(t, { content: THREAD, write: () => ({ conflict: 'changed' }) });
+  $('.md-doc .md-comment-marker').click();
+  $('.md-comment-popover__delete').click();
+  disk['/ws/notes.md'] = `# Added elsewhere\n\n${THREAD}`;
+  $('.md-comment-popover__confirm-delete').click();
+  await settle();
+  assert.equal(calls.writes.length, 1);
+  assert.equal($('.md-doc h1').textContent, 'Added elsewhere');
+  const notice = $('.md-comment-popover--view .md-comment-popover__notice');
+  assert.ok(notice, 'the comment is open again');
+  assert.match(notice.textContent, /changed on disk.*Nothing was deleted/);
+  assert.ok($('.md-comment-popover__delete'), 'and offers Delete again');
+});
+
+test('a failed write keeps the question with the reason (#1405)', async (t) => {
+  const { calls } = await mountPane(t, { content: THREAD, write: () => ({ error: 'EACCES' }) });
+  $('.md-doc .md-comment-marker').click();
+  $('.md-comment-popover__delete').click();
+  $('.md-comment-popover__confirm-delete').click();
+  await settle();
+  assert.equal(calls.writes.length, 1);
+  const message = $('.md-comment-popover__confirm .md-comment-popover__message');
+  assert.equal(message.hidden, false);
+  assert.match(message.textContent, /could not be deleted/);
+  assert.equal($('.md-comment-popover__confirm-delete').getAttribute('aria-disabled'), 'false');
+  assert.equal($('.md-comment-popover__confirm-delete').textContent, 'Delete');
+});
