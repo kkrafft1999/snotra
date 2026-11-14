@@ -756,10 +756,12 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   // text layer (macOS and Windows CI, first run of #1387). So the line is
   // scrolled into view, and the mouse only goes down once the very same span
   // has stood at the same spot for longer than that pause and is what the
-  // pointer would hit.
+  // pointer would hit. The line is the first one, two lines clear of Ada's
+  // comment: a comment's target is at least 32 px tall, and at the 54 % zoom
+  // of a 1024 × 768 runner it reaches over the neighbouring lines.
   const lineBox = await poll(() => page.evaluate(() => {
     const span = [...document.querySelectorAll('.pdf-page[data-page="1"] .pdf-text-layer span')]
-      .find((s) => s.textContent.startsWith('Helvetica is not'));
+      .find((s) => s.textContent.startsWith('This page is drawn'));
     if (!span) return null;
     span.scrollIntoView({ block: 'center', inline: 'nearest' });
     const r = span.getBoundingClientRect();
@@ -773,13 +775,30 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     }
     if (!steady || r.width === 0 || (hit !== span && !span.contains(hit))) return null;
     return { left: r.left, top: r.top, width: r.width, height: r.height };
-  }), { what: 'ruhende Textebene der PDF-Seite', intervalMs: 100 });
+  }), {
+    what: 'ruhende Textebene der PDF-Seite',
+    intervalMs: 100,
+    explain: () => page.evaluate(() => {
+      const view = document.querySelector('.pdf-view');
+      const span = [...document.querySelectorAll('.pdf-page[data-page="1"] .pdf-text-layer span')]
+        .find((s) => s.textContent.startsWith('This page is drawn'));
+      const r = span?.getBoundingClientRect();
+      const hit = r ? document.elementFromPoint(r.left + 2, r.top + r.height / 2) : null;
+      return {
+        window: [innerWidth, innerHeight],
+        view: view && [view.clientWidth, view.clientHeight, view.scrollWidth, view.scrollHeight, view.scrollTop],
+        zoom: document.querySelector('.pdf-tools__zoom-value, .pdf-tools [aria-live]')?.textContent ?? null,
+        span: span ? { spot: span.dataset.smokeSpot, box: [r.left, r.top, r.width, r.height].map(Math.round) } : null,
+        hit: hit ? `${hit.tagName}.${hit.className}` : null,
+      };
+    }),
+  });
   const lineY = lineBox.top + lineBox.height / 2;
   await page.mouse.move(lineBox.left + 1, lineY);
   await page.mouse.down();
   await page.mouse.move(lineBox.left + lineBox.width * 0.5, lineY, { steps: 8 });
   await page.mouse.up();
-  assert.match(await page.evaluate(() => String(document.getSelection())), /^Helvetica is/);
+  assert.match(await page.evaluate(() => String(document.getSelection())), /^This page is/);
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+Alt+KeyM' : 'Control+Alt+KeyM');
   await poll(() => page.evaluate(() => document.activeElement?.classList.contains('pdf-compose__field')),
     { what: 'Kommentarfeld' });
