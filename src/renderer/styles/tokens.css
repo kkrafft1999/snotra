@@ -17,6 +17,10 @@
   --ds-blue: #00759E;          /* einzige Akzentfarbe (5,1:1 auf --ds-surface) */
   --ds-blue-soft: rgba(0, 117, 158, 0.05);   /* Hover-Wash, aktive Card-Items, Tool-Running-Header */
   --ds-blue-border: rgba(0, 117, 158, 0.25); /* Tool-Running Header-Border, sanfte Divider */
+  /* A commented passage in the Markdown preview (#1388): a wash twice as
+   * strong as --ds-blue-soft, so that it reads as marked, not as hovered.
+   * Body text keeps its contrast on it; a link inside takes --ds-blue-strong. */
+  --ds-comment-bg: rgba(0, 117, 158, 0.10);
   /* Blue text on a blue wash. --ds-blue keeps 4.7:1 on the wash over
    * --ds-surface but drops to 4.45:1 over --ds-grey-bg — the ground of the
    * Settings navigation, where the selected item sits (CR-B15-03). A darker
@@ -343,6 +347,7 @@
   --ds-tool-shimmer-highlight: color-mix(in srgb, var(--ds-white) 72%, var(--ds-blue) 28%);
   --ds-blue-soft: rgba(63, 184, 229, 0.08);
   --ds-blue-border: rgba(63, 184, 229, 0.30);
+  --ds-comment-bg: rgba(63, 184, 229, 0.16);
   --ds-chat-user-bg: rgba(63, 184, 229, 0.10);
   --ds-chat-bg: #33312F;
   --ds-chat-composer-bg: #3C3A38;

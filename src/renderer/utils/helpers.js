@@ -196,12 +196,14 @@ function configureDomPurify() {
  *     means every line break it contains.
  *   * `keepRelativeLinks: true` — a link without a scheme leaves the sanitizer
  *     as `data-workspace-href` instead of disappearing, see the hook above.
+ *   * `parser` — a `marked` instance of its own, for the comments a file
+ *     may carry (#1388); the chat renders with the shared one.
  */
-export function markdownToSafeHtml(raw, { breaks = true, keepRelativeLinks: keepRelative = false } = {}) {
+export function markdownToSafeHtml(raw, { breaks = true, keepRelativeLinks: keepRelative = false, parser = null } = {}) {
   const text = String(raw ?? '');
   if (typeof marked !== 'undefined' && typeof marked.parse === 'function' && typeof DOMPurify !== 'undefined') {
     configureDomPurify();
-    const html = marked.parse(text, { breaks, gfm: true });
+    const html = (parser ?? marked).parse(text, { breaks, gfm: true });
     keepRelativeLinks = keepRelative;
     try {
       return DOMPurify.sanitize(html, {

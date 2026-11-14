@@ -10,6 +10,7 @@ import frontmatterParser from '../generated/skill-frontmatter.js';
 import headingSlugModule from '../generated/heading-slug.js';
 import { inertHtmlFragment, isOpenableLink, markdownToSafeHtml } from '../utils/helpers.js';
 import { resolveNative } from '../utils/nativePath.js';
+import { previewMarked, sourceBlocks } from './markdown-comments.js';
 
 const { decodeWorkspaceImageSource, isWindowsDrivePath } = contracts;
 const { splitFrontmatter, parseFrontmatterLines } = frontmatterParser;
@@ -152,8 +153,18 @@ const SHORT_CELL = 12;
  */
 export function renderMarkdownFragment(body) {
   const root = inertHtmlFragment(
-    markdownToSafeHtml(body, { breaks: false, keepRelativeLinks: true })
+    markdownToSafeHtml(body, { breaks: false, keepRelativeLinks: true, parser: previewMarked() })
   );
+
+  // Where each block stands in the source, for a comment on a selection in it
+  // (#1388). Only when blocks and elements pair up one to one: raw HTML the
+  // sanitizer drops, or that opens more than one element, leaves the count
+  // off, and then the comment searches the whole body instead.
+  for (const el of root.querySelectorAll('[data-md-range]')) el.removeAttribute('data-md-range');
+  const blocks = sourceBlocks(body);
+  if (blocks && blocks.length === root.children.length) {
+    blocks.forEach(({ start, end }, i) => root.children[i].setAttribute('data-md-range', `${start}:${end}`));
+  }
 
   for (const img of root.querySelectorAll('img')) {
     // An image alone in its paragraph is a figure and gets the full width; one

@@ -22,6 +22,12 @@
 // preview is on show; leaving the source saves first and stays when that
 // fails.
 //
+// Since #1388 a passage selected in the preview can be commented: the comment
+// goes into the file as CriticMarkup, through the same checked write as the
+// source, and the preview shows it as a highlight with a marker. The parts
+// are in `markdown-comments.js` (the source side) and
+// `markdown-comment-ui.js` (what the reader sees).
+//
 // The interface it implements is documented in the header of `registry.js`.
 
 import contracts from '../generated/contracts.js';
@@ -40,6 +46,9 @@ import { MODES, buildModeSwitch } from './mode-switch.js';
 import { MARKDOWN_ZOOM_STEPS, markdownZoom, rememberMarkdownZoom } from './markdown-zoom.js';
 import { ZOOM_IN_ICON, ZOOM_OUT_ICON, iconButton, nextZoom } from './zoom-tools.js';
 import { plainTextView } from './plain-text-view.js';
+import { sha256Hex } from './autosave.js';
+import { COMMENT_ERRORS, commentDate, insertComment, locateSelection } from './markdown-comments.js';
+import { createCommentUi, isCommentShortcut } from './markdown-comment-ui.js';
 
 const {
   isWorkspaceImageSource,
@@ -61,6 +70,13 @@ const BROKEN = 'broken';
 // What the view sets on a link of the document. The sanitizer lets `data-*`
 // through, so whatever the document wrote under these names goes first.
 const LINK_DATA_ATTRIBUTES = ['data-link-kind', 'data-anchor', 'data-target', 'data-fragment'];
+// Why a selection cannot be commented, as the key of its message (#1388).
+const COMMENT_ERROR_KEYS = {
+  [COMMENT_ERRORS.EMPTY]: 'notFound',
+  [COMMENT_ERRORS.NOT_FOUND]: 'notFound',
+  [COMMENT_ERRORS.AMBIGUOUS]: 'ambiguous',
+  [COMMENT_ERRORS.OVERLAP]: 'overlap',
+};
 
 function buildFrontMatter(frontMatter) {
   const section = document.createElement('section');
@@ -149,6 +165,8 @@ export const markdownView = {
     let sourceTools = [];
     // The source saved a text the preview has not rendered yet.
     let previewStale = false;
+    // While a chat run is active nothing is written, comments included (#863).
+    let editingBlocked = context.isEditingBlocked?.() === true;
 
     const noticeEl = document.createElement('div');
     noticeEl.className = 'md-notice';
@@ -256,6 +274,89 @@ export const markdownView = {
       }, NOTICE_MS);
     }
 
+    // ── Comments (#1388) ──────────────────────────────────────────────────
+
+    async function commentAuthor() {
+      const prefs = await api.getUIPrefs?.();
+      return typeof prefs?.commentAuthor === 'string' ? prefs.commentAuthor : '';
+    }
+
+    /** A selection in the preview, traced back to a place in `content`. */
+    function locateComment({ blockRange, selected, occurrence }) {
+      const { body } = splitDocument(content);
+      if (!content.endsWith(body)) return { error: 'notFound' };
+      const bodyOffset = content.length - body.length;
+      const [from, to] = blockRange ?? [0, body.length];
+      const located = locateSelection({ blockSource: body.slice(from, to), selected, occurrence, body });
+      if (located.error) return { error: COMMENT_ERROR_KEYS[located.error] ?? 'notFound' };
+      return {
+        target: {
+          start: bodyOffset + from + located.start,
+          end: bodyOffset + from + located.end,
+          base: content,
+        },
+      };
+    }
+
+    /** The text as the host now holds it: what was saved, or what is on disk. */
+    function adoptContent(text) {
+      content = text;
+      previewStale = false;
+      render({ keepImages: true }).catch((err) => console.warn('Markdown preview: images after a comment failed:', err?.message ?? err));
+      sourceInstance?.update({ content: text });
+    }
+
+    /**
+     * Writes the comment into the file, through the same checked path as the
+     * source editor: a file that changed on disk since it was rendered is not
+     * overwritten, but read again — the reader selects anew in what is there.
+     */
+    async function saveComment(target, text) {
+      if (content !== target.base) {
+        showNotice(t('fileView.markdown.comment.changed'));
+        return false;
+      }
+      const author = await commentAuthor().catch(() => {
+        // Unreadable prefs sign the comment without a name rather than lose it.
+        return '';
+      });
+      const next = insertComment(content, target, { author, date: commentDate(), text });
+      let written;
+      try {
+        written = await context.writeFile(next, { baseHash: await sha256Hex(target.base) });
+      } catch (err) {
+        console.warn('Markdown preview: the comment could not be written:', err?.message ?? err);
+        written = { error: 'failed' };
+      }
+      if (disposed) return false;
+      if (written?.ok) {
+        adoptContent(next);
+        showNotice(t('fileView.markdown.comment.saved'));
+        return true;
+      }
+      if (written?.conflict === 'changed') {
+        showNotice(t('fileView.markdown.comment.conflict'));
+        const read = await context.readFile?.();
+        if (!disposed && read && !read.error && typeof read.content === 'string') adoptContent(read.content);
+        return false;
+      }
+      showNotice(t(written?.conflict === 'deleted'
+        ? 'fileView.markdown.comment.deleted'
+        : 'fileView.markdown.comment.failed'));
+      return false;
+    }
+
+    const comments = createCommentUi({
+      previewEl,
+      articleEl,
+      canComment: () => mode === MODES.PREVIEW && typeof context.writeFile === 'function',
+      isBlocked: () => editingBlocked,
+      getAuthor: commentAuthor,
+      locate: locateComment,
+      save: saveComment,
+      notify: showNotice,
+    });
+
     /**
      * What the source gets as its context: the host's, with the tools it
      * claims kept here, and what it writes or reads taken as this file's text.
@@ -300,6 +401,7 @@ export const markdownView = {
       }
       previewEl.hidden = mode !== MODES.PREVIEW;
       sourceEl.hidden = mode !== MODES.SOURCE;
+      comments.refresh();
       showTools();
     }
 
@@ -345,6 +447,7 @@ export const markdownView = {
       const scrollTop = previewEl.scrollTop;
       articleEl.replaceChildren(...nodes);
       prepareLinks();
+      comments.decorate();
       fitTables();
       previewEl.scrollTop = scrollTop;
       return resolveImages(previous);
@@ -680,6 +783,10 @@ export const markdownView = {
 
     /** ⌘+ / ⌘− / ⌘0 while the preview has focus, as in the image preview. */
     function onKeyDown(event) {
+      if (isCommentShortcut(event)) {
+        if (comments.composeFromSelection()) event.preventDefault();
+        return;
+      }
       if (event.altKey || !(event.metaKey || event.ctrlKey)) return;
       if (event.key === '+' || event.key === '=') setZoom(nextZoom(zoom, 1, MARKDOWN_ZOOM_STEPS));
       else if (event.key === '-') setZoom(nextZoom(zoom, -1, MARKDOWN_ZOOM_STEPS));
@@ -695,6 +802,7 @@ export const markdownView = {
     const stopFollowingLocale = onLocaleChange(() => {
       modeSwitch.applyLabels();
       applyToolLabels();
+      comments.applyLabels();
       void render({ keepImages: true });
     });
 
@@ -738,6 +846,8 @@ export const markdownView = {
         return sourceInstance?.save?.() ?? Promise.resolve(true);
       },
       setEditingBlocked(blocked) {
+        editingBlocked = Boolean(blocked);
+        comments.refresh();
         sourceInstance?.setEditingBlocked?.(blocked);
       },
       /**
@@ -758,6 +868,7 @@ export const markdownView = {
         fitObserver?.disconnect();
         clearTimeout(noticeTimer);
         stopFollowingLocale();
+        comments.dispose();
         previewEl.removeEventListener('click', onClick);
         previewEl.removeEventListener('auxclick', onAuxClick);
         previewEl.removeEventListener('keydown', onKeyDown);
@@ -777,6 +888,10 @@ export const markdownView = {
         if (name !== 'toggle-source') return false;
         void requestMode(mode === MODES.PREVIEW ? MODES.SOURCE : MODES.PREVIEW);
         return true;
+      },
+      /** For tests: the comment form or popover that is open, if any (#1388). */
+      get commentOpen() {
+        return comments.openKind;
       },
       /** For tests: which of the two is on show. */
       get mode() {

@@ -8082,6 +8082,8 @@ select.modal-input {
  * between the 24px a narrow column can spare and the 64px a wide one looks
  * right with. A fixed 24px left the text pressed against the edges. */
 .md-view {
+  /* The anchor of the comment button and popover (#1388), which scroll with the text. */
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: auto;
@@ -8434,6 +8436,260 @@ select.modal-input {
 
 .md-notice[hidden] {
   display: none;
+}
+
+/* ── Comments in the Markdown preview (#1388) ─────────────────────────────
+ * A commented passage carries a wash and a line under it; the marker after it
+ * is the button that opens the comment. The button at a selection and the
+ * two popovers are overlays over the text, so they take the overlay surface. */
+.md-doc mark.md-comment {
+  padding: 0 1px;
+  border-bottom: 1.5px solid var(--ds-blue-border);
+  border-radius: var(--ds-radius-sm) var(--ds-radius-sm) 0 0;
+  background: var(--ds-comment-bg);
+  color: inherit;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.md-doc mark.md-comment[data-md-comment] {
+  cursor: pointer;
+}
+
+.md-doc mark.md-comment a {
+  color: var(--ds-blue-strong);
+}
+
+.md-doc mark.md-comment--point {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+.md-comment-marker {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0 0 0 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ds-blue);
+  vertical-align: -0.2em;
+  cursor: pointer;
+  transition: background var(--ds-motion-fast);
+}
+
+/* The touch target is 32px; the marker itself stays the size of the text. */
+.md-comment-marker::before {
+  content: '';
+  position: absolute;
+  inset: -7px;
+}
+
+.md-comment-marker svg {
+  width: 14px;
+  height: 14px;
+}
+
+.md-comment-marker:hover,
+.md-comment-marker[aria-expanded='true'] {
+  background: var(--ds-blue-soft);
+}
+
+.md-comment-marker:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.md-comment-action {
+  position: absolute;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px 0 10px;
+  border: 1px solid var(--ds-overlay-border);
+  border-radius: 999px;
+  background: var(--ds-surface);
+  box-shadow: var(--ds-overlay-shadow);
+  color: var(--text-primary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast);
+}
+
+.md-comment-action svg {
+  color: var(--ds-blue);
+}
+
+.md-comment-action:hover:not(:disabled) {
+  border-color: var(--ds-blue);
+}
+
+.md-comment-action:active:not(:disabled) {
+  box-shadow: var(--ds-overlay-shadow), var(--ds-icon-btn-active-shadow);
+}
+
+.md-comment-action:disabled {
+  color: var(--text-muted-strong);
+  cursor: not-allowed;
+}
+
+.md-comment-action:disabled svg {
+  color: inherit;
+}
+
+.md-comment-action:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.md-comment-action[hidden] {
+  display: none;
+}
+
+.md-comment-popover {
+  position: absolute;
+  z-index: 4;
+  box-sizing: border-box;
+  width: 340px;
+  max-width: calc(100% - 16px);
+  padding: 14px 16px 16px;
+  border: 1px solid var(--ds-overlay-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  box-shadow: var(--ds-overlay-shadow);
+  color: var(--text-primary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-md);
+  line-height: 1.45;
+  text-align: start;
+}
+
+.md-comment-popover--view {
+  max-height: 320px;
+  overflow: auto;
+  padding-right: 44px;
+}
+
+.md-comment-popover:focus {
+  outline: none;
+}
+
+.md-comment-popover:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.md-comment-popover__quote {
+  display: -webkit-box;
+  margin: 0 0 10px;
+  padding-left: 10px;
+  overflow: hidden;
+  border-left: 2px solid var(--ds-blue-border);
+  color: var(--text-secondary);
+  font-size: var(--ds-font-size-sm);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.md-comment-popover__input {
+  display: block;
+  box-sizing: border-box;
+  min-height: 76px;
+  resize: vertical;
+}
+
+.md-comment-popover__author {
+  margin: 8px 0 0;
+  color: var(--ds-grey-muted);
+  font-size: var(--ds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+.md-comment-popover__author:empty {
+  display: none;
+}
+
+.md-comment-popover__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.md-comment-popover__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+}
+
+.md-comment-popover__name {
+  font-size: var(--ds-font-size-sm);
+  font-weight: var(--ds-font-weight-bold);
+  overflow-wrap: anywhere;
+}
+
+.md-comment-popover__date {
+  color: var(--ds-grey-muted);
+  font-size: var(--ds-font-size-xs);
+  font-variant-numeric: var(--ds-font-numeric-tabular);
+}
+
+.md-comment-popover__text {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.md-comment-popover__close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.md-comment-popover__close:hover {
+  background: var(--ds-grey-bg);
+  color: var(--text-primary);
+}
+
+.md-comment-popover__close:active {
+  box-shadow: var(--ds-icon-btn-active-shadow);
+}
+
+.md-comment-popover__close:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .md-comment-marker,
+  .md-comment-action {
+    transition: none;
+  }
 }
 
 /* ── Images in the file preview (#345, #803) ──────────────────────────────

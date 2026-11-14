@@ -1351,6 +1351,72 @@ const MOTIFS = {
     },
   },
 
+  /** A Markdown note with a comment, and a second one being written (#1388). */
+  'markdown-comment': {
+    prefs: { commentAuthor: 'Ada Lovelace' },
+    text: {
+      en: {
+        file: 'crop-rotation.md',
+        content: [
+          '# Crop rotation',
+          '',
+          'Each bed changes its plant family every year, so that the soil can rest.',
+          'The south bed had carrots, so it gets {==beans next year==}{>>Grace Hopper, 2026-11-12: Beans or peas?<<}.',
+          '',
+          '- Lettuce stays in **the north bed**, where it is shaded at noon.',
+          '- Tomatoes move to the greenhouse.',
+          '',
+        ].join('\n'),
+        select: 'the north bed',
+        comment: 'Only five hours of sun there.',
+      },
+      de: {
+        file: 'fruchtfolge.md',
+        content: [
+          '# Fruchtfolge',
+          '',
+          'Jedes Beet wechselt jedes Jahr die Pflanzenfamilie, damit sich der Boden erholt.',
+          'Im Südbeet standen Möhren, deshalb kommen {==nächstes Jahr Bohnen==}{>>Grace Hopper, 2026-11-12: Bohnen oder Erbsen?<<} hinein.',
+          '',
+          '- Der Salat bleibt im **Nordbeet**, wo er mittags Schatten hat.',
+          '- Die Tomaten ziehen ins Gewächshaus.',
+          '',
+        ].join('\n'),
+        select: 'Nordbeet',
+        comment: 'Dort gibt es nur fünf Stunden Sonne.',
+      },
+    },
+    async setUp({ page, text, workspace }) {
+      await writeFile(path.join(workspace, text.file), text.content);
+      await clickTreeRow(page, text.file);
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.md-doc mark.md-comment'))),
+        { what: 'commented note in the preview' });
+      await page.evaluate((needle) => {
+        const item = [...document.querySelectorAll('.md-doc li')].find((li) => li.textContent.includes(needle));
+        const walker = document.createTreeWalker(item, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const at = node.data.indexOf(needle);
+          if (at === -1) continue;
+          const range = document.createRange();
+          range.setStart(node, at);
+          range.setEnd(node, at + needle.length);
+          document.querySelector('.md-view').focus();
+          document.getSelection().removeAllRanges();
+          document.getSelection().addRange(range);
+          return;
+        }
+      }, text.select);
+      await poll(() => page.evaluate(() => document.querySelector('.md-comment-action')?.hidden === false),
+        { what: 'comment button' });
+      await page.click('.md-comment-action');
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.md-comment-popover__author')?.textContent)),
+        { what: 'comment form' });
+      await page.keyboard.type(text.comment);
+      await page.mouse.move(0, 0);
+      return clipPreview(page);
+    },
+  },
+
   /** An image in the preview, with the zoom in its header. */
   'image-preview': {
     text: { en: { file: 'garden-plan.png' }, de: { file: 'gartenplan.png' } },

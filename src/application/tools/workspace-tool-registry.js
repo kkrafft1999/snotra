@@ -675,6 +675,18 @@ function createToolRegistry(initialDefinitions = []) {
       parts.push('Where a tool has the include_hidden parameter, true adds the hidden entries.');
     }
 
+    // Comments the user left in the Markdown preview (#1388) are CriticMarkup
+    // in the file. Said once, so that "work through the comments" needs no
+    // tool of its own — and so that an addressed comment is taken out, as
+    // decided in the issue, instead of being left behind as resolved.
+    if (available.some((definition) => definition.name === 'edit_file' || definition.name === 'apply_patch')) {
+      parts.push(
+        'In Markdown files, {==passage==}{>>Name, YYYY-MM-DD: comment<<} is a comment the user left ' +
+          'on that passage. Once you have addressed one, remove its markup — both parts, keeping the ' +
+          'passage as revised; leave the comments you did not address as they are.'
+      );
+    }
+
     // A tool that is off is not in the list at all, so the model reads its
     // absence as a limit of language models ("I can't browse the web") and
     // never thinks of get_configuration (#916). One sentence per request, not

@@ -2153,6 +2153,8 @@ type: a new view is one module and one line in the registry.
 | `renderer/file-views/syntax-language.js` | File name → Prism grammar, or plain text. DOM-free, never by content | `test/syntax-language.test.js` |
 | `renderer/file-views/syntax-highlight.js` | Prism's tokens → text nodes and `<span class="syntax-…">` in nine roles; code blocks in Markdown in their own language | `test/syntax-highlight-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/markdown-view.js` | `md`, `markdown`, `mdx`: rendered, with a "Preview \| Source" switch; images, links, notices ([#344](https://github.com/kkrafft1999/snotra/issues/344)) | `test/markdown-view-dom.test.js`, `e2e/smoke.test.mjs` |
+| `renderer/file-views/markdown-comments.js` | CriticMarkup rendering, block ranges, a selection traced back to the source, the comment text ([#1388](https://github.com/kkrafft1999/snotra/issues/1388)) | `test/markdown-comments.test.js` |
+| `renderer/file-views/markdown-comment-ui.js` | The comment button, form, markers and popover in the Markdown preview ([#1388](https://github.com/kkrafft1999/snotra/issues/1388)) | `test/markdown-comment-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/markdown-document.js` | What needs no mounted view: front matter, paths relative to the file, link kinds, the inert fragment | `test/markdown-document.test.js` |
 | `renderer/file-views/image-view.js` | `png`, `jpg`/`jpeg`, `gif`, `webp`, `svg`: fitted, zoom in the header, drag to pan, checkerboard, pixel dimensions, a reason instead of an empty column; SVG with a "Preview \| Source" switch ([#345](https://github.com/kkrafft1999/snotra/issues/345)) | `test/image-view-dom.test.js`, `e2e/smoke.test.mjs` |
 | `renderer/file-views/mode-switch.js` | The "Preview \| Source" control, shared by Markdown and SVG | both view tests |
@@ -2300,6 +2302,48 @@ text ─ splitDocument ─▶ front matter ─▶ key/value block (raw YAML if u
 - **The mode belongs to the open file.** Every file opens in the preview; the
   source (the plain-text view, mounted on first use) and the preview both
   follow an external change, so switching back shows the current text.
+
+#### Comments in Markdown ([#1388](https://github.com/kkrafft1999/snotra/issues/1388))
+
+```
+selection in .md-doc ─ resolve: one paragraph / item / cell, not code
+        │   block = closest [data-md-range] (start:end of its marked token)
+        ▼
+locateSelection: the selected text as a pattern that lets Markdown syntax
+        │        sit between its characters, matched in the block's source;
+        │        the occurrence the reader picked; grown over delimiters and
+        │        link tails until a rendered probe highlights exactly it
+        ▼
+insertComment → {==passage==}{>>Name, YYYY-MM-DD: text<<}
+        │
+        ▼
+context.writeFile(text, { baseHash }) — the source editor's checked write
+```
+
+- **The comment lives in the file**, as CriticMarkup, so that it travels with
+  it and the agent reads it with the file. The tool prompt says once what the
+  markup means and that an addressed comment is removed
+  (`workspace-tool-registry.js`, only when `edit_file` or `apply_patch` is on).
+  No tool of its own, no sidecar file, nothing in app data.
+- **A separate `marked` instance.** `previewMarked()` adds the inline
+  extension; the chat keeps rendering with the shared one, so an answer that
+  quotes `{==x==}` shows it as written. The comment text goes into
+  `data-md-comment` escaped, and reaches the screen only as `textContent`.
+- **Blocks point at their source.** After rendering, the top-level elements
+  get `data-md-range` from `marked`'s top-level tokens (`\r\n` counted back
+  in). Only when tokens and elements pair up one to one; otherwise — raw HTML
+  the sanitizer drops — the whole body is searched.
+- **Refuse rather than guess.** No match, two matches the reader cannot be
+  told apart by, a range that overlaps a comment, or a probe that does not
+  highlight exactly the selected text: the view says why and writes nothing.
+- **Same write path as editing.** The base hash makes main refuse a file that
+  changed since it was rendered; the view reads it again. While a chat run is
+  active (`setEditingBlocked`) the button is off.
+- **What the reader sees.** `markdown-comment-ui.js`: the button at the
+  selection (only in the document while it is shown), ⌥⌘M / Ctrl+Alt+M, the
+  form, and after each comment a `<button>` marker — after the link, when the
+  passage is a link's text — tied to its last word by a word joiner. The name
+  comes from the UI prefs (`commentAuthor`, *Settings › General*).
 
 #### Images ([#345](https://github.com/kkrafft1999/snotra/issues/345))
 

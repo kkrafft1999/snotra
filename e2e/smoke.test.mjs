@@ -349,7 +349,9 @@ async function createWorkspace() {
   const dir = await makeTempDir('snotra-smoke-ws-');
   await writeFile(path.join(dir, 'README.md'), README, 'utf8');
   await mkdir(path.join(dir, 'notizen'));
-  await writeFile(path.join(dir, 'notizen', 'liste.md'), '- eins\n', 'utf8');
+  // A comment that tries to leave its attribute, and a passage to comment (#1388).
+  await writeFile(path.join(dir, 'notizen', 'liste.md'),
+    '- eins {==zwei==}{>>Grace, 2026-11-14: "><img src=x onerror="globalThis.__pwned=\'comment\'"><<}\n- drei vier\n', 'utf8');
   await writeFile(path.join(dir, 'notizen', 'vorschau.md'), PREVIEW_MD, 'utf8');
   await writeFile(path.join(dir, 'notizen', 'bild.png'), makePng(40, 20));
   await writeFile(path.join(dir, 'notizen', 'fluss.svg'), FLOW_SVG, 'utf8');
@@ -615,6 +617,52 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     && document.querySelector('#tree-container .tree-item.active .label')?.textContent === 'liste.md'),
   { what: 'liste.md ueber den Link geoeffnet' });
   step('Markdown-Vorschau geprueft');
+
+  // --- Comments in the Markdown preview (#1388) -----------------------------
+  // Through the real sanitizer: the comment stays text in its attribute, the
+  // marker opens it, and a new comment is written into the file on disk.
+  const commentState = await poll(() => page.evaluate(() => {
+    const mark = document.querySelector('.md-doc mark.md-comment');
+    if (!mark) return null;
+    document.querySelector('.md-doc .md-comment-marker').click();
+    return {
+      mark: mark.textContent,
+      images: document.querySelectorAll('.md-doc img').length,
+      shown: document.querySelector('.md-comment-popover__text')?.textContent ?? null,
+      pwned: globalThis.__pwned ?? null,
+    };
+  }), { what: 'comment in liste.md' });
+  assert.deepEqual(commentState, {
+    mark: 'zwei',
+    images: 0,
+    shown: '"><img src=x onerror="globalThis.__pwned=\'comment\'">',
+    pwned: null,
+  });
+  await page.keyboard.press('Escape');
+  await page.evaluate(() => {
+    const item = [...document.querySelectorAll('.md-doc li')].find((li) => li.textContent.includes('drei'));
+    const node = item.firstChild;
+    const range = document.createRange();
+    range.setStart(node, node.data.indexOf('vier'));
+    range.setEnd(node, node.data.indexOf('vier') + 4);
+    document.querySelector('.md-view').focus();
+    document.getSelection().removeAllRanges();
+    document.getSelection().addRange(range);
+  });
+  await poll(() => page.evaluate(() => document.querySelector('.md-comment-action')?.hidden === false), { what: 'comment button' });
+  await page.click('.md-comment-action');
+  await poll(() => page.evaluate(() => document.activeElement?.classList.contains('md-comment-popover__input')),
+    { what: 'comment form' });
+  await page.keyboard.type('fuenf?');
+  await page.click('.md-comment-popover button[type="submit"]');
+  const listOnDisk = await poll(async () => {
+    const text = await readFile(path.join(workspace, 'notizen', 'liste.md'), 'utf8');
+    return text.includes('fuenf?') ? text : null;
+  }, { what: 'comment written to liste.md' });
+  assert.match(listOnDisk, /\n- drei \{==vier==\}\{>>\d{4}-\d{2}-\d{2}: fuenf\?<<\}\n$/);
+  await poll(() => page.evaluate(() => document.querySelectorAll('.md-doc mark.md-comment').length === 2),
+    { what: 'new comment in the preview' });
+  step('Markdown-Kommentar geprueft');
 
   // --- Images in the preview (#345) -----------------------------------------
   // Only here can it be seen whether Chromium really decodes the data: URI,
