@@ -79,6 +79,34 @@ function createProgramAllowances({
     }
   }
 
+  /**
+   * Whether a redirection target is a file inside the open folder (#1379),
+   * judged by real paths: a symlink in the folder that leads out of it leads
+   * out of it, and one that leads nowhere yet would let the shell create its
+   * target wherever it points — refused as well.
+   *
+   * @param {unknown} target
+   * @param {string|null|undefined} cwd
+   * @param {string|null|undefined} workspaceRoot
+   */
+  async function isFileInFolder(target, cwd, workspaceRoot) {
+    if (typeof target !== 'string' || !target || target.includes('\0')) return false;
+    if (typeof workspaceRoot !== 'string' || !workspaceRoot) return false;
+    const root = await realpathOrNull(workspaceRoot);
+    if (!root) return false;
+    const absolute = path.resolve(cwd || root, target);
+    let real = await realpathOrNull(absolute);
+    if (!real) {
+      const dangling = await fs.lstat(absolute).then(() => true, () => false);
+      if (dangling) return false;
+      const dir = await realpathOrNull(path.dirname(absolute));
+      if (!dir) return false;
+      real = path.join(dir, path.basename(absolute));
+    }
+    const rel = path.relative(root, real);
+    return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel);
+  }
+
   /** @param {string} target */
   async function isExecutableFile(target) {
     try {
@@ -318,6 +346,7 @@ function createProgramAllowances({
     readAllowances,
     locate,
     realPath: realpathOrNull,
+    isFileInFolder,
     // An allowance widens the sandbox; without one there is nothing to widen.
     sandboxSupported: platformSupports(platform, PLATFORM_CAPABILITIES.EXECUTION_SANDBOX),
     trustdApplies: platform === 'darwin',

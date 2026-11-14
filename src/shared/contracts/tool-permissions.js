@@ -1162,7 +1162,7 @@ function stringList(value, maxItems, maxChars) {
 }
 
 /** A program allowance on the card (#408): what it adds, or why it stays off. */
-const ALLOWANCE_SKIP_REASONS = new Set(['compound', 'expansion', 'otherFile']);
+const ALLOWANCE_SKIP_REASONS = new Set(['compound', 'expansion', 'otherFile', 'redirectOutside', 'redirectSecrets']);
 
 /**
  * How an execution tool's run is isolated (#329): the domains it may reach and

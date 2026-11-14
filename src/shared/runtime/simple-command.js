@@ -16,7 +16,19 @@
  *
  * `start`/`end` delimit a word in the original line, quotes included.
  *
- * @typedef {{ ok: true, words: Array<{ value: string, start: number, end: number }> }
+ * With `{ redirections: true }` (#1379) the line may end in redirections of
+ * the program's output: `>`/`>>` of descriptor 1 or 2 into a file, and the
+ * duplications `2>&1`, `1>&2`, `>&2`. They run nothing besides the program —
+ * the shell opens the file before it starts it — and come back apart from
+ * the words. Whether a file target is acceptable is the caller's to judge.
+ * Everything else stays "more than the program": input redirection, `&>`,
+ * `>|`, other descriptors, a redirection in front of the program, a word
+ * after the first redirection, and a target the shell would still expand
+ * (`~`, globs, braces).
+ *
+ * @typedef {{ fd: 1|2, append: boolean, target: string, start: number, end: number }
+ *   | { fd: 1|2, dup: 1|2, start: number, end: number }} Redirection
+ * @typedef {{ ok: true, words: Array<{ value: string, start: number, end: number }>, redirections?: Redirection[] }
  *   | { ok: false, reason: 'empty'|'compound'|'expansion' }} SimpleCommand
  */
 
@@ -26,17 +38,26 @@ const OPERATOR_CHARS = new Set([';', '&', '|', '<', '>', '(', ')', '\n', '\r']);
 const EXPANSION_CHARS = new Set(['$', '`']);
 /** `NAME=value` in front of the program. */
 const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*=/;
+/** In a redirection target the shell would still expand these (bash does, even in a redirection). */
+const TARGET_EXPANSION = /[~*?[\]{}]/;
+/** A word after a redirection, a redirection without a program, an unreadable target. */
+const COMPOUND = Object.freeze({ ok: false, reason: 'compound' });
 
 /**
  * @param {unknown} line
+ * @param {{ redirections?: boolean }} [options]
  * @returns {SimpleCommand}
  */
-function parseSimpleCommand(line) {
+function parseSimpleCommand(line, { redirections: withRedirections = false } = {}) {
   const text = typeof line === 'string' ? line : '';
   /** @type {Array<{ value: string, start: number, end: number, raw: string }>} */
   const words = [];
+  /** @type {Redirection[]} */
+  const redirections = [];
   /** @type {{ value: string, start: number, end: number, raw: string }|null} */
   let current = null;
+  /** A `>` read, its target word not yet. @type {{ fd: 1|2, append: boolean, start: number }|null} */
+  let pending = null;
   let i = 0;
 
   /** @param {number} at */
@@ -44,19 +65,65 @@ function parseSimpleCommand(line) {
     if (!current) current = { value: '', start: at, end: at, raw: '' };
     return current;
   };
-  /** @param {number} at */
+  /**
+   * Closes the word in progress: an argument, or the target of a pending
+   * redirection. False when the line stops being one simple command.
+   *
+   * @param {number} at
+   */
   const endWord = (at) => {
-    if (!current) return;
-    current.end = at;
-    words.push(current);
+    if (!current) return true;
+    const word = current;
+    word.end = at;
     current = null;
+    if (pending) {
+      if (!word.value || TARGET_EXPANSION.test(word.value)) return false;
+      redirections.push({ fd: pending.fd, append: pending.append, target: word.value, start: pending.start, end: at });
+      pending = null;
+      return true;
+    }
+    if (redirections.length > 0) return false;
+    words.push(word);
+    return true;
   };
 
   while (i < text.length) {
     const ch = text[i];
     if (ch === ' ' || ch === '\t') {
-      endWord(i);
+      if (!endWord(i)) return COMPOUND;
       i += 1;
+      continue;
+    }
+    if (ch === '>' && withRedirections && !pending) {
+      // `2>`, `1>`: digits right before the operator name the descriptor.
+      // Set by startWord, which the checker cannot see from here.
+      const open = /** @type {{ value: string, start: number, end: number, raw: string }|null} */ (current);
+      /** @type {1|2} */
+      let fd = 1;
+      let start = i;
+      if (open && (open.raw === '1' || open.raw === '2')) {
+        fd = open.raw === '2' ? 2 : 1;
+        start = open.start;
+        current = null;
+      } else if (open && /^[0-9]+$/.test(open.raw)) {
+        return COMPOUND;
+      } else if (!endWord(i)) {
+        return COMPOUND;
+      }
+      if (words.length === 0) return COMPOUND;
+      let j = i + 1;
+      const append = text[j] === '>';
+      if (append) j += 1;
+      if (text[j] === '&') {
+        const dup = text[j + 1];
+        const after = text[j + 2];
+        if (append || (dup !== '1' && dup !== '2') || (after !== undefined && after !== ' ' && after !== '\t')) return COMPOUND;
+        redirections.push({ fd, dup: dup === '2' ? 2 : 1, start, end: j + 2 });
+        i = j + 2;
+        continue;
+      }
+      pending = { fd, append, start };
+      i = j;
       continue;
     }
     if (OPERATOR_CHARS.has(ch)) return { ok: false, reason: 'compound' };
@@ -106,12 +173,13 @@ function parseSimpleCommand(line) {
     word.raw += ch;
     i += 1;
   }
-  endWord(text.length);
+  if (!endWord(text.length) || pending) return COMPOUND;
 
   if (words.length === 0) return { ok: false, reason: 'empty' };
   // Only the raw spelling tells an assignment from a quoted argument.
   if (ASSIGNMENT.test(words[0].raw)) return { ok: false, reason: 'compound' };
-  return { ok: true, words: words.map(({ value, start, end }) => ({ value, start, end })) };
+  const plain = words.map(({ value, start, end }) => ({ value, start, end }));
+  return withRedirections ? { ok: true, words: plain, redirections } : { ok: true, words: plain };
 }
 
 module.exports = { parseSimpleCommand };

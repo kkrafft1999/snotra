@@ -2378,6 +2378,8 @@ module.exports = {
   'approval.allowance.skipped.compound': 'Die Freigabe für {program} gilt nicht: Der Befehl tut mehr, als das Programm zu starten.',
   'approval.allowance.skipped.expansion': 'Die Freigabe für {program} gilt nicht: Der Befehl nutzt $ oder Backticks.',
   'approval.allowance.skipped.otherFile': 'Die Freigabe für {program} gilt nicht: Der Befehl startet eine andere Datei gleichen Namens.',
+  'approval.allowance.skipped.redirectOutside': 'Die Freigabe für {program} gilt nicht: Die Ausgabe geht in eine Datei außerhalb des geöffneten Ordners.',
+  'approval.allowance.skipped.redirectSecrets': 'Die Freigabe für {program} gilt nicht: Sie gibt Zugangsdaten mit, und eine Datei würde sie unmaskiert festhalten.',
   'approval.allowance.settings': 'Programme mit mehr Spielraum',
   'approval.warning.delete': 'Die bestehende Datei wird vollständig überschrieben – ohne Wiederherstellungskopie. Das lässt sich nicht rückgängig machen.',
   'approval.warning.knowledge': 'Früher in diesem Chat klang ein Tool-Ergebnis oder der eigene Text dieses Ordners wie versteckte Anweisungen. Prüf, ob du das in einer Datei haben willst, die Snotra in jedem Chat liest.',

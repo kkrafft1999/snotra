@@ -116,6 +116,10 @@ const PROGRAM_ALLOWANCE_SKIP_REASONS = Object.freeze({
   EXPANSION: 'expansion',
   /** A file of the same name, but not the one the allowance names. */
   OTHER_FILE: 'otherFile',
+  /** Output redirected into a file outside the open folder (#1379). */
+  REDIRECT_OUTSIDE: 'redirectOutside',
+  /** Output redirected into a file while the allowance hands over credentials: the file would keep what the masking hides (#1379). */
+  REDIRECT_SECRETS: 'redirectSecrets',
 });
 
 /**

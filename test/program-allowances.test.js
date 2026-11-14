@@ -136,6 +136,60 @@ test('whatever the shell expands first is refused, even inside double quotes', (
   assert.deepEqual(parseSimpleCommand('   '), { ok: false, reason: 'empty' });
 });
 
+test('output redirections at the end come back apart from the words (#1379)', () => {
+  const opts = { redirections: true };
+  assert.deepEqual(parseSimpleCommand('ms-todo-cli show --json > out/todo.json 2> out/todo.err', opts), {
+    ok: true,
+    words: [
+      { value: 'ms-todo-cli', start: 0, end: 11 },
+      { value: 'show', start: 12, end: 16 },
+      { value: '--json', start: 17, end: 23 },
+    ],
+    redirections: [
+      { fd: 1, append: false, target: 'out/todo.json', start: 24, end: 39 },
+      { fd: 2, append: false, target: 'out/todo.err', start: 40, end: 55 },
+    ],
+  });
+  assert.deepEqual(parseSimpleCommand('ms-todo-cli lists>>log.txt 2>&1', opts).redirections, [
+    { fd: 1, append: true, target: 'log.txt', start: 17, end: 26 },
+    { fd: 2, dup: 1, start: 27, end: 31 },
+  ]);
+  assert.deepEqual(parseSimpleCommand('ms-todo-cli >&2', opts).redirections, [{ fd: 1, dup: 2, start: 12, end: 15 }]);
+  assert.equal(parseSimpleCommand('ms-todo-cli 2>/dev/null', opts).redirections[0].target, '/dev/null');
+  // Quotes are understood in a target; quoted digits are a word, not a descriptor.
+  assert.equal(parseSimpleCommand('ms-todo-cli > "my file.json"', opts).redirections[0].target, 'my file.json');
+  assert.deepEqual(parseSimpleCommand('ms-todo-cli "2">a', opts).words.map((w) => w.value), ['ms-todo-cli', '2']);
+  // Without a redirection the shape is the plain one plus an empty list.
+  assert.deepEqual(parseSimpleCommand('ms-todo-cli lists', opts).redirections, []);
+});
+
+test('every other redirection stays more than the program (#1379)', () => {
+  const opts = { redirections: true };
+  for (const line of [
+    'ms-todo-cli < in.txt',
+    'ms-todo-cli &> out.txt',
+    'ms-todo-cli >| out.txt',
+    'ms-todo-cli 3> out.txt',
+    'ms-todo-cli >&out.txt',
+    'ms-todo-cli 2>&3',
+    'ms-todo-cli >>&1',
+    'ms-todo-cli >',
+    'ms-todo-cli > > out.txt',
+    'ms-todo-cli > out.txt lists',
+    '> out.txt ms-todo-cli',
+    '2> err.txt ms-todo-cli',
+    'ms-todo-cli > ~/out.txt',
+    'ms-todo-cli > out*.txt',
+    'ms-todo-cli > out{1,2}.txt',
+    'ms-todo-cli > ""',
+    'ms-todo-cli > out.txt | head',
+    'ms-todo-cli > out.txt; rm x',
+  ]) {
+    assert.deepEqual(parseSimpleCommand(line, opts), { ok: false, reason: 'compound' }, line);
+  }
+  assert.deepEqual(parseSimpleCommand('ms-todo-cli > "$HOME/x"', opts), { ok: false, reason: 'expansion' });
+});
+
 // ── The service ─────────────────────────────────────────────────────────────
 
 async function makeFixture() {
@@ -250,6 +304,59 @@ test('a command that runs the allowed file on its own gets the allowance and its
     // trustd is a macOS thing; elsewhere the card must not claim it.
     const linux = makeService(fx, { allowances: [entry], platform: 'linux' });
     assert.equal((await linux.match({ command: 'ms-todo-cli', cwd: fx.project })).allowance.trustd, false);
+  } finally {
+    await removeTempDir(fx.root);
+  }
+});
+
+test('output redirected into the open folder keeps the allowance, outside it does not (#1379)', posixOnly, async () => {
+  const fx = await makeFixture();
+  try {
+    const entry = { path: fx.tool, domains: ['graph.microsoft.com'], writePaths: [fx.cache], trustd: true, credentials: [] };
+    const service = makeService(fx, { allowances: [entry] });
+    const sub = path.join(fx.project, 'runs');
+    await fs.mkdir(sub);
+    const match = (command, cwd = fx.project) => service.match({ command, cwd, workspaceRoot: fx.project });
+
+    const into = await match('ms-todo-cli show --json > runs/todo.json 2> runs/todo.err');
+    assert.equal(into.allowance.path, fx.tool);
+    // The redirections stay on the line the shell runs.
+    assert.equal(into.command, `${fx.tool} show --json > runs/todo.json 2> runs/todo.err`);
+    assert.ok((await match('ms-todo-cli show > todo.json', sub)).allowance, 'relative to the working folder');
+    assert.ok((await match(`ms-todo-cli show > ${path.join(sub, 'todo.json')}`)).allowance, 'an absolute path inside');
+    assert.ok((await match('ms-todo-cli show 2>/dev/null 2>&1')).allowance, '/dev/null and a duplication need no file');
+
+    const outside = { program: 'ms-todo-cli', reason: 'redirectOutside' };
+    assert.deepEqual((await match('ms-todo-cli show > ../todo.json')).skipped, outside);
+    // An allowance's own write folder is no place for the shell to write into.
+    assert.deepEqual((await match(`ms-todo-cli show > "${path.join(fx.cache, 'token.json')}"`)).skipped, outside);
+    // A symlink in the folder that leads out of it, existing or dangling.
+    await fs.symlink(fx.cache, path.join(fx.project, 'cache-link'));
+    assert.deepEqual((await match('ms-todo-cli show > cache-link/token.json')).skipped, outside);
+    await fs.symlink(path.join(fx.cache, 'new.json'), path.join(fx.project, 'dangling.json'));
+    assert.deepEqual((await match('ms-todo-cli show > dangling.json')).skipped, outside);
+    assert.deepEqual((await match('ms-todo-cli show > missing/todo.json')).skipped, outside);
+    assert.deepEqual((await match('ms-todo-cli show > .')).skipped, outside);
+    // Without an open folder there is nothing inside.
+    assert.deepEqual((await service.match({ command: 'ms-todo-cli show > todo.json', cwd: fx.project }))?.skipped, outside);
+  } finally {
+    await removeTempDir(fx.root);
+  }
+});
+
+test('an allowance with credentials does not apply when the output goes into a file (#1379)', posixOnly, async () => {
+  const fx = await makeFixture();
+  try {
+    const entry = {
+      path: fx.tool, domains: ['graph.microsoft.com'], writePaths: [], trustd: false,
+      credentials: [{ name: 'TODO_TOKEN', id: 'a1b2c3d4-0000-4000-8000-000000000000' }],
+    };
+    const service = makeService(fx, { allowances: [entry] });
+    const match = (command) => service.match({ command, cwd: fx.project, workspaceRoot: fx.project });
+    assert.deepEqual((await match('ms-todo-cli show > todo.json')).skipped, { program: 'ms-todo-cli', reason: 'redirectSecrets' });
+    // Into /dev/null or merged into the masked output nothing is kept.
+    assert.ok((await match('ms-todo-cli show 2>/dev/null')).allowance);
+    assert.ok((await match('ms-todo-cli show 2>&1')).allowance);
   } finally {
     await removeTempDir(fx.root);
   }
