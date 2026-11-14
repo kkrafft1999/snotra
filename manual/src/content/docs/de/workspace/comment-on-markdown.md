@@ -13,7 +13,7 @@ sidebar:
 
 - Einen geöffneten Ordner und eine Markdown-Datei daraus in der [Vorschau](../preview/), auf der Seite *Preview*.
 - Es läuft keine Chat-Antwort. Solange der Agent arbeitet, warten Kommentare, wie das [Bearbeiten](../edit-a-file/).
-- Optional: deinen Namen unter [*Einstellungen › Allgemein*](../../customising/settings/#der-bereich-allgemein), *Name für Kommentare*. Ohne ihn trägt ein Kommentar nur das Datum.
+- Optional: einen Namen unter [*Einstellungen › Allgemein*](../../customising/settings/#der-bereich-allgemein), *Name für Kommentare*. Ohne ihn unterschreibt Snotra mit dem vollen Namen deines Benutzerkontos, wie in einer PDF.
 
 ## Schritte
 
