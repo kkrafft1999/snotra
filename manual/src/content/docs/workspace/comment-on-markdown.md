@@ -31,7 +31,7 @@ sidebar:
 
 ## Reply to a comment
 
-[since 1.33] A comment can be answered right where it is, so that question and answer stay together.
+[since 1.32.1] A comment can be answered right where it is, so that question and answer stay together.
 
 1. Open the comment: click its speech bubble or the passage.
 2. Click *Reply* at the bottom of the comment.
@@ -43,7 +43,7 @@ The reply is written into the file right after the comment, as one more comment 
 
 ## Delete a comment
 
-[since 1.33] A comment in the wrong place, or one that has done its job, can be taken out again — yours or anyone else's.
+[since 1.32.1] A comment in the wrong place, or one that has done its job, can be taken out again — yours or anyone else's.
 
 1. Open the comment.
 2. Click *Delete comment* at the bottom right of the comment.

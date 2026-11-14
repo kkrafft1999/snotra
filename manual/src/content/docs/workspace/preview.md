@@ -87,7 +87,7 @@ A selection that runs over several pages is commented on the page where it start
 
 ### Reply to a comment
 
-[since 1.33] A comment can be answered right where it is, so that question and answer stay together.
+[since 1.32.1] A comment can be answered right where it is, so that question and answer stay together.
 
 **What you need:** a PDF that is neither signed nor protected, as for adding a comment.
 
@@ -111,7 +111,7 @@ A single reply cannot be deleted on its own: *Delete comment* removes the commen
 
 ### Delete a comment
 
-[since 1.33] A comment in the wrong place, or one that turned out to be wrong, can be taken out of the PDF again — yours or anyone else's.
+[since 1.32.1] A comment in the wrong place, or one that turned out to be wrong, can be taken out of the PDF again — yours or anyone else's.
 
 **What you need:** a PDF that is neither signed nor protected, as for adding a comment.
 

@@ -87,7 +87,7 @@ Eine Markierung über mehrere Seiten wird auf der Seite kommentiert, auf der sie
 
 ### Auf einen Kommentar antworten
 
-[seit 1.33] Ein Kommentar lässt sich direkt dort beantworten, wo er steht, damit Frage und Antwort zusammenbleiben.
+[seit 1.32.1] Ein Kommentar lässt sich direkt dort beantworten, wo er steht, damit Frage und Antwort zusammenbleiben.
 
 **Was du brauchst:** eine PDF, die weder signiert noch geschützt ist, wie beim Hinzufügen.
 
@@ -111,7 +111,7 @@ Eine einzelne Antwort lässt sich nicht für sich löschen: *Kommentar löschen*
 
 ### Einen Kommentar löschen
 
-[seit 1.33] Ein Kommentar an der falschen Stelle oder einer, der sich als falsch herausgestellt hat, lässt sich wieder aus der PDF entfernen — deiner und auch der von anderen.
+[seit 1.32.1] Ein Kommentar an der falschen Stelle oder einer, der sich als falsch herausgestellt hat, lässt sich wieder aus der PDF entfernen — deiner und auch der von anderen.
 
 **Was du brauchst:** eine PDF, die weder signiert noch geschützt ist, wie beim Hinzufügen.
 
