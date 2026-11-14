@@ -877,7 +877,11 @@ replaced by an operating system boundary:
   rejects the value (decision on #329). A venv with a different pip version is a
   known limitation; Go tools that verify through the Security framework (`gh`,
   `terraform`) get the service back only through a program allowance (#408,
-  below), one program at a time.
+  below), one program at a time. Apple's system libcurl — git over HTTPS,
+  curl — checks `/etc/ssl/cert.pem` first and falls back to the Security
+  framework through `com.apple.TrustEvaluationAgent` for a root that is only
+  in the keychain; the same allowance switch opens that service too
+  (`allowMachLookup`, #1398).
 - **The remaining risk.** A run can still **read** files outside the denied
   locations — source code, documents — and send what it read to a domain the
   card allowed; an allowed domain is a channel. `execute` still cannot be
@@ -991,7 +995,9 @@ program.
   looking like a broken certificate.
 - **The remaining risk.** trustd runs outside the sandbox and can reach the
   network by itself; the runtime calls opening it a potential exfiltration
-  channel, and it is open for the whole run of an allowed program. The program
+  channel, and it is open for the whole run of an allowed program — together
+  with `com.apple.TrustEvaluationAgent`, which the switch opens as well
+  (#1398). The program
   is trusted with any arguments the model gives it: an allowed `gh` can reach
   every endpoint of its hosts, an allowed tool can write anything into its
   folders. The folders are refused where they would reach keys or Snotra's own

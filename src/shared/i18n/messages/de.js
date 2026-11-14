@@ -1192,7 +1192,7 @@ module.exports = {
   'allowanceDialog.folders.add': 'Ordner hinzufügen …',
   'allowanceDialog.folders.remove': '{folder} entfernen',
   'allowanceDialog.trustd.label': 'Zertifikate über macOS prüfen',
-  'allowanceDialog.trustd.warning': '<strong>Schwächere Isolation:</strong> Programme in Go brauchen das, um ins Netz zu kommen. Es öffnet einen macOS-Dienst, der außerhalb der Sandbox läuft und selbst Verbindungen aufbauen kann.',
+  'allowanceDialog.trustd.warning': '<strong>Schwächere Isolation:</strong> Programme in Go brauchen das, um ins Netz zu kommen, und git und curl ebenso, wenn dem Zertifikat eines Servers nur über den macOS-Schlüsselbund vertraut wird. Es öffnet macOS-Dienste, die außerhalb der Sandbox laufen und selbst Verbindungen aufbauen können.',
   'allowanceDialog.cancel': 'Abbrechen',
   'allowanceDialog.save': 'Speichern',
   // Credentials of a program allowance (#1262): the dialog section, its
@@ -1816,7 +1816,7 @@ module.exports = {
   'permissionDialog.allowance.intro': 'Immer wenn ein Befehl {path} allein startet, in jedem Workspace:',
   'permissionDialog.allowance.domains': 'darf es {domains} erreichen',
   'permissionDialog.allowance.folders': 'darf es in {folders} schreiben',
-  'permissionDialog.allowance.trustd': 'darf es Zertifikate über macOS prüfen. Das öffnet einen Systemdienst außerhalb der Sandbox und schwächt ihre Netzwerk-Isolation.',
+  'permissionDialog.allowance.trustd': 'darf es Zertifikate über macOS prüfen. Das öffnet Systemdienste außerhalb der Sandbox und schwächt ihre Netzwerk-Isolation.',
   'permissionDialog.allowance.footer': 'Unter {place} änderst oder entfernst du das jederzeit.',
   'permissionDialog.allowance.confirm': 'Erlauben',
   'permissionDialog.allowance.folderTitle': 'Ordner, in den das Programm schreiben darf',

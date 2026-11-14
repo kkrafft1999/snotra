@@ -449,7 +449,7 @@ test('a new allowance needs the native confirmation, which names every right; ca
   assert.match(dialogCalls[0].detail, /Whenever a command runs ~\/.ai-workplace\/bin\/ms-todo-cli on its own, in any workspace:/);
   assert.match(dialogCalls[0].detail, /• it may reach graph\.microsoft\.com, login\.microsoftonline\.com/);
   assert.match(dialogCalls[0].detail, /• it may write in ~\/Library\/Application Support\/ms-todo/);
-  assert.match(dialogCalls[0].detail, /• it may check certificates through macOS\. That opens a system service outside the sandbox/);
+  assert.match(dialogCalls[0].detail, /• it may check certificates through macOS\. That opens system services outside the sandbox/);
   assert.match(dialogCalls[0].detail, /under Settings › Tools › Security/);
   assert.deepEqual(dialogCalls[0].buttons, ['Allow', 'Cancel']);
   assert.equal(dialogCalls[0].cancelId, 1, 'Cancel is the default');
