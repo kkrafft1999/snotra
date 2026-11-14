@@ -1483,11 +1483,36 @@ const MOTIFS = {
       await clickTreeRow(page, text.file);
       await poll(() => page.evaluate(() => document.querySelectorAll('.pdf-page canvas').length > 0
         && document.querySelectorAll('.pdf-comment-target').length === 2), { what: 'PDF with its comments' });
+      // The page is laid out again once the column has its width, and that
+      // closes an open comment; the click waits for the second layout.
+      await pause(800);
+      await poll(() => page.evaluate(() => document.querySelectorAll('.pdf-comment-target').length === 2), { what: 'settled comments' });
       await page.locator('.pdf-comment-target').first().click();
       await poll(() => page.evaluate(() => Boolean(document.querySelector('.pdf-comment'))), { what: 'opened comment' });
       await page.mouse.move(0, 0);
       await pause(300);
       // Down to a little below the opened comment.
+      return page.evaluate(() => {
+        const column = document.getElementById('file-preview').getBoundingClientRect();
+        const popover = document.querySelector('.pdf-comment').getBoundingClientRect();
+        return { x: column.left, y: column.top, width: column.width, height: Math.min(column.height, popover.bottom + 40 - column.top) };
+      });
+    },
+  },
+
+  /** Deleting a comment in a PDF (#1397): the question in the popover's footer. */
+  'pdf-delete': {
+    get text() {
+      return MOTIFS['pdf-comments'].text;
+    },
+    async setUp(context) {
+      const { page } = context;
+      await MOTIFS['pdf-comments'].setUp(context);
+      await page.locator('.pdf-comment__delete').click();
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.pdf-comment__confirm'))), { what: 'delete question' });
+      await page.mouse.move(0, 0);
+      await pause(300);
+      // Down to a little below the opened comment and its question.
       return page.evaluate(() => {
         const column = document.getElementById('file-preview').getBoundingClientRect();
         const popover = document.querySelector('.pdf-comment').getBoundingClientRect();

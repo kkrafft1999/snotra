@@ -26,6 +26,9 @@ const HIDDEN_FLAGS = 1 | 2 | 32;
 const MIN_TARGET_PX = 32;
 const POPOVER_GAP_PX = 6;
 
+const TRASH_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.1a1 1 0 0 0 1 .9h3.8a1 1 0 0 0 1-.9l.6-8.1M6.8 7v4M9.2 7v4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+let confirmIds = 0;
+
 const textOf = (obj) => (typeof obj?.str === 'string' ? obj.str.trim() : '');
 const dirOf = (obj) => (obj?.dir === 'rtl' ? 'rtl' : 'ltr');
 
@@ -85,7 +88,39 @@ export function commentsFromAnnotations(annotations) {
   for (const comment of roots) {
     comment.replies.sort((a, b) => (a.date?.getTime() ?? 0) - (b.date?.getTime() ?? 0));
   }
-  return roots.filter((c) => c.text || c.replies.length);
+  const shown = roots.filter((c) => c.text || c.replies.length);
+  for (const comment of shown) comment.refs = threadRefs(annotations, comment.id, byId.has(comment.id));
+  return shown;
+}
+
+/**
+ * What deleting a comment removes (#1397): the comment and everything that
+ * answers it, at any depth — replies, replies to replies, members of its
+ * group — each with its popup. `{ id, popupRef }` as pdf.js names the
+ * objects; empty for a comment without an object of its own, which cannot
+ * be deleted.
+ */
+function threadRefs(annotations, rootId, linked) {
+  if (!linked) return [];
+  const children = new Map();
+  for (const a of annotations) {
+    if (!a?.inReplyTo || a.id == null) continue;
+    const parent = String(a.inReplyTo);
+    if (!children.has(parent)) children.set(parent, []);
+    children.get(parent).push(a);
+  }
+  const root = annotations.find((a) => a && String(a.id) === rootId);
+  const refs = [];
+  const seen = new Set();
+  const visit = (a) => {
+    const id = String(a.id);
+    if (seen.has(id)) return;
+    seen.add(id);
+    refs.push({ id, popupRef: typeof a.popupRef === 'string' ? a.popupRef : '' });
+    for (const child of children.get(id) ?? []) visit(child);
+  };
+  if (root) visit(root);
+  return refs;
 }
 
 /**
@@ -162,11 +197,19 @@ function entryNode(entry, className) {
  * The buttons over the markings and the one popover. `viewEl` is the
  * scrolling view; the popover is placed inside the page it belongs to and
  * kept within the view's visible width.
+ *
+ * Deleting (#1397): `deleteComment({ page, refs })` removes a comment with
+ * its replies from the file and answers `{ ok }` or `{ ok: false, reason }`;
+ * `canDelete()` says whether the document takes changes at all; `announce`
+ * speaks the outcome. Without `deleteComment` the popover offers no delete.
  */
-export function createCommentLayer({ viewEl }) {
+export function createCommentLayer({ viewEl, deleteComment = null, canDelete = () => true, announce = () => {} }) {
   // Page number → { layerEl, comments, buttons }
   const pages = new Map();
   let open = null; // { page, id, button, popover }
+  // A delete that found the file changed (#1397): the view reloads, and the
+  // comment opens again with the reason, if it is still there.
+  let pendingNotice = null; // { page, id, text }
 
   function attach(pageEl, n, comments, viewport) {
     detach(n);
@@ -202,17 +245,24 @@ export function createCommentLayer({ viewEl }) {
     }
     pageEl.append(layerEl);
     pages.set(n, { layerEl, comments, buttons });
+    if (pendingNotice?.page === n) {
+      const { id, text } = pendingNotice;
+      pendingNotice = null;
+      const comment = comments.find((c) => c.id === id);
+      if (comment) show(n, comment, buttons.get(id), { notice: text });
+    }
   }
 
   function detach(n) {
     const entry = pages.get(n);
     if (!entry) return;
-    if (open?.page === n) close({ focus: false });
+    // A page drawn again keeps a notice that waits for it; any other close drops it.
+    if (open?.page === n) close({ focus: false, keepNotice: true });
     entry.layerEl.remove();
     pages.delete(n);
   }
 
-  function show(n, comment, button, { focus = true } = {}) {
+  function show(n, comment, button, { focus = true, notice = '' } = {}) {
     close({ focus: false });
     const layerEl = pages.get(n)?.layerEl;
     if (!layerEl) return;
@@ -233,6 +283,14 @@ export function createCommentLayer({ viewEl }) {
       }
       popover.append(list);
     }
+    if (notice) {
+      const noticeEl = document.createElement('p');
+      noticeEl.className = 'pdf-comment__message pdf-comment__notice';
+      noticeEl.setAttribute('role', 'alert');
+      noticeEl.textContent = notice;
+      popover.append(noticeEl);
+    }
+    if (deleteComment && comment.refs?.length && canDelete()) popover.append(deleteFooter(n, comment));
     const closeButton = document.createElement('button');
     closeButton.type = 'button';
     closeButton.className = 'pdf-comment__close';
@@ -259,6 +317,130 @@ export function createCommentLayer({ viewEl }) {
     popover.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
   }
 
+  /**
+   * The popover's footer: "Delete comment", which turns into the question in
+   * the same place. Cancel comes first and takes the focus, so that neither
+   * Enter nor a double click deletes by accident.
+   */
+  function deleteFooter(n, comment) {
+    const foot = document.createElement('div');
+    foot.className = 'pdf-comment__foot';
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'pdf-comment__delete';
+    trigger.innerHTML = TRASH_ICON;
+    const triggerLabel = document.createElement('span');
+    triggerLabel.textContent = t('fileView.pdf.comment.delete');
+    trigger.append(triggerLabel);
+    trigger.addEventListener('click', ask);
+    foot.append(trigger);
+
+    let busy = false;
+    let confirmEl = null;
+    let cancelButton = null;
+    let deleteButton = null;
+    let messageEl = null;
+
+    function ask() {
+      const count = comment.replies.length;
+      confirmIds += 1;
+      confirmEl = document.createElement('div');
+      confirmEl.className = 'pdf-comment__confirm';
+      confirmEl.setAttribute('role', 'group');
+      const question = document.createElement('p');
+      question.className = 'pdf-comment__question';
+      question.id = `pdf-comment-question-${confirmIds}`;
+      question.textContent = count
+        ? tPlural('fileView.pdf.comment.delete.questionReplies', count, { count })
+        : t('fileView.pdf.comment.delete.question');
+      const detail = document.createElement('p');
+      detail.className = 'pdf-comment__detail';
+      detail.id = `pdf-comment-detail-${confirmIds}`;
+      detail.textContent = t(count ? 'fileView.pdf.comment.delete.detailReplies' : 'fileView.pdf.comment.delete.detail');
+      confirmEl.setAttribute('aria-labelledby', question.id);
+      confirmEl.setAttribute('aria-describedby', detail.id);
+      messageEl = document.createElement('p');
+      messageEl.className = 'pdf-comment__message';
+      messageEl.setAttribute('role', 'alert');
+      messageEl.hidden = true;
+      const actions = document.createElement('div');
+      actions.className = 'pdf-comment__actions';
+      cancelButton = document.createElement('button');
+      cancelButton.type = 'button';
+      cancelButton.className = 'btn-secondary pdf-comment__cancel';
+      cancelButton.textContent = t('fileView.pdf.comment.delete.cancel');
+      cancelButton.addEventListener('click', () => {
+        if (!busy) back();
+      });
+      deleteButton = document.createElement('button');
+      deleteButton.type = 'button';
+      deleteButton.className = 'btn-destructive pdf-comment__confirm-delete';
+      deleteButton.textContent = t('fileView.pdf.comment.delete.confirm');
+      deleteButton.addEventListener('click', run);
+      actions.append(cancelButton, deleteButton);
+      confirmEl.append(question, detail, messageEl, actions);
+      confirmEl.addEventListener('keydown', (event) => {
+        // Escape steps back to the comment instead of closing it.
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        event.stopPropagation();
+        if (!busy) back();
+      });
+      foot.replaceChildren(confirmEl);
+      foot.classList.add('pdf-comment__foot--confirm');
+      cancelButton.focus({ preventScroll: true });
+      confirmEl.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }
+
+    function back() {
+      foot.classList.remove('pdf-comment__foot--confirm');
+      foot.replaceChildren(trigger);
+      confirmEl = null;
+      trigger.focus({ preventScroll: true });
+    }
+
+    function setBusy(value) {
+      busy = value;
+      // aria-disabled rather than disabled: a disabled button drops the focus.
+      for (const button of [cancelButton, deleteButton]) button.setAttribute('aria-disabled', String(value));
+      deleteButton.textContent = t(value ? 'fileView.pdf.comment.delete.deleting' : 'fileView.pdf.comment.delete.confirm');
+    }
+
+    async function run() {
+      if (busy) return;
+      setBusy(true);
+      messageEl.hidden = true;
+      let result;
+      try {
+        result = await deleteComment({ page: n, refs: comment.refs });
+      } catch (err) {
+        console.warn('PDF comment could not be deleted:', err?.message ?? err);
+        result = { ok: false, reason: 'failed' };
+      }
+      // On success the view reloads, and this popover goes with the page.
+      if (result?.ok) {
+        announce(t('fileView.pdf.comment.delete.done'));
+        return;
+      }
+      const changed = result?.reason === 'changed';
+      const text = t(`fileView.pdf.comment.delete.error.${changed ? 'changed' : 'failed'}`);
+      if (changed) {
+        // The reload takes this popover; the comment comes back with the reason.
+        pendingNotice = { page: n, id: comment.id, text };
+        announce(text);
+      }
+      if (!foot.isConnected) {
+        if (!changed) announce(text);
+        return;
+      }
+      setBusy(false);
+      messageEl.textContent = text;
+      messageEl.hidden = false;
+    }
+
+    return foot;
+  }
+
   /** Below the marking, or above it when the page ends first; inside the view's width. */
   function place(popover, button) {
     const pageEl = popover.closest('.pdf-page');
@@ -279,7 +461,8 @@ export function createCommentLayer({ viewEl }) {
     popover.style.left = `${Math.max(visibleLeft, x)}px`;
   }
 
-  function close({ focus }) {
+  function close({ focus, keepNotice = false }) {
+    if (!keepNotice) pendingNotice = null;
     if (!open) return;
     const { button, popover } = open;
     open = null;
@@ -325,6 +508,7 @@ export function createCommentLayer({ viewEl }) {
       for (const n of [...pages.keys()]) detach(n);
     },
     dispose() {
+      pendingNotice = null;
       this.clear();
       document.removeEventListener('pointerdown', onPointerDown, true);
       document.removeEventListener('focusin', onFocusIn);

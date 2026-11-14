@@ -867,6 +867,29 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
   assert.ok(pdfAfter.length > pdfBefore.length);
   assert.ok(pdfAfter.subarray(0, pdfBefore.length).equals(pdfBefore), 'appended, not rewritten');
   assert.ok(pdfAfter.includes(Buffer.from('/Highlight')));
+  // Deleting a comment (#1397): Ada's comment goes with Grace's reply, after
+  // the question in the popover's footer, as one more appended update; the
+  // new comment stays.
+  await page.locator('.pdf-comment-target[aria-label^="Kommentar von Ada"]').click();
+  await page.locator('.pdf-comment__delete').click();
+  const question = await poll(() => page.evaluate(() => {
+    const text = document.querySelector('.pdf-comment__question')?.textContent;
+    return text ? { text, cancelFocused: document.activeElement?.classList.contains('pdf-comment__cancel') } : null;
+  }), { what: 'Rückfrage zum Löschen' });
+  assert.deepEqual(question, { text: 'Diesen Kommentar und 1 Antwort löschen?', cancelFocused: true });
+  await page.locator('.pdf-comment__confirm-delete').click();
+  const deleted = await poll(() => page.evaluate(() => {
+    const targets = [...document.querySelectorAll('.pdf-comment-target')];
+    if (targets.length !== 1 || document.querySelector('.pdf-comment')) return null;
+    return {
+      labels: targets.map((b) => b.getAttribute('aria-label')),
+      announced: document.querySelector('.pdf-view__announcer')?.textContent ?? '',
+    };
+  }), { what: 'gelöschter PDF-Kommentar' });
+  assert.equal(deleted.announced, 'Kommentar aus dem PDF gelöscht.');
+  assert.ok(!deleted.labels[0].startsWith('Kommentar von Ada'), 'the new comment is the one left');
+  const pdfDeleted = await readFile(pdfPath);
+  assert.ok(pdfDeleted.subarray(0, pdfAfter.length).equals(pdfAfter), 'appended again, not rewritten');
   // What the clicks and the rest of the markdown could have set going is read
   // after the next step, the HTML page below, not after a fixed pause.
   step('PDF-Vorschau geprueft');
