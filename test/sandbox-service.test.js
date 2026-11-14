@@ -404,6 +404,7 @@ test('a program allowance adds its folders to the writable ones, trustd stays cl
   const config = calls.updateConfig.at(-1);
   assert.deepEqual(config.filesystem.allowWrite, ['/home/u/project', '/tmp/snotra-sh-2', '/home/u/.cache/tool']);
   assert.equal('enableWeakerNetworkIsolation' in config, false, 'Linux has no trust service to open');
+  assert.equal('allowMachLookup' in config.network, false, 'nor Mach services');
   assert.deepEqual(prepared.writePaths, ['/home/u/.cache/tool']);
   assert.equal(prepared.trustd, false);
   prepared.release();
@@ -418,29 +419,54 @@ test('on macOS trustd opens only for a run whose allowance asks for it, and a bl
     await service.detect();
     const tls = 'Get "https://login.microsoftonline.com/x": tls: failed to verify certificate: x509: OSStatus -26276';
 
+    const curl = "fatal: unable to access 'https://git.example.com/x.git/': SSL certificate problem: unable to get local issuer certificate";
+
     const open = await service.prepare({ command: 'tool', runTmp: '/tmp/r1', weakerNetworkIsolation: true });
     assert.equal(calls.updateConfig.at(-1).enableWeakerNetworkIsolation, true);
+    // Apple's libcurl falls back to this service for a root only in the keychain (#1398).
+    assert.deepEqual(calls.updateConfig.at(-1).network.allowMachLookup, ['com.apple.TrustEvaluationAgent']);
     assert.equal(open.trustd, true);
     assert.doesNotMatch(open.annotate(tls), /sandbox_certificates/);
+    assert.doesNotMatch(open.annotate(curl), /sandbox_certificates/, 'with the check open, the words mean the certificate');
     open.release();
 
     const closed = await service.prepare({ command: 'tool', runTmp: '/tmp/r2' });
     assert.equal('enableWeakerNetworkIsolation' in calls.updateConfig.at(-1), false);
+    assert.equal('allowMachLookup' in calls.updateConfig.at(-1).network, false);
     assert.equal(closed.trustd, false);
     const annotated = closed.annotate(tls);
     assert.match(annotated, /<sandbox_certificates>/);
     assert.match(annotated, /Settings › Tools › Security › Programs with more room/);
+    const curlNote = closed.annotate(curl);
+    assert.match(curlNote, /<sandbox_certificates>/);
+    assert.match(curlNote, /Programs with more room/);
     closed.release();
   } finally {
     await removeTempDir(dir);
   }
 });
 
-test('the trustd note only answers Go\'s blocked certificate check, and only once', () => {
+test('the trustd note answers Go\'s blocked check and curl\'s missing issuer, each only once', () => {
   assert.equal(annotateBlockedTrustd('curl: (60) SSL certificate problem'), 'curl: (60) SSL certificate problem');
+  assert.equal(
+    annotateBlockedTrustd('SSL certificate problem: certificate has expired'),
+    'SSL certificate problem: certificate has expired',
+    'an expired certificate is not the sandbox\'s doing',
+  );
   const once = annotateBlockedTrustd('x509: OSStatus -26276');
   assert.match(once, /^x509: OSStatus -26276\n\n<sandbox_certificates>\n/);
+  assert.match(once, /The host was not reached/);
   assert.equal(annotateBlockedTrustd(once), once);
+
+  // git over HTTPS through Apple's libcurl (#1398): conditional, since the
+  // same words stand for a certificate nobody trusts.
+  const issuer = 'fatal: unable to access \'https://git.example.com/x.git/\': SSL certificate problem: unable to get local issuer certificate';
+  const curlOnce = annotateBlockedTrustd(issuer);
+  assert.match(curlOnce, /\n\n<sandbox_certificates>\n.*may have failed because of the sandbox/s);
+  assert.match(curlOnce, /If the same command works in a terminal/);
+  assert.match(curlOnce, /never turn certificate verification off/);
+  assert.doesNotMatch(curlOnce, /The host was not reached/, 'curl did reach the host');
+  assert.equal(annotateBlockedTrustd(curlOnce), curlOnce);
 });
 
 // ── Git over SSH (#932) ─────────────────────────────────────────────────────

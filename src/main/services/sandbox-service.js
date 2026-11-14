@@ -41,6 +41,18 @@ const { quoteArgv } = require('../../shared/runtime/quote-argv');
 /** The Linux packages the runtime needs, as the distributions name them. */
 const LINUX_PACKAGES = Object.freeze(['bubblewrap', 'socat', 'ripgrep']);
 
+/**
+ * The macOS services a program allowance's certificate check opens besides
+ * `com.apple.trustd.agent` (the runtime's `enableWeakerNetworkIsolation`).
+ * Apple's system libcurl — git's HTTPS transport, `/usr/bin/curl` — verifies
+ * against `/etc/ssl/cert.pem` first and, for a root that is only in the
+ * keychain, falls back to the Security framework, which asks
+ * `com.apple.TrustEvaluationAgent`. trustd.agent alone leaves that fallback
+ * closed and git fails with "unable to get local issuer certificate" (#1398).
+ * Same class of risk as trustd: a system service outside the sandbox.
+ */
+const TRUST_EVALUATION_SERVICES = Object.freeze(['com.apple.TrustEvaluationAgent']);
+
 const LIMITS = Object.freeze({
   SELF_TEST_TIMEOUT_MS: 15_000,
   PIP_PROBE_TIMEOUT_MS: 10_000,
@@ -824,6 +836,7 @@ function createSandboxService({
     const relay = sshRelay();
     const deniedReads = sensitiveReadPaths({ platform, userDataPath }).map((p) => path.resolve(expandHome(p)));
     const hiddenSocket = relay && socket && deniedReads.some((denied) => isPathInside(path, denied, socket)) ? [socket] : [];
+    const trustServices = platform === 'darwin' && weakerNetworkIsolation === true;
     const allowRead = [
       ...grantedReads,
       // Without an agent too: an unknown host is then not what SSH reports.
@@ -836,6 +849,9 @@ function createSandboxService({
         allowedDomains: runDomains(allowedDomains, grants),
         deniedDomains: [],
         ...(socket && platform === 'darwin' ? { allowUnixSockets: [socket] } : {}),
+        // The certificate check of a program allowance: trustd.agent below,
+        // and the service Apple's libcurl falls back to (#1398).
+        ...(trustServices ? { allowMachLookup: [...TRUST_EVALUATION_SERVICES] } : {}),
       },
       filesystem: {
         denyRead: sensitiveReadPaths({ platform, userDataPath }),
@@ -843,7 +859,7 @@ function createSandboxService({
         allowWrite,
         denyWrite: [...DENY_WRITE_DEFAULTS, ...protectedPaths],
       },
-      ...(platform === 'darwin' && weakerNetworkIsolation === true ? { enableWeakerNetworkIsolation: true } : {}),
+      ...(trustServices ? { enableWeakerNetworkIsolation: true } : {}),
       ...vendorPaths(),
     };
   }
@@ -1434,15 +1450,31 @@ function annotateUnreachableProxy(stderr, proxyPort) {
  * (errSecInternalComponent) before a single byte reaches the host (#408).
  * Without a word the model reads that as a broken certificate or a host that
  * is down, so the run says what happened and where the user can change it.
+ *
+ * Apple's libcurl — git over HTTPS, curl — says "unable to get local issuer
+ * certificate" when the server's root is only in the keychain: its fallback to
+ * the Security framework is closed as well (#1398). The same words also stand
+ * for a certificate nobody trusts, so that note is conditional. Only called
+ * on macOS and only for a run without the certificate check.
  */
 /** @param {unknown} stderr */
 function annotateBlockedTrustd(stderr) {
   const text = String(stderr ?? '');
-  if (!/x509: OSStatus -26276\b/.test(text) || text.includes('<sandbox_certificates>')) return text;
-  const note = 'The certificate check was refused inside the sandbox: this program verifies certificates '
-    + 'through the macOS trust service (trustd), which the sandbox keeps closed. The host was not reached. '
-    + 'If the user trusts the program, they can allow certificate checks for it under Settings › Tools › Security › '
-    + 'Programs with more room. Tell them that instead of working around it.';
+  if (text.includes('<sandbox_certificates>')) return text;
+  const where = 'Settings › Tools › Security › Programs with more room';
+  let note = '';
+  if (/x509: OSStatus -26276\b/.test(text)) {
+    note = 'The certificate check was refused inside the sandbox: this program verifies certificates '
+      + 'through the macOS trust service (trustd), which the sandbox keeps closed. The host was not reached. '
+      + `If the user trusts the program, they can allow certificate checks for it under ${where}. `
+      + 'Tell them that instead of working around it.';
+  } else if (/SSL certificate problem: unable to get local issuer certificate/.test(text)) {
+    note = 'The certificate check may have failed because of the sandbox: this program (git over HTTPS, curl) '
+      + 'falls back to the macOS trust services for a root certificate that is only in the keychain, and the '
+      + 'sandbox keeps them closed. If the same command works in a terminal, the user can allow certificate '
+      + `checks for the program under ${where}. Tell them that; never turn certificate verification off.`;
+  }
+  if (!note) return text;
   return `${text}${text && !text.endsWith('\n') ? '\n' : ''}\n<sandbox_certificates>\n${note}\n</sandbox_certificates>\n`;
 }
 

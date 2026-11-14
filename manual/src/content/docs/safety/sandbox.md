@@ -148,7 +148,7 @@ Often it is a single program that needs more — a tool whose login has to be re
 2. Under *Program*, enter its name as you type it in the terminal, or its full path. Snotra shows which file it found.
 3. [since 1.26] Under *Applies to*, keep *This workspace* — the usual choice — or choose *All workspaces* for a tool you trust in every folder. Without an open folder, only *All workspaces* is possible; from *All workspaces*, it is chosen already.
 4. Add the *Domains it may reach*, one per line, and under *Folders it may also write in* any folder it keeps its data in.
-5. On macOS, tick *Check certificates through macOS* for programs written in Go, such as `gh` and `terraform`. It weakens the isolation a little; the dialog says how.
+5. On macOS, tick *Check certificates through macOS* for programs written in Go, such as `gh` and `terraform`, and for `git` and `curl` when they reach a server whose certificate your Mac trusts only through the keychain. It weakens the isolation a little; the dialog says how.
 6. [since 1.28] If the program signs in with a token, add it under *Credentials* — see [Give a program a token](#give-a-program-a-token).
 7. Click *Save* and confirm in the system dialog, which names the folder or says *in any workspace*.
 
@@ -223,6 +223,7 @@ Enter the host with its port, such as `api.example.com:443`, or as `*.example.co
 - **Git over SSH: *Permission denied (publickey)*.** The key is not loaded in the ssh-agent, so SSH has nothing to sign in with. Load it — `ssh-add --apple-use-keychain ~/.ssh/<key>` on macOS, `ssh-add ~/.ssh/<key>` on Linux — and run the command again; see [Use Git over SSH](#use-git-over-ssh). On Linux, if `ssh-add -l` works in your terminal but Snotra still finds no agent, start Snotra from a session that has `SSH_AUTH_SOCK` set.
 - **Git over SSH: *Host key verification failed*.** The host is not in `~/.ssh/known_hosts` yet. Connect to it once from a terminal and accept its key.
 - **macOS: `gh`, `terraform` or another Go program cannot reach the network.** Give it a program allowance with *Check certificates through macOS*.
+- **macOS: `git` or `curl` over HTTPS reports *SSL certificate problem: unable to get local issuer certificate*, while the same command works in the terminal.** Your Mac trusts the server's certificate only through the keychain, and the sandbox keeps that check closed. Give the program a [program allowance](#give-one-program-more-room) with the server's host and *Check certificates through macOS*. Don't switch certificate verification off.
 - **The sandbox of a workspace cannot be switched off.** That needs the system's encrypted storage; where there is none, the switch stays on and the tile says why. The same holds for programs, hosts and *Sandbox on in new workspaces*.
 - **Windows: *Settings › Tools › Security* has nothing to set up.** There is no sandbox on Windows yet, so there is nothing to widen; the page says so for every workspace.
 - **An allowance does not apply in one folder.** Its sandbox is off there — the allowances rest while it is, and the page marks them — or the allowance belongs to another workspace. Choose the folder in the list to see what applies there.

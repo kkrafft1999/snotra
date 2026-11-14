@@ -1617,7 +1617,7 @@
                 <label for="allowance-field-trustd" class="settings-switch-row__label" data-i18n="allowanceDialog.trustd.label">Check certificates through macOS</label>
                 <input type="checkbox" role="switch" class="ds-switch" id="allowance-field-trustd" aria-describedby="allowance-trustd-warning">
               </div>
-              <p id="allowance-trustd-warning" class="allowance-warning" data-i18n-html="allowanceDialog.trustd.warning"><strong>Weaker isolation:</strong> programs written in Go need this to reach the network. It opens a macOS service that runs outside the sandbox and can make connections of its own.</p>
+              <p id="allowance-trustd-warning" class="allowance-warning" data-i18n-html="allowanceDialog.trustd.warning"><strong>Weaker isolation:</strong> programs written in Go need this to reach the network, and so do git and curl when a server’s certificate is trusted only through the macOS keychain. It opens macOS services that run outside the sandbox and can make connections of their own.</p>
             </div>
             <!-- Credentials (#1262): a variable and a secret value, never shown again once saved. -->
             <div class="modal-field-group" id="allowance-credentials-group">

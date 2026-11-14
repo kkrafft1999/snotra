@@ -1173,7 +1173,7 @@ module.exports = {
   'allowanceDialog.folders.add': 'Add folder…',
   'allowanceDialog.folders.remove': 'Remove {folder}',
   'allowanceDialog.trustd.label': 'Check certificates through macOS',
-  'allowanceDialog.trustd.warning': '<strong>Weaker isolation:</strong> programs written in Go need this to reach the network. It opens a macOS service that runs outside the sandbox and can make connections of its own.',
+  'allowanceDialog.trustd.warning': '<strong>Weaker isolation:</strong> programs written in Go need this to reach the network, and so do git and curl when a server’s certificate is trusted only through the macOS keychain. It opens macOS services that run outside the sandbox and can make connections of their own.',
   'allowanceDialog.cancel': 'Cancel',
   'allowanceDialog.save': 'Save',
   // Credentials of a program allowance (#1262): the dialog section, its
@@ -1797,7 +1797,7 @@ module.exports = {
   'permissionDialog.allowance.intro': 'Whenever a command runs {path} on its own, in any workspace:',
   'permissionDialog.allowance.domains': 'it may reach {domains}',
   'permissionDialog.allowance.folders': 'it may write in {folders}',
-  'permissionDialog.allowance.trustd': 'it may check certificates through macOS. That opens a system service outside the sandbox and weakens its network isolation.',
+  'permissionDialog.allowance.trustd': 'it may check certificates through macOS. That opens system services outside the sandbox and weakens its network isolation.',
   'permissionDialog.allowance.footer': 'You can change or remove this under {place} at any time.',
   'permissionDialog.allowance.confirm': 'Allow',
   'permissionDialog.allowance.folderTitle': 'Folder the program may write in',
