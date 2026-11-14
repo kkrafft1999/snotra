@@ -15,6 +15,7 @@ import { initSettingsHelp } from './SettingsHelp.js';
 import { initModelPricesSettings } from './ModelPricesSettings.js';
 import { initRemoteAccessSettings, initRemoteSectionVisibility } from './RemoteAccessSettings.js';
 import { initModelNameCombobox } from './ModelNameCombobox.js';
+import { accountName } from '../file-views/comment-author.js';
 
 /**
  * Sections that take effect **at once** rather than on Apply: permissions
@@ -242,8 +243,15 @@ export function initSettingsModal(deps) {
   const btnSettingsClose = document.getElementById('btn-settings-close');
   const btnSettingsFooterClose = document.getElementById('btn-settings-footer-close');
   const inputGlobalSystemPrompt = document.getElementById('input-global-system-prompt');
-  // The name a comment in a Markdown file is signed with (#1388).
+  // The name a comment in a PDF or Markdown file is signed with (#1388,
+  // #1391). Empty, the account name applies — and stands in the field as its
+  // placeholder, so that what will be written is visible without typing it.
   const inputCommentAuthor = document.getElementById('input-comment-author');
+  let commentAccountName = '';
+  function showCommentAuthorPlaceholder() {
+    if (!inputCommentAuthor) return;
+    inputCommentAuthor.placeholder = commentAccountName || t('settings.general.commentAuthor.placeholder');
+  }
   // Appearance and interface language take effect at once (issue #297).
   const choiceAppLocale = document.getElementById('choice-app-locale');
   const choiceAppTheme = document.getElementById('choice-app-theme');
@@ -2187,6 +2195,12 @@ export function initSettingsModal(deps) {
       if (stale()) return;
       inputGlobalSystemPrompt.value = typeof up.baseSystemPrompt === 'string' ? up.baseSystemPrompt : '';
       if (inputCommentAuthor) inputCommentAuthor.value = typeof up.commentAuthor === 'string' ? up.commentAuthor : '';
+      showCommentAuthorPlaceholder();
+      accountName(api).then((name) => {
+        if (stale()) return;
+        commentAccountName = name;
+        showCommentAuthorPlaceholder();
+      }).catch((err) => console.warn('Settings: no account name for the comment field:', err?.message ?? err));
       localeChoice.set(LOCALES.includes(up.appLocale) ? up.appLocale : DEFAULT_LOCALE);
       if (selectSkillSuggestionMode) {
         selectSkillSuggestionMode.value = isSkillSuggestionMode(up.skillSuggestionMode)
@@ -3115,6 +3129,7 @@ export function initSettingsModal(deps) {
   // costs nothing — the next open draws afresh anyway.
   onLocaleChange(() => {
     if (modalSettings.classList.contains('hidden')) return;
+    showCommentAuthorPlaceholder();
     activateSettingsPanel(activePanelKey);
     renderDraftPresetList();
     // Provider names, hints and option labels come from the main process in

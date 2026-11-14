@@ -2344,7 +2344,8 @@ context.writeFile(text, { baseHash }) — the source editor's checked write
   selection (only in the document while it is shown), ⌥⌘M / Ctrl+Alt+M, the
   form, and after each comment a `<button>` marker — after the link, when the
   passage is a link's text — tied to its last word by a word joiner. The name
-  comes from the UI prefs (`commentAuthor`, *Settings › General*).
+  comes from the UI prefs (`commentAuthor`, *Settings › General*), or while
+  that is empty from the account name — as for a PDF comment (#1391).
 
 #### Images ([#345](https://github.com/kkrafft1999/snotra/issues/345))
 
@@ -2524,9 +2525,12 @@ name, nothing else.
         path checked again, atomic write ─▶ the view reloads the file
   ```
 
-  The comment is signed with the system account's full name
-  (`pdf:commentAuthor`, `main/services/account-name.js`: `id -F` on macOS,
-  GECOS on Linux, the login name elsewhere). Signed and protected PDFs
+  The comment is signed with *Settings › General › Name for comments*, or
+  while that is empty with the system account's full name
+  (`comment:accountName`, `main/services/account-name.js`: `id -F` on macOS,
+  GECOS on Linux, the login name elsewhere) — the same rule as for Markdown
+  comments, in `renderer/file-views/comment-author.js`
+  ([#1391](https://github.com/kkrafft1999/snotra/issues/1391)). Signed and protected PDFs
   (pdf.js's `IsSignaturesPresent`, `EncryptFilterName`) take no comments.
   `pdf-lib` was the first plan; it rewrites the whole file and so breaks
   signatures, and it is unmaintained — pdf.js, already vendored, appends.

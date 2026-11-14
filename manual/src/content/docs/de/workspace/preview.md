@@ -74,7 +74,7 @@ Eine PDF öffnet sich Seite für Seite, eingepasst in die Spaltenbreite. Der Kop
 
 ![Die mittlere Spalte mit pruefung.pdf: die Zeile „Die Kräuterspirale bleibt, wo sie ist“ gelb markiert, darunter das Feld „Neuer Kommentar als Ada Lovelace“ mit einer Frage zum Gießen der Spirale und den Knöpfen Abbrechen und Speichern.](screenshots/pdf-annotate.webp)
 
-**Was passiert:** Die Stelle wird gelb markiert, und der Kommentar wird in die PDF selbst geschrieben, mit dem vollen Namen deines Benutzerkontos und der Uhrzeit. Snotra hängt ihn ans Ende der Datei an und ändert nichts an dem, was schon drinstand. Acrobat, die macOS-Vorschau und andere PDF-Programme zeigen ihn wie einen dort geschriebenen Kommentar, und Snotra zeigt ihn sofort, wie oben beschrieben.
+**Was passiert:** Die Stelle wird gelb markiert, und der Kommentar wird in die PDF selbst geschrieben, mit der Uhrzeit und dem Namen unter [*Einstellungen › Allgemein*](../../customising/settings/#der-bereich-allgemein), *Name für Kommentare* — oder, solange der leer ist, dem vollen Namen deines Benutzerkontos. Snotra hängt ihn ans Ende der Datei an und ändert nichts an dem, was schon drinstand. Acrobat, die macOS-Vorschau und andere PDF-Programme zeigen ihn wie einen dort geschriebenen Kommentar, und Snotra zeigt ihn sofort, wie oben beschrieben.
 
 Eine Markierung über mehrere Seiten wird auf der Seite kommentiert, auf der sie beginnt.
 

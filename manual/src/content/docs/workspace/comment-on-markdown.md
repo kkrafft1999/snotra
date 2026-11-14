@@ -13,7 +13,7 @@ sidebar:
 
 - An open folder and a Markdown file from it in the [preview](../preview/), on its *Preview* side.
 - No chat answer is running. While the agent works, comments wait, as [editing](../edit-a-file/) does.
-- Optional: your name under [*Settings › General*](../../customising/settings/#the-section-general), *Name for comments*. Without it a comment carries only the date.
+- Optional: a name under [*Settings › General*](../../customising/settings/#the-section-general), *Name for comments*. Without it Snotra signs with the full name of your user account, as it does in a PDF.
 
 ## Steps
 

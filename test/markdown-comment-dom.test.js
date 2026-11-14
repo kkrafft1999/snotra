@@ -23,7 +23,7 @@ async function settle() {
   for (let i = 0; i < 4; i += 1) await flush();
 }
 
-async function mountPane(t, { content, author = 'Ada Lovelace', write } = {}) {
+async function mountPane(t, { content, author = 'Ada Lovelace', account = '', write } = {}) {
   const dom = setupRendererDom();
   require(path.join(RENDERER_DIR, 'vendor', 'marked.umd.js'));
   globalThis.marked = globalThis.marked || dom.window.marked;
@@ -35,6 +35,7 @@ async function mountPane(t, { content, author = 'Ada Lovelace', write } = {}) {
   const api = {
     setUIPrefs: async () => ({}),
     getUIPrefs: async () => ({ commentAuthor: author }),
+    commentAccountName: async () => account,
     readFile: async (p) => (p in disk ? file(disk[p]) : { error: `ENOENT: ${p}` }),
     readWorkspaceImage: async () => ({ ok: false, reason: 'not_found' }),
     writeFile: async (p, text, options) => {
@@ -242,4 +243,19 @@ test('a selection over a commented passage and beyond is traced through the mark
   await settle();
   await writeComment('y');
   assert.match(calls.writes[0].text, /^Alpha \{==beta==\}\{>>x<<\} \{==gamma==\}\{>>Ada Lovelace, [\d-]+: y<<\} delta\.\n$/);
+});
+
+test('with the setting empty, the account name signs the comment, as in a PDF (#1391)', async (t) => {
+  const { calls } = await mountPane(t, { content: 'Plain words.\n', author: '', account: 'Kim Example' });
+  select('.md-doc p', 'words');
+  await settle();
+  action().click();
+  await settle();
+  assert.equal($('.md-comment-popover__author').textContent, 'As Kim Example');
+  const input = $('.md-comment-popover textarea');
+  input.value = 'x';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  $('.md-comment-popover button[type="submit"]').click();
+  await settle();
+  assert.match(calls.writes[0].text, /^Plain \{==words==\}\{>>Kim Example, \d{4}-\d{2}-\d{2}: x<<\}\.\n$/);
 });

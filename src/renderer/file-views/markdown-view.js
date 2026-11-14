@@ -49,6 +49,7 @@ import { plainTextView } from './plain-text-view.js';
 import { sha256Hex } from './autosave.js';
 import { COMMENT_ERRORS, commentDate, insertComment, locateSelection } from './markdown-comments.js';
 import { createCommentUi, isCommentShortcut } from './markdown-comment-ui.js';
+import { commentAuthor as resolveCommentAuthor } from './comment-author.js';
 
 const {
   isWorkspaceImageSource,
@@ -276,9 +277,9 @@ export const markdownView = {
 
     // ── Comments (#1388) ──────────────────────────────────────────────────
 
-    async function commentAuthor() {
-      const prefs = await api.getUIPrefs?.();
-      return typeof prefs?.commentAuthor === 'string' ? prefs.commentAuthor : '';
+    /** The setting, else the account name — the same name as a PDF comment's (#1391). */
+    function commentAuthor() {
+      return resolveCommentAuthor(api);
     }
 
     /** A selection in the preview, traced back to a place in `content`. */

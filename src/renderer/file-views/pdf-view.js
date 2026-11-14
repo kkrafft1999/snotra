@@ -36,6 +36,7 @@ import { formatSize } from '../utils/helpers.js';
 import { openPdfDocument, renderTextLayer, saveWithHighlight, commentBlockReason } from './pdf-engine.js';
 import { commentsFromAnnotations, createCommentLayer } from './pdf-comments.js';
 import { createCommentComposer, highlightAnnotation } from './pdf-annotate.js';
+import { commentAuthor as resolveCommentAuthor } from './comment-author.js';
 import { ZOOM_STEPS, nextZoom, iconButton, ZOOM_IN_ICON, ZOOM_OUT_ICON } from './zoom-tools.js';
 
 export { ZOOM_STEPS, nextZoom };
@@ -121,7 +122,6 @@ export function createPdfView({
       const baseViewports = new Map();
       // Why the shown document takes no comments, or null (#1386).
       let commentBlock = null;
-      let authorPromise = null;
       // Zoom: 'fit' follows the column width; otherwise a fixed factor.
       let zoomMode = 'fit';
       let zoom = 1;
@@ -751,16 +751,9 @@ export function createPdfView({
         return { el, viewport: base.clone({ scale: zoom * CSS_PX_PER_PT }) };
       }
 
-      /** The account name a comment is signed with; asked once per view. */
+      /** The name a comment is signed with: the setting, else the account name (#1391). */
       function commentAuthor() {
-        authorPromise ??= Promise.resolve()
-          .then(() => (typeof api.pdfCommentAuthor === 'function' ? api.pdfCommentAuthor() : ''))
-          .then((name) => (typeof name === 'string' ? name : ''))
-          .catch(() => {
-            // No name from main: the comment goes out unsigned.
-            return '';
-          });
-        return authorPromise;
+        return resolveCommentAuthor(api);
       }
 
       /**

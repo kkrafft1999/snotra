@@ -158,13 +158,14 @@ function registerFsHandlers({
     ipcMain.handle(REQ.PDF_READ_ASSET, async (_event, kind, filename) =>
       pdfAssets.readPdfAsset(kind, filename));
   }
-  // #1386: a comment written into a PDF, and the name it is signed with.
+  // #1386: a comment written into a PDF. #1391: the account name every
+  // comment falls back to while the setting is empty.
   // The renderer hands over bytes; whether they may replace the file is
   // decided in the service, against the file on disk.
   ipcMain.handle(REQ.FS_WRITE_WORKSPACE_PDF, async (_event, pdfPath, bytes) =>
     filesystem.writeWorkspacePdf(pdfPath, bytes));
   if (accountName) {
-    ipcMain.handle(REQ.PDF_COMMENT_AUTHOR, async () => accountName.fullName());
+    ipcMain.handle(REQ.COMMENT_ACCOUNT_NAME, async () => accountName.fullName());
   }
 
   ipcMain.handle(REQ.FS_LIST_WORKSPACE_PATHS, async (_event, options) =>

@@ -808,7 +808,7 @@ function annotatableDocument() {
   return doc;
 }
 
-async function mountAnnotatable(t, { blocked = null, write, saveHighlight } = {}) {
+async function mountAnnotatable(t, { blocked = null, write, saveHighlight, commentAuthor = '' } = {}) {
   const saved = [];
   const writes = [];
   let version = 1;
@@ -829,7 +829,9 @@ async function mountAnnotatable(t, { blocked = null, write, saveHighlight } = {}
       blockReason: async () => blocked,
     },
     api: {
-      pdfCommentAuthor: async () => 'Kim Example',
+      commentAccountName: async () => 'Kim Example',
+      // *Settings › General › Name for comments* (#1391); empty falls back to the account.
+      getUIPrefs: async () => ({ commentAuthor }),
       writeWorkspacePdf: async (p, bytes) => {
         writes.push({ path: p, bytes });
         const result = write ? write() : { ok: true, size: bytes.length, mtimeMs: 2 };
@@ -992,4 +994,16 @@ test('without a selection in the text the shortcut does nothing', async (t) => {
   document.getSelection().removeAllRanges();
   shortcut();
   assert.equal($('.pdf-compose'), null);
+});
+
+test('the name from the settings signs a PDF comment before the account name (#1391)', async (t) => {
+  const { saved } = await mountAnnotatable(t, { commentAuthor: 'Ada Lovelace' });
+  selectOnPage(1);
+  shortcut();
+  await settle();
+  assert.equal($('.pdf-compose__author').textContent, 'as Ada Lovelace');
+  const field = typeComment('Same name as in Markdown.');
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', metaKey: true, bubbles: true }));
+  await settle();
+  assert.equal(saved[0].user, 'Ada Lovelace');
 });

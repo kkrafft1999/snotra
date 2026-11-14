@@ -74,7 +74,7 @@ A PDF opens page after page, fitted to the column width. The header shows the pa
 
 ![The middle column with review.pdf: the line "The herb spiral stays where it is" marked yellow, and below it the box "New comment as Ada Lovelace" with a question about watering the spiral, and the buttons Cancel and Save.](screenshots/pdf-annotate.webp)
 
-**What happens:** the passage is highlighted in yellow and the comment is written into the PDF itself, signed with the full name of your user account and the time. Snotra appends it to the end of the file and changes nothing that was there before. Acrobat, macOS Preview and other PDF readers show it like a comment made there, and Snotra shows it right away, as described above.
+**What happens:** the passage is highlighted in yellow and the comment is written into the PDF itself, signed with the time and the name under [*Settings › General*](../../customising/settings/#the-section-general), *Name for comments* — or, while that is empty, the full name of your user account. Snotra appends it to the end of the file and changes nothing that was there before. Acrobat, macOS Preview and other PDF readers show it like a comment made there, and Snotra shows it right away, as described above.
 
 A selection that runs over several pages is commented on the page where it starts.
 

@@ -52,10 +52,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // PDF in the file preview (#346): the file's bytes, and the data pdf.js asks for.
   readWorkspacePdf: (pdfPath) => ipcRenderer.invoke(REQ.FS_READ_WORKSPACE_PDF, pdfPath),
   readPdfAsset: (kind, filename) => ipcRenderer.invoke(REQ.PDF_READ_ASSET, kind, filename),
-  // A comment written into the shown PDF (#1386): pdf.js's appended bytes,
-  // and the account name the comment is signed with.
+  // A comment written into the shown PDF (#1386): pdf.js's appended bytes.
   writeWorkspacePdf: (pdfPath, bytes) => ipcRenderer.invoke(REQ.FS_WRITE_WORKSPACE_PDF, pdfPath, bytes),
-  pdfCommentAuthor: () => ipcRenderer.invoke(REQ.PDF_COMMENT_AUTHOR),
+  // The system account's full name, which every comment falls back to (#1391).
+  commentAccountName: () => ipcRenderer.invoke(REQ.COMMENT_ACCOUNT_NAME),
   // An HTML file as a live page (#479), in a view main lays over the preview.
   // The renderer names the file and the place; main decides the rest.
   htmlPreview: {

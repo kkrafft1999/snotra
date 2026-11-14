@@ -659,7 +659,9 @@ test('Smoke-Test: Start, Datei oeffnen, Chat abbrechen, Antwort sanitizen, Einst
     const text = await readFile(path.join(workspace, 'notizen', 'liste.md'), 'utf8');
     return text.includes('fuenf?') ? text : null;
   }, { what: 'comment written to liste.md' });
-  assert.match(listOnDisk, /\n- drei \{==vier==\}\{>>\d{4}-\d{2}-\d{2}: fuenf\?<<\}\n$/);
+  // No name in the settings: signed with the account's full name, if the
+  // system has one for the runner (#1391).
+  assert.match(listOnDisk, /\n- drei \{==vier==\}\{>>(?:[^,\n<]+, )?\d{4}-\d{2}-\d{2}: fuenf\?<<\}\n$/);
   await poll(() => page.evaluate(() => document.querySelectorAll('.md-doc mark.md-comment').length === 2),
     { what: 'new comment in the preview' });
   step('Markdown-Kommentar geprueft');

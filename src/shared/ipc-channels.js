@@ -38,11 +38,12 @@ const REQUEST_CHANNELS = Object.freeze({
    * A comment the user added in the PDF view (#1386): the new bytes, which
    * pdf.js made by appending to the file the view had read. Main writes them
    * only if the file on disk is still that one, byte for byte.
-   * `PDF_COMMENT_AUTHOR` is the name the comment is signed with — the
-   * system account's full name.
+   * `COMMENT_ACCOUNT_NAME` is the system account's full name — what a
+   * comment in a PDF or a Markdown file is signed with while *Name for
+   * comments* in the settings is empty (#1391).
    */
   FS_WRITE_WORKSPACE_PDF: 'fs:writeWorkspacePdf',
-  PDF_COMMENT_AUTHOR: 'pdf:commentAuthor',
+  COMMENT_ACCOUNT_NAME: 'comment:accountName',
   /**
    * An HTML file as a live page (#479), in a view of its own that main lays
    * over the preview column. The renderer names the file and says where the

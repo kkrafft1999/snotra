@@ -40,7 +40,7 @@ The line at the bottom of each section says it, because it differs:
 ![Settings › General: a text field for the system prompt, the switch "Send environment information", and the choice between Light, Dark and System.](screenshots/settings-general.webp)
 
 - ***System prompt*** — your own instructions for every conversation: a role, a tone, fixed rules. Sent to the model unchanged. Empty by default; Snotra sets none of its own here.
-- ***Name for comments*** — [since 1.32] the name a comment you add to a Markdown file is signed with, next to the date. Empty by default: then a comment carries only the date. See [Comment on a Markdown file](../../workspace/comment-on-markdown/).
+- ***Name for comments*** — [since 1.32] the name every comment you add to a PDF or a Markdown file is signed with, next to the date. Empty by default: then Snotra uses the full name of your user account, which the field shows in grey. See [Comment on a Markdown file](../../workspace/comment-on-markdown/).
 - ***Send environment information*** — tells the model the full path of the open folder (which contains your user name), whether it is a Git repository, your platform, the shell and today's date. Without it the model guesses the platform for commands and dates "last week" by when it was trained. On by default.
 - ***Appearance*** — *Light*, *Dark*, or [since 1.26] *System*, which follows the light or dark setting of macOS, Windows or Linux and switches with it while Snotra is open. *Light* is the default. This choice stays on this computer.
 - ***Interface language*** — English or German, switching at once. It covers the window and the menu bar; what goes to the model stays English.
