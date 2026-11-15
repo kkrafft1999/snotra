@@ -37,7 +37,7 @@ The app is signed by its developer and notarised by Apple, so this one question 
 
 1. Right-click the downloaded `.zip` and choose *Extract All…*. Pick a place inside your user folder, for example `C:\Users\<you>\Snotra Agent`.
 2. Open that folder and start `Snotra Agent.exe`.
-3. Windows SmartScreen may warn that it does not recognise the app. Click *More info* and check that the publisher reads *Konrad Krafft*, then click *Run anyway*. Windows asks this only on the first start.
+3. Windows SmartScreen may warn that it does not recognise the app. Click *More info*. Next to *Publisher*, Windows lists the certificate's details — country, state and town first — and the line ends in *Konrad Krafft, Konrad Krafft*. Windows may garble the “ü” in *Baden-Württemberg*; that is a display quirk, not a sign of a wrong file. Then click *Run anyway*. Windows asks this only on the first start.
 
 [since 1.27.2] The app is signed in the name of its developer. The certificate is new, and SmartScreen trusts a certificate only once enough people have installed apps signed with it. Until then it may warn, but it names the publisher. The warning goes away on its own over time.
 
@@ -83,7 +83,7 @@ Settings and chats are kept in a profile folder of their own, outside the app: `
 ## If it doesn't work
 
 - **Windows offers no *Run anyway*.** The button only appears after you click *More info*. On a computer managed by an organisation, a policy may block apps it does not know yet; then only your IT department can allow it.
-- **SmartScreen names no publisher, or a different one.** Then the file is not the one from the release page. Don't start it; download it again from the [releases on GitHub](https://github.com/kkrafft1999/snotra/releases/latest).
+- **SmartScreen names no publisher, or the line does not end in *Konrad Krafft*.** Then the file is not the one from the release page. Don't start it; download it again from the [releases on GitHub](https://github.com/kkrafft1999/snotra/releases/latest).
 - **Linux, tarball: the app does not start and reports** *The SUID sandbox helper binary was found, but is not configured correctly.* Some distributions, Ubuntu 24.04 and later among them, restrict what the browser engine inside Snotra needs. Fix it once inside the extracted folder:
 
   ```bash

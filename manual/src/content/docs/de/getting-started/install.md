@@ -37,7 +37,7 @@ Die App ist vom Entwickler signiert und von Apple notarisiert, deshalb bleibt es
 
 1. Klick mit der rechten Maustaste auf die heruntergeladene `.zip`-Datei und wähle *Alle extrahieren…*. Wähl einen Ort in deinem Benutzerordner, zum Beispiel `C:\Users\<du>\Snotra Agent`.
 2. Öffne diesen Ordner und starte `Snotra Agent.exe`.
-3. Windows SmartScreen warnt unter Umständen, dass es die App nicht kennt. Klick auf *Weitere Informationen* und prüf, dass als Herausgeber *Konrad Krafft* steht. Klick dann auf *Trotzdem ausführen*. Windows fragt das nur beim ersten Start.
+3. Windows SmartScreen warnt unter Umständen, dass es die App nicht kennt. Klick auf *Weitere Informationen*. Neben *Herausgeber* zeigt Windows die Angaben aus dem Zertifikat — zuerst Land, Bundesland und Ort —, und die Zeile endet auf *Konrad Krafft, Konrad Krafft*. Das „ü“ in *Baden-Württemberg* stellt Windows unter Umständen falsch dar; das ist ein Anzeigefehler, kein Zeichen für eine falsche Datei. Klick dann auf *Trotzdem ausführen*. Windows fragt das nur beim ersten Start.
 
 [seit 1.27.2] Die App ist im Namen ihres Entwicklers signiert. Das Zertifikat ist neu, und SmartScreen vertraut einem Zertifikat erst, wenn genug Leute damit signierte Apps installiert haben. Bis dahin kann es noch warnen, nennt aber den Herausgeber. Die Warnung verschwindet mit der Zeit von selbst.
 
@@ -83,7 +83,7 @@ Einstellungen und Chats liegen in einem eigenen Profilordner außerhalb der App:
 ## Wenn es nicht klappt
 
 - **Windows bietet kein *Trotzdem ausführen* an.** Der Knopf erscheint erst, nachdem du auf *Weitere Informationen* geklickt hast. Auf einem Rechner, den eine Organisation verwaltet, kann eine Richtlinie Apps sperren, die sie noch nicht kennt; dann kann sie nur deine IT freigeben.
-- **SmartScreen nennt keinen oder einen anderen Herausgeber.** Dann ist die Datei nicht die von der Release-Seite. Starte sie nicht, sondern lade sie neu aus den [Releases auf GitHub](https://github.com/kkrafft1999/snotra/releases/latest).
+- **SmartScreen nennt keinen Herausgeber, oder die Zeile endet nicht auf *Konrad Krafft*.** Dann ist die Datei nicht die von der Release-Seite. Starte sie nicht, sondern lade sie neu aus den [Releases auf GitHub](https://github.com/kkrafft1999/snotra/releases/latest).
 - **Linux, Tarball: Die App startet nicht und meldet** *The SUID sandbox helper binary was found, but is not configured correctly.* Manche Distributionen, darunter Ubuntu ab 24.04, schränken ein, was die Browser-Engine in Snotra braucht. Behebe das einmal im entpackten Ordner:
 
   ```bash

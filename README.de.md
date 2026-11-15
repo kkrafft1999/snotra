@@ -82,8 +82,10 @@ Die neueste Version liegt auf der
   signiert ([#911](https://github.com/kkrafft1999/snotra/issues/911)). Das
   Zertifikat ist neu, deshalb kann SmartScreen beim ersten Start noch warnen,
   bis es sich einen Ruf aufgebaut hat. ZIP entpacken, `Snotra Agent.exe`
-  starten, prüfen, dass als Herausgeber *Konrad Krafft* steht, dann
-  *Weitere Informationen › Trotzdem ausführen*.
+  starten, auf *Weitere Informationen* klicken und prüfen, dass die Zeile
+  *Herausgeber* auf *Konrad Krafft, Konrad Krafft* endet (davor nennt Windows
+  Land, Bundesland und Ort und stellt das „ü“ in *Baden-Württemberg* unter
+  Umständen falsch dar), dann *Trotzdem ausführen*.
 
 ## Warum Snotra?
 
