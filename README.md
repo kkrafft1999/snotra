@@ -81,8 +81,10 @@ Get the latest release from the
 - **Windows:** since 1.27.2, `Snotra Agent.exe` is signed in the developer's
   name ([#911](https://github.com/kkrafft1999/snotra/issues/911)). The
   certificate is new, so SmartScreen may still warn on first launch until it
-  has built up a reputation. Unzip, start `Snotra Agent.exe`, check that the
-  publisher reads *Konrad Krafft*, then *More info › Run anyway*.
+  has built up a reputation. Unzip, start `Snotra Agent.exe`, click
+  *More info* and check that the publisher line ends in
+  *Konrad Krafft, Konrad Krafft* (Windows lists country, state and town first
+  and may garble the “ü” in *Baden-Württemberg*), then *Run anyway*.
 
 ## Why Snotra?
 

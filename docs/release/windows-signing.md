@@ -6,7 +6,7 @@
 | --- | --- |
 | What is signed | `Snotra Agent.exe` in the packaged folder, before it is zipped — nothing else |
 | Certificate | SSL.com *Personal ID Code Signing*, individual validation, in the author's name |
-| Subject / publisher | `CN=Konrad Krafft` — what Windows shows as the publisher |
+| Subject / publisher | `C=DE, ST=Baden-Württemberg, L=Friedrichshafen, O=Konrad Krafft, CN=Konrad Krafft` — the order was validated IV+OV, hence the `O=` with the same name |
 | Issuer | SSL.com Code Signing Intermediate CA RSA R1 |
 | SSL.com order | `co-3211d91k803` |
 | Certificate expiry | **2027-10-19** — renew before, see below |
@@ -70,6 +70,16 @@ first signed releases can still show the "Windows protected your PC" dialog —
 now with the publisher's name instead of "Unknown publisher" — until enough
 downloads have built reputation. A new certificate (another CA, or a re-key)
 starts from zero again.
+
+What the dialog shows under *Publisher* is the whole subject, not only the CN:
+`DE, Baden-W?rttemberg, Friedrichshafen, Konrad Krafft, Konrad Krafft`, with
+the "ü" replaced by a placeholder glyph. Checked on a real Windows machine with
+1.32.1 on 2026-11-15. The certificate is not at fault: `ST` is a `UTF8String`
+holding `C3 BC`, a correct UTF-8 "ü", so the garbling is SmartScreen's own
+rendering. A certificate without the umlaut would fix the display but reset
+the reputation to zero, so it stays as it is. The user-facing texts (README,
+manual page *Install*) tell users to look for *Konrad Krafft, Konrad Krafft* at
+the end of the line rather than an exact match.
 
 ## Renewal
 
