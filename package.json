@@ -116,7 +116,7 @@
     "node": ">=24"
   },
   "dependencies": {
-    "@anthropic-ai/sandbox-runtime": "0.0.81",
+    "@anthropic-ai/sandbox-runtime": "0.0.82",
     "@noble/ciphers": "^2.4.0",
     "qrcode-generator": "^2.0.4",
     "undici": "^8.12.4"
