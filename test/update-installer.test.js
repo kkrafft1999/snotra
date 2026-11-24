@@ -59,6 +59,12 @@ async function writeAppAsar(packageDir, pkg = { productName: 'Snotra Agent', ver
   }
 }
 
+/** The folder the Windows installer has PowerShell unpack the release ZIP into. */
+function extractDestination(args) {
+  const [, dest] = args[args.length - 1].match(/ExtractToDirectory\('(?:[^']|'')*', '((?:[^']|'')*)'\)/);
+  return dest.replace(/''/g, "'");
+}
+
 /** The script inside a `-EncodedCommand` call, and the result file it names. */
 function decodeLauncher(args) {
   const text = Buffer.from(args[args.indexOf('-EncodedCommand') + 1], 'base64').toString('utf16le');
@@ -376,7 +382,7 @@ async function prepareWindowsInstall(t) {
   const zip = path.join(dir, 'new.zip');
   await fsp.writeFile(zip, 'zip');
   const onRun = async (cmd, args) => {
-    const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
+    const dest = extractDestination(args);
     await fsp.mkdir(path.join(dest, 'Snotra Agent-win32-x64'), { recursive: true });
     await fsp.writeFile(path.join(dest, 'Snotra Agent-win32-x64', 'Snotra Agent.exe'), 'new');
     await writeAppAsar(path.join(dest, 'Snotra Agent-win32-x64'));
@@ -428,6 +434,37 @@ async function assertUntouched(dir, installDir) {
   assert.deepEqual(await fsp.readdir(path.join(dir, 'tools')), ['Snotra Agent-win32-x64'], 'the staged folder is gone');
   assert.equal(await fsp.readFile(path.join(installDir, 'Snotra Agent.exe'), 'utf8'), 'old');
 }
+
+// #1424: Expand-Archive is whichever one PSModulePath turns up, and one from
+// PowerShell 7 unpacked nothing without failing. .NET unpacks instead, and a
+// failure ends the command instead of passing for an empty archive.
+test('Windows: the ZIP is unpacked without Expand-Archive, and a failure to unpack is reported as such (#1424)', async (t) => {
+  if (process.platform === 'win32') return t.skip('needs POSIX paths');
+  const { dir, installDir, options } = await prepareWindowsInstall(t);
+  const { installer, runs, quiets } = makeInstaller({
+    onRun: async (cmd, args) => {
+      // Half unpacked when it fails.
+      await fsp.mkdir(extractDestination(args), { recursive: true });
+      await fsp.writeFile(path.join(extractDestination(args), 'Snotra Agent.exe'), 'half');
+      throw Object.assign(new Error('powershell.exe failed: the disk is full'), {
+        userMessage: { key: 'update.error.commandFailed', params: { command: 'powershell.exe', output: 'the disk is full' } },
+      });
+    },
+  });
+
+  const res = await installer.install(options);
+
+  assert.deepEqual(res, {
+    ok: false,
+    error: { key: 'update.error.commandFailed', params: { command: 'powershell.exe', output: 'the disk is full' } },
+  });
+  const command = runs[0].args[runs[0].args.length - 1];
+  assert.doesNotMatch(command, /Expand-Archive/);
+  assert.match(command, /^\$ErrorActionPreference = 'Stop'; /);
+  assert.match(command, /\[System\.IO\.Compression\.ZipFile\]::ExtractToDirectory\('[^']+new\.zip', '[^']+\.snotra-new-\d+'\)$/);
+  assert.equal(quiets.length, 0, 'no helper is started');
+  await assertUntouched(dir, installDir);
+});
 
 // #654: as long as the app is still running, a helper that did not start can
 // be reported instead of leaving the user with a closed app and the old version.
@@ -738,7 +775,7 @@ for (const [label, pkg, pattern] of [
 
     const { installer, launches } = makeInstaller({
       onRun: async (cmd, args) => {
-        const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
+        const dest = extractDestination(args);
         await fsp.mkdir(dest, { recursive: true });
         await fsp.writeFile(path.join(dest, 'Snotra Agent.exe'), 'new');
         await writeAppAsar(dest, pkg);
@@ -924,7 +961,7 @@ test('Windows: a package under the other name is installed and started under tha
   await fsp.writeFile(zip, 'zip');
   const { installer, quiets } = makeInstaller({
     onRun: async (cmd, args) => {
-      const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
+      const dest = extractDestination(args);
       const pkgDir = path.join(dest, `${OTHER_NAME}-win32-x64`);
       await fsp.mkdir(pkgDir, { recursive: true });
       await fsp.writeFile(path.join(pkgDir, `${OTHER_NAME}.exe`), 'new');
@@ -998,7 +1035,7 @@ test('Windows: staging folders an earlier attempt left behind are removed, nothi
   // This attempt fails as well: the archive brings an app.asar, but no program.
   const { installer, launches } = makeInstaller({
     onRun: async (cmd, args) => {
-      const dest = args[args.length - 1].match(/-DestinationPath '([^']+)'/)[1];
+      const dest = extractDestination(args);
       await writeAppAsar(dest);
       return '';
     },

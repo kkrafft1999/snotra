@@ -379,6 +379,69 @@ test('Windows: the swap goes through although the app ran from its own folder', 
   assert.deepEqual(startedStandIns(fixture).map(([label]) => label), ['new']);
 });
 
+/**
+ * A Microsoft.PowerShell.Archive in `root` that outranks every real one and
+ * behaves like 1.2.7 from PowerShell 7.6.10 does in Windows PowerShell: an
+ * error on the console, exit code 0, nothing unpacked (#1424).
+ */
+async function writeArchiveModuleThatUnpacksNothing(root) {
+  const dir = path.join(root, 'Microsoft.PowerShell.Archive', '99.0.0');
+  await fsp.mkdir(dir, { recursive: true });
+  await fsp.writeFile(path.join(dir, 'Microsoft.PowerShell.Archive.psd1'), [
+    '@{',
+    "  RootModule = 'Microsoft.PowerShell.Archive.psm1'",
+    "  ModuleVersion = '99.0.0'",
+    "  GUID = '6b2e1f4e-3c1a-4d7e-9a1b-1424e0a1d424'",
+    "  FunctionsToExport = @('Expand-Archive')",
+    '}',
+    '',
+  ].join('\r\n'));
+  await fsp.writeFile(path.join(dir, 'Microsoft.PowerShell.Archive.psm1'), [
+    'function Expand-Archive {',
+    '  param([string] $LiteralPath, [string] $Path, [string] $DestinationPath, [switch] $Force)',
+    `  [Console]::Error.WriteLine('Cannot find an overload for "ExtractToDirectory" and the argument count: "3".')`,
+    '}',
+    '',
+  ].join('\r\n'));
+}
+
+// #1424: started from a PowerShell 7 session, the app hands PowerShell 7's
+// module folder on to Windows PowerShell, and the Expand-Archive found there
+// unpacked nothing — without failing. The install must not depend on it.
+test('Windows: an Expand-Archive on the module path that unpacks nothing does not stop the update (#1424)', { skip: !onWindows, timeout: 90_000 }, async (t) => {
+  const fixture = await makeFixture(t, 90_000);
+  const modules = path.join(fixture.dir, 'modules');
+  await writeArchiveModuleThatUnpacksNothing(modules);
+  const previous = process.env.PSModulePath;
+  const env = { ...process.env, PSModulePath: [modules, previous].filter(Boolean).join(path.delimiter) };
+  const found = execFileSync('powershell.exe', [
+    '-NoProfile', '-NonInteractive', '-Command', '(Get-Command Expand-Archive).Module.Version.ToString()',
+  ], { env, encoding: 'utf8' }).trim();
+  assert.equal(found, '99.0.0', 'Windows PowerShell finds the module that unpacks nothing');
+
+  const app = holdFolder(fixture.installDir, 2000);
+  fixture.holders.push(app);
+  process.env.PSModulePath = env.PSModulePath;
+  let res;
+  try {
+    res = await installFromInsideTheFolder(fixture, app.pid);
+  } finally {
+    if (previous === undefined) delete process.env.PSModulePath;
+    else process.env.PSModulePath = previous;
+  }
+  mark(fixture, 'install() returned');
+  assert.equal(res.ok, true, JSON.stringify(res));
+
+  const log = await waitFor(() => /updated to 1\.13\.0/.test(readIfThere(fixture.logFile)) && readIfThere(fixture.logFile), {
+    timeoutMs: 60_000,
+    what: () => describe(fixture),
+    fixture,
+  });
+  assert.equal(readIfThere(path.join(fixture.installDir, 'version')), 'new', log);
+  assert.deepEqual(fs.readdirSync(fixture.parentDir), [FOLDER], 'no staging or backup folder is left behind');
+  assert.deepEqual(startedStandIns(fixture).map(([label]) => label), ['new']);
+});
+
 // #654: what broke in the field from v1.12.2 on. The process that started the
 // helper quits, and the helper went down with it before it had moved anything.
 test('Windows: the helper outlives the app that started it', { skip: !onWindows, timeout: 90_000 }, async (t) => {

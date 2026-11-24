@@ -131,6 +131,25 @@ function psQuote(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
 
+// In the GAC of every .NET Framework from 4.5 on, which Windows PowerShell 5.1
+// runs on.
+const ZIP_ASSEMBLY = 'System.IO.Compression.FileSystem, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089';
+
+/**
+ * The Windows PowerShell command that unpacks `zipFile` into `destDir`, which
+ * it creates (#1424).
+ *
+ * @param {string} zipFile
+ * @param {string} destDir
+ */
+function windowsExtractCommand(zipFile, destDir) {
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    `[void][System.Reflection.Assembly]::Load(${psQuote(ZIP_ASSEMBLY)})`,
+    `[System.IO.Compression.ZipFile]::ExtractToDirectory(${psQuote(zipFile)}, ${psQuote(destDir)})`,
+  ].join('; ');
+}
+
 /** How long a POSIX helper waits for this app to quit, and for the new version to start. */
 const POSIX_QUIT_SECONDS = 120;
 const POSIX_START_SECONDS = 120;
@@ -1050,10 +1069,26 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
     const stagedDir = path.join(parentDir, `.snotra-new-${stamp}`);
     const backupDir = path.join(parentDir, `.snotra-old-${stamp}`);
 
-    await exec('powershell.exe', [
-      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
-      `Expand-Archive -LiteralPath ${psQuote(filePath)} -DestinationPath ${psQuote(stagedDir)} -Force`,
-    ]);
+    // Unpacked by .NET itself, not by Expand-Archive (#1424). Which
+    // Expand-Archive Windows PowerShell runs depends on PSModulePath: an app
+    // started from a PowerShell 7 session passes PowerShell 7's module folder
+    // on, and the Microsoft.PowerShell.Archive found there may call .NET
+    // methods Windows PowerShell lacks — it then prints an error, exits with 0
+    // and leaves an empty folder. Loading the assembly by its full name takes
+    // no cmdlet and no module, and `Stop` turns any failure into a non-zero
+    // exit code that reaches the user as such.
+    try {
+      await exec('powershell.exe', [
+        '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command',
+        windowsExtractCommand(filePath, stagedDir),
+      ]);
+    } catch (err) {
+      await removeTree(stagedDir).catch(() => {
+        // The failed extraction is what the user needs to hear about. A half
+        // unpacked folder that stays goes with the next attempt (#914).
+      });
+      throw err;
+    }
 
     // Das ZIP enthaelt den Inhalt des Paketordners, nicht den Ordner selbst.
     // Wenn ein Release das mal anders packt, eine Ebene tiefer nachsehen,
@@ -1246,6 +1281,7 @@ module.exports = {
   buildWindowsSwapScript,
   ereEscape,
   buildWindowsLaunchCommand,
+  windowsExtractCommand,
   encodePowerShell,
   listForeignEntries,
   macTargetBundlePath,
