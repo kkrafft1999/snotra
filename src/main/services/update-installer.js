@@ -1083,7 +1083,10 @@ function createUpdateInstaller({ getPid, run, spawnDetached, runQuiet } = {}) {
         windowsExtractCommand(filePath, stagedDir),
       ]);
     } catch (err) {
-      await removeTree(stagedDir).catch(() => {});
+      await removeTree(stagedDir).catch(() => {
+        // The failed extraction is what the user needs to hear about. A half
+        // unpacked folder that stays goes with the next attempt (#914).
+      });
       throw err;
     }
 
