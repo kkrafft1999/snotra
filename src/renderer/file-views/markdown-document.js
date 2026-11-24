@@ -144,6 +144,36 @@ function decodeFragment(fragment) {
 /** Characters up to which a table cell is a value rather than prose. */
 const SHORT_CELL = 12;
 
+const renderBody = (body) => inertHtmlFragment(
+  markdownToSafeHtml(body, { breaks: false, keepRelativeLinks: true, parser: previewMarked() })
+);
+
+/**
+ * Marks every top-level element with the place in `body` it was rendered
+ * from (`data-md-range`), for comments (#1388) and for editing in the
+ * preview (#1422). Usually every block of the source is one element. A block
+ * that renders nothing — an HTML comment, which the sanitizer drops — breaks
+ * that count; then each block is rendered on its own to learn how many
+ * elements it put on screen. A block that made more than one leaves the
+ * document untraced.
+ */
+function traceBlocks(root, body) {
+  const blocks = sourceBlocks(body);
+  if (!blocks) return;
+  const elements = [...root.children];
+  let counts = blocks.map(() => 1);
+  if (blocks.length !== elements.length) {
+    counts = blocks.map(({ start, end }) => renderBody(body.slice(start, end)).children.length);
+    if (counts.some((count) => count > 1) || counts.reduce((sum, count) => sum + count, 0) !== elements.length) return;
+  }
+  let at = 0;
+  blocks.forEach(({ start, end }, i) => {
+    if (counts[i] === 0) return;
+    elements[at].setAttribute('data-md-range', `${start}:${end}`);
+    at += 1;
+  });
+}
+
 /**
  * Renders the Markdown body into an inert fragment.
  *
@@ -152,19 +182,14 @@ const SHORT_CELL = 12;
  * `fs:readWorkspaceImage` or replaces it with a placeholder.
  */
 export function renderMarkdownFragment(body) {
-  const root = inertHtmlFragment(
-    markdownToSafeHtml(body, { breaks: false, keepRelativeLinks: true, parser: previewMarked() })
-  );
+  const root = renderBody(body);
 
   // Where each block stands in the source, for a comment on a selection in it
   // (#1388). Only when blocks and elements pair up one to one: raw HTML the
   // sanitizer drops, or that opens more than one element, leaves the count
   // off, and then the comment searches the whole body instead.
   for (const el of root.querySelectorAll('[data-md-range]')) el.removeAttribute('data-md-range');
-  const blocks = sourceBlocks(body);
-  if (blocks && blocks.length === root.children.length) {
-    blocks.forEach(({ start, end }, i) => root.children[i].setAttribute('data-md-range', `${start}:${end}`));
-  }
+  traceBlocks(root, body);
 
   for (const img of root.querySelectorAll('img')) {
     // An image alone in its paragraph is a figure and gets the full width; one
@@ -200,6 +225,13 @@ export function renderMarkdownFragment(body) {
     }
     const frame = document.createElement('div');
     frame.className = 'md-table-frame';
+    // The frame is the top-level block now; it carries the table's place in
+    // the source (#1422), and a cell still finds it as its block (#1388).
+    const range = table.getAttribute('data-md-range');
+    if (range) {
+      frame.setAttribute('data-md-range', range);
+      table.removeAttribute('data-md-range');
+    }
     table.replaceWith(frame);
     frame.append(table);
   }

@@ -2,7 +2,7 @@
 title: Eine Markdown-Datei kommentieren
 description: Eine Stelle in der Vorschau markieren und einen Kommentar dazu schreiben — er steht in der Datei, so sehen ihn der Agent und alle, die die Datei öffnen.
 sidebar:
-  order: 7
+  order: 8
 ---
 
 [seit 1.32] Ein Konzept oder eine Notiz durchsehen geht wie in einer Textverarbeitung: eine Stelle in der formatierten Vorschau markieren, aufschreiben, was dir dazu einfällt, weiterlesen. Später kannst du den Agenten bitten, die Kommentare abzuarbeiten.

@@ -1351,6 +1351,69 @@ const MOTIFS = {
     },
   },
 
+  /** A Markdown note edited in the preview, with the formatting toolbar (#1422). */
+  'format-markdown': {
+    text: {
+      en: {
+        file: 'crop-rotation.md',
+        content: [
+          '# Crop rotation',
+          '',
+          'Each bed changes its plant family every year, so that the soil can rest.',
+          '',
+          '## This spring',
+          '',
+          '- Lettuce stays in **the north bed**, where it is shaded at noon.',
+          '- Tomatoes move to the greenhouse.',
+          '- [ ] Order seed potatoes',
+          '',
+        ].join('\n'),
+        select: 'the north bed',
+      },
+      de: {
+        file: 'fruchtfolge.md',
+        content: [
+          '# Fruchtfolge',
+          '',
+          'Jedes Beet wechselt jedes Jahr die Pflanzenfamilie, damit sich der Boden erholt.',
+          '',
+          '## Dieses Frühjahr',
+          '',
+          '- Der Salat bleibt im **Nordbeet**, wo er mittags Schatten hat.',
+          '- Die Tomaten ziehen ins Gewächshaus.',
+          '- [ ] Saatkartoffeln bestellen',
+          '',
+        ].join('\n'),
+        select: 'Nordbeet',
+      },
+    },
+    async setUp({ page, text, workspace }) {
+      await writeFile(path.join(workspace, text.file), text.content);
+      await clickTreeRow(page, text.file);
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.md-doc h2'))), { what: 'note in the preview' });
+      await page.click('#preview-tools .file-edit-toggle');
+      await poll(() => page.evaluate(() => Boolean(document.querySelector('.md-format-bar'))), { what: 'formatting toolbar' });
+      // The caret's word in bold, in a bulleted item: the toolbar shows both.
+      await page.evaluate((needle) => {
+        const walker = document.createTreeWalker(document.querySelector('.md-doc'), NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const at = node.data.indexOf(needle);
+          if (at === -1) continue;
+          const range = document.createRange();
+          range.setStart(node, at);
+          range.setEnd(node, at + needle.length);
+          document.getSelection().removeAllRanges();
+          document.getSelection().addRange(range);
+          return;
+        }
+      }, text.select);
+      await poll(() => page.evaluate(() => document.querySelector('.md-format-bar__button[data-format="bold"]')
+        ?.getAttribute('aria-pressed') === 'true'), { what: 'bold at the selection' });
+      await page.mouse.move(0, 0);
+      return clipPreview(page, 440);
+    },
+  },
+
   /** A Markdown note with a comment, and a second one being written (#1388). */
   'markdown-comment': {
     prefs: { commentAuthor: 'Ada Lovelace' },
@@ -2225,6 +2288,11 @@ async function shootMotif(name, motif, locale, model) {
     args: [`--force-device-scale-factor=${WINDOW.scale}`],
   });
   const { app, page } = snotra;
+  // `SCREENSHOTS_IN_BACKGROUND=1` keeps the app from taking the keyboard
+  // from whoever works on this Mac while it shoots (#1422). macOS only.
+  if (process.env.SCREENSHOTS_IN_BACKGROUND === '1' && process.platform === 'darwin') {
+    await app.evaluate(({ app: electronApp }) => electronApp.hide());
+  }
   try {
     await app.evaluate(({ BrowserWindow }, { width, height }) => {
       const window = BrowserWindow.getAllWindows()[0];

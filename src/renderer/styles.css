@@ -8424,6 +8424,174 @@ select.modal-input {
 }
 
 /* Why a link did nothing — a file that is not there, a failed browser. */
+/* ── Editing in the Markdown preview (#1422) ──────────────────────────────
+ * The formatting toolbar is a fixed row below the file header while Edit is
+ * on (picked from three mockups on 2026-11-24). Round icon buttons as
+ * everywhere; a pressed one carries the blue wash and a blue edge, so that
+ * its state does not hang on colour alone. */
+.md-format-bar {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--ds-grey-divider);
+  background: var(--ds-surface);
+  font-family: var(--ds-font-ui);
+}
+
+.md-format-bar__separator {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 6px;
+  background: var(--ds-grey-divider);
+}
+
+.md-format-bar__block-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.md-format-bar__block {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: 140px;
+  height: var(--ds-touch-min);
+  padding: 0 32px 0 12px;
+  border: 1px solid var(--ds-grey-divider);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  color: var(--text-primary);
+  font-family: var(--ds-font-ui);
+  font-size: var(--ds-font-size-md);
+  font-weight: var(--ds-font-weight-medium);
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast);
+}
+
+.md-format-bar__block:hover:not(:disabled) {
+  border-color: var(--ds-grey-muted);
+}
+
+.md-format-bar__block:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.md-format-bar__block:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.md-format-bar__block-wrap svg {
+  position: absolute;
+  right: 10px;
+  color: var(--ds-grey-muted);
+  pointer-events: none;
+}
+
+.md-format-bar__button {
+  display: inline-grid;
+  place-items: center;
+  width: var(--ds-touch-min);
+  height: var(--ds-touch-min);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--ds-motion-fast), color var(--ds-motion-fast), border-color var(--ds-motion-fast);
+}
+
+.md-format-bar__button:hover:not([aria-disabled='true']) {
+  background: var(--ds-grey-bg);
+  color: var(--text-primary);
+}
+
+.md-format-bar__button[aria-pressed='true'] {
+  border-color: var(--ds-blue-border);
+  background: var(--ds-blue-soft);
+  color: var(--ds-blue);
+}
+
+.md-format-bar__button:focus-visible {
+  outline: var(--ds-focus-ring);
+  outline-offset: var(--ds-focus-offset);
+}
+
+.md-format-bar__button[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The link form opens under its button, an overlay over the document. */
+.md-link-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: clamp(8px, var(--md-link-left, 0px), calc(100% - 328px));
+  z-index: 5;
+  box-sizing: border-box;
+  width: 320px;
+  max-width: calc(100% - 16px);
+  padding: 12px 14px 14px;
+  border: 1px solid var(--ds-overlay-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  box-shadow: var(--ds-overlay-shadow);
+  color: var(--text-primary);
+  font-size: var(--ds-font-size-md);
+}
+
+.md-link-popover[hidden],
+.md-link-popover__actions [hidden] {
+  display: none;
+}
+
+.md-link-popover__label {
+  display: block;
+  margin: 0 0 6px;
+  font-weight: var(--ds-font-weight-medium);
+}
+
+.md-link-popover__field {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.md-link-popover__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* The document while it is edited: the caret is the focus. */
+.md-doc--editing {
+  outline: none;
+  caret-color: var(--ds-blue);
+  cursor: text;
+}
+
+.md-doc--editing a {
+  cursor: text;
+}
+
+/* What the preview cannot write back stays as it is; on hover a dashed edge
+ * shows where it ends, and its tooltip sends the reader to the source. */
+.md-doc--editing .md-island {
+  cursor: default;
+}
+
+.md-doc--editing .md-island:hover {
+  outline: 1px dashed var(--ds-grey-muted);
+  outline-offset: 4px;
+}
+
 .md-notice {
   margin: 0 24px 16px;
   padding: 8px 12px;

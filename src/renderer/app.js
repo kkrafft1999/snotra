@@ -274,8 +274,22 @@ btnToggleSidebar.addEventListener('click', () => {
   void toggleSidebar();
 });
 
-// Menue "Ansicht > Seitenleiste ein-/ausblenden" bzw. Cmd/Ctrl+B.
-api.onToggleSidebar?.(() => {
+/**
+ * Asks the focused element whether it takes a formatting key (#1422): the
+ * Markdown preview, while it is edited, answers `snotra:format-shortcut` by
+ * cancelling it. True when it did.
+ */
+function formatShortcutTaken(command) {
+  const target = document.activeElement;
+  if (!target || target === document.body) return false;
+  const event = new CustomEvent('snotra:format-shortcut', { detail: { command }, bubbles: true, cancelable: true });
+  return !target.dispatchEvent(event);
+}
+
+// Menue "Ansicht > Seitenleiste ein-/ausblenden" bzw. Cmd/Ctrl+B — the key
+// means bold in a text that is being formatted (#1422).
+api.onToggleSidebar?.((detail) => {
+  if (detail?.viaShortcut && formatShortcutTaken('bold')) return;
   void toggleSidebar();
 });
 

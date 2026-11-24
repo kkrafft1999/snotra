@@ -28,6 +28,13 @@
 // are in `markdown-comments.js` (the source side) and
 // `markdown-comment-ui.js` (what the reader sees).
 //
+// Since #1422 the preview itself can be edited: the same Edit toggle as the
+// source's turns the rendered document into the editor, with a formatting
+// toolbar below the header. Only the blocks the reader changes are written
+// back; everything else in the file stays byte for byte. The parts are in
+// `markdown-editing.js` (the document), `markdown-serialize.js` and
+// `markdown-splice.js` (the way back into the file) and `markdown-toolbar.js`.
+//
 // The interface it implements is documented in the header of `registry.js`.
 
 import contracts from '../generated/contracts.js';
@@ -46,7 +53,10 @@ import { MODES, buildModeSwitch } from './mode-switch.js';
 import { MARKDOWN_ZOOM_STEPS, markdownZoom, rememberMarkdownZoom } from './markdown-zoom.js';
 import { ZOOM_IN_ICON, ZOOM_OUT_ICON, iconButton, nextZoom } from './zoom-tools.js';
 import { plainTextView } from './plain-text-view.js';
-import { sha256Hex } from './autosave.js';
+import { SAVE_STATES, createAutosave, sha256Hex } from './autosave.js';
+import { createEditControls } from './edit-controls.js';
+import { FORMATS, attachEditing, canEditDocument } from './markdown-editing.js';
+import { createFormatToolbar, matchFormatShortcut } from './markdown-toolbar.js';
 import { COMMENT_ERRORS, commentDate, insertComment, insertReply, locateSelection, locateThread, removeThread } from './markdown-comments.js';
 import { createCommentUi, isCommentShortcut } from './markdown-comment-ui.js';
 import { commentAuthor as resolveCommentAuthor } from './comment-author.js';
@@ -60,6 +70,12 @@ const {
 
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx']);
 const NOTICE_MS = 5000;
+const isMacPlatform = () => typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent ?? '');
+
+/** A step of editing in the preview that failed outside a save (#1422); a save says so in its own bar. */
+function warnEditFailure(err) {
+  console.warn('Markdown preview: editing failed:', err?.message ?? err);
+}
 // Every entry holds a whole image as base64, up to 10 MB each — the same
 // bound as the chat's cache in workspaceImages.js (#640).
 const MAX_CACHED_IMAGES = 24;
@@ -70,7 +86,7 @@ const MAX_PARALLEL_READS = 4;
 const BROKEN = 'broken';
 // What the view sets on a link of the document. The sanitizer lets `data-*`
 // through, so whatever the document wrote under these names goes first.
-const LINK_DATA_ATTRIBUTES = ['data-link-kind', 'data-anchor', 'data-target', 'data-fragment'];
+const LINK_DATA_ATTRIBUTES = ['data-link-kind', 'data-anchor', 'data-target', 'data-fragment', 'data-md-href', 'data-md-title'];
 // Why a selection cannot be commented, as the key of its message (#1388).
 const COMMENT_ERROR_KEYS = {
   [COMMENT_ERRORS.EMPTY]: 'notFound',
@@ -253,10 +269,27 @@ export const markdownView = {
       applyZoom();
     }
 
-    /** The header: the zoom while the preview is on show, and the switch. */
+    /** The header: the switch, the Edit toggle and the zoom while the preview is on show. */
     function showTools() {
-      context.setTools(mode === MODES.PREVIEW ? [modeSwitch.element, zoomEl] : [modeSwitch.element, ...sourceTools]);
+      const editTools = controls ? [controls.toggle, controls.status] : [];
+      context.setTools(mode === MODES.PREVIEW ? [modeSwitch.element, ...editTools, zoomEl] : [modeSwitch.element, ...sourceTools]);
     }
+
+    // ── Editing in the preview (#1422) ────────────────────────────────────
+
+    const editable = context.editable !== false && typeof context.writeFile === 'function';
+    // While the preview is edited: { doc, autosave, toolbar }.
+    let edit = null;
+    const controls = editable
+      ? createEditControls({
+        onToggle: () => {
+          if (edit) leaveEditing({ focusToggle: true }).catch(warnEditFailure);
+          else enterEditing();
+        },
+        onPrimary: () => onEditPrimary().catch(warnEditFailure),
+        onSecondary: () => onEditSecondary().catch(warnEditFailure),
+      })
+      : null;
 
     zoomOutButton.addEventListener('click', () => setZoom(nextZoom(zoom, -1, MARKDOWN_ZOOM_STEPS)));
     zoomInButton.addEventListener('click', () => setZoom(nextZoom(zoom, 1, MARKDOWN_ZOOM_STEPS)));
@@ -409,8 +442,9 @@ export const markdownView = {
     const comments = createCommentUi({
       previewEl,
       articleEl,
-      canComment: () => mode === MODES.PREVIEW && typeof context.writeFile === 'function',
+      canComment: () => mode === MODES.PREVIEW && typeof context.writeFile === 'function' && !edit,
       isBlocked: () => editingBlocked,
+      isEditing: () => Boolean(edit),
       getAuthor: commentAuthor,
       locate: locateComment,
       save: saveComment,
@@ -418,6 +452,221 @@ export const markdownView = {
       remove: removeComment,
       notify: showNotice,
     });
+
+    /** Why the preview cannot be edited right now, as a catalogue key, or null. */
+    function lockReason() {
+      if (editingBlocked) return 'fileView.edit.blocked';
+      if (edit) return null;
+      if (content.includes('\uFFFD')) return 'fileView.edit.notText';
+      if (!canEditDocument(articleEl, content)) return 'fileView.markdown.edit.untraced';
+      return null;
+    }
+
+    function renderEditState() {
+      controls?.render({
+        editing: Boolean(edit),
+        lockReason: lockReason(),
+        save: edit?.autosave.state ?? null,
+        blocked: editingBlocked,
+      });
+    }
+
+    function renderToolbar() {
+      if (edit) edit.toolbar.render(edit.doc.state());
+    }
+
+    function onEditState() {
+      if (!edit) return;
+      context.setDirty?.(edit.autosave.isDirty());
+      renderEditState();
+    }
+
+    /** The rendered document as the editor, for `content` as it is now. */
+    function attachDocument() {
+      return attachEditing(articleEl, {
+        content,
+        onInput: () => {
+          edit?.autosave.changed();
+          renderToolbar();
+        },
+        onSelection: renderToolbar,
+        islandTitle: t('fileView.markdown.edit.island'),
+      });
+    }
+
+    /**
+     * Attaching must not change a byte: the document as attached has to
+     * stand for the file exactly. If it does not, something on screen could
+     * not be traced, and the preview is not edited at all.
+     */
+    function attachChecked() {
+      const doc = attachDocument();
+      if (doc.getText() === content) return doc;
+      doc.detach();
+      console.warn('Markdown preview: the document does not stand for its file; not editing it (#1422).');
+      return null;
+    }
+
+    function enterEditing() {
+      if (edit || disposed || !controls || mode !== MODES.PREVIEW || lockReason()) return;
+      const doc = attachChecked();
+      if (!doc) {
+        render({ keepImages: true }).catch(warnEditFailure);
+        showNotice(t('fileView.markdown.edit.untraced'));
+        return;
+      }
+      const toolbar = createFormatToolbar({
+        onFormat: (format) => {
+          edit?.doc.command(format);
+          renderToolbar();
+        },
+        onBlock: (format) => {
+          edit?.doc.setBlock(format);
+          renderToolbar();
+        },
+        onLink: (href) => {
+          edit?.doc.setLink(href);
+          renderToolbar();
+        },
+        onClose: () => edit?.doc.restoreSelection(),
+        onLeave: () => edit?.doc.rememberSelection(),
+      });
+      const autosave = createAutosave({
+        base: content,
+        getText: () => edit.doc.getText(),
+        write: async (text, options) => {
+          const session = edit;
+          const build = session?.doc.buildFor(text) ?? null;
+          const written = await context.writeFile(text, options);
+          if (written?.ok && !disposed) {
+            content = text;
+            if (edit === session && build) session.doc.rebase(build);
+            sourceInstance?.update({ content: text });
+          }
+          return written;
+        },
+        onState: onEditState,
+      });
+      edit = { doc, autosave, toolbar };
+      hostEl.insertBefore(toolbar.element, previewEl);
+      hostEl.insertBefore(controls.notice, previewEl);
+      comments.refresh();
+      doc.focusStart(previewEl);
+      renderToolbar();
+      renderEditState();
+    }
+
+    /** Back to reading, without saving: whatever was to keep is kept. */
+    function closeEditing({ focusToggle = false } = {}) {
+      if (!edit) return;
+      const { doc, autosave, toolbar } = edit;
+      edit = null;
+      autosave.dispose();
+      toolbar.closeLink({ focus: false });
+      doc.detach();
+      toolbar.element.remove();
+      controls.notice.remove();
+      context.setDirty?.(false);
+      render({ keepImages: true }).catch(warnEditFailure);
+      comments.refresh();
+      renderEditState();
+      if (focusToggle && controls.toggle.isConnected) controls.toggle.focus();
+    }
+
+    /**
+     * Saves and stops editing. False when the text could not be saved — then
+     * editing goes on, and the bar above the document says why.
+     */
+    async function leaveEditing({ focusToggle = false } = {}) {
+      if (!edit) return true;
+      const session = edit;
+      // Typing on while the save runs is saved as well, a few times at most.
+      for (let round = 0; round < 3; round += 1) {
+        if (!(await session.autosave.flush())) return false;
+        if (edit !== session) return true;
+        if (!session.autosave.isDirty()) break;
+      }
+      if (edit !== session || session.autosave.isDirty()) return false;
+      closeEditing({ focusToggle });
+      return true;
+    }
+
+    /** The file on disk is the text to edit now: shown anew, and edited on. */
+    function reattach() {
+      if (!edit) return;
+      edit.doc.detach();
+      render({ keepImages: true }).catch(warnEditFailure);
+      const doc = attachChecked();
+      if (!doc) {
+        closeEditing();
+        showNotice(t('fileView.markdown.edit.untraced'));
+        return;
+      }
+      edit.doc = doc;
+      doc.focusStart(previewEl);
+      renderToolbar();
+      renderEditState();
+    }
+
+    async function onEditPrimary() {
+      if (!edit || editingBlocked) return;
+      const ok = edit.autosave.state.status === SAVE_STATES.CONFLICT
+        ? await edit.autosave.keepMine()
+        : await edit.autosave.flush();
+      if (ok) edit?.doc.restoreSelection();
+    }
+
+    async function onEditSecondary() {
+      if (!edit || editingBlocked) return;
+      const { status: saveStatus, conflict } = edit.autosave.state;
+      const leave = saveStatus === SAVE_STATES.FAILED || conflict === 'deleted';
+      const result = await context.readFile?.();
+      if (!edit || disposed) return;
+      const read = Boolean(result && !result.error && typeof result.content === 'string');
+      if (read) content = result.content;
+      edit.autosave.adopt(content);
+      context.setDirty?.(false);
+      sourceInstance?.update({ content });
+      if (leave || !read) closeEditing({ focusToggle: true });
+      else reattach();
+    }
+
+    /** The keys of the document while it is edited; true when one was taken. */
+    function onEditKey(event) {
+      const primary = isMacPlatform() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+      if (event.key === 'Escape' && !event.defaultPrevented) {
+        event.preventDefault();
+        leaveEditing({ focusToggle: true }).catch(warnEditFailure);
+        return true;
+      }
+      if (primary && !event.altKey && !event.shiftKey && event.code === 'KeyS') {
+        event.preventDefault();
+        edit.autosave.flush().catch(warnEditFailure);
+        return true;
+      }
+      // The way from the text to the toolbar, as in other editors.
+      if (event.altKey && event.key === 'F10') {
+        event.preventDefault();
+        edit.toolbar.focus();
+        return true;
+      }
+      const shortcut = matchFormatShortcut(event);
+      if (!shortcut) return false;
+      event.preventDefault();
+      if (shortcut.block) {
+        edit.doc.setBlock(shortcut.block);
+      } else if (shortcut.format === FORMATS.LINK) {
+        // The form shows the link at the selection as it is now, not as the
+        // last `selectionchange` left it.
+        edit.doc.rememberSelection();
+        renderToolbar();
+        edit.toolbar.openLink();
+      } else {
+        edit.doc.command(shortcut.format);
+      }
+      renderToolbar();
+      return true;
+    }
 
     /**
      * What the source gets as its context: the host's, with the tools it
@@ -473,6 +722,14 @@ export const markdownView = {
      */
     async function requestMode(next) {
       if (next === mode || disposed) return;
+      if (next === MODES.SOURCE && edit) {
+        const left = await leaveEditing();
+        if (disposed) return;
+        if (!left) {
+          modeSwitch.select(mode);
+          return;
+        }
+      }
       if (next === MODES.PREVIEW && sourceInstance?.editing) {
         const left = await sourceInstance.leaveEditing();
         if (disposed) return;
@@ -512,14 +769,21 @@ export const markdownView = {
       comments.decorate();
       fitTables();
       previewEl.scrollTop = scrollTop;
+      renderEditState();
       return resolveImages(previous);
     }
 
     function prepareLinks() {
       for (const anchor of articleEl.querySelectorAll('a')) {
+        // What the file says, kept aside for writing the link back while the
+        // preview is edited (#1422): `href` and `title` are the view's below.
+        const written = anchor.getAttribute('data-workspace-href') ?? anchor.getAttribute('href');
+        const writtenTitle = anchor.getAttribute('title');
         const link = classifyLink(anchor);
         anchor.removeAttribute('data-workspace-href');
         for (const name of LINK_DATA_ATTRIBUTES) anchor.removeAttribute(name);
+        if (written) anchor.setAttribute('data-md-href', written);
+        if (writtenTitle) anchor.setAttribute('data-md-title', writtenTitle);
         if (!link) {
           anchor.removeAttribute('href');
           anchor.removeAttribute('target');
@@ -833,6 +1097,8 @@ export const markdownView = {
       const anchor = event.target.closest?.('a');
       if (!anchor || !articleEl.contains(anchor)) return;
       event.preventDefault();
+      // While editing, a click puts the caret into the link; ⌘-click follows it.
+      if (edit && !(event.metaKey || event.ctrlKey)) return;
       if (!anchor.dataset.linkKind) return;
       void followLink(anchor);
     }
@@ -845,6 +1111,7 @@ export const markdownView = {
 
     /** ⌘+ / ⌘− / ⌘0 while the preview has focus, as in the image preview. */
     function onKeyDown(event) {
+      if (edit && onEditKey(event)) return;
       if (isCommentShortcut(event)) {
         if (comments.composeFromSelection()) event.preventDefault();
         return;
@@ -865,6 +1132,12 @@ export const markdownView = {
       modeSwitch.applyLabels();
       applyToolLabels();
       comments.applyLabels();
+      if (edit) {
+        // Rendering anew would throw the reader's undo history away.
+        edit.toolbar.applyLabels();
+        renderEditState();
+        return;
+      }
       void render({ keepImages: true });
     });
 
@@ -898,19 +1171,35 @@ export const markdownView = {
 
     return {
       update({ content: next }) {
+        if (edit) {
+          // Never under the caret: only text that loses nothing of the
+          // reader's is taken, anything else is a conflict for them to settle.
+          const answer = edit.autosave.external(next);
+          if (answer === 'replace') {
+            content = next;
+            reattach();
+          } else if (answer === 'ignore' && !edit.autosave.isDirty()) {
+            content = next;
+          }
+          sourceInstance?.update({ content });
+          return;
+        }
         content = next;
         previewStale = false;
         void render();
         sourceInstance?.update({ content: next });
       },
-      /** The source's unsaved text, if it holds any (#863). */
-      save() {
-        return sourceInstance?.save?.() ?? Promise.resolve(true);
+      /** Unsaved text of the preview's editor or the source's (#863, #1422). */
+      async save() {
+        if (edit) return (await edit.autosave.flush()) && !edit.autosave.isDirty();
+        return sourceInstance?.save?.() ?? true;
       },
       setEditingBlocked(blocked) {
         editingBlocked = Boolean(blocked);
         comments.refresh();
         sourceInstance?.setEditingBlocked?.(blocked);
+        renderEditState();
+        if (editingBlocked && edit) leaveEditing().catch(warnEditFailure);
       },
       /**
        * The text is unchanged, the images it shows may not be (#640): the
@@ -930,6 +1219,12 @@ export const markdownView = {
         fitObserver?.disconnect();
         clearTimeout(noticeTimer);
         stopFollowingLocale();
+        if (edit) {
+          edit.autosave.dispose();
+          edit.doc.detach();
+          edit.toolbar.element.remove();
+          edit = null;
+        }
         comments.dispose();
         previewEl.removeEventListener('click', onClick);
         previewEl.removeEventListener('auxclick', onAuxClick);
@@ -958,6 +1253,10 @@ export const markdownView = {
       /** For tests: which of the two is on show. */
       get mode() {
         return mode;
+      },
+      /** Is the preview being edited (#1422)? */
+      get editing() {
+        return Boolean(edit);
       },
     };
   },

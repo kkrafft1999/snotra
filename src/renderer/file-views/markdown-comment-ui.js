@@ -58,6 +58,7 @@ function elementOf(node) {
  *   articleEl: HTMLElement,
  *   canComment: () => boolean,
  *   isBlocked: () => boolean,
+ *   isEditing?: () => boolean,
  *   getAuthor: () => Promise<string>,
  *   locate: (request: { blockRange: [number, number] | null, selected: string, occurrence: number }) => ({ target: object } | { error: string }),
  *   save: (target: object, text: string) => Promise<boolean>,
@@ -73,7 +74,7 @@ function elementOf(node) {
  * it asks first, then `remove` takes the whole thread out and leaves the
  * passage.
  */
-export function createCommentUi({ previewEl, articleEl, canComment, isBlocked, getAuthor, locate, save, reply = null, remove = null, notify }) {
+export function createCommentUi({ previewEl, articleEl, canComment, isBlocked, isEditing = () => false, getAuthor, locate, save, reply = null, remove = null, notify }) {
   let disposed = false;
   let frame = 0;
   // The open form or comment: `{ kind: 'compose'|'view', el, returnFocus, … }`.
@@ -775,6 +776,9 @@ export function createCommentUi({ previewEl, articleEl, canComment, isBlocked, g
     }
     const mark = event.target.closest?.('mark.md-comment[data-md-comment]');
     if (!mark || !articleEl.contains(mark)) return;
+    // While the preview is edited (#1422), a click in the passage puts the
+    // caret there; the marker still opens the comment.
+    if (isEditing()) return;
     // A click that ends a selection is a selection, not a request to open.
     if (currentRange()) return;
     // Inside a link, the link has the click.
@@ -808,9 +812,9 @@ export function createCommentUi({ previewEl, articleEl, canComment, isBlocked, g
       compose(range, { returnFocus: previewEl }).catch((err) => console.error('Comment form failed:', err));
       return true;
     },
-    /** The preview went out of sight, or the lock moved. */
+    /** The preview went out of sight, the lock moved, or editing began (#1422). */
     refresh() {
-      if (previewEl.hidden) closeOpen({ focus: false });
+      if (previewEl.hidden || isEditing()) closeOpen({ focus: false });
       scheduleUpdate();
     },
     /** For tests and the view: whether a form or a comment is open. */
