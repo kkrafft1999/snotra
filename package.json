@@ -133,7 +133,7 @@
     "@reforged/maker-appimage": "^6.0.0",
     "axe-core": "^4.14.1",
     "dompurify": "^3.4.17",
-    "electron": "^45.2.3",
+    "electron": "^45.4.1",
     "esbuild": "^0.28.2",
     "happy-dom": "^21.0.4",
     "jsqr": "^1.4.0",
