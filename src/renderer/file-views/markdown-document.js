@@ -225,6 +225,13 @@ export function renderMarkdownFragment(body) {
     }
     const frame = document.createElement('div');
     frame.className = 'md-table-frame';
+    // The frame is the top-level block now; it carries the table's place in
+    // the source (#1422), and a cell still finds it as its block (#1388).
+    const range = table.getAttribute('data-md-range');
+    if (range) {
+      frame.setAttribute('data-md-range', range);
+      table.removeAttribute('data-md-range');
+    }
     table.replaceWith(frame);
     frame.append(table);
   }

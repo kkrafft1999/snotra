@@ -45,7 +45,8 @@ const TRANSPARENT = new Set(['SPAN', 'FONT', 'U', 'SMALL', 'BIG']);
 /** Inside a block: elements the preview can write back. */
 const INLINE_OK = new Set(['STRONG', 'B', 'EM', 'I', 'DEL', 'S', 'STRIKE', 'CODE', 'A', 'BR', 'MARK']);
 
-const WORD_JOINER = /\u2060/g;
+// The comment marker's word joiner (#1388) and the editor's seam (#1422): never text.
+const INVISIBLE = /[\u2060\u200b]/g;
 const isUiDecoration = (el) => el.classList?.contains('md-comment-marker');
 
 // ── What can be edited ──────────────────────────────────────────────────────
@@ -112,7 +113,7 @@ export function isEditableBlock(el) {
 function collectRuns(node, marks, runs) {
   for (const child of node.childNodes) {
     if (child.nodeType === TEXT) {
-      const text = child.data.replace(WORD_JOINER, '').replace(/\u00a0/g, ' ');
+      const text = child.data.replace(INVISIBLE, '').replace(/\u00a0/g, ' ');
       if (text) runs.push({ text, marks });
       continue;
     }
@@ -121,7 +122,7 @@ function collectRuns(node, marks, runs) {
     if (tag === 'BR') {
       runs.push({ br: true, marks });
     } else if (tag === 'CODE') {
-      const code = child.textContent.replace(WORD_JOINER, '').replace(/\u00a0/g, ' ');
+      const code = child.textContent.replace(INVISIBLE, '').replace(/\u00a0/g, ' ');
       if (code) runs.push({ code, marks });
     } else if (MARK_OF_TAG[tag]) {
       collectRuns(child, withMark(marks, { type: MARK_OF_TAG[tag] }), runs);
@@ -427,10 +428,31 @@ export function serializeBlock(el, options = {}) {
     return parts.join('\n\n').split('\n').map((line) => (line ? `> ${line}` : '>')).join('\n');
   }
   if (tag === 'HR') return '---';
-  // A paragraph — and whatever else the editing engine made of one.
-  if (tag === 'DIV' && [...el.children].some((child) => HEADINGS.has(child.tagName) || LISTS.has(child.tagName)
-    || child.tagName === 'P' || child.tagName === 'BLOCKQUOTE')) {
-    return [...el.children].map((child) => serializeBlock(child, options)).filter(Boolean).join('\n\n');
+  // A paragraph — and whatever else the editing engine made of one: Chromium
+  // turns a paragraph into a heading by putting the heading inside it.
+  const blocks = (tag === 'DIV' || tag === 'P')
+    ? [...el.children].filter((child) => HEADINGS.has(child.tagName) || LISTS.has(child.tagName)
+      || child.tagName === 'P' || child.tagName === 'DIV' || child.tagName === 'BLOCKQUOTE')
+    : [];
+  if (blocks.length) {
+    const parts = [];
+    let loose = document.createDocumentFragment();
+    const flush = () => {
+      const text = serializeInline(loose);
+      if (text) parts.push(text);
+      loose = document.createDocumentFragment();
+    };
+    for (const child of [...el.childNodes]) {
+      if (blocks.includes(child)) {
+        flush();
+        const text = serializeBlock(child, options);
+        if (text) parts.push(text);
+      } else {
+        loose.append(child.cloneNode(true));
+      }
+    }
+    flush();
+    return parts.join('\n\n');
   }
   return serializeInline(el);
 }

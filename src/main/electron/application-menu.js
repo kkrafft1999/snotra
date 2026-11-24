@@ -91,7 +91,7 @@ function createApplicationMenuTemplate({
   const isMac = platform === 'darwin';
 
   /** @param {string} channel */
-  const send = (channel) => getMainWindow()?.webContents.send(channel);
+  const send = (channel, payload) => getMainWindow()?.webContents.send(channel, payload);
   // Der einzige Weg in die Einstellungen ist das Menue — das Zahnrad im
   // Chat-Kopf ist weg, und mit der Chat-Spalte waere es ohnehin weggeschaltet.
   const settingsItem = createSettingsItem(() => send(PUSH.UI_OPEN_SETTINGS), t);
@@ -177,7 +177,12 @@ function createApplicationMenuTemplate({
       {
         label: t('menu.view.toggleSidebar'),
         accelerator: 'CmdOrCtrl+B',
-        click: () => send(PUSH.UI_TOGGLE_SIDEBAR),
+        // #1422: in a text that can be formatted, the key means bold; the
+        // renderer decides, so it has to know whether the key or a click
+        // in the menu sent it.
+        click: (_item, _window, event) => send(PUSH.UI_TOGGLE_SIDEBAR, {
+          viaShortcut: event?.triggeredByAccelerator === true,
+        }),
       },
       // #436: dot files in the tree, next to the sidebar they belong to. The
       // renderer holds the state and answers with it, which ticks this box via

@@ -418,9 +418,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Seitenleiste umschalten (Issue #167). Das Kuerzel Cmd/Ctrl+B haengt am
   // Menueeintrag im Main-Prozess — der Renderer bekommt nur das Signal, den
   // Zustand haelt er selbst.
+  // Since #1422 with `{ viaShortcut }`: the key, rather than a click in the menu.
   onToggleSidebar: (callback) => {
     const channel = PUSH.UI_TOGGLE_SIDEBAR;
-    const listener = () => callback();
+    const listener = (_event, detail) => callback({ viaShortcut: detail?.viaShortcut === true });
     ipcRenderer.on(channel, listener);
     return () => ipcRenderer.removeListener(channel, listener);
   },

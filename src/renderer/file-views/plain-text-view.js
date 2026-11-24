@@ -26,6 +26,7 @@ import { syntaxLanguageFor } from './syntax-language.js';
 import { highlightToFragment } from './syntax-highlight.js';
 import { mountTextEditor } from './text-editor.js';
 import { SAVE_STATES, createAutosave } from './autosave.js';
+import { createEditControls } from './edit-controls.js';
 
 export const COLOUR_AT_ONCE_LIMIT = 64 * 1024;
 export const COLOUR_LIMIT = 512 * 1024;
@@ -40,37 +41,6 @@ function afterPaint(fn) {
     cancelAnimationFrame(frame);
     clearTimeout(timer);
   };
-}
-
-const PENCIL_ICON = 'M10.8 2.7a1.4 1.4 0 0 1 2 0l.5.5a1.4 1.4 0 0 1 0 2L6 12.5l-3 .8.8-3z';
-
-// What a failed write says, by the reason main gave (#863).
-const FAILURE_KEYS = Object.freeze({
-  'too-large': 'fileView.edit.reason.tooLarge',
-  encoding: 'fileView.edit.reason.encoding',
-  'not-file': 'fileView.edit.reason.notFile',
-  refused: 'fileView.edit.reason.refused',
-  permission: 'fileView.edit.reason.permission',
-  missing: 'fileView.edit.reason.missing',
-});
-
-function pencilIcon() {
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('aria-hidden', 'true');
-  svg.setAttribute('focusable', 'false');
-  const shape = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  shape.setAttribute('d', PENCIL_ICON);
-  svg.append(shape);
-  return svg;
-}
-
-function actionButton(onClick) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'btn-secondary file-edit-notice__action';
-  button.addEventListener('click', onClick);
-  return button;
 }
 
 export const plainTextView = {
@@ -126,17 +96,15 @@ export const plainTextView = {
 
     // ── Edit toggle and save state in the header (#863) ───────────────────
 
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'file-edit-toggle';
-    toggle.setAttribute('aria-pressed', 'false');
-    const toggleText = document.createElement('span');
-    toggle.append(pencilIcon(), toggleText);
-    const status = document.createElement('span');
-    status.className = 'file-edit-status';
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    status.hidden = true;
+    const controls = createEditControls({
+      onToggle: () => {
+        if (edit) void leaveEditing({ focusToggle: true });
+        else enterEditing();
+      },
+      onPrimary: () => void onPrimary(),
+      onSecondary: () => void onSecondary(),
+    });
+    const { toggle, status } = controls;
 
     /** A text the preview decoded with replacement characters is not UTF-8. */
     const isUtf8 = () => !text.includes('�');
@@ -148,82 +116,19 @@ export const plainTextView = {
       return null;
     }
 
-    function renderToggle() {
-      const reason = lockReason();
-      toggleText.textContent = t('fileView.edit.toggle');
-      toggle.setAttribute('aria-pressed', String(Boolean(edit)));
-      // aria-disabled rather than disabled: the button stays focusable and
-      // its tooltip says why it does nothing.
-      if (reason) toggle.setAttribute('aria-disabled', 'true');
-      else toggle.removeAttribute('aria-disabled');
-      toggle.title = t(reason ?? (edit ? 'fileView.edit.toggle.leave' : 'fileView.edit.toggle.title'));
-    }
-
-    const STATUS_KEYS = {
-      [SAVE_STATES.PENDING]: 'fileView.edit.state.saving',
-      [SAVE_STATES.SAVING]: 'fileView.edit.state.saving',
-      [SAVE_STATES.SAVED]: 'fileView.edit.state.saved',
-      [SAVE_STATES.FAILED]: 'fileView.edit.state.failed',
-      [SAVE_STATES.CONFLICT]: 'fileView.edit.state.conflict',
-    };
-
-    function renderStatus() {
-      const key = edit ? STATUS_KEYS[edit.autosave.state.status] : null;
-      status.hidden = !key;
-      status.textContent = key ? t(key) : '';
-      status.dataset.state = edit?.autosave.state.status ?? '';
-    }
-
-    /** The bar above the editor: a failed save or a conflict, with the choices. */
-    function renderNotice() {
-      if (!edit) return;
-      const { status: saveStatus, reason, conflict } = edit.autosave.state;
-      const { notice, message, primary, secondary } = edit.notice;
-      if (saveStatus !== SAVE_STATES.FAILED && saveStatus !== SAVE_STATES.CONFLICT) {
-        notice.hidden = true;
-        return;
-      }
-      notice.hidden = false;
-      notice.dataset.kind = saveStatus === SAVE_STATES.FAILED ? 'failed' : conflict;
-      if (saveStatus === SAVE_STATES.FAILED) {
-        message.textContent = t('fileView.edit.failed', { reason: t(FAILURE_KEYS[reason] ?? 'fileView.edit.reason.failed') });
-        primary.textContent = t('fileView.edit.retry');
-        secondary.textContent = t('fileView.edit.discard');
-      } else {
-        message.textContent = t(conflict === 'deleted' ? 'fileView.edit.conflict.deleted' : 'fileView.edit.conflict.changed');
-        primary.textContent = t('fileView.edit.keepMine');
-        secondary.textContent = t(conflict === 'deleted' ? 'fileView.edit.discard' : 'fileView.edit.takeDisk');
-      }
-      primary.disabled = blocked;
-      secondary.disabled = blocked;
-    }
-
     function renderEditState() {
-      renderToggle();
-      renderStatus();
-      renderNotice();
+      controls.render({
+        editing: Boolean(edit),
+        lockReason: lockReason(),
+        save: edit?.autosave.state ?? null,
+        blocked,
+      });
     }
 
     function onSaveState() {
       if (!edit) return;
       context.setDirty?.(edit.autosave.isDirty());
       renderEditState();
-    }
-
-    function buildNotice() {
-      const notice = document.createElement('div');
-      notice.className = 'file-edit-notice';
-      notice.setAttribute('role', 'alert');
-      notice.hidden = true;
-      const message = document.createElement('p');
-      message.className = 'file-edit-notice__message';
-      const actions = document.createElement('div');
-      actions.className = 'file-edit-notice__actions';
-      const primary = actionButton(() => void onPrimary());
-      const secondary = actionButton(() => void onSecondary());
-      actions.append(primary, secondary);
-      notice.append(message, actions);
-      return { notice, message, primary, secondary };
     }
 
     async function onPrimary() {
@@ -272,10 +177,9 @@ export const plainTextView = {
       const scroll = { top: pre.scrollTop, left: pre.scrollLeft };
       const container = document.createElement('div');
       container.className = 'file-edit';
-      const notice = buildNotice();
       const area = document.createElement('div');
       area.className = 'file-edit__area';
-      container.append(notice.notice, area);
+      container.append(controls.notice, area);
       const editor = mountTextEditor(area, {
         text,
         language,
@@ -290,7 +194,7 @@ export const plainTextView = {
         write: (next, options) => context.writeFile(next, options),
         onState: onSaveState,
       });
-      edit = { container, notice, editor, autosave };
+      edit = { container, editor, autosave };
       pre.hidden = true;
       hostEl.append(container);
       editor.restoreViewState(scroll);
@@ -334,12 +238,6 @@ export const plainTextView = {
       return true;
     }
 
-    toggle.addEventListener('click', () => {
-      if (toggle.getAttribute('aria-disabled') === 'true') return;
-      if (edit) void leaveEditing({ focusToggle: true });
-      else enterEditing();
-    });
-
     show(text);
     // Back to where the reader was (#822).
     if (viewState) {
@@ -364,7 +262,7 @@ export const plainTextView = {
         if (!edit) {
           text = incoming;
           show(text);
-          if (editable) renderToggle();
+          if (editable) renderEditState();
           return;
         }
         // Never under the cursor: only text that loses nothing of the user's
