@@ -21,6 +21,19 @@ async function settle() {
   for (let i = 0; i < 4; i += 1) await flush();
 }
 
+/**
+ * Until `check()` holds — by the clock, not by ticks: a save hashes the text
+ * on the thread pool first, and a slow runner takes its time (#1422).
+ */
+async function until(check, what, ms = 5000) {
+  const end = Date.now() + ms;
+  while (!check()) {
+    if (Date.now() > end) throw new Error(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  await settle();
+}
+
 const NOTE = [
   '---',
   'name: plan',
@@ -154,8 +167,7 @@ test('leaving saves, and the preview is a preview again', async (t) => {
   await startEditing();
   type('.md-doc p', 'Last line.', 'Final line.');
   toggle().click();
-  await settle();
-  await settle();
+  await until(() => !$('.md-format-bar'), 'editing to end');
   assert.equal(disk['/ws/notes.md'], NOTE.replace('Last line.', 'Final line.'));
   assert.equal($('.md-doc').hasAttribute('contenteditable'), false);
   assert.equal($('.md-format-bar'), null);
@@ -187,8 +199,7 @@ test('while the agent works, Edit is paused, and a run that starts ends editing 
   await startEditing();
   type('.md-doc p', 'Last line.', 'Saved before the run.');
   host.setEditingBlocked(true);
-  await settle();
-  await settle();
+  await until(() => !$('.md-format-bar'), 'editing to end');
   assert.equal(disk['/ws/notes.md'], NOTE.replace('Last line.', 'Saved before the run.'));
   assert.equal($('.md-format-bar'), null);
   assert.equal(toggle().getAttribute('aria-disabled'), 'true');
