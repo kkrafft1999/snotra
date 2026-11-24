@@ -325,12 +325,16 @@ test('a file that is not UTF-8 cannot be edited', async (t) => {
 test('Markdown: the toggle sits next to "Preview | Source", and the preview shows what was saved', async (t) => {
   const pane = await mountPane(t, { files: { '/ws/n.md': '# Old\n' } });
   await pane.host.open(item('n.md'));
-  assert.equal(pane.toggle(), null, 'no toggle in the preview');
+  // Since #1422 the preview has an Edit toggle of its own; the source's
+  // takes its place in the header on the other side.
+  const previewToggle = pane.toggle();
+  assert.equal(previewToggle.getAttribute('aria-pressed'), 'false', 'the preview’s own toggle');
 
   pane.host.runCommand('toggle-source');
   const tools = [...pane.$('#preview-tools').children];
   assert.equal(tools[0].classList.contains('file-view-mode-switch'), true);
   assert.equal(tools[1], pane.toggle());
+  assert.notEqual(pane.toggle(), previewToggle);
 
   pane.toggle().click();
   pane.type('# New\n');
@@ -338,7 +342,8 @@ test('Markdown: the toggle sits next to "Preview | Source", and the preview show
   await settle();
   assert.equal(pane.writes[0].content, '# New\n', 'leaving the source saves');
   assert.equal(pane.$('.md-doc h1').textContent, 'New');
-  assert.equal(pane.toggle(), null);
+  assert.equal(pane.toggle(), previewToggle, 'back in the preview, with its own toggle');
+  assert.equal(pane.$('.md-doc').hasAttribute('contenteditable'), false, 'not editing there');
 });
 
 test('Markdown: a save that fails keeps the source on show', async (t) => {

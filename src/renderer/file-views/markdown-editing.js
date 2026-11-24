@@ -179,11 +179,49 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
     return list;
   }
 
+  // The Markdown of each unit as last written, until something inside it
+  // changes: a keystroke writes its own block anew, not the whole document.
+  const written = new Map();
+  const isRunKey = (key) => key.nodeType !== ELEMENT || INLINE_TAGS.has(key.tagName);
+
+  /** The child of the document that holds `node`; the document itself; or null when detached. */
+  function topLevelOf(node) {
+    for (let at = node; at; at = at.parentNode) {
+      if (at === articleEl || at.parentNode === articleEl) return at;
+    }
+    return null;
+  }
+
+  function forget(records) {
+    if (!records.length) return;
+    version += 1;
+    for (const record of records) {
+      const top = topLevelOf(record.target);
+      if (top === null) {
+        written.clear();
+        return;
+      }
+      if (top !== articleEl && !isRunKey(top)) {
+        written.delete(top);
+        continue;
+      }
+      // Loose inline nodes at the top: their runs are read again.
+      for (const key of [...written.keys()]) if (isRunKey(key)) written.delete(key);
+    }
+  }
+
   function serializeUnit(unit, options) {
-    if (unit.el) return serializeBlock(unit.el, options);
-    const line = document.createElement('p');
-    for (const node of unit.nodes) line.append(node.cloneNode(true));
-    return serializeBlock(line, options);
+    if (written.has(unit.key)) return written.get(unit.key);
+    let markdown;
+    if (unit.el) {
+      markdown = serializeBlock(unit.el, options);
+    } else {
+      const line = document.createElement('p');
+      for (const node of unit.nodes) line.append(node.cloneNode(true));
+      markdown = serializeBlock(line, options);
+    }
+    written.set(unit.key, markdown);
+    return markdown;
   }
 
   function build() {
@@ -213,13 +251,11 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
     return { text: prefix + spliced.text, entries, ranges: spliced.ranges };
   }
 
-  const observer = new MutationObserver(() => {
-    version += 1;
-  });
+  const observer = new MutationObserver(forget);
   observer.observe(articleEl, { subtree: true, childList: true, characterData: true, attributes: true });
 
   function current() {
-    if (observer.takeRecords().length) version += 1;
+    forget(observer.takeRecords());
     if (!cache || cache.version !== version) cache = { version, build: build() };
     return cache.build;
   }
@@ -494,10 +530,20 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
   articleEl.addEventListener('snotra:format-shortcut', onFormatShortcut);
   document.addEventListener('selectionchange', onSelectionChange);
 
-  /** Puts the caret at the start of the first editable block in view. */
+  /**
+   * Into the document: where the reader had selected something, or at the
+   * start of the first editable block in view — not at the top of a
+   * document they had scrolled down in.
+   */
   function focusStart(scroller) {
+    const selected = selectionRange()?.cloneRange() ?? null;
     articleEl.focus({ preventScroll: true });
-    if (selectionRange()) return;
+    if (selected && !elementAt(selected.startContainer)?.closest('[contenteditable="false"]')) {
+      const selection = document.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(selected);
+      return;
+    }
     const top = scroller?.getBoundingClientRect().top ?? -Infinity;
     const candidates = [...articleEl.children].filter((el) => !el.hasAttribute('contenteditable'));
     const target = candidates.find((el) => el.getBoundingClientRect().bottom > top) ?? candidates[0];
