@@ -93,9 +93,10 @@ const OFFERED_BLOCKS = new Set(['p', 'h1', 'h2', 'h3']);
 /**
  * Builds the toolbar. `onFormat(format)` and `onBlock(format)` run what the
  * reader picked; `onLink(href)` sets a link (an empty one removes it);
- * `onClose()` gives the focus back to the document.
+ * `onClose()` gives the focus back to the document; `onLeave()` runs just
+ * before the link form takes the focus from it.
  */
-export function createFormatToolbar({ onFormat, onBlock, onLink, onClose }) {
+export function createFormatToolbar({ onFormat, onBlock, onLink, onClose, onLeave = () => {} }) {
   const bar = document.createElement('div');
   bar.className = 'md-format-bar';
   bar.setAttribute('role', 'toolbar');
@@ -192,6 +193,7 @@ export function createFormatToolbar({ onFormat, onBlock, onLink, onClose }) {
 
   /** Opens the link form under the link button, with the link at the caret. */
   function openLink(href) {
+    onLeave();
     const button = buttons.get(FORMATS.LINK);
     field.value = href ?? '';
     remove.hidden = !href;

@@ -124,9 +124,22 @@ test('a Markdown file is edited and formatted in its preview, and only the chang
   text = await saved('checklist');
   assert.ok(text.includes('* [ ] *lettuce*\n* [ ] tomatoes\n* [ ] beans\n'), text);
 
-  // A link through the form.
-  await caret(page, '.md-doc h1', 'rotation', { select: true });
-  await page.keyboard.press(`${mod}+KeyK`);
+  // A link through the form — the selection and the key in one task, before
+  // `selectionchange` arrives: the form must act on this selection, not on
+  // the one before (seen on the macOS runner).
+  await page.evaluate((onMac) => {
+    const heading = document.querySelector('.md-doc h1');
+    const node = heading.firstChild;
+    const at = node.data.indexOf('rotation');
+    const range = document.createRange();
+    range.setStart(node, at);
+    range.setEnd(node, at + 'rotation'.length);
+    document.getSelection().removeAllRanges();
+    document.getSelection().addRange(range);
+    heading.dispatchEvent(new KeyboardEvent('keydown', {
+      key: 'k', code: 'KeyK', metaKey: onMac, ctrlKey: !onMac, bubbles: true, cancelable: true,
+    }));
+  }, process.platform === 'darwin');
   await poll(() => page.evaluate(() => document.activeElement?.classList.contains('md-link-popover__field')), { what: 'link form' });
   await page.keyboard.type('https://example.com/rotation');
   await page.keyboard.press('Enter');

@@ -529,6 +529,7 @@ export const markdownView = {
           renderToolbar();
         },
         onClose: () => edit?.doc.restoreSelection(),
+        onLeave: () => edit?.doc.rememberSelection(),
       });
       const autosave = createAutosave({
         base: content,
@@ -652,9 +653,17 @@ export const markdownView = {
       const shortcut = matchFormatShortcut(event);
       if (!shortcut) return false;
       event.preventDefault();
-      if (shortcut.block) edit.doc.setBlock(shortcut.block);
-      else if (shortcut.format === FORMATS.LINK) edit.toolbar.openLink();
-      else edit.doc.command(shortcut.format);
+      if (shortcut.block) {
+        edit.doc.setBlock(shortcut.block);
+      } else if (shortcut.format === FORMATS.LINK) {
+        // The form shows the link at the selection as it is now, not as the
+        // last `selectionchange` left it.
+        edit.doc.rememberSelection();
+        renderToolbar();
+        edit.toolbar.openLink();
+      } else {
+        edit.doc.command(shortcut.format);
+      }
       renderToolbar();
       return true;
     }

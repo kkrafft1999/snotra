@@ -290,10 +290,21 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
   }
 
   function onSelectionChange() {
-    const range = selectionRange();
-    if (!range) return;
-    lastRange = range.cloneRange();
+    if (!rememberSelection()) return;
     onSelection();
+  }
+
+  /**
+   * Keeps the current selection for `restoreSelection()`. `selectionchange`
+   * arrives a task later; whatever moves the focus out of the document — the
+   * link form — calls this first, or a quick key would act on the selection
+   * before (#1422, seen on the macOS runner).
+   */
+  function rememberSelection() {
+    const range = selectionRange();
+    if (!range) return false;
+    lastRange = range.cloneRange();
+    return true;
   }
 
   // ── State at the caret ────────────────────────────────────────────────────
@@ -589,6 +600,7 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
     command,
     setBlock,
     setLink,
+    rememberSelection,
     restoreSelection,
     focusStart,
     detach() {
