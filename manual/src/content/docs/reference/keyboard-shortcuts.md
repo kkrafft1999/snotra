@@ -17,7 +17,7 @@ These work with the focus in the chat input as well.
 | Start or stop dictation [since 1.20] | `Cmd+D` | `Ctrl+D` | *Edit › Voice Input* |
 | Open the settings | `Cmd+,` | `Ctrl+,` | *Snotra Agent › Settings…* on macOS, *View › Settings…* elsewhere |
 | Open the usage report [since 1.28] | `Cmd+Shift+K` | `Ctrl+Shift+K` | *View › Usage & Cost…* |
-| Show or hide the sidebar | `Cmd+B` | `Ctrl+B` | *View › Toggle Sidebar* |
+| Show or hide the sidebar — in a Markdown preview you edit, the key means bold [since 1.33] | `Cmd+B` | `Ctrl+B` | *View › Toggle Sidebar* |
 | Show or hide hidden files in the tree | `Cmd+Shift+.` | `Ctrl+Shift+.` | *View › Show Hidden Files* |
 | Filter the file tree | `Cmd+P` | `Ctrl+P` | *View › Filter Files…* |
 | Go back to the file the preview showed before [since 1.18] | `Cmd+[` | `Alt+←` | *View › Back* |
@@ -72,6 +72,10 @@ Click into the tree, or move there with `Tab`. The full table with what each key
 | In a PDF: first page · last page | `Home` · `End` |
 | In a PDF [since 1.32]: comment on the selected text · save the comment | `Cmd+Alt+M` / `Ctrl+Alt+M` · `Cmd+Enter` / `Ctrl+Enter` |
 | While editing a text file [since 1.24]: save now · stop editing | `Cmd+S` / `Ctrl+S` · `Esc` |
+| While editing a Markdown preview [since 1.33]: bold · italic · strikethrough · code · link | `Cmd+B` · `Cmd+I` · `Shift+Cmd+X` · `Cmd+E` · `Cmd+K` (`Ctrl` on Windows and Linux) |
+| While editing a Markdown preview [since 1.33]: bulleted · numbered list · checklist | `Shift+Cmd+8` · `Shift+Cmd+7` · `Shift+Cmd+9` (`Ctrl+Shift` on Windows and Linux) |
+| While editing a Markdown preview [since 1.33]: paragraph · heading 1 · 2 · 3 | `Option+Cmd+0` · `1` · `2` · `3` (`Ctrl+Alt` on Windows and Linux) |
+| While editing a Markdown preview [since 1.33]: to the formatting toolbar · back to the text | `Alt+F10` · `Esc` |
 
 The zoom keys act on the document only while the preview has the focus — click into it first. Otherwise they zoom the whole window, as *View › Zoom In* does. A Markdown file returns to 100 % with `Cmd+0`, a PDF or an image to its fitted size. The Markdown zoom is [since 1.19]. Details in [Look at a file](../../workspace/preview/).
 

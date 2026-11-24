@@ -273,6 +273,7 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
       try {
         return document.queryCommandState(name);
       } catch {
+        // An engine without the command (a DOM test) has no format to show.
         return false;
       }
     };

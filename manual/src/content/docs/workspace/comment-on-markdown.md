@@ -2,7 +2,7 @@
 title: Comment on a Markdown file
 description: Select a passage in the preview and write a comment on it — it goes into the file, so the agent and everyone else who opens the file see it.
 sidebar:
-  order: 7
+  order: 8
 ---
 
 [since 1.32] Reviewing a concept or a note works the way it does in a word processor: select a passage in the formatted preview, type what you think, move on. Later you can ask the agent to work through the comments.

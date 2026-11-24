@@ -17,7 +17,7 @@ Diese Kürzel wirken auch, wenn der Fokus im Chat-Eingabefeld liegt.
 | Ein Diktat starten oder stoppen [seit 1.20] | `Cmd+D` | `Strg+D` | *Bearbeiten › Spracheingabe* |
 | Die Einstellungen öffnen | `Cmd+,` | `Strg+,` | *Snotra Agent › Einstellungen…* unter macOS, sonst *Ansicht › Einstellungen…* |
 | Den Nutzungsbericht öffnen [seit 1.28] | `Cmd+Shift+K` | `Strg+Shift+K` | *Ansicht › Nutzung & Kosten…* |
-| Die Seitenleiste ein- oder ausblenden | `Cmd+B` | `Strg+B` | *Ansicht › Seitenleiste ein-/ausblenden* |
+| Die Seitenleiste ein- oder ausblenden — in einer Markdown-Vorschau, die du bearbeitest, bedeutet die Taste fett [seit 1.33] | `Cmd+B` | `Strg+B` | *Ansicht › Seitenleiste ein-/ausblenden* |
 | Versteckte Dateien im Baum zeigen oder verbergen | `Cmd+Shift+.` | `Strg+Shift+.` | *Ansicht › Versteckte Dateien anzeigen* |
 | Den Dateibaum filtern | `Cmd+P` | `Strg+P` | *Ansicht › Dateien filtern…* |
 | Zu der Datei zurück, die die Vorschau davor gezeigt hat [seit 1.18] | `Cmd+[` | `Alt+←` | *Ansicht › Zurück* |
@@ -72,6 +72,10 @@ Klick in den Baum oder geh mit `Tab` dorthin. Die ganze Tabelle mit dem, was jed
 | In einem PDF: erste Seite · letzte Seite | `Pos1` · `Ende` |
 | In einem PDF [seit 1.32]: den markierten Text kommentieren · den Kommentar speichern | `Cmd+Alt+M` / `Strg+Alt+M` · `Cmd+Enter` / `Strg+Enter` |
 | Beim Bearbeiten einer Textdatei [seit 1.24]: sofort speichern · Bearbeiten beenden | `Cmd+S` / `Strg+S` · `Esc` |
+| Beim Bearbeiten einer Markdown-Vorschau [seit 1.33]: fett · kursiv · durchgestrichen · Code · Link | `Cmd+B` · `Cmd+I` · `Shift+Cmd+X` · `Cmd+E` · `Cmd+K` (`Strg` unter Windows und Linux) |
+| Beim Bearbeiten einer Markdown-Vorschau [seit 1.33]: Aufzählung · Nummerierung · Checkliste | `Shift+Cmd+8` · `Shift+Cmd+7` · `Shift+Cmd+9` (`Strg+Shift` unter Windows und Linux) |
+| Beim Bearbeiten einer Markdown-Vorschau [seit 1.33]: Absatz · Überschrift 1 · 2 · 3 | `Option+Cmd+0` · `1` · `2` · `3` (`Strg+Alt` unter Windows und Linux) |
+| Beim Bearbeiten einer Markdown-Vorschau [seit 1.33]: zur Formatierungsleiste · zurück in den Text | `Alt+F10` · `Esc` |
 
 Die Zoom-Tasten wirken auf das Dokument nur, solange die Vorschau den Fokus hat — klick zuerst hinein. Sonst zoomen sie das ganze Fenster, wie *Ansicht › Vergrößern*. Eine Markdown-Datei kehrt mit `Cmd+0` auf 100 % zurück, ein PDF oder ein Bild auf seine angepasste Größe. Der Markdown-Zoom gilt [seit 1.19]. Einzelheiten in [Eine Datei ansehen](../../workspace/preview/).
 

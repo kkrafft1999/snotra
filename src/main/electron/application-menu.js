@@ -90,7 +90,10 @@ function createApplicationMenuTemplate({
   // es kein App-Menue, dort beginnen wir direkt mit Datei/Bearbeiten.
   const isMac = platform === 'darwin';
 
-  /** @param {string} channel */
+  /**
+   * @param {string} channel
+   * @param {unknown} [payload] Since #1422 the sidebar toggle says whether its key sent it.
+   */
   const send = (channel, payload) => getMainWindow()?.webContents.send(channel, payload);
   // Der einzige Weg in die Einstellungen ist das Menue — das Zahnrad im
   // Chat-Kopf ist weg, und mit der Chat-Spalte waere es ohnehin weggeschaltet.

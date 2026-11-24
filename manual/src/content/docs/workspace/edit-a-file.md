@@ -18,7 +18,7 @@ sidebar:
 ## Steps
 
 1. Click the file in the tree. The preview shows it, read-only as always.
-2. Click *Edit* in the header. For a Markdown file, switch to *Source* first; *Edit* sits next to *Preview | Source*.
+2. Click *Edit* in the header. A Markdown file can be edited on both sides of *Preview | Source*: in *Source* as here, and [since 1.33] in its *Preview*, with a toolbar for formats — see [Edit Markdown in the preview](../format-markdown/).
 3. Type. The text stays in the same place, without colours while you edit.
 4. To stop, click *Edit* again or press `Esc`. The colours come back.
 
@@ -41,4 +41,4 @@ There is no save button. Snotra saves a second after you stop typing, when you c
 - ***Your changes could not be saved*.** The bar names the reason — no permission to write the file, the file is larger than 2 MB, it lies in a folder Snotra doesn't write to. *Try again* once the cause is gone, or *Discard my changes*. Your text stays in the editor until you choose; another file doesn't open over it.
 - ***Another program changed this file*.** Something else wrote the file while you were typing. *Keep my version* writes yours over it; *Use the version on disk* throws yours away and goes on from the other one.
 - ***This file was deleted*.** *Keep my version* writes it again; *Discard my changes* closes it.
-- **Images, PDFs, HTML pages and the source of an SVG can't be edited here.** Only text files and Markdown in *Source*.
+- **Images, PDFs, HTML pages and the source of an SVG can't be edited here.** Only text files, and Markdown in *Source* or in its [preview](../format-markdown/).

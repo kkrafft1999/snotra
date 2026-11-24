@@ -18,7 +18,7 @@ sidebar:
 ## Schritte
 
 1. Klick im Baum auf die Datei. Die Vorschau zeigt sie, wie immer nur zum Lesen.
-2. Klick im Kopf auf *Bearbeiten*. Bei einer Markdown-Datei wechselst du zuerst auf *Quelltext*; *Bearbeiten* steht neben *Preview | Quelltext*.
+2. Klick im Kopf auf *Bearbeiten*. Eine Markdown-Datei kannst du auf beiden Seiten von *Preview | Quelltext* bearbeiten: im *Quelltext* wie hier und [seit 1.33] in ihrer *Preview*, mit einer Leiste für Formate — siehe [Markdown in der Vorschau bearbeiten](../format-markdown/).
 3. Tippe. Der Text bleibt an seinem Platz, beim Bearbeiten ohne Farben.
 4. Zum Aufhören klickst du noch einmal auf *Bearbeiten* oder drückst `Esc`. Die Farben kommen zurück.
 
@@ -41,4 +41,4 @@ Einen Speichern-Knopf gibt es nicht. Snotra speichert eine Sekunde, nachdem du a
 - ***Deine Änderungen konnten nicht gespeichert werden*.** Die Leiste nennt den Grund — keine Berechtigung, die Datei zu schreiben, die Datei ist größer als 2 MB, sie liegt in einem Ordner, in den Snotra nicht schreibt. *Erneut versuchen*, sobald die Ursache weg ist, oder *Meine Änderungen verwerfen*. Dein Text bleibt im Editor, bis du entscheidest; eine andere Datei öffnet sich nicht darüber.
 - ***Ein anderes Programm hat die Datei geändert*.** Etwas anderes hat die Datei geschrieben, während du getippt hast. *Meine Version behalten* schreibt deine darüber; *Version auf dem Datenträger übernehmen* verwirft deine und macht mit der anderen weiter.
 - ***Die Datei wurde gelöscht*.** *Meine Version behalten* schreibt sie wieder; *Meine Änderungen verwerfen* schließt sie.
-- **Bilder, PDFs, HTML-Seiten und der Quelltext einer SVG lassen sich hier nicht bearbeiten.** Nur Textdateien und Markdown auf der Seite *Quelltext*.
+- **Bilder, PDFs, HTML-Seiten und der Quelltext einer SVG lassen sich hier nicht bearbeiten.** Nur Textdateien, und Markdown im *Quelltext* oder in seiner [Vorschau](../format-markdown/).

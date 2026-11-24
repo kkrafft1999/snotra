@@ -71,6 +71,11 @@ const {
 const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx']);
 const NOTICE_MS = 5000;
 const isMacPlatform = () => typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent ?? '');
+
+/** A step of editing in the preview that failed outside a save (#1422); a save says so in its own bar. */
+function warnEditFailure(err) {
+  console.warn('Markdown preview: editing failed:', err?.message ?? err);
+}
 // Every entry holds a whole image as base64, up to 10 MB each — the same
 // bound as the chat's cache in workspaceImages.js (#640).
 const MAX_CACHED_IMAGES = 24;
@@ -278,11 +283,11 @@ export const markdownView = {
     const controls = editable
       ? createEditControls({
         onToggle: () => {
-          if (edit) void leaveEditing({ focusToggle: true });
+          if (edit) leaveEditing({ focusToggle: true }).catch(warnEditFailure);
           else enterEditing();
         },
-        onPrimary: () => void onEditPrimary(),
-        onSecondary: () => void onEditSecondary(),
+        onPrimary: () => onEditPrimary().catch(warnEditFailure),
+        onSecondary: () => onEditSecondary().catch(warnEditFailure),
       })
       : null;
 
@@ -506,7 +511,7 @@ export const markdownView = {
       if (edit || disposed || !controls || mode !== MODES.PREVIEW || lockReason()) return;
       const doc = attachChecked();
       if (!doc) {
-        void render({ keepImages: true });
+        render({ keepImages: true }).catch(warnEditFailure);
         showNotice(t('fileView.markdown.edit.untraced'));
         return;
       }
@@ -561,7 +566,7 @@ export const markdownView = {
       toolbar.element.remove();
       controls.notice.remove();
       context.setDirty?.(false);
-      void render({ keepImages: true });
+      render({ keepImages: true }).catch(warnEditFailure);
       comments.refresh();
       renderEditState();
       if (focusToggle && controls.toggle.isConnected) controls.toggle.focus();
@@ -589,7 +594,7 @@ export const markdownView = {
     function reattach() {
       if (!edit) return;
       edit.doc.detach();
-      void render({ keepImages: true });
+      render({ keepImages: true }).catch(warnEditFailure);
       const doc = attachChecked();
       if (!doc) {
         closeEditing();
@@ -630,12 +635,12 @@ export const markdownView = {
       const primary = isMacPlatform() ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
       if (event.key === 'Escape' && !event.defaultPrevented) {
         event.preventDefault();
-        void leaveEditing({ focusToggle: true });
+        leaveEditing({ focusToggle: true }).catch(warnEditFailure);
         return true;
       }
       if (primary && !event.altKey && !event.shiftKey && event.code === 'KeyS') {
         event.preventDefault();
-        void edit.autosave.flush();
+        edit.autosave.flush().catch(warnEditFailure);
         return true;
       }
       // The way from the text to the toolbar, as in other editors.
@@ -1185,7 +1190,7 @@ export const markdownView = {
         comments.refresh();
         sourceInstance?.setEditingBlocked?.(blocked);
         renderEditState();
-        if (editingBlocked && edit) void leaveEditing();
+        if (editingBlocked && edit) leaveEditing().catch(warnEditFailure);
       },
       /**
        * The text is unchanged, the images it shows may not be (#640): the
