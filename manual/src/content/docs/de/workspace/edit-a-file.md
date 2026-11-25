@@ -26,7 +26,7 @@ Einen Speichern-Knopf gibt es nicht. Snotra speichert eine Sekunde, nachdem du a
 
 ## Was dann passiert
 
-- **Der Kopf sagt, wie es steht:** *Wird gespeichert …*, während geschrieben wird, *Gespeichert*, sobald die Datei auf dem Datenträger dein Text ist, *Nicht gespeichert*, wenn etwas im Weg steht — dann sagt eine Leiste über dem Text, was.
+- **Der Kopf sagt, wie es steht,** gleich hinter dem Dateinamen: *Wird gespeichert …*, während geschrieben wird, *Gespeichert*, sobald die Datei auf dem Datenträger dein Text ist, *Nicht gespeichert*, wenn etwas im Weg steht — dann sagt eine Leiste über dem Text, was.
 - **Rückgängig geht wie in jedem Textfeld:** `Cmd+Z` / `Strg+Z` oder *Bearbeiten › Rückgängig*; *Bearbeiten › Wiederholen* holt es zurück.
 - **Zeilenenden bleiben, wie sie waren.** Eine Datei mit Windows-Zeilenenden wird wieder mit ihnen gespeichert.
 - **`Tab` bewegt den Fokus weiter**, wie überall in Snotra. Zum Einrücken tippst du Leerzeichen.

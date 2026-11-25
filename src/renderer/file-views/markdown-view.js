@@ -180,6 +180,7 @@ export const markdownView = {
     let sourceInstance = null;
     // The Edit toggle and save state of the source (#863).
     let sourceTools = [];
+    let sourceStatus = null;
     // The source saved a text the preview has not rendered yet.
     let previewStale = false;
     // While a chat run is active nothing is written, comments included (#863).
@@ -269,10 +270,15 @@ export const markdownView = {
       applyZoom();
     }
 
-    /** The header: the switch, the Edit toggle and the zoom while the preview is on show. */
+    /**
+     * The header: the switch, the Edit toggle and the zoom while the preview
+     * is on show; the save state of whichever editor is on show after the
+     * file name (#1431).
+     */
     function showTools() {
-      const editTools = controls ? [controls.toggle, controls.status] : [];
+      const editTools = controls ? [controls.toggle] : [];
       context.setTools(mode === MODES.PREVIEW ? [modeSwitch.element, ...editTools, zoomEl] : [modeSwitch.element, ...sourceTools]);
+      context.setStatus?.(mode === MODES.PREVIEW ? controls?.status ?? null : sourceStatus);
     }
 
     // ── Editing in the preview (#1422) ────────────────────────────────────
@@ -684,6 +690,10 @@ export const markdownView = {
         viewState: sourceState,
         setTools: (nodes) => {
           sourceTools = nodes ?? [];
+          showTools();
+        },
+        setStatus: (node) => {
+          sourceStatus = node ?? null;
           showTools();
         },
         writeFile: async (text, options) => {

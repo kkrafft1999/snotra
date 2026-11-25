@@ -7599,8 +7599,19 @@ select.modal-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1 1 auto;
+  /* As wide as the name: the save state stands right after it (#1431). */
+  flex: 0 1 auto;
   min-width: 0;
+}
+
+#preview-status {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+#preview-status[hidden] {
+  display: none;
 }
 
 /* Back and forward through the files the preview showed (#822): the round
