@@ -209,6 +209,18 @@ function escapeText(text) {
     .replace(/\{(?===|>>)/g, '\\{');
 }
 
+/**
+ * Code in a table cell that holds a backslash right before a bar: GFM reads
+ * `\\|` there as the end of the cell, and `\\\|` as a bar without the
+ * backslash, so no code span can say it (#1430). An HTML `<code>` can, with
+ * the bar as an entity — the preview renders it as the same element. Only
+ * its tags are HTML; what stands between them is read as Markdown.
+ */
+function cellCode(code) {
+  // Between the tags it is Markdown text again: escaped as text, the bar last.
+  return `<code>${escapeText(code).replace(/\|/g, '&#124;')}</code>`;
+}
+
 function codeSpan(code) {
   const longest = Math.max(0, ...[...code.matchAll(/`+/g)].map((m) => m[0].length));
   const fence = '`'.repeat(longest + 1);
@@ -255,7 +267,7 @@ function autolinkOf(runs, mark) {
  * Writes runs as Markdown. Whitespace at the edge of a format goes outside
  * its delimiters — `**word **` is not bold in Markdown, `**word** ` is.
  */
-function writeRuns(runs) {
+function writeRuns(runs, { inTable = false } = {}) {
   // Split whitespace off the ends of text runs, so that it can stand outside.
   const pieces = [];
   for (const run of runs) {
@@ -308,7 +320,7 @@ function writeRuns(runs) {
       // not keep the rest.
       out += /[ \n]$/.test(out) ? piece.text.replace(/^ +/, '') : piece.text;
     } else if (piece.br) out += '\\\n';
-    else if (piece.code !== undefined) out += codeSpan(piece.code);
+    else if (piece.code !== undefined) out += inTable && /\\\|/.test(piece.code) ? cellCode(piece.code) : codeSpan(piece.code);
     else if (piece.atom !== undefined) out += piece.atom;
     else out += escapeText(piece.text);
   }
@@ -344,11 +356,11 @@ const isFiller = (run) => run.br || (run.text !== undefined && !run.text.trim())
  * `<br>` in an empty line — and are dropped. `lineStarts: false` for a
  * heading, where nothing after the `#` can start a block.
  */
-export function serializeInline(node, { lineStarts = true } = {}) {
+export function serializeInline(node, { lineStarts = true, inTable = false } = {}) {
   const runs = collectRuns(node, [], []);
   while (runs.length && isFiller(runs[0])) runs.shift();
   while (runs.length && isFiller(runs.at(-1))) runs.pop();
-  const text = writeRuns(runs);
+  const text = writeRuns(runs, { inTable });
   return lineStarts ? escapeLineStarts(text) : text;
 }
 
@@ -434,15 +446,23 @@ function alignOfCell(cell) {
 }
 
 /**
+ * A bar escaped for a table cell. GFM splits a row at every bar after an even
+ * run of backslashes — none, or escaped ones — so exactly those get one more;
+ * a bar after an odd run is escaped already. Inside code, GFM reads `\|` as
+ * the bar itself.
+ */
+function escapeCellBars(text) {
+  return text.replace(/(\\*)\|/g, (match, backslashes) => (backslashes.length % 2 ? match : `${backslashes}\\|`));
+}
+
+/**
  * One cell as Markdown on one line: a line break in it is `<br>` — the only
- * one a cell has —, any other line ends in a blank, and `|` is escaped, also
- * inside code, where GFM reads `\|` as the bar itself.
+ * one a cell has —, any other line ends in a blank, and every bar is escaped.
  */
 function serializeCell(cell) {
-  return serializeInline(cell, { lineStarts: false })
+  return escapeCellBars(serializeInline(cell, { lineStarts: false, inTable: true })
     .replace(/\\\n/g, '<br>')
-    .replace(/\s*\n\s*/g, ' ')
-    .replace(/\|/g, '\\|')
+    .replace(/\s*\n\s*/g, ' '))
     .trim();
 }
 

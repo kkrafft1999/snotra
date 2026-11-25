@@ -177,6 +177,19 @@ test('a bar in a cell is escaped, also in code; a line break is a <br>', () => {
   assert.match(written, /\| one<br>two \| \[link\]\(https:\/\/e\.com\) \|/);
 });
 
+test('a backslash before a bar keeps the cell whole, in text and in code', () => {
+  const rendered = doc.renderMarkdownFragment('| a | b |\n|---|---|\n| x | y |');
+  const frame = rendered.firstElementChild;
+  const [text, code] = frame.querySelectorAll('tbody td');
+  text.textContent = 'back\\|slash';
+  code.replaceChildren(Object.assign(document.createElement('code'), { textContent: 'p\\|q' }));
+  const written = serialize.serializeBlock(frame);
+  assert.equal(written.split('\n')[2], '| back\\\\\\|slash | <code>p\\\\&#124;q</code> |');
+  const again = doc.renderMarkdownFragment(written).firstElementChild;
+  assert.deepEqual([...again.querySelectorAll('tbody td')].map((cell) => cell.textContent), ['back\\|slash', 'p\\|q']);
+  assert.ok(serialize.isEditableBlock(again));
+});
+
 test('an emptied cell stays a cell, and a short row is filled up', () => {
   const rendered = doc.renderMarkdownFragment('| a | b |\n|---|---|\n| 1 | 2 |');
   const frame = rendered.firstElementChild;
