@@ -7599,8 +7599,19 @@ select.modal-input {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex: 1 1 auto;
+  /* As wide as the name: the save state stands right after it (#1431). */
+  flex: 0 1 auto;
   min-width: 0;
+}
+
+#preview-status {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+}
+
+#preview-status[hidden] {
+  display: none;
 }
 
 /* Back and forward through the files the preview showed (#822): the round
@@ -8590,6 +8601,20 @@ select.modal-input {
 .md-doc--editing .md-island:hover {
   outline: 1px dashed var(--ds-grey-muted);
   outline-offset: 4px;
+}
+
+/* A table is edited in its cells (#1430): the cell with the caret carries
+ * the accent's edge inside its border, so that it is clear which one takes
+ * the typing. */
+.md-doc--editing .md-table-frame--editing td,
+.md-doc--editing .md-table-frame--editing th {
+  cursor: text;
+}
+
+.md-doc--editing .md-table-frame--editing td:focus,
+.md-doc--editing .md-table-frame--editing th:focus {
+  outline: 2px solid var(--ds-blue);
+  outline-offset: -2px;
 }
 
 .md-notice {

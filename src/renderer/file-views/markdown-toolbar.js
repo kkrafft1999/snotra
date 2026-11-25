@@ -12,7 +12,7 @@
 // the selection they act on stays where it is.
 
 import { t } from '../i18n.js';
-import { FORMATS } from './markdown-editing.js';
+import { BLOCK_LEVEL, FORMATS } from './markdown-editing.js';
 
 const isMac = () => typeof navigator !== 'undefined' && /Mac/.test(navigator.userAgent ?? '');
 
@@ -282,7 +282,8 @@ export function createFormatToolbar({ onFormat, onBlock, onLink, onClose, onLeav
   /** Shows the state at the caret; null or an island turns the tools off. */
   function render(state) {
     const off = !state || state.island;
-    block.disabled = off;
+    // A table cell holds one line: the block formats wait outside it (#1430).
+    block.disabled = off || Boolean(state.cell);
     if (!off) {
       block.value = state.block;
       for (const option of block.options) option.hidden = !OFFERED_BLOCKS.has(option.value) && option.value !== state.block;
@@ -299,7 +300,9 @@ export function createFormatToolbar({ onFormat, onBlock, onLink, onClose, onLeav
       [FORMATS.QUOTE]: state?.quote,
     };
     for (const [format, button] of buttons) {
-      const disabled = off || (format === FORMATS.BOLD && state.heading);
+      const disabled = off
+        || (format === FORMATS.BOLD && (state.heading || state.headCell))
+        || (state.cell && BLOCK_LEVEL.has(format));
       button.setAttribute('aria-pressed', String(Boolean(!off && pressed[format])));
       if (disabled) button.setAttribute('aria-disabled', 'true');
       else button.removeAttribute('aria-disabled');

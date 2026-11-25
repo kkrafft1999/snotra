@@ -80,6 +80,7 @@ export function createFileViewHost({
   const previewLead = document.getElementById('preview-lead');
   const previewFilename = document.getElementById('preview-filename');
   const previewTools = document.getElementById('preview-tools');
+  const previewStatus = document.getElementById('preview-status');
   const previewMeta = document.getElementById('preview-meta');
   const previewBody = document.getElementById('preview-body');
   const fileInfo = document.getElementById('file-info');
@@ -126,6 +127,18 @@ export function createFileViewHost({
     }
     previewBody.replaceChildren();
     setTools(null);
+    setStatus(null);
+  }
+
+  /**
+   * The slot right after the file name, for an editor's save state (#1431).
+   * Its text changes while the user types; at the name it moves nothing,
+   * among the tools it shifted every button to its left.
+   */
+  function setStatus(node) {
+    if (node) previewStatus.replaceChildren(node);
+    else previewStatus.replaceChildren();
+    previewStatus.hidden = !node;
   }
 
   function setTools(nodes) {
@@ -435,6 +448,9 @@ export function createFileViewHost({
         : Promise.resolve({ ok: false, reason: 'stale' })),
       setTools: (nodes) => {
         if (current === shown) setTools(nodes);
+      },
+      setStatus: (node) => {
+        if (current === shown) setStatus(node);
       },
       setMeta: ({ size, detail, text } = {}) => {
         if (current !== shown) return;

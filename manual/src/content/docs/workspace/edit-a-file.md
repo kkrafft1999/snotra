@@ -26,7 +26,7 @@ There is no save button. Snotra saves a second after you stop typing, when you c
 
 ## What happens
 
-- **The header says where things stand:** *Saving…* while it writes, *Saved* once the file on disk is your text, *Not saved* when something stands in the way — then a bar above the text says what.
+- **The header says where things stand,** right after the file name: *Saving…* while it writes, *Saved* once the file on disk is your text, *Not saved* when something stands in the way — then a bar above the text says what.
 - **Undo works as in any text field:** `Cmd+Z` / `Ctrl+Z`, or *Edit › Undo*; *Edit › Redo* brings it back.
 - **Line endings stay as they were.** A file written with Windows line endings is saved with them again.
 - **`Tab` moves the focus on**, as everywhere in Snotra. To indent, type spaces.

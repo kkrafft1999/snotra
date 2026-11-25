@@ -10,7 +10,8 @@
 // actually typed.
 //
 // What it can write is deliberately small: the formats the toolbar offers,
-// links, line breaks and comments (#1388). A block that holds anything else —
+// links, line breaks, comments (#1388), and tables whose cells hold only
+// those (#1430) — a table's text, not its shape. A block that holds anything else —
 // an image, inline HTML, a footnote — is not editable in the preview at all
 // (`isEditableBlock`); it stays as it is, and the source is where it is
 // changed. That is the line between "the preview may rewrite this" and "it
@@ -81,12 +82,44 @@ function listEditable(list) {
   return true;
 }
 
+const ROW_GROUPS = new Set(['THEAD', 'TBODY']);
+const CELLS = new Set(['TH', 'TD']);
+
+/** The table inside the preview's frame around it (`.md-table-frame`), or null. */
+export function tableOf(el) {
+  if (el?.nodeType !== ELEMENT || el.tagName !== 'DIV' || !el.classList.contains('md-table-frame')) return null;
+  const elements = [...el.children];
+  return elements.length === 1 && elements[0].tagName === 'TABLE' ? elements[0] : null;
+}
+
+function rowsOf(table) {
+  return [...table.children].filter((group) => ROW_GROUPS.has(group.tagName)).flatMap((group) => [...group.children]);
+}
+
+/**
+ * A table whose cells hold only what a cell can write back (#1430). Its
+ * shape is the source's: rows of cells under a head row, nothing else.
+ */
+function tableEditable(table) {
+  const head = [...table.children].find((group) => group.tagName === 'THEAD');
+  if (!head || [...table.children].some((group) => !ROW_GROUPS.has(group.tagName))) return false;
+  for (const row of rowsOf(table)) {
+    if (row.tagName !== 'TR') return false;
+    for (const cell of row.children) {
+      if (!CELLS.has(cell.tagName) || !inlineEditable(cell)) return false;
+    }
+  }
+  return true;
+}
+
 /**
  * Can the reader edit this top-level block of the preview, and can it be
  * written back without losing anything?
  */
 export function isEditableBlock(el) {
   if (!el || el.nodeType !== ELEMENT) return false;
+  const table = tableOf(el);
+  if (table) return tableEditable(table);
   if (el.tagName === 'P') {
     if (el.classList.contains('md-figure') || el.classList.contains('md-empty')) return false;
     return inlineEditable(el);
@@ -375,6 +408,83 @@ function serializeListItem(item, marker, options) {
   return { text: out, loose };
 }
 
+// ── Tables (#1430) ──────────────────────────────────────────────────────────
+
+/**
+ * The alignment of each column as the delimiter row of `raw` writes it:
+ * 'left', 'center', 'right' or '' — or null when `raw` is not a table.
+ */
+export function tableAlignOf(raw) {
+  const lines = String(raw ?? '').split('\n');
+  if (lines.length < 2) return null;
+  const row = lines[1].trim().replace(/^\|/, '').replace(/\|$/, '');
+  const cells = row.split('|').map((cell) => cell.trim());
+  if (!cells.length || !cells.every((cell) => /^:?-+:?$/.test(cell))) return null;
+  return cells.map((cell) => {
+    if (cell.startsWith(':') && cell.endsWith(':')) return 'center';
+    if (cell.endsWith(':')) return 'right';
+    if (cell.startsWith(':')) return 'left';
+    return '';
+  });
+}
+
+function alignOfCell(cell) {
+  const align = (cell?.getAttribute('align') || cell?.style?.textAlign || '').toLowerCase();
+  return ['left', 'center', 'right'].includes(align) ? align : '';
+}
+
+/**
+ * One cell as Markdown on one line: a line break in it is `<br>` — the only
+ * one a cell has —, any other line ends in a blank, and `|` is escaped, also
+ * inside code, where GFM reads `\|` as the bar itself.
+ */
+function serializeCell(cell) {
+  return serializeInline(cell, { lineStarts: false })
+    .replace(/\\\n/g, '<br>')
+    .replace(/\s*\n\s*/g, ' ')
+    .replace(/\|/g, '\\|')
+    .trim();
+}
+
+const widthOf = (text) => [...text].length;
+
+function delimiterOf(align, width) {
+  const dashes = '-'.repeat(Math.max(1, width - (align === 'center' ? 2 : align ? 1 : 0)));
+  if (align === 'center') return `:${dashes}:`;
+  if (align === 'right') return `${dashes}:`;
+  if (align === 'left') return `:${dashes}`;
+  return dashes;
+}
+
+/**
+ * A table as a GFM pipe table, its columns padded so that the source reads
+ * as a table too. The alignment comes from the source's delimiter row
+ * (`options.tableAlign`), else from the cells; the head row decides how many
+ * columns there are.
+ */
+function serializeTable(table, options) {
+  const rows = rowsOf(table).map((row) => [...row.children].filter((cell) => CELLS.has(cell.tagName)));
+  if (!rows.length) return '';
+  const columns = rows[0].length;
+  if (!columns) return '';
+  const text = rows.map((cells) => Array.from({ length: columns }, (_, i) => (cells[i] ? serializeCell(cells[i]) : '')));
+  const align = Array.from({ length: columns }, (_, i) => options.tableAlign?.[i] ?? alignOfCell(rows[0][i]));
+  const widths = Array.from({ length: columns }, (_, i) => Math.max(3, ...text.map((cells) => widthOf(cells[i]))));
+  const pad = (cell, i) => {
+    const room = widths[i] - widthOf(cell);
+    if (align[i] === 'right') return ' '.repeat(room) + cell;
+    if (align[i] === 'center') return ' '.repeat(Math.floor(room / 2)) + cell + ' '.repeat(Math.ceil(room / 2));
+    return cell + ' '.repeat(room);
+  };
+  const line = (cells) => `| ${cells.join(' | ')} |`;
+  const [head, ...body] = text;
+  return [
+    line(head.map(pad)),
+    line(align.map((a, i) => delimiterOf(a, widths[i]))),
+    ...body.map((cells) => line(cells.map(pad))),
+  ].join('\n');
+}
+
 function serializeList(list, options) {
   const ordered = list.tagName === 'OL';
   const startAttr = Number.parseInt(list.getAttribute('start') ?? '1', 10);
@@ -390,7 +500,7 @@ function serializeList(list, options) {
 /**
  * The Markdown of one top-level block of the preview, as the reader left it.
  * `options.bullet` and `options.orderedDelimiter` keep the list style the
- * block had; an empty string means the block holds nothing to write.
+ * block had, `options.tableAlign` a table's column alignment; an empty string means the block holds nothing to write.
  */
 export function serializeBlock(el, options = {}) {
   if (!el || el.nodeType !== ELEMENT) return '';
@@ -405,6 +515,8 @@ export function serializeBlock(el, options = {}) {
     return text ? `${'#'.repeat(Number(tag[1]))} ${text}` : '';
   }
   if (LISTS.has(tag)) return serializeList(el, options);
+  const table = tableOf(el);
+  if (table) return serializeTable(table, options);
   if (tag === 'BLOCKQUOTE') {
     const parts = [];
     let loose = document.createDocumentFragment();

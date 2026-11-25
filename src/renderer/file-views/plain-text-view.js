@@ -246,7 +246,8 @@ export const plainTextView = {
     }
     if (editable) {
       renderEditState();
-      context.setTools?.([toggle, status]);
+      context.setTools?.([toggle]);
+      context.setStatus?.(status);
     }
 
     const stopFollowingLocale = editable

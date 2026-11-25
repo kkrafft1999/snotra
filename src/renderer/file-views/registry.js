@@ -44,6 +44,8 @@
 //                           // The fragment reaches the view of that file.
 //     setTools(nodes),      // fill the tool area in the header (right-hand
 //                           // side, next to the size); [] or null clears it
+//     setStatus(node),      // editors (#1431): the save state, shown right
+//                           // after the file name; null clears it
 //     setMeta({ size, detail }),
 //                           // what the size pill says: a size the view read
 //                           // itself, and a detail after it, e.g. the pixel

@@ -75,7 +75,9 @@ test('the header carries ‹ ›, both off until there is somewhere to go', asyn
   await host.open(item('a.txt'));
   const lead = document.getElementById('preview-lead');
   assert.equal(lead.firstElementChild.classList.contains('preview-history'), true);
-  assert.equal(lead.lastElementChild.id, 'preview-filename');
+  // The name, then the slot for an editor's save state (#1431).
+  assert.equal(lead.lastElementChild.previousElementSibling.id, 'preview-filename');
+  assert.equal(lead.lastElementChild.id, 'preview-status');
   assert.equal(back().disabled, true);
   assert.equal(forward().disabled, true);
   assert.equal(back().getAttribute('aria-label'), 'Back');

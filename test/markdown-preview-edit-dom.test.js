@@ -44,6 +44,10 @@ const NOTE = [
   '',
   '<!-- kept -->',
   '',
+  '```',
+  'code',
+  '```',
+  '',
   '* one',
   '* two',
   '',
@@ -127,11 +131,17 @@ test('Edit makes the document editable, with the toolbar below the header and is
   assert.equal(bar.getAttribute('role'), 'toolbar');
   assert.equal(bar.nextElementSibling.classList.contains('file-edit-notice'), true);
   assert.equal($('.file-edit-notice').nextElementSibling.classList.contains('md-view'), true);
-  // The table and the front matter are islands; text blocks are not.
-  assert.equal($('.md-table-frame').getAttribute('contenteditable'), 'false');
+  // The code block and the front matter are islands; text blocks are not.
+  assert.equal($('.md-doc pre').getAttribute('contenteditable'), 'false');
   assert.equal($('.md-front-matter').getAttribute('contenteditable'), 'false');
   assert.equal($('.md-doc h1').hasAttribute('contenteditable'), false);
-  assert.ok($('.md-table-frame').title, 'the island says where it is edited');
+  assert.ok($('.md-doc pre').title, 'the island says where it is edited');
+  // A table is edited in its cells (#1430): its frame is not editable, each cell is.
+  assert.equal($('.md-table-frame').getAttribute('contenteditable'), 'false');
+  assert.equal($('.md-table-frame').classList.contains('md-island'), false);
+  assert.equal($('.md-table-frame').title, '');
+  assert.deepEqual($$('.md-table-frame th, .md-table-frame td').map((cell) => cell.getAttribute('contenteditable')),
+    ['true', 'true', 'true', 'true']);
   // A comment's marker leaves while the text is edited; its passage stays marked.
   assert.equal($$('.md-comment-marker').length, 0);
   assert.ok($('.md-doc mark.md-comment'));
@@ -150,6 +160,39 @@ test('a changed word writes only its block; the rest of the file stays byte for 
     .replace('Last line.', 'Last line, edited.')
     .replace('{==a comment==}', '{==a long comment==}'));
   assert.equal($('.file-edit-status').textContent, 'Saved');
+});
+
+test('a changed table cell writes its table anew; the rest stays byte for byte (#1430)', async (t) => {
+  const { host, disk } = await mountPane(t);
+  await startEditing();
+  type('.md-doc td', '2', 'two | three');
+  assert.equal(await host.settleUnsaved(), true);
+  assert.equal(disk['/ws/notes.md'], NOTE.replace('| a | b |\n|---|---|\n| 1 | 2 |', [
+    '| a   | b            |',
+    '| --- | ------------ |',
+    '| 1   | two \\| three |',
+  ].join('\n')));
+});
+
+test('leaving takes the cells out of editing (#1430)', async (t) => {
+  await mountPane(t);
+  await startEditing();
+  toggle().click();
+  await until(() => !$('.md-format-bar'), 'editing to end');
+  assert.equal($('.md-table-frame').hasAttribute('contenteditable'), false);
+  assert.equal($$('.md-table-frame [contenteditable]').length, 0);
+});
+
+test('the save state stands right after the file name, not among the tools (#1431)', async (t) => {
+  const { host } = await mountPane(t);
+  await startEditing();
+  type('.md-doc p', 'Last line.', 'Last line, edited.');
+  assert.equal(await host.settleUnsaved(), true);
+  assert.equal($('#preview-tools .file-edit-status'), null);
+  const status = $('#preview-status .file-edit-status');
+  assert.equal(status.textContent, 'Saved');
+  assert.equal($('#preview-status').previousElementSibling.id, 'preview-filename');
+  assert.equal($('#preview-status').hidden, false);
 });
 
 test('a second change after a save is measured against what was saved', async (t) => {
