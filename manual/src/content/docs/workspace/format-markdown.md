@@ -41,20 +41,22 @@ The keys follow the key, not the character on it: `Shift+Cmd+7` works on a Germa
 
 ## What happens
 
-- **Only what you changed is written.** Snotra writes back the paragraphs, headings and lists you touched. Everything else in the file stays exactly as it was: the blank lines, the way a list was written, comments in HTML. One changed word is one changed paragraph in the file, nothing more.
+- **Only what you changed is written.** Snotra writes back the paragraphs, headings, lists and tables you touched. Everything else in the file stays exactly as it was: the blank lines, the way a list was written, comments in HTML. One changed word is one changed paragraph in the file, nothing more.
 - **The toolbar shows the format at the caret:** a pressed button for bold or a list, and the menu says *Paragraph* or *Heading 2*. In a heading, *Bold* is off — a heading is bold already.
-- **Tables, code blocks, images and HTML stay as they are.** The preview could not write them back without losing something, so they can't be edited here. On hover a dashed edge shows where such a part ends, and its tooltip sends you to *Source*. Edit them there.
+- **Tables are edited in their cells.** [since 1.34] Click into a cell and type; `Tab` and `Shift+Tab` move to the next and the previous cell. Bold, italic, strikethrough, code and links work in a cell. A cell holds one line: `Enter` does nothing there, and a pasted text with several lines arrives as one. Lists, quotes and headings are off while the caret is in a cell. The table keeps its rows, its columns and their alignment — to add or remove a row or a column, switch to *Source*. A table you changed is written back with its columns lined up, so that it reads as a table in *Source* too.
+- **Code blocks, images and HTML stay as they are.** The preview could not write them back without losing something, so they can't be edited here. The same goes for a table with an image or HTML in a cell. On hover a dashed edge shows where such a part ends, and its tooltip sends you to *Source*. Edit them there.
 - **Comments stay.** Text you change inside a [commented passage](../comment-on-markdown/) keeps its comment. While you edit, the speech bubbles are hidden; they come back when you stop. Delete the whole passage and its comment goes with it.
 - **Pasting brings the text, not its formats.** What you paste from a web page or another app arrives as plain text; format it with the toolbar.
 - **Undo works for every step:** `Cmd+Z` / `Ctrl+Z`.
 - **Links:** while you edit, a click puts the caret into a link; `Cmd`-click / `Ctrl`-click follows it. The link button or `Cmd+K` / `Ctrl+K` opens a small form for the address — a web address or a path in the folder. *Remove link* takes the link off and keeps the text.
 - **From the text to the toolbar:** `Alt+F10`. The arrow keys move between its controls, `Esc` goes back to the text.
-- **Saving, conflicts and the agent** work as when you [edit a text file](../edit-a-file/): the header says *Saving…* and *Saved*, a file another program changed is never overwritten silently, and a chat answer that starts saves your text and ends editing.
+- **Saving, conflicts and the agent** work as when you [edit a text file](../edit-a-file/): the header says *Saving…* and *Saved* right after the file name, a file another program changed is never overwritten silently, and a chat answer that starts saves your text and ends editing.
 
 ## If it doesn't work
 
 - ***Edit* is greyed out: *This document can only be edited in the source*.** Something in it can't be traced back to its place in the file — rare, usually HTML that renders as several blocks. Switch to *Source* and edit it there.
 - ***Edit* is greyed out and says the agent is working.** Wait until the chat answer is finished, or stop it.
-- **A table or a code block doesn't take the caret.** That is on purpose, see above. Switch to *Source*.
+- **A code block doesn't take the caret.** That is on purpose, see above. Switch to *Source*. The same goes for a table with an image or HTML in one of its cells.
+- **I can't add a row to a table.** The preview edits the text in a table, not its shape. Add rows and columns in *Source*.
 - **`Cmd+B` / `Ctrl+B` hides the sidebar.** The key means bold only while the caret is in the document you edit. Anywhere else it shows or hides the sidebar, as always.
 - **A changed paragraph is written differently from before.** In a paragraph you changed, Snotra writes Markdown its own way: `**` for bold, `*` for italics, `-` for a new list. A list that was already there keeps its marker. Paragraphs you did not touch are never rewritten.

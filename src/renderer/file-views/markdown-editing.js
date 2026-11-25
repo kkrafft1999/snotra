@@ -10,9 +10,11 @@
 // `markdown-splice.js` puts the pieces together. So a changed word is a
 // changed block in `git diff`, never a rewritten file.
 //
-// What the preview cannot write back without losing something — a table, a
-// code block, an image, HTML — is an island: not editable here, with a
-// tooltip that sends the reader to the source. The front matter is one too.
+// What the preview cannot write back without losing something — a code
+// block, an image, HTML — is an island: not editable here, with a tooltip
+// that sends the reader to the source. The front matter is one too. A table
+// is edited in its cells (#1430): each cell is an editing host of its own,
+// the table around them is not, so that its shape stays as it was written.
 //
 // Formatting uses the browser's editing commands (`execCommand`), so that
 // undo and redo stay the browser's own and cover every step.
@@ -23,7 +25,7 @@
 // `markdown-toolbar.js`.
 
 import { splitDocument } from './markdown-document.js';
-import { isEditableBlock, serializeBlock } from './markdown-serialize.js';
+import { isEditableBlock, serializeBlock, tableAlignOf, tableOf } from './markdown-serialize.js';
 import { spliceBlocks } from './markdown-splice.js';
 
 const ELEMENT = 1;
@@ -40,6 +42,9 @@ export const FORMATS = Object.freeze({
   TASKS: 'tasks',
   QUOTE: 'quote',
 });
+
+/** Formats that make a block of their own: not inside a table cell (#1430). */
+export const BLOCK_LEVEL = new Set([FORMATS.BULLETS, FORMATS.NUMBERED, FORMATS.TASKS, FORMATS.QUOTE]);
 
 /** The block formats of the toolbar's select: a paragraph or a heading. */
 export const BLOCK_FORMATS = Object.freeze(['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6']);
@@ -60,6 +65,8 @@ const SAME_KEY_MS = 500;
  * of it. Invisible, and never written: the serializer drops it.
  */
 const SEAM = '\u200b';
+/** Breaking a line or a block: a table cell has one line (#1430). */
+const LINE_BREAKS = new Set(['insertParagraph', 'insertLineBreak']);
 
 function rangeOf(el) {
   const value = el.getAttribute?.('data-md-range');
@@ -93,6 +100,13 @@ function listStyleOf(raw) {
   return { bullet, orderedDelimiter };
 }
 
+/** The editing host that holds `el`: the document, a table cell, or an island. */
+function hostOf(el) {
+  return el?.closest('[contenteditable]') ?? null;
+}
+
+const inIsland = (el) => hostOf(el)?.getAttribute('contenteditable') === 'false';
+
 function escapeHtml(text) {
   return text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
@@ -117,6 +131,7 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
   let lastRange = null;
   let nativeBoldAt = 0;
   const islands = [];
+  const tables = [];
 
   // An empty document has a line to type into instead of its notice.
   const empty = articleEl.querySelector(':scope > .md-empty');
@@ -133,6 +148,17 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
     islands.push(el);
   }
 
+  /**
+   * A table edited in its cells: the frame is not editable, each cell is
+   * (#1430). The cells are reached with Tab like fields of a form.
+   */
+  function makeTableEditable(frame, table) {
+    frame.setAttribute('contenteditable', 'false');
+    frame.classList.add('md-table-frame--editing');
+    for (const cell of table.querySelectorAll('th, td')) cell.setAttribute('contenteditable', 'true');
+    tables.push(frame);
+  }
+
   for (const el of articleEl.children) {
     if (isUiOnly(el)) {
       makeIsland(el);
@@ -142,8 +168,11 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
     if (!range) continue;
     const index = blocks.push(range) - 1;
     const island = !isEditableBlock(el);
-    const options = { ...defaults, ...listStyleOf(body.slice(range.start, range.end)) };
+    const raw = body.slice(range.start, range.end);
+    const table = tableOf(el);
+    const options = { ...defaults, ...listStyleOf(raw), ...(table ? { tableAlign: tableAlignOf(raw) } : {}) };
     if (island) makeIsland(el);
+    else if (table) makeTableEditable(el, table);
     known.set(el, { index, island, options, baseline: island ? null : serializeBlock(el, options) });
   }
   // A comment's marker is a button between words (#1388). Inside an edited
@@ -279,10 +308,16 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
    * the caret at its start.
    */
   function restoreSelection() {
-    const wasFocused = document.activeElement === articleEl;
-    if (!wasFocused) articleEl.focus({ preventScroll: true });
+    const active = document.activeElement;
+    const wasFocused = active === articleEl || (articleEl.contains(active) && hostOf(active) === active);
     if (wasFocused && selectionRange()) return true;
-    if (!lastRange || !articleEl.contains(lastRange.startContainer)) return Boolean(selectionRange());
+    const saved = lastRange && articleEl.contains(lastRange.startContainer) ? lastRange : null;
+    // A table cell is a host of its own: the caret goes back into it, not
+    // into the document around it (#1430).
+    const host = saved ? hostOf(elementAt(saved.startContainer)) : null;
+    const target = host && host !== articleEl && !inIsland(host) ? host : articleEl;
+    if (!wasFocused || document.activeElement !== target) target.focus({ preventScroll: true });
+    if (!saved) return Boolean(selectionRange());
     const selection = document.getSelection();
     selection.removeAllRanges();
     selection.addRange(lastRange);
@@ -314,8 +349,9 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
     if (!range || !articleEl.contains(range.startContainer)) return null;
     const el = elementAt(range.startContainer);
     if (!el) return null;
-    if (el.closest('[contenteditable="false"]')) return { island: true };
+    if (inIsland(el)) return { island: true };
     const heading = el.closest(HEADINGS);
+    const cell = el.closest('td, th');
     const query = (name) => {
       try {
         return document.queryCommandState(name);
@@ -329,8 +365,12 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
       island: false,
       block: heading ? heading.tagName.toLowerCase() : 'p',
       heading: Boolean(heading),
+      // A table cell holds a line: no heading, list or quote in it (#1430).
+      cell: Boolean(cell),
+      // A head cell is bold by its style, as a heading is.
+      headCell: cell?.tagName === 'TH',
       // A heading is bold by its style, not by `**`.
-      bold: !heading && query('bold'),
+      bold: !heading && cell?.tagName !== 'TH' && query('bold'),
       italic: query('italic'),
       strike: query('strikeThrough'),
       code: Boolean(el.closest('code')),
@@ -424,9 +464,10 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
     if (!restoreSelection()) return false;
     const at = state();
     if (!at || at.island) return false;
+    if (at.cell && BLOCK_LEVEL.has(name)) return false;
     switch (name) {
       case FORMATS.BOLD:
-        return at.heading ? false : exec('bold');
+        return at.heading || at.headCell ? false : exec('bold');
       case FORMATS.ITALIC:
         return exec('italic');
       case FORMATS.STRIKE:
@@ -452,7 +493,7 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
   function setBlock(format) {
     if (!BLOCK_FORMATS.includes(format) || !restoreSelection()) return false;
     const at = state();
-    if (!at || at.island) return false;
+    if (!at || at.island || at.cell) return false;
     return exec('formatBlock', format);
   }
 
@@ -497,8 +538,10 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
     }
     if (event.inputType === 'formatBold') {
       nativeBoldAt = Date.now();
-      if (state()?.heading) event.preventDefault();
+      const at = state();
+      if (at?.heading || at?.headCell) event.preventDefault();
     }
+    if (LINE_BREAKS.has(event.inputType) && state()?.cell) event.preventDefault();
   }
 
   /** Only the text of a paste: formats come from the toolbar, not from another app. */
@@ -506,7 +549,9 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
     const plain = event.clipboardData?.getData('text/plain');
     if (typeof plain !== 'string') return;
     event.preventDefault();
-    if (plain) exec('insertText', plain.replace(/\r\n?/g, '\n'));
+    const text = plain.replace(/\r\n?/g, '\n');
+    // A cell holds one line: the lines of a paste follow each other in it.
+    if (text) exec('insertText', state()?.cell ? text.replace(/\s*\n\s*/g, ' ') : text);
   }
 
   const refuseDrop = (event) => event.preventDefault();
@@ -549,7 +594,9 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
   function focusStart(scroller) {
     const selected = selectionRange()?.cloneRange() ?? null;
     articleEl.focus({ preventScroll: true });
-    if (selected && !elementAt(selected.startContainer)?.closest('[contenteditable="false"]')) {
+    const host = selected ? hostOf(elementAt(selected.startContainer)) : null;
+    if (selected && host && !inIsland(host)) {
+      if (host !== articleEl) host.focus({ preventScroll: true });
       const selection = document.getSelection();
       selection.removeAllRanges();
       selection.addRange(selected);
@@ -614,6 +661,11 @@ export function attachEditing(articleEl, { content, onInput = () => {}, onSelect
       document.removeEventListener('selectionchange', onSelectionChange);
       articleEl.removeAttribute('contenteditable');
       articleEl.classList.remove('md-doc--editing');
+      for (const frame of tables) {
+        frame.removeAttribute('contenteditable');
+        frame.classList.remove('md-table-frame--editing');
+        for (const cell of frame.querySelectorAll('[contenteditable]')) cell.removeAttribute('contenteditable');
+      }
       for (const el of islands) {
         el.removeAttribute('contenteditable');
         el.classList.remove('md-island');

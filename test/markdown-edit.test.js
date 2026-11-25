@@ -142,10 +142,53 @@ test('comments and their replies survive an edit of their paragraph (#1388)', ()
 
 test('a block that could not be written back is not editable', () => {
   const blocks = doc.renderMarkdownFragment([
-    '![logo](logo.png)', '', '| a |\n|---|\n| b |', '', '```\ncode\n```', '', '<details>x</details>', '',
+    '![logo](logo.png)', '', '| a |\n|---|\n| ![b](b.png) |', '', '```\ncode\n```', '', '<details>x</details>', '',
     'Text with <kbd>Ctrl</kbd>', '', '---', '', 'Text with ![inline](i.png) image',
   ].join('\n'));
   for (const el of blocks.children) assert.equal(serialize.isEditableBlock(el), false, el.outerHTML);
+});
+
+// ── Tables (#1430) ──────────────────────────────────────────────────────────
+
+test('a table is editable, and a changed one comes back as a padded pipe table', () => {
+  const written = roundTrip('| Name | Status |\n|---|---|\n| Ada | open |\n| Grace | **done** |');
+  assert.equal(written, [
+    '| Name  | Status   |',
+    '| ----- | -------- |',
+    '| Ada   | open     |',
+    '| Grace | **done** |',
+  ].join('\n'));
+});
+
+test('a table keeps the alignment of its columns', () => {
+  const source = '| L | C | R | N |\n|:--|:-:|--:|---|\n| a | b | c | d |';
+  const align = serialize.tableAlignOf(source);
+  assert.deepEqual(align, ['left', 'center', 'right', '']);
+  const lines = roundTrip(source, { tableAlign: align }).split('\n');
+  assert.equal(lines[1], '| :-- | :-: | --: | --- |');
+  assert.equal(lines[2], '| a   |  b  |   c | d   |');
+  // Without the source, the cells say how they are aligned.
+  assert.equal(roundTrip(source).split('\n')[1], '| :-- | :-: | --: | --- |');
+});
+
+test('a bar in a cell is escaped, also in code; a line break is a <br>', () => {
+  const written = roundTrip('| a | b |\n|---|---|\n| x \\| y | `p\\|q` |\n| one<br>two | [link](https://e.com) |');
+  assert.match(written, /\| x \\\| y +\| `p\\\|q` +\|/);
+  assert.match(written, /\| one<br>two \| \[link\]\(https:\/\/e\.com\) \|/);
+});
+
+test('an emptied cell stays a cell, and a short row is filled up', () => {
+  const rendered = doc.renderMarkdownFragment('| a | b |\n|---|---|\n| 1 | 2 |');
+  const frame = rendered.firstElementChild;
+  frame.querySelector('tbody td').textContent = '';
+  frame.querySelector('tbody tr').lastElementChild.remove();
+  assert.equal(serialize.serializeBlock(frame), '| a   | b   |\n| --- | --- |\n|     |     |');
+});
+
+test('the delimiter row is read only from a table', () => {
+  assert.equal(serialize.tableAlignOf('Just a paragraph\nwith two lines'), null);
+  assert.equal(serialize.tableAlignOf('| a |'), null);
+  assert.deepEqual(serialize.tableAlignOf('a | b\n--- | :---:'), ['', 'center']);
 });
 
 // ── Splicing into the file ──────────────────────────────────────────────────

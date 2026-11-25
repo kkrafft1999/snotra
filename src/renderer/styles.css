@@ -8603,6 +8603,20 @@ select.modal-input {
   outline-offset: 4px;
 }
 
+/* A table is edited in its cells (#1430): the cell with the caret carries
+ * the accent's edge inside its border, so that it is clear which one takes
+ * the typing. */
+.md-doc--editing .md-table-frame--editing td,
+.md-doc--editing .md-table-frame--editing th {
+  cursor: text;
+}
+
+.md-doc--editing .md-table-frame--editing td:focus,
+.md-doc--editing .md-table-frame--editing th:focus {
+  outline: 2px solid var(--ds-blue);
+  outline-offset: -2px;
+}
+
 .md-notice {
   margin: 0 24px 16px;
   padding: 8px 12px;

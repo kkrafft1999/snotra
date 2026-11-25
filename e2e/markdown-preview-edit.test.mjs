@@ -2,7 +2,8 @@
 // browser's editing commands behind the toolbar and the keys, Chromium's own
 // ways with them — a heading put inside its paragraph, an inserted element
 // merged into the text after it — and what reaches the disk. The states
-// around it are covered in test/markdown-preview-edit-dom.test.js.
+// around it are covered in test/markdown-preview-edit-dom.test.js. Since
+// #1430 a table is edited in its cells, each an editing host of its own.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -46,7 +47,8 @@ function caret(page, selector, needle, { select = false, end = false } = {}) {
         range.setStart(node, select ? at : (end ? at + needle.length : at));
         if (select) range.setEnd(node, at + needle.length);
         else range.collapse(true);
-        document.querySelector('.md-doc').focus();
+        // The editing host: the document, or a table cell (#1430).
+        node.parentElement.closest('[contenteditable="true"]').focus();
         document.getSelection().removeAllRanges();
         document.getSelection().addRange(range);
         return true;
@@ -146,9 +148,28 @@ test('a Markdown file is edited and formatted in its preview, and only the chang
   text = await saved('link');
   assert.ok(text.startsWith('# Crop [rotation](https://example.com/rotation)\n'), text);
 
+  // A table cell (#1430): typing and bold work in it, Enter does not split
+  // it, and what makes a block of its own is off.
+  await caret(page, '.md-doc td', 'lettuce', { end: true });
+  await page.keyboard.type(' and herbs');
+  await page.keyboard.press('Enter');
+  await caret(page, '.md-doc td', 'herbs', { select: true });
+  await page.click('.md-format-bar__button[data-format="bold"]');
+  assert.deepEqual(await page.evaluate(() => ({
+    block: document.querySelector('.md-format-bar__block').disabled,
+    bullets: document.querySelector('.md-format-bar__button[data-format="bullets"]').getAttribute('aria-disabled'),
+    quote: document.querySelector('.md-format-bar__button[data-format="quote"]').getAttribute('aria-disabled'),
+    rows: document.querySelectorAll('.md-table-frame tr').length,
+  })), { block: true, bullets: 'true', quote: 'true', rows: 2 });
+  text = await saved('table cell');
+  assert.ok(text.includes([
+    '| Bed   | Plant                 |',
+    '| ----- | --------------------- |',
+    '| north | lettuce and **herbs** |',
+  ].join('\n')), text);
+
   // What was not touched is as it was.
   assert.ok(text.includes('\n\n<!-- keep me -->\n\n'));
-  assert.ok(text.includes('| Bed | Plant |\n|---|---|\n| north | lettuce |\n'));
 
   // Esc ends editing; the preview renders the file anew.
   await page.keyboard.press('Escape');
